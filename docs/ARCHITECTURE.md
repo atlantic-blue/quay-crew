@@ -1,0 +1,245 @@
+# Quay Crew architecture
+
+Quay Crew is a self hosted, open source personal agent hub: a set of small independent services that
+let you drive AI agent work from any channel, run it in sandboxes, and see and audit everything. This
+document describes the design, the stack, and the delivery plan.
+
+## Design principles
+
+1. **Open source and self hosted.** Everything runs on infrastructure the operator controls.
+2. **No baked in data or secrets.** The code has no knowledge of any project. Projects and their
+   credentials are created at runtime through the control plane and stored outside the repository.
+3. **Independent components.** Services communicate over a durable event log and typed APIs, never by
+   calling into each other in process, so any one can be deployed, scaled, or replaced on its own.
+4. **Auditable and observable by construction.** Structured logs and an audit stream, distributed
+   traces, and metrics flow through OpenTelemetry from the first line of every service.
+5. **Reviewed changes only.** An agent can propose a skill or a memory, but nothing self applies.
+6. **Bring your own model.** The model provider is configuration.
+7. **Runs the same locally and in the cloud.** One containerised build, backends swapped by config.
+
+## The shape
+
+Channels feed a durable event log. A control plane consumes it, manages projects, and drives parallel
+agent sessions. Each session talks to the model and runs tools in a sandbox tier. The event log is the
+write side; a projection materialises a read model that the admin dashboard reads. Synchronous
+queries (the dashboard reading the read model, the control plane managing projects) go over gRPC.
+
+```mermaid
+flowchart LR
+  ACTOR["Operator"]
+  subgraph RUNTIME["One containerised build, local or cloud"]
+    subgraph CH["Channels (independent services)"]
+      C1["CLI"]
+      C2["Chat channels"]
+      C3["Scheduler"]
+    end
+    LOG[["Event log (Kafka / Redpanda)"]]
+    subgraph CP["Control plane"]
+      CTRL["Controllers: sessions, tools, skills, model"]
+      PROJ["Projects API (gRPC)"]
+    end
+    subgraph SESS["Agent sessions (parallel, per project)"]
+      S1["Session"]
+      S2["Session"]
+    end
+    SANDBOX["Sandbox tiers: docker, ssh, shell"]
+    PROJECTOR["Projector"]
+    VIEW[("Read model")]
+    DASH(["Admin dashboard"])
+    SECRETS[("Secrets backend")]
+  end
+  MODEL["Model provider"]
+
+  ACTOR <--> CH
+  CH --> LOG
+  LOG --> CP
+  CP --> SESS
+  SESS --> MODEL
+  SANDBOX --> SESS
+  SESS --> LOG
+  LOG --> PROJECTOR --> VIEW
+  DASH -- gRPC --> PROJ
+  DASH -- gRPC --> VIEW
+  CP --> SECRETS
+```
+
+## Components
+
+Each is its own Go service in its own container.
+
+- **Channels.** One service per channel kind (CLI, a chat integration, a scheduler). A channel
+  receives input, publishes an inbound message to the event log, and delivers outbound replies. Every
+  channel implements one shared contract.
+- **Control plane.** Consumes inbound messages and routes them. It holds the controllers: a sessions
+  controller (start or resume the right session), a tools controller, a skills controller, and a model
+  controller. It also exposes the **Projects API** over gRPC for creating and configuring projects.
+- **Agent sessions.** Worker services that run a model thread, capture the session id so a thread can
+  be resumed, and execute tools. Many run in parallel, isolated per project. Tool execution happens in
+  a sandbox tier.
+- **Projector.** Consumes the event log and materialises the read model. The read model is derived, so
+  it is disposable and can be rebuilt from the log.
+- **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list projects, see
+  every session, tail a conversation, start or stop work.
+
+## Messaging and contracts
+
+- **Event log: Kafka.** The async backbone. Run locally with **Redpanda**, which speaks the Kafka
+  protocol and is a single lightweight binary, and managed Kafka or Redpanda in the cloud. The client
+  is `franz-go` (pure Go, no CGO, so the images stay small).
+- **Why an event log.** It decouples the services (each publishes and subscribes on its own), it is
+  durable and replayable, and it is the natural write side for the read model: the log is the source
+  of truth, the projection is a consumer.
+- **Synchronous APIs: gRPC.** Request and response calls (managing projects, reading the read model)
+  use gRPC. The message shapes and the service methods are defined in **protobuf** under `proto/`, so
+  every service agrees on one contract.
+- **The channel contract.** The shared inbound and outbound message schema every channel implements.
+  Each message carries a `project` and a `correlation_id` (which is also the trace id).
+
+## Projects and isolation
+
+A project is the unit of isolation, and it is a runtime resource, not a file in the repository.
+
+- **Created through the control plane.** The Projects API (and the dashboard on top of it) creates and
+  configures projects. Project lifecycle is captured as events on the log (`ProjectCreated`,
+  `ChannelAttached`, `SecretSet`), projected into a projects read model the dashboard renders.
+- **Namespaced by project id.** Every message carries its project. The event log topics, the consumer
+  groups, the stored state, and the agent workspace are all scoped by project id.
+- **Two isolation levels.** Logical isolation shares one running stack and separates everything by
+  project id (the default, lightweight). Hard isolation runs a fully separate stack per project, with
+  its own volumes and network, when stronger separation is wanted.
+
+```mermaid
+flowchart TB
+  subgraph API["Control plane"]
+    P["Projects API (gRPC)"]
+  end
+  subgraph LOGICAL["Logical isolation (one stack)"]
+    T1["topics: projectA prefix"]
+    T2["topics: projectB prefix"]
+    W1["workspace: projectA"]
+    W2["workspace: projectB"]
+  end
+  HARD["Hard isolation: a separate stack per project (own volumes and network)"]
+  DASH(["Dashboard"]) -- create, configure --> P
+  P -- emits events --> T1
+  P -- emits events --> T2
+  P -. optional .-> HARD
+```
+
+## Secrets
+
+Secrets are never stored in the repository, and the code has no built in knowledge of any.
+
+- **Set at runtime.** The operator sets a project's credentials through the dashboard or the API. The
+  value goes straight to a pluggable secrets backend.
+- **A reference in the log, never the value.** The event log records only a reference to a secret; the
+  value lives in the backend. Services read by reference at runtime. Logs and the audit stream redact.
+- **Pluggable backends.** Development uses an encrypted local store in a gitignored data volume, so
+  nothing sits in plaintext or in the repository even locally. The cloud swaps to a managed secrets
+  service behind the same interface.
+
+## Observability and audit
+
+Auditability and observability are first class, because the system runs a model with real permissions
+and can send messages and run shell. Two layers reinforce each other.
+
+1. **The application's own history.** The event log is the write side; the read model is a queryable
+   view of what happened. That record lives in the operator's own storage.
+2. **Operational telemetry.** Logs, metrics, and traces through an OpenTelemetry pipeline into Grafana,
+   with Loki for logs and audit, Tempo for traces, and Prometheus for metrics.
+
+```mermaid
+flowchart LR
+  subgraph SVC["Services emit telemetry"]
+    A["Channels"]
+    B["Control plane"]
+    C["Sessions"]
+    D["Sandbox execs"]
+  end
+  HOST["Host exporters: node, GPU, per-session usage"]
+  OTEL["OpenTelemetry collector"]
+  LOKI[("Loki: logs and audit stream")]
+  TEMPO[("Tempo: traces")]
+  PROM[("Prometheus: metrics")]
+  GRAF(["Grafana: dashboards, audit search, alerts"])
+  A --> OTEL
+  B --> OTEL
+  C --> OTEL
+  D --> OTEL
+  HOST --> PROM
+  OTEL --> LOKI
+  OTEL --> TEMPO
+  OTEL --> PROM
+  LOKI --> GRAF
+  TEMPO --> GRAF
+  PROM --> GRAF
+```
+
+Concretely:
+
+- **Structured logs** to Loki from every service at boundaries: a message arriving on a channel, log
+  enqueue and consume, each controller decision, session start and resume, every tool and sandbox
+  execution (command, exit code, duration), every model call (latency, tokens, cost), the permission
+  tier applied, every outbound delivery, and every error. One correlation id per inbound message
+  threads through all of them and equals the trace id, so logs and traces pivot in Grafana.
+- **An audit stream:** the security relevant subset (who initiated, what command, which permission
+  tier, what shell or tool ran, which files changed, what was sent and to whom), labelled and retained
+  longer than debug logs. Every privileged action is a queryable audit event.
+- **Token and cost metrics:** input and output tokens and cost per model call, per session, per
+  channel, per project, and per day, with a cost ceiling alert. When the model runs remotely, its cost
+  is tokens and money, not local hardware.
+- **Host and resource metrics:** CPU, memory, and disk via a node exporter; GPU utilisation and memory
+  via the platform appropriate exporter where a GPU is in play (local transcription, a local model, or
+  a cloud GPU runner); and per session process usage, so an individual session's compute cost is
+  visible, not just its tokens.
+- **Traces** to Tempo: one trace per inbound message spanning channel, log, control plane, session,
+  tool or model call, and outbound. Error scoping is by span kind, so a denied permission or an
+  expected client error does not read as a system failure.
+- **Dashboards and alerts as code**, reviewed in a pull request, not clicked into a UI.
+- The whole telemetry stack runs the same locally and in the cloud.
+
+## Deployment
+
+- **Everything in Docker.** Each component is a container; a compose file wires them locally, and
+  `make up` (alias `make start`) is the front door. The heavy observability stack sits behind a compose
+  profile so the day to day loop stays light.
+- **Local and cloud from one build.** The event log, storage, sandbox, and secrets are each behind an
+  interface with a local implementation (Redpanda, files or a local database, local docker, an
+  encrypted local store) and a cloud implementation (managed Kafka or Redpanda, object store, remote
+  runners, a managed secrets service), selected by configuration.
+- **Deploy through CI.** The cloud target ships through a pipeline on merge, with secrets from the
+  platform store, never a laptop apply.
+
+## Delivery plan
+
+Sequenced spine first. Each slice is small, single intention, typed, and tested. Observability is
+cross cutting from the first slice: every service emits structured logs with a correlation id that
+doubles as the trace id, and token and cost counters land with the first model call.
+
+- **Foundations.** Scaffold the Go monorepo and tooling, resolve the open decisions, and stand up the
+  logging and correlation id conventions.
+- **Spine (local and usable).** The channel contract, the event log interface, the control plane with
+  the sessions controller, the thread engine, and a CLI channel end to end.
+- **First remote channel.** A chat channel inbound onto the log, outbound gated so nothing sends
+  without the operator's intent, plus the telemetry stack in the local compose.
+- **Controllers, sessions, sandbox.** The remaining controllers, parallel sessions with a durable
+  session store, and sandbox tiers with permission tiers per channel.
+- **Dashboard and projection.** The projection that materialises the read model, and the admin
+  dashboard that reads it and drives the control plane.
+- **Cloud parity.** Containerise, cloud implementations behind the interfaces, and deploy through CI.
+- **Differentiators (optional).** A reviewed learning loop that proposes a skill or memory for
+  approval, a scheduler, and voice input transcribed locally.
+
+## Prior art
+
+Quay Crew learns from three points on the map.
+
+- **OpenClaw:** a self hosted gateway with a control plane, many channel adapters, and config, memory,
+  and skills as files on disk. Quay Crew keeps the self hosted, files on disk, control plane shape and
+  avoids an unvetted third party skill marketplace.
+- **Hermes Agent:** an agent loop that writes its own skills, a built in scheduler, and persistent
+  memory. Quay Crew borrows the learning loop and the scheduler but keeps changes reviewed rather than
+  self applied.
+- **Remote control features** that turn a phone into a live window onto a local session: the safest way
+  to steer one session, but not a programmable, multi channel, self hosted hub. Quay Crew is the
+  latter.
