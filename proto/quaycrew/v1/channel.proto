@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+// Package quaycrew.v1 holds the shared message contracts every service agrees on.
+package quaycrew.v1;
+
+// InboundMessage is published to the event log by a channel when it receives input.
+// Every message is scoped to a project and carries a correlation id that equals the trace id.
+message InboundMessage {
+  // project is the isolation unit this message belongs to.
+  string project = 1;
+  // channel is the id of the channel that received the input (for example "cli", "telegram").
+  string channel = 2;
+  // sender is the channel specific identity of who sent it.
+  string sender = 3;
+  // text is the message body.
+  string text = 4;
+  // thread_id continues an existing thread when set; empty starts a new one.
+  string thread_id = 5;
+  // correlation_id is unique per inbound message and is also used as the trace id.
+  string correlation_id = 6;
+  // received_at is when the channel received the input, in RFC 3339.
+  string received_at = 7;
+}
+
+// OutboundMessage is delivered back to a channel as a reply.
+message OutboundMessage {
+  // project is the isolation unit this reply belongs to.
+  string project = 1;
+  // thread_id is the thread the reply belongs to.
+  string thread_id = 2;
+  // text is the reply body.
+  string text = 3;
+  // correlation_id ties the reply back to the originating inbound message.
+  string correlation_id = 4;
+}
