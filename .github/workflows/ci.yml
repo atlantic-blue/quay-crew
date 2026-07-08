@@ -73,7 +73,7 @@ jobs:
         run: docker compose -f deploy/docker-compose.yml build
 
       - name: Start the core stack
-        run: docker compose -f deploy/docker-compose.yml up -d redpanda otel-collector gateway
+        run: docker compose -f deploy/docker-compose.yml up -d redpanda otel-collector gateway controlplane
 
       - name: Wait for Redpanda to be healthy
         run: |
@@ -91,9 +91,10 @@ jobs:
       - name: Check services are up and networked
         run: |
           docker compose -f deploy/docker-compose.yml ps
-          docker compose -f deploy/docker-compose.yml logs gateway
-          # gateway must still be running (its telemetry init reached the collector over the network)
+          docker compose -f deploy/docker-compose.yml logs gateway controlplane
+          # both services must still be running (they reached the collector, and Redpanda, over the network)
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q gateway)")" = "true"
+          test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q controlplane)")" = "true"
 
       - name: Tear down
         if: always()
