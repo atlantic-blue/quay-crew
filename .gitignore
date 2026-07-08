@@ -1,24 +1,20 @@
-# dependencies
-node_modules/
+# binaries
+/bin/
+/out/
+*.exe
 
-# build output
-dist/
-build/
-*.tsbuildinfo
-
-# test / coverage
-coverage/
-
-# env and secrets
+# env and secrets (secrets are set at runtime, never committed)
 .env
 .env.*
 *.local
 
+# local data volumes (event log, sessions, projections, secrets store)
+.data/
+
 # logs
 *.log
 
-# os
+# os / editor
 .DS_Store
-
-# local data (queue, sessions, projections) when using file backends
-.data/
+.idea/
+.vscode/

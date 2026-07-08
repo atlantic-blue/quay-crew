@@ -1,0 +1,30 @@
+# Minimal OpenTelemetry collector config for local development.
+# It accepts OTLP over gRPC and logs a summary. Exporters to Loki, Tempo, and Prometheus are wired
+# in when the observability stack lands (see the "Stand up the local telemetry stack" issue).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
