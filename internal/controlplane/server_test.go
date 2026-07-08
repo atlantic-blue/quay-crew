@@ -8,6 +8,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,7 +18,7 @@ import (
 )
 
 func newServer(runner model.Runner) *controlplane.Server {
-	return controlplane.NewServer(runner, secrets.NewMemory())
+	return controlplane.NewServer(runner, &sandbox.FakeProvider{}, secrets.NewMemory())
 }
 
 func TestCreateAndListProjects(t *testing.T) {
@@ -91,7 +92,7 @@ func TestDispatchUnknownProject(t *testing.T) {
 
 func TestSetSecretStoresValue(t *testing.T) {
 	store := secrets.NewMemory()
-	s := controlplane.NewServer(&model.FakeRunner{}, store)
+	s := controlplane.NewServer(&model.FakeRunner{}, &sandbox.FakeProvider{}, store)
 	ctx := context.Background()
 
 	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
@@ -103,6 +104,35 @@ func TestSetSecretStoresValue(t *testing.T) {
 	got, err := store.Get(ctx, pid, "token")
 	if err != nil || got != "s3cret" {
 		t.Fatalf("secret not stored: got %q err %v", got, err)
+	}
+}
+
+func TestSessionSandboxLifecycle(t *testing.T) {
+	provider := &sandbox.FakeProvider{}
+	s := controlplane.NewServer(&model.FakeRunner{Reply: "ok"}, provider, secrets.NewMemory())
+	ctx := context.Background()
+
+	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	pid := project.GetProject().GetId()
+
+	// Two turns on the same thread must share one sandbox (created once, not per turn).
+	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "one"})
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, ThreadId: first.GetThreadId(), Text: "two"}); err != nil {
+		t.Fatalf("second dispatch: %v", err)
+	}
+	if len(provider.Created) != 1 {
+		t.Fatalf("expected 1 sandbox for the session, got %d (%v)", len(provider.Created), provider.Created)
+	}
+	if provider.Created[0] != first.GetSessionId() {
+		t.Fatalf("sandbox created for %q, want session %q", provider.Created[0], first.GetSessionId())
+	}
+
+	// Stopping the session tears its sandbox down.
+	if _, err := s.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: first.GetSessionId()}); err != nil {
+		t.Fatalf("StopSession: %v", err)
+	}
+	if !provider.Boxes[0].Closed {
+		t.Fatal("stopping the session did not close its sandbox")
 	}
 }
 

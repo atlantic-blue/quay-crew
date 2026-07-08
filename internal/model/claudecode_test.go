@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/session"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
 func TestBuildArgs(t *testing.T) {
@@ -61,29 +61,29 @@ func TestParseStreamFallsBackToAssistantText(t *testing.T) {
 	}
 }
 
-func TestRunThroughRuntime(t *testing.T) {
+func TestRunInSandbox(t *testing.T) {
 	stream := `{"type":"system","session_id":"s-1"}` + "\n" + `{"type":"result","result":"ok","session_id":"s-1"}`
-	fake := &session.Fake{Output: stream}
-	runner := NewClaudeCodeRunner(fake)
+	box := &sandbox.FakeSandbox{Output: stream}
+	runner := NewClaudeCodeRunner()
 
-	resp, err := runner.Run(context.Background(), Request{Text: "hi", PermissionMode: "acceptEdits"})
+	resp, err := runner.Run(context.Background(), box, Request{Text: "hi", PermissionMode: "acceptEdits"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if resp.Reply != "ok" || resp.ModelSessionID != "s-1" {
 		t.Fatalf("bad response: %+v", resp)
 	}
-	if len(fake.LastSpec.Argv) == 0 || fake.LastSpec.Argv[0] != "claude" {
-		t.Fatalf("session runtime did not receive the claude command: %+v", fake.LastSpec.Argv)
+	if len(box.LastSpec.Argv) == 0 || box.LastSpec.Argv[0] != "claude" {
+		t.Fatalf("sandbox did not receive the claude command: %+v", box.LastSpec.Argv)
 	}
-	if !strings.Contains(strings.Join(fake.LastSpec.Argv, " "), "--permission-mode acceptEdits") {
-		t.Fatalf("permission mode not passed through: %+v", fake.LastSpec.Argv)
+	if !strings.Contains(strings.Join(box.LastSpec.Argv, " "), "--permission-mode acceptEdits") {
+		t.Fatalf("permission mode not passed through: %+v", box.LastSpec.Argv)
 	}
 }
 
-func TestRunRequiresRuntime(t *testing.T) {
-	runner := &ClaudeCodeRunner{}
-	if _, err := runner.Run(context.Background(), Request{Text: "hi"}); err == nil {
-		t.Fatal("Run with no runtime = nil error, want error")
+func TestRunRequiresSandbox(t *testing.T) {
+	runner := NewClaudeCodeRunner()
+	if _, err := runner.Run(context.Background(), nil, Request{Text: "hi"}); err == nil {
+		t.Fatal("Run with nil sandbox = nil error, want error")
 	}
 }

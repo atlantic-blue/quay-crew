@@ -1,6 +1,10 @@
 package model
 
-import "context"
+import (
+	"context"
+
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+)
 
 // FakeRunner is a Runner for tests. It records the last request and returns a canned response.
 type FakeRunner struct {
@@ -13,8 +17,8 @@ type FakeRunner struct {
 // compile time check.
 var _ Runner = (*FakeRunner)(nil)
 
-// Run records the request and returns the canned response (or Err).
-func (f *FakeRunner) Run(_ context.Context, req Request) (Response, error) {
+// Run records the request and returns the canned response (or Err). The sandbox is ignored.
+func (f *FakeRunner) Run(_ context.Context, _ sandbox.Sandbox, req Request) (Response, error) {
 	f.LastReq = req
 	if f.Err != nil {
 		return Response{}, f.Err

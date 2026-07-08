@@ -1,7 +1,7 @@
 // Command controlplane is the spine service: it serves the ControlPlaneService gRPC API. The model
-// backend and the session runtime are chosen by configuration, so the control plane depends only on
+// backend and the sandbox provider are chosen by configuration, so the control plane depends only on
 // the interfaces, not on any concrete implementation. The default model backend is the Claude Code
-// adapter (your subscription, no API cost), run inside a session runtime (Docker by default).
+// adapter (your subscription, no API cost); each session runs in its own sandbox (Docker by default).
 package main
 
 import (
@@ -17,8 +17,8 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc"
 )
@@ -39,13 +39,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	runner, err := buildRunner()
+	runner, err := model.NewRunner(os.Getenv("QC_MODEL"), os.Getenv("QC_WORKDIR"))
 	if err != nil {
 		logger.Error("model runner config failed", "error", err)
 		os.Exit(1)
 	}
 
-	server := controlplane.NewServer(runner, secrets.NewMemory())
+	provider, err := sandbox.NewProvider(
+		os.Getenv("QC_SANDBOX"),
+		os.Getenv("QC_SANDBOX_IMAGE"),
+		splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
+	)
+	if err != nil {
+		logger.Error("sandbox provider config failed", "error", err)
+		os.Exit(1)
+	}
+
+	server := controlplane.NewServer(runner, provider, secrets.NewMemory())
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
@@ -71,19 +81,6 @@ func main() {
 	if err := shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
-}
-
-// buildRunner selects the session runtime and the model backend from configuration.
-func buildRunner() (model.Runner, error) {
-	runtime, err := session.New(
-		os.Getenv("QC_SESSION_RUNTIME"),
-		os.Getenv("QC_SESSION_IMAGE"),
-		splitAndTrim(os.Getenv("QC_SESSION_MOUNTS")),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return model.NewRunner(os.Getenv("QC_MODEL"), runtime, os.Getenv("QC_WORKDIR"))
 }
 
 func splitAndTrim(csv string) []string {

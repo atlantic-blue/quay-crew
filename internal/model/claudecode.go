@@ -8,26 +8,22 @@ import (
 	"io"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/session"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
 // ClaudeCodeRunner runs turns by driving the Claude Code CLI, under your subscription (no API cost).
-// It executes the CLI inside a session Runtime rather than directly on the host, so a run is isolated.
-// It streams JSON events, captures the session id so the thread can be resumed, and returns the
-// result text.
+// It runs the CLI inside the session's sandbox it is handed, so the run is isolated and the CLI's
+// state persists across the session's turns. It streams JSON events, captures the session id so the
+// thread can be resumed, and returns the result text.
 type ClaudeCodeRunner struct {
 	// Bin is the CLI binary; empty defaults to "claude".
 	Bin string
 	// DefaultWorkdir is used when a Request does not set Workdir.
 	DefaultWorkdir string
-	// Runtime isolates the run (Docker by default; a local backend short term).
-	Runtime session.Runtime
 }
 
-// NewClaudeCodeRunner returns a runner that invokes "claude" inside the given session Runtime.
-func NewClaudeCodeRunner(rt session.Runtime) *ClaudeCodeRunner {
-	return &ClaudeCodeRunner{Bin: "claude", Runtime: rt}
-}
+// NewClaudeCodeRunner returns a runner that invokes "claude".
+func NewClaudeCodeRunner() *ClaudeCodeRunner { return &ClaudeCodeRunner{Bin: "claude"} }
 
 // compile time check.
 var _ Runner = (*ClaudeCodeRunner)(nil)
@@ -44,10 +40,10 @@ func buildArgs(req Request) []string {
 	return args
 }
 
-// Run runs one turn inside the session Runtime and parses its streamed output.
-func (r *ClaudeCodeRunner) Run(ctx context.Context, req Request) (Response, error) {
-	if r.Runtime == nil {
-		return Response{}, fmt.Errorf("model: no session runtime configured")
+// Run runs one turn inside the session's sandbox and parses its streamed output.
+func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error) {
+	if box == nil {
+		return Response{}, fmt.Errorf("model: no sandbox provided")
 	}
 	bin := r.Bin
 	if bin == "" {
@@ -58,10 +54,10 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, req Request) (Response, erro
 		workdir = r.DefaultWorkdir
 	}
 
-	spec := session.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir}
-	proc, err := r.Runtime.Start(ctx, spec)
+	spec := sandbox.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir}
+	proc, err := box.Exec(ctx, spec)
 	if err != nil {
-		return Response{}, fmt.Errorf("model: start: %w", err)
+		return Response{}, fmt.Errorf("model: exec: %w", err)
 	}
 
 	resp, parseErr := parseStream(proc.Stdout())

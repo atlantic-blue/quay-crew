@@ -2,11 +2,15 @@
 //
 // The default implementation drives the local Claude Code CLI as a subprocess, so threads run under
 // your existing subscription with no API cost. An API backed implementation, or a local model, can
-// sit behind the same Runner interface and be selected by configuration. The control plane's model
-// controller only ever sees Runner.
+// sit behind the same Runner interface and be selected by configuration. A turn runs inside the
+// session's sandbox, which the control plane hands to Run.
 package model
 
-import "context"
+import (
+	"context"
+
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+)
 
 // Request is one turn to run against the model.
 type Request struct {
@@ -28,7 +32,8 @@ type Response struct {
 	ModelSessionID string
 }
 
-// Runner runs a single turn against a model and returns its reply plus the thread id to resume.
+// Runner runs a single turn against a model inside the session's sandbox, returning the reply and
+// the thread id to resume.
 type Runner interface {
-	Run(ctx context.Context, req Request) (Response, error)
+	Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error)
 }

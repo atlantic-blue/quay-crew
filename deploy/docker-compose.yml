@@ -54,8 +54,8 @@ services:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317
       QC_GRPC_ADDR: ":50051"
-      # Local session runtime for now (short term stopgap); Docker isolation is the default target.
-      QC_SESSION_RUNTIME: local
+      # Local sandbox for now (short term stopgap); Docker isolation per session is the default target.
+      QC_SANDBOX: local
     ports:
       - "50051:50051"
     depends_on:

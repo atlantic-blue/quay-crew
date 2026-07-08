@@ -5,9 +5,11 @@ package controlplane
 
 import (
 	"context"
+	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,16 +24,49 @@ type Server struct {
 	sessions *sessionStore
 	secrets  secrets.Store
 	runner   model.Runner
+	provider sandbox.Provider
+
+	mu        sync.Mutex
+	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
 }
 
-// NewServer builds a control plane backed by in memory stores, the given secrets store, and the
-// given model runner (the Claude Code adapter by default).
-func NewServer(runner model.Runner, secretStore secrets.Store) *Server {
+// NewServer builds a control plane backed by in memory stores, the given secrets store, the given
+// model runner (the Claude Code adapter by default), and the given sandbox provider (one sandbox per
+// session).
+func NewServer(runner model.Runner, provider sandbox.Provider, secretStore secrets.Store) *Server {
 	return &Server{
-		projects: newProjectStore(),
-		sessions: newSessionStore(),
-		secrets:  secretStore,
-		runner:   runner,
+		projects:  newProjectStore(),
+		sessions:  newSessionStore(),
+		secrets:   secretStore,
+		runner:    runner,
+		provider:  provider,
+		sandboxes: make(map[string]sandbox.Sandbox),
+	}
+}
+
+// sandboxFor returns the session's sandbox, creating it on first use so it is reused across turns.
+func (s *Server) sandboxFor(ctx context.Context, sessionID string) (sandbox.Sandbox, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if box, ok := s.sandboxes[sessionID]; ok {
+		return box, nil
+	}
+	box, err := s.provider.Create(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	s.sandboxes[sessionID] = box
+	return box, nil
+}
+
+// closeSandbox tears down and forgets a session's sandbox.
+func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
+	s.mu.Lock()
+	box, ok := s.sandboxes[sessionID]
+	delete(s.sandboxes, sessionID)
+	s.mu.Unlock()
+	if ok {
+		_ = box.Close(ctx)
 	}
 }
 
@@ -108,7 +143,13 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	}
 	session := s.sessions.findOrCreate(req.GetProject(), thread)
 
-	resp, err := s.runner.Run(ctx, model.Request{
+	box, err := s.sandboxFor(ctx, session.GetId())
+	if err != nil {
+		s.sessions.recordTurn(session.GetId(), "", "failed")
+		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
+	}
+
+	resp, err := s.runner.Run(ctx, box, model.Request{
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: defaultPermissionMode,
@@ -136,10 +177,11 @@ func (s *Server) GetSession(_ context.Context, req *quaycrewv1.GetSessionRequest
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
 
-// StopSession marks a session stopped.
-func (s *Server) StopSession(_ context.Context, req *quaycrewv1.StopSessionRequest) (*quaycrewv1.StopSessionResponse, error) {
+// StopSession marks a session stopped and tears down its sandbox.
+func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionRequest) (*quaycrewv1.StopSessionResponse, error) {
 	if !s.sessions.stop(req.GetId()) {
 		return nil, status.Errorf(codes.NotFound, "session %q not found", req.GetId())
 	}
+	s.closeSandbox(ctx, req.GetId())
 	return &quaycrewv1.StopSessionResponse{}, nil
 }
