@@ -26,7 +26,8 @@ jobs:
       - name: Verify generated code is up to date
         run: |
           if find . -name '*.proto' 2>/dev/null | grep -q .; then
-            go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+            go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+            go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
             export PATH="$PATH:$(go env GOPATH)/bin"
             buf generate
             git diff --exit-code -- gen
@@ -73,7 +74,7 @@ jobs:
         run: docker compose -f deploy/docker-compose.yml build
 
       - name: Start the core stack
-        run: docker compose -f deploy/docker-compose.yml up -d redpanda otel-collector gateway
+        run: docker compose -f deploy/docker-compose.yml up -d redpanda otel-collector gateway controlplane
 
       - name: Wait for Redpanda to be healthy
         run: |
@@ -91,9 +92,10 @@ jobs:
       - name: Check services are up and networked
         run: |
           docker compose -f deploy/docker-compose.yml ps
-          docker compose -f deploy/docker-compose.yml logs gateway
-          # gateway must still be running (its telemetry init reached the collector over the network)
+          docker compose -f deploy/docker-compose.yml logs gateway controlplane
+          # both services must still be running (they reached the collector, and Redpanda, over the network)
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q gateway)")" = "true"
+          test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q controlplane)")" = "true"
 
       - name: Tear down
         if: always()

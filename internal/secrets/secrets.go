@@ -1,0 +1,57 @@
+// Package secrets is the pluggable store for per project credentials. Secrets are set at runtime
+// through the control plane and read by reference; the value never appears in the repo, and the
+// event log records only a reference, never the value. This package provides the interface and an
+// in memory backend for development; a managed backend implements the same interface in the cloud.
+package secrets
+
+import (
+	"context"
+	"errors"
+	"sync"
+)
+
+// ErrNotFound is returned when a secret does not exist.
+var ErrNotFound = errors.New("secrets: not found")
+
+// Store sets and reads project scoped secrets. Set is called from the API; Get is called by
+// services that need the value at runtime.
+type Store interface {
+	Set(ctx context.Context, project, key, value string) error
+	Get(ctx context.Context, project, key string) (string, error)
+}
+
+// Memory is an in memory Store for development and tests.
+type Memory struct {
+	mu   sync.RWMutex
+	data map[string]string
+}
+
+// compile time check.
+var _ Store = (*Memory)(nil)
+
+// NewMemory returns an empty in memory store.
+func NewMemory() *Memory { return &Memory{data: make(map[string]string)} }
+
+func key(project, name string) string { return project + "\x00" + name }
+
+// Set stores a secret value for a project.
+func (m *Memory) Set(_ context.Context, project, name, value string) error {
+	if project == "" || name == "" {
+		return errors.New("secrets: project and key are required")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[key(project, name)] = value
+	return nil
+}
+
+// Get reads a secret value for a project.
+func (m *Memory) Get(_ context.Context, project, name string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	value, ok := m.data[key(project, name)]
+	if !ok {
+		return "", ErrNotFound
+	}
+	return value, nil
+}

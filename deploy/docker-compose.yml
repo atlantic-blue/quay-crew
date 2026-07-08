@@ -44,6 +44,24 @@ services:
       otel-collector:
         condition: service_started
 
+  controlplane:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: controlplane
+    environment:
+      QC_SERVICE_NAME: controlplane
+      QC_OTEL_ENDPOINT: otel-collector:4317
+      QC_GRPC_ADDR: ":50051"
+      # Local sandbox for now (short term stopgap); Docker isolation per session is the default target.
+      QC_SANDBOX: local
+    ports:
+      - "50051:50051"
+    depends_on:
+      otel-collector:
+        condition: service_started
+
   # Observability stack. Started only with: make up-observability
   grafana:
     image: grafana/grafana:11.2.0
