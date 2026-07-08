@@ -1,8 +1,11 @@
 package model
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/atlantic-blue/quay-crew/internal/session"
 )
 
 func TestBuildArgs(t *testing.T) {
@@ -55,5 +58,32 @@ func TestParseStreamFallsBackToAssistantText(t *testing.T) {
 	}
 	if resp.Reply != "part one part two" {
 		t.Fatalf("reply = %q, want 'part one part two'", resp.Reply)
+	}
+}
+
+func TestRunThroughRuntime(t *testing.T) {
+	stream := `{"type":"system","session_id":"s-1"}` + "\n" + `{"type":"result","result":"ok","session_id":"s-1"}`
+	fake := &session.Fake{Output: stream}
+	runner := NewClaudeCodeRunner(fake)
+
+	resp, err := runner.Run(context.Background(), Request{Text: "hi", PermissionMode: "acceptEdits"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if resp.Reply != "ok" || resp.ModelSessionID != "s-1" {
+		t.Fatalf("bad response: %+v", resp)
+	}
+	if len(fake.LastSpec.Argv) == 0 || fake.LastSpec.Argv[0] != "claude" {
+		t.Fatalf("session runtime did not receive the claude command: %+v", fake.LastSpec.Argv)
+	}
+	if !strings.Contains(strings.Join(fake.LastSpec.Argv, " "), "--permission-mode acceptEdits") {
+		t.Fatalf("permission mode not passed through: %+v", fake.LastSpec.Argv)
+	}
+}
+
+func TestRunRequiresRuntime(t *testing.T) {
+	runner := &ClaudeCodeRunner{}
+	if _, err := runner.Run(context.Background(), Request{Text: "hi"}); err == nil {
+		t.Fatal("Run with no runtime = nil error, want error")
 	}
 }

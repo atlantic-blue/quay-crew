@@ -1,6 +1,7 @@
-// Command controlplane is the spine service: it serves the ControlPlaneService gRPC API and, when a
-// Kafka seed is configured, consumes inbound channel messages from the event log and routes them to
-// sessions. The model runner defaults to the Claude Code adapter (your subscription, no API cost).
+// Command controlplane is the spine service: it serves the ControlPlaneService gRPC API. The model
+// backend and the session runtime are chosen by configuration, so the control plane depends only on
+// the interfaces, not on any concrete implementation. The default model backend is the Claude Code
+// adapter (your subscription, no API cost), run inside a session runtime (Docker by default).
 package main
 
 import (
@@ -15,12 +16,11 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 )
 
 func main() {
@@ -39,8 +39,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := controlplane.NewServer(model.NewClaudeCodeRunner(), secrets.NewMemory())
+	runner, err := buildRunner()
+	if err != nil {
+		logger.Error("model runner config failed", "error", err)
+		os.Exit(1)
+	}
 
+	server := controlplane.NewServer(runner, secrets.NewMemory())
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
@@ -57,15 +62,9 @@ func main() {
 		}
 	}()
 
-	// Optional event log consumer: route inbound channel messages to sessions.
-	log := startEventLogConsumer(ctx, logger, server)
-
 	<-ctx.Done()
 	logger.Info("shutting down")
 	grpcServer.GracefulStop()
-	if log != nil {
-		log.Close()
-	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -74,41 +73,17 @@ func main() {
 	}
 }
 
-// startEventLogConsumer wires the event log to the control plane when QC_KAFKA_SEEDS and
-// QC_INBOUND_TOPICS are set. It returns the event log so the caller can close it.
-func startEventLogConsumer(ctx context.Context, logger *slog.Logger, server *controlplane.Server) messaging.EventLog {
-	seeds := splitAndTrim(os.Getenv("QC_KAFKA_SEEDS"))
-	topics := splitAndTrim(os.Getenv("QC_INBOUND_TOPICS"))
-	if len(seeds) == 0 || len(topics) == 0 {
-		logger.Info("event log consumer disabled (set QC_KAFKA_SEEDS and QC_INBOUND_TOPICS to enable)")
-		return nil
-	}
-
-	eventLog, err := messaging.NewClient(seeds...)
+// buildRunner selects the session runtime and the model backend from configuration.
+func buildRunner() (model.Runner, error) {
+	runtime, err := session.New(
+		os.Getenv("QC_SESSION_RUNTIME"),
+		os.Getenv("QC_SESSION_IMAGE"),
+		splitAndTrim(os.Getenv("QC_SESSION_MOUNTS")),
+	)
 	if err != nil {
-		logger.Error("event log client failed", "error", err)
-		return nil
+		return nil, err
 	}
-
-	handler := func(ctx context.Context, r messaging.Record) error {
-		var msg quaycrewv1.InboundMessage
-		if err := proto.Unmarshal(r.Value, &msg); err != nil {
-			logger.Error("bad inbound message, skipping", "topic", r.Topic, "error", err)
-			return nil
-		}
-		if err := server.HandleInbound(ctx, &msg); err != nil {
-			logger.Error("handle inbound failed", "project", msg.GetProject(), "error", err)
-		}
-		return nil
-	}
-
-	go func() {
-		logger.Info("consuming inbound", "topics", topics)
-		if err := eventLog.Consume(ctx, "controlplane", topics, handler); err != nil && ctx.Err() == nil {
-			logger.Error("consumer stopped", "error", err)
-		}
-	}()
-	return eventLog
+	return model.NewRunner(os.Getenv("QC_MODEL"), runtime, os.Getenv("QC_WORKDIR"))
 }
 
 func splitAndTrim(csv string) []string {

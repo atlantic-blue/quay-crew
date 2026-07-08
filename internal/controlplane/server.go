@@ -143,14 +143,3 @@ func (s *Server) StopSession(_ context.Context, req *quaycrewv1.StopSessionReque
 	}
 	return &quaycrewv1.StopSessionResponse{}, nil
 }
-
-// HandleInbound routes an inbound channel message to a session, running a turn. The event log
-// consumer calls this, so channel messages drive the same path as Dispatch.
-func (s *Server) HandleInbound(ctx context.Context, msg *quaycrewv1.InboundMessage) error {
-	_, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project:  msg.GetProject(),
-		ThreadId: msg.GetThreadId(),
-		Text:     msg.GetText(),
-	})
-	return err
-}

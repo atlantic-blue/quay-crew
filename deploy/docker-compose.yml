@@ -54,12 +54,11 @@ services:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317
       QC_GRPC_ADDR: ":50051"
-      QC_KAFKA_SEEDS: redpanda:9092
+      # Local session runtime for now (short term stopgap); Docker isolation is the default target.
+      QC_SESSION_RUNTIME: local
     ports:
       - "50051:50051"
     depends_on:
-      redpanda:
-        condition: service_healthy
       otel-collector:
         condition: service_started
 

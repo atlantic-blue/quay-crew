@@ -6,22 +6,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
+
+	"github.com/atlantic-blue/quay-crew/internal/session"
 )
 
-// ClaudeCodeRunner runs turns by driving the local Claude Code CLI as a subprocess, under your
-// subscription (no API cost). It mirrors the print mode with resume pattern: it streams JSON events,
-// captures the session id so the thread can be resumed, and returns the final result text.
+// ClaudeCodeRunner runs turns by driving the Claude Code CLI, under your subscription (no API cost).
+// It executes the CLI inside a session Runtime rather than directly on the host, so a run is isolated.
+// It streams JSON events, captures the session id so the thread can be resumed, and returns the
+// result text.
 type ClaudeCodeRunner struct {
 	// Bin is the CLI binary; empty defaults to "claude".
 	Bin string
 	// DefaultWorkdir is used when a Request does not set Workdir.
 	DefaultWorkdir string
+	// Runtime isolates the run (Docker by default; a local backend short term).
+	Runtime session.Runtime
 }
 
-// NewClaudeCodeRunner returns a runner that invokes the "claude" binary.
-func NewClaudeCodeRunner() *ClaudeCodeRunner { return &ClaudeCodeRunner{Bin: "claude"} }
+// NewClaudeCodeRunner returns a runner that invokes "claude" inside the given session Runtime.
+func NewClaudeCodeRunner(rt session.Runtime) *ClaudeCodeRunner {
+	return &ClaudeCodeRunner{Bin: "claude", Runtime: rt}
+}
 
 // compile time check.
 var _ Runner = (*ClaudeCodeRunner)(nil)
@@ -38,31 +44,30 @@ func buildArgs(req Request) []string {
 	return args
 }
 
-// Run invokes the CLI for one turn and parses its streamed output.
+// Run runs one turn inside the session Runtime and parses its streamed output.
 func (r *ClaudeCodeRunner) Run(ctx context.Context, req Request) (Response, error) {
+	if r.Runtime == nil {
+		return Response{}, fmt.Errorf("model: no session runtime configured")
+	}
 	bin := r.Bin
 	if bin == "" {
 		bin = "claude"
 	}
-	cmd := exec.CommandContext(ctx, bin, buildArgs(req)...)
-	if req.Workdir != "" {
-		cmd.Dir = req.Workdir
-	} else if r.DefaultWorkdir != "" {
-		cmd.Dir = r.DefaultWorkdir
+	workdir := req.Workdir
+	if workdir == "" {
+		workdir = r.DefaultWorkdir
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	spec := session.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir}
+	proc, err := r.Runtime.Start(ctx, spec)
 	if err != nil {
-		return Response{}, fmt.Errorf("model: stdout pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return Response{}, fmt.Errorf("model: start %s: %w", bin, err)
+		return Response{}, fmt.Errorf("model: start: %w", err)
 	}
 
-	resp, parseErr := parseStream(stdout)
-	waitErr := cmd.Wait()
+	resp, parseErr := parseStream(proc.Stdout())
+	waitErr := proc.Wait()
 	if waitErr != nil {
-		return Response{}, fmt.Errorf("model: %s exited: %w", bin, waitErr)
+		return Response{}, fmt.Errorf("model: run exited: %w", waitErr)
 	}
 	if parseErr != nil {
 		return Response{}, fmt.Errorf("model: parse stream: %w", parseErr)
