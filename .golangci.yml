@@ -2,6 +2,13 @@ version: "2"
 
 linters:
   default: standard
+  settings:
+    errcheck:
+      # Writes to stdout/stderr via fmt rarely fail and checking them is noise (kubectl, cobra do this).
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
 
 formatters:
   enable:
