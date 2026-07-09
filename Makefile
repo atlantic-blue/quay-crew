@@ -6,7 +6,7 @@ COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 COMPOSE := docker compose -p $(COMPOSE_PROJECT) -f deploy/docker-compose.yml
 GOBIN := $(shell go env GOPATH)/bin
 
-.PHONY: up start up-observability down logs ps proto build test lint fmt tidy help
+.PHONY: up start up-observability down logs ps proto build install test lint fmt tidy help
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
 up:
@@ -38,6 +38,11 @@ proto:
 ## build: build all Go packages
 build:
 	go build ./...
+
+## install: build and install the quay CLI into GOBIN
+install:
+	go install ./cmd/quay
+	@echo "installed quay to $(GOBIN)/quay (ensure $(GOBIN) is on your PATH)"
 
 ## test: run the tests
 test:
