@@ -1,4 +1,4 @@
-// Command hub is the CLI channel: a synchronous client of the control plane. You create projects,
+// Command quay is the CLI channel: a synchronous client of the control plane. You create projects,
 // dispatch a turn, and list sessions, and the reply comes straight back. Async chat channels use the
 // event log instead; the CLI talks to the ControlPlaneService gRPC API directly.
 package main
@@ -13,7 +13,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
 
-const usage = `usage: hub <command>
+const usage = `usage: quay <command>
 
 commands:
   project create <name>            create a project
@@ -41,12 +41,12 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 
 func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: hub project <create|list>")
+		return fmt.Errorf("usage: quay project <create|list>")
 	}
 	switch args[0] {
 	case "create":
 		if len(args) < 2 {
-			return fmt.Errorf("usage: hub project create <name>")
+			return fmt.Errorf("usage: quay project create <name>")
 		}
 		resp, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: args[1]})
 		if err != nil {
@@ -68,7 +68,7 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		}
 		return nil
 	default:
-		return fmt.Errorf("usage: hub project <create|list>")
+		return fmt.Errorf("usage: quay project <create|list>")
 	}
 }
 

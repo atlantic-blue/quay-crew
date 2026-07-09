@@ -18,14 +18,14 @@ func main() {
 
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hub: connect to %s: %v\n", addr, err)
+		fmt.Fprintf(os.Stderr, "quay: connect to %s: %v\n", addr, err)
 		os.Exit(1)
 	}
 	defer func() { _ = conn.Close() }()
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	if err := run(context.Background(), client, os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "hub:", err)
+		fmt.Fprintln(os.Stderr, "quay:", err)
 		os.Exit(1)
 	}
 }
