@@ -1,6 +1,6 @@
 // Package messaging is the event log boundary: project namespaced topic names and a thin Kafka
-// client used to publish to the log. Locally the log is Redpanda; in the cloud it is managed Kafka
-// or Redpanda. Only this package knows about the broker.
+// client used to publish records to the log and consume them as a group. Locally the log is
+// Redpanda; in the cloud it is managed Kafka or Redpanda. Only this package knows about the broker.
 package messaging
 
 import (
