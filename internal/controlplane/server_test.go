@@ -90,6 +90,41 @@ func TestDispatchUnknownProject(t *testing.T) {
 	}
 }
 
+func TestDispatchInjectsTheProjectSubscriptionToken(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "ok"}
+	s := controlplane.NewServer(runner, &sandbox.FakeProvider{}, secrets.NewMemory())
+	ctx := context.Background()
+
+	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	pid := project.GetProject().GetId()
+
+	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: pid, Key: model.ClaudeCodeOAuthTokenEnv, Value: "tok-xyz"}); err != nil {
+		t.Fatalf("SetSecret: %v", err)
+	}
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if got := runner.LastReq.Env[model.ClaudeCodeOAuthTokenEnv]; got != "tok-xyz" {
+		t.Fatalf("turn env[%s] = %q, want tok-xyz", model.ClaudeCodeOAuthTokenEnv, got)
+	}
+}
+
+func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "ok"}
+	s := newServer(runner)
+	ctx := context.Background()
+
+	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project.GetProject().GetId(), Text: "hello"}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if len(runner.LastReq.Env) != 0 {
+		t.Fatalf("turn env = %v, want empty when no secret is set", runner.LastReq.Env)
+	}
+}
+
 func TestSetSecretStoresValue(t *testing.T) {
 	store := secrets.NewMemory()
 	s := controlplane.NewServer(&model.FakeRunner{}, &sandbox.FakeProvider{}, store)

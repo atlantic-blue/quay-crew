@@ -43,3 +43,35 @@ func TestDockerProvider(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 }
+
+// TestDockerProviderDeliversEnv proves the mechanism the subscription token rides on: a value put in
+// Spec.Env reaches the process running inside the sandbox. This needs only Docker, so it runs in CI
+// and guards the token delivery without any subscription.
+func TestDockerProviderDeliversEnv(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	box, err := sandbox.DockerProvider{Image: "busybox:latest"}.Create(ctx, "itest-env")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = box.Close(context.Background()) })
+
+	proc, err := box.Exec(ctx, sandbox.Spec{
+		Argv: []string{"printenv", "CLAUDE_CODE_OAUTH_TOKEN"},
+		Env:  []string{"CLAUDE_CODE_OAUTH_TOKEN=tok-from-secret"},
+	})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	if strings.TrimSpace(string(out)) != "tok-from-secret" {
+		t.Fatalf("env in sandbox = %q, want 'tok-from-secret'", string(out))
+	}
+}
