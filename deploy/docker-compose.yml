@@ -32,6 +32,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      target: runtime
       args:
         SERVICE: gateway
     environment:
@@ -48,14 +49,23 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      target: runtime-docker
       args:
         SERVICE: controlplane
     environment:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317
       QC_GRPC_ADDR: ":50051"
-      # Local sandbox for now (short term stopgap); Docker isolation per session is the default target.
-      QC_SANDBOX: local
+      # Each session gets its own container on the host daemon, a sibling of this one.
+      QC_SANDBOX: docker
+      QC_SANDBOX_IMAGE: ${QC_SANDBOX_IMAGE:-alpine:3.22}
+      # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
+      # Claude Code CLI and its credentials is in place.
+      QC_MODEL: ${QC_MODEL:-echo}
+    volumes:
+      # The control plane starts sandbox containers through the host daemon. This is root equivalent
+      # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "50051:50051"
     depends_on:

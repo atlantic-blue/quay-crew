@@ -67,6 +67,11 @@ jobs:
 
   containers:
     runs-on: ubuntu-latest
+    # An explicit compose project name so the stack's containers (qcci-controlplane-1, ...) do not
+    # share the "quaycrew-" prefix the sandbox containers use, which would make the count below match
+    # the whole stack. Without this the project defaults to the checkout directory ("quaycrew").
+    env:
+      COMPOSE_PROJECT_NAME: qcci
     steps:
       - uses: actions/checkout@v4
 
@@ -97,9 +102,51 @@ jobs:
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q gateway)")" = "true"
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q controlplane)")" = "true"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      # Pull it here rather than implicitly on the first `docker run`, so a registry hiccup reads as
+      # a pull failure instead of a dispatch failure.
+      - name: Pre-pull the sandbox image
+        run: docker pull alpine:3.22
+
+      # The point of this step: prove a turn really runs. It goes through the gRPC API, creates a
+      # session, starts a sandbox container on the host daemon, execs inside it, and returns the
+      # reply. Only the model is substituted (QC_MODEL=echo in compose). Asserting the services are
+      # merely running let a stack ship that could not execute a single turn.
+      - name: Dispatch a turn end to end
+        env:
+          QC_GRPC_ADDR: localhost:50051
+        run: |
+          set -euo pipefail
+          project=$(go run ./cmd/quay project create smoke | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
+          test -n "$project"
+          echo "project=$project"
+
+          out=$(go run ./cmd/quay dispatch --project "$project" "hello from ci")
+          echo "$out"
+          test "$(printf '%s' "$out" | head -1)" = "hello from ci"
+
+          # The turn must have run inside a sandbox container, not in the control plane itself.
+          test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+
+          # A second turn on the same thread reuses that one sandbox.
+          thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
+          test -n "$thread"
+          go run ./cmd/quay dispatch --project "$project" --thread "$thread" "second turn" >/dev/null
+          test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+
+      - name: Sandbox logs on failure
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs controlplane
+
       - name: Tear down
         if: always()
-        run: docker compose -f deploy/docker-compose.yml down -v
+        run: |
+          docker compose -f deploy/docker-compose.yml down -v
+          # Sandboxes outlive the control plane today; see issue #35.
+          docker rm -f $(docker ps -aq --filter 'name=quaycrew-') 2>/dev/null || true
 
   secrets:
     runs-on: ubuntu-latest

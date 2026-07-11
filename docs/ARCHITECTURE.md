@@ -126,6 +126,31 @@ flowchart TB
   P -. optional .-> HARD
 ```
 
+## Sandboxes
+
+A **session** is the conversation. A **sandbox** is the isolated environment that session runs in. A
+session runs in exactly one sandbox, created on its first turn, reused across turns so the model's own
+state survives between them, and closed when the session ends.
+
+The default provider gives each session its own container. The control plane runs as a service in the
+same stack and creates those containers as **siblings on the host daemon**, through a mounted Docker
+socket, rather than nesting Docker inside Docker. Two consequences follow, and both are deliberate:
+
+- Mounting the host's Docker socket into the control plane is **equivalent to giving it root on the
+  host**. The control plane is trusted; the sandboxes it starts are not, which is the boundary that
+  matters. A deployment that cannot accept this runs the control plane as a host process instead, and
+  nothing else changes, because the provider talks to the same daemon either way.
+- Bind mount paths in a sandbox are resolved by the **host** daemon, not inside the control plane
+  container, so paths handed to a sandbox are host paths.
+
+The control plane image therefore carries the Docker client and runs as root. Every other service is
+an unprivileged distroless image.
+
+Verifying this end to end is a requirement, not a nicety. A turn that cannot exec inside its sandbox
+is a stack that cannot do anything at all, and a smoke test that only checks the services are running
+will not notice. Continuous integration therefore dispatches a real turn against the composed stack
+with a model substitute that still execs inside the sandbox.
+
 ## Secrets
 
 Secrets are never stored in the repository, and the code has no built in knowledge of any.
