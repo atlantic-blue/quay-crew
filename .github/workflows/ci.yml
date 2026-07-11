@@ -67,6 +67,11 @@ jobs:
 
   containers:
     runs-on: ubuntu-latest
+    # An explicit compose project name so the stack's containers (qcci-controlplane-1, ...) do not
+    # share the "quaycrew-" prefix the sandbox containers use, which would make the count below match
+    # the whole stack. Without this the project defaults to the checkout directory ("quaycrew").
+    env:
+      COMPOSE_PROJECT_NAME: qcci
     steps:
       - uses: actions/checkout@v4
 
