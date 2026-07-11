@@ -8,6 +8,45 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
+func TestEnvListIsSortedKeyValues(t *testing.T) {
+	got := envList(map[string]string{"B": "2", "A": "1"})
+	want := []string{"A=1", "B=2"}
+	if len(got) != len(want) {
+		t.Fatalf("envList = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("envList = %v, want %v", got, want)
+		}
+	}
+	if envList(nil) != nil {
+		t.Fatalf("envList(nil) = %v, want nil", envList(nil))
+	}
+}
+
+func TestRunForwardsEnvToTheSandbox(t *testing.T) {
+	box := &sandbox.FakeSandbox{Output: `{"type":"result","result":"ok","session_id":"s1"}`}
+	runner := &ClaudeCodeRunner{Bin: "claude"}
+
+	_, err := runner.Run(context.Background(), box, Request{
+		Text: "hello",
+		Env:  map[string]string{"CLAUDE_CODE_OAUTH_TOKEN": "tok-abc"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	found := false
+	for _, e := range box.LastSpec.Env {
+		if e == "CLAUDE_CODE_OAUTH_TOKEN=tok-abc" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("sandbox env = %v, want it to carry CLAUDE_CODE_OAUTH_TOKEN", box.LastSpec.Env)
+	}
+}
+
 func TestBuildArgs(t *testing.T) {
 	got := buildArgs(Request{Text: "do a thing"})
 	want := "-p do a thing --output-format stream-json --verbose --permission-mode plan"

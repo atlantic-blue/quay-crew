@@ -6,7 +6,11 @@ COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 COMPOSE := docker compose -p $(COMPOSE_PROJECT) -f deploy/docker-compose.yml
 GOBIN := $(shell go env GOPATH)/bin
 
-.PHONY: up start up-observability down logs ps proto build install test lint fmt tidy help
+# The default sandbox image: a container with the Claude Code CLI, built locally with `make
+# sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
+SANDBOX_IMAGE := quaycrew-sandbox-claude:local
+
+.PHONY: up start up-observability down logs ps proto build install test lint fmt tidy sandbox-image help
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
 up:
@@ -14,6 +18,10 @@ up:
 
 ## start: alias for up
 start: up
+
+## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
+sandbox-image:
+	docker build -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
 
 ## up-observability: also start Grafana, Loki, Tempo, Prometheus
 up-observability:

@@ -153,6 +153,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: defaultPermissionMode,
+		Env:            s.turnEnv(ctx, req.GetProject()),
 	})
 	if err != nil {
 		s.sessions.recordTurn(session.GetId(), "", "failed")
@@ -161,6 +162,17 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	s.sessions.recordTurn(session.GetId(), resp.ModelSessionID, "idle")
 
 	return &quaycrewv1.DispatchResponse{SessionId: session.GetId(), ThreadId: thread, Reply: resp.Reply}, nil
+}
+
+// turnEnv gathers the environment a turn runs with from the project's secrets. Right now that is the
+// Claude Code subscription token, if one is set. A project that has not set it (or a model backend
+// that does not need it) simply runs with no extra env, so the lookup never fails a turn.
+func (s *Server) turnEnv(ctx context.Context, project string) map[string]string {
+	token, err := s.secrets.Get(ctx, project, model.ClaudeCodeOAuthTokenEnv)
+	if err != nil || token == "" {
+		return nil
+	}
+	return map[string]string{model.ClaudeCodeOAuthTokenEnv: token}
 }
 
 // ListSessions lists sessions, optionally filtered by project.

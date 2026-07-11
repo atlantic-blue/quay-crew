@@ -146,6 +146,12 @@ socket, rather than nesting Docker inside Docker. Two consequences follow, and b
 The control plane image therefore carries the Docker client and runs as root. Every other service is
 an unprivileged distroless image.
 
+The default sandbox image carries the Claude Code CLI, and a turn runs `claude` inside it under the
+operator's subscription. The image holds no credentials: the subscription token is stored per project
+as a secret and injected into the sandbox as an environment variable at turn time, so the same image
+runs unchanged on a laptop or in the cloud. See `docs/SANDBOX.md` for how to build the image, set the
+token, and run a real turn.
+
 Verifying this end to end is a requirement, not a nicety. A turn that cannot exec inside its sandbox
 is a stack that cannot do anything at all, and a smoke test that only checks the services are running
 will not notice. Continuous integration therefore dispatches a real turn against the composed stack

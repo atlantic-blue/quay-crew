@@ -90,6 +90,39 @@ func TestDispatch(t *testing.T) {
 	}
 }
 
+func TestSecretSet(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	created, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	pid := created.GetProject().GetId()
+
+	var out bytes.Buffer
+	if err := run(ctx, client, []string{"secret", "set", "--project", pid, "CLAUDE_CODE_OAUTH_TOKEN", "tok-123"}, &out); err != nil {
+		t.Fatalf("secret set: %v", err)
+	}
+	if !strings.Contains(out.String(), "set secret CLAUDE_CODE_OAUTH_TOKEN") {
+		t.Fatalf("secret set output: %q", out.String())
+	}
+	// The value must never be echoed back.
+	if strings.Contains(out.String(), "tok-123") {
+		t.Fatalf("secret value was printed: %q", out.String())
+	}
+}
+
+func TestSecretSetRequiresProjectKeyValue(t *testing.T) {
+	client := testClient(t)
+	if err := run(context.Background(), client, []string{"secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "tok"}, io.Discard); err == nil {
+		t.Fatal("secret set without --project = nil error, want error")
+	}
+	if err := run(context.Background(), client, []string{"secret", "set", "--project", "p1", "only-key"}, io.Discard); err == nil {
+		t.Fatal("secret set without a value = nil error, want error")
+	}
+}
+
 func TestDispatchRequiresProject(t *testing.T) {
 	client := testClient(t)
 	var out bytes.Buffer

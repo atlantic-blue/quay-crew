@@ -22,6 +22,10 @@ type Request struct {
 	PermissionMode string
 	// Workdir is the directory the turn runs in; empty uses the runner's default.
 	Workdir string
+	// Env is extra environment for the turn, for example the subscription token the Claude Code
+	// backend authenticates with. The control plane fills this from the project's secrets, so a
+	// secret value reaches the sandbox but is never part of the request text or the event log.
+	Env map[string]string
 }
 
 // Response is the result of a turn.

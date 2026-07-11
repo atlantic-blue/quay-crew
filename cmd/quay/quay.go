@@ -20,6 +20,7 @@ commands:
   project list                     list projects
   dispatch --project <id> <text>   start or continue a thread (add --thread <id> to continue)
   sessions [--project <id>]        list sessions
+  secret set --project <id> <key> <value>   set a project secret (for example the model token)
 `
 
 // run executes one CLI invocation against the control plane client, writing output to out.
@@ -34,9 +35,38 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runDispatch(ctx, client, args[1:], out)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
+	case "secret":
+		return runSecret(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}
+}
+
+func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) == 0 || args[0] != "set" {
+		return fmt.Errorf("usage: quay secret set --project <id> <key> <value>")
+	}
+	fs := flag.NewFlagSet("secret set", flag.ContinueOnError)
+	fs.SetOutput(out)
+	project := fs.String("project", "", "project id (required)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *project == "" {
+		return fmt.Errorf("secret set requires --project")
+	}
+	rest := fs.Args()
+	if len(rest) != 2 {
+		return fmt.Errorf("usage: quay secret set --project <id> <key> <value>")
+	}
+	key, value := rest[0], rest[1]
+
+	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: *project, Key: key, Value: value}); err != nil {
+		return err
+	}
+	// Confirm without echoing the value.
+	fmt.Fprintf(out, "set secret %s for project %s\n", key, *project)
+	return nil
 }
 
 func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

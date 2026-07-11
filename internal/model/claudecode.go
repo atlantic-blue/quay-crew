@@ -6,10 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
+
+// ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived
+// subscription token from (minted by `claude setup-token`). The control plane stores this per project
+// as a secret and injects it into the sandbox at turn time.
+const ClaudeCodeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 
 // ClaudeCodeRunner runs turns by driving the Claude Code CLI, under your subscription (no API cost).
 // It runs the CLI inside the session's sandbox it is handed, so the run is isolated and the CLI's
@@ -27,6 +33,24 @@ func NewClaudeCodeRunner() *ClaudeCodeRunner { return &ClaudeCodeRunner{Bin: "cl
 
 // compile time check.
 var _ Runner = (*ClaudeCodeRunner)(nil)
+
+// envList turns the request env into the "KEY=value" form the sandbox expects, sorted so the exec is
+// deterministic.
+func envList(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(env))
+	for _, k := range keys {
+		out = append(out, k+"="+env[k])
+	}
+	return out
+}
 
 func buildArgs(req Request) []string {
 	mode := req.PermissionMode
@@ -54,7 +78,7 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 		workdir = r.DefaultWorkdir
 	}
 
-	spec := sandbox.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir}
+	spec := sandbox.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir, Env: envList(req.Env)}
 	proc, err := box.Exec(ctx, spec)
 	if err != nil {
 		return Response{}, fmt.Errorf("model: exec: %w", err)
