@@ -9,7 +9,27 @@ import (
 )
 
 // updateKey routes a keypress to whichever bar has the keyboard.
-func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+//
+// One read can carry several runes at once. That is what pasting looks like, and what a terminal
+// does with keys pressed faster than it drains its buffer, so ":p" can arrive as a single two rune
+// message. Fold those through one rune at a time, otherwise they match no binding at all and the
+// keystrokes are silently dropped.
+func (m Model) updateKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if msg.Type != tea.KeyRunes || len(msg.Runes) <= 1 {
+		return m.routeKey(msg)
+	}
+	commands := make([]tea.Cmd, 0, len(msg.Runes))
+	for _, r := range msg.Runes {
+		next, cmd := m.routeKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = next
+		if cmd != nil {
+			commands = append(commands, cmd)
+		}
+	}
+	return m, tea.Batch(commands...)
+}
+
+func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch m.mode {
 	case modeCommand:
 		return m.updateCommandKey(msg)
@@ -23,7 +43,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateBrowseKey handles the default mode: move, drill, go back, act.
-func (m Model) updateBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		m.quitting = true
@@ -70,7 +90,7 @@ func (m Model) move(key string) (Model, bool) {
 }
 
 // act runs the action bound to key on the selected row, if there is one.
-func (m Model) act(key string) (tea.Model, tea.Cmd) {
+func (m Model) act(key string) (Model, tea.Cmd) {
 	row, hasRow := m.selectedRowValue()
 	if !hasRow {
 		return m, nil
@@ -113,7 +133,7 @@ func runCmd(action Action, row Row) tea.Cmd {
 }
 
 // drill descends into the selected row's child resource, remembering where to come back to.
-func (m Model) drill() (tea.Model, tea.Cmd) {
+func (m Model) drill() (Model, tea.Cmd) {
 	if m.active.DrillTo == "" {
 		return m, nil
 	}
@@ -134,7 +154,7 @@ func (m Model) drill() (tea.Model, tea.Cmd) {
 
 // back returns to the view that was drilled down from, with its selection intact. At the top of the
 // stack escape clears the filter instead, and clears nothing when there is no filter.
-func (m Model) back() (tea.Model, tea.Cmd) {
+func (m Model) back() (Model, tea.Cmd) {
 	if len(m.stack) == 0 {
 		if m.filter == "" {
 			return m, nil
@@ -156,7 +176,7 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 }
 
 // updateCommandKey handles the command bar: type a resource name or alias, enter to switch.
-func (m Model) updateCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateCommandKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		m.mode, m.input = modeBrowse, ""
@@ -172,7 +192,7 @@ func (m Model) updateCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // openTyped switches to the resource named in the command bar.
-func (m Model) openTyped() (tea.Model, tea.Cmd) {
+func (m Model) openTyped() (Model, tea.Cmd) {
 	typed := m.input
 	m.mode, m.input = modeBrowse, ""
 
@@ -191,7 +211,7 @@ func (m Model) openTyped() (tea.Model, tea.Cmd) {
 }
 
 // updateFilterKey handles the filter bar. Filtering is live: every keystroke narrows the rows.
-func (m Model) updateFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateFilterKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		m.mode, m.input, m.filter = modeBrowse, "", ""

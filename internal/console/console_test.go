@@ -532,3 +532,40 @@ func TestNewRejectsAnUnknownStartingResource(t *testing.T) {
 		t.Fatal("want an error opening on a resource that is not registered")
 	}
 }
+
+// ---------- batched keys ----------
+
+// A terminal can hand several runes over in one read, which is what pasting looks like. Before this
+// was handled the whole message matched no binding and the keystrokes vanished, which showed up as
+// the command bar simply not opening.
+
+func TestABatchedKeyReadIsFoldedIntoSeparateKeypresses(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions", "s"), staticResource("projects", "p"))
+
+	model, _ = update(t, model, runes(":p"))
+	if model.mode != modeCommand {
+		t.Fatalf("mode = %v, want the colon to have opened the command bar", model.mode)
+	}
+	if model.input != "p" {
+		t.Fatalf("input = %q, want the p to have landed in the command bar", model.input)
+	}
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.active.Name != "projects" {
+		t.Fatalf("active = %q, want projects", model.active.Name)
+	}
+}
+
+func TestPastingIntoTheFilterKeepsEveryRune(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, rowsFor(model, row("alpha", "alpha", "one"), row("beta", "beta", "two")))
+
+	model, _ = update(t, model, runes("/alph"))
+
+	if model.filter != "alph" {
+		t.Fatalf("filter = %q, want alph", model.filter)
+	}
+	if len(model.visibleRows()) != 1 {
+		t.Fatalf("visible = %d, want the pasted filter applied", len(model.visibleRows()))
+	}
+}
