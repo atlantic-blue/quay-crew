@@ -38,6 +38,24 @@ Feature: Sessions run in isolated sandboxes
     And the operator dispatches "a different subject" to a new thread
     Then the project has 2 sessions
 
+  Scenario: A session survives the control plane restarting
+    Given a session started by dispatching "remember this"
+    When the control plane restarts
+    And the operator dispatches "and again" to the same thread
+    Then both turns ran in the same session
+    And the second turn resumed the conversation the first turn started
+
+  Scenario: The operator can still see their sessions after a restart
+    Given a session started by dispatching "hello"
+    When the control plane restarts
+    Then the project has 1 sessions
+    And the session is reported as idle
+
+  Scenario: Projects survive the control plane restarting
+    When the control plane restarts
+    Then the project is listed
+    And the project can be fetched by its id
+
   Scenario: Stopping a session tears down its sandbox
     Given a session started by dispatching "hello"
     When the operator stops the session

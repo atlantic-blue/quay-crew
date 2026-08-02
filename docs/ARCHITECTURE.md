@@ -157,6 +157,28 @@ is a stack that cannot do anything at all, and a smoke test that only checks the
 will not notice. Continuous integration therefore dispatches a real turn against the composed stack
 with a model substitute that still execs inside the sandbox.
 
+## Storage
+
+Projects, their channels and their sessions live in Postgres, a service in the same compose stack.
+The control plane holds no domain state of its own, which is the whole point: a session's
+`model_session_id` is the handle to a conversation the model keeps on its own disk, so losing that
+pointer orphans a conversation that still exists and cannot be reached again.
+
+- **One interface, two implementations.** `store.Store` is the contract. `store.Memory` runs without
+  a database and loses everything on restart, which the control plane warns about on the way up.
+  `store.Postgres` is what the composed stack and the cloud use. Both are held to the same
+  conformance suite, so a behaviour proven against one is proven against the other.
+- **Forward only migrations.** Embedded in the binary and applied on every start inside a
+  transaction each, recorded in `schema_migrations`, so starting twice is a no op. Every migration
+  ships a matching down file for an operator to run deliberately; nothing rolls back automatically.
+- **Every table carries `id`, `created_at` and `updated_at`.** Projects are soft deleted through
+  `deleted_at` and disappear from every read, while their sessions keep their history.
+- **A failed turn never erases the conversation handle.** Recording a turn with no handle leaves the
+  stored one alone, so a model call that fails cannot cost you the thread.
+
+Set `QC_DATABASE_URL` to use Postgres. Leave it unset and the store is in memory, which is only
+appropriate for a throwaway stack.
+
 ## What the product does, as an executable specification
 
 `features/` holds the behaviour specifications: feature files written in plain language, run by

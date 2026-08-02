@@ -28,6 +28,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -113,6 +114,7 @@ type world struct {
 	provider   *sandbox.FakeProvider
 	runner     *recordingRunner
 	secrets    secrets.Store
+	store      store.Store
 
 	projectID          string
 	projectName        string
@@ -134,10 +136,23 @@ func (w *world) start() error {
 	w.provider = &sandbox.FakeProvider{}
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
+	w.store = store.NewMemory()
+	return w.serve()
+}
 
+// restart tears the control plane down and stands a new one up over the same store, model and
+// sandbox provider, which is what a process restart looks like from the outside. Anything the new
+// instance can still see was in the store rather than in the old process.
+func (w *world) restart() error {
+	w.stop()
+	return w.serve()
+}
+
+// serve stands up a control plane over the world's existing dependencies.
+func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.grpcServer = grpc.NewServer()
-	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(w.runner, w.provider, w.secrets))
+	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(w.store, w.runner, w.provider, w.secrets))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
 	conn, err := grpc.NewClient(
@@ -261,6 +276,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to project "([^"]*)"$`, func(ctx context.Context, text, project string) error {
 		return worldFrom(ctx).dispatch(ctx, project, "", text)
+	})
+	sc.Step(`^the control plane restarts$`, func(ctx context.Context) error {
+		return worldFrom(ctx).restart()
 	})
 	sc.Step(`^the operator stops the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
@@ -388,7 +406,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the session is reported as stopped$`, func(ctx context.Context) error {
+	sc.Step(`^the session is reported as (\w+)$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		current, err := w.lastTurn()
 		if err != nil {
@@ -398,8 +416,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		if resp.GetSession().GetStatus() != "stopped" {
-			return fmt.Errorf("session status is %q, want stopped", resp.GetSession().GetStatus())
+		if got := resp.GetSession().GetStatus(); got != want {
+			return fmt.Errorf("session status is %q, want %q", got, want)
 		}
 		return nil
 	})

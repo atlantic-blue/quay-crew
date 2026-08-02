@@ -19,6 +19,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc"
 )
@@ -55,7 +56,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := controlplane.NewServer(runner, provider, secrets.NewMemory())
+	durable, err := openStore(ctx, os.Getenv("QC_DATABASE_URL"), logger)
+	if err != nil {
+		logger.Error("store open failed", "error", err)
+		os.Exit(1)
+	}
+	defer durable.Close()
+
+	server := controlplane.NewServer(durable, runner, provider, secrets.NewMemory())
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
@@ -81,6 +89,22 @@ func main() {
 	if err := shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// openStore returns the durable store. With QC_DATABASE_URL set it is Postgres, and the migrations
+// are applied on the way up. Without it the store is in memory, which loses every project and
+// session on restart and is only appropriate for a throwaway stack.
+func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (store.Store, error) {
+	if databaseURL == "" {
+		logger.Warn("no QC_DATABASE_URL set, using the in memory store: projects and sessions will not survive a restart")
+		return store.NewMemory(), nil
+	}
+	durable, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("store ready", "backend", "postgres")
+	return durable, nil
 }
 
 func splitAndTrim(csv string) []string {

@@ -13,6 +13,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -22,7 +23,7 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
-	srv := controlplane.NewServer(&model.FakeRunner{Reply: "ok"}, &sandbox.FakeProvider{}, secrets.NewMemory())
+	srv := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, &sandbox.FakeProvider{}, secrets.NewMemory())
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, srv)
 	go func() { _ = grpcServer.Serve(lis) }()
 	t.Cleanup(grpcServer.Stop)
