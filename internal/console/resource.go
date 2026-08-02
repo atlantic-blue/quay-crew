@@ -1,0 +1,158 @@
+// Package console is the operator's full screen terminal interface. It is a registry of resources,
+// one listed at a time, in the shape of k9s: a command bar switches views, enter drills down, escape
+// goes back, and the footer says which keys do what here.
+//
+// The registry is the point. Every resource the crew has should be inspectable from the same place,
+// so adding a view is declaring a Resource, never building a screen.
+package console
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"sort"
+	"strings"
+)
+
+// State is how a row is doing, so the console can colour it without knowing what the row is.
+type State int
+
+const (
+	// StateUnknown is the default: no colour, no claim.
+	StateUnknown State = iota
+	// StateReady is healthy and idle.
+	StateReady
+	// StateBusy is working right now.
+	StateBusy
+	// StateStopped ended cleanly.
+	StateStopped
+	// StateFailed ended badly and wants attention.
+	StateFailed
+)
+
+// Column is one column of a resource's table. A width of zero flexes to fill what is left over,
+// and at most one column should flex.
+type Column struct {
+	Title string
+	Width int
+}
+
+// Row is one listed item: the cells to show, the identifier actions operate on, and the parent it
+// belongs to so a drilled down view can scope to it.
+type Row struct {
+	ID     string
+	Parent string
+	Cells  []string
+	State  State
+}
+
+// Lister returns the current rows for a resource. Parent is empty for an unscoped view, or the
+// identifier drilled down from, for example a project id when listing that project's sessions.
+type Lister func(ctx context.Context, parent string) ([]Row, error)
+
+// Action is a key bound operation on the selected row.
+//
+// Exactly one of Run and Shell is set. Run performs the action and returns. Shell returns a command
+// to run with the console suspended, which is how shelling into a session's container works.
+type Action struct {
+	Key   string
+	Label string
+	Run   func(ctx context.Context, row Row) error
+	Shell func(row Row) *exec.Cmd
+}
+
+// Resource is one thing the console can list. Adding a view is adding one of these.
+type Resource struct {
+	// Name is the canonical name, typed as ":sessions" and shown in the breadcrumb.
+	Name string
+	// Aliases are shorter spellings the command bar also accepts.
+	Aliases []string
+	Columns []Column
+	List    Lister
+	Actions []Action
+	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
+	// does nothing here.
+	DrillTo string
+}
+
+// Registry holds the resources the console knows about and resolves what the operator types.
+type Registry struct {
+	byName  map[string]Resource
+	byToken map[string]string
+	order   []string
+}
+
+// NewRegistry indexes resources by name and alias. It rejects a duplicate name or alias rather than
+// letting one resource silently shadow another, because the shadowed view would simply never open.
+func NewRegistry(resources ...Resource) (*Registry, error) {
+	registry := &Registry{
+		byName:  make(map[string]Resource, len(resources)),
+		byToken: make(map[string]string, len(resources)*2),
+	}
+	for _, resource := range resources {
+		if err := registry.add(resource); err != nil {
+			return nil, err
+		}
+	}
+	return registry, nil
+}
+
+func (r *Registry) add(resource Resource) error {
+	if resource.Name == "" {
+		return fmt.Errorf("console: resource has no name")
+	}
+	if resource.List == nil {
+		return fmt.Errorf("console: resource %q has no lister", resource.Name)
+	}
+	if _, taken := r.byName[resource.Name]; taken {
+		return fmt.Errorf("console: resource %q is registered twice", resource.Name)
+	}
+	r.byName[resource.Name] = resource
+	r.order = append(r.order, resource.Name)
+
+	for _, token := range append([]string{resource.Name}, resource.Aliases...) {
+		if owner, taken := r.byToken[token]; taken {
+			return fmt.Errorf("console: %q already resolves to resource %q", token, owner)
+		}
+		r.byToken[token] = resource.Name
+	}
+	return nil
+}
+
+// Resolve maps what was typed into the command bar to a resource. Matching is case insensitive and
+// ignores surrounding space and a leading colon, so ":Sessions" and "s" both land.
+func (r *Registry) Resolve(token string) (Resource, bool) {
+	cleaned := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(token), ":")))
+	if cleaned == "" {
+		return Resource{}, false
+	}
+	name, known := r.byToken[cleaned]
+	if !known {
+		return Resource{}, false
+	}
+	resource, found := r.byName[name]
+	return resource, found
+}
+
+// Get returns a resource by its canonical name.
+func (r *Registry) Get(name string) (Resource, bool) {
+	resource, found := r.byName[name]
+	return resource, found
+}
+
+// Names returns every registered resource name in registration order, for the help view.
+func (r *Registry) Names() []string {
+	names := make([]string, len(r.order))
+	copy(names, r.order)
+	return names
+}
+
+// Tokens returns every name and alias, sorted, for command bar completion.
+func (r *Registry) Tokens() []string {
+	tokens := make([]string, 0, len(r.byToken))
+	for token := range r.byToken {
+		tokens = append(tokens, token)
+	}
+	sort.Strings(tokens)
+	return tokens
+}
