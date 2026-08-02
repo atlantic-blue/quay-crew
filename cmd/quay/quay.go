@@ -13,7 +13,10 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
 
-const usage = `usage: quay <command>
+const usage = `usage: quay [command]
+
+with no command, quay opens the console: a full screen view of every resource the crew has.
+press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
 
 commands:
   project create <name>            create a project
