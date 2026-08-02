@@ -20,6 +20,21 @@ services:
     volumes:
       - redpanda-data:/var/lib/redpanda/data
 
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: quaycrew
+      POSTGRES_USER: quaycrew
+      # Local development only. Every deployed environment supplies this from its secrets backend.
+      POSTGRES_PASSWORD: ${QC_POSTGRES_PASSWORD:-quaycrew}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quaycrew -d quaycrew"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.109.0
     command: ["--config=/etc/otel-collector.yaml"]
@@ -56,6 +71,9 @@ services:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317
       QC_GRPC_ADDR: ":50051"
+      # Projects and sessions live here, so a restart resumes conversations instead of orphaning
+      # them. Unset it and the control plane falls back to an in memory store and says so.
+      QC_DATABASE_URL: postgres://quaycrew:${QC_POSTGRES_PASSWORD:-quaycrew}@postgres:5432/quaycrew?sslmode=disable
       # Each session gets its own container on the host daemon, a sibling of this one.
       QC_SANDBOX: docker
       QC_SANDBOX_IMAGE: ${QC_SANDBOX_IMAGE:-alpine:3.22}
@@ -71,6 +89,8 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
+      postgres:
+        condition: service_healthy
 
   # Observability stack. Started only with: make up-observability
   grafana:
@@ -98,3 +118,4 @@ services:
 
 volumes:
   redpanda-data:
+  postgres-data:
