@@ -80,6 +80,9 @@ Each is its own Go service in its own container.
   it is disposable and can be rebuilt from the log.
 - **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list projects, see
   every session, tail a conversation, start or stop work.
+- **Flow reducer.** Consumes the event log in its own group and advances automation runs against a
+  graph, dispatching turns and asking the operator through the same gated outbound as everything
+  else. It is where control flow across sessions is written down. See Automation graphs below.
 
 ## Messaging and contracts
 
@@ -175,6 +178,113 @@ Three rules keep the layer worth having.
   do not prove a real turn executes; the dispatch smoke does that against the composed stack.
 
 The suite fails if it finds no feature files, because a run with nothing to run reports success.
+
+## Automation graphs
+
+Inside a session the model decides what happens next, and that is right. It is better at choosing the
+next step than any diagram would be. Across sessions the operator wants the opposite: a decision
+written down where it can be read, tested and stopped. Automation graphs are that second thing.
+
+The substrate is the one already here, a stream and a reducer:
+
+```go
+// Pure. No Docker, no Postgres, no model. Testable in a table test.
+type Runner interface {
+    Advance(run Run, ev Event) (Run, []Command, error)
+}
+```
+
+A run is an instance of a graph: an identifier, the graph version it is pinned to, a small state map,
+and one current node. An event arrives, the reducer evaluates the current node's outgoing edges, and
+returns the next state plus commands to emit. Every transition is written back to the log as an
+event, so run state is derived rather than stored, and any run can be reconstructed by replay.
+
+A stream and a reducer is the more powerful arrangement, strictly. Any control flow can be written as
+a reducer, including branching computed at run time and steps chosen by the model. A graph cannot
+express that. **The graph is a deliberate restriction on the reducer, and the restriction is the
+point.** An arbitrary reducer is code, so the only way to answer what an automation will do is to run
+it, which is the same opacity the model already has. A graph answers statically: the console can draw
+it, the operator can read it before it runs and see which node a run is sitting on while it does.
+Power is not what is wanted at this layer, legibility is.
+
+Five node types, and a sixth needs an argument:
+
+- `dispatch` sends a turn to a session and waits for the result.
+- `wait` waits for an external event, a timer or a webhook or a channel message.
+- `ask` puts a question to the operator through the gated outbound and waits for the reply.
+- `choice` branches on state, pure, no side effect.
+- `done` ends the run.
+
+Every node either waits on something or is pure, so the reducer never blocks and there is no
+goroutine per run.
+
+Graphs are authored as files, loaded into the store, and versioned:
+
+```yaml
+name: fix-red-pull-request
+on: { event: pull_request.check_failed }
+nodes:
+  fix:   { type: dispatch, session: "{{project}}", prompt: "CI is red on {{url}}. Diagnose and fix." }
+  ok:    { type: choice, on: { result.exit_code: 0 } }
+  ask:   { type: ask, text: "Fixed {{url}} locally. Push?" }
+edges:
+  - [fix, ok]
+  - [ok, ask, "true"]
+  - [ok, done, "false"]
+  - [ask, push, "yes"]
+```
+
+### Where it sits
+
+`internal/flow` is another consumer group on the log, a peer of the gateway rather than a layer under
+anything. It is in no request path, so removing it leaves every existing path working. It holds no
+privileged access: it calls the same `ControlPlaneService` the console does, and its outbound goes
+through the same gate as everything else, so it cannot reach the operator without intent.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EV as trigger
+    participant LOG as event log
+    participant FLOW as flow reducer
+    participant API as control plane
+    participant SBX as sandbox
+    participant YOU as operator
+
+    EV->>LOG: check failed on a pull request
+    LOG->>FLOW: event, partitioned by run id
+    Note over FLOW: Advance(run, event)<br/>edge matches, next node is dispatch
+    FLOW->>LOG: run advanced, now at node dispatch
+    FLOW->>API: Dispatch turn into the session
+    API->>SBX: run the turn
+    SBX-->>API: result, exit code 0
+    API->>LOG: turn finished
+    LOG->>FLOW: event
+    Note over FLOW: node choice is pure,<br/>exit code 0 takes the yes edge
+    FLOW->>LOG: outbound, gated, awaiting intent
+    LOG->>YOU: fixed it locally, push?
+    YOU->>LOG: yes
+    LOG->>FLOW: event
+    FLOW->>API: Dispatch the push turn
+```
+
+### Constraints that hold the design together
+
+- **Partition the log by run identifier.** One run's events are then totally ordered, so no locking.
+- **Pin the graph version on the run.** Otherwise editing a file changes an automation that is
+  halfway through.
+- **No expression language.** Three comparison operators to start. Accepting arbitrary expressions
+  means owning a language and a sandbox.
+- **No parallel nodes and no joins in the first version.** A single current node. Joins are where
+  every workflow engine turns into a product, and which join is needed will not be knowable until two
+  real automations exist.
+- **No framework.** LangGraph and its peers get durability from a checkpointer that saves a snapshot
+  per node. That is a weaker version of the log already here: it keeps the latest state and not the
+  history, so a consumer added later cannot read what already happened. A framework also owns the
+  schema, which turns the store into its cache rather than the source of truth.
+
+The scheduler is an implementation detail of the `wait` node, not an automation system of its own. It
+delivers timer events onto the log and nothing more.
 
 ## Secrets
 
