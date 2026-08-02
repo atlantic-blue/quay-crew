@@ -10,7 +10,7 @@ GOBIN := $(shell go env GOPATH)/bin
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start up-observability down logs ps proto build install test lint fmt tidy sandbox-image help
+.PHONY: up start up-observability down logs ps proto build install test features lint fmt tidy sandbox-image help
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
 up:
@@ -56,10 +56,14 @@ install:
 test:
 	go test ./...
 
+## features: run the behaviour specifications and print what the product does
+features:
+	go test ./features/... -v -count=1
+
 ## lint: run buf and golangci-lint (generated code is not linted)
 lint:
 	buf lint
-	golangci-lint run ./internal/... ./cmd/...
+	golangci-lint run ./internal/... ./cmd/... ./features/...
 
 ## fmt: format the Go sources (excluding generated code)
 fmt:
