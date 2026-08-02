@@ -157,6 +157,25 @@ is a stack that cannot do anything at all, and a smoke test that only checks the
 will not notice. Continuous integration therefore dispatches a real turn against the composed stack
 with a model substitute that still execs inside the sandbox.
 
+## What the product does, as an executable specification
+
+`features/` holds the behaviour specifications: feature files written in plain language, run by
+godog, driving the control plane over its real interface through an in memory connection. They are
+the readable answer to what Quay Crew does, and they fail when it stops doing it. `make features`
+runs them and prints them.
+
+Three rules keep the layer worth having.
+
+- **The control plane contract only.** A behaviour that is better said as a Go table test belongs in
+  the package it tests. A feature file per package restates the tests more slowly.
+- **Every scenario has teeth.** Each one was checked by breaking the implementation on purpose and
+  confirming it goes red. A scenario that passes against a broken system is worse than no scenario.
+- **They state their own limits.** The model runner and the sandbox provider are doubles here, so
+  these scenarios prove routing, session identity, sandbox lifecycle and refusals. They deliberately
+  do not prove a real turn executes; the dispatch smoke does that against the composed stack.
+
+The suite fails if it finds no feature files, because a run with nothing to run reports success.
+
 ## Secrets
 
 Secrets are never stored in the repository, and the code has no built in knowledge of any.
