@@ -164,10 +164,17 @@ jobs:
             sleep 2
           done
 
+          # Capture before matching. Under pipefail a `grep -q` closes the pipe on its first match,
+          # which hands the writer a broken pipe and fails the step for the wrong reason.
+          projects=$(go run ./cmd/quay project list)
+          sessions=$(go run ./cmd/quay sessions --project "$project")
+          echo "$projects"
+          echo "$sessions"
+
           # The project is still there.
-          go run ./cmd/quay project list | grep -q "$project"
+          case "$projects" in *"$project"*) ;; *) echo "the project did not survive the restart"; exit 1 ;; esac
           # And so is the session, on the same thread, exactly one of it.
-          test "$(go run ./cmd/quay sessions --project "$project" | grep -c "thread=$thread")" -eq 1
+          test "$(printf '%s\n' "$sessions" | grep -c "thread=$thread")" -eq 1
 
           # Dispatching a turn after the restart is deliberately not asserted here. The control plane
           # forgets which container each session was running in, so it tries to start a second one
