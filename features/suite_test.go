@@ -395,6 +395,23 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	sc.Step(`^the session still holds the conversation the first turn started$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		if err != nil {
+			return err
+		}
+		// The handle points at a conversation the model keeps on its own disk. Lose it and that
+		// conversation still exists but can never be reached again.
+		if got := resp.GetSession().GetModelSessionId(); got != "conversation-1" {
+			return fmt.Errorf("the session holds conversation %q, want conversation-1", got)
+		}
+		return nil
+	})
 	sc.Step(`^the project has (\d+) sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
 		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
