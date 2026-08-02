@@ -10,6 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -18,7 +19,7 @@ import (
 )
 
 func newServer(runner model.Runner) *controlplane.Server {
-	return controlplane.NewServer(runner, &sandbox.FakeProvider{}, secrets.NewMemory())
+	return controlplane.NewServer(store.NewMemory(), runner, &sandbox.FakeProvider{}, secrets.NewMemory())
 }
 
 func TestCreateAndListProjects(t *testing.T) {
@@ -92,7 +93,7 @@ func TestDispatchUnknownProject(t *testing.T) {
 
 func TestDispatchInjectsTheProjectSubscriptionToken(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "ok"}
-	s := controlplane.NewServer(runner, &sandbox.FakeProvider{}, secrets.NewMemory())
+	s := controlplane.NewServer(store.NewMemory(), runner, &sandbox.FakeProvider{}, secrets.NewMemory())
 	ctx := context.Background()
 
 	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
@@ -126,8 +127,8 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 }
 
 func TestSetSecretStoresValue(t *testing.T) {
-	store := secrets.NewMemory()
-	s := controlplane.NewServer(&model.FakeRunner{}, &sandbox.FakeProvider{}, store)
+	secretStore := secrets.NewMemory()
+	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{}, &sandbox.FakeProvider{}, secretStore)
 	ctx := context.Background()
 
 	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
@@ -136,7 +137,7 @@ func TestSetSecretStoresValue(t *testing.T) {
 	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: pid, Key: "token", Value: "s3cret"}); err != nil {
 		t.Fatalf("SetSecret: %v", err)
 	}
-	got, err := store.Get(ctx, pid, "token")
+	got, err := secretStore.Get(ctx, pid, "token")
 	if err != nil || got != "s3cret" {
 		t.Fatalf("secret not stored: got %q err %v", got, err)
 	}
@@ -144,7 +145,7 @@ func TestSetSecretStoresValue(t *testing.T) {
 
 func TestSessionSandboxLifecycle(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := controlplane.NewServer(&model.FakeRunner{Reply: "ok"}, provider, secrets.NewMemory())
+	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, provider, secrets.NewMemory())
 	ctx := context.Background()
 
 	project, _ := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})

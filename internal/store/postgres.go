@@ -1,0 +1,254 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// Postgres is the durable Store. Everything the control plane knows lives here, so the process holds
+// nothing that a restart would lose.
+type Postgres struct {
+	pool *pgxpool.Pool
+}
+
+var _ Store = (*Postgres)(nil)
+
+// NewPostgres connects, applies the migrations, and returns the store. The caller closes it.
+func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse database url: %w", err)
+	}
+	// Every query the control plane makes is short. A connection that cannot be had quickly is a
+	// failed turn, not a turn that hangs.
+	config.ConnConfig.ConnectTimeout = 10 * time.Second
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping: %w", err)
+	}
+	if err := Migrate(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return &Postgres{pool: pool}, nil
+}
+
+// Close releases the connection pool.
+func (p *Postgres) Close() { p.pool.Close() }
+
+// CreateProject inserts a project.
+func (p *Postgres) CreateProject(ctx context.Context, name string) (*quaycrewv1.Project, error) {
+	var (
+		id        = NewID()
+		createdAt time.Time
+	)
+	err := p.pool.QueryRow(ctx,
+		`insert into projects (id, name) values ($1, $2) returning created_at`, id, name,
+	).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("create project: %w", err)
+	}
+	return &quaycrewv1.Project{Id: id, Name: name, CreatedAt: timestamppb.New(createdAt)}, nil
+}
+
+// GetProject returns a project that has not been deleted.
+func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error) {
+	var (
+		name      string
+		createdAt time.Time
+	)
+	err := p.pool.QueryRow(ctx,
+		`select name, created_at from projects where id = $1 and deleted_at is null`, id,
+	).Scan(&name, &createdAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get project: %w", err)
+	}
+	return &quaycrewv1.Project{Id: id, Name: name, CreatedAt: timestamppb.New(createdAt)}, nil
+}
+
+// ListProjects returns every project that has not been deleted, newest first.
+func (p *Postgres) ListProjects(ctx context.Context) ([]*quaycrewv1.Project, error) {
+	rows, err := p.pool.Query(ctx,
+		`select id, name, created_at from projects where deleted_at is null order by created_at desc, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]*quaycrewv1.Project, 0)
+	for rows.Next() {
+		var (
+			id, name  string
+			createdAt time.Time
+		)
+		if err := rows.Scan(&id, &name, &createdAt); err != nil {
+			return nil, fmt.Errorf("scan project: %w", err)
+		}
+		out = append(out, &quaycrewv1.Project{Id: id, Name: name, CreatedAt: timestamppb.New(createdAt)})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	return out, nil
+}
+
+// DeleteProject soft deletes a project, leaving its sessions intact.
+func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update projects set deleted_at = now(), updated_at = now() where id = $1 and deleted_at is null`, id)
+	if err != nil {
+		return fmt.Errorf("delete project: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// AttachChannel records a channel against a live project.
+func (p *Postgres) AttachChannel(ctx context.Context, project, id, kind string) (*quaycrewv1.Channel, error) {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return nil, err
+	}
+	_, err := p.pool.Exec(ctx, `
+		insert into channels (id, project, kind) values ($1, $2, $3)
+		on conflict (project, id) do update set kind = excluded.kind, updated_at = now()`,
+		id, project, kind)
+	if err != nil {
+		return nil, fmt.Errorf("attach channel: %w", err)
+	}
+	return &quaycrewv1.Channel{Project: project, Id: id, Kind: kind}, nil
+}
+
+// FindOrCreateSession returns the project's session for a thread, creating it on first use.
+//
+// The insert races with any other caller dispatching to the same thread, so it defers to the unique
+// constraint on (project, thread_id) and reads the winner back rather than trusting a prior select.
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error) {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return nil, err
+	}
+	if _, err := p.pool.Exec(ctx, `
+		insert into sessions (id, project, thread_id, status) values ($1, $2, $3, 'idle')
+		on conflict (project, thread_id) do nothing`,
+		NewID(), project, thread); err != nil {
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+	return p.sessionBy(ctx, `project = $1 and thread_id = $2`, project, thread)
+}
+
+// RecordTurn stores the model conversation handle and status after a turn. An empty handle leaves
+// the stored one alone, so a failed turn cannot erase the pointer to a live conversation.
+func (p *Postgres) RecordTurn(ctx context.Context, id, modelSessionID, status string) error {
+	tag, err := p.pool.Exec(ctx, `
+		update sessions
+		set model_session_id = case when $2 = '' then model_session_id else $2 end,
+		    status = $3,
+		    updated_at = now()
+		where id = $1`,
+		id, modelSessionID, status)
+	if err != nil {
+		return fmt.Errorf("record turn: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetSession returns a session by id.
+func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error) {
+	return p.sessionBy(ctx, `id = $1`, id)
+}
+
+// ListSessions returns sessions, optionally filtered to one project, newest first.
+func (p *Postgres) ListSessions(ctx context.Context, project string) ([]*quaycrewv1.Session, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, project, thread_id, status, model_session_id, created_at, updated_at
+		from sessions
+		where ($1 = '' or project = $1)
+		order by created_at desc, id`, project)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]*quaycrewv1.Session, 0)
+	for rows.Next() {
+		session, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	return out, nil
+}
+
+// StopSession marks a session stopped.
+func (p *Postgres) StopSession(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set status = 'stopped', updated_at = now() where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("stop session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// sessionBy reads the single session matching a where clause.
+func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, project, thread_id, status, model_session_id, created_at, updated_at
+		from sessions where `+where, args...)
+	if err != nil {
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("get session: %w", err)
+		}
+		return nil, ErrNotFound
+	}
+	return scanSession(rows)
+}
+
+func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
+	var (
+		id, project, thread, status, modelSessionID string
+		createdAt, updatedAt                        time.Time
+	)
+	if err := rows.Scan(&id, &project, &thread, &status, &modelSessionID, &createdAt, &updatedAt); err != nil {
+		return nil, fmt.Errorf("scan session: %w", err)
+	}
+	return &quaycrewv1.Session{
+		Id:             id,
+		Project:        project,
+		ThreadId:       thread,
+		Status:         status,
+		ModelSessionId: modelSessionID,
+		CreatedAt:      timestamppb.New(createdAt),
+		UpdatedAt:      timestamppb.New(updatedAt),
+	}, nil
+}
