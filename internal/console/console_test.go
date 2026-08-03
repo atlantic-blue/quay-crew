@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -978,6 +980,47 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 	// The row's identifier is the file, because that is what any action on it would open.
 	if rows[1].ID != "/data/workspaces/w1/projects/p1/workspace/CLAUDE.md" {
 		t.Fatalf("the row carries %q, want the file to edit", rows[1].ID)
+	}
+}
+
+// TestEditingContextOpensTheOperatorsEditor: the console suspends itself to run a command, which is
+// how opening a thread works, so an editor is the same mechanism. The file is created by the editor
+// saving it, but the directory has to be there first or an editor writing into a sandbox that has
+// never run fails on a path nobody made.
+func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "never", "made", "CLAUDE.md")
+	t.Setenv("EDITOR", "vi -u NONE")
+
+	edit := actionBoundTo(t, Contexts(&fakeClient{}), "enter")
+	if edit.Label != "Edit" {
+		t.Fatalf("enter runs %q, want Edit", edit.Label)
+	}
+	command, err := edit.Shell(Row{ID: file})
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	if got := strings.Join(command.Args, " "); got != "vi -u NONE "+file {
+		t.Fatalf("command = %q, want the editor and the file", got)
+	}
+	if _, err := os.Stat(filepath.Dir(file)); err != nil {
+		t.Fatalf("the directory the editor would write into was not made: %v", err)
+	}
+}
+
+// TestEditingSaysWhenThereIsNoEditor: guessing one drops somebody into an editor they cannot leave.
+func TestEditingSaysWhenThereIsNoEditor(t *testing.T) {
+	t.Setenv("EDITOR", "")
+
+	edit := actionBoundTo(t, Contexts(&fakeClient{}), "e")
+	_, err := edit.Shell(Row{ID: "/somewhere/CLAUDE.md"})
+	if err == nil {
+		t.Fatal("editing with no EDITOR set succeeded, want a reason")
+	}
+	for _, want := range []string{"EDITOR", "/somewhere/CLAUDE.md"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the reason is %q, want it to mention %q", err, want)
+		}
 	}
 }
 

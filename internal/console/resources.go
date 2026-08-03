@@ -3,7 +3,10 @@ package console
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/features"
@@ -124,6 +127,22 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "edit this file", Width: 0},
 		},
 		SortBy: 1,
+		Actions: []Action{
+			{
+				// The console already suspends itself to run a command, which is how opening a thread
+				// and shelling in work, so an editor is the same mechanism. It creates the file when
+				// it saves, which is why nothing here has to write one first.
+				Key:   "enter",
+				Also:  []string{"e"},
+				Label: "Edit",
+				Shell: func(row Row) (*exec.Cmd, error) {
+					if row.ID == "" {
+						return nil, fmt.Errorf("no context selected")
+					}
+					return editorFor(row.ID)
+				},
+			},
+		},
 		List: func(ctx context.Context, _ string) ([]Row, error) {
 			resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
 			if err != nil {
@@ -136,6 +155,23 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			return rows, nil
 		},
 	}
+}
+
+// editorFor opens a file in the operator's own editor. It is their editor and their file: the crew
+// has no business choosing one, so an unset EDITOR is said out loud rather than guessed at, because
+// guessing wrong drops somebody into an editor they cannot leave.
+func editorFor(file string) (*exec.Cmd, error) {
+	editor := strings.TrimSpace(os.Getenv("EDITOR"))
+	if editor == "" {
+		return nil, fmt.Errorf("no EDITOR set: export one, or edit %s yourself", file)
+	}
+	// The directory is created for a sandbox that has never run, so an editor writing there does not
+	// fail on a path that is not made yet.
+	if err := os.MkdirAll(filepath.Dir(file), 0o777); err != nil {
+		return nil, fmt.Errorf("make room for %s: %w", file, err)
+	}
+	parts := strings.Fields(editor)
+	return exec.Command(parts[0], append(parts[1:], file)...), nil
 }
 
 func contextRow(dir *quaycrewv1.ContextDir) Row {
