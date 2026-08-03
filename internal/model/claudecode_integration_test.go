@@ -59,3 +59,29 @@ func TestClaudeCodeRunnerRealTurn(t *testing.T) {
 	}
 	t.Logf("reply=%q session=%s", resp.Reply, resp.ModelSessionID)
 }
+
+// TestClaudeSandboxImageSkipsFirstRunPrompts guards the thing that made attaching useless: a fresh
+// sandbox that has never completed the CLI's first run stops at the theme picker and then the
+// workspace trust prompt. A turn never notices, because a turn is not interactive. Attaching does
+// nothing else.
+//
+// Skips unless the image has been built (`make sandbox-image`), the same as the real turn test.
+func TestClaudeSandboxImageSkipsFirstRunPrompts(t *testing.T) {
+	const image = "quaycrew-sandbox-claude:local"
+	if exec.Command("docker", "image", "inspect", image).Run() != nil {
+		t.Skipf("%s is not built; run make sandbox-image", image)
+	}
+
+	out, err := exec.Command("docker", "run", "--rm", image,
+		"node", "-e", `const d=require("/home/agent/.claude.json");
+			const p = d.projects && d.projects["/home/agent/workspace"] || {};
+			console.log([d.hasCompletedOnboarding === true, p.hasTrustDialogAccepted === true].join(","))`,
+	).Output()
+	if err != nil {
+		t.Fatalf("read the seeded config from the image: %v", err)
+	}
+
+	if got := strings.TrimSpace(string(out)); got != "true,true" {
+		t.Fatalf("the image reports onboarding,trust = %q, want true,true: an attach would stop at a prompt", got)
+	}
+}

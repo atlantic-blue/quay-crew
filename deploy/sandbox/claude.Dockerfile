@@ -18,3 +18,15 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN useradd --create-home --shell /bin/bash agent
 USER agent
 WORKDIR /home/agent/workspace
+
+# Get the first run out of the way.
+#
+# A turn is non interactive and skips all of this, but attaching to a conversation is interactive, and
+# a sandbox is a fresh container every time. Without this the operator lands in the theme picker and
+# then the workspace trust prompt instead of their conversation, which reads as "the token is not
+# working" because nothing ever gets far enough to authenticate.
+#
+# The CLI rewrites this file as it runs; these are only the starting values.
+RUN mkdir -p /home/agent/.claude \
+    && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \
+    && printf '%s\n' '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true,"hasCompletedProjectOnboarding":true}}}' > /home/agent/.claude.json
