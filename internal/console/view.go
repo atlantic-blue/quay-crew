@@ -19,6 +19,18 @@ func (m Model) View() string {
 	visible := m.visibleRows()
 
 	lines := m.headerLines()
+	if m.mode == modeHelp {
+		lines = append(lines, m.panelTop(len(visible)))
+		for _, line := range m.helpBody() {
+			lines = append(lines, m.framed(line))
+		}
+		lines = append(lines, m.panelBottom())
+		if m.err != nil {
+			lines = append(lines, alert.Render(truncate(m.err.Error(), m.width)))
+		}
+		return strings.Join(append(lines, m.footer()), "\n")
+	}
+
 	lines = append(lines, m.panelTop(len(visible)), m.framed(m.columnHeader()))
 	for _, line := range m.bodyLines(visible) {
 		lines = append(lines, m.framed(line))
@@ -44,7 +56,7 @@ func (m Model) headerLines() []string {
 		}
 	}
 
-	// The block is as tall as the taller of the two: neither the crew's description nor the keys
+	// The block is as tall as the tallest of them: neither the crew's description nor the keys
 	// available may be cut off because the other one is shorter.
 	height := len(status)
 	if len(hints) > height {
@@ -63,6 +75,38 @@ func (m Model) headerLines() []string {
 		}
 		lines = append(lines, truncate(combined, m.width))
 	}
+	return m.withLogo(lines)
+}
+
+// logo is the wordmark, drawn on the right of the header the way k9s draws its own.
+var logo = []string{
+	"  ██████  ██    ██  █████  ██    ██",
+	" ██    ██ ██    ██ ██   ██  ██  ██ ",
+	" ██    ██ ██    ██ ███████   ████  ",
+	" ██ ▄▄ ██ ██    ██ ██   ██    ██   ",
+	"  ██████   ██████  ██   ██    ██   ",
+	"     ▀▀                            ",
+}
+
+// withLogo puts the wordmark against the right edge, and leaves it out rather than making room for
+// it: on a narrow window, or a header shorter than the mark, the rows matter more than the branding.
+func (m Model) withLogo(lines []string) []string {
+	if len(lines) < len(logo) {
+		return lines
+	}
+	room := 0
+	for _, line := range lines {
+		if width := lipgloss.Width(line); width > room {
+			room = width
+		}
+	}
+	if m.width-room-2 < lipgloss.Width(logo[0]) {
+		return lines
+	}
+
+	for index := range logo {
+		lines[index] = pad(lines[index], m.width-lipgloss.Width(logo[index])) + mark.Render(logo[index])
+	}
 	return lines
 }
 
@@ -73,19 +117,20 @@ func (m Model) statusLines() []string {
 	lines := make([]string, 0, 6)
 	add := func(key, value string) {
 		if value != "" {
-			lines = append(lines, faint.Render(pad(key, 8))+value)
+			lines = append(lines, statusKey.Render(pad(key+":", 9))+value)
 		}
 	}
-	add("address", m.info.Address)
-	add("model", m.info.Model)
-	add("sandbox", m.info.Sandbox)
-	add("store", m.info.Store)
+	add("Quay", m.info.Version)
+	add("Address", m.info.Address)
+	add("Context", m.info.Context)
+	add("Model", m.info.Model)
+	add("Sandbox", m.info.Sandbox)
+	add("Store", m.info.Store)
 	if m.info.Store != "" {
-		add("state", statePhrase(m.info.StateKept))
+		add("State", statePhrase(m.info.StateKept))
 	}
-	add("scope", m.scopeName())
 	if len(lines) == 0 {
-		lines = append(lines, faint.Render("quay"))
+		lines = append(lines, statusKey.Render("Quay:    ")+faint.Render("asking what this crew is running"))
 	}
 	return lines
 }
@@ -99,16 +144,6 @@ func statePhrase(kept bool) string {
 	return alert.Render("lost with the container")
 }
 
-// scopeName is what the current view is narrowed to, as a path, so it reads the way the operator
-// would type it.
-func (m Model) scopeName() string {
-	trail := m.trail()
-	if len(trail) == 0 {
-		return ""
-	}
-	return strings.Join(trail, "/")
-}
-
 // trail is what was drilled through to get here, named rather than identified.
 func (m Model) trail() []string {
 	names := make([]string, 0, len(m.stack))
@@ -120,19 +155,61 @@ func (m Model) trail() []string {
 	return names
 }
 
-// hintLines is what the keys do here, wrapped into the same number of lines as the status block so
-// the two sit side by side. The view's own actions come first: they are the reason the operator is
-// looking at this view rather than another one.
+// hintLines is what the keys do here, in aligned columns beside the status block: one hint per line,
+// filling a column top to bottom before starting the next, the way k9s lays them out. Reading down a
+// column is how you find a key; reading along a wrapped row is not.
+//
+// The view's own actions come first, because they are the reason the operator is looking at this
+// view rather than another one.
 func (m Model) hintLines() []string {
-	perLine := 3
 	hints := m.hintParts()
-	lines := make([]string, 0, (len(hints)+perLine-1)/perLine)
-	for start := 0; start < len(hints); start += perLine {
-		end := start + perLine
+	if len(hints) == 0 {
+		return nil
+	}
+
+	// Tall enough to read, matching the status block when that is taller so the two end together,
+	// and never so tall that the rows have nowhere left to go.
+	height := len(m.statusLines())
+	if height < 4 {
+		height = 4
+	}
+	if height > len(hints) {
+		height = len(hints)
+	}
+	if limit := m.height / 3; limit > 0 && height > limit {
+		height = limit
+	}
+	if height < 1 {
+		height = 1
+	}
+
+	columns := make([][]string, 0, (len(hints)+height-1)/height)
+	for start := 0; start < len(hints); start += height {
+		end := start + height
 		if end > len(hints) {
 			end = len(hints)
 		}
-		lines = append(lines, strings.Join(hints[start:end], " "))
+		columns = append(columns, hints[start:end])
+	}
+
+	lines := make([]string, height)
+	for _, column := range columns {
+		widest := 0
+		for _, cell := range column {
+			if width := lipgloss.Width(cell); width > widest {
+				widest = width
+			}
+		}
+		for row := 0; row < height; row++ {
+			cell := ""
+			if row < len(column) {
+				cell = column[row]
+			}
+			lines[row] += pad(cell, widest+3)
+		}
+	}
+	for index, line := range lines {
+		lines[index] = strings.TrimRight(line, " ")
 	}
 	return lines
 }
@@ -141,6 +218,10 @@ func (m Model) hintLines() []string {
 // both are visible without counting rows: sessions(house-bills)[3].
 func (m Model) panelTop(count int) string {
 	title := m.active.Name
+	if m.mode == modeHelp {
+		title = "help(" + m.active.Name + ")"
+		return m.titledEdge(title)
+	}
 	// The nearest thing drilled through, not the whole path: the path is already in the status
 	// block, and the title is answering "these rows are which ones".
 	if trail := m.trail(); len(trail) > 0 {
@@ -150,12 +231,28 @@ func (m Model) panelTop(count int) string {
 	if m.filter != "" {
 		title += " filter " + m.filter
 	}
+	return m.titledEdge(title)
+}
 
-	edge := "╭─ " + title + " "
-	if gap := m.width - lipgloss.Width(edge) - 1; gap > 0 {
-		edge += strings.Repeat("─", gap)
+// titledEdge draws the panel's top edge with its title centred, which is where k9s puts it and where
+// the eye goes first.
+func (m Model) titledEdge(title string) string {
+	labelled := " " + crumb.Render(title) + " "
+	rule := m.width - 2 - lipgloss.Width(labelled)
+	if rule < 0 {
+		return frame.Render("╭" + strings.Repeat("─", max(m.width-2, 0)) + "╮")
 	}
-	return frame.Render(truncate(edge, m.width-1) + "╮")
+	left := rule / 2
+	return frame.Render("╭"+strings.Repeat("─", left)) + labelled +
+		frame.Render(strings.Repeat("─", rule-left)+"╮")
+}
+
+// max is the larger of two, which the standard library only grew for floats.
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (m Model) panelBottom() string {
@@ -164,6 +261,46 @@ func (m Model) panelBottom() string {
 		width = 0
 	}
 	return frame.Render("╰" + strings.Repeat("─", width) + "╯")
+}
+
+// helpBody is the key list, padded to the same height the rows would have taken, so opening it does
+// not resize the window's contents underneath.
+//
+// It goes into two columns rather than being cut off when it does not fit, because a list of keys
+// with the last few missing is exactly as useful as no list at all.
+func (m Model) helpBody() []string {
+	height := m.bodyHeight() + 1
+	entries := m.helpLines()
+	if len(entries) > height {
+		entries = intoTwoColumns(entries, m.innerWidth()/2)
+	}
+
+	lines := make([]string, 0, height)
+	for _, line := range entries {
+		if len(lines) == height {
+			break
+		}
+		lines = append(lines, m.fit(line))
+	}
+	for len(lines) < height {
+		lines = append(lines, m.fit(""))
+	}
+	return lines
+}
+
+// intoTwoColumns folds a list in half, side by side, reading down the left column and then down the
+// right one.
+func intoTwoColumns(entries []string, columnWidth int) []string {
+	half := (len(entries) + 1) / 2
+	folded := make([]string, 0, half)
+	for index := 0; index < half; index++ {
+		line := pad(entries[index], columnWidth)
+		if right := index + half; right < len(entries) {
+			line += entries[right]
+		}
+		folded = append(folded, line)
+	}
+	return folded
 }
 
 // framed puts one line inside the panel's sides.
@@ -199,7 +336,7 @@ func titles(columns []Column, sortedBy int) []string {
 	for i, column := range columns {
 		out[i] = strings.ToUpper(column.Title)
 		if i == sortedBy {
-			out[i] += " ▲"
+			out[i] += "↑"
 		}
 	}
 	return out
@@ -275,34 +412,65 @@ func (m Model) footer() string {
 	}
 }
 
-// breadcrumb is the drill path, so "me > house-bills > sessions" says what escape goes back to.
+// breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
+// says both where you are and what escape goes back to.
 func (m Model) breadcrumb() string {
-	trail := append(m.trail(), m.active.Name)
-	line := " " + crumb.Render(strings.Join(trail, faint.Render(" > ")))
+	line := " "
+	if trail := m.trail(); len(trail) > 0 {
+		line += faint.Render(strings.Join(trail, " > ")) + " "
+	}
+	line += chip.Render("<" + m.active.Name + ">")
 	if len(m.stack) > 0 {
 		line += faint.Render("   esc to go back")
 	}
 	return line
 }
 
-// hintParts lists what the keys do, with the view's own actions first because they are the reason
-// the operator is looking at this view rather than another one.
+// hintParts is what the header shows: this view's own commands, and the key that lists the rest.
+//
+// Only this view's commands, deliberately. k9s puts the view's verbs up here and everything else
+// behind a question mark, and a header that lists every key teaches the operator to stop reading it.
 func (m Model) hintParts() []string {
-	parts := make([]string, 0, len(m.active.Actions)+6)
+	parts := make([]string, 0, len(m.active.Actions)+3)
 	for _, action := range m.active.Actions {
 		parts = append(parts, hint(action.Key, action.Label))
 	}
 	if m.active.DrillTo != "" {
-		parts = append(parts, hint("⏎", m.active.DrillTo))
+		parts = append(parts, hint("enter", m.active.DrillTo))
 	}
 	if len(m.stack) > 0 || m.filter != "" {
 		parts = append(parts, hint("esc", "Back"))
 	}
-	parts = append(parts,
-		hint("↑↓", "Nav"), hint(":", "Resource"), hint("/", "Filter"),
-		hint("g", "Refresh"), hint("q", "Quit"),
-	)
-	return parts
+	return append(parts, hint("?", "Help"))
+}
+
+// helpLines is every key, this view's own first and then the ones that work everywhere. This is what
+// the question mark opens, and it is the only place the full list lives.
+func (m Model) helpLines() []string {
+	lines := make([]string, 0, len(m.active.Actions)+12)
+	lines = append(lines, crumb.Render("  "+m.active.Name))
+	for _, action := range m.active.Actions {
+		lines = append(lines, "    "+hint(action.Key, action.Label))
+	}
+	if m.active.DrillTo != "" {
+		lines = append(lines, "    "+hint("enter", "Drill into "+m.active.DrillTo))
+	}
+
+	lines = append(lines, "", crumb.Render("  everywhere"))
+	for _, pair := range [][2]string{
+		{"↑↓ jk", "Move"},
+		{"pgup pgdn", "Page"},
+		{"enter", "Drill in"},
+		{"esc", "Back, or clear the filter"},
+		{":", "Switch resource"},
+		{"/", "Filter these rows"},
+		{"g", "Refresh now"},
+		{"?", "This list"},
+		{"q", "Quit"},
+	} {
+		lines = append(lines, "    "+hint(pair[0], pair[1]))
+	}
+	return append(lines, "", faint.Render("  any key closes this"))
 }
 
 // pad right pads to a display width, leaving anything already wider alone.

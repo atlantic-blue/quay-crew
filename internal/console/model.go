@@ -23,6 +23,9 @@ const (
 	modeCommand
 	// modeFilter is the filter bar, opened with a slash, narrowing the rows on screen.
 	modeFilter
+	// modeHelp lists every key, opened with a question mark. The header carries only this view's own
+	// commands, the way k9s does, so the rest have to be somewhere.
+	modeHelp
 )
 
 // crumbEntry remembers a view that was drilled down from, so escape restores it exactly. It also
@@ -39,7 +42,12 @@ type crumbEntry struct {
 // operator can see which one they are about to act on, the way a cluster name does. It is fetched
 // once: it is configuration, and configuration does not change under a running process.
 type Info struct {
-	Address   string
+	// Version is the build of the tool itself, stamped in at compile time.
+	Version string
+	// Address is the control plane this console is pointed at.
+	Address string
+	// Context is where the operator is standing, "me/house-bills", from their current context.
+	Context   string
 	Model     string
 	Sandbox   string
 	Store     string

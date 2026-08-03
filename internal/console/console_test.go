@@ -550,16 +550,78 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 // ---------- view ----------
 
-func TestViewShowsTheKeyHintsForThisView(t *testing.T) {
+// TestTheHeaderShowsThisViewsOwnCommands: the header carries the verbs for what is on screen, and
+// the key that lists the rest. A header that lists every key teaches the operator to stop reading it.
+func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	client := &fakeClient{}
 	model := newTestModel(t, Sessions(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"sessions", "Shell", "Stop", "Filter", "Quit"} {
+	for _, want := range []string{"<a> Attach", "<s> Shell", "<x> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
-			t.Fatalf("view does not mention %q:\n%s", want, view)
+			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}
+	}
+	for _, unwanted := range []string{"Quit", "Refresh", "Resource"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("the header lists %q, which belongs behind the question mark:\n%s", unwanted, view)
+		}
+	}
+}
+
+// TestTheQuestionMarkListsEveryKey is where the keys the header does not show have to live.
+func TestTheQuestionMarkListsEveryKey(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Sessions(client), Workspaces(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
+
+	model, _ = update(t, model, runes("?"))
+	view := model.View()
+	for _, want := range []string{"help(sessions)", "Quit", "Refresh now", "Filter these rows", "<a> Attach"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the key list does not mention %q:\n%s", want, view)
+		}
+	}
+
+	// Any key closes it, because nothing in there acts on anything.
+	model, _ = update(t, model, runes("z"))
+	if model.mode != modeBrowse {
+		t.Fatalf("mode is %v after a keypress, want back to browsing", model.mode)
+	}
+	if strings.Contains(model.View(), "help(") {
+		t.Fatalf("the key list is still on screen:\n%s", model.View())
+	}
+}
+
+// TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding covers the two things only the tool knows
+// about itself: which build it is, and the context the operator set.
+func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Context: "me/house-bills"}})
+
+	view := model.View()
+	for _, want := range []string{"Quay:", "5fd7bee", "Context:", "me/house-bills"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the status block does not say %q:\n%s", want, view)
+		}
+	}
+}
+
+// TestTheWordmarkGivesWayToTheRows: branding is the first thing to drop when the window is small.
+func TestTheWordmarkGivesWayToTheRows(t *testing.T) {
+	full := newTestModel(t, staticResource("sessions"))
+	full, _ = update(t, full, tea.WindowSizeMsg{Width: 140, Height: 30})
+	full, _ = update(t, full, infoMsg{info: Info{
+		Version: "5fd7bee", Address: "localhost:50051", Context: "me", Model: "echo", Sandbox: "docker", Store: "memory",
+	}})
+	if !strings.Contains(full.View(), logo[0]) {
+		t.Fatalf("a wide window does not carry the wordmark:\n%s", full.View())
+	}
+
+	narrow, _ := update(t, full, tea.WindowSizeMsg{Width: 70, Height: 30})
+	if strings.Contains(narrow.View(), logo[0]) {
+		t.Fatalf("a narrow window still carries the wordmark:\n%s", narrow.View())
 	}
 }
 
@@ -681,10 +743,10 @@ func TestRowsAreSortedByTheMarkedColumn(t *testing.T) {
 			[]string{visible[0].ID, visible[1].ID, visible[2].ID})
 	}
 	view := model.View()
-	if !strings.Contains(view, "NAME ▲") {
+	if !strings.Contains(view, "NAME↑") {
 		t.Fatalf("the sorted column is not marked:\n%s", view)
 	}
-	if strings.Contains(view, "ID ▲") {
+	if strings.Contains(view, "ID↑") {
 		t.Fatalf("a column that is not sorted is marked:\n%s", view)
 	}
 }

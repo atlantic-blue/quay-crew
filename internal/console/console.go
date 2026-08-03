@@ -22,35 +22,35 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	return NewRegistry(Sessions(client), Projects(client), Workspaces(client))
 }
 
-// InfoFrom asks the control plane what it is running, for the console's status block. The address is
-// the client's own, because only the caller knows where it dialled.
-func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, address string) InfoSource {
+// InfoFrom asks the control plane what it is running and folds the answer into what the caller
+// already knows: which build this tool is, where it dialled, and where the operator is standing.
+// None of those three are the control plane's to say.
+func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSource {
 	return func(ctx context.Context) (Info, error) {
 		resp, err := client.GetInfo(ctx, &quaycrewv1.GetInfoRequest{})
 		if err != nil {
 			return Info{}, err
 		}
-		return Info{
-			Address:   address,
-			Model:     resp.GetModel(),
-			Sandbox:   resp.GetSandbox(),
-			Store:     resp.GetStore(),
-			StateKept: resp.GetStateKept(),
-		}, nil
+		known.Model, known.Sandbox = resp.GetModel(), resp.GetSandbox()
+		known.Store, known.StateKept = resp.GetStore(), resp.GetStateKept()
+		return known, nil
 	}
 }
 
-// Run opens the full screen console and returns when the operator quits. address is where the client
-// is pointed, shown in the status block so the operator can see which crew they are acting on.
-func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, address string) error {
+// Run opens the full screen console and returns when the operator quits. known is what the caller
+// can say without asking anybody: the build, the address, and the current context.
+func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
 	}
-	model, err := New(registry, Default, InfoFrom(client, address))
+	model, err := New(registry, Default, InfoFrom(client, known))
 	if err != nil {
 		return err
 	}
+	// Show what is already known while the control plane is still being asked, rather than an empty
+	// block that fills in a moment later.
+	model.info = known
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)

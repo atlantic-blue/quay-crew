@@ -37,6 +37,10 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateFilterKey(msg)
 	case modeBrowse:
 		return m.updateBrowseKey(msg)
+	case modeHelp:
+		// Any key closes it. Nothing in here acts on anything, so there is nothing to get wrong.
+		m.mode = modeBrowse
+		return m, nil
 	default:
 		return m, nil
 	}
@@ -53,6 +57,9 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "/":
 		m.mode, m.input = modeFilter, m.filter
+		return m, nil
+	case "?":
+		m.mode = modeHelp
 		return m, nil
 	case "g":
 		return m, listCmd(m.active, m.parent)

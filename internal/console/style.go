@@ -22,10 +22,17 @@ var (
 	headerBar = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiGreen)
 	// selectedRow is the cursor line: black on cyan, full width.
 	selectedRow = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiCyan)
-	// keyLabel is a footer hint's words, black on cyan, sitting right after its key letter.
-	keyLabel = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiCyan)
-	// keyLetter is the key itself, bold on the default background.
-	keyLetter = lipgloss.NewStyle().Bold(true)
+	// statusKey labels a value in the status block: "Address:", "Model:".
+	statusKey = lipgloss.NewStyle().Foreground(ansiCyan)
+	// hotKey is a key in the hints, wrapped in angle brackets so it reads as a key rather than a
+	// word: <a>, <ctrl-d>.
+	hotKey = lipgloss.NewStyle().Foreground(ansiCyan).Bold(true)
+	// hotKeyLabel is what that key does.
+	hotKeyLabel = lipgloss.NewStyle().Faint(true)
+	// mark is the wordmark in the top right.
+	mark = lipgloss.NewStyle().Foreground(ansiGreen)
+	// chip is the view you are in, at the bottom left, black on green the way the column header is.
+	chip = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiGreen)
 	// crumb is the breadcrumb line above the table.
 	crumb = lipgloss.NewStyle().Bold(true)
 	// faint is anything secondary: counts, timestamps, the scope note.
@@ -61,7 +68,8 @@ func styleFor(state State) lipgloss.Style {
 	}
 }
 
-// hint renders one footer key hint, for example a bold "s" followed by "Shell" on cyan.
+// hint renders one key hint, for example "<s> Shell". The angle brackets are k9s's, and they earn
+// their place: they say the thing inside is a key rather than a word.
 func hint(key, label string) string {
-	return keyLetter.Render(key) + keyLabel.Render(label)
+	return hotKey.Render("<"+key+">") + " " + hotKeyLabel.Render(label)
 }

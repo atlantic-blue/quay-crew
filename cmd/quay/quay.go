@@ -25,6 +25,7 @@ you work in one place at a time, and say where with an address: workspace/projec
   quay dispatch "when is the electricity bill due"
 
 commands:
+  version                                 print which build this is
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
@@ -46,6 +47,9 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return fmt.Errorf("%s", usage)
 	}
 	switch args[0] {
+	case "version":
+		fmt.Fprintln(out, version)
+		return nil
 	case "use":
 		return runUse(ctx, client, args[1:], out)
 	case "workspace":
