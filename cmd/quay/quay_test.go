@@ -19,8 +19,13 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
+// testClient stands up a control plane over an in memory connection and points the configuration
+// directory at a temporary one, so a test that moves the current context cannot touch the operator's
+// own.
 func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
 	srv := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, &sandbox.FakeProvider{}, secrets.NewMemory())
@@ -40,28 +45,207 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	return quaycrewv1.NewControlPlaneServiceClient(conn)
 }
 
+// mustRun runs one invocation and fails the test if it errors, for the setup steps that are not what
+// the test is about.
+func mustRun(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...string) string {
+	t.Helper()
+	var out bytes.Buffer
+	if err := run(context.Background(), client, args, &out); err != nil {
+		t.Fatalf("quay %s: %v", strings.Join(args, " "), err)
+	}
+	return out.String()
+}
+
 func TestWorkspaceCreateAndList(t *testing.T) {
 	client := testClient(t)
-	ctx := context.Background()
 
-	var out bytes.Buffer
-	if err := run(ctx, client, []string{"workspace", "create", "acme"}, &out); err != nil {
-		t.Fatalf("create: %v", err)
+	created := mustRun(t, client, "workspace", "create", "acme")
+	if !strings.Contains(created, "created workspace") || !strings.Contains(created, "(acme)") {
+		t.Fatalf("create output: %q", created)
 	}
-	if !strings.Contains(out.String(), "created workspace") || !strings.Contains(out.String(), "(acme)") {
-		t.Fatalf("create output: %q", out.String())
+	// Creating something says where you now are, so the next command needs no address.
+	if !strings.Contains(created, "now in acme") {
+		t.Fatalf("create did not move the operator: %q", created)
 	}
 
-	out.Reset()
-	if err := run(ctx, client, []string{"workspace", "list"}, &out); err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if !strings.Contains(out.String(), "acme") {
-		t.Fatalf("list output: %q", out.String())
+	if listed := mustRun(t, client, "workspace", "list"); !strings.Contains(listed, "acme") {
+		t.Fatalf("list output: %q", listed)
 	}
 }
 
-func TestDispatch(t *testing.T) {
+// TestCreateMovesYouAndDispatchFollows is the point of the whole change: say where you are once,
+// then talk.
+func TestCreateMovesYouAndDispatchFollows(t *testing.T) {
+	client := testClient(t)
+
+	mustRun(t, client, "workspace", "create", "me")
+	created := mustRun(t, client, "project", "create", "house-bills")
+	if !strings.Contains(created, "now in me/house-bills") {
+		t.Fatalf("creating a project did not move the operator into it: %q", created)
+	}
+	if where := mustRun(t, client, "use"); strings.TrimSpace(where) != "me/house-bills" {
+		t.Fatalf("quay use says %q, want me/house-bills", where)
+	}
+
+	replied := mustRun(t, client, "dispatch", "hello", "there")
+	if !strings.Contains(replied, "ok") {
+		t.Fatalf("dispatch with no address did not run: %q", replied)
+	}
+	if !strings.Contains(replied, "session ") || !strings.Contains(replied, "thread ") {
+		t.Fatalf("dispatch did not show session and thread: %q", replied)
+	}
+
+	// And the listing names things rather than printing identifiers.
+	listed := mustRun(t, client, "sessions")
+	if !strings.Contains(listed, "me/house-bills") {
+		t.Fatalf("sessions output does not name the workspace and project: %q", listed)
+	}
+}
+
+// TestAddressOnTheCommandLineDoesNotMoveYou covers the override: reach somewhere else for one
+// command without leaving where you are.
+func TestAddressOnTheCommandLineDoesNotMoveYou(t *testing.T) {
+	client := testClient(t)
+
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "project", "create", "gardening")
+	mustRun(t, client, "use", "me/house-bills")
+
+	if replied := mustRun(t, client, "dispatch", "me/gardening", "order the bulbs"); !strings.Contains(replied, "ok") {
+		t.Fatalf("dispatch to an explicit address did not run: %q", replied)
+	}
+	if where := mustRun(t, client, "use"); strings.TrimSpace(where) != "me/house-bills" {
+		t.Fatalf("an address on the command line moved the operator to %q", where)
+	}
+}
+
+// TestUseAThreadContinuesThatConversation is the third level: a thread is somewhere you can stand.
+func TestUseAThreadContinuesThatConversation(t *testing.T) {
+	client := testClient(t)
+
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	first := mustRun(t, client, "dispatch", "hello")
+	thread := threadFrom(t, first)
+
+	// The shortened identifier is what a listing prints, so typing that back has to work.
+	moved := mustRun(t, client, "use", "me/house-bills/"+thread[:8])
+	if !strings.Contains(moved, "now in me/house-bills/"+thread[:8]) {
+		t.Fatalf("use of a thread said %q", moved)
+	}
+
+	second := mustRun(t, client, "dispatch", "and again")
+	if got := threadFrom(t, second); got != thread {
+		t.Fatalf("the second turn ran in thread %s, want the one the context named, %s", got, thread)
+	}
+}
+
+// threadFrom digs the thread id out of what a dispatch printed.
+func threadFrom(t *testing.T, output string) string {
+	t.Helper()
+	_, after, found := strings.Cut(output, "thread ")
+	if !found {
+		t.Fatalf("no thread in %q", output)
+	}
+	return strings.TrimSuffix(strings.TrimSpace(after), ")")
+}
+
+func TestDispatchFromAWorkspaceSaysWhichProjectsItHolds(t *testing.T) {
+	client := testClient(t)
+
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "use", "me")
+
+	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard)
+	if err == nil {
+		t.Fatal("dispatching from a workspace succeeded, want a refusal")
+	}
+	// A refusal that only says no leaves the operator guessing what to type next.
+	if !strings.Contains(err.Error(), "house-bills") {
+		t.Fatalf("the refusal is %q, want it to name the projects the workspace holds", err)
+	}
+}
+
+func TestDispatchWithNowhereToGoExplainsItself(t *testing.T) {
+	client := testClient(t)
+	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard)
+	if err == nil {
+		t.Fatal("dispatch with no context succeeded, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "quay use") {
+		t.Fatalf("the refusal is %q, want it to say how to get somewhere", err)
+	}
+}
+
+// TestAMessageIsNotAnAddress guards the parsing rule: only something carrying a separator is read as
+// an address, so an unquoted message keeps working.
+func TestAMessageIsNotAnAddress(t *testing.T) {
+	client := testClient(t)
+
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	replied := mustRun(t, client, "dispatch", "hello", "there")
+	if !strings.Contains(replied, "ok") {
+		t.Fatalf("a two word message was not dispatched: %q", replied)
+	}
+}
+
+func TestUseRefusesAnAddressThatNamesNothing(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+
+	err := run(context.Background(), client, []string{"use", "ghost/bills"}, io.Discard)
+	if err == nil {
+		t.Fatal("use of an unknown address succeeded")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("the refusal is %q, want it to quote what was typed", err)
+	}
+	// And it left the operator where they already were, which creating "me" had made "me".
+	if where := mustRun(t, client, "use"); strings.TrimSpace(where) != "me" {
+		t.Fatalf("a refused address moved the operator to %q", where)
+	}
+}
+
+func TestSecretSet(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "acme")
+
+	out := mustRun(t, client, "secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "tok-123")
+	if !strings.Contains(out, "set secret CLAUDE_CODE_OAUTH_TOKEN") {
+		t.Fatalf("secret set output: %q", out)
+	}
+	// The value must never be echoed back.
+	if strings.Contains(out, "tok-123") {
+		t.Fatalf("secret value was printed: %q", out)
+	}
+
+	// A workspace can also be named outright, without moving there.
+	if out := mustRun(t, client, "secret", "set", "acme", "OTHER_KEY", "value"); !strings.Contains(out, "OTHER_KEY") {
+		t.Fatalf("secret set with an address: %q", out)
+	}
+}
+
+func TestSecretSetNeedsAKeyAndAValue(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "acme")
+	if err := run(context.Background(), client, []string{"secret", "set", "only-key"}, io.Discard); err == nil {
+		t.Fatal("secret set without a value = nil error, want error")
+	}
+}
+
+func TestUnknownCommand(t *testing.T) {
+	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard); err == nil {
+		t.Fatal("unknown command = nil error, want error")
+	}
+}
+
+// TestAnIdWorksWhereverANameDoes: the levels of an address are references, so nothing forces the
+// operator to have named things well.
+func TestAnIdWorksWhereverANameDoes(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -75,135 +259,9 @@ func TestDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	pid := project.GetProject().GetId()
 
-	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--project", pid, "hello", "world"}, &out); err != nil {
-		t.Fatalf("dispatch: %v", err)
-	}
-	if !strings.Contains(out.String(), "ok") {
-		t.Fatalf("dispatch reply not shown: %q", out.String())
-	}
-	if !strings.Contains(out.String(), "session ") || !strings.Contains(out.String(), "thread ") {
-		t.Fatalf("dispatch did not show session/thread: %q", out.String())
-	}
-
-	out.Reset()
-	if err := run(ctx, client, []string{"sessions", "--project", pid}, &out); err != nil {
-		t.Fatalf("sessions: %v", err)
-	}
-	// The listing names things rather than printing identifiers.
-	if !strings.Contains(out.String(), "acme/house-bills") {
-		t.Fatalf("sessions output does not name the workspace and project: %q", out.String())
-	}
-	if strings.Contains(out.String(), pid) {
-		t.Fatalf("sessions output prints the whole identifier: %q", out.String())
-	}
-}
-
-func TestSecretSet(t *testing.T) {
-	client := testClient(t)
-	ctx := context.Background()
-
-	created, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	if err != nil {
-		t.Fatalf("CreateWorkspace: %v", err)
-	}
-	pid := created.GetWorkspace().GetId()
-
-	var out bytes.Buffer
-	if err := run(ctx, client, []string{"secret", "set", "--workspace", pid, "CLAUDE_CODE_OAUTH_TOKEN", "tok-123"}, &out); err != nil {
-		t.Fatalf("secret set: %v", err)
-	}
-	if !strings.Contains(out.String(), "set secret CLAUDE_CODE_OAUTH_TOKEN") {
-		t.Fatalf("secret set output: %q", out.String())
-	}
-	// The value must never be echoed back.
-	if strings.Contains(out.String(), "tok-123") {
-		t.Fatalf("secret value was printed: %q", out.String())
-	}
-}
-
-func TestSecretSetRequiresWorkspaceKeyValue(t *testing.T) {
-	client := testClient(t)
-	if err := run(context.Background(), client, []string{"secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "tok"}, io.Discard); err == nil {
-		t.Fatal("secret set without --workspace = nil error, want error")
-	}
-	if err := run(context.Background(), client, []string{"secret", "set", "--workspace", "p1", "only-key"}, io.Discard); err == nil {
-		t.Fatal("secret set without a value = nil error, want error")
-	}
-}
-
-func TestDispatchRequiresWorkspace(t *testing.T) {
-	client := testClient(t)
-	var out bytes.Buffer
-	if err := run(context.Background(), client, []string{"dispatch", "hi"}, &out); err == nil {
-		t.Fatal("dispatch without --workspace = nil error, want error")
-	}
-}
-
-func TestUnknownCommand(t *testing.T) {
-	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard); err == nil {
-		t.Fatal("unknown command = nil error, want error")
-	}
-}
-
-// TestDispatchAcceptsAProjectName covers the papercut this exists for: the operator types the name
-// they gave the workspace, not the hex id printed once at creation.
-func TestDispatchAcceptsAProjectName(t *testing.T) {
-	client := testClient(t)
-	ctx := context.Background()
-
-	var created bytes.Buffer
-	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &created); err != nil {
-		t.Fatalf("workspace create: %v", err)
-	}
-	if err := run(ctx, client, []string{"project", "create", "--workspace", "demo", "bills"}, &created); err != nil {
-		t.Fatalf("project create: %v", err)
-	}
-
-	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--project", "bills", "hello"}, &out); err != nil {
-		t.Fatalf("dispatch by name: %v", err)
-	}
-	if !strings.Contains(out.String(), "ok") {
-		t.Fatalf("dispatch by name returned %q, want the reply", out.String())
-	}
-}
-
-func TestSessionsAcceptsAProjectName(t *testing.T) {
-	client := testClient(t)
-	ctx := context.Background()
-
-	var discard bytes.Buffer
-	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &discard); err != nil {
-		t.Fatalf("workspace create: %v", err)
-	}
-	if err := run(ctx, client, []string{"project", "create", "--workspace", "demo", "bills"}, &discard); err != nil {
-		t.Fatalf("project create: %v", err)
-	}
-	if err := run(ctx, client, []string{"dispatch", "--project", "bills", "hello"}, &discard); err != nil {
-		t.Fatalf("dispatch: %v", err)
-	}
-
-	var out bytes.Buffer
-	if err := run(ctx, client, []string{"sessions", "--project", "bills"}, &out); err != nil {
-		t.Fatalf("sessions by name: %v", err)
-	}
-	if strings.Contains(out.String(), "no sessions") {
-		t.Fatalf("sessions by name found nothing: %q", out.String())
-	}
-}
-
-func TestDispatchRejectsAnUnknownProjectReference(t *testing.T) {
-	client := testClient(t)
-	var out bytes.Buffer
-	err := run(context.Background(), client, []string{"dispatch", "--project", "ghost", "hello"}, &out)
-	if err == nil {
-		t.Fatal("dispatch to an unknown workspace succeeded")
-	}
-	// The operator needs to know it was the workspace reference that was wrong.
-	if !strings.Contains(err.Error(), "ghost") {
-		t.Fatalf("the error %q does not name the reference the operator typed", err)
+	address := created.GetWorkspace().GetId() + "/" + project.GetProject().GetId()
+	if replied := mustRun(t, client, "dispatch", address, "hello"); !strings.Contains(replied, "ok") {
+		t.Fatalf("dispatch by id: %q", replied)
 	}
 }

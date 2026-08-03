@@ -205,6 +205,11 @@ A workspace and a project are named in lowercase with hyphens, because a name is
 `me/house-bills` says which project of which workspace, on a command line and in a directory path on
 disk. The control plane refuses a name that could not be part of one, and says what would work.
 
+The three levels are addressed as a path, and the operator stands in one of them at a time. `quay use
+me/house-bills` records that in `~/.config/quay/context`, the way kubectl keeps a current context, and
+every command after it acts there until an address typed on the command line says otherwise. A thread
+is the third level, so standing in one continues that conversation rather than starting another.
+
 A **workspace** is the unit of tenancy. A **project** is a body of work inside it. A **thread** is one
 conversation, and a session is that thread running: it belongs to a project, and it carries its
 workspace too, denormalised so a listing needs no join. A project never moves workspace, so that

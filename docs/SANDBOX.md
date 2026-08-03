@@ -44,19 +44,23 @@ You need Docker and a Claude subscription.
    ```
    make install
    quay workspace create demo
-   quay project create --workspace demo house-bills
-   quay secret set --workspace demo CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
+   quay project create house-bills
+   quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
    ```
 
-   `--workspace` takes the workspace id or its name, so you never need to copy the id around.
-   The secret is scoped to the workspace, and a turn runs inside a project. The control plane reads it when running a turn and injects it
-   into that session's sandbox; it is never part of the message or the event log.
+   Creating something moves you into it, so each line lands where the one above it left you, and
+   `quay use` says where that is. The secret is scoped to the workspace, and a turn runs inside a
+   project. The control plane reads the secret when running a turn and injects it into that
+   session's sandbox; it is never part of the message or the event log.
 
 5. Dispatch a turn and get a real reply:
 
    ```
-   quay dispatch --project house-bills "say pong"
+   quay dispatch "say pong"
    ```
+
+   You are already in `demo/house-bills`, so nothing needs saying twice. To reach somewhere else for
+   one turn without moving, put the address first: `quay dispatch demo/gardening "order the bulbs"`.
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first turn and is reused for the
    rest of the session. A second dispatch on the same thread continues the same conversation.
