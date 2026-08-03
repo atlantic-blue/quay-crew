@@ -195,7 +195,7 @@ func TestOverGrpc(t *testing.T) {
 		t.Fatalf("CreateWorkspace over grpc: %v", err)
 	}
 	project, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
-		Workspace: workspace.GetWorkspace().GetId(), Name: "house bills",
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
 	})
 	if err != nil {
 		t.Fatalf("CreateProject over grpc: %v", err)
@@ -219,7 +219,7 @@ func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID st
 		t.Fatalf("CreateWorkspace: %v", err)
 	}
 	project, err := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
-		Workspace: workspace.GetWorkspace().GetId(), Name: "house bills",
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
 	})
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)

@@ -9,7 +9,7 @@ Feature: Sessions run in isolated sandboxes
   Background:
     Given a running control plane
     And a workspace named "acme"
-    And a project named "house bills"
+    And a project named "house-bills"
 
   Scenario: Dispatching a turn starts a session in its own sandbox
     When the operator dispatches "hello" to the project

@@ -70,7 +70,7 @@ func TestDispatch(t *testing.T) {
 		t.Fatalf("CreateWorkspace: %v", err)
 	}
 	project, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
-		Workspace: created.GetWorkspace().GetId(), Name: "house bills",
+		Workspace: created.GetWorkspace().GetId(), Name: "house-bills",
 	})
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
@@ -93,7 +93,7 @@ func TestDispatch(t *testing.T) {
 		t.Fatalf("sessions: %v", err)
 	}
 	// The listing names things rather than printing identifiers.
-	if !strings.Contains(out.String(), "acme/house bills") {
+	if !strings.Contains(out.String(), "acme/house-bills") {
 		t.Fatalf("sessions output does not name the workspace and project: %q", out.String())
 	}
 	if strings.Contains(out.String(), pid) {

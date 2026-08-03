@@ -20,6 +20,18 @@ Feature: Workspaces hold the crew's work
     When the operator creates a workspace named ""
     Then the control plane refuses it as invalid
 
+  # A name is half of an address: "me/house-bills" says which project of which workspace. So a name
+  # has to survive being typed on a command line without quoting, and a name containing a slash would
+  # break the address rather than be part of it.
+  Scenario: A workspace name that could not be part of an address is refused
+    When the operator creates a workspace named "House Bills"
+    Then the control plane refuses it as invalid
+    And the refusal suggests "house-bills"
+
+  Scenario: A workspace name containing a slash is refused
+    When the operator creates a workspace named "me/bills"
+    Then the control plane refuses it as invalid
+
   Scenario: Deleting a workspace
     Given a workspace named "acme"
     When the operator deletes the workspace
