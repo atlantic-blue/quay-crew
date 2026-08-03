@@ -63,7 +63,9 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "?":
 		m.mode = modeHelp
 		return m, nil
-	case "g":
+	case "r", "g":
+		// Refreshing is the key reached for constantly, so it holds the short obvious letter. `g` is
+		// what the help has said since the console shipped, so it keeps working.
 		return m, listCmd(m.active, m.parent)
 	case "enter":
 		// Enter descends where there is somewhere to descend to, and otherwise does whatever this

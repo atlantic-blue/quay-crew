@@ -307,7 +307,10 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		{
 			// Not destructive, so no question. Restarting a thread that is not stopped is refused by
 			// the control plane, and that refusal is what the operator sees.
-			Key:   "r",
+			//
+			// Uppercase, beside Archive: the uppercase letters act on the thread, and `r` refreshes
+			// the view, which is the key anybody reaches for far more often.
+			Key:   "R",
 			Label: "Restart",
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {

@@ -497,7 +497,7 @@ func (m Model) helpLines() []string {
 		{"esc", "Back, or clear the filter"},
 		{":", "Switch resource"},
 		{"/", "Filter these rows"},
-		{"g", "Refresh now"},
+		{"r g", "Refresh now"},
 		{"?", "This list"},
 		{"q", "Quit"},
 	} {
