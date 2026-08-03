@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **Enter opens a thread's conversation.** A thread has nothing to drill into, so enter did nothing
+  at all on the one view where the obvious key has an obvious meaning. `a` still works, and the
+  question mark now lists every key an action answers to.
+  ([#93](https://github.com/atlantic-blue/quay-crew/pull/93))
 - **The console calls them threads.** The view, its panel title and the breadcrumb say threads, because
   a row in that list is one conversation. The control plane still calls the running thread a session,
   which is a real distinction inside it and means nothing to somebody reading a list of fourteen rows.
