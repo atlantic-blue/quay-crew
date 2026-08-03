@@ -9,9 +9,15 @@ read, or run with `make features`.
 ## 3 August 2026
 
 - **The console says when the control plane is older than the tool**, rather than quietly showing four
-  fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool does not rebuild the
-  stack, so this is the normal state of things after an upgrade, and silence reads as the console being
-  broken. ([#81](https://github.com/atlantic-blue/quay-crew/pull/81))
+  fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool
+  does not rebuild the stack, so this is the normal state of things after an upgrade, and silence reads
+  as the console being broken. ([#81](https://github.com/atlantic-blue/quay-crew/pull/81))
+- **`make upgrade`**: fetch, fast forward, rebuild the tool and the images, restart the stack. One
+  command for "bring everything to the latest", because `make install` only ever builds the tool and a
+  new tool against an old control plane is the mismatch that costs an afternoon. It refuses on a
+  branch, on a dirty checkout, and when it cannot reach the newest build, rather than quietly
+  rebuilding the stack from something else.
+  ([#80](https://github.com/atlantic-blue/quay-crew/pull/80))
 - **The console header reads like k9s**: the status block says which build, which control plane, where
   you are standing, and what a turn would run in; this view's own commands sit beside it as
   `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `THREAD↑`;

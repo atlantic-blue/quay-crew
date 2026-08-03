@@ -98,6 +98,7 @@ make up-observability # also start Grafana, Loki, Tempo, Prometheus
 make down             # stop everything
 make proto            # regenerate code from the protobuf contracts
 make install          # build quay from this checkout, over whatever quay your shell runs
+make upgrade          # fetch the latest, rebuild the tool and the stack, restart it
 make test             # run the tests
 make features         # print what the product does, scenario by scenario
 make lint             # run the linters
