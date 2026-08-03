@@ -318,7 +318,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			// It used to do nothing at all here, because a thread has nothing to drill into.
 			Key:   "enter",
 			Also:  []string{"a"},
-			Label: "Attach",
+			Label: "Open",
 			Shell: func(row Row) (*exec.Cmd, error) {
 				if row.ID == "" {
 					return nil, fmt.Errorf("no session selected")

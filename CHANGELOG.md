@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **You can leave an open thread without ending it.** Opening a conversation handed the terminal to
+  `claude --resume` and the only way back to the list was to end it. It now runs inside tmux in the
+  thread's own sandbox, so `ctrl-b d` leaves the model running and returns you to the console, and
+  opening the thread again lands in the same live conversation. The sandbox image carries tmux.
+  ([#109](https://github.com/atlantic-blue/quay-crew/pull/109))
+- **The key list stops silently dropping keys.** It folded into two columns and then cut whatever did
+  not fit, so adding a binding pushed the last one off the bottom with nothing to say so. It folds into
+  as many columns as it takes.
 - **Opening a thread runs in the mode that thread is set to.** The attached session carried no mode at
   all, so a thread armed to skip permissions stopped and asked the moment you opened it, which reads as
   the toggle not working. ([#107](https://github.com/atlantic-blue/quay-crew/pull/107))

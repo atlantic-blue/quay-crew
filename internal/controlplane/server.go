@@ -430,12 +430,20 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if _, err := s.sandboxFor(ctx, session); err != nil {
 		return nil, status.Errorf(codes.Internal, "start sandbox: %v", err)
 	}
-	// The same mode the thread's turns run in. Without it an attached session runs as whatever the
-	// model defaults to, so a thread armed to skip permissions still stops and asks the moment the
-	// operator opens it, which reads as the toggle not working.
+	// Inside tmux, so the operator can leave without ending what they opened. Detaching returns them
+	// to the console with the model still running; the only way back before this was to kill the
+	// conversation they had just opened.
+	//
+	// -A attaches to the session if it is already there and creates it otherwise, so opening a thread
+	// a second time lands in the same live conversation rather than starting a second one beside it.
+	//
+	// The permission mode is the same one the thread's turns run in. Without it an attached session
+	// runs as whatever the model defaults to, so a thread armed to skip permissions stops and asks the
+	// moment it is opened, which reads as the toggle not working.
 	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
-		Argv: []string{"claude", "--resume", session.GetModelSessionId(),
+		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
+			"claude", "--resume", session.GetModelSessionId(),
 			"--permission-mode", permissionModeOf(session)},
 	}, nil
 }

@@ -542,8 +542,8 @@ func TestEnterAndAOpenTheSameConversation(t *testing.T) {
 	if !attach.Bound("a") {
 		t.Fatal("the attach action no longer answers to a")
 	}
-	if attach.Label != "Attach" {
-		t.Fatalf("enter runs %q, want Attach", attach.Label)
+	if attach.Label != "Open" {
+		t.Fatalf("enter runs %q, want Open", attach.Label)
 	}
 
 	command, err := attach.Shell(Row{ID: "s1"})
@@ -1109,7 +1109,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"<enter> Attach", "<s> Shell", "<R> Restart", "<backspace> Stop", "<?> Help"} {
+	for _, want := range []string{"<enter> Open", "<s> Shell", "<R> Restart", "<backspace> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}
@@ -1129,7 +1129,7 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 
 	model, _ = update(t, model, runes("?"))
 	view := model.View()
-	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<enter a> Attach"} {
+	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<enter a> Open", "Leave an open conversation running"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the key list does not mention %q:\n%s", want, view)
 		}

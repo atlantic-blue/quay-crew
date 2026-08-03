@@ -288,14 +288,12 @@ func (m Model) panelBottom() string {
 // helpBody is the key list, padded to the same height the rows would have taken, so opening it does
 // not resize the window's contents underneath.
 //
-// It goes into two columns rather than being cut off when it does not fit, because a list of keys
-// with the last few missing is exactly as useful as no list at all.
+// It goes into as many columns as it takes rather than being cut off, because a list of keys with the
+// last few missing is exactly as useful as no list at all, and worse than that: it is a list that
+// looks complete. Adding one binding used to push the last one off the bottom with nothing to say so.
 func (m Model) helpBody() []string {
 	height := m.bodyHeight() + 1
-	entries := m.helpLines()
-	if len(entries) > height {
-		entries = intoTwoColumns(entries, m.innerWidth()/2)
-	}
+	entries := intoColumns(m.helpLines(), height, m.innerWidth())
 
 	lines := make([]string, 0, height)
 	for _, line := range entries {
@@ -310,15 +308,39 @@ func (m Model) helpBody() []string {
 	return lines
 }
 
-// intoTwoColumns folds a list in half, side by side, reading down the left column and then down the
-// right one.
-func intoTwoColumns(entries []string, columnWidth int) []string {
-	half := (len(entries) + 1) / 2
-	folded := make([]string, 0, half)
-	for index := 0; index < half; index++ {
-		line := pad(entries[index], columnWidth)
-		if right := index + half; right < len(entries) {
-			line += entries[right]
+// intoColumns folds a list into however many columns it takes to fit in height lines, reading down
+// each column before starting the next. A list that already fits is left alone.
+//
+// It stops widening at the point where a column would be too narrow to read, and returns what it has:
+// a window that small cannot show every key, and the caller pads or clips. Everything above that is
+// shown in full.
+func intoColumns(entries []string, height, width int) []string {
+	if height < 1 || len(entries) <= height {
+		return entries
+	}
+	const narrowest = 24
+	columns := (len(entries) + height - 1) / height
+	if room := width / narrowest; room > 0 && columns > room {
+		columns = room
+	}
+	if columns < 2 {
+		columns = 2
+	}
+	perColumn := (len(entries) + columns - 1) / columns
+
+	folded := make([]string, 0, perColumn)
+	for index := 0; index < perColumn; index++ {
+		line := ""
+		for column := 0; column < columns; column++ {
+			at := column*perColumn + index
+			if at >= len(entries) {
+				break
+			}
+			if column == columns-1 {
+				line += entries[at]
+				break
+			}
+			line += pad(entries[at], width/columns)
 		}
 		folded = append(folded, line)
 	}
@@ -498,6 +520,10 @@ func (m Model) helpLines() []string {
 		{":", "Switch resource"},
 		{"/", "Filter these rows"},
 		{"r g", "Refresh now"},
+		// The one key here that is not the console's own. An open conversation runs inside tmux in its
+		// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
+		// ending it, which is what everybody does until somebody tells them otherwise.
+		{"ctrl-b d", "Leave an open conversation running"},
 		{"?", "This list"},
 		{"q", "Quit"},
 	} {

@@ -8,7 +8,7 @@ FROM node:22-slim
 
 # git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git ripgrep \
+    && apt-get install -y --no-install-recommends ca-certificates git ripgrep tmux \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @anthropic-ai/claude-code
