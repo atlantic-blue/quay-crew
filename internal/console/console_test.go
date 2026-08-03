@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ type fakeClient struct {
 	projects   []*quaycrewv1.Project
 	sessions   []*quaycrewv1.Session
 
+	attachErr       error
 	listSessionsFor string
 	stopped         []string
 	listErr         error
@@ -30,6 +32,13 @@ func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesR
 		return nil, f.listErr
 	}
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
+}
+
+func (f *fakeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionRequest, ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
+	if f.attachErr != nil {
+		return nil, f.attachErr
+	}
+	return &quaycrewv1.AttachSessionResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
 }
 
 func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProjectsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
@@ -431,16 +440,43 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 		t.Fatal("sessions has no shell action")
 	}
 
-	command := shell.Shell(Row{ID: "s1"})
-	if command == nil {
-		t.Fatal("shell action produced no command")
+	command, err := shell.Shell(Row{ID: "s1"})
+	if err != nil {
+		t.Fatalf("shell action: %v", err)
 	}
 	want := []string{"docker", "exec", "-it", "quaycrew-s1", "sh"}
 	if strings.Join(command.Args, " ") != strings.Join(want, " ") {
 		t.Fatalf("command = %v, want %v", command.Args, want)
 	}
-	if shell.Shell(Row{}) != nil {
-		t.Fatal("want no command for a row with no session id")
+	if _, err := shell.Shell(Row{}); err == nil {
+		t.Fatal("want a reason for a row with no session id")
+	}
+}
+
+// TestAttachTellsTheOperatorWhyItCannot covers the thing that made this worthless before: the console
+// swallowed the control plane's reason and said "nothing to run", which is not something anyone can
+// act on. A session with no conversation yet is fixed by dispatching a turn, and the operator has to
+// be told that.
+func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
+	resource := Sessions(client)
+
+	var attach *Action
+	for index := range resource.Actions {
+		if resource.Actions[index].Key == "a" {
+			attach = &resource.Actions[index]
+		}
+	}
+	if attach == nil {
+		t.Fatal("sessions has no attach action")
+	}
+
+	_, err := attach.Shell(Row{ID: "s1"})
+	if err == nil {
+		t.Fatal("attaching to a session with no conversation succeeded")
+	}
+	if !strings.Contains(err.Error(), "no conversation yet") {
+		t.Fatalf("the reason did not reach the operator: %v", err)
 	}
 }
 

@@ -111,7 +111,10 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 
 // shellCmd suspends the console, hands the terminal to the command, and restores on exit.
 func shellCmd(action Action, row Row) tea.Cmd {
-	command := action.Shell(row)
+	command, err := action.Shell(row)
+	if err != nil {
+		return func() tea.Msg { return errMsg{err: err} }
+	}
 	if command == nil {
 		return func() tea.Msg {
 			return errMsg{err: fmt.Errorf("%s: nothing to run for %s", action.Label, row.ID)}
