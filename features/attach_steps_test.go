@@ -106,6 +106,17 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// Closing the sandbox without going through StopSession is what an upgrade, a prune or anything
+	// else that removes a container does: the container goes, the control plane is not told, and its
+	// own handle carries on claiming the container is there.
+	sc.Step(`^the session's sandbox is removed without telling the control plane$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Boxes) == 0 {
+			return fmt.Errorf("no sandbox has been made yet")
+		}
+		return w.provider.Boxes[len(w.provider.Boxes)-1].Close(ctx)
+	})
+
 	// The model keeps its conversations on the host now, so losing one is deleting the file, which is
 	// exactly what happened to every conversation from a sandbox built before those mounts existed.
 	sc.Step(`^the conversation the model kept is lost$`, func(ctx context.Context) error {
