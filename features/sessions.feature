@@ -181,7 +181,7 @@ Feature: Sessions run in isolated sandboxes
     When the conversation the model kept is lost
     And the operator asks how to attach to the session
     Then the control plane refuses it as not yet ready
-    And the refusal says the conversation is gone
+    And the refusal says the conversation is gone, in the operator's words
 
   Scenario: An archived thread cannot be attached to
     Given a session started by dispatching "hello"
