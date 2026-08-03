@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -103,6 +104,38 @@ func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		names[w.GetId()] = w.GetName()
 	}
 	return names
+}
+
+// Features lists what this build of the crew can do, from the specification embedded in it. It is the
+// one view that asks the control plane nothing: a capability belongs to the build, not to a running
+// stack, and this is the view an operator opens before they know what to open.
+func Features() Resource {
+	return Resource{
+		Name:    "features",
+		Aliases: []string{"f", "feature", "capabilities"},
+		Columns: []Column{
+			{Title: "feature", Width: 44},
+			{Title: "proved by", Width: 0},
+		},
+		List: func(context.Context, string) ([]Row, error) {
+			rows := make([]Row, 0, 32)
+			for _, feature := range features.All() {
+				for index, scenario := range feature.Scenarios {
+					title := ""
+					if index == 0 {
+						title = feature.Title
+					}
+					rows = append(rows, Row{
+						ID:    feature.Title + ": " + scenario,
+						Label: feature.Title,
+						Cells: []string{title, scenario},
+						State: StateReady,
+					})
+				}
+			}
+			return rows, nil
+		},
+	}
 }
 
 // Sessions lists sessions, scoped to a project when drilled into from one. The operator can stop a

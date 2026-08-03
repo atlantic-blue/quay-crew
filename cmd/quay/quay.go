@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
@@ -26,6 +27,7 @@ you work in one place at a time, and say where with an address: workspace/projec
 
 commands:
   version                                 print which build this is
+  features                                what this crew can do, and what proves it
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
@@ -41,6 +43,40 @@ may be the shortened id a listing prints. An address typed on the command line a
 command only and does not move you.
 `
 
+// runFeatures prints what the product does, from the specification embedded in this binary. With a
+// name, it prints only the features that mention it.
+//
+// It talks to nothing. What the crew can do is a property of the build, not of a running stack, and
+// the question is usually asked by somebody who has not started one yet.
+func runFeatures(args []string, out io.Writer) error {
+	needle := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	shown := 0
+	for _, feature := range features.All() {
+		if needle != "" && !mentions(feature, needle) {
+			continue
+		}
+		shown++
+		fmt.Fprintf(out, "%s\n", feature.Title)
+		if feature.Summary != "" {
+			fmt.Fprintf(out, "  %s\n", feature.Summary)
+		}
+		for _, scenario := range feature.Scenarios {
+			fmt.Fprintf(out, "    %s\n", scenario)
+		}
+		fmt.Fprintln(out)
+	}
+	if shown == 0 {
+		fmt.Fprintf(out, "nothing here mentions %q\n", needle)
+	}
+	return nil
+}
+
+// mentions reports whether a feature is about what was asked for, title, summary or scenarios.
+func mentions(feature features.Feature, needle string) bool {
+	haystack := strings.ToLower(feature.Title + " " + feature.Summary + " " + strings.Join(feature.Scenarios, " "))
+	return strings.Contains(haystack, needle)
+}
+
 // run executes one CLI invocation against the control plane client, writing output to out.
 func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
@@ -50,6 +86,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "version":
 		fmt.Fprintln(out, version)
 		return nil
+	case "features":
+		return runFeatures(args[1:], out)
 	case "use":
 		return runUse(ctx, client, args[1:], out)
 	case "workspace":
