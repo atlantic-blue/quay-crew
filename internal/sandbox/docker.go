@@ -23,7 +23,7 @@ func (d DockerProvider) Create(ctx context.Context, id string) (Sandbox, error) 
 	if d.Image == "" {
 		return nil, fmt.Errorf("sandbox: docker image is required")
 	}
-	name := "quaycrew-" + id
+	name := ContainerName(id)
 	args := []string{"run", "--detach", "--name", name}
 	for _, mount := range d.Mounts {
 		args = append(args, "-v", mount)

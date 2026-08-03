@@ -130,6 +130,19 @@ message GetSessionRequest {
 message GetSessionResponse {
   Session session = 1;
 }
+// AttachSessionRequest asks how to get inside a session's conversation.
+message AttachSessionRequest {
+  string id = 1;
+}
+// AttachSessionResponse describes the command that opens the conversation, and deliberately carries
+// no credential: the operator's own environment supplies that.
+message AttachSessionResponse {
+  // sandbox is the container the session runs in.
+  string sandbox = 1;
+  // argv is the command to run inside it, for example ["claude", "--resume", "<conversation id>"].
+  repeated string argv = 2;
+}
+
 message StopSessionRequest {
   string id = 1;
 }
@@ -153,5 +166,6 @@ service ControlPlaneService {
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
 }

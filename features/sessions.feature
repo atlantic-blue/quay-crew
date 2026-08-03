@@ -77,3 +77,21 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
     And the turn ran with no extra environment
+
+  # Shelling in opens the room the conversation happens in. This opens the conversation.
+  Scenario: The operator can attach to a thread's conversation
+    Given a session started by dispatching "remember this"
+    When the operator asks how to attach to the session
+    Then the control plane names the session's sandbox
+    And the command resumes the conversation the turn started
+    And the answer carries no credential
+
+  Scenario: A thread with no conversation yet cannot be attached to
+    When the operator asks how to attach to a session that has never had a turn
+    Then the control plane refuses it as not yet ready
+
+  Scenario: A stopped thread cannot be attached to
+    Given a session started by dispatching "hello"
+    When the operator stops the session
+    And the operator asks how to attach to the session
+    Then the control plane refuses it as not yet ready
