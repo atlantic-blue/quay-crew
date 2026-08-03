@@ -1694,6 +1694,122 @@ func (*StopSessionResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{33}
 }
 
+// GetInfoRequest asks what this control plane is running.
+type GetInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInfoRequest) Reset() {
+	*x = GetInfoRequest{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInfoRequest) ProtoMessage() {}
+
+func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetInfoRequest) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{34}
+}
+
+// GetInfoResponse says what a turn dispatched here would actually do.
+//
+// It carries configuration, never a secret and never a health verdict. The console shows it so the
+// operator can see which crew they are about to act on, the way a cluster name does.
+type GetInfoResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// model is the backend a turn runs against, for example "claude-code" or "echo".
+	Model string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	// sandbox is the isolation a session runs in, for example "docker" or "local".
+	Sandbox string `protobuf:"bytes,2,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
+	// store is where workspaces and sessions are kept, for example "postgres" or "memory". A memory
+	// store loses every workspace and session when the process restarts, which is worth seeing before
+	// starting work rather than after.
+	Store string `protobuf:"bytes,3,opt,name=store,proto3" json:"store,omitempty"`
+	// state_kept is true when a session's conversation is kept outside its container, so replacing a
+	// sandbox does not destroy the conversation.
+	StateKept     bool `protobuf:"varint,4,opt,name=state_kept,json=stateKept,proto3" json:"state_kept,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInfoResponse) Reset() {
+	*x = GetInfoResponse{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInfoResponse) ProtoMessage() {}
+
+func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
+func (*GetInfoResponse) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *GetInfoResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetSandbox() string {
+	if x != nil {
+		return x.Sandbox
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetStore() string {
+	if x != nil {
+		return x.Store
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetStateKept() bool {
+	if x != nil {
+		return x.StateKept
+	}
+	return false
+}
+
 var File_quaycrew_v1_controlplane_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
@@ -1793,7 +1909,14 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x04argv\x18\x02 \x03(\tR\x04argv\"$\n" +
 	"\x12StopSessionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
-	"\x13StopSessionResponse2\x90\n" +
+	"\x13StopSessionResponse\"\x10\n" +
+	"\x0eGetInfoRequest\"v\n" +
+	"\x0fGetInfoResponse\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x18\n" +
+	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
+	"\x05store\x18\x03 \x01(\tR\x05store\x12\x1d\n" +
+	"\n" +
+	"state_kept\x18\x04 \x01(\bR\tstateKept2\xd6\n" +
 	"\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
@@ -1812,7 +1935,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"GetSession\x12\x1e.quaycrew.v1.GetSessionRequest\x1a\x1f.quaycrew.v1.GetSessionResponse\x12V\n" +
 	"\rAttachSession\x12!.quaycrew.v1.AttachSessionRequest\x1a\".quaycrew.v1.AttachSessionResponse\x12P\n" +
-	"\vStopSession\x12\x1f.quaycrew.v1.StopSessionRequest\x1a .quaycrew.v1.StopSessionResponseB\xb0\x01\n" +
+	"\vStopSession\x12\x1f.quaycrew.v1.StopSessionRequest\x1a .quaycrew.v1.StopSessionResponse\x12D\n" +
+	"\aGetInfo\x12\x1b.quaycrew.v1.GetInfoRequest\x1a\x1c.quaycrew.v1.GetInfoResponseB\xb0\x01\n" +
 	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
@@ -1827,7 +1951,7 @@ func file_quaycrew_v1_controlplane_proto_rawDescGZIP() []byte {
 	return file_quaycrew_v1_controlplane_proto_rawDescData
 }
 
-var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*Workspace)(nil),               // 0: quaycrew.v1.Workspace
 	(*Channel)(nil),                 // 1: quaycrew.v1.Channel
@@ -1863,13 +1987,15 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*AttachSessionResponse)(nil),   // 31: quaycrew.v1.AttachSessionResponse
 	(*StopSessionRequest)(nil),      // 32: quaycrew.v1.StopSessionRequest
 	(*StopSessionResponse)(nil),     // 33: quaycrew.v1.StopSessionResponse
-	(*timestamppb.Timestamp)(nil),   // 34: google.protobuf.Timestamp
+	(*GetInfoRequest)(nil),          // 34: quaycrew.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),         // 35: quaycrew.v1.GetInfoResponse
+	(*timestamppb.Timestamp)(nil),   // 36: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
-	34, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
-	34, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	34, // 2: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	34, // 3: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	36, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
+	36, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	36, // 2: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	36, // 3: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 4: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
 	0,  // 5: quaycrew.v1.GetWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
 	0,  // 6: quaycrew.v1.ListWorkspacesResponse.workspaces:type_name -> quaycrew.v1.Workspace
@@ -1894,23 +2020,25 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	28, // 25: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
 	30, // 26: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
 	32, // 27: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	5,  // 28: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
-	7,  // 29: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
-	9,  // 30: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
-	11, // 31: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
-	13, // 32: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
-	15, // 33: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
-	17, // 34: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
-	19, // 35: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
-	21, // 36: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
-	23, // 37: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
-	25, // 38: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
-	27, // 39: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
-	29, // 40: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
-	31, // 41: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
-	33, // 42: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
-	28, // [28:43] is the sub-list for method output_type
-	13, // [13:28] is the sub-list for method input_type
+	34, // 28: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
+	5,  // 29: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
+	7,  // 30: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
+	9,  // 31: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
+	11, // 32: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
+	13, // 33: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
+	15, // 34: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
+	17, // 35: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
+	19, // 36: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
+	21, // 37: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
+	23, // 38: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
+	25, // 39: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
+	27, // 40: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
+	29, // 41: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
+	31, // 42: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
+	33, // 43: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
+	35, // 44: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
+	29, // [29:45] is the sub-list for method output_type
+	13, // [13:29] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -1927,7 +2055,7 @@ func file_quaycrew_v1_controlplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quaycrew_v1_controlplane_proto_rawDesc), len(file_quaycrew_v1_controlplane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

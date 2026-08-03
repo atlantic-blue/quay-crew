@@ -28,7 +28,10 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
-	srv := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, &sandbox.FakeProvider{}, secrets.NewMemory())
+	srv := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, srv)
 	go func() { _ = grpcServer.Serve(lis) }()
 	t.Cleanup(grpcServer.Stop)

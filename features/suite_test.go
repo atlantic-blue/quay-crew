@@ -123,6 +123,9 @@ type world struct {
 	runner     *recordingRunner
 	secrets    secrets.Store
 	store      store.Store
+	// info is what the control plane reports about itself, describing the doubles the scenarios
+	// actually run against rather than a stack nobody here has.
+	info controlplane.Info
 
 	workspaceID        string
 	workspaceName      string
@@ -148,6 +151,7 @@ func (w *world) start() error {
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
 	w.store = store.NewMemory()
+	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory"}
 	return w.serve()
 }
 
@@ -163,7 +167,9 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.grpcServer = grpc.NewServer()
-	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(w.store, w.runner, w.provider, w.secrets))
+	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
+		Store: w.store, Runner: w.runner, Provider: w.provider, Secrets: w.secrets, Info: w.info,
+	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
 	conn, err := grpc.NewClient(
@@ -242,6 +248,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeConsoleSteps(sc)
 	initializeProjectSteps(sc)
 	initializeAddressSteps(sc)
+	initializeInfoSteps(sc)
 	initializeAttachSteps(sc)
 	initializeSandboxEnvSteps(sc)
 	initializeWorkspaceSteps(sc)

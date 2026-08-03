@@ -13,17 +13,39 @@ type Options struct {
 	Storage Storage
 }
 
+// Kinds of sandbox. The default isolates each session in its own container.
+const (
+	// KindDocker gives each session a container of its own.
+	KindDocker = "docker"
+	// KindLocal runs on the host with no isolation. A stopgap, not a sandbox.
+	KindLocal = "local"
+)
+
+// ResolveKind names the backend a kind selects, filling in the default for an empty one. Anything
+// that reports the configuration reads it from here, so what is reported cannot drift from what is
+// built.
+func ResolveKind(kind string) (string, error) {
+	switch kind {
+	case "", KindDocker:
+		return KindDocker, nil
+	case KindLocal:
+		return KindLocal, nil
+	default:
+		return "", fmt.Errorf("sandbox: unknown provider %q", kind)
+	}
+}
+
 // NewProvider builds a Provider by kind. The default (empty or "docker") isolates each session in a
 // container; "local" is the short term host backend. Other kinds are an error.
 func NewProvider(kind string, opts Options) (Provider, error) {
-	switch kind {
-	case "", "docker":
-		// The Docker backend is configured by exactly these options today, so it converts straight
-		// across. A backend that needs something else gets its own fields here.
-		return DockerProvider(opts), nil
-	case "local":
-		return LocalProvider{}, nil
-	default:
-		return nil, fmt.Errorf("sandbox: unknown provider %q", kind)
+	resolved, err := ResolveKind(kind)
+	if err != nil {
+		return nil, err
 	}
+	if resolved == KindLocal {
+		return LocalProvider{}, nil
+	}
+	// The Docker backend is configured by exactly these options today, so it converts straight
+	// across. A backend that needs something else gets its own fields here.
+	return DockerProvider(opts), nil
 }
