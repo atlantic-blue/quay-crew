@@ -806,3 +806,57 @@ func TestPastingIntoTheFilterKeepsEveryRune(t *testing.T) {
 		t.Fatalf("visible = %d, want the pasted filter applied", len(model.visibleRows()))
 	}
 }
+
+// TestTheViewIsExactlyTheHeightOfTheWindow is the invariant the layout has to hold: draw one line
+// too many and the terminal scrolls, which pushes the status block and the key hints off the top of
+// the screen. That is what happened against a control plane too old to answer what it is running:
+// the status block was one line, the key hints were three, and the body was sized off the status
+// block alone.
+func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
+	client := &fakeClient{}
+	cases := []struct {
+		name string
+		info Info
+		rows int
+		err  error
+		size [2]int
+	}{
+		{name: "nothing known yet", size: [2]int{120, 24}},
+		{name: "the crew answered", info: Info{
+			Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres", StateKept: true,
+		}, size: [2]int{120, 24}},
+		{name: "more rows than fit", info: Info{Address: "here"}, rows: 40, size: [2]int{120, 24}},
+		{name: "an error to show", err: errors.New("list sessions: nope"), size: [2]int{120, 24}},
+		{name: "a short window", info: Info{Address: "here", Store: "memory"}, size: [2]int{120, 12}},
+		{name: "a narrow window", info: Info{Address: "here"}, size: [2]int{60, 20}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := newTestModel(t, Sessions(client), Workspaces(client))
+			model, _ = update(t, model, tea.WindowSizeMsg{Width: tc.size[0], Height: tc.size[1]})
+			if tc.info != (Info{}) {
+				model, _ = update(t, model, infoMsg{info: tc.info})
+			}
+			rows := make([]Row, 0, tc.rows)
+			for i := 0; i < tc.rows; i++ {
+				rows = append(rows, row(fmt.Sprintf("s%d", i), fmt.Sprintf("s%d", i), "me", "bills", "t", "idle", "1m"))
+			}
+			model, _ = update(t, model, rowsFor(model, rows...))
+			if tc.err != nil {
+				model, _ = update(t, model, errMsg{err: tc.err})
+			}
+
+			lines := strings.Split(model.View(), "\n")
+			if len(lines) != tc.size[1] {
+				t.Fatalf("the view is %d lines in a window %d high, so the top scrolls off:\n%s",
+					len(lines), tc.size[1], model.View())
+			}
+			for index, line := range lines {
+				if width := lipgloss.Width(line); width > tc.size[0] {
+					t.Fatalf("line %d is %d wide in a window %d wide, so it wraps: %q", index, width, tc.size[0], line)
+				}
+			}
+		})
+	}
+}

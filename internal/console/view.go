@@ -182,7 +182,16 @@ func (m Model) innerWidth() int {
 // columnHeader is the black on green title bar, marked with an arrow on the column the rows are
 // ordered by, because an order you cannot see is an order you cannot trust.
 func (m Model) columnHeader() string {
-	return headerBar.Render(pad(m.renderCells(titles(m.active.Columns, m.active.SortBy)), m.innerWidth()))
+	return headerBar.Render(m.fit(m.renderCells(titles(m.active.Columns, m.active.SortBy))))
+}
+
+// fit makes a line exactly the width inside the panel: padded when it is short, cut when it is long.
+// Cutting matters on a narrow window, where the columns a resource declares add up to more than the
+// room available and an overflowing line wraps, which costs a row and pushes the top of the view off
+// the screen. It cuts before any styling is applied, because slicing a styled string cuts through
+// the escape codes in it.
+func (m Model) fit(text string) string {
+	return pad(truncate(text, m.innerWidth()), m.innerWidth())
 }
 
 func titles(columns []Column, sortedBy int) []string {
@@ -203,7 +212,7 @@ func (m Model) bodyLines(visible []Row) []string {
 	lines := make([]string, 0, body)
 
 	if len(visible) == 0 {
-		lines = append(lines, pad(faint.Render("  nothing here"), m.innerWidth()))
+		lines = append(lines, faint.Render(m.fit("  nothing here")))
 	}
 	for index := m.top; index < len(visible) && len(lines) < body; index++ {
 		lines = append(lines, m.rowLine(visible[index], index == m.selected))
@@ -215,9 +224,9 @@ func (m Model) bodyLines(visible []Row) []string {
 }
 
 func (m Model) rowLine(row Row, isSelected bool) string {
-	// Padded to the full width inside the panel, so the cursor is a bar across the row rather than a
+	// Sized to the full width inside the panel, so the cursor is a bar across the row rather than a
 	// highlight around the text that happens to be in it.
-	text := pad(m.renderCells(row.Cells), m.innerWidth())
+	text := m.fit(m.renderCells(row.Cells))
 	if isSelected {
 		return selectedRow.Render(text)
 	}

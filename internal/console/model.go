@@ -234,10 +234,16 @@ func (m Model) selectedRowValue() (Row, bool) {
 	return visible[m.selected], true
 }
 
-// bodyHeight is how many rows fit: the window less the status block, the panel's own frame and
+// bodyHeight is how many rows fit: the window less the header block, the panel's own frame and
 // column header, and the footer line.
+//
+// It measures the header block rather than the status block inside it. The key hints sit beside the
+// status, and either can be the taller of the two, so sizing the body off the status alone draws a
+// view taller than the window. The terminal then scrolls, and what scrolls away is the top: the
+// status block and the hints. Seen against a control plane too old to say what it was running, where
+// the status was one line and the hints were three.
 func (m Model) bodyHeight() int {
-	body := m.height - len(m.statusLines()) - 4
+	body := m.height - len(m.headerLines()) - 4
 	if m.err != nil {
 		body--
 	}
