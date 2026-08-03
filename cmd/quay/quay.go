@@ -1,4 +1,4 @@
-// Command quay is the CLI channel: a synchronous client of the control plane. You create projects,
+// Command quay is the CLI channel: a synchronous client of the control plane. You create workspaces,
 // dispatch a turn, and list sessions, and the reply comes straight back. Async chat channels use the
 // event log instead; the CLI talks to the ControlPlaneService gRPC API directly.
 package main
@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/project"
+	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
 
 const usage = `usage: quay [command]
@@ -20,11 +20,11 @@ with no command, quay opens the console: a full screen view of every resource th
 press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
 
 commands:
-  project create <name>            create a project
-  project list                     list projects
-  dispatch --project <id or name> <text>    start or continue a thread (--thread <id> continues)
-  sessions [--project <id or name>]         list sessions
-  secret set --project <id or name> <key> <value>   set a project secret (for example the model token)
+  workspace create <name>            create a workspace
+  workspace list                     list workspaces
+  dispatch --workspace <id or name> <text>    start or continue a thread (--thread <id> continues)
+  sessions [--workspace <id or name>]         list sessions
+  secret set --workspace <id or name> <key> <value>   set a workspace secret (for example the model token)
 `
 
 // run executes one CLI invocation against the control plane client, writing output to out.
@@ -33,8 +33,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return fmt.Errorf("%s", usage)
 	}
 	switch args[0] {
-	case "project":
-		return runProject(ctx, client, args[1:], out)
+	case "workspace":
+		return runWorkspace(ctx, client, args[1:], out)
 	case "dispatch":
 		return runDispatch(ctx, client, args[1:], out)
 	case "sessions":
@@ -48,89 +48,89 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 
 func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] != "set" {
-		return fmt.Errorf("usage: quay secret set --project <id> <key> <value>")
+		return fmt.Errorf("usage: quay secret set --workspace <id> <key> <value>")
 	}
 	fs := flag.NewFlagSet("secret set", flag.ContinueOnError)
 	fs.SetOutput(out)
-	projectRef := fs.String("project", "", "project id or name (required)")
+	workspaceRef := fs.String("workspace", "", "workspace id or name (required)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *projectRef == "" {
-		return fmt.Errorf("secret set requires --project")
+	if *workspaceRef == "" {
+		return fmt.Errorf("secret set requires --workspace")
 	}
 	rest := fs.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: quay secret set --project <id or name> <key> <value>")
+		return fmt.Errorf("usage: quay secret set --workspace <id or name> <key> <value>")
 	}
 	key, value := rest[0], rest[1]
 
-	projectID, err := project.Resolve(ctx, client, *projectRef)
+	workspaceID, err := workspace.Resolve(ctx, client, *workspaceRef)
 	if err != nil {
 		return err
 	}
-	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: projectID, Key: key, Value: value}); err != nil {
+	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: workspaceID, Key: key, Value: value}); err != nil {
 		return err
 	}
 	// Confirm without echoing the value.
-	fmt.Fprintf(out, "set secret %s for project %s\n", key, projectID)
+	fmt.Fprintf(out, "set secret %s for workspace %s\n", key, workspaceID)
 	return nil
 }
 
-func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay project <create|list>")
+		return fmt.Errorf("usage: quay workspace <create|list>")
 	}
 	switch args[0] {
 	case "create":
 		if len(args) < 2 {
-			return fmt.Errorf("usage: quay project create <name>")
+			return fmt.Errorf("usage: quay workspace create <name>")
 		}
-		resp, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: args[1]})
+		resp, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: args[1]})
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "created project %s (%s)\n", resp.GetProject().GetId(), resp.GetProject().GetName())
+		fmt.Fprintf(out, "created workspace %s (%s)\n", resp.GetWorkspace().GetId(), resp.GetWorkspace().GetName())
 		return nil
 	case "list":
-		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+		resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 		if err != nil {
 			return err
 		}
-		if len(resp.GetProjects()) == 0 {
-			fmt.Fprintln(out, "no projects")
+		if len(resp.GetWorkspaces()) == 0 {
+			fmt.Fprintln(out, "no workspaces")
 			return nil
 		}
-		for _, p := range resp.GetProjects() {
+		for _, p := range resp.GetWorkspaces() {
 			fmt.Fprintf(out, "%s  %s\n", p.GetId(), p.GetName())
 		}
 		return nil
 	default:
-		return fmt.Errorf("usage: quay project <create|list>")
+		return fmt.Errorf("usage: quay workspace <create|list>")
 	}
 }
 
 func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("dispatch", flag.ContinueOnError)
 	fs.SetOutput(out)
-	projectRef := fs.String("project", "", "project id or name (required)")
+	workspaceRef := fs.String("workspace", "", "workspace id or name (required)")
 	thread := fs.String("thread", "", "thread id to continue (optional)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *projectRef == "" {
-		return fmt.Errorf("dispatch requires --project")
+	if *workspaceRef == "" {
+		return fmt.Errorf("dispatch requires --workspace")
 	}
 	text := strings.TrimSpace(strings.Join(fs.Args(), " "))
 	if text == "" {
 		return fmt.Errorf("dispatch requires message text")
 	}
 
-	projectID, err := project.Resolve(ctx, client, *projectRef)
+	workspaceID, err := workspace.Resolve(ctx, client, *workspaceRef)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: projectID, ThreadId: *thread, Text: text})
+	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: workspaceID, ThreadId: *thread, Text: text})
 	if err != nil {
 		return err
 	}
@@ -142,19 +142,19 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
 	fs.SetOutput(out)
-	projectRef := fs.String("project", "", "filter by project id or name (optional)")
+	workspaceRef := fs.String("workspace", "", "filter by workspace id or name (optional)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	projectID := ""
-	if *projectRef != "" {
-		resolved, err := project.Resolve(ctx, client, *projectRef)
+	workspaceID := ""
+	if *workspaceRef != "" {
+		resolved, err := workspace.Resolve(ctx, client, *workspaceRef)
 		if err != nil {
 			return err
 		}
-		projectID = resolved
+		workspaceID = resolved
 	}
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
+	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: workspaceID})
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		return nil
 	}
 	for _, s := range resp.GetSessions() {
-		fmt.Fprintf(out, "%s  project=%s  thread=%s  %s\n", s.GetId(), s.GetProject(), s.GetThreadId(), s.GetStatus())
+		fmt.Fprintf(out, "%s  workspace=%s  thread=%s  %s\n", s.GetId(), s.GetWorkspace(), s.GetThreadId(), s.GetStatus())
 	}
 	return nil
 }

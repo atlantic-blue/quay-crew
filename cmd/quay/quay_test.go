@@ -40,20 +40,20 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	return quaycrewv1.NewControlPlaneServiceClient(conn)
 }
 
-func TestProjectCreateAndList(t *testing.T) {
+func TestWorkspaceCreateAndList(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"project", "create", "acme"}, &out); err != nil {
+	if err := run(ctx, client, []string{"workspace", "create", "acme"}, &out); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(out.String(), "created project") || !strings.Contains(out.String(), "(acme)") {
+	if !strings.Contains(out.String(), "created workspace") || !strings.Contains(out.String(), "(acme)") {
 		t.Fatalf("create output: %q", out.String())
 	}
 
 	out.Reset()
-	if err := run(ctx, client, []string{"project", "list"}, &out); err != nil {
+	if err := run(ctx, client, []string{"workspace", "list"}, &out); err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if !strings.Contains(out.String(), "acme") {
@@ -65,14 +65,14 @@ func TestDispatch(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
-	created, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	created, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
 	if err != nil {
-		t.Fatalf("CreateProject: %v", err)
+		t.Fatalf("CreateWorkspace: %v", err)
 	}
-	pid := created.GetProject().GetId()
+	pid := created.GetWorkspace().GetId()
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--project", pid, "hello", "world"}, &out); err != nil {
+	if err := run(ctx, client, []string{"dispatch", "--workspace", pid, "hello", "world"}, &out); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
 	if !strings.Contains(out.String(), "ok") {
@@ -83,10 +83,10 @@ func TestDispatch(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := run(ctx, client, []string{"sessions", "--project", pid}, &out); err != nil {
+	if err := run(ctx, client, []string{"sessions", "--workspace", pid}, &out); err != nil {
 		t.Fatalf("sessions: %v", err)
 	}
-	if !strings.Contains(out.String(), "project="+pid) {
+	if !strings.Contains(out.String(), "workspace="+pid) {
 		t.Fatalf("sessions output: %q", out.String())
 	}
 }
@@ -95,14 +95,14 @@ func TestSecretSet(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
-	created, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: "acme"})
+	created, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
 	if err != nil {
-		t.Fatalf("CreateProject: %v", err)
+		t.Fatalf("CreateWorkspace: %v", err)
 	}
-	pid := created.GetProject().GetId()
+	pid := created.GetWorkspace().GetId()
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"secret", "set", "--project", pid, "CLAUDE_CODE_OAUTH_TOKEN", "tok-123"}, &out); err != nil {
+	if err := run(ctx, client, []string{"secret", "set", "--workspace", pid, "CLAUDE_CODE_OAUTH_TOKEN", "tok-123"}, &out); err != nil {
 		t.Fatalf("secret set: %v", err)
 	}
 	if !strings.Contains(out.String(), "set secret CLAUDE_CODE_OAUTH_TOKEN") {
@@ -114,21 +114,21 @@ func TestSecretSet(t *testing.T) {
 	}
 }
 
-func TestSecretSetRequiresProjectKeyValue(t *testing.T) {
+func TestSecretSetRequiresWorkspaceKeyValue(t *testing.T) {
 	client := testClient(t)
 	if err := run(context.Background(), client, []string{"secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "tok"}, io.Discard); err == nil {
-		t.Fatal("secret set without --project = nil error, want error")
+		t.Fatal("secret set without --workspace = nil error, want error")
 	}
-	if err := run(context.Background(), client, []string{"secret", "set", "--project", "p1", "only-key"}, io.Discard); err == nil {
+	if err := run(context.Background(), client, []string{"secret", "set", "--workspace", "p1", "only-key"}, io.Discard); err == nil {
 		t.Fatal("secret set without a value = nil error, want error")
 	}
 }
 
-func TestDispatchRequiresProject(t *testing.T) {
+func TestDispatchRequiresWorkspace(t *testing.T) {
 	client := testClient(t)
 	var out bytes.Buffer
 	if err := run(context.Background(), client, []string{"dispatch", "hi"}, &out); err == nil {
-		t.Fatal("dispatch without --project = nil error, want error")
+		t.Fatal("dispatch without --workspace = nil error, want error")
 	}
 }
 
@@ -138,19 +138,19 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
-// TestDispatchAcceptsAProjectName covers the papercut this exists for: the operator types the name
-// they gave the project, not the hex id printed once at creation.
-func TestDispatchAcceptsAProjectName(t *testing.T) {
+// TestDispatchAcceptsAWorkspaceName covers the papercut this exists for: the operator types the name
+// they gave the workspace, not the hex id printed once at creation.
+func TestDispatchAcceptsAWorkspaceName(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	var created bytes.Buffer
-	if err := run(ctx, client, []string{"project", "create", "demo"}, &created); err != nil {
-		t.Fatalf("project create: %v", err)
+	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &created); err != nil {
+		t.Fatalf("workspace create: %v", err)
 	}
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--project", "demo", "hello"}, &out); err != nil {
+	if err := run(ctx, client, []string{"dispatch", "--workspace", "demo", "hello"}, &out); err != nil {
 		t.Fatalf("dispatch by name: %v", err)
 	}
 	if !strings.Contains(out.String(), "ok") {
@@ -158,20 +158,20 @@ func TestDispatchAcceptsAProjectName(t *testing.T) {
 	}
 }
 
-func TestSessionsAcceptsAProjectName(t *testing.T) {
+func TestSessionsAcceptsAWorkspaceName(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	var discard bytes.Buffer
-	if err := run(ctx, client, []string{"project", "create", "demo"}, &discard); err != nil {
-		t.Fatalf("project create: %v", err)
+	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &discard); err != nil {
+		t.Fatalf("workspace create: %v", err)
 	}
-	if err := run(ctx, client, []string{"dispatch", "--project", "demo", "hello"}, &discard); err != nil {
+	if err := run(ctx, client, []string{"dispatch", "--workspace", "demo", "hello"}, &discard); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"sessions", "--project", "demo"}, &out); err != nil {
+	if err := run(ctx, client, []string{"sessions", "--workspace", "demo"}, &out); err != nil {
 		t.Fatalf("sessions by name: %v", err)
 	}
 	if strings.Contains(out.String(), "no sessions") {
@@ -179,14 +179,14 @@ func TestSessionsAcceptsAProjectName(t *testing.T) {
 	}
 }
 
-func TestDispatchRejectsAnUnknownProjectReference(t *testing.T) {
+func TestDispatchRejectsAnUnknownWorkspaceReference(t *testing.T) {
 	client := testClient(t)
 	var out bytes.Buffer
-	err := run(context.Background(), client, []string{"dispatch", "--project", "ghost", "hello"}, &out)
+	err := run(context.Background(), client, []string{"dispatch", "--workspace", "ghost", "hello"}, &out)
 	if err == nil {
-		t.Fatal("dispatch to an unknown project succeeded")
+		t.Fatal("dispatch to an unknown workspace succeeded")
 	}
-	// The operator needs to know it was the project reference that was wrong.
+	// The operator needs to know it was the workspace reference that was wrong.
 	if !strings.Contains(err.Error(), "ghost") {
 		t.Fatalf("the error %q does not name the reference the operator typed", err)
 	}

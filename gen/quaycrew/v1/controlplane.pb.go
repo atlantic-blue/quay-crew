@@ -22,8 +22,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// A project is the runtime unit of isolation. Created through this API, never stored in the repo.
-type Project struct {
+// A workspace is the runtime unit of isolation. Created through this API, never stored in the repo.
+type Workspace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
@@ -32,20 +32,20 @@ type Project struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Project) Reset() {
-	*x = Project{}
+func (x *Workspace) Reset() {
+	*x = Workspace{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Project) String() string {
+func (x *Workspace) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Project) ProtoMessage() {}
+func (*Workspace) ProtoMessage() {}
 
-func (x *Project) ProtoReflect() protoreflect.Message {
+func (x *Workspace) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -57,36 +57,36 @@ func (x *Project) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Project.ProtoReflect.Descriptor instead.
-func (*Project) Descriptor() ([]byte, []int) {
+// Deprecated: Use Workspace.ProtoReflect.Descriptor instead.
+func (*Workspace) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Project) GetId() string {
+func (x *Workspace) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *Project) GetName() string {
+func (x *Workspace) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *Project) GetCreatedAt() *timestamppb.Timestamp {
+func (x *Workspace) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
 }
 
-// A channel attached to a project (for example a Telegram bot).
+// A channel attached to a workspace (for example a Telegram bot).
 type Channel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -123,9 +123,9 @@ func (*Channel) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Channel) GetProject() string {
+func (x *Channel) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -144,13 +144,13 @@ func (x *Channel) GetKind() string {
 	return ""
 }
 
-// A session is one model thread for a project.
+// A session is one model thread for a workspace.
 type Session struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Project  string                 `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	ThreadId string                 `protobuf:"bytes,3,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
-	Status   string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Workspace string                 `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	ThreadId  string                 `protobuf:"bytes,3,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	Status    string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	// model_session_id is the underlying model thread id, used to resume the thread.
 	ModelSessionId string                 `protobuf:"bytes,5,opt,name=model_session_id,json=modelSessionId,proto3" json:"model_session_id,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
@@ -196,9 +196,9 @@ func (x *Session) GetId() string {
 	return ""
 }
 
-func (x *Session) GetProject() string {
+func (x *Session) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -238,27 +238,27 @@ func (x *Session) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-type CreateProjectRequest struct {
+type CreateWorkspaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateProjectRequest) Reset() {
-	*x = CreateProjectRequest{}
+func (x *CreateWorkspaceRequest) Reset() {
+	*x = CreateWorkspaceRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateProjectRequest) String() string {
+func (x *CreateWorkspaceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateProjectRequest) ProtoMessage() {}
+func (*CreateWorkspaceRequest) ProtoMessage() {}
 
-func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
+func (x *CreateWorkspaceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -270,39 +270,39 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
-func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateWorkspaceRequest.ProtoReflect.Descriptor instead.
+func (*CreateWorkspaceRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *CreateProjectRequest) GetName() string {
+func (x *CreateWorkspaceRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-type CreateProjectResponse struct {
+type CreateWorkspaceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       *Project               `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     *Workspace             `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateProjectResponse) Reset() {
-	*x = CreateProjectResponse{}
+func (x *CreateWorkspaceResponse) Reset() {
+	*x = CreateWorkspaceResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateProjectResponse) String() string {
+func (x *CreateWorkspaceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateProjectResponse) ProtoMessage() {}
+func (*CreateWorkspaceResponse) ProtoMessage() {}
 
-func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
+func (x *CreateWorkspaceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -314,39 +314,39 @@ func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateProjectResponse.ProtoReflect.Descriptor instead.
-func (*CreateProjectResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateWorkspaceResponse.ProtoReflect.Descriptor instead.
+func (*CreateWorkspaceResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *CreateProjectResponse) GetProject() *Project {
+func (x *CreateWorkspaceResponse) GetWorkspace() *Workspace {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return nil
 }
 
-type GetProjectRequest struct {
+type GetWorkspaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetProjectRequest) Reset() {
-	*x = GetProjectRequest{}
+func (x *GetWorkspaceRequest) Reset() {
+	*x = GetWorkspaceRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetProjectRequest) String() string {
+func (x *GetWorkspaceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetProjectRequest) ProtoMessage() {}
+func (*GetWorkspaceRequest) ProtoMessage() {}
 
-func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
+func (x *GetWorkspaceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -358,39 +358,39 @@ func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetProjectRequest.ProtoReflect.Descriptor instead.
-func (*GetProjectRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetWorkspaceRequest.ProtoReflect.Descriptor instead.
+func (*GetWorkspaceRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetProjectRequest) GetId() string {
+func (x *GetWorkspaceRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetProjectResponse struct {
+type GetWorkspaceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       *Project               `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     *Workspace             `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetProjectResponse) Reset() {
-	*x = GetProjectResponse{}
+func (x *GetWorkspaceResponse) Reset() {
+	*x = GetWorkspaceResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetProjectResponse) String() string {
+func (x *GetWorkspaceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetProjectResponse) ProtoMessage() {}
+func (*GetWorkspaceResponse) ProtoMessage() {}
 
-func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
+func (x *GetWorkspaceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -402,38 +402,38 @@ func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetProjectResponse.ProtoReflect.Descriptor instead.
-func (*GetProjectResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetWorkspaceResponse.ProtoReflect.Descriptor instead.
+func (*GetWorkspaceResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *GetProjectResponse) GetProject() *Project {
+func (x *GetWorkspaceResponse) GetWorkspace() *Workspace {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return nil
 }
 
-type ListProjectsRequest struct {
+type ListWorkspacesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListProjectsRequest) Reset() {
-	*x = ListProjectsRequest{}
+func (x *ListWorkspacesRequest) Reset() {
+	*x = ListWorkspacesRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListProjectsRequest) String() string {
+func (x *ListWorkspacesRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListProjectsRequest) ProtoMessage() {}
+func (*ListWorkspacesRequest) ProtoMessage() {}
 
-func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
+func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -445,32 +445,32 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
-func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListWorkspacesRequest.ProtoReflect.Descriptor instead.
+func (*ListWorkspacesRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{7}
 }
 
-type ListProjectsResponse struct {
+type ListWorkspacesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Projects      []*Project             `protobuf:"bytes,1,rep,name=projects,proto3" json:"projects,omitempty"`
+	Workspaces    []*Workspace           `protobuf:"bytes,1,rep,name=workspaces,proto3" json:"workspaces,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListProjectsResponse) Reset() {
-	*x = ListProjectsResponse{}
+func (x *ListWorkspacesResponse) Reset() {
+	*x = ListWorkspacesResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListProjectsResponse) String() string {
+func (x *ListWorkspacesResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListProjectsResponse) ProtoMessage() {}
+func (*ListWorkspacesResponse) ProtoMessage() {}
 
-func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
+func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -482,39 +482,39 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
-func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListWorkspacesResponse.ProtoReflect.Descriptor instead.
+func (*ListWorkspacesResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ListProjectsResponse) GetProjects() []*Project {
+func (x *ListWorkspacesResponse) GetWorkspaces() []*Workspace {
 	if x != nil {
-		return x.Projects
+		return x.Workspaces
 	}
 	return nil
 }
 
-type DeleteProjectRequest struct {
+type DeleteWorkspaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteProjectRequest) Reset() {
-	*x = DeleteProjectRequest{}
+func (x *DeleteWorkspaceRequest) Reset() {
+	*x = DeleteWorkspaceRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteProjectRequest) String() string {
+func (x *DeleteWorkspaceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteProjectRequest) ProtoMessage() {}
+func (*DeleteWorkspaceRequest) ProtoMessage() {}
 
-func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
+func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -526,38 +526,38 @@ func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteProjectRequest.ProtoReflect.Descriptor instead.
-func (*DeleteProjectRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteWorkspaceRequest.ProtoReflect.Descriptor instead.
+func (*DeleteWorkspaceRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *DeleteProjectRequest) GetId() string {
+func (x *DeleteWorkspaceRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type DeleteProjectResponse struct {
+type DeleteWorkspaceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteProjectResponse) Reset() {
-	*x = DeleteProjectResponse{}
+func (x *DeleteWorkspaceResponse) Reset() {
+	*x = DeleteWorkspaceResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteProjectResponse) String() string {
+func (x *DeleteWorkspaceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteProjectResponse) ProtoMessage() {}
+func (*DeleteWorkspaceResponse) ProtoMessage() {}
 
-func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
+func (x *DeleteWorkspaceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -569,14 +569,14 @@ func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteProjectResponse.ProtoReflect.Descriptor instead.
-func (*DeleteProjectResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteWorkspaceResponse.ProtoReflect.Descriptor instead.
+func (*DeleteWorkspaceResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{10}
 }
 
 type AttachChannelRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -613,9 +613,9 @@ func (*AttachChannelRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *AttachChannelRequest) GetProject() string {
+func (x *AttachChannelRequest) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -681,7 +681,7 @@ func (x *AttachChannelResponse) GetChannel() *Channel {
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 type SetSecretRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -718,9 +718,9 @@ func (*SetSecretRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *SetSecretRequest) GetProject() string {
+func (x *SetSecretRequest) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -778,7 +778,7 @@ func (*SetSecretResponse) Descriptor() ([]byte, []int) {
 // DispatchRequest starts a new thread (thread_id empty) or continues an existing one.
 type DispatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	ThreadId      string                 `protobuf:"bytes,2,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
 	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -815,9 +815,9 @@ func (*DispatchRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *DispatchRequest) GetProject() string {
+func (x *DispatchRequest) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -898,7 +898,7 @@ func (x *DispatchResponse) GetReply() string {
 
 type ListSessionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -933,9 +933,9 @@ func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ListSessionsRequest) GetProject() string {
+func (x *ListSessionsRequest) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -1156,62 +1156,64 @@ var File_quaycrew_v1_controlplane_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
-	"\x1equaycrew/v1/controlplane.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"h\n" +
-	"\aProject\x12\x0e\n" +
+	"\x1equaycrew/v1/controlplane.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"j\n" +
+	"\tWorkspace\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x129\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"G\n" +
-	"\aChannel\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x0e\n" +
+	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"K\n" +
+	"\aChannel\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kind\"\x88\x02\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\"\x8c\x02\n" +
 	"\aSession\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
-	"\aproject\x18\x02 \x01(\tR\aproject\x12\x1b\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
+	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tthread_id\x18\x03 \x01(\tR\bthreadId\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12(\n" +
 	"\x10model_session_id\x18\x05 \x01(\tR\x0emodelSessionId\x129\n" +
 	"\n" +
 	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"*\n" +
-	"\x14CreateProjectRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"G\n" +
-	"\x15CreateProjectResponse\x12.\n" +
-	"\aproject\x18\x01 \x01(\v2\x14.quaycrew.v1.ProjectR\aproject\"#\n" +
-	"\x11GetProjectRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"D\n" +
-	"\x12GetProjectResponse\x12.\n" +
-	"\aproject\x18\x01 \x01(\v2\x14.quaycrew.v1.ProjectR\aproject\"\x15\n" +
-	"\x13ListProjectsRequest\"H\n" +
-	"\x14ListProjectsResponse\x120\n" +
-	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"&\n" +
-	"\x14DeleteProjectRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x17\n" +
-	"\x15DeleteProjectResponse\"T\n" +
-	"\x14AttachChannelRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x0e\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\",\n" +
+	"\x16CreateWorkspaceRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"O\n" +
+	"\x17CreateWorkspaceResponse\x124\n" +
+	"\tworkspace\x18\x01 \x01(\v2\x16.quaycrew.v1.WorkspaceR\tworkspace\"%\n" +
+	"\x13GetWorkspaceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"L\n" +
+	"\x14GetWorkspaceResponse\x124\n" +
+	"\tworkspace\x18\x01 \x01(\v2\x16.quaycrew.v1.WorkspaceR\tworkspace\"\x17\n" +
+	"\x15ListWorkspacesRequest\"P\n" +
+	"\x16ListWorkspacesResponse\x126\n" +
+	"\n" +
+	"workspaces\x18\x01 \x03(\v2\x16.quaycrew.v1.WorkspaceR\n" +
+	"workspaces\"(\n" +
+	"\x16DeleteWorkspaceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x19\n" +
+	"\x17DeleteWorkspaceResponse\"X\n" +
+	"\x14AttachChannelRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\"G\n" +
 	"\x15AttachChannelResponse\x12.\n" +
-	"\achannel\x18\x01 \x01(\v2\x14.quaycrew.v1.ChannelR\achannel\"T\n" +
-	"\x10SetSecretRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x10\n" +
+	"\achannel\x18\x01 \x01(\v2\x14.quaycrew.v1.ChannelR\achannel\"X\n" +
+	"\x10SetSecretRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\tR\x05value\"\x13\n" +
-	"\x11SetSecretResponse\"\\\n" +
-	"\x0fDispatchRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x1b\n" +
+	"\x11SetSecretResponse\"`\n" +
+	"\x0fDispatchRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\"d\n" +
 	"\x10DispatchResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x14\n" +
-	"\x05reply\x18\x03 \x01(\tR\x05reply\"/\n" +
-	"\x13ListSessionsRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\"H\n" +
+	"\x05reply\x18\x03 \x01(\tR\x05reply\"3\n" +
+	"\x13ListSessionsRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"H\n" +
 	"\x14ListSessionsResponse\x120\n" +
 	"\bsessions\x18\x01 \x03(\v2\x14.quaycrew.v1.SessionR\bsessions\"#\n" +
 	"\x11GetSessionRequest\x12\x0e\n" +
@@ -1220,13 +1222,12 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"$\n" +
 	"\x12StopSessionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
-	"\x13StopSessionResponse2\xcc\x06\n" +
-	"\x13ControlPlaneService\x12V\n" +
-	"\rCreateProject\x12!.quaycrew.v1.CreateProjectRequest\x1a\".quaycrew.v1.CreateProjectResponse\x12M\n" +
-	"\n" +
-	"GetProject\x12\x1e.quaycrew.v1.GetProjectRequest\x1a\x1f.quaycrew.v1.GetProjectResponse\x12S\n" +
-	"\fListProjects\x12 .quaycrew.v1.ListProjectsRequest\x1a!.quaycrew.v1.ListProjectsResponse\x12V\n" +
-	"\rDeleteProject\x12!.quaycrew.v1.DeleteProjectRequest\x1a\".quaycrew.v1.DeleteProjectResponse\x12V\n" +
+	"\x13StopSessionResponse2\xe4\x06\n" +
+	"\x13ControlPlaneService\x12\\\n" +
+	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
+	"\fGetWorkspace\x12 .quaycrew.v1.GetWorkspaceRequest\x1a!.quaycrew.v1.GetWorkspaceResponse\x12Y\n" +
+	"\x0eListWorkspaces\x12\".quaycrew.v1.ListWorkspacesRequest\x1a#.quaycrew.v1.ListWorkspacesResponse\x12\\\n" +
+	"\x0fDeleteWorkspace\x12#.quaycrew.v1.DeleteWorkspaceRequest\x1a$.quaycrew.v1.DeleteWorkspaceResponse\x12V\n" +
 	"\rAttachChannel\x12!.quaycrew.v1.AttachChannelRequest\x1a\".quaycrew.v1.AttachChannelResponse\x12J\n" +
 	"\tSetSecret\x12\x1d.quaycrew.v1.SetSecretRequest\x1a\x1e.quaycrew.v1.SetSecretResponse\x12G\n" +
 	"\bDispatch\x12\x1c.quaycrew.v1.DispatchRequest\x1a\x1d.quaycrew.v1.DispatchResponse\x12S\n" +
@@ -1250,55 +1251,55 @@ func file_quaycrew_v1_controlplane_proto_rawDescGZIP() []byte {
 
 var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_quaycrew_v1_controlplane_proto_goTypes = []any{
-	(*Project)(nil),               // 0: quaycrew.v1.Project
-	(*Channel)(nil),               // 1: quaycrew.v1.Channel
-	(*Session)(nil),               // 2: quaycrew.v1.Session
-	(*CreateProjectRequest)(nil),  // 3: quaycrew.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil), // 4: quaycrew.v1.CreateProjectResponse
-	(*GetProjectRequest)(nil),     // 5: quaycrew.v1.GetProjectRequest
-	(*GetProjectResponse)(nil),    // 6: quaycrew.v1.GetProjectResponse
-	(*ListProjectsRequest)(nil),   // 7: quaycrew.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),  // 8: quaycrew.v1.ListProjectsResponse
-	(*DeleteProjectRequest)(nil),  // 9: quaycrew.v1.DeleteProjectRequest
-	(*DeleteProjectResponse)(nil), // 10: quaycrew.v1.DeleteProjectResponse
-	(*AttachChannelRequest)(nil),  // 11: quaycrew.v1.AttachChannelRequest
-	(*AttachChannelResponse)(nil), // 12: quaycrew.v1.AttachChannelResponse
-	(*SetSecretRequest)(nil),      // 13: quaycrew.v1.SetSecretRequest
-	(*SetSecretResponse)(nil),     // 14: quaycrew.v1.SetSecretResponse
-	(*DispatchRequest)(nil),       // 15: quaycrew.v1.DispatchRequest
-	(*DispatchResponse)(nil),      // 16: quaycrew.v1.DispatchResponse
-	(*ListSessionsRequest)(nil),   // 17: quaycrew.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),  // 18: quaycrew.v1.ListSessionsResponse
-	(*GetSessionRequest)(nil),     // 19: quaycrew.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),    // 20: quaycrew.v1.GetSessionResponse
-	(*StopSessionRequest)(nil),    // 21: quaycrew.v1.StopSessionRequest
-	(*StopSessionResponse)(nil),   // 22: quaycrew.v1.StopSessionResponse
-	(*timestamppb.Timestamp)(nil), // 23: google.protobuf.Timestamp
+	(*Workspace)(nil),               // 0: quaycrew.v1.Workspace
+	(*Channel)(nil),                 // 1: quaycrew.v1.Channel
+	(*Session)(nil),                 // 2: quaycrew.v1.Session
+	(*CreateWorkspaceRequest)(nil),  // 3: quaycrew.v1.CreateWorkspaceRequest
+	(*CreateWorkspaceResponse)(nil), // 4: quaycrew.v1.CreateWorkspaceResponse
+	(*GetWorkspaceRequest)(nil),     // 5: quaycrew.v1.GetWorkspaceRequest
+	(*GetWorkspaceResponse)(nil),    // 6: quaycrew.v1.GetWorkspaceResponse
+	(*ListWorkspacesRequest)(nil),   // 7: quaycrew.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),  // 8: quaycrew.v1.ListWorkspacesResponse
+	(*DeleteWorkspaceRequest)(nil),  // 9: quaycrew.v1.DeleteWorkspaceRequest
+	(*DeleteWorkspaceResponse)(nil), // 10: quaycrew.v1.DeleteWorkspaceResponse
+	(*AttachChannelRequest)(nil),    // 11: quaycrew.v1.AttachChannelRequest
+	(*AttachChannelResponse)(nil),   // 12: quaycrew.v1.AttachChannelResponse
+	(*SetSecretRequest)(nil),        // 13: quaycrew.v1.SetSecretRequest
+	(*SetSecretResponse)(nil),       // 14: quaycrew.v1.SetSecretResponse
+	(*DispatchRequest)(nil),         // 15: quaycrew.v1.DispatchRequest
+	(*DispatchResponse)(nil),        // 16: quaycrew.v1.DispatchResponse
+	(*ListSessionsRequest)(nil),     // 17: quaycrew.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),    // 18: quaycrew.v1.ListSessionsResponse
+	(*GetSessionRequest)(nil),       // 19: quaycrew.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),      // 20: quaycrew.v1.GetSessionResponse
+	(*StopSessionRequest)(nil),      // 21: quaycrew.v1.StopSessionRequest
+	(*StopSessionResponse)(nil),     // 22: quaycrew.v1.StopSessionResponse
+	(*timestamppb.Timestamp)(nil),   // 23: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
-	23, // 0: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	23, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
 	23, // 1: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
 	23, // 2: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 3: quaycrew.v1.CreateProjectResponse.project:type_name -> quaycrew.v1.Project
-	0,  // 4: quaycrew.v1.GetProjectResponse.project:type_name -> quaycrew.v1.Project
-	0,  // 5: quaycrew.v1.ListProjectsResponse.projects:type_name -> quaycrew.v1.Project
+	0,  // 3: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
+	0,  // 4: quaycrew.v1.GetWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
+	0,  // 5: quaycrew.v1.ListWorkspacesResponse.workspaces:type_name -> quaycrew.v1.Workspace
 	1,  // 6: quaycrew.v1.AttachChannelResponse.channel:type_name -> quaycrew.v1.Channel
 	2,  // 7: quaycrew.v1.ListSessionsResponse.sessions:type_name -> quaycrew.v1.Session
 	2,  // 8: quaycrew.v1.GetSessionResponse.session:type_name -> quaycrew.v1.Session
-	3,  // 9: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
-	5,  // 10: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
-	7,  // 11: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
-	9,  // 12: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
+	3,  // 9: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
+	5,  // 10: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
+	7,  // 11: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
+	9,  // 12: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
 	11, // 13: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
 	13, // 14: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
 	15, // 15: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
 	17, // 16: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
 	19, // 17: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
 	21, // 18: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	4,  // 19: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
-	6,  // 20: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
-	8,  // 21: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
-	10, // 22: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
+	4,  // 19: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
+	6,  // 20: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
+	8,  // 21: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
+	10, // 22: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
 	12, // 23: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
 	14, // 24: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
 	16, // 25: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse

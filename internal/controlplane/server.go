@@ -2,7 +2,7 @@
 // store, a secrets store, and a model runner. Channels feed it through the event log; the dashboard
 // and CLI drive it through the API.
 //
-// The server holds no domain state of its own. Projects and sessions live in the store, so a restart
+// The server holds no domain state of its own. Workspaces and sessions live in the store, so a restart
 // resumes conversations instead of orphaning them. The one thing it still keeps in the process is
 // the map of live sandboxes, which is a handle to a running container rather than a fact worth
 // keeping; reattaching those after a restart is its own piece of work.
@@ -82,65 +82,65 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 	}
 }
 
-// CreateProject creates a project at runtime.
-func (s *Server) CreateProject(ctx context.Context, req *quaycrewv1.CreateProjectRequest) (*quaycrewv1.CreateProjectResponse, error) {
+// CreateWorkspace creates a workspace at runtime.
+func (s *Server) CreateWorkspace(ctx context.Context, req *quaycrewv1.CreateWorkspaceRequest) (*quaycrewv1.CreateWorkspaceResponse, error) {
 	if req.GetName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
-	project, err := s.store.CreateProject(ctx, req.GetName())
+	workspace, err := s.store.CreateWorkspace(ctx, req.GetName())
 	if err != nil {
-		return nil, storeError(err, "create project")
+		return nil, storeError(err, "create workspace")
 	}
-	return &quaycrewv1.CreateProjectResponse{Project: project}, nil
+	return &quaycrewv1.CreateWorkspaceResponse{Workspace: workspace}, nil
 }
 
-// GetProject returns a project by id.
-func (s *Server) GetProject(ctx context.Context, req *quaycrewv1.GetProjectRequest) (*quaycrewv1.GetProjectResponse, error) {
-	project, err := s.store.GetProject(ctx, req.GetId())
+// GetWorkspace returns a workspace by id.
+func (s *Server) GetWorkspace(ctx context.Context, req *quaycrewv1.GetWorkspaceRequest) (*quaycrewv1.GetWorkspaceResponse, error) {
+	workspace, err := s.store.GetWorkspace(ctx, req.GetId())
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "workspace")
 	}
-	return &quaycrewv1.GetProjectResponse{Project: project}, nil
+	return &quaycrewv1.GetWorkspaceResponse{Workspace: workspace}, nil
 }
 
-// ListProjects lists all projects.
-func (s *Server) ListProjects(ctx context.Context, _ *quaycrewv1.ListProjectsRequest) (*quaycrewv1.ListProjectsResponse, error) {
-	projects, err := s.store.ListProjects(ctx)
+// ListWorkspaces lists all workspaces.
+func (s *Server) ListWorkspaces(ctx context.Context, _ *quaycrewv1.ListWorkspacesRequest) (*quaycrewv1.ListWorkspacesResponse, error) {
+	workspaces, err := s.store.ListWorkspaces(ctx)
 	if err != nil {
-		return nil, storeError(err, "list projects")
+		return nil, storeError(err, "list workspaces")
 	}
-	return &quaycrewv1.ListProjectsResponse{Projects: projects}, nil
+	return &quaycrewv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
 }
 
-// DeleteProject removes a project.
-func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjectRequest) (*quaycrewv1.DeleteProjectResponse, error) {
-	if err := s.store.DeleteProject(ctx, req.GetId()); err != nil {
-		return nil, storeError(err, "project")
+// DeleteWorkspace removes a workspace.
+func (s *Server) DeleteWorkspace(ctx context.Context, req *quaycrewv1.DeleteWorkspaceRequest) (*quaycrewv1.DeleteWorkspaceResponse, error) {
+	if err := s.store.DeleteWorkspace(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "workspace")
 	}
-	return &quaycrewv1.DeleteProjectResponse{}, nil
+	return &quaycrewv1.DeleteWorkspaceResponse{}, nil
 }
 
-// AttachChannel attaches a channel to a project.
+// AttachChannel attaches a channel to a workspace.
 func (s *Server) AttachChannel(ctx context.Context, req *quaycrewv1.AttachChannelRequest) (*quaycrewv1.AttachChannelResponse, error) {
-	if req.GetProject() == "" || req.GetId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "project and id are required")
+	if req.GetWorkspace() == "" || req.GetId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "workspace and id are required")
 	}
-	channel, err := s.store.AttachChannel(ctx, req.GetProject(), req.GetId(), req.GetKind())
+	channel, err := s.store.AttachChannel(ctx, req.GetWorkspace(), req.GetId(), req.GetKind())
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "workspace")
 	}
 	return &quaycrewv1.AttachChannelResponse{Channel: channel}, nil
 }
 
-// SetSecret stores a project secret in the secrets backend. The value is never returned.
+// SetSecret stores a workspace secret in the secrets backend. The value is never returned.
 func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest) (*quaycrewv1.SetSecretResponse, error) {
-	if req.GetProject() == "" || req.GetKey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "project and key are required")
+	if req.GetWorkspace() == "" || req.GetKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "workspace and key are required")
 	}
-	if _, err := s.store.GetProject(ctx, req.GetProject()); err != nil {
-		return nil, storeError(err, "project")
+	if _, err := s.store.GetWorkspace(ctx, req.GetWorkspace()); err != nil {
+		return nil, storeError(err, "workspace")
 	}
-	if err := s.secrets.Set(ctx, req.GetProject(), req.GetKey(), req.GetValue()); err != nil {
+	if err := s.secrets.Set(ctx, req.GetWorkspace(), req.GetKey(), req.GetValue()); err != nil {
 		return nil, status.Errorf(codes.Internal, "set secret: %v", err)
 	}
 	return &quaycrewv1.SetSecretResponse{}, nil
@@ -148,8 +148,8 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 
 // Dispatch starts or continues a thread, running one turn through the model runner.
 func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
-	if req.GetProject() == "" {
-		return nil, status.Error(codes.InvalidArgument, "project is required")
+	if req.GetWorkspace() == "" {
+		return nil, status.Error(codes.InvalidArgument, "workspace is required")
 	}
 	if req.GetText() == "" {
 		return nil, status.Error(codes.InvalidArgument, "text is required")
@@ -159,9 +159,9 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if thread == "" {
 		thread = store.NewID()
 	}
-	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), thread)
+	session, err := s.store.FindOrCreateSession(ctx, req.GetWorkspace(), thread)
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "workspace")
 	}
 
 	box, err := s.sandboxFor(ctx, session.GetId())
@@ -174,7 +174,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: defaultPermissionMode,
-		Env:            s.turnEnv(ctx, req.GetProject()),
+		Env:            s.turnEnv(ctx, req.GetWorkspace()),
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
@@ -192,20 +192,20 @@ func (s *Server) recordTurn(ctx context.Context, sessionID, modelSessionID, sess
 	_ = s.store.RecordTurn(ctx, sessionID, modelSessionID, sessionStatus)
 }
 
-// turnEnv gathers the environment a turn runs with from the project's secrets. Right now that is the
-// Claude Code subscription token, if one is set. A project that has not set it (or a model backend
+// turnEnv gathers the environment a turn runs with from the workspace's secrets. Right now that is the
+// Claude Code subscription token, if one is set. A workspace that has not set it (or a model backend
 // that does not need it) simply runs with no extra env, so the lookup never fails a turn.
-func (s *Server) turnEnv(ctx context.Context, project string) map[string]string {
-	token, err := s.secrets.Get(ctx, project, model.ClaudeCodeOAuthTokenEnv)
+func (s *Server) turnEnv(ctx context.Context, workspace string) map[string]string {
+	token, err := s.secrets.Get(ctx, workspace, model.ClaudeCodeOAuthTokenEnv)
 	if err != nil || token == "" {
 		return nil
 	}
 	return map[string]string{model.ClaudeCodeOAuthTokenEnv: token}
 }
 
-// ListSessions lists sessions, optionally filtered by project.
+// ListSessions lists sessions, optionally filtered by workspace.
 func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
-	sessions, err := s.store.ListSessions(ctx, req.GetProject())
+	sessions, err := s.store.ListSessions(ctx, req.GetWorkspace())
 	if err != nil {
 		return nil, storeError(err, "list sessions")
 	}

@@ -47,7 +47,7 @@ type Row struct {
 }
 
 // Lister returns the current rows for a resource. Parent is empty for an unscoped view, or the
-// identifier drilled down from, for example a project id when listing that project's sessions.
+// identifier drilled down from, for example a workspace id when listing that workspace's sessions.
 type Lister func(ctx context.Context, parent string) ([]Row, error)
 
 // Action is a key bound operation on the selected row.

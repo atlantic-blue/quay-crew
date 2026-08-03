@@ -19,17 +19,17 @@ wherever you are:
 - **Channels** take input and send output: a CLI, chat apps, a scheduler.
 - A durable **event log** (Kafka) carries messages between services so every component is
   independent and replaceable.
-- A **control plane** routes work and manages projects.
+- A **control plane** routes work and manages workspaces.
 - **Agent sessions** run the model and execute tools inside sandboxes.
-- A **projection** builds a read model from the event log that an **admin dashboard** reads.
+- A **workspaceion** builds a read model from the event log that an **admin dashboard** reads.
 
-It ships with no data of any kind. You create **projects** at runtime through the dashboard or the
-control plane API, and each project is isolated from the others.
+It ships with no data of any kind. You create **workspaces** at runtime through the dashboard or the
+control plane API, and each workspace is isolated from the others.
 
 ## Principles
 
 - **Open source and self hosted.** Everything runs on infrastructure you control.
-- **No baked in data or secrets.** The code has no knowledge of any project. Projects and their
+- **No baked in data or secrets.** The code has no knowledge of any workspace. Workspaces and their
   credentials are created at runtime and stored outside the repository.
 - **Independent components.** Services talk over an event log and typed APIs, never by reaching into
   each other, so any one can be deployed, scaled, or replaced on its own.
@@ -53,7 +53,7 @@ control plane API, and each project is isolated from the others.
 make up        # bring up the whole stack (alias: make start)
 ```
 
-Then open the dashboard, create a project, and add that project's channel credentials. The system
+Then open the dashboard, create a workspace, and add that workspace's channel credentials. The system
 starts serving it. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
 
 Common targets:
@@ -67,15 +67,15 @@ make test             # run the tests
 make lint             # run the linters
 ```
 
-## Projects and isolation
+## Workspaces and isolation
 
-A project is the unit of isolation, created at runtime. Everything is namespaced by project id: the
-event log topics, the consumer groups, the stored state, and the agent workspace. Projects can share
+A workspace is the unit of isolation, created at runtime. Everything is namespaced by workspace id: the
+event log topics, the consumer groups, the stored state, and the agent workspace. Workspaces can share
 one running stack (logical isolation) or run as fully separate stacks when you want hard isolation.
 
 ## Secrets
 
-Secrets are never stored in the repository. You set a project's credentials through the dashboard or
+Secrets are never stored in the repository. You set a workspace's credentials through the dashboard or
 the API; they go straight to a pluggable secrets backend (an encrypted local store for development,
 a managed secrets service in the cloud). The event log records only a reference, never the value, and
 logs redact them.
@@ -90,7 +90,7 @@ Built spine first, so a usable thing exists early and the rest widens it. Full d
 - **First remote channel:** a chat channel, inbound and gated outbound.
 - **Controllers, sessions, sandbox:** the rest of the controllers, parallel sessions, a durable
   session store, and sandbox tiers with permission tiers.
-- **Dashboard and projection:** the read model and the admin dashboard.
+- **Dashboard and workspaceion:** the read model and the admin dashboard.
 - **Cloud parity:** managed backends behind the same interfaces, deployed through CI.
 - **Differentiators (optional):** a reviewed learning loop, a scheduler, and voice input.
 

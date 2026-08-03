@@ -23,77 +23,77 @@ type Opener func(t *testing.T) store.Store
 func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
-	t.Run("a project can be created, fetched and listed", func(t *testing.T) {
+	t.Run("a workspace can be created, fetched and listed", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		created, err := s.CreateProject(ctx, "acme")
+		created, err := s.CreateWorkspace(ctx, "acme")
 		if err != nil {
-			t.Fatalf("CreateProject: %v", err)
+			t.Fatalf("CreateWorkspace: %v", err)
 		}
 		if created.GetId() == "" {
-			t.Fatal("created project has no id")
+			t.Fatal("created workspace has no id")
 		}
 		if created.GetName() != "acme" {
 			t.Fatalf("name is %q, want acme", created.GetName())
 		}
 		if created.GetCreatedAt() == nil {
-			t.Fatal("created project has no created_at")
+			t.Fatal("created workspace has no created_at")
 		}
 
-		fetched, err := s.GetProject(ctx, created.GetId())
+		fetched, err := s.GetWorkspace(ctx, created.GetId())
 		if err != nil {
-			t.Fatalf("GetProject: %v", err)
+			t.Fatalf("GetWorkspace: %v", err)
 		}
 		if fetched.GetName() != "acme" {
 			t.Fatalf("fetched name is %q, want acme", fetched.GetName())
 		}
 
-		list, err := s.ListProjects(ctx)
+		list, err := s.ListWorkspaces(ctx)
 		if err != nil {
-			t.Fatalf("ListProjects: %v", err)
+			t.Fatalf("ListWorkspaces: %v", err)
 		}
 		if len(list) != 1 || list[0].GetId() != created.GetId() {
-			t.Fatalf("ListProjects returned %d projects, want the one created", len(list))
+			t.Fatalf("ListWorkspaces returned %d workspaces, want the one created", len(list))
 		}
 	})
 
-	t.Run("a project that does not exist is not found", func(t *testing.T) {
+	t.Run("a workspace that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
-		if _, err := s.GetProject(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("GetProject on a missing project returned %v, want ErrNotFound", err)
+		if _, err := s.GetWorkspace(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetWorkspace on a missing workspace returned %v, want ErrNotFound", err)
 		}
 	})
 
-	t.Run("a deleted project is hidden from every read", func(t *testing.T) {
+	t.Run("a deleted workspace is hidden from every read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		created, _ := s.CreateProject(ctx, "acme")
-		if err := s.DeleteProject(ctx, created.GetId()); err != nil {
-			t.Fatalf("DeleteProject: %v", err)
+		created, _ := s.CreateWorkspace(ctx, "acme")
+		if err := s.DeleteWorkspace(ctx, created.GetId()); err != nil {
+			t.Fatalf("DeleteWorkspace: %v", err)
 		}
 
-		if _, err := s.GetProject(ctx, created.GetId()); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("GetProject after delete returned %v, want ErrNotFound", err)
+		if _, err := s.GetWorkspace(ctx, created.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetWorkspace after delete returned %v, want ErrNotFound", err)
 		}
-		list, err := s.ListProjects(ctx)
+		list, err := s.ListWorkspaces(ctx)
 		if err != nil {
-			t.Fatalf("ListProjects: %v", err)
+			t.Fatalf("ListWorkspaces: %v", err)
 		}
 		if len(list) != 0 {
-			t.Fatalf("ListProjects returned %d projects after delete, want 0", len(list))
+			t.Fatalf("ListWorkspaces returned %d workspaces after delete, want 0", len(list))
 		}
-		if err := s.DeleteProject(ctx, created.GetId()); !errors.Is(err, store.ErrNotFound) {
+		if err := s.DeleteWorkspace(ctx, created.GetId()); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("deleting twice returned %v, want ErrNotFound", err)
 		}
 	})
 
-	t.Run("a channel attaches to a live project only", func(t *testing.T) {
+	t.Run("a channel attaches to a live workspace only", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		created, _ := s.CreateProject(ctx, "acme")
+		created, _ := s.CreateWorkspace(ctx, "acme")
 		channel, err := s.AttachChannel(ctx, created.GetId(), "family-chat", "telegram")
 		if err != nil {
 			t.Fatalf("AttachChannel: %v", err)
@@ -103,16 +103,16 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 
 		if _, err := s.AttachChannel(ctx, "ghost", "family-chat", "telegram"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("attaching to a missing project returned %v, want ErrNotFound", err)
+			t.Fatalf("attaching to a missing workspace returned %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("a thread always lands in the same session", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project, _ := s.CreateProject(ctx, "acme")
+		workspace, _ := s.CreateWorkspace(ctx, "acme")
 
-		first, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		first, err := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -120,7 +120,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("new session status is %q, want idle", first.GetStatus())
 		}
 
-		again, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		again, err := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession again: %v", err)
 		}
@@ -128,7 +128,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the same thread made two sessions: %q and %q", first.GetId(), again.GetId())
 		}
 
-		other, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-b")
+		other, err := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-b")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession other thread: %v", err)
 		}
@@ -137,18 +137,18 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a session needs a live project", func(t *testing.T) {
+	t.Run("a session needs a live workspace", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if _, err := s.FindOrCreateSession(context.Background(), "ghost", "thread-a"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("session on a missing project returned %v, want ErrNotFound", err)
+			t.Fatalf("session on a missing workspace returned %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("a turn records the conversation handle", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project, _ := s.CreateProject(ctx, "acme")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		workspace, _ := s.CreateWorkspace(ctx, "acme")
+		session, _ := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 
 		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTurn: %v", err)
@@ -165,8 +165,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("a failed turn does not erase the conversation handle", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project, _ := s.CreateProject(ctx, "acme")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		workspace, _ := s.CreateWorkspace(ctx, "acme")
+		session, _ := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 
 		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTurn: %v", err)
@@ -193,11 +193,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("sessions list by project and in full", func(t *testing.T) {
+	t.Run("sessions list by workspace and in full", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		first, _ := s.CreateProject(ctx, "acme")
-		second, _ := s.CreateProject(ctx, "other")
+		first, _ := s.CreateWorkspace(ctx, "acme")
+		second, _ := s.CreateWorkspace(ctx, "other")
 
 		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "thread-a"); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
@@ -211,14 +211,14 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		mine, err := s.ListSessions(ctx, first.GetId())
 		if err != nil {
-			t.Fatalf("ListSessions by project: %v", err)
+			t.Fatalf("ListSessions by workspace: %v", err)
 		}
 		if len(mine) != 2 {
-			t.Fatalf("project has %d sessions, want 2", len(mine))
+			t.Fatalf("workspace has %d sessions, want 2", len(mine))
 		}
 		for _, session := range mine {
-			if session.GetProject() != first.GetId() {
-				t.Fatalf("ListSessions by project returned a session from %q", session.GetProject())
+			if session.GetWorkspace() != first.GetId() {
+				t.Fatalf("ListSessions by workspace returned a session from %q", session.GetWorkspace())
 			}
 		}
 
@@ -234,8 +234,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("a session can be stopped", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project, _ := s.CreateProject(ctx, "acme")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		workspace, _ := s.CreateWorkspace(ctx, "acme")
+		session, _ := s.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 
 		if err := s.StopSession(ctx, session.GetId()); err != nil {
 			t.Fatalf("StopSession: %v", err)
@@ -262,11 +262,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		ctx := context.Background()
 
 		before := open(t)
-		project, err := before.CreateProject(ctx, "acme")
+		workspace, err := before.CreateWorkspace(ctx, "acme")
 		if err != nil {
-			t.Fatalf("CreateProject: %v", err)
+			t.Fatalf("CreateWorkspace: %v", err)
 		}
-		session, err := before.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		session, err := before.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -277,20 +277,20 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		after := open(t)
 
-		reopened, err := after.GetProject(ctx, project.GetId())
+		reopened, err := after.GetWorkspace(ctx, workspace.GetId())
 		if err != nil {
-			t.Fatalf("the project did not survive reopening: %v", err)
+			t.Fatalf("the workspace did not survive reopening: %v", err)
 		}
 		if reopened.GetName() != "acme" {
-			t.Fatalf("reopened project is named %q, want acme", reopened.GetName())
+			t.Fatalf("reopened workspace is named %q, want acme", reopened.GetName())
 		}
 
-		sessions, err := after.ListSessions(ctx, project.GetId())
+		sessions, err := after.ListSessions(ctx, workspace.GetId())
 		if err != nil {
 			t.Fatalf("ListSessions after reopening: %v", err)
 		}
 		if len(sessions) != 1 {
-			t.Fatalf("the project has %d sessions after reopening, want 1", len(sessions))
+			t.Fatalf("the workspace has %d sessions after reopening, want 1", len(sessions))
 		}
 		if sessions[0].GetModelSessionId() != "conversation-1" {
 			t.Fatalf("the conversation handle did not survive: it is %q", sessions[0].GetModelSessionId())
@@ -298,7 +298,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		// The same thread must still resolve to the same session, which is what lets the next turn
 		// resume the conversation rather than start a new one.
-		same, err := after.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		same, err := after.FindOrCreateSession(ctx, workspace.GetId(), "thread-a")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession after reopening: %v", err)
 		}

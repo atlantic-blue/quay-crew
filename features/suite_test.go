@@ -116,9 +116,9 @@ type world struct {
 	secrets    secrets.Store
 	store      store.Store
 
-	projectID          string
-	projectName        string
-	secondProjectID    string
+	workspaceID        string
+	workspaceName      string
+	secondWorkspaceID  string
 	turns              []turn
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
@@ -187,8 +187,8 @@ func (w *world) lastTurn() (turn, error) {
 
 // dispatch runs one turn and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
-func (w *world) dispatch(ctx context.Context, project, thread, text string) error {
-	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, ThreadId: thread, Text: text})
+func (w *world) dispatch(ctx context.Context, workspace, thread, text string) error {
+	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: workspace, ThreadId: thread, Text: text})
 	w.lastErr = err
 	if err != nil {
 		return nil
@@ -197,14 +197,14 @@ func (w *world) dispatch(ctx context.Context, project, thread, text string) erro
 	return nil
 }
 
-func (w *world) createProject(ctx context.Context, name string) error {
-	resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: name})
+func (w *world) createWorkspace(ctx context.Context, name string) error {
+	resp, err := w.client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: name})
 	w.lastErr = err
 	if err != nil {
 		return nil
 	}
-	w.projectID = resp.GetProject().GetId()
-	w.projectName = resp.GetProject().GetName()
+	w.workspaceID = resp.GetWorkspace().GetId()
+	w.workspaceName = resp.GetWorkspace().GetName()
 	return nil
 }
 
@@ -218,7 +218,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
-	initializeProjectSteps(sc)
+	initializeWorkspaceSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
@@ -236,46 +236,46 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^a second project named "([^"]*)"$`, func(ctx context.Context, name string) error {
+	sc.Step(`^a second workspace named "([^"]*)"$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: name})
+		resp, err := w.client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: name})
 		if err != nil {
 			return err
 		}
-		// createProject would move the world's current project, and the background's project is the
+		// createWorkspace would move the world's current workspace, and the background's workspace is the
 		// one the other steps mean, so record this one separately.
-		w.secondProjectID = resp.GetProject().GetId()
+		w.secondWorkspaceID = resp.GetWorkspace().GetId()
 		return nil
 	})
-	sc.Step(`^a project named "([^"]*)"$`, func(ctx context.Context, name string) error {
+	sc.Step(`^a workspace named "([^"]*)"$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		if err := w.createProject(ctx, name); err != nil {
+		if err := w.createWorkspace(ctx, name); err != nil {
 			return err
 		}
 		if w.lastErr != nil {
-			return fmt.Errorf("create the project: %w", w.lastErr)
+			return fmt.Errorf("create the workspace: %w", w.lastErr)
 		}
 		return nil
 	})
-	sc.Step(`^the project has the subscription token "([^"]*)"$`, func(ctx context.Context, token string) error {
+	sc.Step(`^the workspace has the subscription token "([^"]*)"$`, func(ctx context.Context, token string) error {
 		w := worldFrom(ctx)
 		_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-			Project: w.projectID, Key: model.ClaudeCodeOAuthTokenEnv, Value: token,
+			Workspace: w.workspaceID, Key: model.ClaudeCodeOAuthTokenEnv, Value: token,
 		})
 		return err
 	})
 	sc.Step(`^a session started by dispatching "([^"]*)"$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		if err := w.dispatch(ctx, w.projectID, "", text); err != nil {
+		if err := w.dispatch(ctx, w.workspaceID, "", text); err != nil {
 			return err
 		}
 		return w.lastErr
 	})
 
 	// When: sessions.
-	sc.Step(`^the operator dispatches "([^"]*)" to the project$`, func(ctx context.Context, text string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to the workspace$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		return w.dispatch(ctx, w.projectID, "", text)
+		return w.dispatch(ctx, w.workspaceID, "", text)
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to the same thread$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
@@ -283,14 +283,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		return w.dispatch(ctx, w.projectID, previous.threadID, text)
+		return w.dispatch(ctx, w.workspaceID, previous.threadID, text)
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to a new thread$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		return w.dispatch(ctx, w.projectID, "", text)
+		return w.dispatch(ctx, w.workspaceID, "", text)
 	})
-	sc.Step(`^the operator dispatches "([^"]*)" to project "([^"]*)"$`, func(ctx context.Context, text, project string) error {
-		return worldFrom(ctx).dispatch(ctx, project, "", text)
+	sc.Step(`^the operator dispatches "([^"]*)" to workspace "([^"]*)"$`, func(ctx context.Context, text, workspace string) error {
+		return worldFrom(ctx).dispatch(ctx, workspace, "", text)
 	})
 	sc.Step(`^the control plane restarts$`, func(ctx context.Context) error {
 		return worldFrom(ctx).restart()
@@ -305,38 +305,38 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
-	// When: projects.
-	sc.Step(`^the operator creates a project named "([^"]*)"$`, func(ctx context.Context, name string) error {
-		return worldFrom(ctx).createProject(ctx, name)
+	// When: workspaces.
+	sc.Step(`^the operator creates a workspace named "([^"]*)"$`, func(ctx context.Context, name string) error {
+		return worldFrom(ctx).createWorkspace(ctx, name)
 	})
-	sc.Step(`^the operator fetches the project "([^"]*)"$`, func(ctx context.Context, id string) error {
+	sc.Step(`^the operator fetches the workspace "([^"]*)"$`, func(ctx context.Context, id string) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: id})
+		_, w.lastErr = w.client.GetWorkspace(ctx, &quaycrewv1.GetWorkspaceRequest{Id: id})
 		return nil
 	})
-	sc.Step(`^the operator deletes the project$`, func(ctx context.Context) error {
+	sc.Step(`^the operator deletes the workspace$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.DeleteProject(ctx, &quaycrewv1.DeleteProjectRequest{Id: w.projectID})
+		_, w.lastErr = w.client.DeleteWorkspace(ctx, &quaycrewv1.DeleteWorkspaceRequest{Id: w.workspaceID})
 		return w.lastErr
 	})
-	sc.Step(`^the operator attaches a "([^"]*)" channel called "([^"]*)" to project "([^"]*)"$`,
-		func(ctx context.Context, kind, id, project string) error {
+	sc.Step(`^the operator attaches a "([^"]*)" channel called "([^"]*)" to workspace "([^"]*)"$`,
+		func(ctx context.Context, kind, id, workspace string) error {
 			w := worldFrom(ctx)
-			_, w.lastErr = w.client.AttachChannel(ctx, &quaycrewv1.AttachChannelRequest{Project: project, Id: id, Kind: kind})
+			_, w.lastErr = w.client.AttachChannel(ctx, &quaycrewv1.AttachChannelRequest{Workspace: workspace, Id: id, Kind: kind})
 			return nil
 		})
 	sc.Step(`^the operator sets the secret "([^"]*)" to "([^"]*)"$`, func(ctx context.Context, key, value string) error {
 		w := worldFrom(ctx)
 		w.lastSecretResponse, w.lastErr = w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-			Project: w.projectID, Key: key, Value: value,
+			Workspace: w.workspaceID, Key: key, Value: value,
 		})
 		return w.lastErr
 	})
-	sc.Step(`^the operator sets the secret "([^"]*)" to "([^"]*)" on project "([^"]*)"$`,
-		func(ctx context.Context, key, value, project string) error {
+	sc.Step(`^the operator sets the secret "([^"]*)" to "([^"]*)" on workspace "([^"]*)"$`,
+		func(ctx context.Context, key, value, workspace string) error {
 			w := worldFrom(ctx)
 			w.lastSecretResponse, w.lastErr = w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-				Project: project, Key: key, Value: value,
+				Workspace: workspace, Key: key, Value: value,
 			})
 			return nil
 		})
@@ -427,14 +427,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the project has (\d+) sessions$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the workspace has (\d+) sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: w.workspaceID})
 		if err != nil {
 			return err
 		}
 		if got := len(resp.GetSessions()); got != want {
-			return fmt.Errorf("the project has %d sessions, want %d", got, want)
+			return fmt.Errorf("the workspace has %d sessions, want %d", got, want)
 		}
 		return nil
 	})
@@ -488,27 +488,27 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Then: projects.
-	sc.Step(`^the project is listed$`, func(ctx context.Context) error {
-		return worldFrom(ctx).projectIsListed(ctx, true)
+	// Then: workspaces.
+	sc.Step(`^the workspace is listed$`, func(ctx context.Context) error {
+		return worldFrom(ctx).workspaceIsListed(ctx, true)
 	})
-	sc.Step(`^the project is no longer listed$`, func(ctx context.Context) error {
-		return worldFrom(ctx).projectIsListed(ctx, false)
+	sc.Step(`^the workspace is no longer listed$`, func(ctx context.Context) error {
+		return worldFrom(ctx).workspaceIsListed(ctx, false)
 	})
-	sc.Step(`^the project can be fetched by its id$`, func(ctx context.Context) error {
+	sc.Step(`^the workspace can be fetched by its id$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: w.projectID})
+		resp, err := w.client.GetWorkspace(ctx, &quaycrewv1.GetWorkspaceRequest{Id: w.workspaceID})
 		if err != nil {
 			return err
 		}
-		if resp.GetProject().GetName() != w.projectName {
-			return fmt.Errorf("fetched project is named %q, want %q", resp.GetProject().GetName(), w.projectName)
+		if resp.GetWorkspace().GetName() != w.workspaceName {
+			return fmt.Errorf("fetched workspace is named %q, want %q", resp.GetWorkspace().GetName(), w.workspaceName)
 		}
 		return nil
 	})
-	sc.Step(`^the secrets backend holds "([^"]*)" for that project$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the secrets backend holds "([^"]*)" for that workspace$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		got, err := w.secrets.Get(ctx, w.projectID, model.ClaudeCodeOAuthTokenEnv)
+		got, err := w.secrets.Get(ctx, w.workspaceID, model.ClaudeCodeOAuthTokenEnv)
 		if err != nil {
 			return fmt.Errorf("read the secret back: %w", err)
 		}
@@ -537,21 +537,21 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 }
 
-func (w *world) projectIsListed(ctx context.Context, want bool) error {
-	resp, err := w.client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+func (w *world) workspaceIsListed(ctx context.Context, want bool) error {
+	resp, err := w.client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 	if err != nil {
 		return err
 	}
-	for _, project := range resp.GetProjects() {
-		if project.GetId() == w.projectID {
+	for _, workspace := range resp.GetWorkspaces() {
+		if workspace.GetId() == w.workspaceID {
 			if !want {
-				return fmt.Errorf("project %q is still listed", w.projectID)
+				return fmt.Errorf("workspace %q is still listed", w.workspaceID)
 			}
 			return nil
 		}
 	}
 	if want {
-		return fmt.Errorf("project %q is not listed", w.projectID)
+		return fmt.Errorf("workspace %q is not listed", w.workspaceID)
 	}
 	return nil
 }
