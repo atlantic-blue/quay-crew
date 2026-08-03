@@ -7,7 +7,7 @@ document describes the design, the stack, and the delivery plan.
 ## Design principles
 
 1. **Open source and self hosted.** Everything runs on infrastructure the operator controls.
-2. **No baked in data or secrets.** The code has no knowledge of any project. Projects and their
+2. **No baked in data or secrets.** The code has no knowledge of any workspace. Workspaces and their
    credentials are created at runtime through the control plane and stored outside the repository.
 3. **Independent components.** Services communicate over a durable event log and typed APIs, never by
    calling into each other in process, so any one can be deployed, scaled, or replaced on its own.
@@ -19,10 +19,10 @@ document describes the design, the stack, and the delivery plan.
 
 ## The shape
 
-Channels feed a durable event log. A control plane consumes it, manages projects, and drives parallel
+Channels feed a durable event log. A control plane consumes it, manages workspaces, and drives parallel
 agent sessions. Each session talks to the model and runs tools in a sandbox tier. The event log is the
-write side; a projection materialises a read model that the admin dashboard reads. Synchronous
-queries (the dashboard reading the read model, the control plane managing projects) go over gRPC.
+write side; a workspaceion materialises a read model that the admin dashboard reads. Synchronous
+queries (the dashboard reading the read model, the control plane managing workspaces) go over gRPC.
 
 ```mermaid
 flowchart LR
@@ -36,14 +36,14 @@ flowchart LR
     LOG[["Event log (Kafka / Redpanda)"]]
     subgraph CP["Control plane"]
       CTRL["Controllers: sessions, tools, skills, model"]
-      PROJ["Projects API (gRPC)"]
+      PROJ["Workspaces API (gRPC)"]
     end
-    subgraph SESS["Agent sessions (parallel, per project)"]
+    subgraph SESS["Agent sessions (parallel, per workspace)"]
       S1["Session"]
       S2["Session"]
     end
     SANDBOX["Sandbox tiers: docker, ssh, shell"]
-    PROJECTOR["Projector"]
+    PROJECTOR["Workspaceor"]
     VIEW[("Read model")]
     DASH(["Admin dashboard"])
     SECRETS[("Secrets backend")]
@@ -72,13 +72,13 @@ Each is its own Go service in its own container.
   channel implements one shared contract.
 - **Control plane.** Consumes inbound messages and routes them. It holds the controllers: a sessions
   controller (start or resume the right session), a tools controller, a skills controller, and a model
-  controller. It also exposes the **Projects API** over gRPC for creating and configuring projects.
+  controller. It also exposes the **Workspaces API** over gRPC for creating and configuring workspaces.
 - **Agent sessions.** Worker services that run a model thread, capture the session id so a thread can
-  be resumed, and execute tools. Many run in parallel, isolated per project. Tool execution happens in
+  be resumed, and execute tools. Many run in parallel, isolated per workspace. Tool execution happens in
   a sandbox tier.
-- **Projector.** Consumes the event log and materialises the read model. The read model is derived, so
+- **Workspaceor.** Consumes the event log and materialises the read model. The read model is derived, so
   it is disposable and can be rebuilt from the log.
-- **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list projects, see
+- **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list workspaces, see
   every session, tail a conversation, start or stop work.
 - **Flow reducer.** Consumes the event log in its own group and advances automation runs against a
   graph, dispatching turns and asking the operator through the same gated outbound as everything
@@ -91,38 +91,38 @@ Each is its own Go service in its own container.
   is `franz-go` (pure Go, no CGO, so the images stay small).
 - **Why an event log.** It decouples the services (each publishes and subscribes on its own), it is
   durable and replayable, and it is the natural write side for the read model: the log is the source
-  of truth, the projection is a consumer.
-- **Synchronous APIs: gRPC.** Request and response calls (managing projects, reading the read model)
+  of truth, the workspaceion is a consumer.
+- **Synchronous APIs: gRPC.** Request and response calls (managing workspaces, reading the read model)
   use gRPC. The message shapes and the service methods are defined in **protobuf** under `proto/`, so
   every service agrees on one contract.
 - **The channel contract.** The shared inbound and outbound message schema every channel implements.
-  Each message carries a `project` and a `correlation_id` (which is also the trace id).
+  Each message carries a `workspace` and a `correlation_id` (which is also the trace id).
 
-## Projects and isolation
+## Workspaces and isolation
 
-A project is the unit of isolation, and it is a runtime resource, not a file in the repository.
+A workspace is the unit of isolation, and it is a runtime resource, not a file in the repository.
 
-- **Created through the control plane.** The Projects API (and the dashboard on top of it) creates and
-  configures projects. Project lifecycle is captured as events on the log (`ProjectCreated`,
-  `ChannelAttached`, `SecretSet`), projected into a projects read model the dashboard renders.
-- **Namespaced by project id.** Every message carries its project. The event log topics, the consumer
-  groups, the stored state, and the agent workspace are all scoped by project id.
+- **Created through the control plane.** The Workspaces API (and the dashboard on top of it) creates and
+  configures workspaces. Workspace lifecycle is captured as events on the log (`WorkspaceCreated`,
+  `ChannelAttached`, `SecretSet`), workspaceed into a workspaces read model the dashboard renders.
+- **Namespaced by workspace id.** Every message carries its workspace. The event log topics, the consumer
+  groups, the stored state, and the agent workspace are all scoped by workspace id.
 - **Two isolation levels.** Logical isolation shares one running stack and separates everything by
-  project id (the default, lightweight). Hard isolation runs a fully separate stack per project, with
+  workspace id (the default, lightweight). Hard isolation runs a fully separate stack per workspace, with
   its own volumes and network, when stronger separation is wanted.
 
 ```mermaid
 flowchart TB
   subgraph API["Control plane"]
-    P["Projects API (gRPC)"]
+    P["Workspaces API (gRPC)"]
   end
   subgraph LOGICAL["Logical isolation (one stack)"]
-    T1["topics: projectA prefix"]
-    T2["topics: projectB prefix"]
-    W1["workspace: projectA"]
-    W2["workspace: projectB"]
+    T1["topics: workspaceA prefix"]
+    T2["topics: workspaceB prefix"]
+    W1["workspace: workspaceA"]
+    W2["workspace: workspaceB"]
   end
-  HARD["Hard isolation: a separate stack per project (own volumes and network)"]
+  HARD["Hard isolation: a separate stack per workspace (own volumes and network)"]
   DASH(["Dashboard"]) -- create, configure --> P
   P -- emits events --> T1
   P -- emits events --> T2
@@ -150,7 +150,7 @@ The control plane image therefore carries the Docker client and runs as root. Ev
 an unprivileged distroless image.
 
 The default sandbox image carries the Claude Code CLI, and a turn runs `claude` inside it under the
-operator's subscription. The image holds no credentials: the subscription token is stored per project
+operator's subscription. The image holds no credentials: the subscription token is stored per workspace
 as a secret and injected into the sandbox as an environment variable at turn time, so the same image
 runs unchanged on a laptop or in the cloud. See `docs/SANDBOX.md` for how to build the image, set the
 token, and run a real turn.
@@ -162,7 +162,7 @@ with a model substitute that still execs inside the sandbox.
 
 ## Storage
 
-Projects, their channels and their sessions live in Postgres, a service in the same compose stack.
+Workspaces, their channels and their sessions live in Postgres, a service in the same compose stack.
 The control plane holds no domain state of its own, which is the whole point: a session's
 `model_session_id` is the handle to a conversation the model keeps on its own disk, so losing that
 pointer orphans a conversation that still exists and cannot be reached again.
@@ -174,7 +174,7 @@ pointer orphans a conversation that still exists and cannot be reached again.
 - **Forward only migrations.** Embedded in the binary and applied on every start inside a
   transaction each, recorded in `schema_migrations`, so starting twice is a no op. Every migration
   ships a matching down file for an operator to run deliberately; nothing rolls back automatically.
-- **Every table carries `id`, `created_at` and `updated_at`.** Projects are soft deleted through
+- **Every table carries `id`, `created_at` and `updated_at`.** Workspaces are soft deleted through
   `deleted_at` and disappear from every read, while their sessions keep their history.
 - **A failed turn never erases the conversation handle.** Recording a turn with no handle leaves the
   stored one alone, so a model call that fails cannot cost you the thread.
@@ -246,7 +246,7 @@ Graphs are authored as files, loaded into the store, and versioned:
 name: fix-red-pull-request
 on: { event: pull_request.check_failed }
 nodes:
-  fix:   { type: dispatch, session: "{{project}}", prompt: "CI is red on {{url}}. Diagnose and fix." }
+  fix:   { type: dispatch, session: "{{workspace}}", prompt: "CI is red on {{url}}. Diagnose and fix." }
   ok:    { type: choice, on: { result.exit_code: 0 } }
   ask:   { type: ask, text: "Fixed {{url}} locally. Push?" }
 edges:
@@ -312,7 +312,7 @@ delivers timer events onto the log and nothing more.
 
 Secrets are never stored in the repository, and the code has no built in knowledge of any.
 
-- **Set at runtime.** The operator sets a project's credentials through the dashboard or the API. The
+- **Set at runtime.** The operator sets a workspace's credentials through the dashboard or the API. The
   value goes straight to a pluggable secrets backend.
 - **A reference in the log, never the value.** The event log records only a reference to a secret; the
   value lives in the backend. Services read by reference at runtime. Logs and the audit stream redact.
@@ -368,7 +368,7 @@ Concretely:
   tier, what shell or tool ran, which files changed, what was sent and to whom), labelled and retained
   longer than debug logs. Every privileged action is a queryable audit event.
 - **Token and cost metrics:** input and output tokens and cost per model call, per session, per
-  channel, per project, and per day, with a cost ceiling alert. When the model runs remotely, its cost
+  channel, per workspace, and per day, with a cost ceiling alert. When the model runs remotely, its cost
   is tokens and money, not local hardware.
 - **Host and resource metrics:** CPU, memory, and disk via a node exporter; GPU utilisation and memory
   via the platform appropriate exporter where a GPU is in play (local transcription, a local model, or
@@ -406,7 +406,7 @@ doubles as the trace id, and token and cost counters land with the first model c
   without the operator's intent, plus the telemetry stack in the local compose.
 - **Controllers, sessions, sandbox.** The remaining controllers, parallel sessions with a durable
   session store, and sandbox tiers with permission tiers per channel.
-- **Dashboard and projection.** The projection that materialises the read model, and the admin
+- **Dashboard and workspaceion.** The workspaceion that materialises the read model, and the admin
   dashboard that reads it and drives the control plane.
 - **Cloud parity.** Containerise, cloud implementations behind the interfaces, and deploy through CI.
 - **Differentiators (optional).** A reviewed learning loop that proposes a skill or memory for

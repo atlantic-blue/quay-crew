@@ -1,4 +1,4 @@
-// Package messaging is the event log boundary: project namespaced topic names and a thin Kafka
+// Package messaging is the event log boundary: workspace namespaced topic names and a thin Kafka
 // client used to publish records to the log and consume them as a group. Locally the log is
 // Redpanda; in the cloud it is managed Kafka or Redpanda. Only this package knows about the broker.
 package messaging
@@ -8,16 +8,16 @@ import (
 	"strings"
 )
 
-// Topic returns the Kafka topic name for a logical stream within a project, namespaced so projects
+// Topic returns the Kafka topic name for a logical stream within a workspace, namespaced so workspaces
 // stay isolated on one cluster. For example Topic("acme", "inbound") returns "acme.inbound".
-func Topic(project, stream string) (string, error) {
-	if err := validateName("project", project); err != nil {
+func Topic(workspace, stream string) (string, error) {
+	if err := validateName("workspace", workspace); err != nil {
 		return "", err
 	}
 	if err := validateName("stream", stream); err != nil {
 		return "", err
 	}
-	return project + "." + stream, nil
+	return workspace + "." + stream, nil
 }
 
 func validateName(kind, value string) error {

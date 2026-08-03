@@ -24,11 +24,11 @@ const (
 )
 
 // InboundMessage is published to the event log by a channel when it receives input.
-// Every message is scoped to a project and carries a correlation id that equals the trace id.
+// Every message is scoped to a workspace and carries a correlation id that equals the trace id.
 type InboundMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// project is the isolation unit this message belongs to.
-	Project string `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// workspace is the isolation unit this message belongs to.
+	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	// channel is the id of the channel that received the input (for example "cli", "telegram").
 	Channel string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
 	// sender is the channel specific identity of who sent it.
@@ -75,9 +75,9 @@ func (*InboundMessage) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_channel_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *InboundMessage) GetProject() string {
+func (x *InboundMessage) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -127,8 +127,8 @@ func (x *InboundMessage) GetReceivedAt() string {
 // OutboundMessage is delivered back to a channel as a reply.
 type OutboundMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// project is the isolation unit this reply belongs to.
-	Project string `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// workspace is the isolation unit this reply belongs to.
+	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	// thread_id is the thread the reply belongs to.
 	ThreadId string `protobuf:"bytes,2,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
 	// text is the reply body.
@@ -169,9 +169,9 @@ func (*OutboundMessage) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_channel_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OutboundMessage) GetProject() string {
+func (x *OutboundMessage) GetWorkspace() string {
 	if x != nil {
-		return x.Project
+		return x.Workspace
 	}
 	return ""
 }
@@ -201,18 +201,18 @@ var File_quaycrew_v1_channel_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_channel_proto_rawDesc = "" +
 	"\n" +
-	"\x19quaycrew/v1/channel.proto\x12\vquaycrew.v1\"\xd5\x01\n" +
-	"\x0eInboundMessage\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x18\n" +
+	"\x19quaycrew/v1/channel.proto\x12\vquaycrew.v1\"\xd9\x01\n" +
+	"\x0eInboundMessage\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
 	"\achannel\x18\x02 \x01(\tR\achannel\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x12\n" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x12\x1b\n" +
 	"\tthread_id\x18\x05 \x01(\tR\bthreadId\x12%\n" +
 	"\x0ecorrelation_id\x18\x06 \x01(\tR\rcorrelationId\x12\x1f\n" +
 	"\vreceived_at\x18\a \x01(\tR\n" +
-	"receivedAt\"\x83\x01\n" +
-	"\x0fOutboundMessage\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x1b\n" +
+	"receivedAt\"\x87\x01\n" +
+	"\x0fOutboundMessage\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12%\n" +
 	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationIdB\xab\x01\n" +

@@ -3,7 +3,7 @@
 A session runs its turns inside a sandbox: an isolated container the control plane starts per
 session. The default sandbox image carries the Claude Code CLI, and each turn runs `claude` inside
 it. The image holds no credentials. The subscription token is injected at turn time as the
-`CLAUDE_CODE_OAUTH_TOKEN` environment variable, stored per project as a secret, so the same image is
+`CLAUDE_CODE_OAUTH_TOKEN` environment variable, stored per workspace as a secret, so the same image is
 safe to build and run anywhere.
 
 For why the control plane starts these containers on the host daemon, see the Sandboxes section of
@@ -39,22 +39,22 @@ You need Docker and a Claude subscription.
    Without these two variables the stack uses a lightweight image and an echo backend, which is what
    continuous integration runs (no subscription there).
 
-4. Install the CLI, create a project, and give it the token:
+4. Install the CLI, create a workspace, and give it the token:
 
    ```
    make install
-   quay project create demo
-   quay secret set --project demo CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
+   quay workspace create demo
+   quay secret set --workspace demo CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
    ```
 
-   `--project` takes the project id or its name, so you never need to copy the id around.
-   The secret is scoped to the project. The control plane reads it when running a turn and injects it
+   `--workspace` takes the workspace id or its name, so you never need to copy the id around.
+   The secret is scoped to the workspace. The control plane reads it when running a turn and injects it
    into that session's sandbox; it is never part of the message or the event log.
 
 5. Dispatch a turn and get a real reply:
 
    ```
-   quay dispatch --project demo "say pong"
+   quay dispatch --workspace demo "say pong"
    ```
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first turn and is reused for the

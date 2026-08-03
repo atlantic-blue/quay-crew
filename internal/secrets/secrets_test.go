@@ -24,7 +24,7 @@ func TestMemoryRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMemoryIsProjectScoped(t *testing.T) {
+func TestMemoryIsWorkspaceScoped(t *testing.T) {
 	store := secrets.NewMemory()
 	ctx := context.Background()
 	_ = store.Set(ctx, "acme", "k", "a")
@@ -48,6 +48,6 @@ func TestMemoryNotFound(t *testing.T) {
 func TestMemoryRejectsEmpty(t *testing.T) {
 	store := secrets.NewMemory()
 	if err := store.Set(context.Background(), "", "k", "v"); err == nil {
-		t.Fatal("Set with empty project = nil error, want error")
+		t.Fatal("Set with empty workspace = nil error, want error")
 	}
 }

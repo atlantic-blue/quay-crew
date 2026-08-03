@@ -13,7 +13,7 @@ import (
 )
 
 // ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived
-// subscription token from (minted by `claude setup-token`). The control plane stores this per project
+// subscription token from (minted by `claude setup-token`). The control plane stores this per workspace
 // as a secret and injects it into the sandbox at turn time.
 const ClaudeCodeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 

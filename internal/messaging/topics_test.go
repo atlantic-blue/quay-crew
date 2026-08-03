@@ -17,7 +17,7 @@ func TestTopic(t *testing.T) {
 }
 
 func TestTopicRejectsBadNames(t *testing.T) {
-	cases := []struct{ project, stream string }{
+	cases := []struct{ workspace, stream string }{
 		{"", "inbound"},
 		{"acme", ""},
 		{"a.b", "inbound"},
@@ -25,8 +25,8 @@ func TestTopicRejectsBadNames(t *testing.T) {
 		{"acme", "in/bound"},
 	}
 	for _, c := range cases {
-		if _, err := messaging.Topic(c.project, c.stream); err == nil {
-			t.Fatalf("Topic(%q, %q) = nil error, want error", c.project, c.stream)
+		if _, err := messaging.Topic(c.workspace, c.stream); err == nil {
+			t.Fatalf("Topic(%q, %q) = nil error, want error", c.workspace, c.stream)
 		}
 	}
 }

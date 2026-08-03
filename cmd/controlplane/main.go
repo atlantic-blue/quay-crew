@@ -92,11 +92,11 @@ func main() {
 }
 
 // openStore returns the durable store. With QC_DATABASE_URL set it is Postgres, and the migrations
-// are applied on the way up. Without it the store is in memory, which loses every project and
+// are applied on the way up. Without it the store is in memory, which loses every workspace and
 // session on restart and is only appropriate for a throwaway stack.
 func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (store.Store, error) {
 	if databaseURL == "" {
-		logger.Warn("no QC_DATABASE_URL set, using the in memory store: projects and sessions will not survive a restart")
+		logger.Warn("no QC_DATABASE_URL set, using the in memory store: workspaces and sessions will not survive a restart")
 		return store.NewMemory(), nil
 	}
 	durable, err := store.NewPostgres(ctx, databaseURL)

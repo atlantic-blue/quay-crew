@@ -27,14 +27,14 @@ func TestMemoryAdapterRoundTrip(t *testing.T) {
 		})
 	}()
 
-	in := &quaycrewv1.InboundMessage{Project: "acme", Channel: "cli", Text: "hello", CorrelationId: "abc"}
+	in := &quaycrewv1.InboundMessage{Workspace: "acme", Channel: "cli", Text: "hello", CorrelationId: "abc"}
 	if err := adapter.Inject(ctx, in); err != nil {
 		t.Fatalf("Inject: %v", err)
 	}
 
 	select {
 	case msg := <-got:
-		if msg.GetText() != "hello" || msg.GetProject() != "acme" {
+		if msg.GetText() != "hello" || msg.GetWorkspace() != "acme" {
 			t.Fatalf("handler got %+v", msg)
 		}
 	case <-ctx.Done():
@@ -44,7 +44,7 @@ func TestMemoryAdapterRoundTrip(t *testing.T) {
 
 func TestMemoryAdapterDeliverRecords(t *testing.T) {
 	adapter := channel.NewMemoryAdapter("cli")
-	out := &quaycrewv1.OutboundMessage{Project: "acme", ThreadId: "t1", Text: "reply", CorrelationId: "abc"}
+	out := &quaycrewv1.OutboundMessage{Workspace: "acme", ThreadId: "t1", Text: "reply", CorrelationId: "abc"}
 	if err := adapter.Deliver(context.Background(), out); err != nil {
 		t.Fatalf("Deliver: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestMemoryAdapterInjectRespectsContext(t *testing.T) {
 	adapter := channel.NewMemoryAdapter("cli") // never Started, so never ready
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	in := &quaycrewv1.InboundMessage{Project: "acme"}
+	in := &quaycrewv1.InboundMessage{Workspace: "acme"}
 	if err := adapter.Inject(ctx, in); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Inject on cancelled ctx err = %v, want context.Canceled", err)
 	}

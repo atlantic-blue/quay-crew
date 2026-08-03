@@ -4,24 +4,24 @@ package quaycrew.v1;
 
 import "google/protobuf/timestamp.proto";
 
-// A project is the runtime unit of isolation. Created through this API, never stored in the repo.
-message Project {
+// A workspace is the runtime unit of isolation. Created through this API, never stored in the repo.
+message Workspace {
   string id = 1;
   string name = 2;
   google.protobuf.Timestamp created_at = 3;
 }
 
-// A channel attached to a project (for example a Telegram bot).
+// A channel attached to a workspace (for example a Telegram bot).
 message Channel {
-  string project = 1;
+  string workspace = 1;
   string id = 2;
   string kind = 3;
 }
 
-// A session is one model thread for a project.
+// A session is one model thread for a workspace.
 message Session {
   string id = 1;
-  string project = 2;
+  string workspace = 2;
   string thread_id = 3;
   string status = 4;
   // model_session_id is the underlying model thread id, used to resume the thread.
@@ -30,29 +30,29 @@ message Session {
   google.protobuf.Timestamp updated_at = 7;
 }
 
-message CreateProjectRequest {
+message CreateWorkspaceRequest {
   string name = 1;
 }
-message CreateProjectResponse {
-  Project project = 1;
+message CreateWorkspaceResponse {
+  Workspace workspace = 1;
 }
-message GetProjectRequest {
+message GetWorkspaceRequest {
   string id = 1;
 }
-message GetProjectResponse {
-  Project project = 1;
+message GetWorkspaceResponse {
+  Workspace workspace = 1;
 }
-message ListProjectsRequest {}
-message ListProjectsResponse {
-  repeated Project projects = 1;
+message ListWorkspacesRequest {}
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
 }
-message DeleteProjectRequest {
+message DeleteWorkspaceRequest {
   string id = 1;
 }
-message DeleteProjectResponse {}
+message DeleteWorkspaceResponse {}
 
 message AttachChannelRequest {
-  string project = 1;
+  string workspace = 1;
   string id = 2;
   string kind = 3;
 }
@@ -62,7 +62,7 @@ message AttachChannelResponse {
 
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 message SetSecretRequest {
-  string project = 1;
+  string workspace = 1;
   string key = 2;
   string value = 3;
 }
@@ -70,7 +70,7 @@ message SetSecretResponse {}
 
 // DispatchRequest starts a new thread (thread_id empty) or continues an existing one.
 message DispatchRequest {
-  string project = 1;
+  string workspace = 1;
   string thread_id = 2;
   string text = 3;
 }
@@ -81,7 +81,7 @@ message DispatchResponse {
 }
 
 message ListSessionsRequest {
-  string project = 1;
+  string workspace = 1;
 }
 message ListSessionsResponse {
   repeated Session sessions = 1;
@@ -99,10 +99,10 @@ message StopSessionResponse {}
 
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.
 service ControlPlaneService {
-  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
-  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
-  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
-  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

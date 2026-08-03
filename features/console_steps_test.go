@@ -55,34 +55,34 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, consoleKey{}, &consoleWorld{}), nil
 	})
 
-	sc.Step(`^the operator dispatches "([^"]*)" to the second project$`, func(ctx context.Context, text string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to the second workspace$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		if w.secondProjectID == "" {
-			return fmt.Errorf("no second project was created")
+		if w.secondWorkspaceID == "" {
+			return fmt.Errorf("no second workspace was created")
 		}
-		return w.dispatch(ctx, w.secondProjectID, "", text)
+		return w.dispatch(ctx, w.secondWorkspaceID, "", text)
 	})
 
 	sc.Step(`^the operator opens the console$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, console.Default)
 	})
 
-	sc.Step(`^the operator opens the console on projects$`, func(ctx context.Context) error {
-		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, "projects")
+	sc.Step(`^the operator opens the console on workspaces$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, "workspaces")
 	})
 
-	sc.Step(`^the operator drills into project "([^"]*)"$`, func(ctx context.Context, name string) error {
+	sc.Step(`^the operator drills into workspace "([^"]*)"$`, func(ctx context.Context, name string) error {
 		c := consoleFrom(ctx)
-		if err := c.open(ctx, worldFrom(ctx).client, "projects"); err != nil {
+		if err := c.open(ctx, worldFrom(ctx).client, "workspaces"); err != nil {
 			return err
 		}
 		target, found := rowNamed(c.rows, name)
 		if !found {
-			return fmt.Errorf("the console does not list a project called %q", name)
+			return fmt.Errorf("the console does not list a workspace called %q", name)
 		}
 		child, known := c.registry.Get(c.active.DrillTo)
 		if !known {
-			return fmt.Errorf("projects drills into %q, which is not registered", c.active.DrillTo)
+			return fmt.Errorf("workspaces drills into %q, which is not registered", c.active.DrillTo)
 		}
 		c.active = child
 		return c.list(ctx, target.ID)
@@ -92,14 +92,14 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return expectRows(consoleFrom(ctx), "sessions", want)
 	})
 
-	sc.Step(`^the console lists (\d+) projects?$`, func(ctx context.Context, want int) error {
-		return expectRows(consoleFrom(ctx), "projects", want)
+	sc.Step(`^the console lists (\d+) workspaces?$`, func(ctx context.Context, want int) error {
+		return expectRows(consoleFrom(ctx), "workspaces", want)
 	})
 
-	sc.Step(`^the console can drill from projects into sessions$`, func(ctx context.Context) error {
+	sc.Step(`^the console can drill from workspaces into sessions$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if c.active.DrillTo != "sessions" {
-			return fmt.Errorf("projects drills into %q, want sessions", c.active.DrillTo)
+			return fmt.Errorf("workspaces drills into %q, want sessions", c.active.DrillTo)
 		}
 		if _, found := c.registry.Get("sessions"); !found {
 			return fmt.Errorf("sessions is not a registered resource, so the drill would dead end")
@@ -107,16 +107,16 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console shows the session's project as "([^"]*)"$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the console shows the session's workspace as "([^"]*)"$`, func(ctx context.Context, want string) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
 			return err
 		}
-		// The project column is the second one the sessions resource declares.
-		const projectColumn = 1
-		if got := row.Cells[projectColumn]; got != want {
-			return fmt.Errorf("the console shows the project as %q, want the name %q", got, want)
+		// The workspace column is the second one the sessions resource declares.
+		const workspaceColumn = 1
+		if got := row.Cells[workspaceColumn]; got != want {
+			return fmt.Errorf("the console shows the workspace as %q, want the name %q", got, want)
 		}
 		return nil
 	})

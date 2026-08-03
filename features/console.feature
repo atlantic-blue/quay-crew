@@ -6,29 +6,29 @@ Feature: The operator sees the crew from the console
 
   How the console draws those rows, filters them and moves a cursor over them is a table test in
   internal/console, where it belongs. What cannot be said there is this: that the rows are the
-  control plane's actual sessions and projects.
+  control plane's actual sessions and workspaces.
 
   Background:
     Given a running control plane
-    And a project named "acme"
+    And a workspace named "acme"
 
   Scenario: The console lists the sessions the control plane has
-    When the operator dispatches "hello" to the project
+    When the operator dispatches "hello" to the workspace
     And the operator dispatches "a different subject" to a new thread
     And the operator opens the console
     Then the console lists 2 sessions
 
-  Scenario: The console lists a project it can drill into
-    When the operator opens the console on projects
-    Then the console lists 1 project
-    And the console can drill from projects into sessions
+  Scenario: The console lists a workspace it can drill into
+    When the operator opens the console on workspaces
+    Then the console lists 1 workspace
+    And the console can drill from workspaces into sessions
 
-  Scenario: Drilling into a project shows only that project's sessions
-    Given a second project named "other"
-    When the operator dispatches "hello" to the project
-    And the operator dispatches "hello" to the second project
+  Scenario: Drilling into a workspace shows only that workspace's sessions
+    Given a second workspace named "other"
+    When the operator dispatches "hello" to the workspace
+    And the operator dispatches "hello" to the second workspace
     And the operator opens the console
-    And the operator drills into project "acme"
+    And the operator drills into workspace "acme"
     Then the console lists 1 session
 
   Scenario: An empty crew lists nothing rather than failing
@@ -37,13 +37,13 @@ Feature: The operator sees the crew from the console
 
   # An identifier is what actions use, a name is what the operator reads. These say the console shows
   # the second without losing the first.
-  Scenario: The console names a session's project rather than showing its identifier
-    When the operator dispatches "hello" to the project
+  Scenario: The console names a session's workspace rather than showing its identifier
+    When the operator dispatches "hello" to the workspace
     And the operator opens the console
-    Then the console shows the session's project as "acme"
+    Then the console shows the session's workspace as "acme"
 
   Scenario: The console shortens identifiers so a row can be read
-    When the operator dispatches "hello" to the project
+    When the operator dispatches "hello" to the workspace
     And the operator opens the console
     Then the console shows the session identifier shortened
 

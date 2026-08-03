@@ -94,9 +94,9 @@ func TestMigrationsAreIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
-	project, err := first.CreateProject(ctx, "acme")
+	workspace, err := first.CreateWorkspace(ctx, "acme")
 	if err != nil {
-		t.Fatalf("CreateProject: %v", err)
+		t.Fatalf("CreateWorkspace: %v", err)
 	}
 	first.Close()
 
@@ -107,7 +107,7 @@ func TestMigrationsAreIdempotent(t *testing.T) {
 	}
 	t.Cleanup(second.Close)
 
-	if _, err := second.GetProject(ctx, project.GetId()); err != nil {
+	if _, err := second.GetWorkspace(ctx, workspace.GetId()); err != nil {
 		t.Fatalf("rerunning the migrations lost the data: %v", err)
 	}
 }
@@ -133,7 +133,106 @@ func truncate(t *testing.T) {
 	if !exists {
 		return
 	}
-	if _, err := pool.Exec(ctx, `truncate sessions, channels, projects restart identity cascade`); err != nil {
+	if _, err := pool.Exec(ctx, `truncate sessions, channels, workspaces restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
+	}
+}
+
+// TestRenameMigrationKeepsExistingRows applies the original schema by hand, seeds it the way a
+// database in use would look, and then lets the store migrate. Everything must still be there under
+// the new names, above all a session's model_session_id, which is the only pointer to a conversation
+// the model holds on its own disk. Losing it in a rename would orphan every live conversation.
+func TestRenameMigrationKeepsExistingRows(t *testing.T) {
+	ctx := context.Background()
+	dropEverything(t)
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	original, err := os.ReadFile("migrations/0001_init.up.sql")
+	if err != nil {
+		pool.Close()
+		t.Fatalf("read the original migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(original)); err != nil {
+		pool.Close()
+		t.Fatalf("apply the original schema: %v", err)
+	}
+	// Record it as applied, so the store migrates from here rather than starting over.
+	if _, err := pool.Exec(ctx, `
+		create table if not exists schema_migrations (
+			version text primary key, applied_at timestamptz not null default now())`); err != nil {
+		pool.Close()
+		t.Fatalf("create schema_migrations: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`insert into schema_migrations (version) values ('0001_init') on conflict do nothing`); err != nil {
+		pool.Close()
+		t.Fatalf("record the original migration: %v", err)
+	}
+
+	// A workspace and a session as they looked under the old names.
+	if _, err := pool.Exec(ctx,
+		`insert into projects (id, name) values ('ws-1', 'me')`); err != nil {
+		pool.Close()
+		t.Fatalf("seed the project: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into sessions (id, project, thread_id, status, model_session_id)
+		values ('sess-1', 'ws-1', 'thread-1', 'idle', 'conversation-1')`); err != nil {
+		pool.Close()
+		t.Fatalf("seed the session: %v", err)
+	}
+	pool.Close()
+
+	// Opening the store runs the rename.
+	migrated, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(migrated.Close)
+
+	workspace, err := migrated.GetWorkspace(ctx, "ws-1")
+	if err != nil {
+		t.Fatalf("the workspace did not survive the rename: %v", err)
+	}
+	if workspace.GetName() != "me" {
+		t.Fatalf("the workspace is named %q, want me", workspace.GetName())
+	}
+
+	session, err := migrated.GetSession(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("the session did not survive the rename: %v", err)
+	}
+	if session.GetWorkspace() != "ws-1" {
+		t.Fatalf("the session belongs to %q, want ws-1", session.GetWorkspace())
+	}
+	if session.GetModelSessionId() != "conversation-1" {
+		t.Fatalf("the conversation handle did not survive: %q", session.GetModelSessionId())
+	}
+
+	// The thread must still resolve to the same session, or the next turn starts a new conversation.
+	same, err := migrated.FindOrCreateSession(ctx, "ws-1", "thread-1")
+	if err != nil {
+		t.Fatalf("FindOrCreateSession after the rename: %v", err)
+	}
+	if same.GetId() != "sess-1" {
+		t.Fatalf("the thread made a new session after the rename: %q", same.GetId())
+	}
+}
+
+// dropEverything returns the database to empty, so a migration test starts from nothing.
+func dropEverything(t *testing.T) {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("connect to drop: %v", err)
+	}
+	defer pool.Close()
+	if _, err := pool.Exec(context.Background(),
+		`drop table if exists sessions, channels, projects, workspaces, schema_migrations cascade`); err != nil {
+		t.Fatalf("drop: %v", err)
 	}
 }

@@ -74,9 +74,9 @@ jobs:
 
   containers:
     runs-on: ubuntu-latest
-    # An explicit compose project name so the stack's containers (qcci-controlplane-1, ...) do not
+    # An explicit compose workspace name so the stack's containers (qcci-controlplane-1, ...) do not
     # share the "quaycrew-" prefix the sandbox containers use, which would make the count below match
-    # the whole stack. Without this the project defaults to the checkout directory ("quaycrew").
+    # the whole stack. Without this the workspace defaults to the checkout directory ("quaycrew").
     env:
       COMPOSE_PROJECT_NAME: qcci
     steps:
@@ -127,11 +127,11 @@ jobs:
           QC_GRPC_ADDR: localhost:50051
         run: |
           set -euo pipefail
-          project=$(go run ./cmd/quay project create smoke | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
-          test -n "$project"
-          echo "project=$project"
+          workspace=$(go run ./cmd/quay workspace create smoke | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
+          test -n "$workspace"
+          echo "workspace=$workspace"
 
-          out=$(go run ./cmd/quay dispatch --project "$project" "hello from ci")
+          out=$(go run ./cmd/quay dispatch --workspace "$workspace" "hello from ci")
           echo "$out"
           test "$(printf '%s' "$out" | head -1)" = "hello from ci"
 
@@ -141,38 +141,38 @@ jobs:
           # A second turn on the same thread reuses that one sandbox.
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$thread"
-          go run ./cmd/quay dispatch --project "$project" --thread "$thread" "second turn" >/dev/null
+          go run ./cmd/quay dispatch --workspace "$workspace" --thread "$thread" "second turn" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
 
       # The point of this step: prove a session is really durable. Restarting the control plane
       # throws away everything the process held, so anything still visible afterwards came back from
-      # Postgres. Before this, a restart lost every project and orphaned every conversation.
+      # Postgres. Before this, a restart lost every workspace and orphaned every conversation.
       - name: A session survives a control plane restart
         env:
           QC_GRPC_ADDR: localhost:50051
         run: |
           set -euo pipefail
-          project=$(go run ./cmd/quay project create durable | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
-          test -n "$project"
-          out=$(go run ./cmd/quay dispatch --project "$project" "remember this")
+          workspace=$(go run ./cmd/quay workspace create durable | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
+          test -n "$workspace"
+          out=$(go run ./cmd/quay dispatch --workspace "$workspace" "remember this")
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$thread"
 
           docker compose -f deploy/docker-compose.yml restart controlplane
           for i in $(seq 1 30); do
-            go run ./cmd/quay project list >/dev/null 2>&1 && break
+            go run ./cmd/quay workspace list >/dev/null 2>&1 && break
             sleep 2
           done
 
           # Capture before matching. Under pipefail a `grep -q` closes the pipe on its first match,
           # which hands the writer a broken pipe and fails the step for the wrong reason.
-          projects=$(go run ./cmd/quay project list)
-          sessions=$(go run ./cmd/quay sessions --project "$project")
-          echo "$projects"
+          workspaces=$(go run ./cmd/quay workspace list)
+          sessions=$(go run ./cmd/quay sessions --workspace "$workspace")
+          echo "$workspaces"
           echo "$sessions"
 
-          # The project is still there.
-          case "$projects" in *"$project"*) ;; *) echo "the project did not survive the restart"; exit 1 ;; esac
+          # The workspace is still there.
+          case "$workspaces" in *"$workspace"*) ;; *) echo "the workspace did not survive the restart"; exit 1 ;; esac
           # And so is the session, on the same thread, exactly one of it.
           test "$(printf '%s\n' "$sessions" | grep -c "thread=$thread")" -eq 1
 

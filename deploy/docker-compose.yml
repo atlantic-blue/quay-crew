@@ -71,7 +71,7 @@ services:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317
       QC_GRPC_ADDR: ":50051"
-      # Projects and sessions live here, so a restart resumes conversations instead of orphaning
+      # Workspaces and sessions live here, so a restart resumes conversations instead of orphaning
       # them. Unset it and the control plane falls back to an in memory store and says so.
       QC_DATABASE_URL: postgres://quaycrew:${QC_POSTGRES_PASSWORD:-quaycrew}@postgres:5432/quaycrew?sslmode=disable
       # Each session gets its own container on the host daemon, a sibling of this one.

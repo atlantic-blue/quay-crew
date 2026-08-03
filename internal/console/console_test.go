@@ -16,33 +16,33 @@ import (
 type fakeClient struct {
 	quaycrewv1.ControlPlaneServiceClient
 
-	projects []*quaycrewv1.Project
-	sessions []*quaycrewv1.Session
+	workspaces []*quaycrewv1.Workspace
+	sessions   []*quaycrewv1.Session
 
 	listSessionsFor string
 	stopped         []string
 	listErr         error
 }
 
-func (f *fakeClient) ListProjects(context.Context, *quaycrewv1.ListProjectsRequest, ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
+func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	return &quaycrewv1.ListProjectsResponse{Projects: f.projects}, nil
+	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
 }
 
 func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	f.listSessionsFor = req.GetProject()
+	f.listSessionsFor = req.GetWorkspace()
 
-	if req.GetProject() == "" {
+	if req.GetWorkspace() == "" {
 		return &quaycrewv1.ListSessionsResponse{Sessions: f.sessions}, nil
 	}
 	matched := make([]*quaycrewv1.Session, 0, len(f.sessions))
 	for _, session := range f.sessions {
-		if session.GetProject() == req.GetProject() {
+		if session.GetWorkspace() == req.GetWorkspace() {
 			matched = append(matched, session)
 		}
 	}
@@ -159,7 +159,7 @@ func TestRegistryRejectsResourceWithoutLister(t *testing.T) {
 // ---------- the console shell ----------
 
 func TestCommandBarSwitchesResource(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions", "s"), staticResource("projects", "p"))
+	model := newTestModel(t, staticResource("sessions", "s"), staticResource("workspaces", "p"))
 
 	model, _ = update(t, model, runes(":"))
 	if model.mode != modeCommand {
@@ -168,8 +168,8 @@ func TestCommandBarSwitchesResource(t *testing.T) {
 	model = typeAll(t, model, "p")
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if model.active.Name != "projects" {
-		t.Fatalf("active = %q, want projects", model.active.Name)
+	if model.active.Name != "workspaces" {
+		t.Fatalf("active = %q, want workspaces", model.active.Name)
 	}
 	if model.mode != modeBrowse {
 		t.Fatal("command bar stayed open after enter")
@@ -215,7 +215,7 @@ func TestFailedRefreshKeepsThePreviousRows(t *testing.T) {
 }
 
 func TestListingForALeftViewIsIgnored(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions", "s"), staticResource("projects", "p"))
+	model := newTestModel(t, staticResource("sessions", "s"), staticResource("workspaces", "p"))
 	model, _ = update(t, model, rowsFor(model, row("a", "a", "one")))
 
 	// Switch away, then let the earlier view's slow listing land.
@@ -305,11 +305,11 @@ func TestQuitStopsTheProgram(t *testing.T) {
 func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 	client := &fakeClient{
 		sessions: []*quaycrewv1.Session{
-			{Id: "s1", Project: "acme", Status: "idle"},
-			{Id: "s2", Project: "other", Status: "idle"},
+			{Id: "s1", Workspace: "acme", Status: "idle"},
+			{Id: "s2", Workspace: "other", Status: "idle"},
 		},
 	}
-	model := newTestModel(t, Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme"), row("other", "other", "Other")))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
@@ -318,7 +318,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 		t.Fatalf("active = %q, want sessions", model.active.Name)
 	}
 	if model.parent != "acme" {
-		t.Fatalf("parent = %q, want the selected project", model.parent)
+		t.Fatalf("parent = %q, want the selected workspace", model.parent)
 	}
 	if cmd == nil {
 		t.Fatal("drilling did not trigger a listing")
@@ -338,7 +338,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 
 func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model,
 		row("acme", "acme", "Acme"), row("other", "other", "Other"), row("third", "third", "Third")))
 
@@ -350,8 +350,8 @@ func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
 
-	if model.active.Name != "projects" {
-		t.Fatalf("active = %q, want projects after escape", model.active.Name)
+	if model.active.Name != "workspaces" {
+		t.Fatalf("active = %q, want workspaces after escape", model.active.Name)
 	}
 	if model.selected != 1 {
 		t.Fatalf("selected = %d, want the previous selection of 1 restored", model.selected)
@@ -366,12 +366,12 @@ func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 
 func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme")))
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	model, _ = update(t, model, runes(":"))
-	model = typeAll(t, model, "projects")
+	model = typeAll(t, model, "workspaces")
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if len(model.stack) != 0 {
@@ -382,7 +382,7 @@ func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 // ---------- actions ----------
 
 func TestStopActionStopsTheSelectedSession(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Project: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
@@ -468,7 +468,7 @@ func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 }
 
 func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Project: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 
 	var out strings.Builder
 	if err := Plain(context.Background(), client, &out); err != nil {
@@ -496,7 +496,7 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 func TestViewShowsTheBreadcrumbCountAndKeyHints(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Projects(client))
+	model := newTestModel(t, Sessions(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
@@ -540,7 +540,7 @@ func TestNewRejectsAnUnknownStartingResource(t *testing.T) {
 // the command bar simply not opening.
 
 func TestABatchedKeyReadIsFoldedIntoSeparateKeypresses(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions", "s"), staticResource("projects", "p"))
+	model := newTestModel(t, staticResource("sessions", "s"), staticResource("workspaces", "p"))
 
 	model, _ = update(t, model, runes(":p"))
 	if model.mode != modeCommand {
@@ -551,8 +551,8 @@ func TestABatchedKeyReadIsFoldedIntoSeparateKeypresses(t *testing.T) {
 	}
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	if model.active.Name != "projects" {
-		t.Fatalf("active = %q, want projects", model.active.Name)
+	if model.active.Name != "workspaces" {
+		t.Fatalf("active = %q, want workspaces", model.active.Name)
 	}
 }
 

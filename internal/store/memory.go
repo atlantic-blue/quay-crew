@@ -13,12 +13,12 @@ import (
 // Memory is an in memory Store. It outlives any one control plane instance it is handed to, which
 // is what lets a test restart the server and assert that no state was hiding in the process.
 type Memory struct {
-	mu       sync.RWMutex
-	projects map[string]*quaycrewv1.Project
-	deleted  map[string]bool
-	channels map[string][]*quaycrewv1.Channel
-	sessions map[string]*quaycrewv1.Session
-	byThread map[string]string
+	mu         sync.RWMutex
+	workspaces map[string]*quaycrewv1.Workspace
+	deleted    map[string]bool
+	channels   map[string][]*quaycrewv1.Channel
+	sessions   map[string]*quaycrewv1.Session
+	byThread   map[string]string
 }
 
 var _ Store = (*Memory)(nil)
@@ -26,93 +26,93 @@ var _ Store = (*Memory)(nil)
 // NewMemory returns an empty in memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		projects: make(map[string]*quaycrewv1.Project),
-		deleted:  make(map[string]bool),
-		channels: make(map[string][]*quaycrewv1.Channel),
-		sessions: make(map[string]*quaycrewv1.Session),
-		byThread: make(map[string]string),
+		workspaces: make(map[string]*quaycrewv1.Workspace),
+		deleted:    make(map[string]bool),
+		channels:   make(map[string][]*quaycrewv1.Channel),
+		sessions:   make(map[string]*quaycrewv1.Session),
+		byThread:   make(map[string]string),
 	}
 }
 
-func threadKey(project, thread string) string { return project + "\x00" + thread }
+func threadKey(workspace, thread string) string { return workspace + "\x00" + thread }
 
-// CreateProject stores a new project.
-func (m *Memory) CreateProject(_ context.Context, name string) (*quaycrewv1.Project, error) {
+// CreateWorkspace stores a new workspace.
+func (m *Memory) CreateWorkspace(_ context.Context, name string) (*quaycrewv1.Workspace, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	project := &quaycrewv1.Project{Id: NewID(), Name: name, CreatedAt: timestamppb.New(time.Now().UTC())}
-	m.projects[project.GetId()] = project
-	return clone(project), nil
+	workspace := &quaycrewv1.Workspace{Id: NewID(), Name: name, CreatedAt: timestamppb.New(time.Now().UTC())}
+	m.workspaces[workspace.GetId()] = workspace
+	return clone(workspace), nil
 }
 
-// GetProject returns a project that has not been deleted.
-func (m *Memory) GetProject(_ context.Context, id string) (*quaycrewv1.Project, error) {
+// GetWorkspace returns a workspace that has not been deleted.
+func (m *Memory) GetWorkspace(_ context.Context, id string) (*quaycrewv1.Workspace, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	project, ok := m.projects[id]
+	workspace, ok := m.workspaces[id]
 	if !ok || m.deleted[id] {
 		return nil, ErrNotFound
 	}
-	return clone(project), nil
+	return clone(workspace), nil
 }
 
-// ListProjects returns every project that has not been deleted.
-func (m *Memory) ListProjects(_ context.Context) ([]*quaycrewv1.Project, error) {
+// ListWorkspaces returns every workspace that has not been deleted.
+func (m *Memory) ListWorkspaces(_ context.Context) ([]*quaycrewv1.Workspace, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]*quaycrewv1.Project, 0, len(m.projects))
-	for id, project := range m.projects {
+	out := make([]*quaycrewv1.Workspace, 0, len(m.workspaces))
+	for id, workspace := range m.workspaces {
 		if !m.deleted[id] {
-			out = append(out, clone(project))
+			out = append(out, clone(workspace))
 		}
 	}
 	return out, nil
 }
 
-// DeleteProject soft deletes a project.
-func (m *Memory) DeleteProject(_ context.Context, id string) error {
+// DeleteWorkspace soft deletes a workspace.
+func (m *Memory) DeleteWorkspace(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.projects[id]; !ok || m.deleted[id] {
+	if _, ok := m.workspaces[id]; !ok || m.deleted[id] {
 		return ErrNotFound
 	}
 	m.deleted[id] = true
 	return nil
 }
 
-// AttachChannel records a channel against a project.
-func (m *Memory) AttachChannel(_ context.Context, project, id, kind string) (*quaycrewv1.Channel, error) {
+// AttachChannel records a channel against a workspace.
+func (m *Memory) AttachChannel(_ context.Context, workspace, id, kind string) (*quaycrewv1.Channel, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.projects[project]; !ok || m.deleted[project] {
+	if _, ok := m.workspaces[workspace]; !ok || m.deleted[workspace] {
 		return nil, ErrNotFound
 	}
-	channel := &quaycrewv1.Channel{Project: project, Id: id, Kind: kind}
-	m.channels[project] = append(m.channels[project], channel)
+	channel := &quaycrewv1.Channel{Workspace: workspace, Id: id, Kind: kind}
+	m.channels[workspace] = append(m.channels[workspace], channel)
 	return clone(channel), nil
 }
 
-// FindOrCreateSession returns the project's session for a thread, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) (*quaycrewv1.Session, error) {
+// FindOrCreateSession returns the workspace's session for a thread, creating it on first use.
+func (m *Memory) FindOrCreateSession(_ context.Context, workspace, thread string) (*quaycrewv1.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.projects[project]; !ok || m.deleted[project] {
+	if _, ok := m.workspaces[workspace]; !ok || m.deleted[workspace] {
 		return nil, ErrNotFound
 	}
-	if id, ok := m.byThread[threadKey(project, thread)]; ok {
+	if id, ok := m.byThread[threadKey(workspace, thread)]; ok {
 		return clone(m.sessions[id]), nil
 	}
 	now := timestamppb.New(time.Now().UTC())
 	session := &quaycrewv1.Session{
 		Id:        NewID(),
-		Project:   project,
+		Workspace: workspace,
 		ThreadId:  thread,
 		Status:    "idle",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 	m.sessions[session.GetId()] = session
-	m.byThread[threadKey(project, thread)] = session.GetId()
+	m.byThread[threadKey(workspace, thread)] = session.GetId()
 	return clone(session), nil
 }
 
@@ -144,13 +144,13 @@ func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, 
 	return clone(session), nil
 }
 
-// ListSessions returns sessions, optionally filtered to one project.
-func (m *Memory) ListSessions(_ context.Context, project string) ([]*quaycrewv1.Session, error) {
+// ListSessions returns sessions, optionally filtered to one workspace.
+func (m *Memory) ListSessions(_ context.Context, workspace string) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
-		if project == "" || session.GetProject() == project {
+		if workspace == "" || session.GetWorkspace() == workspace {
 			out = append(out, clone(session))
 		}
 	}
