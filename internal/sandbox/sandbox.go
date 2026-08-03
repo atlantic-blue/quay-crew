@@ -32,15 +32,51 @@ type Sandbox interface {
 	Close(ctx context.Context) error
 }
 
-// Provider mints a Sandbox per session, keyed by the session id.
+// Config describes the sandbox a session needs.
 //
-// env is set on the sandbox itself, so every process started inside it inherits the values. That is
-// what lets an operator attach to a session's conversation directly, rather than the tool having to
-// carry a credential to each command it runs. The cost is that these values are readable for the
-// life of the container, for example through docker inspect, so pass only what the session needs.
-type Provider interface {
-	Create(ctx context.Context, id string, env []string) (Sandbox, error)
+// A sandbox belongs to a session, and through it to a project and a workspace. The provider is told
+// all three because a session's state does not all sit at the same level: the conversation store
+// belongs to the workspace, and the working files belong to the project. How that state is actually
+// kept is the provider's business, a host directory on Docker and a volume on Kubernetes.
+type Config struct {
+	// ID is the session's id. It names the sandbox.
+	ID string
+	// Workspace owns the conversation store and the workspace's own context.
+	Workspace string
+	// Project owns the working directory: the project's files and its context.
+	Project string
+	// Env is set on the sandbox itself, so every process started inside it inherits the values. That
+	// is what lets an operator attach to a session's conversation directly, rather than the tool
+	// having to carry a credential to each command it runs. The cost is that these values are
+	// readable for the life of the container, for example through docker inspect, so pass only what
+	// the session needs.
+	Env []string
 }
+
+// Provider mints a Sandbox per session.
+type Provider interface {
+	Create(ctx context.Context, cfg Config) (Sandbox, error)
+}
+
+// Mount is a directory made available inside a sandbox. Both sides are read write: the model's own
+// conversation store is one of them, and the model has to be able to write it.
+type Mount struct {
+	// Source is the directory as the host daemon sees it.
+	Source string
+	// Target is where it appears inside the sandbox.
+	Target string
+}
+
+// These are properties of the sandbox image, so they move with deploy/sandbox/claude.Dockerfile.
+const (
+	// ConversationPath is where the model's command line tool keeps its own state: its settings, the
+	// workspace memory it reads as CLAUDE.md, and the transcripts a turn resumes. It is inside the
+	// container, so without a mount it dies with the container.
+	ConversationPath = "/home/agent/.claude"
+	// WorkingPath is the directory a turn runs in: the project's files, and the project memory the
+	// model reads as CLAUDE.md.
+	WorkingPath = "/home/agent/workspace"
+)
 
 // ContainerPrefix is what a session's container name starts with, so ours are recognisable among
 // everything else on the daemon.

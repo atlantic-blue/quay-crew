@@ -80,10 +80,18 @@ services:
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
       # Claude Code CLI and its credentials is in place.
       QC_MODEL: ${QC_MODEL:-echo}
+      # A workspace's conversation store and a project's files live here, on the host, rather than
+      # inside the sandbox container, so replacing a container does not destroy the conversation the
+      # database holds a handle to. QC_DATA_DIR is this container's view of the directory, the one it
+      # creates folders in. QC_DATA_HOST is the same directory as the host daemon sees it, which is
+      # what a sandbox, a sibling container on that daemon, can actually mount.
+      QC_DATA_DIR: /var/lib/quaycrew
+      QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quaycrew/data}
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${QC_DATA_HOST:-${HOME}/.quaycrew/data}:/var/lib/quaycrew
     ports:
       - "50051:50051"
     depends_on:

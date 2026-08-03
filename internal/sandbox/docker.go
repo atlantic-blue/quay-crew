@@ -7,26 +7,38 @@ import (
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
-// session's turns exec inside it (so state, like the CLI's conversation store, persists across
-// turns), and it is removed when the session ends.
+// session's turns exec inside it, and it is removed when the session ends.
+//
+// The state that has to outlive the container comes from Storage, mounted in from the host, so
+// removing a container no longer destroys the conversation the database holds a handle to.
 type DockerProvider struct {
 	// Image is the container image sessions run in.
 	Image string
-	// Mounts are bind mounts, each "host:container[:ro]".
+	// Mounts are extra bind mounts for every sandbox, each "host:container[:ro]".
 	Mounts []string
+	// Storage keeps the workspace's conversation store and the project's files on the host.
+	Storage Storage
 }
 
 var _ Provider = DockerProvider{}
 
 // Create starts a detached container for the session and returns a sandbox that execs into it.
-func (d DockerProvider) Create(ctx context.Context, id string, env []string) (Sandbox, error) {
+func (d DockerProvider) Create(ctx context.Context, cfg Config) (Sandbox, error) {
 	if d.Image == "" {
 		return nil, fmt.Errorf("sandbox: docker image is required")
 	}
-	name := ContainerName(id)
+	kept, err := d.Storage.Prepare(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	name := ContainerName(cfg.ID)
 	args := []string{"run", "--detach", "--name", name}
-	for _, entry := range env {
+	for _, entry := range cfg.Env {
 		args = append(args, "--env", entry)
+	}
+	for _, mount := range kept {
+		args = append(args, "-v", mount.Source+":"+mount.Target)
 	}
 	for _, mount := range d.Mounts {
 		args = append(args, "-v", mount)

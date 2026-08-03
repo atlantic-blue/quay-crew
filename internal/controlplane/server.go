@@ -59,21 +59,30 @@ func storeError(err error, what string) error {
 
 // sandboxFor returns the session's sandbox, creating it on first use so it is reused across turns.
 //
+// The sandbox is told which project and workspace the session belongs to, because the state that
+// has to outlive it does not all sit at the same level: the conversation store and the workspace's
+// context belong to the workspace, the working files and the project's context to the project.
+//
 // The workspace's environment is set on the sandbox itself, not just on each turn, so anything the
 // operator starts inside it later (attaching to the conversation, for instance) is authenticated
 // without the tool carrying the credential around. A token set after a session's first turn will not
 // reach that session's existing sandbox: stop the session to get a fresh one.
-func (s *Server) sandboxFor(ctx context.Context, sessionID, workspace string) (sandbox.Sandbox, error) {
+func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if box, ok := s.sandboxes[sessionID]; ok {
+	if box, ok := s.sandboxes[session.GetId()]; ok {
 		return box, nil
 	}
-	box, err := s.provider.Create(ctx, sessionID, environ(s.turnEnv(ctx, workspace)))
+	box, err := s.provider.Create(ctx, sandbox.Config{
+		ID:        session.GetId(),
+		Workspace: session.GetWorkspace(),
+		Project:   session.GetProject(),
+		Env:       environ(s.turnEnv(ctx, session.GetWorkspace())),
+	})
 	if err != nil {
 		return nil, err
 	}
-	s.sandboxes[sessionID] = box
+	s.sandboxes[session.GetId()] = box
 	return box, nil
 }
 
@@ -211,7 +220,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, storeError(err, "project")
 	}
 
-	box, err := s.sandboxFor(ctx, session.GetId(), session.GetWorkspace())
+	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
 		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)

@@ -7,25 +7,23 @@ import (
 	"sync"
 )
 
-// FakeProvider hands out a FakeSandbox and records the ids it was asked to create. For tests.
+// FakeProvider hands out a FakeSandbox and records what it was asked to create. For tests.
 type FakeProvider struct {
-	Output  string
-	mu      sync.Mutex
-	Created []string
-	// CreatedEnv records the environment each sandbox was created with, so a test can assert what a
-	// session's container carries.
-	CreatedEnv [][]string
-	Boxes      []*FakeSandbox
+	Output string
+	mu     sync.Mutex
+	// Created records each sandbox's configuration in order, so a test can assert which session,
+	// project and workspace it belongs to and what environment it carries.
+	Created []Config
+	Boxes   []*FakeSandbox
 }
 
 var _ Provider = (*FakeProvider)(nil)
 
-// Create records the id and returns a new FakeSandbox streaming the provider's canned Output.
-func (f *FakeProvider) Create(_ context.Context, id string, env []string) (Sandbox, error) {
+// Create records the configuration and returns a new FakeSandbox streaming the canned Output.
+func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Created = append(f.Created, id)
-	f.CreatedEnv = append(f.CreatedEnv, env)
+	f.Created = append(f.Created, cfg)
 	box := &FakeSandbox{Output: f.Output}
 	f.Boxes = append(f.Boxes, box)
 	return box, nil

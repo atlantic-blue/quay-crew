@@ -149,6 +149,35 @@ socket, rather than nesting Docker inside Docker. Two consequences follow, and b
 The control plane image therefore carries the Docker client and runs as root. Every other service is
 an unprivileged distroless image.
 
+### What a sandbox keeps, and where
+
+A container's filesystem dies with the container. The model's own conversation store lives in one, so
+without somewhere else to put it, removing a sandbox destroys the conversation the database still
+holds a handle to, permanently. Two directories are therefore mounted in from the host:
+
+```
+<data>/workspaces/<workspace>/claude                        ->  /home/agent/.claude
+<data>/workspaces/<workspace>/projects/<project>/workspace   ->  /home/agent/workspace
+```
+
+The levels are not an invention. The model's command line tool already reads memory from `CLAUDE.md`
+in the home directory and `CLAUDE.md` in the working directory, and already keeps its transcripts
+under the home directory. So a workspace's directory carries who you are plus every conversation in
+it, and a project's directory carries that body of work and its files. Context reaches the model with
+no prompt assembly, no token cost on a turn that does not need it, and no second mechanism: editing
+context is editing files.
+
+They are bind mounts rather than named volumes so the operator can drop a file into a project with an
+editor instead of a throwaway container. Both are read write, which they have to be, because the same
+directory holds the store the model writes and the files the agent works on. The consequence worth
+naming: an agent can edit its own context. That is how `CLAUDE.md` normally works, and it does mean
+context is no longer something only the operator changes.
+
+The control plane sees that data directory through its own mount (`QC_DATA_DIR`) and hands sandboxes
+the path the host daemon sees (`QC_DATA_HOST`), because those containers are siblings on that daemon.
+With neither set, state stays in the container and dies with it. Where the directories live is
+configuration, so a Kubernetes provider can back the same two levels with a volume instead.
+
 The default sandbox image carries the Claude Code CLI, and a turn runs `claude` inside it under the
 operator's subscription. The image holds no credentials: the subscription token is stored per workspace
 as a secret and injected into the sandbox as an environment variable at turn time, so the same image

@@ -37,7 +37,7 @@ func TestClaudeCodeRunnerRealTurn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, "claude-itest", nil)
+	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, sandbox.Config{ID: "claude-itest"})
 	if err != nil {
 		t.Fatalf("create sandbox: %v", err)
 	}
@@ -58,6 +58,80 @@ func TestClaudeCodeRunnerRealTurn(t *testing.T) {
 		t.Fatal("no model session id, so the thread could not be resumed")
 	}
 	t.Logf("reply=%q session=%s", resp.Reply, resp.ModelSessionID)
+}
+
+// TestClaudeConversationSurvivesItsContainer is the same claim as
+// TestDockerProviderKeepsStateAcrossContainers, made against the real model rather than a file: the
+// conversation itself, not just the bytes underneath it.
+//
+// A turn happens, the container is destroyed, a new one is created for the same session, and the
+// model still remembers what it was told. The transcript lives in the mounted directory rather than
+// in the container, so resuming has something to read.
+//
+// It spends a subscription, so it skips exactly like the real turn test above.
+func TestClaudeConversationSurvivesItsContainer(t *testing.T) {
+	token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN")
+	if token == "" {
+		t.Skip("set CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) to run a real conversation")
+	}
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		image = "quaycrew-sandbox-claude:local"
+	}
+	if err := exec.Command("docker", "image", "inspect", image).Run(); err != nil {
+		t.Skipf("sandbox image %s not found; build it with `make sandbox-image`", image)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+
+	data := t.TempDir()
+	provider := sandbox.DockerProvider{Image: image, Storage: sandbox.Storage{Dir: data, Host: data}}
+	config := sandbox.Config{ID: "claude-durable", Workspace: "ws-durable", Project: "prj-durable"}
+	runner := model.NewClaudeCodeRunner()
+	env := map[string]string{model.ClaudeCodeOAuthTokenEnv: token}
+
+	first, err := provider.Create(ctx, config)
+	if err != nil {
+		t.Fatalf("create the first sandbox: %v", err)
+	}
+	t.Cleanup(func() { _ = first.Close(context.Background()) })
+
+	opening, err := runner.Run(ctx, first, model.Request{
+		Text:           "Remember the number 84713. Reply with exactly: ok",
+		PermissionMode: "plan",
+		Env:            env,
+	})
+	if err != nil {
+		t.Fatalf("first turn: %v", err)
+	}
+	if opening.ModelSessionID == "" {
+		t.Fatal("no conversation id came back, so there is nothing to resume")
+	}
+
+	if err := first.Close(ctx); err != nil {
+		t.Fatalf("destroy the first sandbox: %v", err)
+	}
+
+	second, err := provider.Create(ctx, config)
+	if err != nil {
+		t.Fatalf("create the replacement sandbox: %v", err)
+	}
+	t.Cleanup(func() { _ = second.Close(context.Background()) })
+
+	resumed, err := runner.Run(ctx, second, model.Request{
+		Text:           "What number did I ask you to remember? Reply with only the number.",
+		ModelSessionID: opening.ModelSessionID,
+		PermissionMode: "plan",
+		Env:            env,
+	})
+	if err != nil {
+		t.Fatalf("resume the conversation in a new container: %v", err)
+	}
+	if !strings.Contains(resumed.Reply, "84713") {
+		t.Fatalf("the resumed conversation replied %q, want it to remember 84713", resumed.Reply)
+	}
+	t.Logf("conversation %s survived its container: %q", opening.ModelSessionID, strings.TrimSpace(resumed.Reply))
 }
 
 // TestClaudeSandboxImageSkipsFirstRunPrompts guards the thing that made attaching useless: a fresh

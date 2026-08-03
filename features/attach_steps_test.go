@@ -121,25 +121,26 @@ func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the session's sandbox was created with the subscription token "([^"]*)"$`,
 		func(ctx context.Context, want string) error {
 			w := worldFrom(ctx)
-			if len(w.provider.CreatedEnv) != 1 {
-				return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.CreatedEnv))
+			if len(w.provider.Created) != 1 {
+				return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.Created))
 			}
 			entry := "CLAUDE_CODE_OAUTH_TOKEN=" + want
-			for _, got := range w.provider.CreatedEnv[0] {
+			created := w.provider.Created[0]
+			for _, got := range created.Env {
 				if got == entry {
 					return nil
 				}
 			}
-			return fmt.Errorf("the sandbox was created with %v, want it to carry %s", w.provider.CreatedEnv[0], entry)
+			return fmt.Errorf("the sandbox was created with %v, want it to carry %s", created.Env, entry)
 		})
 
 	sc.Step(`^the session's sandbox was created with no environment$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		if len(w.provider.CreatedEnv) != 1 {
-			return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.CreatedEnv))
+		if len(w.provider.Created) != 1 {
+			return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.Created))
 		}
-		if len(w.provider.CreatedEnv[0]) != 0 {
-			return fmt.Errorf("the sandbox was created with %v, want nothing", w.provider.CreatedEnv[0])
+		if len(w.provider.Created[0].Env) != 0 {
+			return fmt.Errorf("the sandbox was created with %v, want nothing", w.provider.Created[0].Env)
 		}
 		return nil
 	})
