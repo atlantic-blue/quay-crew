@@ -81,8 +81,22 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
 		// conversation-1 is what the recording runner hands back for a first turn.
-		if line != "claude --resume conversation-1" {
+		if !strings.HasPrefix(line, "claude --resume conversation-1") {
 			return fmt.Errorf("the command is %q, want it to resume the turn's conversation", line)
+		}
+		return nil
+	})
+
+	// An attached session that ignored the thread's mode would stop and ask the moment it was opened,
+	// on a thread the operator had deliberately armed, which reads as the toggle not working.
+	sc.Step(`^the command runs in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
+		a := attachFrom(ctx)
+		if a.err != nil {
+			return fmt.Errorf("attaching was refused: %w", a.err)
+		}
+		line := strings.Join(a.spec.GetArgv(), " ")
+		if !strings.Contains(line, "--permission-mode "+want) {
+			return fmt.Errorf("the command is %q, want it to run as %q", line, want)
 		}
 		return nil
 	})
