@@ -13,7 +13,7 @@ read, or run with `make features`.
   was kept on the host died with that container while the row kept the handle. Resuming one printed
   `No conversation found` inside the container and exited, which from the console looked like nothing
   happening. Attaching now checks the workspace's store first and says to dispatch a turn instead.
-  ([#103](https://github.com/atlantic-blue/quay-crew/pull/103))
+  ([#102](https://github.com/atlantic-blue/quay-crew/pull/102))
 - **Opening an idle thread works again.** Attaching answered from the database row alone, so after the
   control plane restarted it handed back a container name the daemon had never heard of:
   `No such container: quaycrew-134c2c6d...`. Attaching now starts the thread's sandbox when there is
