@@ -214,18 +214,21 @@ func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, 
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (m *Memory) ListSessions(_ context.Context, workspace, project string) ([]*quaycrewv1.Session, error) {
+func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
+		if (session.GetArchivedAt() != nil) != filter.Archived {
+			continue
+		}
 		switch {
-		case project != "":
-			if session.GetProject() != project {
+		case filter.Project != "":
+			if session.GetProject() != filter.Project {
 				continue
 			}
-		case workspace != "":
-			if session.GetWorkspace() != workspace {
+		case filter.Workspace != "":
+			if session.GetWorkspace() != filter.Workspace {
 				continue
 			}
 		}
@@ -256,6 +259,28 @@ func (m *Memory) RestartSession(_ context.Context, id string) error {
 		return ErrNotFound
 	}
 	session.Status = "idle"
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return nil
+}
+
+// ArchiveSession stamps a session as put away.
+func (m *Memory) ArchiveSession(_ context.Context, id string) error {
+	return m.stampArchived(id, timestamppb.New(time.Now().UTC()))
+}
+
+// RestoreSession clears the stamp, bringing the thread back into the default listing.
+func (m *Memory) RestoreSession(_ context.Context, id string) error {
+	return m.stampArchived(id, nil)
+}
+
+func (m *Memory) stampArchived(id string, at *timestamppb.Timestamp) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	session.ArchivedAt = at
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }

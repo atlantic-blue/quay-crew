@@ -160,15 +160,63 @@ func Threads(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
 		// under it.
 		SortBy:  3,
-		List:    sessionLister(client),
+		List:    sessionLister(client, live),
 		Actions: sessionActions(client),
 	}
 }
 
-func sessionLister(client quaycrewv1.ControlPlaneServiceClient) Lister {
+// Archived lists the threads that have been put away. Nothing was deleted to get here, so the only
+// action is bringing one back.
+//
+// It is its own view rather than a filter on the threads view, because an archived thread is one the
+// operator deliberately hid, and a listing that quietly grows them back is worse than no archive at
+// all.
+func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "archived",
+		Aliases: []string{"arch", "archive"},
+		Columns: []Column{
+			{Title: "id", Width: 10},
+			{Title: "workspace", Width: 16},
+			{Title: "project", Width: 20},
+			{Title: "thread", Width: 10},
+			{Title: "status", Width: 10},
+			{Title: "archived", Width: 0},
+		},
+		SortBy: 3,
+		List:   sessionLister(client, putAway),
+		Actions: []Action{
+			{
+				Key:   "u",
+				Label: "Restore",
+				Run: func(ctx context.Context, row Row) error {
+					if row.ID == "" {
+						return fmt.Errorf("no thread selected")
+					}
+					_, err := client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: row.ID})
+					return err
+				},
+			},
+		},
+	}
+}
+
+// which listing a session lister asks for. Named rather than a bare boolean at the two call sites,
+// where true would have said nothing about what it selected.
+type shelf bool
+
+const (
+	live    shelf = false
+	putAway shelf = true
+)
+
+func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) Lister {
 	// parent is a project id when drilled into from one, and empty at the top level.
 	return func(ctx context.Context, parent string) ([]Row, error) {
-		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: parent})
+		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+			Project:  parent,
+			Archived: bool(from),
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -211,10 +259,22 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 			display.Name(projectName, session.GetProject()),
 			display.ShortID(session.GetThreadId()),
 			session.GetStatus(),
-			age(session.GetUpdatedAt()),
+			// The last column is how long ago it was put away in the archived view, and how long ago
+			// it was touched everywhere else. A live thread has no archived stamp, so one rule covers
+			// both without either view having to say which it is.
+			age(lastMoved(session)),
 		},
 		State: stateFromStatus(session.GetStatus()),
 	}
+}
+
+// lastMoved is when the thread last went anywhere: when it was put away if it was, and when it was
+// last touched otherwise.
+func lastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
+	if session.GetArchivedAt() != nil {
+		return session.GetArchivedAt()
+	}
+	return session.GetUpdatedAt()
 }
 
 func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
@@ -254,6 +314,21 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 					return fmt.Errorf("no thread selected")
 				}
 				_, err := client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: row.ID})
+				return err
+			},
+		},
+		{
+			// Uppercase, because `a` already attaches and archiving is the rarer of the two. It asks
+			// first: a thread that disappears from the list under an accidental keypress reads
+			// exactly like one that was deleted.
+			Key:     "A",
+			Label:   "Archive",
+			Confirm: true,
+			Run: func(ctx context.Context, row Row) error {
+				if row.ID == "" {
+					return fmt.Errorf("no thread selected")
+				}
+				_, err := client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: row.ID})
 				return err
 			},
 		},

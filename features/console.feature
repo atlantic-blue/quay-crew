@@ -97,6 +97,15 @@ Feature: The operator sees the crew from the console
     And the operator answers "n"
     Then the session is reported as idle
 
+  # Archiving from the console, driven through its own reducer: the thread leaves the view it was put
+  # away from and turns up in the archived one, with its conversation intact.
+  Scenario: An archived thread leaves the threads view for the archived one
+    Given a session started by dispatching "remember this"
+    When the operator opens the console and archives the thread
+    Then the console lists 0 threads
+    And the archived view lists 1 thread
+    And the archived thread still holds its conversation
+
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console

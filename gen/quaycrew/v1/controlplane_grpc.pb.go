@@ -35,6 +35,8 @@ const (
 	ControlPlaneService_AttachSession_FullMethodName   = "/quaycrew.v1.ControlPlaneService/AttachSession"
 	ControlPlaneService_StopSession_FullMethodName     = "/quaycrew.v1.ControlPlaneService/StopSession"
 	ControlPlaneService_RestartSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/RestartSession"
+	ControlPlaneService_ArchiveSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
+	ControlPlaneService_RestoreSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/RestoreSession"
 	ControlPlaneService_GetInfo_FullMethodName         = "/quaycrew.v1.ControlPlaneService/GetInfo"
 )
 
@@ -60,6 +62,8 @@ type ControlPlaneServiceClient interface {
 	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
 	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
 	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
+	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
+	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 }
 
@@ -231,6 +235,26 @@ func (c *controlPlaneServiceClient) RestartSession(ctx context.Context, in *Rest
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ArchiveSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RestoreSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInfoResponse)
@@ -263,6 +287,8 @@ type ControlPlaneServiceServer interface {
 	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
 	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
 	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
+	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
+	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
@@ -321,6 +347,12 @@ func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *Stop
 }
 func (UnimplementedControlPlaneServiceServer) RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestartSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreSession not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInfo not implemented")
@@ -634,6 +666,42 @@ func _ControlPlaneService_RestartSession_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ArchiveSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ArchiveSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ArchiveSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ArchiveSession(ctx, req.(*ArchiveSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RestoreSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RestoreSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RestoreSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RestoreSession(ctx, req.(*RestoreSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
@@ -722,6 +790,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestartSession",
 			Handler:    _ControlPlaneService_RestartSession_Handler,
+		},
+		{
+			MethodName: "ArchiveSession",
+			Handler:    _ControlPlaneService_ArchiveSession_Handler,
+		},
+		{
+			MethodName: "RestoreSession",
+			Handler:    _ControlPlaneService_RestoreSession_Handler,
 		},
 		{
 			MethodName: "GetInfo",

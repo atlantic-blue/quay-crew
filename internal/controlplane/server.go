@@ -320,7 +320,11 @@ func (s *Server) turnEnv(ctx context.Context, workspace string) map[string]strin
 
 // ListSessions lists sessions, optionally filtered by workspace.
 func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
-	sessions, err := s.store.ListSessions(ctx, req.GetWorkspace(), req.GetProject())
+	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{
+		Workspace: req.GetWorkspace(),
+		Project:   req.GetProject(),
+		Archived:  req.GetArchived(),
+	})
 	if err != nil {
 		return nil, storeError(err, "list sessions")
 	}
@@ -390,6 +394,60 @@ func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSess
 		return nil, storeError(err, "session")
 	}
 	return &quaycrewv1.RestartSessionResponse{Session: restarted}, nil
+}
+
+// ArchiveSession puts a thread away, stopping it first if it is running.
+//
+// Nothing is deleted, by anyone, here: the row, the conversation handle, the conversation store on
+// the host and the project's files are all untouched. Archiving is a stamp, so restoring is clearing
+// it. Deleting a conversation is a separate decision and not something to slip in behind a key.
+func (s *Server) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
+	session, err := s.store.GetSession(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	if session.GetArchivedAt() != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "session %s is already archived", req.GetId())
+	}
+	// A container left running for a thread nobody can see is exactly the leak this project keeps
+	// finding, so put the sandbox away with the thread.
+	if session.GetStatus() != "stopped" {
+		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
+			return nil, storeError(err, "session")
+		}
+		s.closeSandbox(ctx, req.GetId())
+	}
+	if err := s.store.ArchiveSession(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.ArchiveSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
+}
+
+// RestoreSession brings an archived thread back into the default listing. It comes back stopped,
+// which is what it is: archiving stopped it, and starting a container again is what restart is for.
+func (s *Server) RestoreSession(ctx context.Context, req *quaycrewv1.RestoreSessionRequest) (*quaycrewv1.RestoreSessionResponse, error) {
+	session, err := s.store.GetSession(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	if session.GetArchivedAt() == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "session %s is not archived", req.GetId())
+	}
+	if err := s.store.RestoreSession(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.RestoreSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
+}
+
+// reread returns the session as it now is, so a caller does not have to ask again. A read that fails
+// here is not worth failing the write that already succeeded, so it yields nothing rather than an
+// error the caller would misread as the action not having happened.
+func (s *Server) reread(ctx context.Context, id string) *quaycrewv1.Session {
+	session, err := s.store.GetSession(ctx, id)
+	if err != nil {
+		return nil
+	}
+	return session
 }
 
 // StopSession marks a session stopped and tears down its sandbox.

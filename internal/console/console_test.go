@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // fakeClient is a control plane double. It embeds the generated interface so unimplemented calls
@@ -24,12 +26,15 @@ type fakeClient struct {
 	projects   []*quaycrewv1.Project
 	sessions   []*quaycrewv1.Session
 
-	attachErr       error
-	restartErr      error
-	restarted       []string
-	listSessionsFor string
-	stopped         []string
-	listErr         error
+	attachErr        error
+	restartErr       error
+	restarted        []string
+	listSessionsFor  string
+	listArchivedOnly bool
+	stopped          []string
+	archived         []string
+	restored         []string
+	listErr          error
 }
 
 func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
@@ -66,18 +71,29 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	f.listSessionsFor = req.GetProject()
+	f.listSessionsFor, f.listArchivedOnly = req.GetProject(), req.GetArchived()
 
-	if req.GetProject() == "" {
-		return &quaycrewv1.ListSessionsResponse{Sessions: f.sessions}, nil
-	}
 	matched := make([]*quaycrewv1.Session, 0, len(f.sessions))
 	for _, session := range f.sessions {
-		if session.GetProject() == req.GetProject() {
-			matched = append(matched, session)
+		if (session.GetArchivedAt() != nil) != req.GetArchived() {
+			continue
 		}
+		if req.GetProject() != "" && session.GetProject() != req.GetProject() {
+			continue
+		}
+		matched = append(matched, session)
 	}
 	return &quaycrewv1.ListSessionsResponse{Sessions: matched}, nil
+}
+
+func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
+	f.archived = append(f.archived, req.GetId())
+	return &quaycrewv1.ArchiveSessionResponse{}, nil
+}
+
+func (f *fakeClient) RestoreSession(_ context.Context, req *quaycrewv1.RestoreSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreSessionResponse, error) {
+	f.restored = append(f.restored, req.GetId())
+	return &quaycrewv1.RestoreSessionResponse{}, nil
 }
 
 func (f *fakeClient) StopSession(_ context.Context, req *quaycrewv1.StopSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.StopSessionResponse, error) {
@@ -722,6 +738,110 @@ func TestRestartingARunningThreadShowsTheRefusal(t *testing.T) {
 	if !strings.Contains(msg.err.Error(), "nothing to restart") {
 		t.Fatalf("the reason did not reach the operator: %v", msg.err)
 	}
+}
+
+// TestArchiveAsksBeforePuttingAThreadAway: a thread that vanishes from the list under an accidental
+// keypress reads exactly like one that was deleted, and this one is not.
+func TestArchiveAsksBeforePuttingAThreadAway(t *testing.T) {
+	client := &fakeClient{}
+	model, _ := update(t, threadsAt(t, client), runes("A"))
+
+	if model.mode != modeConfirm {
+		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
+	}
+	if view := model.View(); !strings.Contains(view, "archive thread d754610f?") {
+		t.Fatalf("the console does not name what it is about to archive:\n%s", view)
+	}
+	if len(client.archived) != 0 {
+		t.Fatalf("archived = %v, want nothing archived yet", client.archived)
+	}
+
+	_, cmd := update(t, model, runes("y"))
+	if cmd == nil {
+		t.Fatal("yes produced no command")
+	}
+	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
+		t.Fatalf("archiving returned %#v, want a clean actionDoneMsg", cmd())
+	}
+	if len(client.archived) != 1 || client.archived[0] != "s1" {
+		t.Fatalf("archived = %v, want [s1]", client.archived)
+	}
+}
+
+// TestTheTwoListingsNeverMix is what makes archiving worth having: a thread the operator put away
+// must not come back into the view they put it away from.
+func TestTheTwoListingsNeverMix(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{
+		{Id: "live", Workspace: "acme", ThreadId: "t1", Status: "idle"},
+		{Id: "away", Workspace: "acme", ThreadId: "t2", Status: "stopped", ArchivedAt: timestamppb.Now()},
+	}}
+
+	threads, err := Threads(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing threads: %v", err)
+	}
+	if len(threads) != 1 || threads[0].ID != "live" {
+		t.Fatalf("the threads view lists %v, want only the live one", rowIDs(threads))
+	}
+	if client.listArchivedOnly {
+		t.Fatal("the threads view asked the control plane for archived threads")
+	}
+
+	archived, err := Archived(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing archived: %v", err)
+	}
+	if len(archived) != 1 || archived[0].ID != "away" {
+		t.Fatalf("the archived view lists %v, want only the one put away", rowIDs(archived))
+	}
+	if !client.listArchivedOnly {
+		t.Fatal("the archived view asked the control plane for live threads")
+	}
+}
+
+// TestRestoreBringsAThreadBack: nothing was deleted, so the only thing to do in there is undo it.
+func TestRestoreBringsAThreadBack(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Archived(client))
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "stopped", "2h"}}))
+
+	_, cmd := update(t, model, runes("u"))
+	if cmd == nil {
+		t.Fatal("restore produced no command")
+	}
+	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
+		t.Fatalf("restore returned %#v, want a clean actionDoneMsg", cmd())
+	}
+	if len(client.restored) != 1 || client.restored[0] != "s1" {
+		t.Fatalf("restored = %v, want [s1]", client.restored)
+	}
+}
+
+// TestTheArchivedViewSaysWhenAThreadWasPutAway: its last column is the stamp, not the last touch,
+// because "two hours ago" about a thread nobody has touched since is the useful number.
+func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
+		Id: "away", Workspace: "acme", ThreadId: "t2", Status: "stopped",
+		UpdatedAt:  timestamppb.New(time.Now().Add(-72 * time.Hour)),
+		ArchivedAt: timestamppb.New(time.Now().Add(-2 * time.Hour)),
+	}}}
+
+	rows, err := Archived(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing archived: %v", err)
+	}
+	if got := rows[0].Cells[5]; got != "2h" {
+		t.Fatalf("the last column reads %q, want 2h, when it was put away", got)
+	}
+}
+
+func rowIDs(rows []Row) []string {
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.ID)
+	}
+	return out
 }
 
 // actionBoundTo returns the action a key runs, failing the test when nothing is bound to it.

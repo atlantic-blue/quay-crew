@@ -201,6 +201,45 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the operator opens the console and archives the thread$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx).client); err != nil {
+			return err
+		}
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")}); err != nil {
+			return err
+		}
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); err != nil {
+			return err
+		}
+		// The console asked; whichever view a later step reads is listed fresh from the control plane.
+		return c.open(ctx, worldFrom(ctx).client, console.Default)
+	})
+
+	sc.Step(`^the archived view lists (\d+) threads?$`, func(ctx context.Context, want int) error {
+		c := consoleFrom(ctx)
+		if err := c.open(ctx, worldFrom(ctx).client, "archived"); err != nil {
+			return err
+		}
+		return expectRows(c, "archived", want)
+	})
+
+	sc.Step(`^the archived thread still holds its conversation$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		session, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: row.ID})
+		if err != nil {
+			return err
+		}
+		if session.GetSession().GetModelSessionId() == "" {
+			return fmt.Errorf("the archived thread has no conversation handle left")
+		}
+		return nil
+	})
+
 	sc.Step(`^the console says the thread has no conversation yet$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if c.openErr == nil {
