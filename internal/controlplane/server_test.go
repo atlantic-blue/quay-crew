@@ -56,10 +56,10 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 	s := newServer(runner)
 	ctx := context.Background()
 
-	workspace, _ := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	pid := workspace.GetWorkspace().GetId()
+	wid, pid := newProject(t, s)
+	_ = wid
 
-	first, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: pid, Text: "hello"})
+	first, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"})
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 	}
 
 	// Continue the same thread: the runner should be asked to resume the model session.
-	second, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: pid, ThreadId: first.GetThreadId(), Text: "more"})
+	second, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, ThreadId: first.GetThreadId(), Text: "more"})
 	if err != nil {
 		t.Fatalf("Dispatch continue: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 
 func TestDispatchUnknownWorkspace(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
-	_, err := s.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{Workspace: "ghost", Text: "hi"})
+	_, err := s.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{Project: "ghost", Text: "hi"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("want NotFound, got %v", err)
 	}
@@ -96,13 +96,12 @@ func TestDispatchInjectsTheWorkspaceSubscriptionToken(t *testing.T) {
 	s := controlplane.NewServer(store.NewMemory(), runner, &sandbox.FakeProvider{}, secrets.NewMemory())
 	ctx := context.Background()
 
-	workspace, _ := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	pid := workspace.GetWorkspace().GetId()
+	wid, pid := newProject(t, s)
 
-	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: pid, Key: model.ClaudeCodeOAuthTokenEnv, Value: "tok-xyz"}); err != nil {
+	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: wid, Key: model.ClaudeCodeOAuthTokenEnv, Value: "tok-xyz"}); err != nil {
 		t.Fatalf("SetSecret: %v", err)
 	}
-	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: pid, Text: "hello"}); err != nil {
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"}); err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
@@ -116,8 +115,8 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 	s := newServer(runner)
 	ctx := context.Background()
 
-	workspace, _ := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: workspace.GetWorkspace().GetId(), Text: "hello"}); err != nil {
+	_, pid := newProject(t, s)
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"}); err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
@@ -131,13 +130,12 @@ func TestSetSecretStoresValue(t *testing.T) {
 	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{}, &sandbox.FakeProvider{}, secretStore)
 	ctx := context.Background()
 
-	workspace, _ := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	pid := workspace.GetWorkspace().GetId()
+	wid, _ := newProject(t, s)
 
-	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: pid, Key: "token", Value: "s3cret"}); err != nil {
+	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: wid, Key: "token", Value: "s3cret"}); err != nil {
 		t.Fatalf("SetSecret: %v", err)
 	}
-	got, err := secretStore.Get(ctx, pid, "token")
+	got, err := secretStore.Get(ctx, wid, "token")
 	if err != nil || got != "s3cret" {
 		t.Fatalf("secret not stored: got %q err %v", got, err)
 	}
@@ -148,12 +146,12 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, provider, secrets.NewMemory())
 	ctx := context.Background()
 
-	workspace, _ := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
-	pid := workspace.GetWorkspace().GetId()
+	wid, pid := newProject(t, s)
+	_ = wid
 
 	// Two turns on the same thread must share one sandbox (created once, not per turn).
-	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: pid, Text: "one"})
-	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: pid, ThreadId: first.GetThreadId(), Text: "two"}); err != nil {
+	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "one"})
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, ThreadId: first.GetThreadId(), Text: "two"}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
 	}
 	if len(provider.Created) != 1 {
@@ -196,11 +194,35 @@ func TestOverGrpc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorkspace over grpc: %v", err)
 	}
-	dispatch, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: workspace.GetWorkspace().GetId(), Text: "hi"})
+	project, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house bills",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject over grpc: %v", err)
+	}
+	dispatch, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project.GetProject().GetId(), Text: "hi"})
 	if err != nil {
 		t.Fatalf("Dispatch over grpc: %v", err)
 	}
 	if dispatch.GetReply() != "ok" {
 		t.Fatalf("reply = %q, want ok", dispatch.GetReply())
 	}
+}
+
+// newProject creates a workspace and a project inside it: the smallest setup a dispatch needs now
+// that a thread lives inside a project.
+func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID string) {
+	t.Helper()
+	ctx := context.Background()
+	workspace, err := s.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
+	if err != nil {
+		t.Fatalf("CreateWorkspace: %v", err)
+	}
+	project, err := s.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house bills",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	return workspace.GetWorkspace().GetId(), project.GetProject().GetId()
 }

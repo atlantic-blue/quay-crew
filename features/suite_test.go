@@ -118,6 +118,8 @@ type world struct {
 
 	workspaceID        string
 	workspaceName      string
+	projectID          string
+	projectName        string
 	secondWorkspaceID  string
 	turns              []turn
 	lastErr            error
@@ -187,8 +189,8 @@ func (w *world) lastTurn() (turn, error) {
 
 // dispatch runs one turn and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
-func (w *world) dispatch(ctx context.Context, workspace, thread, text string) error {
-	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Workspace: workspace, ThreadId: thread, Text: text})
+func (w *world) dispatch(ctx context.Context, project, thread, text string) error {
+	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, ThreadId: thread, Text: text})
 	w.lastErr = err
 	if err != nil {
 		return nil
@@ -208,6 +210,18 @@ func (w *world) createWorkspace(ctx context.Context, name string) error {
 	return nil
 }
 
+// createProject adds a body of work to the world's current workspace.
+func (w *world) createProject(ctx context.Context, name string) error {
+	resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Workspace: w.workspaceID, Name: name})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	w.projectID = resp.GetProject().GetId()
+	w.projectName = resp.GetProject().GetName()
+	return nil
+}
+
 func initializeScenario(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		w := &world{}
@@ -218,6 +232,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
+	initializeProjectSteps(sc)
 	initializeWorkspaceSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
@@ -257,6 +272,16 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	sc.Step(`^a project named "([^"]*)"$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		if err := w.createProject(ctx, name); err != nil {
+			return err
+		}
+		if w.lastErr != nil {
+			return fmt.Errorf("create the project: %w", w.lastErr)
+		}
+		return nil
+	})
 	sc.Step(`^the workspace has the subscription token "([^"]*)"$`, func(ctx context.Context, token string) error {
 		w := worldFrom(ctx)
 		_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
@@ -266,16 +291,16 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^a session started by dispatching "([^"]*)"$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		if err := w.dispatch(ctx, w.workspaceID, "", text); err != nil {
+		if err := w.dispatch(ctx, w.projectID, "", text); err != nil {
 			return err
 		}
 		return w.lastErr
 	})
 
 	// When: sessions.
-	sc.Step(`^the operator dispatches "([^"]*)" to the workspace$`, func(ctx context.Context, text string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to the project$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		return w.dispatch(ctx, w.workspaceID, "", text)
+		return w.dispatch(ctx, w.projectID, "", text)
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to the same thread$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
@@ -283,13 +308,13 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		return w.dispatch(ctx, w.workspaceID, previous.threadID, text)
+		return w.dispatch(ctx, w.projectID, previous.threadID, text)
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to a new thread$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		return w.dispatch(ctx, w.workspaceID, "", text)
+		return w.dispatch(ctx, w.projectID, "", text)
 	})
-	sc.Step(`^the operator dispatches "([^"]*)" to workspace "([^"]*)"$`, func(ctx context.Context, text, workspace string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to project "([^"]*)"$`, func(ctx context.Context, text, workspace string) error {
 		return worldFrom(ctx).dispatch(ctx, workspace, "", text)
 	})
 	sc.Step(`^the control plane restarts$`, func(ctx context.Context) error {

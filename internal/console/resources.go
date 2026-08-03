@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -19,13 +20,13 @@ const sandboxPrefix = "quaycrew-"
 func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "workspaces",
-		Aliases: []string{"p", "proj", "workspace"},
+		Aliases: []string{"w", "ws", "workspace"},
 		Columns: []Column{
 			{Title: "id", Width: 10},
 			{Title: "name", Width: 0},
 			{Title: "age", Width: 10},
 		},
-		DrillTo: "sessions",
+		DrillTo: "projects",
 		List: func(ctx context.Context, _ string) ([]Row, error) {
 			resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 			if err != nil {
@@ -44,12 +45,67 @@ func workspaceRow(workspace *quaycrewv1.Workspace) Row {
 	// ID stays whole: it is what actions and drilling down use. Only the cell is shortened.
 	return Row{
 		ID:    workspace.GetId(),
-		Cells: []string{shortID(workspace.GetId()), workspace.GetName(), age(workspace.GetCreatedAt())},
+		Cells: []string{display.ShortID(workspace.GetId()), workspace.GetName(), age(workspace.GetCreatedAt())},
 		State: StateReady,
 	}
 }
 
-// Sessions lists sessions, scoped to a workspace when drilled into from one. The operator can stop a
+// Projects lists the bodies of work inside a workspace, and drills into their sessions.
+func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "projects",
+		Aliases: []string{"p", "proj", "project"},
+		Columns: []Column{
+			{Title: "id", Width: 10},
+			{Title: "name", Width: 24},
+			{Title: "workspace", Width: 18},
+			{Title: "age", Width: 0},
+		},
+		DrillTo: "sessions",
+		List: func(ctx context.Context, workspace string) ([]Row, error) {
+			resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: workspace})
+			if err != nil {
+				return nil, err
+			}
+			names := workspaceNames(ctx, client)
+			rows := make([]Row, 0, len(resp.GetProjects()))
+			for _, project := range resp.GetProjects() {
+				rows = append(rows, projectRow(project, names[project.GetWorkspace()]))
+			}
+			return rows, nil
+		},
+	}
+}
+
+func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
+	// ID and Parent stay whole: they are what drilling and actions use.
+	return Row{
+		ID:     project.GetId(),
+		Parent: project.GetWorkspace(),
+		Cells: []string{
+			display.ShortID(project.GetId()),
+			project.GetName(),
+			display.Name(workspaceName, project.GetWorkspace()),
+			age(project.GetCreatedAt()),
+		},
+		State: StateReady,
+	}
+}
+
+// workspaceNames maps workspace id to name. An error yields an empty map rather than failing a list.
+func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
+	if err != nil {
+		return map[string]string{}
+	}
+	names := make(map[string]string, len(resp.GetWorkspaces()))
+	for _, w := range resp.GetWorkspaces() {
+		names[w.GetId()] = w.GetName()
+	}
+	return names
+}
+
+// Sessions lists sessions, scoped to a project when drilled into from one. The operator can stop a
 // session and shell into its container.
 func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
@@ -57,7 +113,8 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Aliases: []string{"s", "sess", "session"},
 		Columns: []Column{
 			{Title: "id", Width: 10},
-			{Title: "workspace", Width: 18},
+			{Title: "workspace", Width: 16},
+			{Title: "project", Width: 20},
 			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
 			{Title: "age", Width: 0},
@@ -68,8 +125,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 }
 
 func sessionLister(client quaycrewv1.ControlPlaneServiceClient) Lister {
-	return func(ctx context.Context, workspace string) ([]Row, error) {
-		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: workspace})
+	// parent is a project id when drilled into from one, and empty at the top level.
+	return func(ctx context.Context, parent string) ([]Row, error) {
+		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: parent})
 		if err != nil {
 			return nil, err
 		}
@@ -77,38 +135,39 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient) Lister {
 		// list. One extra call turns every one of them into a name. If it fails the rows still
 		// render, with the id as the fallback, because a listing that refuses to draw because the
 		// names could not be looked up is worse than one that shows ids.
-		names := workspaceNames(ctx, client)
+		workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
 
 		rows := make([]Row, 0, len(resp.GetSessions()))
 		for _, session := range resp.GetSessions() {
-			rows = append(rows, sessionRow(session, names[session.GetWorkspace()]))
+			rows = append(rows, sessionRow(session, workspaces[session.GetWorkspace()], projects[session.GetProject()]))
 		}
 		return rows, nil
 	}
 }
 
-// workspaceNames maps workspace id to name. An error yields an empty map rather than failing the list.
-func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
-	resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
+// projectNames maps project id to name, so a session row can name the body of work it belongs to.
+func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
 	if err != nil {
 		return map[string]string{}
 	}
-	names := make(map[string]string, len(resp.GetWorkspaces()))
-	for _, workspace := range resp.GetWorkspaces() {
-		names[workspace.GetId()] = workspace.GetName()
+	names := make(map[string]string, len(resp.GetProjects()))
+	for _, project := range resp.GetProjects() {
+		names[project.GetId()] = project.GetName()
 	}
 	return names
 }
 
-func sessionRow(session *quaycrewv1.Session, workspaceName string) Row {
+func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) Row {
 	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
 		ID:     session.GetId(),
-		Parent: session.GetWorkspace(),
+		Parent: session.GetProject(),
 		Cells: []string{
-			shortID(session.GetId()),
-			displayName(workspaceName, session.GetWorkspace()),
-			shortID(session.GetThreadId()),
+			display.ShortID(session.GetId()),
+			display.Name(workspaceName, session.GetWorkspace()),
+			display.Name(projectName, session.GetProject()),
+			display.ShortID(session.GetThreadId()),
 			session.GetStatus(),
 			age(session.GetUpdatedAt()),
 		},

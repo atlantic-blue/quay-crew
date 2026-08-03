@@ -19,7 +19,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	return NewRegistry(Sessions(client), Workspaces(client))
+	return NewRegistry(Sessions(client), Projects(client), Workspaces(client))
 }
 
 // Run opens the full screen console and returns when the operator quits.
