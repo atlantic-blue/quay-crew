@@ -11,6 +11,10 @@ GOBIN := $(shell go env GOPATH)/bin
 # always leaves you running the build you just made rather than an older copy earlier on your PATH.
 BINDIR ?=
 
+# UPGRADE_BRANCH is the branch `make upgrade` is willing to build the stack from. It exists because a
+# stack built from somebody's half finished branch is a stack nobody can reason about.
+UPGRADE_BRANCH ?= main
+
 # VERSION is what a built binary reports for itself: the commit it came from, marked dirty when the
 # checkout has uncommitted changes, because a build from an edited tree is not that commit.
 VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --quiet 2>/dev/null || echo -dirty)
@@ -19,7 +23,7 @@ VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --qui
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start up-observability down logs ps proto build install test features lint fmt tidy sandbox-image help
+.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image help
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
 up:
@@ -31,6 +35,30 @@ start: up
 ## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
 sandbox-image:
 	docker build -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
+
+## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
+upgrade:
+	@branch="$$(git rev-parse --abbrev-ref HEAD)"; \
+	if [ "$$branch" != "$(UPGRADE_BRANCH)" ]; then \
+		echo "refusing: you are on $$branch, not $(UPGRADE_BRANCH). Upgrading would rebuild the stack from a branch."; \
+		exit 1; \
+	fi; \
+	if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo "refusing: this checkout has uncommitted changes, and upgrading would build them into the stack."; \
+		exit 1; \
+	fi; \
+	before="$$(git rev-parse --short HEAD)"; \
+	git fetch origin; \
+	git merge --ff-only "origin/$(UPGRADE_BRANCH)"; \
+	after="$$(git rev-parse --short HEAD)"; \
+	if [ "$$before" = "$$after" ]; then \
+		echo "already on the newest build ($$after)"; \
+	else \
+		echo "moved from $$before to $$after"; \
+	fi
+	@$(MAKE) --no-print-directory install
+	@echo "rebuilding and restarting the stack. Secrets are held in memory, so set the model token again afterwards."
+	$(COMPOSE) up --build -d
 
 ## up-observability: also start Grafana, Loki, Tempo, Prometheus
 up-observability:
