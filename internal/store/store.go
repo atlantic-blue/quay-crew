@@ -22,6 +22,20 @@ import (
 // ErrNotFound is returned when a workspace or session does not exist, or has been deleted.
 var ErrNotFound = errors.New("store: not found")
 
+// SessionFilter narrows a listing. The zero value is every live session the crew has.
+//
+// It is a struct rather than a list of arguments because the third one would have been a bare
+// boolean at a call site, where nobody reading it could tell what true meant.
+type SessionFilter struct {
+	// Project wins over Workspace when both are set, because it is the narrower of the two.
+	Workspace string
+	Project   string
+	// Archived asks for the threads that have been put away instead of the live ones. A listing is
+	// one or the other and never both: the default view must not quietly grow back the threads
+	// somebody deliberately hid.
+	Archived bool
+}
+
 // Store persists workspaces, channels and sessions.
 //
 // Workspaces are soft deleted: a deleted workspace is invisible to every read, and its rows stay so the
@@ -47,9 +61,14 @@ type Store interface {
 	// empty modelSessionID leaves the stored handle alone, so a failed turn cannot erase it.
 	RecordTurn(ctx context.Context, id, modelSessionID, status string) error
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
-	// ListSessions filters by project when set, else by workspace when set, else lists everything.
-	ListSessions(ctx context.Context, workspace, project string) ([]*quaycrewv1.Session, error)
+	// ListSessions returns the sessions a filter selects.
+	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
+	// ArchiveSession puts a thread away: it disappears from the default listing and nothing else
+	// happens to it. The row, the conversation handle and the files on the host all stay.
+	ArchiveSession(ctx context.Context, id string) error
+	// RestoreSession brings an archived thread back into the default listing.
+	RestoreSession(ctx context.Context, id string) error
 	// RestartSession marks a stopped session idle again. The conversation is untouched, because it
 	// lives on the host rather than in the sandbox that was torn down, which is the whole reason
 	// bringing a thread back is possible at all. Whether the session was stopped in the first place

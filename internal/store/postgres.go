@@ -259,13 +259,14 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (p *Postgres) ListSessions(ctx context.Context, workspace, project string) ([]*quaycrewv1.Session, error) {
+func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at
 		from sessions
 		where ($2 = '' or project = $2)
 		  and ($2 <> '' or $1 = '' or workspace = $1)
-		order by created_at desc, id`, workspace, project)
+		  and ((archived_at is not null) = $3)
+		order by created_at desc, id`, filter.Workspace, filter.Project, filter.Archived)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
@@ -312,10 +313,35 @@ func (p *Postgres) RestartSession(ctx context.Context, id string) error {
 	return nil
 }
 
+// ArchiveSession stamps a session as put away. Nothing is deleted, which is the whole point: the row,
+// the conversation handle and the files on the host are all untouched, so restoring is one update.
+func (p *Postgres) ArchiveSession(ctx context.Context, id string) error {
+	return p.stampArchived(ctx, id, `archived_at = now()`)
+}
+
+// RestoreSession clears the stamp, bringing the thread back into the default listing.
+func (p *Postgres) RestoreSession(ctx context.Context, id string) error {
+	return p.stampArchived(ctx, id, `archived_at = null`)
+}
+
+// stampArchived is the one update both of those are. The clause is a constant from the two callers
+// above and never carries a value, so nothing here is built from input.
+func (p *Postgres) stampArchived(ctx context.Context, id, clause string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set `+clause+`, updated_at = now() where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("archive session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at
 		from sessions where `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -335,11 +361,12 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	var (
 		id, workspace, project, thread, status, modelSessionID string
 		createdAt, updatedAt                                   time.Time
+		archivedAt                                             *time.Time
 	)
-	if err := rows.Scan(&id, &workspace, &project, &thread, &status, &modelSessionID, &createdAt, &updatedAt); err != nil {
+	if err := rows.Scan(&id, &workspace, &project, &thread, &status, &modelSessionID, &createdAt, &updatedAt, &archivedAt); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
-	return &quaycrewv1.Session{
+	session := &quaycrewv1.Session{
 		Id:             id,
 		Workspace:      workspace,
 		Project:        project,
@@ -348,5 +375,9 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		ModelSessionId: modelSessionID,
 		CreatedAt:      timestamppb.New(createdAt),
 		UpdatedAt:      timestamppb.New(updatedAt),
-	}, nil
+	}
+	if archivedAt != nil {
+		session.ArchivedAt = timestamppb.New(*archivedAt)
+	}
+	return session, nil
 }

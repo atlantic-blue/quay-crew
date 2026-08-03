@@ -357,6 +357,24 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: current.sessionID})
 		return nil
 	})
+	sc.Step(`^the operator archives the session$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		_, w.lastErr = w.client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: current.sessionID})
+		return nil
+	})
+	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		_, w.lastErr = w.client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: current.sessionID})
+		return nil
+	})
 	sc.Step(`^the operator restarts a session that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: "ghost"})
@@ -526,6 +544,19 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		if got := len(resp.GetSessions()); got != want {
 			return fmt.Errorf("the workspace has %d sessions, want %d", got, want)
+		}
+		return nil
+	})
+	sc.Step(`^the workspace has (\d+) archived sessions$`, func(ctx context.Context, want int) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+			Workspace: w.workspaceID, Archived: true,
+		})
+		if err != nil {
+			return err
+		}
+		if got := len(resp.GetSessions()); got != want {
+			return fmt.Errorf("the workspace has %d archived sessions, want %d", got, want)
 		}
 		return nil
 	})

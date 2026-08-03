@@ -210,7 +210,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 
-		mine, err := s.ListSessions(ctx, "", first.GetId())
+		mine, err := s.ListSessions(ctx, store.SessionFilter{Project: first.GetId()})
 		if err != nil {
 			t.Fatalf("ListSessions by project: %v", err)
 		}
@@ -223,7 +223,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			}
 		}
 
-		all, err := s.ListSessions(ctx, "", "")
+		all, err := s.ListSessions(ctx, store.SessionFilter{})
 		if err != nil {
 			t.Fatalf("ListSessions all: %v", err)
 		}
@@ -277,6 +277,60 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if err := s.RestartSession(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("restarting a missing session returned %v, want ErrNotFound", err)
+		}
+	})
+
+	// Archiving is a stamp, not a delete, which is the only reason restoring can exist at all. The
+	// conversation handle is the thing worth checking: it is the only pointer to a conversation the
+	// model keeps on its own disk.
+	t.Run("an archived session leaves the default listing and comes back whole", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		kept, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b")
+		if err := s.RecordTurn(ctx, kept.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTurn: %v", err)
+		}
+
+		if err := s.ArchiveSession(ctx, kept.GetId()); err != nil {
+			t.Fatalf("ArchiveSession: %v", err)
+		}
+
+		live, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
+		if len(live) != 1 || live[0].GetId() != other.GetId() {
+			t.Fatalf("the default listing is %v, want only the live thread", ids(live))
+		}
+		archived, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId(), Archived: true})
+		if len(archived) != 1 || archived[0].GetId() != kept.GetId() {
+			t.Fatalf("the archived listing is %v, want only the archived thread", ids(archived))
+		}
+		if archived[0].GetArchivedAt() == nil {
+			t.Fatal("the archived session carries no archived_at, so nothing can say when it was put away")
+		}
+		// Still readable by id: it was hidden from a listing, not deleted.
+		if _, err := s.GetSession(ctx, kept.GetId()); err != nil {
+			t.Fatalf("an archived session cannot be fetched: %v", err)
+		}
+
+		if err := s.RestoreSession(ctx, kept.GetId()); err != nil {
+			t.Fatalf("RestoreSession: %v", err)
+		}
+		back, _ := s.GetSession(ctx, kept.GetId())
+		if back.GetArchivedAt() != nil {
+			t.Fatal("the restored session is still stamped as archived")
+		}
+		if back.GetModelSessionId() != "conversation-1" {
+			t.Fatalf("the conversation handle is %q, want it untouched", back.GetModelSessionId())
+		}
+		if live, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()}); len(live) != 2 {
+			t.Fatalf("the default listing is %v, want both threads back", ids(live))
+		}
+
+		for _, err := range []error{s.ArchiveSession(ctx, "ghost"), s.RestoreSession(ctx, "ghost")} {
+			if !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("acting on a missing session returned %v, want ErrNotFound", err)
+			}
 		}
 	})
 
@@ -458,7 +512,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("reopened project is named %q, want house bills", reopenedProject.GetName())
 		}
 
-		sessions, err := after.ListSessions(ctx, "", project.GetId())
+		sessions, err := after.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
 		if err != nil {
 			t.Fatalf("ListSessions after reopening: %v", err)
 		}
@@ -498,4 +552,14 @@ func newProject(t *testing.T, s store.Store, workspaceName, projectName string) 
 		t.Fatalf("CreateProject: %v", err)
 	}
 	return project
+}
+
+// ids names the sessions in a listing, so a failure says which threads came back rather than how
+// many.
+func ids(sessions []*quaycrewv1.Session) []string {
+	out := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		out = append(out, session.GetId())
+	}
+	return out
 }

@@ -84,6 +84,40 @@ Feature: Sessions run in isolated sandboxes
     When the operator restarts a session that does not exist
     Then the control plane refuses it as not found
 
+  # Archiving puts a thread away and keeps everything: the row, the conversation handle, the
+  # conversation store on the host and the project's files. Nothing is deleted, by anyone, here.
+  Scenario: An archived thread leaves the default listing and is in the archived one
+    Given a session started by dispatching "remember this"
+    When the operator archives the session
+    Then the workspace has 0 sessions
+    And the workspace has 1 archived sessions
+    And the session still holds the conversation the first turn started
+
+  Scenario: Archiving a running thread stops it and closes its sandbox
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    Then the session is reported as stopped
+    And the session's sandbox has been closed
+
+  Scenario: A restored thread is back in the default listing with its conversation
+    Given a session started by dispatching "remember this"
+    When the operator archives the session
+    And the operator restores the session
+    Then the workspace has 1 sessions
+    And the workspace has 0 archived sessions
+    And the session still holds the conversation the first turn started
+
+  Scenario: A thread that is not archived cannot be restored
+    Given a session started by dispatching "hello"
+    When the operator restores the session
+    Then the control plane refuses it as the wrong state
+
+  Scenario: Archiving a thread twice is refused rather than restamped
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator archives the session
+    Then the control plane refuses it as the wrong state
+
   Scenario: A turn for a project that does not exist is refused
     When the operator dispatches "hello" to project "ghost"
     Then the control plane refuses it as not found
