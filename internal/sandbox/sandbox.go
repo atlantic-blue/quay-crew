@@ -76,6 +76,10 @@ const (
 	// WorkingPath is the directory a turn runs in: the project's files, and the project memory the
 	// model reads as CLAUDE.md.
 	WorkingPath = "/home/agent/workspace"
+	// AttachedSessionName is what the operator's open conversation is called inside the sandbox. It
+	// is one per sandbox, and a sandbox holds one thread, so opening a thread twice lands in the one
+	// that is already running rather than starting a second beside it.
+	AttachedSessionName = "quay"
 )
 
 // ContainerPrefix is what a session's container name starts with, so ours are recognisable among

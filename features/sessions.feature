@@ -185,6 +185,7 @@ Feature: Sessions run in isolated sandboxes
     Then the control plane names the session's sandbox
     And the command resumes the conversation the turn started
     And the command runs in permission mode "acceptEdits"
+    And the command runs it inside a terminal the operator can leave
     And the answer carries no credential
 
   # Opening a thread has to be the same thread. One armed to skip permissions that asks anyway the

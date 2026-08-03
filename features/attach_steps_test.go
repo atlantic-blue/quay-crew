@@ -81,8 +81,26 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
 		// conversation-1 is what the recording runner hands back for a first turn.
-		if !strings.HasPrefix(line, "claude --resume conversation-1") {
+		if !strings.Contains(line, "claude --resume conversation-1") {
 			return fmt.Errorf("the command is %q, want it to resume the turn's conversation", line)
+		}
+		return nil
+	})
+
+	// Ending the conversation was the only way back to the console, so an open thread runs inside a
+	// terminal multiplexer in its sandbox: detaching leaves the model running and returns the
+	// operator to the list. Opening it again attaches to the one already there rather than starting a
+	// second beside it, which is what -A is for.
+	sc.Step(`^the command runs it inside a terminal the operator can leave$`, func(ctx context.Context) error {
+		a := attachFrom(ctx)
+		if a.err != nil {
+			return fmt.Errorf("attaching was refused: %w", a.err)
+		}
+		line := strings.Join(a.spec.GetArgv(), " ")
+		for _, want := range []string{"tmux new-session -A -s " + sandbox.AttachedSessionName, "claude --resume"} {
+			if !strings.Contains(line, want) {
+				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
+			}
 		}
 		return nil
 	})
