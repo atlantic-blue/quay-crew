@@ -271,6 +271,55 @@ func TestFeaturesNeedsNoControlPlane(t *testing.T) {
 	}
 }
 
+// TestTheOldFlagsAreRefusedRatherThanSwallowed is the gap that let a regression through: every test
+// written for #69 covered what the address form does, and none covered what happens when somebody
+// types the form it replaced. The answer was that `--project default` became the first two words of
+// the message, and the operator got an error about their workspace instead.
+func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "demo")
+	mustRun(t, client, "project", "create", "default")
+
+	for _, invocation := range [][]string{
+		{"dispatch", "--project", "default", "remember the number"},
+		{"dispatch", "--project=default", "remember the number"},
+		{"sessions", "--workspace", "demo"},
+		{"dispatch", "--thread", "abc123", "hello"},
+		{"secret", "set", "--workspace", "demo", "KEY", "value"},
+	} {
+		err := run(context.Background(), client, invocation, io.Discard)
+		if err == nil {
+			t.Fatalf("quay %s was accepted, want it refused", strings.Join(invocation, " "))
+		}
+		if !strings.Contains(err.Error(), "is gone") || !strings.Contains(err.Error(), "quay use") {
+			t.Fatalf("quay %s said %q, want it to name the flag and how to say it now",
+				strings.Join(invocation, " "), err)
+		}
+	}
+}
+
+// TestAnyOtherFlagIsRefusedToo, so the next thing that gets replaced by an address cannot repeat this.
+func TestAnyOtherFlagIsRefusedToo(t *testing.T) {
+	err := run(context.Background(), testClient(t), []string{"dispatch", "--force", "hello"}, io.Discard)
+	if err == nil {
+		t.Fatal("an unknown flag was accepted")
+	}
+	if !strings.Contains(err.Error(), "takes no flags") {
+		t.Fatalf("an unknown flag said %q, want it to say the tool takes none", err)
+	}
+}
+
+// TestAMessageIsStillAMessage: refusing flags must not refuse a hyphen in something you are saying.
+func TestAMessageIsStillAMessage(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "demo")
+	mustRun(t, client, "project", "create", "default")
+
+	if replied := mustRun(t, client, "dispatch", "the well-known -5 degrees case"); !strings.Contains(replied, "ok") {
+		t.Fatalf("a message with hyphens in it was refused: %q", replied)
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard); err == nil {
 		t.Fatal("unknown command = nil error, want error")
