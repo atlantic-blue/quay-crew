@@ -106,6 +106,74 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+
+	sc.Step(`^the console shows the session's project as "([^"]*)"$`, func(ctx context.Context, want string) error {
+		c := consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		// The project column is the second one the sessions resource declares.
+		const projectColumn = 1
+		if got := row.Cells[projectColumn]; got != want {
+			return fmt.Errorf("the console shows the project as %q, want the name %q", got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console shows the session identifier shortened$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		full, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		shown := row.Cells[0]
+		if shown == full.sessionID {
+			return fmt.Errorf("the console shows the whole identifier %q, want it shortened", shown)
+		}
+		if !strings.HasPrefix(full.sessionID, shown) {
+			return fmt.Errorf("the shortened identifier %q is not a prefix of %q", shown, full.sessionID)
+		}
+		// The row must still carry the whole thing, or every action on it breaks.
+		if row.ID != full.sessionID {
+			return fmt.Errorf("the row carries %q, want the whole identifier %q", row.ID, full.sessionID)
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator stops the selected session from the console$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		for _, action := range c.active.Actions {
+			if action.Label != "Stop" {
+				continue
+			}
+			if action.Run == nil {
+				return fmt.Errorf("the Stop action has nothing to run")
+			}
+			return action.Run(ctx, row)
+		}
+		return fmt.Errorf("the sessions view has no Stop action")
+	})
+}
+
+// onlyRow returns the single listed row, so a scenario asserting on "the session" cannot quietly
+// pass by looking at the first of several.
+func onlyRow(c *consoleWorld) (console.Row, error) {
+	if c.registry == nil {
+		return console.Row{}, fmt.Errorf("the console was not opened")
+	}
+	if len(c.rows) != 1 {
+		return console.Row{}, fmt.Errorf("the console lists %d rows, want exactly 1", len(c.rows))
+	}
+	return c.rows[0], nil
 }
 
 func expectRows(c *consoleWorld, resource string, want int) error {
