@@ -262,6 +262,31 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
 
+// AttachSession describes how to open a session's conversation.
+//
+// It returns the container and the command, and no credential. The conversation handle is a pointer
+// into the model's own store, not a secret, so the operator's environment supplies the subscription
+// token when they run it. Keeping the token out of this response is deliberate: a value the secrets
+// backend holds should not become readable through the API just because a client asks nicely.
+func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessionRequest) (*quaycrewv1.AttachSessionResponse, error) {
+	session, err := s.store.GetSession(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	if session.GetModelSessionId() == "" {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"session %s has no conversation yet: dispatch a turn to it first", req.GetId())
+	}
+	if session.GetStatus() == "stopped" {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"session %s is stopped, so its sandbox is gone", req.GetId())
+	}
+	return &quaycrewv1.AttachSessionResponse{
+		Sandbox: sandbox.ContainerName(session.GetId()),
+		Argv:    []string{"claude", "--resume", session.GetModelSessionId()},
+	}, nil
+}
+
 // StopSession marks a session stopped and tears down its sandbox.
 func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionRequest) (*quaycrewv1.StopSessionResponse, error) {
 	if err := s.store.StopSession(ctx, req.GetId()); err != nil {

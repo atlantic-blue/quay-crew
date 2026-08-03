@@ -69,6 +69,9 @@ var scenariosRun atomic.Int64
 type recordingRunner struct {
 	mu       sync.Mutex
 	requests []model.Request
+	// failNext makes the next turn fail, which is how a scenario gets a session that exists but has
+	// no conversation behind it.
+	failNext bool
 }
 
 var _ model.Runner = (*recordingRunner)(nil)
@@ -77,6 +80,10 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.requests = append(r.requests, req)
+	if r.failNext {
+		r.failNext = false
+		return model.Response{}, fmt.Errorf("the model refused this turn")
+	}
 	return model.Response{
 		Reply:          "you said: " + req.Text,
 		ModelSessionID: fmt.Sprintf("conversation-%d", len(r.requests)),
@@ -233,6 +240,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
 	initializeProjectSteps(sc)
+	initializeAttachSteps(sc)
 	initializeWorkspaceSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.

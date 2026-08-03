@@ -32,6 +32,7 @@ const (
 	ControlPlaneService_Dispatch_FullMethodName        = "/quaycrew.v1.ControlPlaneService/Dispatch"
 	ControlPlaneService_ListSessions_FullMethodName    = "/quaycrew.v1.ControlPlaneService/ListSessions"
 	ControlPlaneService_GetSession_FullMethodName      = "/quaycrew.v1.ControlPlaneService/GetSession"
+	ControlPlaneService_AttachSession_FullMethodName   = "/quaycrew.v1.ControlPlaneService/AttachSession"
 	ControlPlaneService_StopSession_FullMethodName     = "/quaycrew.v1.ControlPlaneService/StopSession"
 )
 
@@ -54,6 +55,7 @@ type ControlPlaneServiceClient interface {
 	Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error)
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
+	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
 	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
 }
 
@@ -195,6 +197,16 @@ func (c *controlPlaneServiceClient) GetSession(ctx context.Context, in *GetSessi
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AttachSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StopSessionResponse)
@@ -224,6 +236,7 @@ type ControlPlaneServiceServer interface {
 	Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error)
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
+	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
 	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
@@ -273,6 +286,9 @@ func (UnimplementedControlPlaneServiceServer) ListSessions(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachSession not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopSession not implemented")
@@ -532,6 +548,24 @@ func _ControlPlaneService_GetSession_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_AttachSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AttachSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AttachSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AttachSession(ctx, req.(*AttachSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_StopSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StopSessionRequest)
 	if err := dec(in); err != nil {
@@ -608,6 +642,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSession",
 			Handler:    _ControlPlaneService_GetSession_Handler,
+		},
+		{
+			MethodName: "AttachSession",
+			Handler:    _ControlPlaneService_AttachSession_Handler,
 		},
 		{
 			MethodName: "StopSession",

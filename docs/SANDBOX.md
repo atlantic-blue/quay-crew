@@ -80,3 +80,25 @@ CLAUDE_CODE_OAUTH_TOKEN=<token> go test -tags=integration -run TestClaudeCodeRun
 Continuous integration has no subscription, so this test skips there. The token delivery mechanism
 itself, that a value in the sandbox env reaches the process inside the container, is covered by
 `TestDockerProviderDeliversEnv`, which needs only Docker and does run in continuous integration.
+
+## Getting inside a conversation
+
+`quay dispatch` runs one turn and returns. To sit inside the conversation, with its history, and keep
+typing:
+
+```
+export CLAUDE_CODE_OAUTH_TOKEN=<token from step 1>
+quay sessions
+quay attach 5d013d07
+```
+
+or press `a` on a session in the console.
+
+This runs `claude --resume <conversation id>` inside that session's sandbox. The control plane says
+which container and which conversation, and deliberately returns **no credential**: a value the
+secrets backend holds should not become readable through the API just because a client asks. The
+token comes from your own environment, which is why the export above is needed even though the same
+token is already set as the workspace secret.
+
+Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
+shows you the conversation.

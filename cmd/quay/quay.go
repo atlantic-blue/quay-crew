@@ -27,6 +27,7 @@ commands:
   project list [--workspace <ref>]               list projects
   dispatch --project <ref> <text>                start or continue a thread (--thread <id> continues)
   sessions [--workspace <ref>] [--project <ref>] list sessions
+  attach <session id>                            open a session's conversation, with its history
   secret set --workspace <ref> <key> <value>     set a workspace secret (for example the model token)
 
 a <ref> is an id or a name. Add --workspace to a project reference when the name is ambiguous.
@@ -44,6 +45,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runProject(ctx, client, args[1:], out)
 	case "dispatch":
 		return runDispatch(ctx, client, args[1:], out)
+	case "attach":
+		return runAttach(ctx, client, args[1:], out)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
 	case "secret":

@@ -3,18 +3,16 @@ package console
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-// sandboxPrefix is how internal/sandbox names a session's container. Shelling in derives the name
-// from the session id rather than asking, which is why it works before the sandbox labelling in
-// issue 35 lands. When Session carries a sandbox id, use that instead.
-const sandboxPrefix = "quaycrew-"
 
 // Workspaces lists the workspaces the control plane knows about, and drills into their sessions.
 func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
@@ -178,13 +176,25 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 	return []Action{
 		{
+			Key:   "a",
+			Label: "Attach",
+			Shell: func(row Row) *exec.Cmd {
+				if row.ID == "" {
+					return nil
+				}
+				// The conversation, not the room. The control plane is asked where it is, so the
+				// console never has to know how a sandbox is named or how a resume works.
+				return attachCommand(client, row.ID)
+			},
+		},
+		{
 			Key:   "s",
 			Label: "Shell",
 			Shell: func(row Row) *exec.Cmd {
 				if row.ID == "" {
 					return nil
 				}
-				return exec.Command("docker", "exec", "-it", sandboxPrefix+row.ID, "sh")
+				return exec.Command("docker", "exec", "-it", sandbox.ContainerName(row.ID), "sh")
 			},
 		},
 		{
@@ -199,6 +209,29 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 	}
+}
+
+// attachCommand asks the control plane how to open a session's conversation and builds the command.
+// A session with no conversation yet, or a stopped one, yields nil, which the console reports rather
+// than launching something that fails in a suspended terminal.
+func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string) *exec.Cmd {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
+	if err != nil {
+		return nil
+	}
+	token := os.Getenv(model.ClaudeCodeOAuthTokenEnv)
+	if token == "" {
+		return nil
+	}
+
+	args := []string{"exec", "--interactive", "--tty",
+		"--env", model.ClaudeCodeOAuthTokenEnv + "=" + token,
+		spec.GetSandbox()}
+	args = append(args, spec.GetArgv()...)
+	return exec.Command("docker", args...)
 }
 
 // stateFromStatus maps the control plane's session status onto a colour. An unrecognised status is

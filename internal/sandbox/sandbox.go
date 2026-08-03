@@ -36,3 +36,12 @@ type Sandbox interface {
 type Provider interface {
 	Create(ctx context.Context, id string) (Sandbox, error)
 }
+
+// ContainerPrefix is what a session's container name starts with, so ours are recognisable among
+// everything else on the daemon.
+const ContainerPrefix = "quaycrew-"
+
+// ContainerName is the container a session's sandbox runs in. Anything that needs to reach into a
+// session from outside the provider (attaching to its conversation, shelling in, reaping strays)
+// derives the name from here rather than rebuilding it.
+func ContainerName(sessionID string) string { return ContainerPrefix + sessionID }
