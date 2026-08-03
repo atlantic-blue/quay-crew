@@ -103,9 +103,21 @@ widens who can see it rather than whether it is there at all. The alternative, h
 through the control plane API on request, was rejected: a secret the backend holds should not become
 readable by any client that asks.
 
+The image also ships past the CLI's first run: onboarding and the workspace trust prompt are marked
+done. A turn is not interactive and never meets either, but attaching is, and a sandbox is a fresh
+container every time, so without this the operator lands in a theme picker instead of their
+conversation. It reads exactly like a broken token, because nothing gets far enough to authenticate.
+
 One consequence to know: a token set **after** a session's first turn does not reach that session's
 existing sandbox. Turns still work, because a turn also passes the environment, but attaching to that
-session will not authenticate. Stop the session to get a fresh sandbox.
+session will not authenticate. Attaching to that session will not authenticate. Do **not** stop the session to fix it: stopping runs
+`docker rm -f`, and the conversation transcript lives at `/home/agent/.claude/projects/` inside that
+container, so stopping destroys the conversation you were trying to reach. Until the sandbox state
+sits on a volume, reach an older session with the token passed on the command instead:
+
+```
+docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude --resume <conversation id>
+```
 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
