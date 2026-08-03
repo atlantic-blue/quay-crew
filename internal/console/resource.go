@@ -54,11 +54,15 @@ type Lister func(ctx context.Context, parent string) ([]Row, error)
 //
 // Exactly one of Run and Shell is set. Run performs the action and returns. Shell returns a command
 // to run with the console suspended, which is how shelling into a session's container works.
+//
+// Shell returns an error rather than a nil command when it cannot proceed, so the operator is told
+// why. "Nothing to run" is not a reason, and the reasons here are ones they can act on: a session
+// with no conversation yet, or one that has been stopped.
 type Action struct {
 	Key   string
 	Label string
 	Run   func(ctx context.Context, row Row) error
-	Shell func(row Row) *exec.Cmd
+	Shell func(row Row) (*exec.Cmd, error)
 }
 
 // Resource is one thing the console can list. Adding a view is adding one of these.

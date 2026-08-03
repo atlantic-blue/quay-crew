@@ -176,9 +176,9 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		{
 			Key:   "a",
 			Label: "Attach",
-			Shell: func(row Row) *exec.Cmd {
+			Shell: func(row Row) (*exec.Cmd, error) {
 				if row.ID == "" {
-					return nil
+					return nil, fmt.Errorf("no session selected")
 				}
 				// The conversation, not the room. The control plane is asked where it is, so the
 				// console never has to know how a sandbox is named or how a resume works.
@@ -188,11 +188,11 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		{
 			Key:   "s",
 			Label: "Shell",
-			Shell: func(row Row) *exec.Cmd {
+			Shell: func(row Row) (*exec.Cmd, error) {
 				if row.ID == "" {
-					return nil
+					return nil, fmt.Errorf("no session selected")
 				}
-				return exec.Command("docker", "exec", "-it", sandbox.ContainerName(row.ID), "sh")
+				return exec.Command("docker", "exec", "-it", sandbox.ContainerName(row.ID), "sh"), nil
 			},
 		},
 		{
@@ -210,20 +210,22 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 }
 
 // attachCommand asks the control plane how to open a session's conversation and builds the command.
-// A session with no conversation yet, or a stopped one, yields nil, which the console reports rather
-// than launching something that fails in a suspended terminal.
-func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string) *exec.Cmd {
+//
+// The control plane's reason for refusing is passed straight through, because a session with no
+// conversation yet or a stopped one are both things the operator can act on, and "nothing to run"
+// tells them neither.
+func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string) (*exec.Cmd, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("attach: %w", err)
 	}
 	// No credential here: the sandbox already carries the workspace's environment.
 	args := []string{"exec", "--interactive", "--tty", spec.GetSandbox()}
 	args = append(args, spec.GetArgv()...)
-	return exec.Command("docker", args...)
+	return exec.Command("docker", args...), nil
 }
 
 // stateFromStatus maps the control plane's session status onto a colour. An unrecognised status is
