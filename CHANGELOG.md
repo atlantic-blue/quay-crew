@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The console says when the control plane is older than the tool**, rather than quietly showing four
+  fewer lines: `Crew: older than this tool, run make upgrade`. Installing the tool does not rebuild the
+  stack, so this is the normal state of things after an upgrade, and silence reads as the console being
+  broken. ([#81](https://github.com/atlantic-blue/quay-crew/pull/81))
 - **The console header reads like k9s**: the status block says which build, which control plane, where
   you are standing, and what a turn would run in; this view's own commands sit beside it as
   `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `THREAD↑`;

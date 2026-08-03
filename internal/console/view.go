@@ -136,6 +136,9 @@ func (m Model) statusLines() []string {
 	if m.info.Store != "" {
 		add("State", statePhrase(m.info.StateKept))
 	}
+	if m.info.Behind {
+		add("Crew", alert.Render("older than this tool, run make upgrade"))
+	}
 	if len(lines) == 0 {
 		lines = append(lines, statusKey.Render("Quay:    ")+faint.Render("asking what this crew is running"))
 	}
