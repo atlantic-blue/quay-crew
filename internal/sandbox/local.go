@@ -14,10 +14,13 @@ type LocalProvider struct{}
 
 var _ Provider = LocalProvider{}
 
-// Create returns a host backed sandbox. The id is ignored; there is nothing to provision.
-func (LocalProvider) Create(context.Context, string) (Sandbox, error) { return localSandbox{}, nil }
+// Create returns a host backed sandbox. The id is ignored; there is nothing to provision. The
+// environment is kept and applied to every command, standing in for a container's own environment.
+func (LocalProvider) Create(_ context.Context, _ string, env []string) (Sandbox, error) {
+	return localSandbox{env: env}, nil
+}
 
-type localSandbox struct{}
+type localSandbox struct{ env []string }
 
 var _ Sandbox = localSandbox{}
 
@@ -31,14 +34,17 @@ func (p *cmdProcess) Stdout() io.Reader { return p.stdout }
 func (p *cmdProcess) Wait() error       { return p.cmd.Wait() }
 
 // Exec runs spec.Argv on the host and streams its stdout.
-func (localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
+func (l localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 	if len(spec.Argv) == 0 {
 		return nil, fmt.Errorf("sandbox: empty argv")
 	}
 	cmd := exec.CommandContext(ctx, spec.Argv[0], spec.Argv[1:]...)
 	cmd.Dir = spec.Workdir
-	if len(spec.Env) > 0 {
-		cmd.Env = append(os.Environ(), spec.Env...)
+	// The sandbox's own environment first, then the command's, so a per turn value wins the way it
+	// would inside a container.
+	if len(l.env) > 0 || len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), l.env...)
+		cmd.Env = append(cmd.Env, spec.Env...)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

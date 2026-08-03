@@ -115,3 +115,32 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 }
+
+// initializeSandboxEnvSteps covers what a session's sandbox is created with.
+func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the session's sandbox was created with the subscription token "([^"]*)"$`,
+		func(ctx context.Context, want string) error {
+			w := worldFrom(ctx)
+			if len(w.provider.CreatedEnv) != 1 {
+				return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.CreatedEnv))
+			}
+			entry := "CLAUDE_CODE_OAUTH_TOKEN=" + want
+			for _, got := range w.provider.CreatedEnv[0] {
+				if got == entry {
+					return nil
+				}
+			}
+			return fmt.Errorf("the sandbox was created with %v, want it to carry %s", w.provider.CreatedEnv[0], entry)
+		})
+
+	sc.Step(`^the session's sandbox was created with no environment$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.CreatedEnv) != 1 {
+			return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.CreatedEnv))
+		}
+		if len(w.provider.CreatedEnv[0]) != 0 {
+			return fmt.Errorf("the sandbox was created with %v, want nothing", w.provider.CreatedEnv[0])
+		}
+		return nil
+	})
+}

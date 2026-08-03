@@ -18,7 +18,7 @@ func TestDockerProvider(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	box, err := sandbox.DockerProvider{Image: "busybox:latest"}.Create(ctx, "itest-1")
+	box, err := sandbox.DockerProvider{Image: "busybox:latest"}.Create(ctx, "itest-1", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestDockerProviderDeliversEnv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	box, err := sandbox.DockerProvider{Image: "busybox:latest"}.Create(ctx, "itest-env")
+	box, err := sandbox.DockerProvider{Image: "busybox:latest"}.Create(ctx, "itest-env", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

@@ -333,6 +333,18 @@ sequenceDiagram
 The scheduler is an implementation detail of the `wait` node, not an automation system of its own. It
 delivers timer events onto the log and nothing more.
 
+### What a sandbox carries
+
+The control plane sets the workspace's environment on the sandbox when it creates it, not only on
+each turn. That is what lets the operator attach to a session's conversation, or shell in and run the
+model by hand, without any tool carrying a credential to each command.
+
+The cost is stated plainly: those values are readable for the life of the container, for example
+through `docker inspect`. They were already reachable from inside the sandbox, which is where the
+model runs, so this changes who can see them rather than whether they are present. The alternative
+considered and rejected was returning the value through the API on request, which would make a secret
+the backend holds readable by any client that asks for it.
+
 ## Secrets
 
 Secrets are never stored in the repository, and the code has no built in knowledge of any.

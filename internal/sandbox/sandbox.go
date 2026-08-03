@@ -33,8 +33,13 @@ type Sandbox interface {
 }
 
 // Provider mints a Sandbox per session, keyed by the session id.
+//
+// env is set on the sandbox itself, so every process started inside it inherits the values. That is
+// what lets an operator attach to a session's conversation directly, rather than the tool having to
+// carry a credential to each command it runs. The cost is that these values are readable for the
+// life of the container, for example through docker inspect, so pass only what the session needs.
 type Provider interface {
-	Create(ctx context.Context, id string) (Sandbox, error)
+	Create(ctx context.Context, id string, env []string) (Sandbox, error)
 }
 
 // ContainerPrefix is what a session's container name starts with, so ours are recognisable among

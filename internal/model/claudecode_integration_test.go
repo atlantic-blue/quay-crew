@@ -37,7 +37,7 @@ func TestClaudeCodeRunnerRealTurn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, "claude-itest")
+	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, "claude-itest", nil)
 	if err != nil {
 		t.Fatalf("create sandbox: %v", err)
 	}
