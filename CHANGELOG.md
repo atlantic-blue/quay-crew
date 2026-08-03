@@ -8,6 +8,9 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **Opening a thread runs in the mode that thread is set to.** The attached session carried no mode at
+  all, so a thread armed to skip permissions stopped and asked the moment you opened it, which reads as
+  the toggle not working. ([#107](https://github.com/atlantic-blue/quay-crew/pull/107))
 - **The daemon is the source of truth about containers, not a map in the control plane.** It remembered
   every sandbox it had made and trusted that memory forever, so anything that removed a container
   behind its back left a handle pointing at nothing and handed the operator a name Docker had never

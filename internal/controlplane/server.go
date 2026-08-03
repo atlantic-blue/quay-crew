@@ -430,9 +430,13 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if _, err := s.sandboxFor(ctx, session); err != nil {
 		return nil, status.Errorf(codes.Internal, "start sandbox: %v", err)
 	}
+	// The same mode the thread's turns run in. Without it an attached session runs as whatever the
+	// model defaults to, so a thread armed to skip permissions still stops and asks the moment the
+	// operator opens it, which reads as the toggle not working.
 	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
-		Argv:    []string{"claude", "--resume", session.GetModelSessionId()},
+		Argv: []string{"claude", "--resume", session.GetModelSessionId(),
+			"--permission-mode", permissionModeOf(session)},
 	}, nil
 }
 

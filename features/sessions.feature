@@ -184,7 +184,16 @@ Feature: Sessions run in isolated sandboxes
     When the operator asks how to attach to the session
     Then the control plane names the session's sandbox
     And the command resumes the conversation the turn started
+    And the command runs in permission mode "acceptEdits"
     And the answer carries no credential
+
+  # Opening a thread has to be the same thread. One armed to skip permissions that asks anyway the
+  # moment it is opened reads as the toggle not working.
+  Scenario: Opening a thread runs in the mode that thread is set to
+    Given a session started by dispatching "remember this"
+    When the thread is set to permission mode "bypassPermissions"
+    And the operator asks how to attach to the session
+    Then the command runs in permission mode "bypassPermissions"
 
   # The live sandboxes are a map in the control plane's process, so a restart empties it while the row
   # still says idle. Answering from the row alone handed the operator a container name the daemon had
