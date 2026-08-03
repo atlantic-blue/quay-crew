@@ -11,6 +11,10 @@ GOBIN := $(shell go env GOPATH)/bin
 # always leaves you running the build you just made rather than an older copy earlier on your PATH.
 BINDIR ?=
 
+# VERSION is what a built binary reports for itself: the commit it came from, marked dirty when the
+# checkout has uncommitted changes, because a build from an edited tree is not that commit.
+VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --quiet 2>/dev/null || echo -dirty)
+
 # The default sandbox image: a container with the Claude Code CLI, built locally with `make
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
@@ -60,8 +64,8 @@ install:
 		if [ -n "$$existing" ]; then dir="$$(dirname "$$existing")"; else dir="$(GOBIN)"; fi; \
 	fi; \
 	mkdir -p "$$dir"; \
-	go build -o "$$dir/quay" ./cmd/quay; \
-	echo "installed quay to $$dir/quay, built from $$(git rev-parse --short HEAD) $$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M')"; \
+	go build -ldflags "-X main.version=$(VERSION)" -o "$$dir/quay" ./cmd/quay; \
+	echo "installed quay to $$dir/quay, built from $(VERSION)"; \
 	found="$$(command -v quay 2>/dev/null || true)"; \
 	if [ -z "$$found" ]; then \
 		echo "note: $$dir is not on your PATH, so run $$dir/quay directly or add it"; \

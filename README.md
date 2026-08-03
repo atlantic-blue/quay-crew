@@ -31,9 +31,9 @@ read, or run with `make features`.
 - **You can get inside the conversation.** `quay attach <session>` puts you in it with its history;
   shelling in with `s` shows you the room instead.
 - **`quay` with no arguments opens a console**, in the shape of k9s: `:` to switch resource, `/` to
-  filter, enter to drill in, `s` to shell in, `x` to stop a session. It opens with a status block
-  naming the crew you are connected to and what a turn there would run in, so you can see which one
-  you are about to act on.
+  filter, enter to drill in, `s` to shell in, `x` to stop a session, `?` for every key. It opens with
+  a status block naming the build, the crew you are connected to, where you are standing and what a
+  turn there would run in, so you can see which one you are about to act on.
 - **Secrets are per workspace**, held by a secrets backend and injected into the session's sandbox. The
   event log records a reference, never a value.
 

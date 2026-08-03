@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The console header reads like k9s**: the status block says which build, which control plane, where
+  you are standing, and what a turn would run in; this view's own commands sit beside it as
+  `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `THREAD↑`;
+  and the wordmark sits on the right when there is room for it.
+  ([#77](https://github.com/atlantic-blue/quay-crew/pull/77))
+- **`quay version`**, and every build stamped with the commit it came from, marked dirty when the
+  checkout had uncommitted changes. Part of #74; `quay update` and release tags are still open.
+  ([#77](https://github.com/atlantic-blue/quay-crew/pull/77))
 - **`make install` installs over the copy your shell actually runs**, and says which commit it built,
   so a stale binary earlier on your PATH cannot quietly keep serving you yesterday's tool. Set
   `BINDIR` to put it somewhere specific. ([#73](https://github.com/atlantic-blue/quay-crew/pull/73))
