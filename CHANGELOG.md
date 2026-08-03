@@ -12,6 +12,11 @@ read, or run with `make features`.
   fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool
   does not rebuild the stack, so this is the normal state of things after an upgrade, and silence reads
   as the console being broken. ([#81](https://github.com/atlantic-blue/quay-crew/pull/81))
+- **`quay features`**, and a `features` view in the console: what this build can do and what proves it,
+  read from the behaviour specification embedded in the binary. It asks the control plane nothing,
+  because a capability belongs to the build rather than to a running stack, and the question is usually
+  asked by somebody who has not started one yet. A hand written list would drift from the scenarios;
+  this one cannot. ([#82](https://github.com/atlantic-blue/quay-crew/pull/82))
 - **`make upgrade`**: fetch, fast forward, rebuild the tool and the images, restart the stack. One
   command for "bring everything to the latest", because `make install` only ever builds the tool and a
   new tool against an old control plane is the mismatch that costs an afternoon. It refuses on a
