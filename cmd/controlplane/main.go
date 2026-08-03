@@ -82,10 +82,13 @@ func main() {
 		Provider: provider,
 		Secrets:  secrets.NewMemory(),
 		Info: controlplane.Info{
-			Model:     modelKind,
-			Sandbox:   sandboxKind,
-			Store:     storeKind,
-			StateKept: storage.Dir != "",
+			Model:   modelKind,
+			Sandbox: sandboxKind,
+			Store:   storeKind,
+			State:   stateKind(storage),
+			// Nothing publishes to or consumes the event log yet, so there is no engine to name.
+			// It becomes one when a channel or the projection is wired to it.
+			Events: "",
 		},
 	})
 	grpcServer := grpc.NewServer()
@@ -129,6 +132,16 @@ func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (st
 	}
 	logger.Info("store ready", "backend", "postgres")
 	return durable, "postgres", nil
+}
+
+// stateKind names where a session's conversation and files are kept, for the status block. It is
+// deliberately not a promise that any particular thread's sandbox has the mounts: a sandbox created
+// before they were configured does not, which is why an upgrade clears the old ones.
+func stateKind(storage sandbox.Storage) string {
+	if storage.Dir == "" {
+		return ""
+	}
+	return "host directory " + storage.Host
 }
 
 func splitAndTrim(csv string) []string {

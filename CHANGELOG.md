@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The status block says what is true, in engines.** `Sandbox engine`, `Store engine` and
+  `Events engine`, `Workspace` and `Project` rather than a borrowed `Context`, and the state line names
+  where a conversation is kept instead of promising it survives. The events line says
+  `none, nothing reads or writes the log yet`, which is the truth: Redpanda is in the compose stack and
+  no service is connected to it. ([#87](https://github.com/atlantic-blue/quay-crew/pull/87))
 - **`make upgrade` brings the stack back the way you configured it**, and clears the sandboxes from
   before the upgrade. Two bugs: it restarted compose with the defaults, so a stack started with
   `QC_MODEL=claude-code` came back running `echo`, and it left every old sandbox running, which blocks

@@ -48,12 +48,14 @@ type Info struct {
 	Version string
 	// Address is the control plane this console is pointed at.
 	Address string
-	// Context is where the operator is standing, "me/house-bills", from their current context.
-	Context   string
+	// Workspace and Project are where the operator is standing, from their current context.
+	Workspace string
+	Project   string
 	Model     string
 	Sandbox   string
 	Store     string
-	StateKept bool
+	State     string
+	Events    string
 	// Behind says the control plane is older than this tool: old enough that it cannot answer what it
 	// is running. Everything else in here is then blank, and the console has to say why rather than
 	// quietly showing less.

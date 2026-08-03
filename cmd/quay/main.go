@@ -54,8 +54,9 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		current = workspace.Path{}
 	}
 	return console.Run(ctx, client, console.Info{
-		Version: version,
-		Address: addr,
-		Context: current.String(),
+		Version:   version,
+		Address:   addr,
+		Workspace: current.Workspace,
+		Project:   current.Project,
 	})
 }

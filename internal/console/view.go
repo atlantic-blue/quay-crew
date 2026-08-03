@@ -124,34 +124,46 @@ func (m Model) statusLines() []string {
 	lines := make([]string, 0, 6)
 	add := func(key, value string) {
 		if value != "" {
-			lines = append(lines, statusKey.Render(pad(key+":", 9))+value)
+			lines = append(lines, statusKey.Render(pad(key+":", 16))+value)
 		}
 	}
 	add("Version", m.info.Version)
 	add("Address", m.info.Address)
-	add("Context", m.info.Context)
+	add("Workspace", m.info.Workspace)
+	add("Project", m.info.Project)
 	add("Model", m.info.Model)
-	add("Sandbox", m.info.Sandbox)
-	add("Store", m.info.Store)
+	add("Sandbox engine", m.info.Sandbox)
+	add("Store engine", m.info.Store)
 	if m.info.Store != "" {
-		add("State", statePhrase(m.info.StateKept))
+		add("Events engine", eventsPhrase(m.info.Events))
+		add("State", statePhrase(m.info.State))
 	}
 	if m.info.Behind {
 		add("Quay", alert.Render("this control plane is older than the tool, run make upgrade"))
 	}
 	if len(lines) == 0 {
-		lines = append(lines, statusKey.Render(pad("Quay:", 9))+faint.Render("asking what this control plane is running"))
+		lines = append(lines, statusKey.Render(pad("Quay:", 16))+faint.Render("asking what this control plane is running"))
 	}
 	return lines
 }
 
-// statePhrase says what happens to a conversation when its container is replaced, in words rather
-// than a true or a false, because that is the thing the operator actually needs to know.
-func statePhrase(kept bool) string {
-	if kept {
-		return "kept on the host"
+// statePhrase says where a conversation is kept. Empty means nowhere: it lives in the container and
+// dies with it, which is worth saying in red because it is the difference between a thread you can
+// come back to and one you cannot.
+func statePhrase(where string) string {
+	if where == "" {
+		return alert.Render("in the container, lost when it is replaced")
 	}
-	return alert.Render("lost with the container")
+	return where
+}
+
+// eventsPhrase names the event log, and says so plainly when nothing is connected to it rather than
+// letting an empty column read as "fine".
+func eventsPhrase(engine string) string {
+	if engine == "" {
+		return faint.Render("none, nothing reads or writes the log yet")
+	}
+	return engine
 }
 
 // trail is what was drilled through to get here, named rather than identified.

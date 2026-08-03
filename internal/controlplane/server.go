@@ -35,8 +35,11 @@ type Info struct {
 	Sandbox string
 	// Store is where workspaces and sessions are kept, for example "postgres".
 	Store string
-	// StateKept is true when a conversation lives outside its container and so survives it.
-	StateKept bool
+	// State is where a conversation and a project's files are kept, for example "host directory".
+	// Empty means they live in the container and are destroyed with it.
+	State string
+	// Events is the event log a turn is recorded on. Empty means nothing is connected to it.
+	Events string
 }
 
 // Config is everything the control plane is built from. It is a struct rather than a parameter list
@@ -79,10 +82,11 @@ func NewServer(cfg Config) *Server {
 // GetInfo reports what this control plane is running.
 func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quaycrewv1.GetInfoResponse, error) {
 	return &quaycrewv1.GetInfoResponse{
-		Model:     s.info.Model,
-		Sandbox:   s.info.Sandbox,
-		Store:     s.info.Store,
-		StateKept: s.info.StateKept,
+		Model:   s.info.Model,
+		Sandbox: s.info.Sandbox,
+		Store:   s.info.Store,
+		State:   s.info.State,
+		Events:  s.info.Events,
 	}, nil
 }
 
