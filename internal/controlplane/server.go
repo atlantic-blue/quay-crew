@@ -49,6 +49,9 @@ type Config struct {
 	Runner   model.Runner
 	Provider sandbox.Provider
 	Secrets  secrets.Store
+	// Storage is where a workspace's conversation store lives on the host. The control plane reads it
+	// to tell a thread whose conversation is still there from one whose handle outlived it.
+	Storage sandbox.Storage
 	// Info describes the three above in words, for the console's status block.
 	Info Info
 }
@@ -60,6 +63,7 @@ type Server struct {
 	secrets  secrets.Store
 	runner   model.Runner
 	provider sandbox.Provider
+	storage  sandbox.Storage
 	info     Info
 
 	mu        sync.Mutex
@@ -74,6 +78,7 @@ func NewServer(cfg Config) *Server {
 		secrets:   cfg.Secrets,
 		runner:    cfg.Runner,
 		provider:  cfg.Provider,
+		storage:   cfg.Storage,
 		info:      cfg.Info,
 		sandboxes: make(map[string]sandbox.Sandbox),
 	}
@@ -362,6 +367,15 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"session %s is archived: restore it first", req.GetId())
+	}
+	// A handle can outlive what it points at: every conversation from a sandbox created before state
+	// was kept on the host died with that container, while the row kept the handle. Resuming one of
+	// those prints "No conversation found" and exits, which from the console looks like nothing
+	// happening at all, so say it here instead of starting a container to fail inside.
+	if !s.storage.HasConversation(session.GetWorkspace(), session.GetModelSessionId()) {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"session %s: its conversation is gone, it predates state on the host. Dispatch a turn to start a new one",
+			req.GetId())
 	}
 	// Make sure there is something to attach to. The live sandboxes are a map in this process, so a
 	// restart empties it while the row still says idle, and answering from the row alone hands the

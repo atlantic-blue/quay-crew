@@ -81,6 +81,7 @@ func main() {
 		Runner:   runner,
 		Provider: provider,
 		Secrets:  secrets.NewMemory(),
+		Storage:  storage,
 		Info: controlplane.Info{
 			Model:   modelKind,
 			Sandbox: sandboxKind,
