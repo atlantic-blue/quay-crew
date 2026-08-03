@@ -608,8 +608,20 @@ func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
 	}
 }
 
-// TestTheWordmarkGivesWayToTheRows: branding is the first thing to drop when the window is small.
-func TestTheWordmarkGivesWayToTheRows(t *testing.T) {
+// TestTheWordmarkIsThereBeforeTheCrewAnswers is how it went missing: against a control plane too old
+// to say what it is running, the status block is three lines, and the mark is six.
+func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, tea.WindowSizeMsg{Width: 150, Height: 30})
+	model, _ = update(t, model, infoMsg{info: Info{Version: "709b79e", Address: "localhost:50051", Context: "demo/default"}})
+
+	if !strings.Contains(model.View(), logo[0]) {
+		t.Fatalf("the wordmark is missing when the status block is short:\n%s", model.View())
+	}
+}
+
+// TestTheWordmarkGivesWayToASmallWindow: branding is the first thing to drop when there is no room.
+func TestTheWordmarkGivesWayToASmallWindow(t *testing.T) {
 	full := newTestModel(t, staticResource("sessions"))
 	full, _ = update(t, full, tea.WindowSizeMsg{Width: 140, Height: 30})
 	full, _ = update(t, full, infoMsg{info: Info{
@@ -622,6 +634,12 @@ func TestTheWordmarkGivesWayToTheRows(t *testing.T) {
 	narrow, _ := update(t, full, tea.WindowSizeMsg{Width: 70, Height: 30})
 	if strings.Contains(narrow.View(), logo[0]) {
 		t.Fatalf("a narrow window still carries the wordmark:\n%s", narrow.View())
+	}
+
+	// And a short one keeps its rows rather than its branding.
+	short, _ := update(t, full, tea.WindowSizeMsg{Width: 140, Height: 12})
+	if strings.Contains(short.View(), logo[0]) {
+		t.Fatalf("a short window spends its rows on the wordmark:\n%s", short.View())
 	}
 }
 

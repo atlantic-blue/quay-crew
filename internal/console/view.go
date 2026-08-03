@@ -88,12 +88,12 @@ var logo = []string{
 	"     ▀▀                            ",
 }
 
-// withLogo puts the wordmark against the right edge, and leaves it out rather than making room for
-// it: on a narrow window, or a header shorter than the mark, the rows matter more than the branding.
+// withLogo puts the wordmark against the right edge, growing the header to fit it when the header is
+// shorter, which it is against a control plane too old to say what it is running.
+//
+// It gives way rather than pushing: on a window too narrow to hold it beside the status block, or too
+// short to spare the rows, the rows matter more than the branding and the mark is simply not drawn.
 func (m Model) withLogo(lines []string) []string {
-	if len(lines) < len(logo) {
-		return lines
-	}
 	room := 0
 	for _, line := range lines {
 		if width := lipgloss.Width(line); width > room {
@@ -103,7 +103,14 @@ func (m Model) withLogo(lines []string) []string {
 	if m.width-room-2 < lipgloss.Width(logo[0]) {
 		return lines
 	}
+	// The header, the panel's frame and header, the footer, and at least a few rows to look at.
+	if m.height-len(logo)-4 < 3 {
+		return lines
+	}
 
+	for len(lines) < len(logo) {
+		lines = append(lines, "")
+	}
 	for index := range logo {
 		lines[index] = pad(lines[index], m.width-lipgloss.Width(logo[index])) + mark.Render(logo[index])
 	}
