@@ -48,8 +48,11 @@ upgrade:
 		exit 1; \
 	fi; \
 	before="$$(git rev-parse --short HEAD)"; \
-	git fetch origin; \
-	git merge --ff-only "origin/$(UPGRADE_BRANCH)"; \
+	git fetch origin || { echo "refusing: could not reach origin, so this would build whatever you already had."; exit 1; }; \
+	git merge --ff-only "origin/$(UPGRADE_BRANCH)" || { \
+		echo "refusing: cannot fast forward onto origin/$(UPGRADE_BRANCH), so this is not the newest build."; \
+		exit 1; \
+	}; \
 	after="$$(git rev-parse --short HEAD)"; \
 	if [ "$$before" = "$$after" ]; then \
 		echo "already on the newest build ($$after)"; \
