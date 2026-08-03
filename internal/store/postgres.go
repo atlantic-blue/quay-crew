@@ -135,21 +135,103 @@ func (p *Postgres) AttachChannel(ctx context.Context, workspace, id, kind string
 	return &quaycrewv1.Channel{Workspace: workspace, Id: id, Kind: kind}, nil
 }
 
-// FindOrCreateSession returns the workspace's session for a thread, creating it on first use.
-//
-// The insert races with any other caller dispatching to the same thread, so it defers to the unique
-// constraint on (workspace, thread_id) and reads the winner back rather than trusting a prior select.
-func (p *Postgres) FindOrCreateSession(ctx context.Context, workspace, thread string) (*quaycrewv1.Session, error) {
+// CreateProject adds a body of work to a live workspace.
+func (p *Postgres) CreateProject(ctx context.Context, workspace, name string) (*quaycrewv1.Project, error) {
 	if _, err := p.GetWorkspace(ctx, workspace); err != nil {
 		return nil, err
 	}
+	var (
+		id        = NewID()
+		createdAt time.Time
+	)
+	err := p.pool.QueryRow(ctx,
+		`insert into projects (id, workspace, name) values ($1, $2, $3) returning created_at`,
+		id, workspace, name,
+	).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("create project: %w", err)
+	}
+	return &quaycrewv1.Project{Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt)}, nil
+}
+
+// GetProject returns a live project whose workspace is also live.
+func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error) {
+	var (
+		workspace, name string
+		createdAt       time.Time
+	)
+	// The join is what stops a project outliving the workspace it belongs to.
+	err := p.pool.QueryRow(ctx, `
+		select p.workspace, p.name, p.created_at
+		from projects p join workspaces w on w.id = p.workspace
+		where p.id = $1 and p.deleted_at is null and w.deleted_at is null`, id,
+	).Scan(&workspace, &name, &createdAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get project: %w", err)
+	}
+	return &quaycrewv1.Project{Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt)}, nil
+}
+
+// ListProjects returns live projects, filtered to one workspace when set, newest first.
+func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error) {
+	rows, err := p.pool.Query(ctx, `
+		select p.id, p.workspace, p.name, p.created_at
+		from projects p join workspaces w on w.id = p.workspace
+		where p.deleted_at is null and w.deleted_at is null and ($1 = '' or p.workspace = $1)
+		order by p.created_at desc, p.id`, workspace)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]*quaycrewv1.Project, 0)
+	for rows.Next() {
+		var (
+			id, owner, name string
+			createdAt       time.Time
+		)
+		if err := rows.Scan(&id, &owner, &name, &createdAt); err != nil {
+			return nil, fmt.Errorf("scan project: %w", err)
+		}
+		out = append(out, &quaycrewv1.Project{Id: id, Workspace: owner, Name: name, CreatedAt: timestamppb.New(createdAt)})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	return out, nil
+}
+
+// DeleteProject soft deletes a project, leaving its sessions intact.
+func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
+	if _, err := p.GetProject(ctx, id); err != nil {
+		return err
+	}
+	if _, err := p.pool.Exec(ctx,
+		`update projects set deleted_at = now(), updated_at = now() where id = $1 and deleted_at is null`, id); err != nil {
+		return fmt.Errorf("delete project: %w", err)
+	}
+	return nil
+}
+
+// FindOrCreateSession returns the project's session for a thread, creating it on first use.
+//
+// The insert races with any other caller dispatching to the same thread, so it defers to the unique
+// constraint on (workspace, thread_id) and reads the winner back rather than trusting a prior select.
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error) {
+	owner, err := p.GetProject(ctx, project)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, thread_id, status) values ($1, $2, $3, 'idle')
-		on conflict (workspace, thread_id) do nothing`,
-		NewID(), workspace, thread); err != nil {
+		insert into sessions (id, workspace, project, thread_id, status) values ($1, $2, $3, $4, 'idle')
+		on conflict (project, thread_id) do nothing`,
+		NewID(), owner.GetWorkspace(), project, thread); err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return p.sessionBy(ctx, `workspace = $1 and thread_id = $2`, workspace, thread)
+	return p.sessionBy(ctx, `project = $1 and thread_id = $2`, project, thread)
 }
 
 // RecordTurn stores the model conversation handle and status after a turn. An empty handle leaves
@@ -176,13 +258,14 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 	return p.sessionBy(ctx, `id = $1`, id)
 }
 
-// ListSessions returns sessions, optionally filtered to one workspace, newest first.
-func (p *Postgres) ListSessions(ctx context.Context, workspace string) ([]*quaycrewv1.Session, error) {
+// ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
+func (p *Postgres) ListSessions(ctx context.Context, workspace, project string) ([]*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, thread_id, status, model_session_id, created_at, updated_at
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at
 		from sessions
-		where ($1 = '' or workspace = $1)
-		order by created_at desc, id`, workspace)
+		where ($2 = '' or project = $2)
+		  and ($2 <> '' or $1 = '' or workspace = $1)
+		order by created_at desc, id`, workspace, project)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
@@ -218,7 +301,7 @@ func (p *Postgres) StopSession(ctx context.Context, id string) error {
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, thread_id, status, model_session_id, created_at, updated_at
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at
 		from sessions where `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -236,15 +319,16 @@ func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*q
 
 func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	var (
-		id, workspace, thread, status, modelSessionID string
-		createdAt, updatedAt                          time.Time
+		id, workspace, project, thread, status, modelSessionID string
+		createdAt, updatedAt                                   time.Time
 	)
-	if err := rows.Scan(&id, &workspace, &thread, &status, &modelSessionID, &createdAt, &updatedAt); err != nil {
+	if err := rows.Scan(&id, &workspace, &project, &thread, &status, &modelSessionID, &createdAt, &updatedAt); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	return &quaycrewv1.Session{
 		Id:             id,
 		Workspace:      workspace,
+		Project:        project,
 		ThreadId:       thread,
 		Status:         status,
 		ModelSessionId: modelSessionID,

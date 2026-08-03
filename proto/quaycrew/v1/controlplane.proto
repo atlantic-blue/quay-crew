@@ -18,7 +18,17 @@ message Channel {
   string kind = 3;
 }
 
-// A session is one model thread for a workspace.
+// A project is a body of work inside a workspace. Threads happen inside a project, and share the
+// context the project carries.
+message Project {
+  string id = 1;
+  string workspace = 2;
+  string name = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// A session is one model thread inside a project. It carries its workspace too, denormalised from
+// the project so a listing does not need a join; a project never moves workspace.
 message Session {
   string id = 1;
   string workspace = 2;
@@ -28,6 +38,7 @@ message Session {
   string model_session_id = 5;
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
+  string project = 8;
 }
 
 message CreateWorkspaceRequest {
@@ -51,6 +62,31 @@ message DeleteWorkspaceRequest {
 }
 message DeleteWorkspaceResponse {}
 
+message CreateProjectRequest {
+  string workspace = 1;
+  string name = 2;
+}
+message CreateProjectResponse {
+  Project project = 1;
+}
+message GetProjectRequest {
+  string id = 1;
+}
+message GetProjectResponse {
+  Project project = 1;
+}
+// ListProjectsRequest lists every project when workspace is empty, or one workspace's when set.
+message ListProjectsRequest {
+  string workspace = 1;
+}
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+message DeleteProjectRequest {
+  string id = 1;
+}
+message DeleteProjectResponse {}
+
 message AttachChannelRequest {
   string workspace = 1;
   string id = 2;
@@ -70,7 +106,7 @@ message SetSecretResponse {}
 
 // DispatchRequest starts a new thread (thread_id empty) or continues an existing one.
 message DispatchRequest {
-  string workspace = 1;
+  string project = 1;
   string thread_id = 2;
   string text = 3;
 }
@@ -80,8 +116,10 @@ message DispatchResponse {
   string reply = 3;
 }
 
+// ListSessionsRequest filters by project when set, else by workspace when set, else lists all.
 message ListSessionsRequest {
   string workspace = 1;
+  string project = 2;
 }
 message ListSessionsResponse {
   repeated Session sessions = 1;
@@ -103,6 +141,11 @@ service ControlPlaneService {
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
   rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
+
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

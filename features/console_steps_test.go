@@ -13,9 +13,10 @@ import (
 // consoleWorld is the console's own scenario state, kept beside the shared world rather than inside
 // it so the console scenarios do not widen what every other scenario carries.
 type consoleWorld struct {
-	registry *console.Registry
-	active   console.Resource
-	rows     []console.Row
+	secondProject string
+	registry      *console.Registry
+	active        console.Resource
+	rows          []console.Row
 }
 
 type consoleKey struct{}
@@ -63,6 +64,29 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return w.dispatch(ctx, w.secondWorkspaceID, "", text)
 	})
 
+	sc.Step(`^a second project named "([^"]*)"$`, func(ctx context.Context, name string) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Workspace: w.workspaceID, Name: name})
+		if err != nil {
+			return err
+		}
+		// The background's project is the one the other steps mean, so record this one separately.
+		c.secondProject = resp.GetProject().GetId()
+		return nil
+	})
+
+	sc.Step(`^the operator dispatches "([^"]*)" to the second project$`, func(ctx context.Context, text string) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		if c.secondProject == "" {
+			return fmt.Errorf("no second project was created")
+		}
+		return w.dispatch(ctx, c.secondProject, "", text)
+	})
+
+	sc.Step(`^the operator drills into project "([^"]*)"$`, func(ctx context.Context, name string) error {
+		return consoleFrom(ctx).drillInto(ctx, worldFrom(ctx).client, "projects", name)
+	})
+
 	sc.Step(`^the operator opens the console$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, console.Default)
 	})
@@ -72,37 +96,28 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the operator drills into workspace "([^"]*)"$`, func(ctx context.Context, name string) error {
-		c := consoleFrom(ctx)
-		if err := c.open(ctx, worldFrom(ctx).client, "workspaces"); err != nil {
-			return err
-		}
-		target, found := rowNamed(c.rows, name)
-		if !found {
-			return fmt.Errorf("the console does not list a workspace called %q", name)
-		}
-		child, known := c.registry.Get(c.active.DrillTo)
-		if !known {
-			return fmt.Errorf("workspaces drills into %q, which is not registered", c.active.DrillTo)
-		}
-		c.active = child
-		return c.list(ctx, target.ID)
+		return consoleFrom(ctx).drillInto(ctx, worldFrom(ctx).client, "workspaces", name)
 	})
 
 	sc.Step(`^the console lists (\d+) sessions?$`, func(ctx context.Context, want int) error {
 		return expectRows(consoleFrom(ctx), "sessions", want)
 	})
 
+	sc.Step(`^the console lists (\d+) projects?$`, func(ctx context.Context, want int) error {
+		return expectRows(consoleFrom(ctx), "projects", want)
+	})
+
 	sc.Step(`^the console lists (\d+) workspaces?$`, func(ctx context.Context, want int) error {
 		return expectRows(consoleFrom(ctx), "workspaces", want)
 	})
 
-	sc.Step(`^the console can drill from workspaces into sessions$`, func(ctx context.Context) error {
+	sc.Step(`^the console can drill from workspaces into projects$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if c.active.DrillTo != "sessions" {
-			return fmt.Errorf("workspaces drills into %q, want sessions", c.active.DrillTo)
+		if c.active.DrillTo != "projects" {
+			return fmt.Errorf("workspaces drills into %q, want projects", c.active.DrillTo)
 		}
-		if _, found := c.registry.Get("sessions"); !found {
-			return fmt.Errorf("sessions is not a registered resource, so the drill would dead end")
+		if _, found := c.registry.Get("projects"); !found {
+			return fmt.Errorf("projects is not a registered resource, so the drill would dead end")
 		}
 		return nil
 	})
@@ -174,6 +189,24 @@ func onlyRow(c *consoleWorld) (console.Row, error) {
 		return console.Row{}, fmt.Errorf("the console lists %d rows, want exactly 1", len(c.rows))
 	}
 	return c.rows[0], nil
+}
+
+// drillInto opens a resource, finds the named row, and descends into whatever that resource drills
+// to, which is how the operator moves from a workspace to its projects and on to their sessions.
+func (c *consoleWorld) drillInto(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, resource, name string) error {
+	if err := c.open(ctx, client, resource); err != nil {
+		return err
+	}
+	target, found := rowNamed(c.rows, name)
+	if !found {
+		return fmt.Errorf("the console does not list a %s row called %q", resource, name)
+	}
+	child, known := c.registry.Get(c.active.DrillTo)
+	if !known {
+		return fmt.Errorf("%s drills into %q, which is not registered", resource, c.active.DrillTo)
+	}
+	c.active = child
+	return c.list(ctx, target.ID)
 }
 
 func expectRows(c *consoleWorld, resource string, want int) error {

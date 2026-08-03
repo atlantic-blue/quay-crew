@@ -70,3 +70,50 @@ func Resolve(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, r
 		return "", &AmbiguousError{Name: reference, IDs: matches}
 	}
 }
+
+// ResolveProject turns a reference into a project id, the same way Resolve does for a workspace.
+//
+// A workspace reference narrows the search, which is what makes short project names usable: two
+// workspaces may each have a project called "notes" without either being ambiguous.
+func ResolveProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, workspaceRef, projectRef string) (string, error) {
+	if strings.TrimSpace(projectRef) == "" {
+		return "", fmt.Errorf("workspace: a project id or name is required")
+	}
+
+	if _, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: projectRef}); err == nil {
+		return projectRef, nil
+	} else if status.Code(err) != codes.NotFound {
+		return "", fmt.Errorf("workspace: look up project %q: %w", projectRef, err)
+	}
+
+	scope := ""
+	if strings.TrimSpace(workspaceRef) != "" {
+		resolved, err := Resolve(ctx, client, workspaceRef)
+		if err != nil {
+			return "", err
+		}
+		scope = resolved
+	}
+
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: scope})
+	if err != nil {
+		return "", fmt.Errorf("workspace: list projects: %w", err)
+	}
+
+	matches := make([]string, 0, 1)
+	for _, candidate := range resp.GetProjects() {
+		if candidate.GetName() == projectRef {
+			matches = append(matches, candidate.GetId())
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("%w: project %q", ErrNotFound, projectRef)
+	case 1:
+		return matches[0], nil
+	default:
+		sort.Strings(matches)
+		return "", &AmbiguousError{Name: projectRef, IDs: matches}
+	}
+}

@@ -69,10 +69,16 @@ func TestDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorkspace: %v", err)
 	}
-	pid := created.GetWorkspace().GetId()
+	project, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: created.GetWorkspace().GetId(), Name: "house bills",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	pid := project.GetProject().GetId()
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--workspace", pid, "hello", "world"}, &out); err != nil {
+	if err := run(ctx, client, []string{"dispatch", "--project", pid, "hello", "world"}, &out); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
 	if !strings.Contains(out.String(), "ok") {
@@ -83,11 +89,15 @@ func TestDispatch(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := run(ctx, client, []string{"sessions", "--workspace", pid}, &out); err != nil {
+	if err := run(ctx, client, []string{"sessions", "--project", pid}, &out); err != nil {
 		t.Fatalf("sessions: %v", err)
 	}
-	if !strings.Contains(out.String(), "workspace="+pid) {
-		t.Fatalf("sessions output: %q", out.String())
+	// The listing names things rather than printing identifiers.
+	if !strings.Contains(out.String(), "acme/house bills") {
+		t.Fatalf("sessions output does not name the workspace and project: %q", out.String())
+	}
+	if strings.Contains(out.String(), pid) {
+		t.Fatalf("sessions output prints the whole identifier: %q", out.String())
 	}
 }
 
@@ -138,9 +148,9 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
-// TestDispatchAcceptsAWorkspaceName covers the papercut this exists for: the operator types the name
+// TestDispatchAcceptsAProjectName covers the papercut this exists for: the operator types the name
 // they gave the workspace, not the hex id printed once at creation.
-func TestDispatchAcceptsAWorkspaceName(t *testing.T) {
+func TestDispatchAcceptsAProjectName(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -148,9 +158,12 @@ func TestDispatchAcceptsAWorkspaceName(t *testing.T) {
 	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &created); err != nil {
 		t.Fatalf("workspace create: %v", err)
 	}
+	if err := run(ctx, client, []string{"project", "create", "--workspace", "demo", "bills"}, &created); err != nil {
+		t.Fatalf("project create: %v", err)
+	}
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"dispatch", "--workspace", "demo", "hello"}, &out); err != nil {
+	if err := run(ctx, client, []string{"dispatch", "--project", "bills", "hello"}, &out); err != nil {
 		t.Fatalf("dispatch by name: %v", err)
 	}
 	if !strings.Contains(out.String(), "ok") {
@@ -158,7 +171,7 @@ func TestDispatchAcceptsAWorkspaceName(t *testing.T) {
 	}
 }
 
-func TestSessionsAcceptsAWorkspaceName(t *testing.T) {
+func TestSessionsAcceptsAProjectName(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -166,12 +179,15 @@ func TestSessionsAcceptsAWorkspaceName(t *testing.T) {
 	if err := run(ctx, client, []string{"workspace", "create", "demo"}, &discard); err != nil {
 		t.Fatalf("workspace create: %v", err)
 	}
-	if err := run(ctx, client, []string{"dispatch", "--workspace", "demo", "hello"}, &discard); err != nil {
+	if err := run(ctx, client, []string{"project", "create", "--workspace", "demo", "bills"}, &discard); err != nil {
+		t.Fatalf("project create: %v", err)
+	}
+	if err := run(ctx, client, []string{"dispatch", "--project", "bills", "hello"}, &discard); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
 
 	var out bytes.Buffer
-	if err := run(ctx, client, []string{"sessions", "--workspace", "demo"}, &out); err != nil {
+	if err := run(ctx, client, []string{"sessions", "--project", "bills"}, &out); err != nil {
 		t.Fatalf("sessions by name: %v", err)
 	}
 	if strings.Contains(out.String(), "no sessions") {
@@ -179,10 +195,10 @@ func TestSessionsAcceptsAWorkspaceName(t *testing.T) {
 	}
 }
 
-func TestDispatchRejectsAnUnknownWorkspaceReference(t *testing.T) {
+func TestDispatchRejectsAnUnknownProjectReference(t *testing.T) {
 	client := testClient(t)
 	var out bytes.Buffer
-	err := run(context.Background(), client, []string{"dispatch", "--workspace", "ghost", "hello"}, &out)
+	err := run(context.Background(), client, []string{"dispatch", "--project", "ghost", "hello"}, &out)
 	if err == nil {
 		t.Fatal("dispatch to an unknown workspace succeeded")
 	}

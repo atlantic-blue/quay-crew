@@ -213,13 +213,29 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		t.Fatalf("the conversation handle did not survive: %q", session.GetModelSessionId())
 	}
 
+	// Sessions predate projects, so the migration gives each workspace one to adopt what it already
+	// had. Without that a session would belong to no project and be unreachable.
+	adopted, err := migrated.ListProjects(ctx, "ws-1")
+	if err != nil {
+		t.Fatalf("ListProjects after migrating: %v", err)
+	}
+	if len(adopted) != 1 {
+		t.Fatalf("the workspace has %d projects after migrating, want the one that adopts its sessions", len(adopted))
+	}
+	if session.GetProject() != adopted[0].GetId() {
+		t.Fatalf("the session belongs to project %q, want the adopting project %q", session.GetProject(), adopted[0].GetId())
+	}
+
 	// The thread must still resolve to the same session, or the next turn starts a new conversation.
-	same, err := migrated.FindOrCreateSession(ctx, "ws-1", "thread-1")
+	same, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "thread-1")
 	if err != nil {
 		t.Fatalf("FindOrCreateSession after the rename: %v", err)
 	}
 	if same.GetId() != "sess-1" {
 		t.Fatalf("the thread made a new session after the rename: %q", same.GetId())
+	}
+	if same.GetModelSessionId() != "conversation-1" {
+		t.Fatalf("the adopted session lost its conversation handle: %q", same.GetModelSessionId())
 	}
 }
 

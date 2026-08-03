@@ -146,10 +146,51 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	return &quaycrewv1.SetSecretResponse{}, nil
 }
 
-// Dispatch starts or continues a thread, running one turn through the model runner.
-func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
+// CreateProject adds a body of work to a workspace.
+func (s *Server) CreateProject(ctx context.Context, req *quaycrewv1.CreateProjectRequest) (*quaycrewv1.CreateProjectResponse, error) {
 	if req.GetWorkspace() == "" {
 		return nil, status.Error(codes.InvalidArgument, "workspace is required")
+	}
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "name is required")
+	}
+	project, err := s.store.CreateProject(ctx, req.GetWorkspace(), req.GetName())
+	if err != nil {
+		return nil, storeError(err, "workspace")
+	}
+	return &quaycrewv1.CreateProjectResponse{Project: project}, nil
+}
+
+// GetProject returns a project by id.
+func (s *Server) GetProject(ctx context.Context, req *quaycrewv1.GetProjectRequest) (*quaycrewv1.GetProjectResponse, error) {
+	project, err := s.store.GetProject(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.GetProjectResponse{Project: project}, nil
+}
+
+// ListProjects lists projects, optionally within one workspace.
+func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsRequest) (*quaycrewv1.ListProjectsResponse, error) {
+	projects, err := s.store.ListProjects(ctx, req.GetWorkspace())
+	if err != nil {
+		return nil, storeError(err, "list projects")
+	}
+	return &quaycrewv1.ListProjectsResponse{Projects: projects}, nil
+}
+
+// DeleteProject removes a project.
+func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjectRequest) (*quaycrewv1.DeleteProjectResponse, error) {
+	if err := s.store.DeleteProject(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.DeleteProjectResponse{}, nil
+}
+
+// Dispatch starts or continues a thread, running one turn through the model runner.
+func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "project is required")
 	}
 	if req.GetText() == "" {
 		return nil, status.Error(codes.InvalidArgument, "text is required")
@@ -159,9 +200,9 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if thread == "" {
 		thread = store.NewID()
 	}
-	session, err := s.store.FindOrCreateSession(ctx, req.GetWorkspace(), thread)
+	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), thread)
 	if err != nil {
-		return nil, storeError(err, "workspace")
+		return nil, storeError(err, "project")
 	}
 
 	box, err := s.sandboxFor(ctx, session.GetId())
@@ -174,7 +215,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: defaultPermissionMode,
-		Env:            s.turnEnv(ctx, req.GetWorkspace()),
+		Env:            s.turnEnv(ctx, session.GetWorkspace()),
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
@@ -205,7 +246,7 @@ func (s *Server) turnEnv(ctx context.Context, workspace string) map[string]strin
 
 // ListSessions lists sessions, optionally filtered by workspace.
 func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
-	sessions, err := s.store.ListSessions(ctx, req.GetWorkspace())
+	sessions, err := s.store.ListSessions(ctx, req.GetWorkspace(), req.GetProject())
 	if err != nil {
 		return nil, storeError(err, "list sessions")
 	}

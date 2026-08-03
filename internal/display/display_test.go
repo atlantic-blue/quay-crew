@@ -1,4 +1,4 @@
-package console
+package display
 
 import "testing"
 
@@ -14,8 +14,8 @@ func TestShortID(t *testing.T) {
 		{"empty stays empty", "", ""},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := shortID(testCase.id); got != testCase.want {
-				t.Fatalf("shortID(%q) = %q, want %q", testCase.id, got, testCase.want)
+			if got := ShortID(testCase.id); got != testCase.want {
+				t.Fatalf("ShortID(%q) = %q, want %q", testCase.id, got, testCase.want)
 			}
 		})
 	}
@@ -33,8 +33,8 @@ func TestDisplayName(t *testing.T) {
 		{"neither shows a dash rather than a blank cell", "", "", "-"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := displayName(testCase.given, testCase.id); got != testCase.want {
-				t.Fatalf("displayName(%q, %q) = %q, want %q", testCase.given, testCase.id, got, testCase.want)
+			if got := Name(testCase.given, testCase.id); got != testCase.want {
+				t.Fatalf("Name(%q, %q) = %q, want %q", testCase.given, testCase.id, got, testCase.want)
 			}
 		})
 	}

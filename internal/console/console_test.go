@@ -17,6 +17,7 @@ type fakeClient struct {
 	quaycrewv1.ControlPlaneServiceClient
 
 	workspaces []*quaycrewv1.Workspace
+	projects   []*quaycrewv1.Project
 	sessions   []*quaycrewv1.Session
 
 	listSessionsFor string
@@ -31,18 +32,34 @@ func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesR
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
 }
 
+func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProjectsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if req.GetWorkspace() == "" {
+		return &quaycrewv1.ListProjectsResponse{Projects: f.projects}, nil
+	}
+	matched := make([]*quaycrewv1.Project, 0, len(f.projects))
+	for _, project := range f.projects {
+		if project.GetWorkspace() == req.GetWorkspace() {
+			matched = append(matched, project)
+		}
+	}
+	return &quaycrewv1.ListProjectsResponse{Projects: matched}, nil
+}
+
 func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	f.listSessionsFor = req.GetWorkspace()
+	f.listSessionsFor = req.GetProject()
 
-	if req.GetWorkspace() == "" {
+	if req.GetProject() == "" {
 		return &quaycrewv1.ListSessionsResponse{Sessions: f.sessions}, nil
 	}
 	matched := make([]*quaycrewv1.Session, 0, len(f.sessions))
 	for _, session := range f.sessions {
-		if session.GetWorkspace() == req.GetWorkspace() {
+		if session.GetProject() == req.GetProject() {
 			matched = append(matched, session)
 		}
 	}
@@ -304,18 +321,23 @@ func TestQuitStopsTheProgram(t *testing.T) {
 
 func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 	client := &fakeClient{
+		projects: []*quaycrewv1.Project{
+			{Id: "p1", Workspace: "acme", Name: "house bills"},
+			{Id: "p2", Workspace: "other", Name: "gardening"},
+		},
 		sessions: []*quaycrewv1.Session{
-			{Id: "s1", Workspace: "acme", Status: "idle"},
-			{Id: "s2", Workspace: "other", Status: "idle"},
+			{Id: "s1", Workspace: "acme", Project: "p1", Status: "idle"},
+			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
 	}
-	model := newTestModel(t, Workspaces(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme"), row("other", "other", "Other")))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if model.active.Name != "sessions" {
-		t.Fatalf("active = %q, want sessions", model.active.Name)
+	// A workspace drills into its projects now, not straight into sessions.
+	if model.active.Name != "projects" {
+		t.Fatalf("active = %q, want projects", model.active.Name)
 	}
 	if model.parent != "acme" {
 		t.Fatalf("parent = %q, want the selected workspace", model.parent)
@@ -328,24 +350,21 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 	if !isRows {
 		t.Fatalf("listing returned %T, want rowsMsg", cmd())
 	}
-	if len(msg.rows) != 1 || msg.rows[0].ID != "s1" {
-		t.Fatalf("rows = %v, want only acme's session", msg.rows)
-	}
-	if client.listSessionsFor != "acme" {
-		t.Fatalf("ListSessions asked for %q, want acme", client.listSessionsFor)
+	if len(msg.rows) != 1 || msg.rows[0].ID != "p1" {
+		t.Fatalf("rows = %v, want only acme's project", msg.rows)
 	}
 }
 
 func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Workspaces(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model,
 		row("acme", "acme", "Acme"), row("other", "other", "Other"), row("third", "third", "Third")))
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyDown})
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	if model.active.Name != "sessions" {
-		t.Fatalf("active = %q, want sessions after drilling", model.active.Name)
+	if model.active.Name != "projects" {
+		t.Fatalf("active = %q, want projects after drilling", model.active.Name)
 	}
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
@@ -366,7 +385,7 @@ func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 
 func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Workspaces(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme")))
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 

@@ -160,6 +160,31 @@ is a stack that cannot do anything at all, and a smoke test that only checks the
 will not notice. Continuous integration therefore dispatches a real turn against the composed stack
 with a model substitute that still execs inside the sandbox.
 
+## Workspaces, projects and threads
+
+Three levels, named the way Claude Projects and Linear name them, because the words should mean what
+a reader already expects.
+
+```
+workspace  "me"                     who you are; secrets and channels attach here
+  └── project  "house bills"        a body of work, with its own shared context
+        ├── thread  "energy supplier"
+        └── thread  "council tax"
+```
+
+A **workspace** is the unit of tenancy. A **project** is a body of work inside it. A **thread** is one
+conversation, and a session is that thread running: it belongs to a project, and it carries its
+workspace too, denormalised so a listing needs no join. A project never moves workspace, so that
+cannot drift.
+
+A thread identifier is unique within its project, not within the workspace. Two bodies of work in one
+workspace can both have a thread a channel calls "general" without colliding, which is the whole
+reason the level exists.
+
+Deleting a workspace hides its projects, and deleting a project hides it from every read while its
+sessions keep their history. Nothing is hard deleted, because a session holds the only pointer to a
+conversation the model keeps on its own disk.
+
 ## Storage
 
 Workspaces, their channels and their sessions live in Postgres, a service in the same compose stack.

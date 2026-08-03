@@ -33,14 +33,22 @@ type Store interface {
 	DeleteWorkspace(ctx context.Context, id string) error
 	AttachChannel(ctx context.Context, workspace, id, kind string) (*quaycrewv1.Channel, error)
 
-	// FindOrCreateSession returns the session for a workspace's thread, creating it on first use, so
+	// CreateProject adds a body of work to a workspace. Threads happen inside a project.
+	CreateProject(ctx context.Context, workspace, name string) (*quaycrewv1.Project, error)
+	GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error)
+	// ListProjects lists every project, or one workspace's when workspace is set.
+	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
+	DeleteProject(ctx context.Context, id string) error
+
+	// FindOrCreateSession returns the session for a project's thread, creating it on first use, so
 	// a channel that only knows its own thread id always lands in the same session.
-	FindOrCreateSession(ctx context.Context, workspace, thread string) (*quaycrewv1.Session, error)
+	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error)
 	// RecordTurn stores the model conversation handle and the session's status after a turn. An
 	// empty modelSessionID leaves the stored handle alone, so a failed turn cannot erase it.
 	RecordTurn(ctx context.Context, id, modelSessionID, status string) error
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
-	ListSessions(ctx context.Context, workspace string) ([]*quaycrewv1.Session, error)
+	// ListSessions filters by project when set, else by workspace when set, else lists everything.
+	ListSessions(ctx context.Context, workspace, project string) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
 
 	// Close releases whatever the implementation holds open.
