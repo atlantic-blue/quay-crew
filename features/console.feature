@@ -11,7 +11,7 @@ Feature: The operator sees the crew from the console
   Background:
     Given a running control plane
     And a workspace named "acme"
-    And a project named "house bills"
+    And a project named "house-bills"
 
   Scenario: The console lists the sessions the control plane has
     When the operator dispatches "hello" to the project
@@ -35,7 +35,7 @@ Feature: The operator sees the crew from the console
     When the operator dispatches "hello" to the project
     And the operator dispatches "hello" to the second project
     And the operator opens the console
-    And the operator drills into project "house bills"
+    And the operator drills into project "house-bills"
     Then the console lists 1 session
 
   Scenario: An empty crew lists nothing rather than failing

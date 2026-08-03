@@ -44,7 +44,7 @@ You need Docker and a Claude subscription.
    ```
    make install
    quay workspace create demo
-   quay project create --workspace demo "house bills"
+   quay project create --workspace demo house-bills
    quay secret set --workspace demo CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
    ```
 
@@ -55,7 +55,7 @@ You need Docker and a Claude subscription.
 5. Dispatch a turn and get a real reply:
 
    ```
-   quay dispatch --project "house bills" "say pong"
+   quay dispatch --project house-bills "say pong"
    ```
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first turn and is reused for the

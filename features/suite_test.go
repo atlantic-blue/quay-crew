@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -577,6 +578,17 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 
 	// Then: refusals.
+	sc.Step(`^the refusal suggests "([^"]*)"$`, func(ctx context.Context, want string) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("nothing was refused")
+		}
+		// A refusal that only says no leaves the operator guessing. It has to name what would work.
+		if !strings.Contains(w.lastErr.Error(), want) {
+			return fmt.Errorf("the refusal is %q, want it to suggest %q", w.lastErr.Error(), want)
+		}
+		return nil
+	})
 	sc.Step(`^the control plane refuses it as not found$`, func(ctx context.Context) error {
 		return refused(worldFrom(ctx), codes.NotFound)
 	})

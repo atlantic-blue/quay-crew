@@ -195,11 +195,15 @@ Three levels, named the way Claude Projects and Linear name them, because the wo
 a reader already expects.
 
 ```
-workspace  "me"                     who you are; secrets and channels attach here
-  └── project  "house bills"        a body of work, with its own shared context
+workspace  "me"                      who you are; secrets and channels attach here
+  └── project  "house-bills"         a body of work, with its own shared context
         ├── thread  "energy supplier"
         └── thread  "council tax"
 ```
+
+A workspace and a project are named in lowercase with hyphens, because a name is half of an address:
+`me/house-bills` says which project of which workspace, on a command line and in a directory path on
+disk. The control plane refuses a name that could not be part of one, and says what would work.
 
 A **workspace** is the unit of tenancy. A **project** is a body of work inside it. A **thread** is one
 conversation, and a session is that thread running: it belongs to a project, and it carries its

@@ -16,6 +16,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -99,8 +100,8 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 
 // CreateWorkspace creates a workspace at runtime.
 func (s *Server) CreateWorkspace(ctx context.Context, req *quaycrewv1.CreateWorkspaceRequest) (*quaycrewv1.CreateWorkspaceResponse, error) {
-	if req.GetName() == "" {
-		return nil, status.Error(codes.InvalidArgument, "name is required")
+	if err := name.Validate("workspace", req.GetName()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	workspace, err := s.store.CreateWorkspace(ctx, req.GetName())
 	if err != nil {
@@ -166,8 +167,8 @@ func (s *Server) CreateProject(ctx context.Context, req *quaycrewv1.CreateProjec
 	if req.GetWorkspace() == "" {
 		return nil, status.Error(codes.InvalidArgument, "workspace is required")
 	}
-	if req.GetName() == "" {
-		return nil, status.Error(codes.InvalidArgument, "name is required")
+	if err := name.Validate("project", req.GetName()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	project, err := s.store.CreateProject(ctx, req.GetWorkspace(), req.GetName())
 	if err != nil {
