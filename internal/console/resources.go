@@ -9,6 +9,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -155,6 +156,7 @@ func Threads(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "project", Width: 20},
 			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
+			{Title: "mode", Width: 12},
 			{Title: "age", Width: 0},
 		},
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
@@ -181,6 +183,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "project", Width: 20},
 			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
+			{Title: "mode", Width: 12},
 			{Title: "archived", Width: 0},
 		},
 		SortBy: 3,
@@ -259,12 +262,30 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 			display.Name(projectName, session.GetProject()),
 			display.ShortID(session.GetThreadId()),
 			session.GetStatus(),
+			permissionLabel(session.GetPermissionMode()),
 			// The last column is how long ago it was put away in the archived view, and how long ago
 			// it was touched everywhere else. A live thread has no archived stamp, so one rule covers
 			// both without either view having to say which it is.
 			age(lastMoved(session)),
 		},
 		State: stateFromStatus(session.GetStatus()),
+	}
+}
+
+// permissionLabel is what a thread's mode reads as in a listing. A thread from before the mode was
+// written down has none, and every one of those has been running acceptEdits, so it is named rather
+// than left blank: an empty cell in this column would read as "asks first", which is the opposite.
+//
+// bypassPermissions becomes "dangerous", which is the word the operator already uses for it and the
+// only one of the three worth spotting from across a list.
+func permissionLabel(mode string) string {
+	switch mode {
+	case model.PermissionBypass:
+		return "dangerous"
+	case model.PermissionPlan:
+		return "plan"
+	default:
+		return "edits"
 	}
 }
 
@@ -275,6 +296,19 @@ func lastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
 		return session.GetArchivedAt()
 	}
 	return session.GetUpdatedAt()
+}
+
+// permissionColumn is where the mode sits in a thread row, which is what the toggle reads to know
+// which way it is going.
+const permissionColumn = 5
+
+// nextPermissionMode is the other side of the toggle: an armed thread goes back to asking before it
+// does anything outside its files, and anything else arms it.
+func nextPermissionMode(row Row) string {
+	if len(row.Cells) > permissionColumn && row.Cells[permissionColumn] == "dangerous" {
+		return model.PermissionAcceptEdits
+	}
+	return model.PermissionBypass
 }
 
 func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
@@ -317,6 +351,23 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 					return fmt.Errorf("no thread selected")
 				}
 				_, err := client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: row.ID})
+				return err
+			},
+		},
+		{
+			// The dangerous toggle. It asks first, like every key that changes what a thread is
+			// allowed to do, and it flips between the two modes worth flipping between: planning is
+			// set deliberately rather than toggled into.
+			Key:     "D",
+			Label:   "Dangerous",
+			Confirm: true,
+			Run: func(ctx context.Context, row Row) error {
+				if row.ID == "" {
+					return fmt.Errorf("no thread selected")
+				}
+				_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{
+					Id: row.ID, Mode: nextPermissionMode(row),
+				})
 				return err
 			},
 		},

@@ -19,25 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlaneService_CreateWorkspace_FullMethodName = "/quaycrew.v1.ControlPlaneService/CreateWorkspace"
-	ControlPlaneService_GetWorkspace_FullMethodName    = "/quaycrew.v1.ControlPlaneService/GetWorkspace"
-	ControlPlaneService_ListWorkspaces_FullMethodName  = "/quaycrew.v1.ControlPlaneService/ListWorkspaces"
-	ControlPlaneService_DeleteWorkspace_FullMethodName = "/quaycrew.v1.ControlPlaneService/DeleteWorkspace"
-	ControlPlaneService_CreateProject_FullMethodName   = "/quaycrew.v1.ControlPlaneService/CreateProject"
-	ControlPlaneService_GetProject_FullMethodName      = "/quaycrew.v1.ControlPlaneService/GetProject"
-	ControlPlaneService_ListProjects_FullMethodName    = "/quaycrew.v1.ControlPlaneService/ListProjects"
-	ControlPlaneService_DeleteProject_FullMethodName   = "/quaycrew.v1.ControlPlaneService/DeleteProject"
-	ControlPlaneService_AttachChannel_FullMethodName   = "/quaycrew.v1.ControlPlaneService/AttachChannel"
-	ControlPlaneService_SetSecret_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetSecret"
-	ControlPlaneService_Dispatch_FullMethodName        = "/quaycrew.v1.ControlPlaneService/Dispatch"
-	ControlPlaneService_ListSessions_FullMethodName    = "/quaycrew.v1.ControlPlaneService/ListSessions"
-	ControlPlaneService_GetSession_FullMethodName      = "/quaycrew.v1.ControlPlaneService/GetSession"
-	ControlPlaneService_AttachSession_FullMethodName   = "/quaycrew.v1.ControlPlaneService/AttachSession"
-	ControlPlaneService_StopSession_FullMethodName     = "/quaycrew.v1.ControlPlaneService/StopSession"
-	ControlPlaneService_RestartSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/RestartSession"
-	ControlPlaneService_ArchiveSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
-	ControlPlaneService_RestoreSession_FullMethodName  = "/quaycrew.v1.ControlPlaneService/RestoreSession"
-	ControlPlaneService_GetInfo_FullMethodName         = "/quaycrew.v1.ControlPlaneService/GetInfo"
+	ControlPlaneService_CreateWorkspace_FullMethodName          = "/quaycrew.v1.ControlPlaneService/CreateWorkspace"
+	ControlPlaneService_GetWorkspace_FullMethodName             = "/quaycrew.v1.ControlPlaneService/GetWorkspace"
+	ControlPlaneService_ListWorkspaces_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ListWorkspaces"
+	ControlPlaneService_DeleteWorkspace_FullMethodName          = "/quaycrew.v1.ControlPlaneService/DeleteWorkspace"
+	ControlPlaneService_CreateProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/CreateProject"
+	ControlPlaneService_GetProject_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetProject"
+	ControlPlaneService_ListProjects_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListProjects"
+	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
+	ControlPlaneService_AttachChannel_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachChannel"
+	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
+	ControlPlaneService_Dispatch_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/Dispatch"
+	ControlPlaneService_ListSessions_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSessions"
+	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
+	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
+	ControlPlaneService_StopSession_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopSession"
+	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
+	ControlPlaneService_ArchiveSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
+	ControlPlaneService_RestoreSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreSession"
+	ControlPlaneService_SetSessionPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetSessionPermissionMode"
+	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -64,6 +65,7 @@ type ControlPlaneServiceClient interface {
 	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
 	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
 	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
+	SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 }
 
@@ -255,6 +257,16 @@ func (c *controlPlaneServiceClient) RestoreSession(ctx context.Context, in *Rest
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSessionPermissionModeResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetSessionPermissionMode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInfoResponse)
@@ -289,6 +301,7 @@ type ControlPlaneServiceServer interface {
 	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
 	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
 	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
+	SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
@@ -353,6 +366,9 @@ func (UnimplementedControlPlaneServiceServer) ArchiveSession(context.Context, *A
 }
 func (UnimplementedControlPlaneServiceServer) RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSessionPermissionMode not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInfo not implemented")
@@ -702,6 +718,24 @@ func _ControlPlaneService_RestoreSession_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_SetSessionPermissionMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSessionPermissionModeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetSessionPermissionMode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetSessionPermissionMode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetSessionPermissionMode(ctx, req.(*SetSessionPermissionModeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
@@ -798,6 +832,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreSession",
 			Handler:    _ControlPlaneService_RestoreSession_Handler,
+		},
+		{
+			MethodName: "SetSessionPermissionMode",
+			Handler:    _ControlPlaneService_SetSessionPermissionMode_Handler,
 		},
 		{
 			MethodName: "GetInfo",

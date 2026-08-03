@@ -34,6 +34,7 @@ type fakeClient struct {
 	stopped          []string
 	archived         []string
 	restored         []string
+	modesSet         []string
 	listErr          error
 }
 
@@ -89,6 +90,11 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
 	f.archived = append(f.archived, req.GetId())
 	return &quaycrewv1.ArchiveSessionResponse{}, nil
+}
+
+func (f *fakeClient) SetSessionPermissionMode(_ context.Context, req *quaycrewv1.SetSessionPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
+	f.modesSet = append(f.modesSet, req.GetMode())
+	return &quaycrewv1.SetSessionPermissionModeResponse{}, nil
 }
 
 func (f *fakeClient) RestoreSession(_ context.Context, req *quaycrewv1.RestoreSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreSessionResponse, error) {
@@ -861,7 +867,7 @@ func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listing archived: %v", err)
 	}
-	if got := rows[0].Cells[5]; got != "2h" {
+	if got := rows[0].Cells[6]; got != "2h" {
 		t.Fatalf("the last column reads %q, want 2h, when it was put away", got)
 	}
 }
@@ -872,6 +878,69 @@ func rowIDs(rows []Row) []string {
 		out = append(out, row.ID)
 	}
 	return out
+}
+
+// TestTheDangerousToggleAsksAndFlipsBothWays is the toggle Julian asked for. Arming a thread asks
+// first, like every key that changes what it is allowed to do, and pressing it again puts it back.
+func TestTheDangerousToggleAsksAndFlipsBothWays(t *testing.T) {
+	client := &fakeClient{}
+	model, _ := update(t, threadsAt(t, client), runes("D"))
+
+	if model.mode != modeConfirm {
+		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
+	}
+	if view := model.View(); !strings.Contains(view, "dangerous thread d754610f?") {
+		t.Fatalf("the console does not name the thread it is about to arm:\n%s", view)
+	}
+	if len(client.modesSet) != 0 {
+		t.Fatalf("modes set = %v, want nothing armed yet", client.modesSet)
+	}
+
+	_, cmd := update(t, model, runes("y"))
+	if cmd == nil {
+		t.Fatal("yes produced no command")
+	}
+	cmd()
+	if len(client.modesSet) != 1 || client.modesSet[0] != "bypassPermissions" {
+		t.Fatalf("modes set = %v, want [bypassPermissions]", client.modesSet)
+	}
+
+	// An armed thread goes back to asking, rather than being armed a second time.
+	armed := newTestModel(t, Threads(client))
+	armed, _ = update(t, armed, rowsFor(armed,
+		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "1m"}}))
+	armed, _ = update(t, armed, runes("D"))
+	_, cmd = update(t, armed, runes("y"))
+	cmd()
+	if len(client.modesSet) != 2 || client.modesSet[1] != "acceptEdits" {
+		t.Fatalf("modes set = %v, want the second one to disarm it", client.modesSet)
+	}
+}
+
+// TestTheModeIsInTheListing: a thread that skips every permission must not look like one that asks.
+func TestTheModeIsInTheListing(t *testing.T) {
+	tests := map[string]string{
+		"bypassPermissions": "dangerous",
+		"plan":              "plan",
+		"acceptEdits":       "edits",
+		// A thread from before the mode was written down has none, and every one of those runs
+		// acceptEdits. An empty cell here would read as "asks first", which is the opposite.
+		"": "edits",
+	}
+	for mode, want := range tests {
+		t.Run(mode, func(t *testing.T) {
+			client := &fakeClient{sessions: []*quaycrewv1.Session{
+				{Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle", PermissionMode: mode},
+			}}
+			rows, err := Threads(client).List(context.Background(), "")
+			if err != nil {
+				t.Fatalf("listing threads: %v", err)
+			}
+			if got := rows[0].Cells[permissionColumn]; got != want {
+				t.Fatalf("mode %q reads as %q, want %q", mode, got, want)
+			}
+		})
+	}
 }
 
 // actionBoundTo returns the action a key runs, failing the test when nothing is bound to it.

@@ -229,9 +229,13 @@ type Session struct {
 	Project        string                 `protobuf:"bytes,8,opt,name=project,proto3" json:"project,omitempty"`
 	// archived_at is when the thread was put away. Unset means it is live. Archiving hides a thread
 	// from the default listing and deletes nothing, so this is reversible by clearing it.
-	ArchivedAt    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ArchivedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"`
+	// permission_mode is what the model is allowed to do without asking, for this thread's turns:
+	// "plan", "acceptEdits" or "bypassPermissions". It belongs to the thread rather than to a turn, so
+	// a thread started to plan something keeps planning.
+	PermissionMode string `protobuf:"bytes,10,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -325,6 +329,13 @@ func (x *Session) GetArchivedAt() *timestamppb.Timestamp {
 		return x.ArchivedAt
 	}
 	return nil
+}
+
+func (x *Session) GetPermissionMode() string {
+	if x != nil {
+		return x.PermissionMode
+	}
+	return ""
 }
 
 type CreateWorkspaceRequest struct {
@@ -1896,6 +1907,105 @@ func (x *ArchiveSessionResponse) GetSession() *Session {
 	return nil
 }
 
+// SetSessionPermissionModeRequest changes what a thread's turns may do without asking.
+type SetSessionPermissionModeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// mode is "plan", "acceptEdits" or "bypassPermissions". An unknown one is refused rather than
+	// passed to the model, which would take it as far as its own argument parser and no further.
+	Mode          string `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSessionPermissionModeRequest) Reset() {
+	*x = SetSessionPermissionModeRequest{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSessionPermissionModeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSessionPermissionModeRequest) ProtoMessage() {}
+
+func (x *SetSessionPermissionModeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSessionPermissionModeRequest.ProtoReflect.Descriptor instead.
+func (*SetSessionPermissionModeRequest) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *SetSessionPermissionModeRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SetSessionPermissionModeRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+type SetSessionPermissionModeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Session       *Session               `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSessionPermissionModeResponse) Reset() {
+	*x = SetSessionPermissionModeResponse{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSessionPermissionModeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSessionPermissionModeResponse) ProtoMessage() {}
+
+func (x *SetSessionPermissionModeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSessionPermissionModeResponse.ProtoReflect.Descriptor instead.
+func (*SetSessionPermissionModeResponse) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SetSessionPermissionModeResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
 // RestoreSessionRequest brings an archived thread back into the default listing.
 type RestoreSessionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1906,7 +2016,7 @@ type RestoreSessionRequest struct {
 
 func (x *RestoreSessionRequest) Reset() {
 	*x = RestoreSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1918,7 +2028,7 @@ func (x *RestoreSessionRequest) String() string {
 func (*RestoreSessionRequest) ProtoMessage() {}
 
 func (x *RestoreSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1931,7 +2041,7 @@ func (x *RestoreSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSessionRequest.ProtoReflect.Descriptor instead.
 func (*RestoreSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{38}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RestoreSessionRequest) GetId() string {
@@ -1950,7 +2060,7 @@ type RestoreSessionResponse struct {
 
 func (x *RestoreSessionResponse) Reset() {
 	*x = RestoreSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1962,7 +2072,7 @@ func (x *RestoreSessionResponse) String() string {
 func (*RestoreSessionResponse) ProtoMessage() {}
 
 func (x *RestoreSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1975,7 +2085,7 @@ func (x *RestoreSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSessionResponse.ProtoReflect.Descriptor instead.
 func (*RestoreSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{39}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RestoreSessionResponse) GetSession() *Session {
@@ -1994,7 +2104,7 @@ type GetInfoRequest struct {
 
 func (x *GetInfoRequest) Reset() {
 	*x = GetInfoRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2006,7 +2116,7 @@ func (x *GetInfoRequest) String() string {
 func (*GetInfoRequest) ProtoMessage() {}
 
 func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2019,7 +2129,7 @@ func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetInfoRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{40}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{42}
 }
 
 // GetInfoResponse says what a turn dispatched here would actually do.
@@ -2049,7 +2159,7 @@ type GetInfoResponse struct {
 
 func (x *GetInfoResponse) Reset() {
 	*x = GetInfoResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2061,7 +2171,7 @@ func (x *GetInfoResponse) String() string {
 func (*GetInfoResponse) ProtoMessage() {}
 
 func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2074,7 +2184,7 @@ func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetInfoResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{41}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GetInfoResponse) GetModel() string {
@@ -2131,7 +2241,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xe3\x02\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x8c\x03\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x1b\n" +
@@ -2144,7 +2254,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
 	"\aproject\x18\b \x01(\tR\aproject\x12;\n" +
 	"\varchived_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"archivedAt\",\n" +
+	"archivedAt\x12'\n" +
+	"\x0fpermission_mode\x18\n" +
+	" \x01(\tR\x0epermissionMode\",\n" +
 	"\x16CreateWorkspaceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"O\n" +
 	"\x17CreateWorkspaceResponse\x124\n" +
@@ -2222,6 +2334,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x15ArchiveSessionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x16ArchiveSessionResponse\x12.\n" +
+	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"E\n" +
+	"\x1fSetSessionPermissionModeRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\"R\n" +
+	" SetSessionPermissionModeResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"'\n" +
 	"\x15RestoreSessionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
@@ -2233,7 +2350,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
 	"\x05store\x18\x03 \x01(\tR\x05store\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
-	"\x06events\x18\x05 \x01(\tR\x06events2\xe7\f\n" +
+	"\x06events\x18\x05 \x01(\tR\x06events2\xe0\r\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
 	"\fGetWorkspace\x12 .quaycrew.v1.GetWorkspaceRequest\x1a!.quaycrew.v1.GetWorkspaceResponse\x12Y\n" +
@@ -2254,7 +2371,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\vStopSession\x12\x1f.quaycrew.v1.StopSessionRequest\x1a .quaycrew.v1.StopSessionResponse\x12Y\n" +
 	"\x0eRestartSession\x12\".quaycrew.v1.RestartSessionRequest\x1a#.quaycrew.v1.RestartSessionResponse\x12Y\n" +
 	"\x0eArchiveSession\x12\".quaycrew.v1.ArchiveSessionRequest\x1a#.quaycrew.v1.ArchiveSessionResponse\x12Y\n" +
-	"\x0eRestoreSession\x12\".quaycrew.v1.RestoreSessionRequest\x1a#.quaycrew.v1.RestoreSessionResponse\x12D\n" +
+	"\x0eRestoreSession\x12\".quaycrew.v1.RestoreSessionRequest\x1a#.quaycrew.v1.RestoreSessionResponse\x12w\n" +
+	"\x18SetSessionPermissionMode\x12,.quaycrew.v1.SetSessionPermissionModeRequest\x1a-.quaycrew.v1.SetSessionPermissionModeResponse\x12D\n" +
 	"\aGetInfo\x12\x1b.quaycrew.v1.GetInfoRequest\x1a\x1c.quaycrew.v1.GetInfoResponseB\xb0\x01\n" +
 	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
@@ -2270,58 +2388,60 @@ func file_quaycrew_v1_controlplane_proto_rawDescGZIP() []byte {
 	return file_quaycrew_v1_controlplane_proto_rawDescData
 }
 
-var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_quaycrew_v1_controlplane_proto_goTypes = []any{
-	(*Workspace)(nil),               // 0: quaycrew.v1.Workspace
-	(*Channel)(nil),                 // 1: quaycrew.v1.Channel
-	(*Project)(nil),                 // 2: quaycrew.v1.Project
-	(*Session)(nil),                 // 3: quaycrew.v1.Session
-	(*CreateWorkspaceRequest)(nil),  // 4: quaycrew.v1.CreateWorkspaceRequest
-	(*CreateWorkspaceResponse)(nil), // 5: quaycrew.v1.CreateWorkspaceResponse
-	(*GetWorkspaceRequest)(nil),     // 6: quaycrew.v1.GetWorkspaceRequest
-	(*GetWorkspaceResponse)(nil),    // 7: quaycrew.v1.GetWorkspaceResponse
-	(*ListWorkspacesRequest)(nil),   // 8: quaycrew.v1.ListWorkspacesRequest
-	(*ListWorkspacesResponse)(nil),  // 9: quaycrew.v1.ListWorkspacesResponse
-	(*DeleteWorkspaceRequest)(nil),  // 10: quaycrew.v1.DeleteWorkspaceRequest
-	(*DeleteWorkspaceResponse)(nil), // 11: quaycrew.v1.DeleteWorkspaceResponse
-	(*CreateProjectRequest)(nil),    // 12: quaycrew.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),   // 13: quaycrew.v1.CreateProjectResponse
-	(*GetProjectRequest)(nil),       // 14: quaycrew.v1.GetProjectRequest
-	(*GetProjectResponse)(nil),      // 15: quaycrew.v1.GetProjectResponse
-	(*ListProjectsRequest)(nil),     // 16: quaycrew.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),    // 17: quaycrew.v1.ListProjectsResponse
-	(*DeleteProjectRequest)(nil),    // 18: quaycrew.v1.DeleteProjectRequest
-	(*DeleteProjectResponse)(nil),   // 19: quaycrew.v1.DeleteProjectResponse
-	(*AttachChannelRequest)(nil),    // 20: quaycrew.v1.AttachChannelRequest
-	(*AttachChannelResponse)(nil),   // 21: quaycrew.v1.AttachChannelResponse
-	(*SetSecretRequest)(nil),        // 22: quaycrew.v1.SetSecretRequest
-	(*SetSecretResponse)(nil),       // 23: quaycrew.v1.SetSecretResponse
-	(*DispatchRequest)(nil),         // 24: quaycrew.v1.DispatchRequest
-	(*DispatchResponse)(nil),        // 25: quaycrew.v1.DispatchResponse
-	(*ListSessionsRequest)(nil),     // 26: quaycrew.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),    // 27: quaycrew.v1.ListSessionsResponse
-	(*GetSessionRequest)(nil),       // 28: quaycrew.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),      // 29: quaycrew.v1.GetSessionResponse
-	(*AttachSessionRequest)(nil),    // 30: quaycrew.v1.AttachSessionRequest
-	(*AttachSessionResponse)(nil),   // 31: quaycrew.v1.AttachSessionResponse
-	(*StopSessionRequest)(nil),      // 32: quaycrew.v1.StopSessionRequest
-	(*StopSessionResponse)(nil),     // 33: quaycrew.v1.StopSessionResponse
-	(*RestartSessionRequest)(nil),   // 34: quaycrew.v1.RestartSessionRequest
-	(*RestartSessionResponse)(nil),  // 35: quaycrew.v1.RestartSessionResponse
-	(*ArchiveSessionRequest)(nil),   // 36: quaycrew.v1.ArchiveSessionRequest
-	(*ArchiveSessionResponse)(nil),  // 37: quaycrew.v1.ArchiveSessionResponse
-	(*RestoreSessionRequest)(nil),   // 38: quaycrew.v1.RestoreSessionRequest
-	(*RestoreSessionResponse)(nil),  // 39: quaycrew.v1.RestoreSessionResponse
-	(*GetInfoRequest)(nil),          // 40: quaycrew.v1.GetInfoRequest
-	(*GetInfoResponse)(nil),         // 41: quaycrew.v1.GetInfoResponse
-	(*timestamppb.Timestamp)(nil),   // 42: google.protobuf.Timestamp
+	(*Workspace)(nil),                        // 0: quaycrew.v1.Workspace
+	(*Channel)(nil),                          // 1: quaycrew.v1.Channel
+	(*Project)(nil),                          // 2: quaycrew.v1.Project
+	(*Session)(nil),                          // 3: quaycrew.v1.Session
+	(*CreateWorkspaceRequest)(nil),           // 4: quaycrew.v1.CreateWorkspaceRequest
+	(*CreateWorkspaceResponse)(nil),          // 5: quaycrew.v1.CreateWorkspaceResponse
+	(*GetWorkspaceRequest)(nil),              // 6: quaycrew.v1.GetWorkspaceRequest
+	(*GetWorkspaceResponse)(nil),             // 7: quaycrew.v1.GetWorkspaceResponse
+	(*ListWorkspacesRequest)(nil),            // 8: quaycrew.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),           // 9: quaycrew.v1.ListWorkspacesResponse
+	(*DeleteWorkspaceRequest)(nil),           // 10: quaycrew.v1.DeleteWorkspaceRequest
+	(*DeleteWorkspaceResponse)(nil),          // 11: quaycrew.v1.DeleteWorkspaceResponse
+	(*CreateProjectRequest)(nil),             // 12: quaycrew.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),            // 13: quaycrew.v1.CreateProjectResponse
+	(*GetProjectRequest)(nil),                // 14: quaycrew.v1.GetProjectRequest
+	(*GetProjectResponse)(nil),               // 15: quaycrew.v1.GetProjectResponse
+	(*ListProjectsRequest)(nil),              // 16: quaycrew.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),             // 17: quaycrew.v1.ListProjectsResponse
+	(*DeleteProjectRequest)(nil),             // 18: quaycrew.v1.DeleteProjectRequest
+	(*DeleteProjectResponse)(nil),            // 19: quaycrew.v1.DeleteProjectResponse
+	(*AttachChannelRequest)(nil),             // 20: quaycrew.v1.AttachChannelRequest
+	(*AttachChannelResponse)(nil),            // 21: quaycrew.v1.AttachChannelResponse
+	(*SetSecretRequest)(nil),                 // 22: quaycrew.v1.SetSecretRequest
+	(*SetSecretResponse)(nil),                // 23: quaycrew.v1.SetSecretResponse
+	(*DispatchRequest)(nil),                  // 24: quaycrew.v1.DispatchRequest
+	(*DispatchResponse)(nil),                 // 25: quaycrew.v1.DispatchResponse
+	(*ListSessionsRequest)(nil),              // 26: quaycrew.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),             // 27: quaycrew.v1.ListSessionsResponse
+	(*GetSessionRequest)(nil),                // 28: quaycrew.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),               // 29: quaycrew.v1.GetSessionResponse
+	(*AttachSessionRequest)(nil),             // 30: quaycrew.v1.AttachSessionRequest
+	(*AttachSessionResponse)(nil),            // 31: quaycrew.v1.AttachSessionResponse
+	(*StopSessionRequest)(nil),               // 32: quaycrew.v1.StopSessionRequest
+	(*StopSessionResponse)(nil),              // 33: quaycrew.v1.StopSessionResponse
+	(*RestartSessionRequest)(nil),            // 34: quaycrew.v1.RestartSessionRequest
+	(*RestartSessionResponse)(nil),           // 35: quaycrew.v1.RestartSessionResponse
+	(*ArchiveSessionRequest)(nil),            // 36: quaycrew.v1.ArchiveSessionRequest
+	(*ArchiveSessionResponse)(nil),           // 37: quaycrew.v1.ArchiveSessionResponse
+	(*SetSessionPermissionModeRequest)(nil),  // 38: quaycrew.v1.SetSessionPermissionModeRequest
+	(*SetSessionPermissionModeResponse)(nil), // 39: quaycrew.v1.SetSessionPermissionModeResponse
+	(*RestoreSessionRequest)(nil),            // 40: quaycrew.v1.RestoreSessionRequest
+	(*RestoreSessionResponse)(nil),           // 41: quaycrew.v1.RestoreSessionResponse
+	(*GetInfoRequest)(nil),                   // 42: quaycrew.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),                  // 43: quaycrew.v1.GetInfoResponse
+	(*timestamppb.Timestamp)(nil),            // 44: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
-	42, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
-	42, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	42, // 2: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	42, // 3: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	42, // 4: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
+	44, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
+	44, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	44, // 2: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	44, // 3: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	44, // 4: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
 	0,  // 5: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
 	0,  // 6: quaycrew.v1.GetWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
 	0,  // 7: quaycrew.v1.ListWorkspacesResponse.workspaces:type_name -> quaycrew.v1.Workspace
@@ -2333,50 +2453,53 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	3,  // 13: quaycrew.v1.GetSessionResponse.session:type_name -> quaycrew.v1.Session
 	3,  // 14: quaycrew.v1.RestartSessionResponse.session:type_name -> quaycrew.v1.Session
 	3,  // 15: quaycrew.v1.ArchiveSessionResponse.session:type_name -> quaycrew.v1.Session
-	3,  // 16: quaycrew.v1.RestoreSessionResponse.session:type_name -> quaycrew.v1.Session
-	4,  // 17: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
-	6,  // 18: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
-	8,  // 19: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
-	10, // 20: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
-	12, // 21: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
-	14, // 22: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
-	16, // 23: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
-	18, // 24: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
-	20, // 25: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
-	22, // 26: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
-	24, // 27: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
-	26, // 28: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
-	28, // 29: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
-	30, // 30: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
-	32, // 31: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	34, // 32: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
-	36, // 33: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
-	38, // 34: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
-	40, // 35: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
-	5,  // 36: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
-	7,  // 37: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
-	9,  // 38: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
-	11, // 39: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
-	13, // 40: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
-	15, // 41: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
-	17, // 42: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
-	19, // 43: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
-	21, // 44: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
-	23, // 45: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
-	25, // 46: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
-	27, // 47: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
-	29, // 48: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
-	31, // 49: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
-	33, // 50: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
-	35, // 51: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
-	37, // 52: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
-	39, // 53: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
-	41, // 54: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
-	36, // [36:55] is the sub-list for method output_type
-	17, // [17:36] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	3,  // 16: quaycrew.v1.SetSessionPermissionModeResponse.session:type_name -> quaycrew.v1.Session
+	3,  // 17: quaycrew.v1.RestoreSessionResponse.session:type_name -> quaycrew.v1.Session
+	4,  // 18: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
+	6,  // 19: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
+	8,  // 20: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
+	10, // 21: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
+	12, // 22: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
+	14, // 23: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
+	16, // 24: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
+	18, // 25: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
+	20, // 26: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
+	22, // 27: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
+	24, // 28: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
+	26, // 29: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
+	28, // 30: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
+	30, // 31: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
+	32, // 32: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
+	34, // 33: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
+	36, // 34: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
+	40, // 35: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
+	38, // 36: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:input_type -> quaycrew.v1.SetSessionPermissionModeRequest
+	42, // 37: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
+	5,  // 38: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
+	7,  // 39: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
+	9,  // 40: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
+	11, // 41: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
+	13, // 42: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
+	15, // 43: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
+	17, // 44: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
+	19, // 45: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
+	21, // 46: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
+	23, // 47: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
+	25, // 48: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
+	27, // 49: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
+	29, // 50: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
+	31, // 51: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
+	33, // 52: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
+	35, // 53: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
+	37, // 54: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
+	41, // 55: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
+	39, // 56: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:output_type -> quaycrew.v1.SetSessionPermissionModeResponse
+	43, // 57: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
+	38, // [38:58] is the sub-list for method output_type
+	18, // [18:38] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_quaycrew_v1_controlplane_proto_init() }
@@ -2390,7 +2513,7 @@ func file_quaycrew_v1_controlplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quaycrew_v1_controlplane_proto_rawDesc), len(file_quaycrew_v1_controlplane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

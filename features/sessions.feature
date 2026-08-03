@@ -118,6 +118,29 @@ Feature: Sessions run in isolated sandboxes
     And the operator archives the session
     Then the control plane refuses it as the wrong state
 
+  # The mode a turn runs in was hardcoded, so no operator could see it or change it. It belongs to the
+  # thread rather than to a turn: a thread started to plan something should keep planning instead of
+  # being re armed on every dispatch.
+  Scenario: A turn runs in the mode its thread is set to
+    Given a session started by dispatching "hello"
+    Then the turn ran in permission mode "acceptEdits"
+    When the thread is set to permission mode "bypassPermissions"
+    And the operator dispatches "and again" to the same thread
+    Then the turn ran in permission mode "bypassPermissions"
+
+  Scenario: A thread keeps its permission mode across a restart of the control plane
+    Given a session started by dispatching "hello"
+    When the thread is set to permission mode "plan"
+    And the control plane restarts
+    And the operator dispatches "and again" to the same thread
+    Then the turn ran in permission mode "plan"
+
+  Scenario: A mode the model does not understand is refused rather than passed to it
+    Given a session started by dispatching "hello"
+    When the thread is set to permission mode "yolo"
+    Then the control plane refuses it as invalid
+    And the refusal suggests "bypassPermissions"
+
   Scenario: A turn for a project that does not exist is refused
     When the operator dispatches "hello" to project "ghost"
     Then the control plane refuses it as not found
