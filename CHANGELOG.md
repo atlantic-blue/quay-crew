@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **A thread can be put away, and brought back.** `A` archives one through the same confirmation, and an
+  `archived` view lists what was put away with `u` to restore it. Archiving stops the thread, closes its
+  sandbox and hides it from the default listing. Nothing is deleted: the row, the conversation and the
+  project files all stay. ([#97](https://github.com/atlantic-blue/quay-crew/pull/97))
 - **A stopped thread can be restarted, with its container.** `r` in the console, `RestartSession` on the
   control plane: back to idle with the sandbox already running, so you can attach into the conversation
   instead of dispatching a turn to make the container exist. Only safe because a session's state lives
