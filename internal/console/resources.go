@@ -220,7 +220,10 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 	return []Action{
 		{
-			Key:   "a",
+			// Enter is the primary key, so the obvious key does the obvious thing on a conversation.
+			// It used to do nothing at all here, because a thread has nothing to drill into.
+			Key:   "enter",
+			Also:  []string{"a"},
 			Label: "Attach",
 			Shell: func(row Row) (*exec.Cmd, error) {
 				if row.ID == "" {

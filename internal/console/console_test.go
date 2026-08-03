@@ -462,17 +462,7 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 // be told that.
 func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
 	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
-	resource := Threads(client)
-
-	var attach *Action
-	for index := range resource.Actions {
-		if resource.Actions[index].Key == "a" {
-			attach = &resource.Actions[index]
-		}
-	}
-	if attach == nil {
-		t.Fatal("sessions has no attach action")
-	}
+	attach := actionBoundTo(t, Threads(client), "a")
 
 	_, err := attach.Shell(Row{ID: "s1"})
 	if err == nil {
@@ -494,6 +484,90 @@ func TestAnActionOnAnEmptyViewDoesNothing(t *testing.T) {
 	if len(client.stopped) != 0 {
 		t.Fatalf("stopped = %v, want nothing stopped", client.stopped)
 	}
+}
+
+// TestEnterAttachesToTheSelectedThread is the point of the key: a thread has nothing to drill into,
+// so enter did nothing at all, on the one view where the obvious key has an obvious meaning.
+func TestEnterAttachesToTheSelectedThread(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Threads(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
+
+	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on a thread produced no command")
+	}
+	if msg, isErr := cmd().(errMsg); isErr {
+		t.Fatalf("enter on a thread failed: %v", msg.err)
+	}
+}
+
+// TestEnterAndAOpenTheSameConversation: the old key keeps working, so muscle memory is not punished.
+func TestEnterAndAOpenTheSameConversation(t *testing.T) {
+	client := &fakeClient{}
+	attach := actionBoundTo(t, Threads(client), "enter")
+	if !attach.Bound("a") {
+		t.Fatal("the attach action no longer answers to a")
+	}
+	if attach.Label != "Attach" {
+		t.Fatalf("enter runs %q, want Attach", attach.Label)
+	}
+
+	command, err := attach.Shell(Row{ID: "s1"})
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	want := "docker exec --interactive --tty quaycrew-s1 claude --resume c1"
+	if got := strings.Join(command.Args, " "); got != want {
+		t.Fatalf("command = %q, want %q", got, want)
+	}
+}
+
+// TestEnterOnAThreadWithNoConversationSaysWhy: opening something that errors is worse than being
+// told to dispatch a turn first.
+func TestEnterOnAThreadWithNoConversationSaysWhy(t *testing.T) {
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
+	model := newTestModel(t, Threads(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
+
+	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter produced no command")
+	}
+	msg, isErr := cmd().(errMsg)
+	if !isErr {
+		t.Fatalf("enter returned %#v, want the control plane's reason", cmd())
+	}
+	if !strings.Contains(msg.err.Error(), "no conversation yet") {
+		t.Fatalf("the reason did not reach the operator: %v", msg.err)
+	}
+}
+
+// TestEnterStillDrillsWhereThereIsSomewhereToGo: attaching must not cost the console its navigation.
+func TestEnterStillDrillsWhereThereIsSomewhereToGo(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
+
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.active.Name != "projects" {
+		t.Fatalf("enter left the console on %q, want it drilled into projects", model.active.Name)
+	}
+	if cmd == nil {
+		t.Fatal("drilling did not trigger a listing")
+	}
+}
+
+// actionBoundTo returns the action a key runs, failing the test when nothing is bound to it.
+func actionBoundTo(t *testing.T, resource Resource, key string) Action {
+	t.Helper()
+	for _, action := range resource.Actions {
+		if action.Bound(key) {
+			return action
+		}
+	}
+	t.Fatalf("%s has nothing bound to %q", resource.Name, key)
+	return Action{}
 }
 
 // ---------- resources ----------
@@ -650,7 +724,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"<a> Attach", "<s> Shell", "<x> Stop", "<?> Help"} {
+	for _, want := range []string{"<enter> Attach", "<s> Shell", "<x> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}
@@ -670,7 +744,7 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 
 	model, _ = update(t, model, runes("?"))
 	view := model.View()
-	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<a> Attach"} {
+	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<enter a> Attach"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the key list does not mention %q:\n%s", want, view)
 		}

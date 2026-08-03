@@ -64,7 +64,13 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "g":
 		return m, listCmd(m.active, m.parent)
 	case "enter":
-		return m.drill()
+		// Enter descends where there is somewhere to descend to, and otherwise does whatever this
+		// view has bound to it. On a list of conversations that is opening the one under the cursor,
+		// which is the obvious meaning of the key and the reason it used to do nothing at all.
+		if m.active.DrillTo != "" {
+			return m.drill()
+		}
+		return m.act("enter")
 	case "esc":
 		return m.back()
 	}
@@ -103,7 +109,7 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, action := range m.active.Actions {
-		if action.Key != key {
+		if !action.Bound(key) {
 			continue
 		}
 		if action.Shell != nil {
