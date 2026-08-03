@@ -60,6 +60,30 @@ Feature: Sessions run in isolated sandboxes
     Then the session is reported as stopped
     And the session's sandbox has been closed
 
+  # Restarting starts the container straight away rather than waiting for the next turn, so the
+  # operator can go back into the conversation instead of dispatching a turn to make the container
+  # exist. It is only safe because the conversation lives on the host now: the new sandbox is a new
+  # container over the same conversation store and the same project files.
+  Scenario: A stopped thread restarts to idle, with a sandbox, and can be attached to
+    Given a session started by dispatching "remember this"
+    When the operator stops the session
+    And the operator restarts the session
+    Then the session is reported as idle
+    And the session still holds the conversation the first turn started
+    And a second sandbox has been created for that session
+    And the operator asks how to attach to the session
+    And the control plane names the session's sandbox
+
+  Scenario: A thread that is not stopped has nothing to restart
+    Given a session started by dispatching "hello"
+    When the operator restarts the session
+    Then the control plane refuses it as the wrong state
+    And the session is reported as idle
+
+  Scenario: Restarting a thread that does not exist is refused
+    When the operator restarts a session that does not exist
+    Then the control plane refuses it as not found
+
   Scenario: A turn for a project that does not exist is refused
     When the operator dispatches "hello" to project "ghost"
     Then the control plane refuses it as not found

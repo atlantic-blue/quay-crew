@@ -247,6 +247,19 @@ func (m *Memory) StopSession(_ context.Context, id string) error {
 	return nil
 }
 
+// RestartSession marks a session idle again.
+func (m *Memory) RestartSession(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	session.Status = "idle"
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return nil
+}
+
 // Close is a no op for the in memory store.
 func (m *Memory) Close() {}
 

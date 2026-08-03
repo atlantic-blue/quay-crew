@@ -361,6 +361,37 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	}, nil
 }
 
+// RestartSession brings a stopped session back to idle, with its sandbox running.
+//
+// The sandbox is started here rather than on the next turn, so the operator can attach into the
+// conversation straight away instead of having to dispatch a turn to make the container exist. That
+// is only safe because a session's state lives on the host now: the sandbox this creates is a new
+// container over the same conversation store and the same project files.
+//
+// The sandbox comes first and the status second. A sandbox that will not start leaves the session
+// stopped, which is what it is, rather than idle and unreachable.
+func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSessionRequest) (*quaycrewv1.RestartSessionResponse, error) {
+	session, err := s.store.GetSession(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	if session.GetStatus() != "stopped" {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"session %s is %s, not stopped, so there is nothing to restart", req.GetId(), session.GetStatus())
+	}
+	if _, err := s.sandboxFor(ctx, session); err != nil {
+		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
+	}
+	if err := s.store.RestartSession(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	restarted, err := s.store.GetSession(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.RestartSessionResponse{Session: restarted}, nil
+}
+
 // StopSession marks a session stopped and tears down its sandbox.
 func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionRequest) (*quaycrewv1.StopSessionResponse, error) {
 	if err := s.store.StopSession(ctx, req.GetId()); err != nil {

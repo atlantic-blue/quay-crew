@@ -347,6 +347,40 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		_, w.lastErr = w.client.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: current.sessionID})
 		return w.lastErr
 	})
+	// A refusal is the point of two of these scenarios, so the error is recorded rather than returned.
+	sc.Step(`^the operator restarts the session$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: current.sessionID})
+		return nil
+	})
+	sc.Step(`^the operator restarts a session that does not exist$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: "ghost"})
+		return nil
+	})
+	// Restarting starts the container straight away, which is the whole difference between it and
+	// simply marking a row idle: a second sandbox for the same session is the evidence.
+	sc.Step(`^a second sandbox has been created for that session$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		var forSession int
+		for _, created := range w.provider.Created {
+			if created.ID == current.sessionID {
+				forSession++
+			}
+		}
+		if forSession != 2 {
+			return fmt.Errorf("%d sandboxes were created for the session, want 2: one for the first turn and one for the restart", forSession)
+		}
+		return nil
+	})
 
 	// When: workspaces.
 	sc.Step(`^the operator creates a workspace named "([^"]*)"$`, func(ctx context.Context, name string) error {
@@ -602,6 +636,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the control plane refuses it as invalid$`, func(ctx context.Context) error {
 		return refused(worldFrom(ctx), codes.InvalidArgument)
+	})
+	sc.Step(`^the control plane refuses it as the wrong state$`, func(ctx context.Context) error {
+		return refused(worldFrom(ctx), codes.FailedPrecondition)
 	})
 }
 

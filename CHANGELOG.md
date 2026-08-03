@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **A stopped thread can be restarted, with its container.** `r` in the console, `RestartSession` on the
+  control plane: back to idle with the sandbox already running, so you can attach into the conversation
+  instead of dispatching a turn to make the container exist. Only safe because a session's state lives
+  on the host. ([#96](https://github.com/atlantic-blue/quay-crew/pull/96))
 - **A destructive key asks first, and backspace stops a thread.** `stop thread d754610f?`, drawn where
   the command bar draws. Yes acts, and every other key cancels, because an accidental cancel costs one
   keypress and an accidental yes costs a conversation. `x` still stops, through the same question.
