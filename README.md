@@ -78,7 +78,7 @@ control plane API, and each workspace is isolated from the others.
 ```sh
 make sandbox-image                                            # the image a session runs in
 QC_SANDBOX_IMAGE=quaycrew-sandbox-claude:local QC_MODEL=claude-code make up
-make install                                                  # put quay on your PATH
+make install                                                  # build quay and install it over the copy you run
 
 quay workspace create me
 quay project create house-bills
@@ -97,6 +97,7 @@ make up               # start everything (Redpanda, collector, services)
 make up-observability # also start Grafana, Loki, Tempo, Prometheus
 make down             # stop everything
 make proto            # regenerate code from the protobuf contracts
+make install          # build quay from this checkout, over whatever quay your shell runs
 make test             # run the tests
 make features         # print what the product does, scenario by scenario
 make lint             # run the linters

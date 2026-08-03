@@ -42,7 +42,7 @@ You need Docker and a Claude subscription.
 4. Install the CLI, create a workspace, and give it the token:
 
    ```
-   make install
+   make install          # installs over the quay your shell runs
    quay workspace create demo
    quay project create house-bills
    quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from step 1>

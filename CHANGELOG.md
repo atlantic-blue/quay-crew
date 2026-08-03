@@ -8,6 +8,9 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **`make install` installs over the copy your shell actually runs**, and says which commit it built,
+  so a stale binary earlier on your PATH cannot quietly keep serving you yesterday's tool. Set
+  `BINDIR` to put it somewhere specific. ([#73](https://github.com/atlantic-blue/quay-crew/pull/73))
 - **The console says which crew you are on and what you can press.** A status block naming the
   address, the model backend, the sandbox, the store and whether a conversation outlives its
   container, with the key hints beside it. The rows sit in a framed panel titled with their scope and
