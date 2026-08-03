@@ -298,6 +298,72 @@ func permissionModeOf(session *quaycrewv1.Session) string {
 	return model.PermissionAcceptEdits
 }
 
+// ListContexts says where the files the model reads live: for one project, or for the whole crew.
+//
+// The tool runs on the operator's machine and knows nothing of where this process keeps data, so the
+// paths come from here. Both the console and the command line are clients of this one call rather
+// than each working the layout out for itself, which is the only way the two cannot drift.
+func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsRequest) (*quaycrewv1.ListContextsResponse, error) {
+	projects, err := s.contextProjects(ctx, req.GetProject())
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]string{}
+	workspaces, err := s.store.ListWorkspaces(ctx)
+	if err != nil {
+		return nil, storeError(err, "list workspaces")
+	}
+	for _, workspace := range workspaces {
+		names[workspace.GetId()] = workspace.GetName()
+	}
+
+	dirs := make([]*quaycrewv1.ContextDir, 0, len(projects)*2)
+	seenWorkspace := map[string]bool{}
+	for _, project := range projects {
+		found := s.storage.Contexts(sandbox.Config{
+			ID: "listing", Workspace: project.GetWorkspace(), Project: project.GetId(),
+		})
+		if len(found) != 2 {
+			continue
+		}
+		// One row per workspace however many projects it holds: the workspace's directory is one
+		// directory, and listing it twice would read as two.
+		if !seenWorkspace[project.GetWorkspace()] {
+			seenWorkspace[project.GetWorkspace()] = true
+			dirs = append(dirs, contextDir("workspace", names[project.GetWorkspace()], found[0]))
+		}
+		dirs = append(dirs, contextDir("project", project.GetName(), found[1]))
+	}
+	return &quaycrewv1.ListContextsResponse{Dirs: dirs}, nil
+}
+
+// contextProjects is the projects a listing covers: one when asked for, else every one the crew has.
+func (s *Server) contextProjects(ctx context.Context, project string) ([]*quaycrewv1.Project, error) {
+	if project == "" {
+		projects, err := s.store.ListProjects(ctx, "")
+		if err != nil {
+			return nil, storeError(err, "list projects")
+		}
+		return projects, nil
+	}
+	found, err := s.store.GetProject(ctx, project)
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return []*quaycrewv1.Project{found}, nil
+}
+
+func contextDir(scope, name string, found sandbox.Context) *quaycrewv1.ContextDir {
+	return &quaycrewv1.ContextDir{
+		Scope:   scope,
+		Name:    name,
+		Host:    found.Host,
+		Sandbox: found.Sandbox,
+		Memory:  found.Memory,
+		Written: found.Written,
+	}
+}
+
 // SetSessionPermissionMode changes what a thread's turns may do without asking.
 //
 // The mode belongs to the thread rather than to a turn, so a thread started to plan something keeps

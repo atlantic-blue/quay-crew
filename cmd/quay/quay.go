@@ -35,6 +35,7 @@ commands:
   project list [<workspace>]              list projects
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
+  context [<address>]                     where the files the model reads live
   attach <session id>                     open a session's conversation, with its history
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
 
@@ -131,6 +132,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runAttach(ctx, client, args[1:], out)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
+	case "context":
+		return runContext(ctx, client, args[1:], out)
 	case "secret":
 		return runSecret(ctx, client, args[1:], out)
 	default:
@@ -409,6 +412,52 @@ func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	return fmt.Errorf("%s is a workspace: a turn runs in a project inside it, one of %s",
 		located.Path.Workspace, strings.Join(names, ", "))
+}
+
+// runContext says where the files the model reads live. It asks the control plane rather than working
+// the paths out, because this tool runs on the operator's machine and the layout belongs to the crew.
+func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context [<address>]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+
+	request := &quaycrewv1.ListContextsRequest{}
+	// An address typed in wins; otherwise the operator's own place narrows it. Standing nowhere shows
+	// the whole crew, because then the question was about the crew.
+	path, err := addressFrom(typed)
+	switch {
+	case err != nil && typed != "":
+		return err
+	case err == nil && !path.IsZero():
+		located, err := workspace.ResolvePath(ctx, client, path)
+		if err != nil {
+			return err
+		}
+		request.Project = located.ProjectID
+	}
+
+	resp, err := client.ListContexts(ctx, request)
+	if err != nil {
+		return err
+	}
+	if len(resp.GetDirs()) == 0 {
+		fmt.Fprintln(out, "no context directories: this crew keeps a session's state in its container")
+		return nil
+	}
+	for _, dir := range resp.GetDirs() {
+		state := "not written yet"
+		if dir.GetWritten() {
+			state = "written"
+		}
+		fmt.Fprintf(out, "%s %s\n", dir.GetScope(), dir.GetName())
+		fmt.Fprintf(out, "  edit  %s  (%s)\n", dir.GetMemory(), state)
+		fmt.Fprintf(out, "  read by the model at %s\n", dir.GetSandbox())
+	}
+	return nil
 }
 
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

@@ -320,6 +320,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeAttachSteps(sc)
+	initializeContextSteps(sc)
 	initializeSandboxEnvSteps(sc)
 	initializeWorkspaceSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
