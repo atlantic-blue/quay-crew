@@ -115,9 +115,12 @@ func storeError(err error, what string) error {
 func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if box, ok := s.sandboxes[session.GetId()]; ok {
-		return box, nil
-	}
+	// Always ask the provider, never a remembered handle. What this process believes about containers
+	// and what the daemon actually has drift constantly: an upgrade reaps them, a prune removes them,
+	// a machine restart is fine but anything that removes one behind the control plane's back leaves
+	// a handle here pointing at nothing, and a name is handed to the operator for a container that is
+	// not there. Creating is idempotent, so the daemon is the source of truth and this map is only
+	// what to close later.
 	box, err := s.provider.Create(ctx, sandbox.Config{
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),

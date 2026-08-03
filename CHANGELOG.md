@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The daemon is the source of truth about containers, not a map in the control plane.** It remembered
+  every sandbox it had made and trusted that memory forever, so anything that removed a container
+  behind its back left a handle pointing at nothing and handed the operator a name Docker had never
+  heard of: `No such container: quaycrew-1edc8349315233e36bf4fd53`, over and over. Every turn and every
+  attach now asks the provider, which adopts the container already carrying that name or makes one.
+  ([#106](https://github.com/atlantic-blue/quay-crew/pull/106))
 - **A thread's permission mode, shown and toggled.** Every turn ran `acceptEdits`, hardcoded, and no
   operator could see it or change it. The mode now belongs to the thread and survives a restart, the
   listing has a `MODE` column reading `edits`, `plan` or `dangerous`, and `D` in the console flips the
