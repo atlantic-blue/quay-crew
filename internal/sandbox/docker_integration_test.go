@@ -5,6 +5,7 @@ package sandbox_test
 import (
 	"context"
 	"io"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -158,5 +159,65 @@ func TestDockerProviderDeliversEnv(t *testing.T) {
 	}
 	if strings.TrimSpace(string(out)) != "tok-from-secret" {
 		t.Fatalf("env in sandbox = %q, want 'tok-from-secret'", string(out))
+	}
+}
+
+// TestDockerProviderAdoptsAnExistingContainer is what a control plane that has forgotten its
+// sandboxes runs into. A session's container name is deterministic, so creating again after a restart
+// used to hit the daemon's name conflict and leave that thread undispatchable until somebody removed
+// the container by hand.
+func TestDockerProviderAdoptsAnExistingContainer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	provider := sandbox.DockerProvider{Image: "busybox:latest"}
+	cfg := sandbox.Config{ID: "itest-adopt"}
+
+	first, err := provider.Create(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = first.Close(context.Background()) })
+
+	again, err := provider.Create(ctx, cfg)
+	if err != nil {
+		t.Fatalf("creating a second time for the same session: %v", err)
+	}
+	if out := execOutput(t, ctx, again, "echo", "adopted"); out != "adopted" {
+		t.Fatalf("the adopted sandbox says %q, want it to be usable", out)
+	}
+
+	// And one that had stopped is started rather than left dead, which is the state a container is in
+	// after the host or the daemon restarted under it.
+	stopContainer(t, ctx, sandbox.ContainerName(cfg.ID))
+	restarted, err := provider.Create(ctx, cfg)
+	if err != nil {
+		t.Fatalf("creating over a stopped container: %v", err)
+	}
+	if out := execOutput(t, ctx, restarted, "echo", "started again"); out != "started again" {
+		t.Fatalf("the restarted sandbox says %q, want it running", out)
+	}
+}
+
+func execOutput(t *testing.T, ctx context.Context, box sandbox.Sandbox, argv ...string) string {
+	t.Helper()
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: argv})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func stopContainer(t *testing.T, ctx context.Context, name string) {
+	t.Helper()
+	if out, err := exec.CommandContext(ctx, "docker", "stop", name).CombinedOutput(); err != nil {
+		t.Fatalf("stopping %s: %v: %s", name, err, out)
 	}
 }

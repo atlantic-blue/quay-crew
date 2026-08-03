@@ -357,7 +357,18 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	}
 	if session.GetStatus() == "stopped" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is stopped, so its sandbox is gone", req.GetId())
+			"session %s is stopped: restart it first", req.GetId())
+	}
+	if session.GetArchivedAt() != nil {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"session %s is archived: restore it first", req.GetId())
+	}
+	// Make sure there is something to attach to. The live sandboxes are a map in this process, so a
+	// restart empties it while the row still says idle, and answering from the row alone hands the
+	// operator a container name the daemon has never heard of. The conversation is on the host, so a
+	// fresh container over the same mounts is the same conversation.
+	if _, err := s.sandboxFor(ctx, session); err != nil {
+		return nil, status.Errorf(codes.Internal, "start sandbox: %v", err)
 	}
 	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),

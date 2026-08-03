@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **Opening an idle thread works again.** Attaching answered from the database row alone, so after the
+  control plane restarted it handed back a container name the daemon had never heard of:
+  `No such container: quaycrew-134c2c6d...`. Attaching now starts the thread's sandbox when there is
+  not one, and creating a sandbox adopts the container already carrying that name instead of colliding
+  with it. ([#101](https://github.com/atlantic-blue/quay-crew/pull/101))
 - **`r` refreshes the view.** It restarted a thread for one afternoon. Refreshing is the key you reach
   for constantly, so it holds the short obvious letter; restart moved to `R`, beside `A` for archive,
   and `g` still refreshes too. ([#99](https://github.com/atlantic-blue/quay-crew/pull/99))
