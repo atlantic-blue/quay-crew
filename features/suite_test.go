@@ -118,6 +118,7 @@ type world struct {
 
 	projectID          string
 	projectName        string
+	secondProjectID    string
 	turns              []turn
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
@@ -217,6 +218,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
+	initializeProjectSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
@@ -232,6 +234,17 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if worldFrom(ctx) == nil {
 			return fmt.Errorf("the control plane was not started")
 		}
+		return nil
+	})
+	sc.Step(`^a second project named "([^"]*)"$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: name})
+		if err != nil {
+			return err
+		}
+		// createProject would move the world's current project, and the background's project is the
+		// one the other steps mean, so record this one separately.
+		w.secondProjectID = resp.GetProject().GetId()
 		return nil
 	})
 	sc.Step(`^a project named "([^"]*)"$`, func(ctx context.Context, name string) error {
