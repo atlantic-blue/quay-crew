@@ -118,6 +118,36 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 
 // initializeSandboxEnvSteps covers what a session's sandbox is created with.
 func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^every sandbox was created for the same workspace and project$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Created) < 2 {
+			return fmt.Errorf("%d sandboxes were created, want at least 2 to compare", len(w.provider.Created))
+		}
+		first := w.provider.Created[0]
+		for _, created := range w.provider.Created[1:] {
+			if created.Workspace != first.Workspace || created.Project != first.Project {
+				return fmt.Errorf("one sandbox was created for %s/%s and another for %s/%s",
+					first.Workspace, first.Project, created.Workspace, created.Project)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the sandboxes were created for one workspace but different projects$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Created) != 2 {
+			return fmt.Errorf("%d sandboxes were created, want 2", len(w.provider.Created))
+		}
+		first, second := w.provider.Created[0], w.provider.Created[1]
+		if first.Workspace != second.Workspace {
+			return fmt.Errorf("they were created for workspaces %q and %q, want one", first.Workspace, second.Workspace)
+		}
+		if first.Project == second.Project {
+			return fmt.Errorf("both were created for project %q, want the two projects kept apart", first.Project)
+		}
+		return nil
+	})
+
 	sc.Step(`^the session's sandbox was created with the subscription token "([^"]*)"$`,
 		func(ctx context.Context, want string) error {
 			w := worldFrom(ctx)
