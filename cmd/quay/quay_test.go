@@ -240,6 +240,37 @@ func TestSecretSetNeedsAKeyAndAValue(t *testing.T) {
 	}
 }
 
+// TestFeaturesNeedsNoControlPlane: the question "what does this thing do" is usually asked by
+// somebody who has not started a stack yet, so it must not need one.
+func TestFeaturesNeedsNoControlPlane(t *testing.T) {
+	var out bytes.Buffer
+	if err := run(context.Background(), nil, []string{"features"}, &out); err != nil {
+		t.Fatalf("quay features with no client: %v", err)
+	}
+	if !strings.Contains(out.String(), "sandbox") {
+		t.Fatalf("the feature list says nothing about sandboxes:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := run(context.Background(), nil, []string{"features", "address"}, &out); err != nil {
+		t.Fatalf("quay features address: %v", err)
+	}
+	if !strings.Contains(out.String(), "address") && !strings.Contains(out.String(), "Address") {
+		t.Fatalf("filtering by a word did not find the feature about it:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "Sessions run in isolated sandboxes") {
+		t.Fatalf("filtering by a word listed everything anyway:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := run(context.Background(), nil, []string{"features", "quantum"}, &out); err != nil {
+		t.Fatalf("quay features quantum: %v", err)
+	}
+	if !strings.Contains(out.String(), "nothing here mentions") {
+		t.Fatalf("a word that matches nothing said %q", out.String())
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard); err == nil {
 		t.Fatal("unknown command = nil error, want error")

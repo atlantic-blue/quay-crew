@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **`quay features`**, and a `features` view in the console: what this build can do and what proves it,
+  read from the behaviour specification embedded in the binary. It asks the control plane nothing,
+  because a capability belongs to the build rather than to a running stack, and the question is usually
+  asked by somebody who has not started one yet. A hand written list would drift from the scenarios;
+  this one cannot. ([#82](https://github.com/atlantic-blue/quay-crew/pull/82))
 - **The console header reads like k9s**: the status block says which build, which control plane, where
   you are standing, and what a turn would run in; this view's own commands sit beside it as
   `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `THREAD↑`;

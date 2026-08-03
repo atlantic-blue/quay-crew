@@ -523,6 +523,33 @@ func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 	}
 }
 
+// TestTheFeaturesViewAsksTheControlPlaneNothing is the point of that view: it is what an operator
+// opens before they have a stack, and a capability belongs to the build rather than to a running one.
+func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
+	rows, err := Features().List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing features: %v", err)
+	}
+	if len(rows) < 10 {
+		t.Fatalf("the features view lists %d rows, want every scenario in the build", len(rows))
+	}
+
+	var titled int
+	for _, row := range rows {
+		if row.Cells[0] != "" {
+			titled++
+		}
+		if row.Cells[1] == "" {
+			t.Fatalf("a row names no scenario: %+v", row)
+		}
+	}
+	// One title per feature, then its scenarios beneath it, rather than the title repeated down the
+	// column.
+	if titled < 5 || titled >= len(rows) {
+		t.Fatalf("%d of %d rows carry a feature title, want one per feature", titled, len(rows))
+	}
+}
+
 func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 

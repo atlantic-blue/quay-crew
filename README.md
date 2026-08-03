@@ -14,7 +14,7 @@ The name is the picture of the system: a crew you command at the quay where ever
 ## What works today
 
 Everything below runs. Each one is written out as scenarios in [`features/`](features/), which you can
-read, or run with `make features`.
+run with `make features`, or read from the binary itself with `quay features`.
 
 - **A session is a conversation in its own container.** It starts on the first turn, is reused for
   every turn after it, and runs the Claude Code command line tool on your subscription, so a turn costs
