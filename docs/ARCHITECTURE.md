@@ -21,7 +21,7 @@ document describes the design, the stack, and the delivery plan.
 
 Channels feed a durable event log. A control plane consumes it, manages workspaces, and drives parallel
 agent sessions. Each session talks to the model and runs tools in a sandbox tier. The event log is the
-write side; a workspaceion materialises a read model that the admin dashboard reads. Synchronous
+write side; a projection materialises a read model that the admin dashboard reads. Synchronous
 queries (the dashboard reading the read model, the control plane managing workspaces) go over gRPC.
 
 ```mermaid
@@ -91,7 +91,7 @@ Each is its own Go service in its own container.
   is `franz-go` (pure Go, no CGO, so the images stay small).
 - **Why an event log.** It decouples the services (each publishes and subscribes on its own), it is
   durable and replayable, and it is the natural write side for the read model: the log is the source
-  of truth, the workspaceion is a consumer.
+  of truth, the projection is a consumer.
 - **Synchronous APIs: gRPC.** Request and response calls (managing workspaces, reading the read model)
   use gRPC. The message shapes and the service methods are defined in **protobuf** under `proto/`, so
   every service agrees on one contract.
@@ -481,7 +481,7 @@ doubles as the trace id, and token and cost counters land with the first model c
   without the operator's intent, plus the telemetry stack in the local compose.
 - **Controllers, sessions, sandbox.** The remaining controllers, parallel sessions with a durable
   session store, and sandbox tiers with permission tiers per channel.
-- **Dashboard and workspaceion.** The workspaceion that materialises the read model, and the admin
+- **Dashboard and projection.** The projection that materialises the read model, and the admin
   dashboard that reads it and drives the control plane.
 - **Cloud parity.** Containerise, cloud implementations behind the interfaces, and deploy through CI.
 - **Differentiators (optional).** A reviewed learning loop that proposes a skill or memory for

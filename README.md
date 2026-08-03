@@ -7,9 +7,33 @@ cloud from the same build.
 
 The name is the picture of the system: a crew you command at the quay where every channel docks.
 
-> Status: early. The architecture and the delivery plan are set (see
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)); the code is being built milestone by milestone,
-> tracked in issues.
+> Status: early. Sessions work end to end from the command line. Chat channels, the dashboard and the
+> telemetry stack do not exist yet. [`CHANGELOG.md`](CHANGELOG.md) is the honest list of what has
+> landed, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is where the whole plan lives.
+
+## What works today
+
+Everything below runs. Each one is written out as scenarios in [`features/`](features/), which you can
+read, or run with `make features`.
+
+- **A session is a conversation in its own container.** It starts on the first turn, is reused for
+  every turn after it, and runs the Claude Code command line tool on your subscription, so a turn costs
+  no API credit.
+- **You address the crew by path.** `quay use me/house-bills`, then `quay dispatch "..."`. Creating a
+  workspace or a project moves you into it. An address typed on a command applies to that command only,
+  and a thread is the third level, so standing in one continues that conversation.
+- **A conversation survives its container.** The model's own store and the project's files are mounted
+  in from the host, so replacing a sandbox does not destroy the conversation.
+- **Each level carries context.** A workspace and a project own a directory the sandbox mounts, and the
+  model reads `CLAUDE.md` from both. Giving a project context is writing a file into it.
+- **Workspaces and sessions survive a restart**, in Postgres, so the thread you were in yesterday is
+  still there.
+- **You can get inside the conversation.** `quay attach <session>` puts you in it with its history;
+  shelling in with `s` shows you the room instead.
+- **`quay` with no arguments opens a console**, in the shape of k9s: `:` to switch resource, `/` to
+  filter, enter to drill in, `s` to shell in, `x` to stop a session.
+- **Secrets are per workspace**, held by a secrets backend and injected into the session's sandbox. The
+  event log records a reference, never a value.
 
 ## What it is
 
@@ -21,7 +45,7 @@ wherever you are:
   independent and replaceable.
 - A **control plane** routes work and manages workspaces.
 - **Agent sessions** run the model and execute tools inside sandboxes.
-- A **workspaceion** builds a read model from the event log that an **admin dashboard** reads.
+- A **projection** builds a read model from the event log that an **admin dashboard** reads.
 
 It ships with no data of any kind. You create **workspaces** at runtime through the dashboard or the
 control plane API, and each workspace is isolated from the others.
@@ -50,11 +74,19 @@ control plane API, and each workspace is isolated from the others.
 ## Quick start
 
 ```sh
-make up        # bring up the whole stack (alias: make start)
+make sandbox-image                                            # the image a session runs in
+QC_SANDBOX_IMAGE=quaycrew-sandbox-claude:local QC_MODEL=claude-code make up
+make install                                                  # put quay on your PATH
+
+quay workspace create me
+quay project create house-bills
+quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
+quay dispatch "say pong"
 ```
 
-Then open the dashboard, create a workspace, and add that workspace's channel credentials. The system
-starts serving it. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
+Creating something moves you into it, so nothing above says where twice, and `quay use` tells you where
+you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
+subscription. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
 
 Common targets:
 
@@ -64,6 +96,7 @@ make up-observability # also start Grafana, Loki, Tempo, Prometheus
 make down             # stop everything
 make proto            # regenerate code from the protobuf contracts
 make test             # run the tests
+make features         # print what the product does, scenario by scenario
 make lint             # run the linters
 ```
 
@@ -90,7 +123,7 @@ Built spine first, so a usable thing exists early and the rest widens it. Full d
 - **First remote channel:** a chat channel, inbound and gated outbound.
 - **Controllers, sessions, sandbox:** the rest of the controllers, parallel sessions, a durable
   session store, and sandbox tiers with permission tiers.
-- **Dashboard and workspaceion:** the read model and the admin dashboard.
+- **Dashboard and projection:** the read model and the admin dashboard.
 - **Cloud parity:** managed backends behind the same interfaces, deployed through CI.
 - **Differentiators (optional):** a reviewed learning loop, a scheduler, and voice input.
 
