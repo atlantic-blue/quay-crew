@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The console calls them threads.** The view, its panel title and the breadcrumb say threads, because
+  a row in that list is one conversation. The control plane still calls the running thread a session,
+  which is a real distinction inside it and means nothing to somebody reading a list of fourteen rows.
+  `sessions`, `session`, `sess` and `s` all still open the view.
+  ([#90](https://github.com/atlantic-blue/quay-crew/pull/90))
 - **A flag is refused rather than swallowed.** `quay dispatch --project default "hello"` used to make
   the flag and its value the first two words of the message, and then complain about the workspace. The
   flags addresses replaced are named, with what to type instead, and any other flag is refused too, so
