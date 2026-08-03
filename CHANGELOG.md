@@ -8,6 +8,9 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **`r` refreshes the view.** It restarted a thread for one afternoon. Refreshing is the key you reach
+  for constantly, so it holds the short obvious letter; restart moved to `R`, beside `A` for archive,
+  and `g` still refreshes too. ([#99](https://github.com/atlantic-blue/quay-crew/pull/99))
 - **A thread can be put away, and brought back.** `A` archives one through the same confirmation, and an
   `archived` view lists what was put away with `u` to restore it. Archiving stops the thread, closes its
   sandbox and hides it from the default listing. Nothing is deleted: the row, the conversation and the

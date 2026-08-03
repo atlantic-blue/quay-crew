@@ -704,10 +704,40 @@ func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	}
 }
 
+// TestRefreshIsBoundToRAndG: refreshing is the key reached for constantly, so it holds the short
+// obvious letter.
+func TestRefreshIsBoundToRAndG(t *testing.T) {
+	for _, key := range []string{"r", "g"} {
+		t.Run(key, func(t *testing.T) {
+			client := &fakeClient{}
+			_, cmd := update(t, threadsAt(t, client), runes(key))
+			if cmd == nil {
+				t.Fatalf("%s produced no command, want a listing", key)
+			}
+			if _, isRows := cmd().(rowsMsg); !isRows {
+				t.Fatalf("%s returned %#v, want a listing", key, cmd())
+			}
+		})
+	}
+}
+
+// TestRNoLongerRestarts is the way off the old spelling. The tests for `R` all pass while `r` quietly
+// keeps restarting, which is how a key that moved carries on doing the old thing.
+func TestRNoLongerRestarts(t *testing.T) {
+	client := &fakeClient{}
+	_, cmd := update(t, threadsAt(t, client), runes("r"))
+	if cmd != nil {
+		cmd()
+	}
+	if len(client.restarted) != 0 {
+		t.Fatalf("r restarted %v, want it to refresh instead", client.restarted)
+	}
+}
+
 // TestRestartBringsAThreadBackWithoutAsking: restarting is not destructive, so it acts at once.
 func TestRestartBringsAThreadBackWithoutAsking(t *testing.T) {
 	client := &fakeClient{}
-	model, cmd := update(t, threadsAt(t, client), runes("r"))
+	model, cmd := update(t, threadsAt(t, client), runes("R"))
 
 	if model.mode != modeBrowse {
 		t.Fatalf("mode = %v, want restarting to act at once", model.mode)
@@ -727,7 +757,7 @@ func TestRestartBringsAThreadBackWithoutAsking(t *testing.T) {
 // restart, and its reason is what the operator has to see.
 func TestRestartingARunningThreadShowsTheRefusal(t *testing.T) {
 	client := &fakeClient{restartErr: fmt.Errorf("session s1 is idle, not stopped, so there is nothing to restart")}
-	_, cmd := update(t, threadsAt(t, client), runes("r"))
+	_, cmd := update(t, threadsAt(t, client), runes("R"))
 	if cmd == nil {
 		t.Fatal("restart produced no command")
 	}
@@ -1010,7 +1040,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"<enter> Attach", "<s> Shell", "<r> Restart", "<backspace> Stop", "<?> Help"} {
+	for _, want := range []string{"<enter> Attach", "<s> Shell", "<R> Restart", "<backspace> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}
