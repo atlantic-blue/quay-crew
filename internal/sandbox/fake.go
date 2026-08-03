@@ -15,16 +15,30 @@ type FakeProvider struct {
 	// project and workspace it belongs to and what environment it carries.
 	Created []Config
 	Boxes   []*FakeSandbox
+	// live is the sandbox each session currently has, so creating twice for one session adopts it.
+	live map[string]*FakeSandbox
 }
 
 var _ Provider = (*FakeProvider)(nil)
 
-// Create records the configuration and returns a new FakeSandbox streaming the canned Output.
+// Create records the configuration and returns a FakeSandbox streaming the canned Output.
+//
+// A session it has already created, and which has not been closed, gets that same sandbox back. The
+// real Docker provider adopts the container already carrying that name, and a double that is looser
+// than the thing it stands in for manufactures green: this one used to hand out two sandboxes for one
+// session, which is why the suite passed while the daemon refused the duplicate name.
 func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Created = append(f.Created, cfg)
+	if box, live := f.live[cfg.ID]; live && !box.Closed {
+		return box, nil
+	}
 	box := &FakeSandbox{Output: f.Output}
+	if f.live == nil {
+		f.live = make(map[string]*FakeSandbox)
+	}
+	f.live[cfg.ID] = box
 	f.Boxes = append(f.Boxes, box)
 	return box, nil
 }

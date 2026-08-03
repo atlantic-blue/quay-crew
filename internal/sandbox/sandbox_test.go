@@ -77,3 +77,34 @@ func TestNewProvider(t *testing.T) {
 		t.Fatal("unknown kind = nil error, want error")
 	}
 }
+
+// TestFakeProviderAdoptsASessionsSandbox holds the double to what Docker does. It used to hand out
+// two sandboxes for one session id, so the suite stayed green while the real daemon refused the
+// duplicate name, which is the exact shape of false green this project keeps finding.
+func TestFakeProviderAdoptsASessionsSandbox(t *testing.T) {
+	provider := &sandbox.FakeProvider{Output: "hi"}
+
+	first, err := provider.Create(context.Background(), sandbox.Config{ID: "s1"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	again, err := provider.Create(context.Background(), sandbox.Config{ID: "s1"})
+	if err != nil {
+		t.Fatalf("Create again: %v", err)
+	}
+	if first != again {
+		t.Fatal("the fake made a second sandbox for one session, which Docker refuses")
+	}
+
+	// Closed is gone, so the next one is genuinely new.
+	if err := first.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	replacement, err := provider.Create(context.Background(), sandbox.Config{ID: "s1"})
+	if err != nil {
+		t.Fatalf("Create after close: %v", err)
+	}
+	if replacement == first {
+		t.Fatal("a closed sandbox was handed back, want a fresh one")
+	}
+}

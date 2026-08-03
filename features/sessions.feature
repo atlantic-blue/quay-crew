@@ -163,6 +163,22 @@ Feature: Sessions run in isolated sandboxes
     And the command resumes the conversation the turn started
     And the answer carries no credential
 
+  # The live sandboxes are a map in the control plane's process, so a restart empties it while the row
+  # still says idle. Answering from the row alone handed the operator a container name the daemon had
+  # never heard of: "No such container: quaycrew-134c2c6dbf1e907413753cc5".
+  Scenario: Attaching to a thread the control plane has forgotten starts its sandbox again
+    Given a session started by dispatching "remember this"
+    When the control plane restarts
+    And the operator asks how to attach to the session
+    Then the control plane names the session's sandbox
+    And a second sandbox has been created for that session
+
+  Scenario: An archived thread cannot be attached to
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator asks how to attach to the session
+    Then the control plane refuses it as not yet ready
+
   Scenario: A thread with no conversation yet cannot be attached to
     When the operator asks how to attach to a session that has never had a turn
     Then the control plane refuses it as not yet ready
