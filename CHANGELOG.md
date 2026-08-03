@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **You can find the files the model reads.** `quay context` on the command line and a `context` view in
+  the console, both clients of one control plane call: a row per workspace and per project, where it is
+  on your machine, where it appears inside a sandbox, and whether `CLAUDE.md` has been written yet. The
+  mounts have existed for a while and nothing said where they were, so the feature worked and nobody
+  could find it. ([#111](https://github.com/atlantic-blue/quay-crew/pull/111))
 - **You can leave an open thread without ending it.** Opening a conversation handed the terminal to
   `claude --resume` and the only way back to the list was to end it. It now runs inside tmux in the
   thread's own sandbox, so `ctrl-b d` leaves the model running and returns you to the console, and

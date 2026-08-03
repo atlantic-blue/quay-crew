@@ -80,6 +80,9 @@ const (
 	// is one per sandbox, and a sandbox holds one thread, so opening a thread twice lands in the one
 	// that is already running rather than starting a second beside it.
 	AttachedSessionName = "quay"
+	// MemoryFile is what the model reads as its memory in a directory: user memory in the home
+	// directory, project memory in the working directory. It is the model's own convention, not ours.
+	MemoryFile = "CLAUDE.md"
 )
 
 // ContainerPrefix is what a session's container name starts with, so ours are recognisable among

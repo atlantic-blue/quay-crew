@@ -35,6 +35,7 @@ type fakeClient struct {
 	archived         []string
 	restored         []string
 	modesSet         []string
+	contexts         []*quaycrewv1.ContextDir
 	listErr          error
 }
 
@@ -90,6 +91,13 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
 	f.archived = append(f.archived, req.GetId())
 	return &quaycrewv1.ArchiveSessionResponse{}, nil
+}
+
+func (f *fakeClient) ListContexts(_ context.Context, _ *quaycrewv1.ListContextsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListContextsResponse, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return &quaycrewv1.ListContextsResponse{Dirs: f.contexts}, nil
 }
 
 func (f *fakeClient) SetSessionPermissionMode(_ context.Context, req *quaycrewv1.SetSessionPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
@@ -940,6 +948,53 @@ func TestTheModeIsInTheListing(t *testing.T) {
 				t.Fatalf("mode %q reads as %q, want %q", mode, got, want)
 			}
 		})
+	}
+}
+
+// TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere: an empty directory is the normal state
+// and says nothing, so whether the memory file exists is a column rather than something to infer.
+func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
+	client := &fakeClient{contexts: []*quaycrewv1.ContextDir{
+		{Scope: "workspace", Name: "demo", Host: "/data/workspaces/w1/claude",
+			Sandbox: "/home/agent/.claude", Memory: "/data/workspaces/w1/claude/CLAUDE.md"},
+		{Scope: "project", Name: "default", Host: "/data/workspaces/w1/projects/p1/workspace",
+			Sandbox: "/home/agent/workspace", Memory: "/data/workspaces/w1/projects/p1/workspace/CLAUDE.md",
+			Written: true},
+	}}
+
+	rows, err := Contexts(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing contexts: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("the context view lists %d rows, want the workspace and the project", len(rows))
+	}
+	if got := rows[0].Cells[2]; got != "not written yet" {
+		t.Fatalf("an unwritten memory file reads as %q, want it said out loud", got)
+	}
+	if got := rows[1].Cells[2]; got != "written" {
+		t.Fatalf("a written memory file reads as %q", got)
+	}
+	// The row's identifier is the file, because that is what any action on it would open.
+	if rows[1].ID != "/data/workspaces/w1/projects/p1/workspace/CLAUDE.md" {
+		t.Fatalf("the row carries %q, want the file to edit", rows[1].ID)
+	}
+}
+
+// TestTheContextViewIsRegistered: it is no use if the command bar cannot reach it.
+func TestTheContextViewIsRegistered(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, token := range []string{"context", "contexts", "ctx", "c"} {
+		resource, found := registry.Resolve(token)
+		if !found {
+			t.Fatalf("Resolve(%q): not found", token)
+		}
+		if resource.Name != "context" {
+			t.Fatalf("Resolve(%q) = %q, want context", token, resource.Name)
+		}
 	}
 }
 

@@ -46,16 +46,8 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 		return nil, err
 	}
 
-	wanted := []struct {
-		parts  []string
-		target string
-	}{
-		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath},
-		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "workspace"}, WorkingPath},
-	}
-
-	mounts := make([]Mount, 0, len(wanted))
-	for _, dir := range wanted {
+	mounts := make([]Mount, 0, 2)
+	for _, dir := range layout(cfg) {
 		if err := makeWritableDir(filepath.Join(append([]string{s.Dir}, dir.parts...)...)); err != nil {
 			return nil, err
 		}
@@ -65,6 +57,60 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 		})
 	}
 	return mounts, nil
+}
+
+// dir is one of a sandbox's two directories, as path parts under the data directory and where it
+// appears inside the container.
+type dir struct {
+	parts  []string
+	target string
+}
+
+// layout is where a sandbox's two directories go. The workspace's conversation store is shared by
+// every project in it, so a thread started in one project can still be resumed; the working directory
+// belongs to a single project.
+func layout(cfg Config) []dir {
+	return []dir{
+		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath},
+		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "workspace"}, WorkingPath},
+	}
+}
+
+// Context describes a directory the model reads, for a caller that wants to show or edit it rather
+// than mount it.
+type Context struct {
+	// Host is where it is on the machine running the sandboxes, which is where it is edited.
+	Host string
+	// Sandbox is where the same directory appears inside a container.
+	Sandbox string
+	// Memory is the file the model reads as its memory for this scope, inside Host.
+	Memory string
+	// Written says whether that file exists yet.
+	Written bool
+}
+
+// Contexts describes the two directories a session for this configuration reads, creating nothing.
+//
+// The paths are the host's, because that is where the operator edits them, while whether the memory
+// file exists is answered from this process's own view of the same directory. In a container those
+// are two different paths to one place.
+func (s Storage) Contexts(cfg Config) []Context {
+	if s.Dir == "" {
+		return nil
+	}
+	out := make([]Context, 0, 2)
+	for _, dir := range layout(cfg) {
+		host := path.Join(append([]string{s.Host}, dir.parts...)...)
+		mine := filepath.Join(append([]string{s.Dir}, dir.parts...)...)
+		_, err := os.Stat(filepath.Join(mine, MemoryFile))
+		out = append(out, Context{
+			Host:    host,
+			Sandbox: dir.target,
+			Memory:  path.Join(host, MemoryFile),
+			Written: err == nil,
+		})
+	}
+	return out
 }
 
 // ConversationFile is the extension the model's command line tool gives a stored conversation. It

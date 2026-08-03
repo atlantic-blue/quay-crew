@@ -107,6 +107,51 @@ func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	return names
 }
 
+// Contexts lists the directories the model reads: one per workspace, one per project. They are files
+// on the operator's machine, mounted into every sandbox, so this view exists to answer where they are
+// and whether anything is in them.
+//
+// An empty directory is the normal state and says nothing, which is why the memory file's presence is
+// a column of its own rather than left to be inferred from a listing that shows nothing.
+func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "context",
+		Aliases: []string{"c", "contexts", "ctx"},
+		Columns: []Column{
+			{Title: "scope", Width: 10},
+			{Title: "name", Width: 18},
+			{Title: "memory", Width: 16},
+			{Title: "edit this file", Width: 0},
+		},
+		SortBy: 1,
+		List: func(ctx context.Context, _ string) ([]Row, error) {
+			resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
+			if err != nil {
+				return nil, err
+			}
+			rows := make([]Row, 0, len(resp.GetDirs()))
+			for _, dir := range resp.GetDirs() {
+				rows = append(rows, contextRow(dir))
+			}
+			return rows, nil
+		},
+	}
+}
+
+func contextRow(dir *quaycrewv1.ContextDir) Row {
+	written, state := "not written yet", StateUnknown
+	if dir.GetWritten() {
+		written, state = "written", StateReady
+	}
+	return Row{
+		// The file is what an action on this row would open, so it is the identifier.
+		ID:    dir.GetMemory(),
+		Label: dir.GetName(),
+		Cells: []string{dir.GetScope(), dir.GetName(), written, dir.GetMemory()},
+		State: state,
+	}
+}
+
 // Features lists what this build of the crew can do, from the specification embedded in it. It is the
 // one view that asks the control plane nothing: a capability belongs to the build, not to a running
 // stack, and this is the view an operator opens before they know what to open.
