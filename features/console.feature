@@ -63,6 +63,20 @@ Feature: The operator sees the crew from the console
     And the operator opens the console
     Then the console shows the thread identifier shortened
 
+  # Enter is the obvious key on a conversation, and on this view it used to do nothing at all, because
+  # a thread has nothing to drill into.
+  Scenario: Enter on a thread opens its conversation
+    Given a session started by dispatching "hello"
+    When the operator opens the console
+    And the operator presses enter on the selected thread
+    Then the console opens that thread's conversation
+
+  Scenario: Enter on a thread with no conversation says why rather than opening something that errors
+    Given a thread whose first turn failed
+    When the operator opens the console
+    And the operator presses enter on the selected thread
+    Then the console says the thread has no conversation yet
+
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console

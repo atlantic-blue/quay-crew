@@ -3,10 +3,12 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 
@@ -17,6 +19,9 @@ type consoleWorld struct {
 	registry      *console.Registry
 	active        console.Resource
 	rows          []console.Row
+	// opened is the command the console would hand the terminal, and openErr the reason it would not.
+	opened  *exec.Cmd
+	openErr error
 }
 
 type consoleKey struct{}
@@ -126,6 +131,57 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// A session exists only once a turn creates it, so a failing runner is how you get one with no
+	// conversation behind it.
+	sc.Step(`^a thread whose first turn failed$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		w.runner.failNext = true
+		_ = w.dispatch(ctx, w.projectID, "", "this turn fails")
+		return nil
+	})
+
+	sc.Step(`^the operator presses enter on the selected thread$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		c.pressEnter(row)
+		return nil
+	})
+
+	sc.Step(`^the console opens that thread's conversation$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		if c.openErr != nil {
+			return fmt.Errorf("enter was refused: %w", c.openErr)
+		}
+		if c.opened == nil {
+			return fmt.Errorf("enter produced no command")
+		}
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		line := strings.Join(c.opened.Args, " ")
+		for _, want := range []string{sandbox.ContainerName(current.sessionID), "claude --resume conversation-1"} {
+			if !strings.Contains(line, want) {
+				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the console says the thread has no conversation yet$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if c.openErr == nil {
+			return fmt.Errorf("enter opened %v, want a reason the operator can act on", c.opened)
+		}
+		if !strings.Contains(c.openErr.Error(), "no conversation yet") {
+			return fmt.Errorf("the reason is %q, want it to say there is no conversation yet", c.openErr)
+		}
+		return nil
+	})
+
 	sc.Step(`^the console lists (\d+) projects?$`, func(ctx context.Context, want int) error {
 		return expectRows(consoleFrom(ctx), "projects", want)
 	})
@@ -200,6 +256,20 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		}
 		return fmt.Errorf("the threads view has no Stop action")
 	})
+}
+
+// pressEnter runs whatever the active view has bound to enter on the single listed row, which is the
+// same path a keypress takes. It records the command and the refusal rather than asserting on either,
+// so the two scenarios can each say what they expect.
+func (c *consoleWorld) pressEnter(row console.Row) {
+	for _, action := range c.active.Actions {
+		if !action.Bound("enter") || action.Shell == nil {
+			continue
+		}
+		c.opened, c.openErr = action.Shell(row)
+		return
+	}
+	c.openErr = fmt.Errorf("the %s view has nothing bound to enter", c.active.Name)
 }
 
 // onlyRow returns the single listed row, so a scenario asserting on "the session" cannot quietly

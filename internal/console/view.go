@@ -472,7 +472,9 @@ func (m Model) helpLines() []string {
 	lines := make([]string, 0, len(m.active.Actions)+12)
 	lines = append(lines, crumb.Render("  "+m.active.Name))
 	for _, action := range m.active.Actions {
-		lines = append(lines, "    "+hint(action.Key, action.Label))
+		// Every spelling, not just the primary one, because this is where somebody looks for the key
+		// they used to press.
+		lines = append(lines, "    "+hint(strings.Join(action.Keys(), " "), action.Label))
 	}
 	if m.active.DrillTo != "" {
 		lines = append(lines, "    "+hint("enter", "Drill into "+m.active.DrillTo))

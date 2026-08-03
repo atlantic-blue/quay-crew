@@ -70,10 +70,32 @@ type Lister func(ctx context.Context, parent string) ([]Row, error)
 // why. "Nothing to run" is not a reason, and the reasons here are ones they can act on: a session
 // with no conversation yet, or one that has been stopped.
 type Action struct {
-	Key   string
+	Key string
+	// Also are further keys that do the same thing. The header shows Key alone, so the hints stay one
+	// line per action; the question mark lists all of them, which is where somebody goes looking for
+	// the spelling they used to type.
+	Also  []string
 	Label string
 	Run   func(ctx context.Context, row Row) error
 	Shell func(row Row) (*exec.Cmd, error)
+}
+
+// Bound says whether a keypress runs this action.
+func (a Action) Bound(key string) bool {
+	if a.Key == key {
+		return true
+	}
+	for _, also := range a.Also {
+		if also == key {
+			return true
+		}
+	}
+	return false
+}
+
+// Keys is every key this action answers to, primary first, for the help list.
+func (a Action) Keys() []string {
+	return append([]string{a.Key}, a.Also...)
 }
 
 // Resource is one thing the console can list. Adding a view is adding one of these.
