@@ -76,8 +76,12 @@ type Action struct {
 	// the spelling they used to type.
 	Also  []string
 	Label string
-	Run   func(ctx context.Context, row Row) error
-	Shell func(row Row) (*exec.Cmd, error)
+	// Confirm makes the console ask before it acts, naming the row it is about to act on. Every
+	// destructive key sets it: the list is full of conversations, and there is no way back from
+	// pressing the wrong one.
+	Confirm bool
+	Run     func(ctx context.Context, row Row) error
+	Shell   func(row Row) (*exec.Cmd, error)
 }
 
 // Bound says whether a keypress runs this action.
@@ -113,6 +117,13 @@ type Resource struct {
 	// SortBy is the column the console orders rows by, and marks with an arrow so the order is
 	// visible. Rows that tie keep the order the control plane returned them in.
 	SortBy int
+}
+
+// One is what to call a single row of this resource, for a sentence about one of them: "stop thread
+// d754610f?". Every resource here is named as a plural, so trimming it is enough and beats carrying a
+// second name on every declaration.
+func (r Resource) One() string {
+	return strings.TrimSuffix(r.Name, "s")
 }
 
 // Registry holds the resources the console knows about and resolves what the operator types.

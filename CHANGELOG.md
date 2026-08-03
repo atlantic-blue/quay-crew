@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **A destructive key asks first, and backspace stops a thread.** `stop thread d754610f?`, drawn where
+  the command bar draws. Yes acts, and every other key cancels, because an accidental cancel costs one
+  keypress and an accidental yes costs a conversation. `x` still stops, through the same question.
+  ([#95](https://github.com/atlantic-blue/quay-crew/pull/95))
 - **Enter opens a thread's conversation.** A thread has nothing to drill into, so enter did nothing
   at all on the one view where the obvious key has an obvious meaning. `a` still works, and the
   question mark now lists every key an action answers to.

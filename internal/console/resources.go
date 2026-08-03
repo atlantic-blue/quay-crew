@@ -245,8 +245,11 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			Key:   "x",
-			Label: "Stop",
+			// Backspace is the primary key, Julian's ask, and it asks before it acts. `x` still works.
+			Key:     "backspace",
+			Also:    []string{"x"},
+			Label:   "Stop",
+			Confirm: true,
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
