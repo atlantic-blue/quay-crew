@@ -3,6 +3,8 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -100,6 +102,41 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		if strings.Contains(a.spec.String(), "OAUTH") {
 			return fmt.Errorf("the answer mentions a credential: %s", a.spec.String())
+		}
+		return nil
+	})
+
+	// The model keeps its conversations on the host now, so losing one is deleting the file, which is
+	// exactly what happened to every conversation from a sandbox built before those mounts existed.
+	sc.Step(`^the conversation the model kept is lost$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		if err != nil {
+			return err
+		}
+		session := resp.GetSession()
+		path := filepath.Join(w.conversationDir(session.GetWorkspace()),
+			session.GetModelSessionId()+sandbox.ConversationFile)
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("losing the conversation: %w", err)
+		}
+		return nil
+	})
+
+	sc.Step(`^the refusal says the conversation is gone$`, func(ctx context.Context) error {
+		a := attachFrom(ctx)
+		if a.err == nil {
+			return fmt.Errorf("attaching was allowed, expected a refusal")
+		}
+		// A refusal that only says no leaves the operator staring at a thread they cannot open.
+		for _, want := range []string{"conversation is gone", "Dispatch a turn"} {
+			if !strings.Contains(a.err.Error(), want) {
+				return fmt.Errorf("the refusal is %q, want it to say %q", a.err.Error(), want)
+			}
 		}
 		return nil
 	})

@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -123,6 +125,9 @@ type world struct {
 	runner     *recordingRunner
 	secrets    secrets.Store
 	store      store.Store
+	// storage is a real conversation store on disk, so a scenario can say what the model kept and
+	// what it did not. The scenarios that do not care about it seed every conversation they start.
+	storage sandbox.Storage
 	// info is what the control plane reports about itself, describing the doubles the scenarios
 	// actually run against rather than a stack nobody here has.
 	info controlplane.Info
@@ -147,6 +152,11 @@ func worldFrom(ctx context.Context) *world {
 // start builds a control plane with doubles behind it and serves it over an in memory listener, so
 // the scenarios exercise the real gRPC path without a port.
 func (w *world) start() error {
+	dir, err := os.MkdirTemp("", "quaycrew-features-")
+	if err != nil {
+		return fmt.Errorf("conversation store for the scenario: %w", err)
+	}
+	w.storage = sandbox.Storage{Dir: dir, Host: dir}
 	w.provider = &sandbox.FakeProvider{}
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
@@ -168,7 +178,8 @@ func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.grpcServer = grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
-		Store: w.store, Runner: w.runner, Provider: w.provider, Secrets: w.secrets, Info: w.info,
+		Store: w.store, Runner: w.runner, Provider: w.provider, Secrets: w.secrets,
+		Storage: w.storage, Info: w.info,
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -210,7 +221,36 @@ func (w *world) dispatch(ctx context.Context, project, thread, text string) erro
 		return nil
 	}
 	w.turns = append(w.turns, turn{sessionID: resp.GetSessionId(), threadID: resp.GetThreadId(), reply: resp.GetReply()})
+	return w.keepConversation(ctx, resp.GetSessionId())
+}
+
+// keepConversation writes what the real model writes. The recording runner hands back a conversation
+// id with nothing behind it, and the control plane now looks in the store before it offers to resume
+// one, so the double has to keep what the thing it stands in for keeps.
+func (w *world) keepConversation(ctx context.Context, sessionID string) error {
+	resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sessionID})
+	if err != nil {
+		return err
+	}
+	session := resp.GetSession()
+	if session.GetModelSessionId() == "" {
+		return nil
+	}
+	dir := w.conversationDir(session.GetWorkspace())
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		return fmt.Errorf("seeding the conversation store: %w", err)
+	}
+	path := filepath.Join(dir, session.GetModelSessionId()+sandbox.ConversationFile)
+	if err := os.WriteFile(path, []byte("{}\n"), 0o666); err != nil {
+		return fmt.Errorf("writing the conversation: %w", err)
+	}
 	return nil
+}
+
+// conversationDir is where the model keeps a workspace's conversations, one directory per working
+// directory, which is the same path in every sandbox.
+func (w *world) conversationDir(workspace string) string {
+	return filepath.Join(w.storage.Dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
 }
 
 func (w *world) createWorkspace(ctx context.Context, name string) error {
@@ -258,6 +298,11 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		scenariosRun.Add(1)
 		if w := worldFrom(ctx); w != nil {
 			w.stop()
+			// The conversation store outlives a restart, which is the point of it, so it is cleaned
+			// up here rather than in stop.
+			if w.storage.Dir != "" {
+				_ = os.RemoveAll(w.storage.Dir)
+			}
 		}
 		return ctx, nil
 	})

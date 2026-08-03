@@ -143,3 +143,50 @@ func TestStoragePrepareRefusesWhatItCannotPlace(t *testing.T) {
 		})
 	}
 }
+
+// TestHasConversationFindsWhatTheModelKeeps is the check that stops attach handing back a resume for
+// a conversation that died with a container built before state was kept on the host.
+func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
+	dir := t.TempDir()
+	storage := sandbox.Storage{Dir: dir, Host: dir}
+
+	const workspace, conversation = "ws1", "d713b6d1-7873-4376-8ffe-cd5c734a9733"
+	kept := filepath.Join(dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
+	if err := os.MkdirAll(kept, 0o777); err != nil {
+		t.Fatalf("seeding the conversation store: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kept, conversation+".jsonl"), []byte("{}\n"), 0o666); err != nil {
+		t.Fatalf("writing the conversation: %v", err)
+	}
+
+	if !storage.HasConversation(workspace, conversation) {
+		t.Fatal("the conversation is on disk and was not found")
+	}
+	if storage.HasConversation(workspace, "37b8f60b-7ef1-4834-9820-2a62b9937faf") {
+		t.Fatal("a conversation that is not on disk was reported as kept")
+	}
+	if storage.HasConversation("other-workspace", conversation) {
+		t.Fatal("a conversation was found in a workspace that does not hold it")
+	}
+}
+
+// TestHasConversationSaysYesWhenItCannotTell: a store that keeps nothing on the host has nowhere to
+// look, and refusing every attach would be worse than the failure this exists to explain.
+func TestHasConversationSaysYesWhenItCannotTell(t *testing.T) {
+	tests := map[string]struct {
+		storage                 sandbox.Storage
+		workspace, conversation string
+	}{
+		"no data directory":          {sandbox.Storage{}, "ws1", "c1"},
+		"no workspace":               {sandbox.Storage{Dir: t.TempDir()}, "", "c1"},
+		"no conversation":            {sandbox.Storage{Dir: t.TempDir()}, "ws1", ""},
+		"a handle with a glob in it": {sandbox.Storage{Dir: t.TempDir()}, "ws1", "*"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if !test.storage.HasConversation(test.workspace, test.conversation) {
+				t.Fatal("want it to say yes when it cannot tell")
+			}
+		})
+	}
+}

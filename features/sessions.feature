@@ -173,6 +173,16 @@ Feature: Sessions run in isolated sandboxes
     Then the control plane names the session's sandbox
     And a second sandbox has been created for that session
 
+  # A handle can outlive what it points at. Every conversation from a sandbox built before state was
+  # kept on the host died with that container while the row kept the handle, and resuming one of those
+  # prints "No conversation found" and exits, which from the console looks like nothing happening.
+  Scenario: A thread whose conversation is gone says so rather than opening nothing
+    Given a session started by dispatching "remember this"
+    When the conversation the model kept is lost
+    And the operator asks how to attach to the session
+    Then the control plane refuses it as not yet ready
+    And the refusal says the conversation is gone
+
   Scenario: An archived thread cannot be attached to
     Given a session started by dispatching "hello"
     When the operator archives the session

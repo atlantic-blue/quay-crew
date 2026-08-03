@@ -67,6 +67,49 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 	return mounts, nil
 }
 
+// ConversationFile is the extension the model's command line tool gives a stored conversation. It
+// keeps one file per conversation, named after the conversation, under a directory per working
+// directory.
+const ConversationFile = ".jsonl"
+
+// HasConversation says whether a workspace's conversation store still holds a conversation.
+//
+// A session's handle is a pointer into a store this process does not own, so a handle can outlive
+// what it points at: every conversation from a sandbox created before state was kept on the host died
+// with that container, while the row kept the handle. Resuming one of those prints "No conversation
+// found" and exits, which from the console looks like nothing happening at all.
+//
+// It answers true whenever it cannot tell. An unconfigured store keeps nothing on the host, and
+// refusing every attach because there is nowhere to look would be worse than the failure this exists
+// to explain.
+func (s Storage) HasConversation(workspace, conversation string) bool {
+	if s.Dir == "" || workspace == "" || conversation == "" {
+		return true
+	}
+	if usableAsPath("workspace", workspace) != nil || !plainIdentifier(conversation) {
+		return true
+	}
+	matches, err := filepath.Glob(filepath.Join(
+		s.Dir, "workspaces", workspace, "claude", "projects", "*", conversation+ConversationFile))
+	if err != nil {
+		return true
+	}
+	return len(matches) > 0
+}
+
+// plainIdentifier keeps anything with a glob character in it out of the pattern above, so a handle
+// from somewhere unexpected widens nothing.
+func plainIdentifier(id string) bool {
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // makeWritableDir creates a directory the sandbox's own user can write to.
 //
 // The sandbox runs as a non root user from its image, and this process does not choose that user's

@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **A thread whose conversation is gone says so.** A session's handle points into a store the crew does
+  not own, so it can outlive what it points at: every conversation from a sandbox built before state
+  was kept on the host died with that container while the row kept the handle. Resuming one printed
+  `No conversation found` inside the container and exited, which from the console looked like nothing
+  happening. Attaching now checks the workspace's store first and says to dispatch a turn instead.
+  ([#102](https://github.com/atlantic-blue/quay-crew/pull/102))
 - **Opening an idle thread works again.** Attaching answered from the database row alone, so after the
   control plane restarted it handed back a container name the daemon had never heard of:
   `No such container: quaycrew-134c2c6d...`. Attaching now starts the thread's sandbox when there is
