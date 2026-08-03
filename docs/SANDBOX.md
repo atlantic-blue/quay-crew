@@ -87,18 +87,25 @@ itself, that a value in the sandbox env reaches the process inside the container
 typing:
 
 ```
-export CLAUDE_CODE_OAUTH_TOKEN=<token from step 1>
 quay sessions
 quay attach 5d013d07
 ```
 
 or press `a` on a session in the console.
 
-This runs `claude --resume <conversation id>` inside that session's sandbox. The control plane says
-which container and which conversation, and deliberately returns **no credential**: a value the
-secrets backend holds should not become readable through the API just because a client asks. The
-token comes from your own environment, which is why the export above is needed even though the same
-token is already set as the workspace secret.
+This runs `claude --resume <conversation id>` inside that session's sandbox, and needs nothing from
+your shell. The control plane sets the workspace's environment on the sandbox when it creates it, so
+everything started inside is already authenticated and no tool has to carry the token around.
+
+The trade is that the token is readable for the life of that container, for example through
+`docker inspect`. It was already reachable from inside the sandbox, which runs the model, so this
+widens who can see it rather than whether it is there at all. The alternative, handing the value back
+through the control plane API on request, was rejected: a secret the backend holds should not become
+readable by any client that asks.
+
+One consequence to know: a token set **after** a session's first turn does not reach that session's
+existing sandbox. Turns still work, because a turn also passes the environment, but attaching to that
+session will not authenticate. Stop the session to get a fresh sandbox.
 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.

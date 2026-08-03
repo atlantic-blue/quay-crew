@@ -11,6 +11,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -57,13 +58,18 @@ func storeError(err error, what string) error {
 }
 
 // sandboxFor returns the session's sandbox, creating it on first use so it is reused across turns.
-func (s *Server) sandboxFor(ctx context.Context, sessionID string) (sandbox.Sandbox, error) {
+//
+// The workspace's environment is set on the sandbox itself, not just on each turn, so anything the
+// operator starts inside it later (attaching to the conversation, for instance) is authenticated
+// without the tool carrying the credential around. A token set after a session's first turn will not
+// reach that session's existing sandbox: stop the session to get a fresh one.
+func (s *Server) sandboxFor(ctx context.Context, sessionID, workspace string) (sandbox.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if box, ok := s.sandboxes[sessionID]; ok {
 		return box, nil
 	}
-	box, err := s.provider.Create(ctx, sessionID)
+	box, err := s.provider.Create(ctx, sessionID, environ(s.turnEnv(ctx, workspace)))
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +211,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, storeError(err, "project")
 	}
 
-	box, err := s.sandboxFor(ctx, session.GetId())
+	box, err := s.sandboxFor(ctx, session.GetId(), session.GetWorkspace())
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
 		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
@@ -231,6 +237,24 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // rather than the turn appearing to have failed when it did not.
 func (s *Server) recordTurn(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
 	_ = s.store.RecordTurn(ctx, sessionID, modelSessionID, sessionStatus)
+}
+
+// environ renders an environment map as the "KEY=value" entries a sandbox expects, sorted so the
+// result is stable.
+func environ(values map[string]string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entries := make([]string, 0, len(keys))
+	for _, key := range keys {
+		entries = append(entries, key+"="+values[key])
+	}
+	return entries
 }
 
 // turnEnv gathers the environment a turn runs with from the workspace's secrets. Right now that is the

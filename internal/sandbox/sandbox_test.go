@@ -10,7 +10,7 @@ import (
 )
 
 func TestLocalProviderExec(t *testing.T) {
-	box, err := sandbox.LocalProvider{}.Create(context.Background(), "sess-1")
+	box, err := sandbox.LocalProvider{}.Create(context.Background(), "sess-1", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestLocalProviderExec(t *testing.T) {
 }
 
 func TestLocalExecRejectsEmptyArgv(t *testing.T) {
-	box, _ := sandbox.LocalProvider{}.Create(context.Background(), "s")
+	box, _ := sandbox.LocalProvider{}.Create(context.Background(), "s", nil)
 	if _, err := box.Exec(context.Background(), sandbox.Spec{}); err == nil {
 		t.Fatal("Exec with empty argv = nil error, want error")
 	}
@@ -42,7 +42,7 @@ func TestLocalExecRejectsEmptyArgv(t *testing.T) {
 
 func TestFakeProvider(t *testing.T) {
 	provider := &sandbox.FakeProvider{Output: "canned"}
-	box, err := provider.Create(context.Background(), "sess-1")
+	box, err := provider.Create(context.Background(), "sess-1", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

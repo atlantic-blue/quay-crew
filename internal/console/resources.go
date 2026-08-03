@@ -3,13 +3,11 @@ package console
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -222,14 +220,8 @@ func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string
 	if err != nil {
 		return nil
 	}
-	token := os.Getenv(model.ClaudeCodeOAuthTokenEnv)
-	if token == "" {
-		return nil
-	}
-
-	args := []string{"exec", "--interactive", "--tty",
-		"--env", model.ClaudeCodeOAuthTokenEnv + "=" + token,
-		spec.GetSandbox()}
+	// No credential here: the sandbox already carries the workspace's environment.
+	args := []string{"exec", "--interactive", "--tty", spec.GetSandbox()}
 	args = append(args, spec.GetArgv()...)
 	return exec.Command("docker", args...)
 }

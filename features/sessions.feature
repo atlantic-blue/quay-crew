@@ -68,6 +68,17 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "" to the project
     Then the control plane refuses it as invalid
 
+  # The token is set on the sandbox at creation, not only on each turn, so anything the operator
+  # starts inside it later is authenticated without the tool carrying a credential around.
+  Scenario: The session's sandbox carries the workspace's subscription token
+    Given the workspace has the subscription token "tok-xyz"
+    When the operator dispatches "hello" to the project
+    Then the session's sandbox was created with the subscription token "tok-xyz"
+
+  Scenario: A workspace with no token creates a sandbox with no credential on it
+    When the operator dispatches "hello" to the project
+    Then the session's sandbox was created with no environment
+
   Scenario: A turn carries the workspace's subscription token into the sandbox
     Given the workspace has the subscription token "tok-xyz"
     When the operator dispatches "hello" to the project

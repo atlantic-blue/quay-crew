@@ -12,16 +12,20 @@ type FakeProvider struct {
 	Output  string
 	mu      sync.Mutex
 	Created []string
-	Boxes   []*FakeSandbox
+	// CreatedEnv records the environment each sandbox was created with, so a test can assert what a
+	// session's container carries.
+	CreatedEnv [][]string
+	Boxes      []*FakeSandbox
 }
 
 var _ Provider = (*FakeProvider)(nil)
 
 // Create records the id and returns a new FakeSandbox streaming the provider's canned Output.
-func (f *FakeProvider) Create(_ context.Context, id string) (Sandbox, error) {
+func (f *FakeProvider) Create(_ context.Context, id string, env []string) (Sandbox, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Created = append(f.Created, id)
+	f.CreatedEnv = append(f.CreatedEnv, env)
 	box := &FakeSandbox{Output: f.Output}
 	f.Boxes = append(f.Boxes, box)
 	return box, nil
