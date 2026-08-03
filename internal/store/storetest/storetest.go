@@ -250,6 +250,36 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The conversation handle is what makes this worth having: it is the only pointer to a
+	// conversation the model keeps on its own disk, and a restart that lost it would leave the
+	// conversation stranded and unreachable.
+	t.Run("a stopped session restarts to idle and keeps its conversation", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTurn: %v", err)
+		}
+		if err := s.StopSession(ctx, session.GetId()); err != nil {
+			t.Fatalf("StopSession: %v", err)
+		}
+
+		if err := s.RestartSession(ctx, session.GetId()); err != nil {
+			t.Fatalf("RestartSession: %v", err)
+		}
+		got, _ := s.GetSession(ctx, session.GetId())
+		if got.GetStatus() != "idle" {
+			t.Fatalf("status is %q, want idle", got.GetStatus())
+		}
+		if got.GetModelSessionId() != "conversation-1" {
+			t.Fatalf("the conversation handle is %q, want it untouched", got.GetModelSessionId())
+		}
+		if err := s.RestartSession(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("restarting a missing session returned %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("a session that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if _, err := s.GetSession(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {

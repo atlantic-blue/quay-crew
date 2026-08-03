@@ -25,6 +25,8 @@ type fakeClient struct {
 	sessions   []*quaycrewv1.Session
 
 	attachErr       error
+	restartErr      error
+	restarted       []string
 	listSessionsFor string
 	stopped         []string
 	listErr         error
@@ -81,6 +83,14 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 func (f *fakeClient) StopSession(_ context.Context, req *quaycrewv1.StopSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.StopSessionResponse, error) {
 	f.stopped = append(f.stopped, req.GetId())
 	return &quaycrewv1.StopSessionResponse{}, nil
+}
+
+func (f *fakeClient) RestartSession(_ context.Context, req *quaycrewv1.RestartSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestartSessionResponse, error) {
+	if f.restartErr != nil {
+		return nil, f.restartErr
+	}
+	f.restarted = append(f.restarted, req.GetId())
+	return &quaycrewv1.RestartSessionResponse{}, nil
 }
 
 // ---------- helpers ----------
@@ -678,6 +688,42 @@ func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	}
 }
 
+// TestRestartBringsAThreadBackWithoutAsking: restarting is not destructive, so it acts at once.
+func TestRestartBringsAThreadBackWithoutAsking(t *testing.T) {
+	client := &fakeClient{}
+	model, cmd := update(t, threadsAt(t, client), runes("r"))
+
+	if model.mode != modeBrowse {
+		t.Fatalf("mode = %v, want restarting to act at once", model.mode)
+	}
+	if cmd == nil {
+		t.Fatal("restart produced no command")
+	}
+	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
+		t.Fatalf("restart returned %#v, want a clean actionDoneMsg", cmd())
+	}
+	if len(client.restarted) != 1 || client.restarted[0] != "s1" {
+		t.Fatalf("restarted = %v, want [s1]", client.restarted)
+	}
+}
+
+// TestRestartingARunningThreadShowsTheRefusal: the control plane decides whether there is anything to
+// restart, and its reason is what the operator has to see.
+func TestRestartingARunningThreadShowsTheRefusal(t *testing.T) {
+	client := &fakeClient{restartErr: fmt.Errorf("session s1 is idle, not stopped, so there is nothing to restart")}
+	_, cmd := update(t, threadsAt(t, client), runes("r"))
+	if cmd == nil {
+		t.Fatal("restart produced no command")
+	}
+	msg, isDone := cmd().(actionDoneMsg)
+	if !isDone || msg.err == nil {
+		t.Fatalf("restart returned %#v, want the refusal", cmd())
+	}
+	if !strings.Contains(msg.err.Error(), "nothing to restart") {
+		t.Fatalf("the reason did not reach the operator: %v", msg.err)
+	}
+}
+
 // actionBoundTo returns the action a key runs, failing the test when nothing is bound to it.
 func actionBoundTo(t *testing.T, resource Resource, key string) Action {
 	t.Helper()
@@ -844,7 +890,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"<enter> Attach", "<s> Shell", "<backspace> Stop", "<?> Help"} {
+	for _, want := range []string{"<enter> Attach", "<s> Shell", "<r> Restart", "<backspace> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}

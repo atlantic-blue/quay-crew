@@ -298,6 +298,20 @@ func (p *Postgres) StopSession(ctx context.Context, id string) error {
 	return nil
 }
 
+// RestartSession marks a session idle again. The conversation handle is left exactly as it was: it
+// is the only pointer to a conversation the model keeps on its own disk.
+func (p *Postgres) RestartSession(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set status = 'idle', updated_at = now() where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("restart session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

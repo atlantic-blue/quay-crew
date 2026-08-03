@@ -50,6 +50,11 @@ type Store interface {
 	// ListSessions filters by project when set, else by workspace when set, else lists everything.
 	ListSessions(ctx context.Context, workspace, project string) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
+	// RestartSession marks a stopped session idle again. The conversation is untouched, because it
+	// lives on the host rather than in the sandbox that was torn down, which is the whole reason
+	// bringing a thread back is possible at all. Whether the session was stopped in the first place
+	// is the control plane's question, not the store's.
+	RestartSession(ctx context.Context, id string) error
 
 	// Close releases whatever the implementation holds open.
 	Close()

@@ -148,6 +148,16 @@ message StopSessionRequest {
 }
 message StopSessionResponse {}
 
+// RestartSessionRequest brings a stopped session back.
+message RestartSessionRequest {
+  string id = 1;
+}
+// RestartSessionResponse carries the session as it now is, idle and with a sandbox running, so the
+// caller does not have to read it back to find out what happened.
+message RestartSessionResponse {
+  Session session = 1;
+}
+
 // GetInfoRequest asks what this control plane is running.
 message GetInfoRequest {}
 // GetInfoResponse says what a turn dispatched here would actually do.
@@ -192,6 +202,7 @@ service ControlPlaneService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
+  rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }
