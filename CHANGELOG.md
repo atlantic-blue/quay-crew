@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The refusals are in the operator's words, and name the thread on their screen.** "Its conversation
+  is gone, it predates state on the host" is a sentence only somebody who worked on this understands,
+  and it named a twenty four character identifier that appears nowhere in the list. Attach now says
+  what happened and what to do, about `thread 34e1a6c7` rather than `session 134c2c6dbf1e907413753cc5`.
+  ([#103](https://github.com/atlantic-blue/quay-crew/pull/103))
 - **A thread whose conversation is gone says so.** A session's handle points into a store the crew does
   not own, so it can outlive what it points at: every conversation from a sandbox built before state
   was kept on the host died with that container while the row kept the handle. Resuming one printed

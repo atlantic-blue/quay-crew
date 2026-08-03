@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -358,24 +359,31 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	}
 	if session.GetModelSessionId() == "" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s has no conversation yet: dispatch a turn to it first", req.GetId())
+			"thread %s has no conversation yet: send it a message with quay dispatch first",
+			display.ShortID(session.GetThreadId()))
 	}
 	if session.GetStatus() == "stopped" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is stopped: restart it first", req.GetId())
+			"thread %s is stopped: restart it first", display.ShortID(session.GetThreadId()))
 	}
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is archived: restore it first", req.GetId())
+			"thread %s is archived: restore it first", display.ShortID(session.GetThreadId()))
 	}
-	// A handle can outlive what it points at: every conversation from a sandbox created before state
-	// was kept on the host died with that container, while the row kept the handle. Resuming one of
-	// those prints "No conversation found" and exits, which from the console looks like nothing
-	// happening at all, so say it here instead of starting a container to fail inside.
+	// A handle can outlive what it points at: every conversation from a sandbox created before the
+	// conversations were kept on the host died with that container, while the row kept the handle.
+	// Resuming one of those prints "No conversation found" and exits, which from the console looks
+	// like nothing happening at all, so say it here instead of starting a container to fail inside.
+	//
+	// In the operator's words, not ours. "Its conversation predates state on the host" is a sentence
+	// only somebody who worked on this understands, and it named an identifier twenty four characters
+	// long that appears nowhere on their screen.
 	if !s.storage.HasConversation(session.GetWorkspace(), session.GetModelSessionId()) {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s: its conversation is gone, it predates state on the host. Dispatch a turn to start a new one",
-			req.GetId())
+			"thread %s has no conversation left: it was saved inside a sandbox that has since been "+
+				"removed, from before conversations were kept on this machine. Send this thread a "+
+				"message with quay dispatch to start a new one",
+			display.ShortID(session.GetThreadId()))
 	}
 	// Make sure there is something to attach to. The live sandboxes are a map in this process, so a
 	// restart empties it while the row still says idle, and answering from the row alone hands the
