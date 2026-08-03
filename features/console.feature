@@ -34,3 +34,21 @@ Feature: The operator sees the crew from the console
   Scenario: An empty crew lists nothing rather than failing
     When the operator opens the console
     Then the console lists 0 sessions
+
+  # An identifier is what actions use, a name is what the operator reads. These say the console shows
+  # the second without losing the first.
+  Scenario: The console names a session's project rather than showing its identifier
+    When the operator dispatches "hello" to the project
+    And the operator opens the console
+    Then the console shows the session's project as "acme"
+
+  Scenario: The console shortens identifiers so a row can be read
+    When the operator dispatches "hello" to the project
+    And the operator opens the console
+    Then the console shows the session identifier shortened
+
+  Scenario: Acting on a row still uses the whole identifier
+    Given a session started by dispatching "hello"
+    When the operator opens the console
+    And the operator stops the selected session from the console
+    Then the session is reported as stopped

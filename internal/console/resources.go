@@ -21,7 +21,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "projects",
 		Aliases: []string{"p", "proj", "project"},
 		Columns: []Column{
-			{Title: "id", Width: 22},
+			{Title: "id", Width: 10},
 			{Title: "name", Width: 0},
 			{Title: "age", Width: 10},
 		},
@@ -41,9 +41,10 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 }
 
 func projectRow(project *quaycrewv1.Project) Row {
+	// ID stays whole: it is what actions and drilling down use. Only the cell is shortened.
 	return Row{
 		ID:    project.GetId(),
-		Cells: []string{project.GetId(), project.GetName(), age(project.GetCreatedAt())},
+		Cells: []string{shortID(project.GetId()), project.GetName(), age(project.GetCreatedAt())},
 		State: StateReady,
 	}
 }
@@ -55,9 +56,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "sessions",
 		Aliases: []string{"s", "sess", "session"},
 		Columns: []Column{
-			{Title: "id", Width: 22},
+			{Title: "id", Width: 10},
 			{Title: "project", Width: 18},
-			{Title: "thread", Width: 22},
+			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
 			{Title: "age", Width: 0},
 		},
@@ -72,22 +73,42 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient) Lister {
 		if err != nil {
 			return nil, err
 		}
+		// A session carries its project id, and an id says nothing to the operator reading the
+		// list. One extra call turns every one of them into a name. If it fails the rows still
+		// render, with the id as the fallback, because a listing that refuses to draw because the
+		// names could not be looked up is worse than one that shows ids.
+		names := projectNames(ctx, client)
+
 		rows := make([]Row, 0, len(resp.GetSessions()))
 		for _, session := range resp.GetSessions() {
-			rows = append(rows, sessionRow(session))
+			rows = append(rows, sessionRow(session, names[session.GetProject()]))
 		}
 		return rows, nil
 	}
 }
 
-func sessionRow(session *quaycrewv1.Session) Row {
+// projectNames maps project id to name. An error yields an empty map rather than failing the list.
+func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		return map[string]string{}
+	}
+	names := make(map[string]string, len(resp.GetProjects()))
+	for _, project := range resp.GetProjects() {
+		names[project.GetId()] = project.GetName()
+	}
+	return names
+}
+
+func sessionRow(session *quaycrewv1.Session, projectName string) Row {
+	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
 		Cells: []string{
-			session.GetId(),
-			session.GetProject(),
-			session.GetThreadId(),
+			shortID(session.GetId()),
+			displayName(projectName, session.GetProject()),
+			shortID(session.GetThreadId()),
 			session.GetStatus(),
 			age(session.GetUpdatedAt()),
 		},
