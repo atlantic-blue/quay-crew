@@ -19,6 +19,12 @@ UPGRADE_BRANCH ?= main
 # checkout has uncommitted changes, because a build from an edited tree is not that commit.
 VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --quiet 2>/dev/null || echo -dirty)
 
+# SANDBOX_PATTERN matches a session's sandbox container and nothing else. The prefix alone is not
+# enough: the compose project is also called quaycrew, so its own services are quaycrew-postgres-1 and
+# friends, and a reap by prefix would take the whole stack with it. So this matches the exact shape of
+# a sandbox name, and the reap below additionally skips anything compose owns.
+SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
+
 # The default sandbox image: a container with the Claude Code CLI, built locally with `make
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
@@ -60,6 +66,16 @@ upgrade:
 		echo "moved from $$before to $$after"; \
 	fi
 	@$(MAKE) --no-print-directory install
+	@if [ ! -f deploy/.env ]; then \
+		echo "note: no deploy/.env, so the stack comes up with the defaults in the compose file."; \
+		echo "      copy deploy/env.example to deploy/.env to keep your model and image across upgrades."; \
+	fi
+	@echo "clearing the sandboxes from before the upgrade. They run the old image, the control plane"
+	@echo "has forgotten them, and their names would block those threads from starting again."
+	@docker ps -a --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' \
+		| awk -F'|' '$$2 == "" { print $$1 }' \
+		| grep -E '$(SANDBOX_PATTERN)' \
+		| xargs -r docker rm -f >/dev/null 2>&1 || true
 	@echo "rebuilding and restarting the stack. Secrets are held in memory, so set the model token again afterwards."
 	$(COMPOSE) up --build -d
 

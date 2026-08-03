@@ -30,14 +30,17 @@ You need Docker and a Claude subscription.
    This builds `quaycrew-sandbox-claude:local` from `deploy/sandbox/claude.Dockerfile` (Node, the
    Claude Code CLI, git, and ripgrep, running as a non-root user).
 
-3. Start the stack pointed at that image and the real model backend:
+3. Say which model and image the stack runs, once, then start it:
 
    ```
-   QC_SANDBOX_IMAGE=quaycrew-sandbox-claude:local QC_MODEL=claude-code make up
+   cp deploy/env.example deploy/.env
+   make up
    ```
 
-   Without these two variables the stack uses a lightweight image and an echo backend, which is what
-   continuous integration runs (no subscription there).
+   `deploy/.env` is read by compose on every command, so `make upgrade` cannot bring the stack back as
+   something else. The two variables can still be given on the command line for a one off. Without
+   either, the stack uses a lightweight image and an echo backend, which is what continuous integration
+   runs, because it has no subscription.
 
 4. Install the CLI, create a workspace, and give it the token:
 
