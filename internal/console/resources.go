@@ -60,7 +60,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "workspace", Width: 18},
 			{Title: "age", Width: 0},
 		},
-		DrillTo: "sessions",
+		DrillTo: "threads",
 		SortBy:  1,
 		List: func(ctx context.Context, workspace string) ([]Row, error) {
 			resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: workspace})
@@ -138,12 +138,17 @@ func Features() Resource {
 	}
 }
 
-// Sessions lists sessions, scoped to a project when drilled into from one. The operator can stop a
-// session and shell into its container.
-func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
+// Threads lists conversations, scoped to a project when drilled into from one. The operator can stop
+// one and shell into its container.
+//
+// The console says threads and the control plane says sessions, deliberately. A session is the thread
+// running, inside a sandbox, and that distinction is real inside the control plane. It means nothing
+// to somebody reading a list of fourteen rows, where every one of them is a conversation. So the old
+// name stays as an alias: the command bar should not punish muscle memory.
+func Threads(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
-		Name:    "sessions",
-		Aliases: []string{"s", "sess", "session"},
+		Name:    "threads",
+		Aliases: []string{"t", "thread", "sessions", "session", "sess", "s"},
 		Columns: []Column{
 			{Title: "id", Width: 10},
 			{Title: "workspace", Width: 16},

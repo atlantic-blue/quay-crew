@@ -342,7 +342,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
 	}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme"), row("other", "other", "Other")))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
@@ -369,7 +369,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 
 func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
 	model, _ = update(t, model, rowsFor(model,
 		row("acme", "acme", "Acme"), row("other", "other", "Other"), row("third", "third", "Third")))
 
@@ -397,7 +397,7 @@ func TestEscapeReturnsToTheParentViewWithItsSelection(t *testing.T) {
 
 func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme")))
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -414,7 +414,7 @@ func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 
 func TestStopActionStopsTheSelectedSession(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
-	model := newTestModel(t, Sessions(client))
+	model := newTestModel(t, Threads(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	_, cmd := update(t, model, runes("x"))
@@ -431,7 +431,7 @@ func TestStopActionStopsTheSelectedSession(t *testing.T) {
 
 func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 	client := &fakeClient{}
-	resource := Sessions(client)
+	resource := Threads(client)
 
 	var shell *Action
 	for index := range resource.Actions {
@@ -462,7 +462,7 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 // be told that.
 func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
 	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
-	resource := Sessions(client)
+	resource := Threads(client)
 
 	var attach *Action
 	for index := range resource.Actions {
@@ -485,7 +485,7 @@ func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
 
 func TestAnActionOnAnEmptyViewDoesNothing(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client))
+	model := newTestModel(t, Threads(client))
 
 	_, cmd := update(t, model, runes("x"))
 	if cmd != nil {
@@ -497,6 +497,69 @@ func TestAnActionOnAnEmptyViewDoesNothing(t *testing.T) {
 }
 
 // ---------- resources ----------
+
+// TestTheConsoleCallsThemThreads: a row in that list is one conversation, and the operator reading it
+// is looking at threads. The control plane still calls the running thread a session, which is a real
+// distinction inside it and means nothing to somebody reading a list.
+func TestTheConsoleCallsThemThreads(t *testing.T) {
+	client := &fakeClient{}
+	if got := Threads(client).Name; got != "threads" {
+		t.Fatalf("the view is called %q, want threads", got)
+	}
+	if Default != "threads" {
+		t.Fatalf("the console opens on %q, want threads", Default)
+	}
+
+	model := newTestModel(t, Threads(client), Projects(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
+
+	view := model.View()
+	if !strings.Contains(view, "threads[1]") {
+		t.Fatalf("the panel is not titled threads:\n%s", view)
+	}
+	if !strings.Contains(view, "<threads>") {
+		t.Fatalf("the breadcrumb does not say threads:\n%s", view)
+	}
+	if strings.Contains(view, "sessions") {
+		t.Fatalf("the console still says sessions somewhere:\n%s", view)
+	}
+}
+
+// TestSessionsStillOpensTheThreadsView keeps the muscle memory working. The command bar should not
+// punish somebody for typing the name the view had yesterday.
+func TestSessionsStillOpensTheThreadsView(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, token := range []string{"threads", "t", "thread", "sessions", "session", "sess", "s"} {
+		resource, found := registry.Resolve(token)
+		if !found {
+			t.Fatalf("Resolve(%q): not found", token)
+		}
+		if resource.Name != "threads" {
+			t.Fatalf("Resolve(%q) = %q, want threads", token, resource.Name)
+		}
+	}
+}
+
+// TestDrillingIntoAProjectLandsOnItsThreads: the rename has to carry the drill target with it, or
+// enter on a project dead ends on a resource nobody registers.
+func TestDrillingIntoAProjectLandsOnItsThreads(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	projects, _ := registry.Get("projects")
+	if projects.DrillTo != "threads" {
+		t.Fatalf("projects drills into %q, want threads", projects.DrillTo)
+	}
+	if _, found := registry.Get(projects.DrillTo); !found {
+		t.Fatalf("projects drills into %q, which nothing registers", projects.DrillTo)
+	}
+}
 
 func TestSessionListingMapsStatusOntoState(t *testing.T) {
 	tests := map[string]State{
@@ -518,7 +581,7 @@ func TestSessionListingMapsStatusOntoState(t *testing.T) {
 
 func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 	client := &fakeClient{listErr: errors.New("unavailable")}
-	resource := Sessions(client)
+	resource := Threads(client)
 
 	if _, err := resource.List(context.Background(), ""); err == nil {
 		t.Fatal("want the control plane error surfaced, not swallowed")
@@ -572,7 +635,7 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 	if err := Plain(context.Background(), &fakeClient{}, &out); err != nil {
 		t.Fatalf("Plain: %v", err)
 	}
-	if !strings.Contains(out.String(), "no sessions") {
+	if !strings.Contains(out.String(), "no threads") {
 		t.Fatalf("output %q, want it to say there are none", out.String())
 	}
 }
@@ -583,7 +646,7 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 // the key that lists the rest. A header that lists every key teaches the operator to stop reading it.
 func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Workspaces(client))
+	model := newTestModel(t, Threads(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
@@ -602,12 +665,12 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 // TestTheQuestionMarkListsEveryKey is where the keys the header does not show have to live.
 func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Workspaces(client))
+	model := newTestModel(t, Threads(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	model, _ = update(t, model, runes("?"))
 	view := model.View()
-	for _, want := range []string{"help(sessions)", "Quit", "Refresh now", "Filter these rows", "<a> Attach"} {
+	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<a> Attach"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the key list does not mention %q:\n%s", want, view)
 		}
@@ -776,7 +839,7 @@ func TestPanelTitleCarriesScopeAndCount(t *testing.T) {
 		workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "me"}},
 		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
 	}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model, _ = update(t, model, rowsFor(model,
@@ -858,7 +921,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
 		sessions:   []*quaycrewv1.Session{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
 	}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Threads(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model, _ = update(t, model, rowsFor(model,
@@ -866,7 +929,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	view := model.View()
-	for _, want := range []string{"me", "house-bills", "sessions", "esc to go back"} {
+	for _, want := range []string{"me", "house-bills", "threads", "esc to go back"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the breadcrumb does not name %q:\n%s", want, view)
 		}
@@ -963,7 +1026,7 @@ func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			model := newTestModel(t, Sessions(client), Workspaces(client))
+			model := newTestModel(t, Threads(client), Workspaces(client))
 			model, _ = update(t, model, tea.WindowSizeMsg{Width: tc.size[0], Height: tc.size[1]})
 			if tc.info != (Info{}) {
 				model, _ = update(t, model, infoMsg{info: tc.info})

@@ -99,8 +99,31 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return consoleFrom(ctx).drillInto(ctx, worldFrom(ctx).client, "workspaces", name)
 	})
 
-	sc.Step(`^the console lists (\d+) sessions?$`, func(ctx context.Context, want int) error {
-		return expectRows(consoleFrom(ctx), "sessions", want)
+	sc.Step(`^the console lists (\d+) threads?$`, func(ctx context.Context, want int) error {
+		return expectRows(consoleFrom(ctx), "threads", want)
+	})
+
+	// The command bar resolves what was typed, so this drives the same path a keystroke does rather
+	// than asking the registry a question the operator never asks it.
+	sc.Step(`^the operator opens the console by typing "([^"]*)"$`, func(ctx context.Context, typed string) error {
+		c := consoleFrom(ctx)
+		registry, err := console.NewDefaultRegistry(worldFrom(ctx).client)
+		if err != nil {
+			return err
+		}
+		resource, found := registry.Resolve(typed)
+		if !found {
+			return fmt.Errorf("the command bar does not know %q", typed)
+		}
+		c.registry, c.active = registry, resource
+		return c.list(ctx, "")
+	})
+
+	sc.Step(`^the console is showing threads$`, func(ctx context.Context) error {
+		if got := consoleFrom(ctx).active.Name; got != "threads" {
+			return fmt.Errorf("the console is showing %q, want threads", got)
+		}
+		return nil
 	})
 
 	sc.Step(`^the console lists (\d+) projects?$`, func(ctx context.Context, want int) error {
@@ -122,7 +145,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console shows the session's workspace as "([^"]*)"$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the console shows the thread's workspace as "([^"]*)"$`, func(ctx context.Context, want string) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -136,7 +159,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console shows the session identifier shortened$`, func(ctx context.Context) error {
+	sc.Step(`^the console shows the thread identifier shortened$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -160,7 +183,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator stops the selected session from the console$`, func(ctx context.Context) error {
+	sc.Step(`^the operator stops the selected thread from the console$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -175,7 +198,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			}
 			return action.Run(ctx, row)
 		}
-		return fmt.Errorf("the sessions view has no Stop action")
+		return fmt.Errorf("the threads view has no Stop action")
 	})
 }
 

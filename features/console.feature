@@ -6,18 +6,22 @@ Feature: The operator sees the crew from the console
 
   How the console draws those rows, filters them and moves a cursor over them is a table test in
   internal/console, where it belongs. What cannot be said there is this: that the rows are the
-  control plane's actual sessions and workspaces.
+  control plane's actual threads and workspaces.
+
+  The console says threads where the control plane says sessions. A session is the thread running,
+  inside a sandbox, which is a real distinction inside the control plane and means nothing to
+  somebody reading a list of conversations.
 
   Background:
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: The console lists the sessions the control plane has
+  Scenario: The console lists the threads the control plane has
     When the operator dispatches "hello" to the project
     And the operator dispatches "a different subject" to a new thread
     And the operator opens the console
-    Then the console lists 2 sessions
+    Then the console lists 2 threads
 
   Scenario: The console lists a workspace it can drill into
     When the operator opens the console on workspaces
@@ -30,32 +34,37 @@ Feature: The operator sees the crew from the console
     And the operator drills into workspace "acme"
     Then the console lists 1 project
 
-  Scenario: Drilling into a project shows only that project's sessions
+  Scenario: Drilling into a project shows only that project's threads
     Given a second project named "gardening"
     When the operator dispatches "hello" to the project
     And the operator dispatches "hello" to the second project
     And the operator opens the console
     And the operator drills into project "house-bills"
-    Then the console lists 1 session
+    Then the console lists 1 thread
+
+  # The old name is what the muscle memory types, so it keeps working rather than being punished.
+  Scenario: Typing sessions still opens the threads view
+    When the operator opens the console by typing "sessions"
+    Then the console is showing threads
 
   Scenario: An empty crew lists nothing rather than failing
     When the operator opens the console
-    Then the console lists 0 sessions
+    Then the console lists 0 threads
 
   # An identifier is what actions use, a name is what the operator reads. These say the console shows
   # the second without losing the first.
-  Scenario: The console names a session's workspace rather than showing its identifier
+  Scenario: The console names a thread's workspace rather than showing its identifier
     When the operator dispatches "hello" to the project
     And the operator opens the console
-    Then the console shows the session's workspace as "acme"
+    Then the console shows the thread's workspace as "acme"
 
   Scenario: The console shortens identifiers so a row can be read
     When the operator dispatches "hello" to the project
     And the operator opens the console
-    Then the console shows the session identifier shortened
+    Then the console shows the thread identifier shortened
 
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console
-    And the operator stops the selected session from the console
+    And the operator stops the selected thread from the console
     Then the session is reported as stopped
