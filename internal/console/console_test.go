@@ -1129,7 +1129,7 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 
 	model, _ = update(t, model, runes("?"))
 	view := model.View()
-	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<enter a> Open", "Leave an open conversation running"} {
+	for _, want := range []string{"help(threads)", "Quit", "Refresh now", "Filter these rows", "<enter a> Open", "<ctrl-o d> Leave an open conversation running"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the key list does not mention %q:\n%s", want, view)
 		}

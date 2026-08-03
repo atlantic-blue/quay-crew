@@ -11,7 +11,9 @@ read, or run with `make features`.
 - **You can leave an open thread without ending it.** Opening a conversation handed the terminal to
   `claude --resume` and the only way back to the list was to end it. It now runs inside tmux in the
   thread's own sandbox, so `ctrl-b d` leaves the model running and returns you to the console, and
-  opening the thread again lands in the same live conversation. The sandbox image carries tmux.
+  opening the thread again lands in the same live conversation. The sandbox image carries tmux, with
+  `ctrl-o` as its prefix so it still works when you opened the console from inside your own tmux, and
+  `ctrl-b` as a second prefix for when nothing is nested.
   ([#109](https://github.com/atlantic-blue/quay-crew/pull/109))
 - **The key list stops silently dropping keys.** It folded into two columns and then cut whatever did
   not fit, so adding a binding pushed the last one off the bottom with nothing to say so. It folds into
