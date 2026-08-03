@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **A flag is refused rather than swallowed.** `quay dispatch --project default "hello"` used to make
+  the flag and its value the first two words of the message, and then complain about the workspace. The
+  flags addresses replaced are named, with what to type instead, and any other flag is refused too, so
+  the next thing replaced by an address cannot repeat it.
+  ([#89](https://github.com/atlantic-blue/quay-crew/pull/89))
 - **The status block says what is true, in engines.** `Sandbox engine`, `Store engine` and
   `Events engine`, `Workspace` and `Project` rather than a borrowed `Context`, and the state line names
   where a conversation is kept instead of promising it survives. The events line says

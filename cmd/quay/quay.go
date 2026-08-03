@@ -77,10 +77,41 @@ func mentions(feature features.Feature, needle string) bool {
 	return strings.Contains(haystack, needle)
 }
 
+// removedFlags are the flags addresses replaced. They are refused by name rather than ignored,
+// because ignoring one is worse than not having it: `quay dispatch --project default "hello"` reads
+// as a perfectly good command, and what actually happened was that the flag and its value became the
+// first three words of the message.
+var removedFlags = map[string]string{
+	"--project":   "an address names the project: quay dispatch <workspace>/<project> \"...\"",
+	"--workspace": "an address names the workspace: quay sessions <workspace>",
+	"--thread":    "an address names the thread: quay dispatch <workspace>/<project>/<thread> \"...\"",
+}
+
+// refuseFlags returns an error when an invocation uses a flag. This tool has none: everything it used
+// to take one for is said with an address now, and a flag that is quietly ignored is worse than one
+// that never existed, because `quay dispatch --project default "hello"` reads as a good command and
+// what actually happened was that both words became the start of the message.
+func refuseFlags(args []string) error {
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "--") {
+			continue
+		}
+		name, _, _ := strings.Cut(arg, "=")
+		if instead, removed := removedFlags[name]; removed {
+			return fmt.Errorf("%s is gone: %s\n\nor move there once and stop saying it: quay use <workspace>/<project>", name, instead)
+		}
+		return fmt.Errorf("quay takes no flags, and %s is not one: say where with an address instead\n\n%s", name, usage)
+	}
+	return nil
+}
+
 // run executes one CLI invocation against the control plane client, writing output to out.
 func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
+	}
+	if err := refuseFlags(args); err != nil {
+		return err
 	}
 	switch args[0] {
 	case "version":
