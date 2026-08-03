@@ -26,7 +26,7 @@ func main() {
 	defer func() { _ = conn.Close() }()
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
-	if err := dispatch(context.Background(), client, os.Args[1:]); err != nil {
+	if err := dispatch(context.Background(), client, os.Args[1:], addr); err != nil {
 		fmt.Fprintln(os.Stderr, "quay:", err)
 		os.Exit(1)
 	}
@@ -34,12 +34,12 @@ func main() {
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.
 // With no terminal attached the console prints plain lines instead, so `quay | grep` still works.
-func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string) error {
+func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) > 0 {
 		return run(ctx, client, args, os.Stdout)
 	}
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		return console.Plain(ctx, client, os.Stdout)
 	}
-	return console.Run(ctx, client)
+	return console.Run(ctx, client, addr)
 }

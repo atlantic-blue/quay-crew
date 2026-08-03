@@ -9,6 +9,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
 )
 
@@ -120,7 +121,7 @@ func newTestModel(t *testing.T, resources ...Resource) Model {
 	if err != nil {
 		t.Fatalf("NewRegistry: %v", err)
 	}
-	model, err := New(registry, resources[0].Name)
+	model, err := New(registry, resources[0].Name, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -549,15 +550,196 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 // ---------- view ----------
 
-func TestViewShowsTheBreadcrumbCountAndKeyHints(t *testing.T) {
+func TestViewShowsTheKeyHintsForThisView(t *testing.T) {
 	client := &fakeClient{}
 	model := newTestModel(t, Sessions(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"sessions", "(1)", "Shell", "Stop", "Filter", "Quit"} {
+	for _, want := range []string{"sessions", "Shell", "Stop", "Filter", "Quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view does not mention %q:\n%s", want, view)
+		}
+	}
+}
+
+// TestStatusBlockNamesTheCrewItIsConnectedTo covers the question the block exists to answer: which
+// crew am I about to act on. Two stacks list identical sessions and behave nothing alike.
+func TestStatusBlockNamesTheCrewItIsConnectedTo(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, infoMsg{info: Info{
+		Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres", StateKept: true,
+	}})
+
+	view := model.View()
+	for _, want := range []string{"localhost:50051", "claude-code", "docker", "postgres", "kept on the host"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the status block does not say %q:\n%s", want, view)
+		}
+	}
+}
+
+// TestStatusBlockSaysWhenAConversationWouldBeLost is the reason state is in words rather than a
+// boolean: "false" is not something anyone reads as "your conversation dies with its container".
+func TestStatusBlockSaysWhenAConversationWouldBeLost(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, infoMsg{info: Info{Address: "here", Store: "memory", StateKept: false}})
+
+	if !strings.Contains(model.View(), "lost with the container") {
+		t.Fatalf("the status block does not warn that state is lost:\n%s", model.View())
+	}
+}
+
+// TestStatusBlockSaysNothingItWasNotTold guards against the console inventing a reassuring answer
+// when the control plane never replied.
+func TestStatusBlockSaysNothingItWasNotTold(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	view := model.View()
+	for _, unwanted := range []string{"kept on the host", "lost with the container", "postgres", "docker"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("the status block claims %q without being told:\n%s", unwanted, view)
+		}
+	}
+}
+
+func TestTheConsoleAsksWhatItIsConnectedTo(t *testing.T) {
+	asked := false
+	registry, err := NewRegistry(staticResource("sessions"))
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	model, err := New(registry, "sessions", func(context.Context) (Info, error) {
+		asked = true
+		return Info{Address: "somewhere"}, nil
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Init batches the listing, the question and the clock. Running the batch is the runtime's job,
+	// so drive the one command this test is about.
+	msg := infoCmd(model.source)()
+	if !asked {
+		t.Fatal("the console never asked what it is connected to")
+	}
+	info, isInfo := msg.(infoMsg)
+	if !isInfo {
+		t.Fatalf("asking returned %T, want infoMsg", msg)
+	}
+	if info.info.Address != "somewhere" {
+		t.Fatalf("it recorded %q, want the address it was given", info.info.Address)
+	}
+}
+
+// TestAFailedQuestionLeavesTheConsoleUsable: the operator came to look at sessions, and a status
+// block that could not be filled in is not a reason to show them an error instead.
+func TestAFailedQuestionLeavesTheConsoleUsable(t *testing.T) {
+	msg := infoCmd(func(context.Context) (Info, error) { return Info{}, errors.New("no answer") })()
+	if msg != nil {
+		t.Fatalf("a failed question produced %v, want nothing", msg)
+	}
+}
+
+// TestPanelTitleCarriesScopeAndCount is k9s's contexts(all)[1] in our own words: what am I looking
+// at, narrowed to what, and how many, without counting rows.
+func TestPanelTitleCarriesScopeAndCount(t *testing.T) {
+	client := &fakeClient{
+		workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "me"}},
+		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
+	}
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "p1", Label: "house-bills", Cells: []string{"p1", "house-bills", "me", "1m"}}))
+
+	if got := model.View(); !strings.Contains(got, "projects(me)[1]") {
+		t.Fatalf("the panel is not titled with its scope and count:\n%s", got)
+	}
+}
+
+func TestPanelTitleWithNoScopeIsJustTheCount(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, rowsFor(model, row("s1", "s1", "one"), row("s2", "s2", "two")))
+
+	if got := model.View(); !strings.Contains(got, "sessions[2]") {
+		t.Fatalf("the panel is not titled with its count:\n%s", got)
+	}
+}
+
+// TestRowsAreSortedByTheMarkedColumn: an order you cannot see is an order you cannot trust, so the
+// arrow and the ordering have to be the same thing.
+func TestRowsAreSortedByTheMarkedColumn(t *testing.T) {
+	resource := staticResource("sessions")
+	resource.SortBy = 1
+	model := newTestModel(t, resource)
+	model, _ = update(t, model, rowsFor(model, row("c", "c", "cherry"), row("a", "a", "apple"), row("b", "b", "banana")))
+
+	visible := model.visibleRows()
+	if visible[0].ID != "a" || visible[2].ID != "c" {
+		t.Fatalf("rows are in the order %v, want them sorted by the second column",
+			[]string{visible[0].ID, visible[1].ID, visible[2].ID})
+	}
+	view := model.View()
+	if !strings.Contains(view, "NAME ▲") {
+		t.Fatalf("the sorted column is not marked:\n%s", view)
+	}
+	if strings.Contains(view, "ID ▲") {
+		t.Fatalf("a column that is not sorted is marked:\n%s", view)
+	}
+}
+
+// TestSortingTiesKeepTheControlPlanesOrder: a stable sort is what stops rows shuffling under the
+// cursor on every refresh.
+func TestSortingTiesKeepTheControlPlanesOrder(t *testing.T) {
+	resource := staticResource("sessions")
+	resource.SortBy = 1
+	model := newTestModel(t, resource)
+	model, _ = update(t, model, rowsFor(model, row("second", "x", "same"), row("first", "y", "same")))
+
+	visible := model.visibleRows()
+	if visible[0].ID != "second" {
+		t.Fatalf("rows that tie were reordered: %q came first", visible[0].ID)
+	}
+}
+
+// TestTheSelectedRowIsHighlightedAcrossTheWholeRow: a cursor that only covers the text is one you
+// lose in a wide window.
+func TestTheSelectedRowIsHighlightedAcrossTheWholeRow(t *testing.T) {
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, rowsFor(model, row("s1", "s1", "one")))
+
+	line := model.rowLine(model.rows[0], true)
+	if lipgloss.Width(line) != model.innerWidth() {
+		t.Fatalf("the selected row is %d wide, want the full %d inside the panel", lipgloss.Width(line), model.innerWidth())
+	}
+	// The highlight itself is a lipgloss style, and lipgloss renders no escape codes with no
+	// terminal attached, so what is asserted here is the width the highlight covers. That it is
+	// drawn at all is what the live run shows.
+	if lipgloss.Width(model.rowLine(model.rows[0], false)) != model.innerWidth() {
+		t.Fatalf("an unselected row is not padded to the same width")
+	}
+}
+
+// TestTheBreadcrumbNamesWhatWasDrilledThrough: "me > house-bills > sessions" says what escape goes
+// back to, which a trail of resource names does not.
+func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
+	client := &fakeClient{
+		workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "me"}},
+		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
+		sessions:   []*quaycrewv1.Session{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
+	}
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "p1", Label: "house-bills", Cells: []string{"p1", "house-bills", "me", "1m"}}))
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	view := model.View()
+	for _, want := range []string{"me", "house-bills", "sessions", "esc to go back"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the breadcrumb does not name %q:\n%s", want, view)
 		}
 	}
 }
@@ -583,7 +765,7 @@ func TestNewRejectsAnUnknownStartingResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRegistry: %v", err)
 	}
-	if _, err := New(registry, "containers"); err == nil {
+	if _, err := New(registry, "containers", nil); err == nil {
 		t.Fatal("want an error opening on a resource that is not registered")
 	}
 }
