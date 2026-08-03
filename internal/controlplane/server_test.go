@@ -157,8 +157,8 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 	if len(provider.Created) != 1 {
 		t.Fatalf("expected 1 sandbox for the session, got %d (%v)", len(provider.Created), provider.Created)
 	}
-	if provider.Created[0] != first.GetSessionId() {
-		t.Fatalf("sandbox created for %q, want session %q", provider.Created[0], first.GetSessionId())
+	if provider.Created[0].ID != first.GetSessionId() {
+		t.Fatalf("sandbox created for %q, want session %q", provider.Created[0].ID, first.GetSessionId())
 	}
 
 	// Stopping the session tears its sandbox down.

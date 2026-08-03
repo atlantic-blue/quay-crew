@@ -439,8 +439,22 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if len(w.provider.Created) == 0 {
 			return fmt.Errorf("no sandbox was created")
 		}
-		if w.provider.Created[0] != current.sessionID {
-			return fmt.Errorf("sandbox was created for %q, want the session %q", w.provider.Created[0], current.sessionID)
+		if w.provider.Created[0].ID != current.sessionID {
+			return fmt.Errorf("sandbox was created for %q, want the session %q", w.provider.Created[0].ID, current.sessionID)
+		}
+		return nil
+	})
+	sc.Step(`^the sandbox was created for the session's project and workspace$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Created) == 0 {
+			return fmt.Errorf("no sandbox was created")
+		}
+		created := w.provider.Created[0]
+		if created.Workspace != w.workspaceID {
+			return fmt.Errorf("the sandbox was created for workspace %q, want %q", created.Workspace, w.workspaceID)
+		}
+		if created.Project != w.projectID {
+			return fmt.Errorf("the sandbox was created for project %q, want %q", created.Project, w.projectID)
 		}
 		return nil
 	})

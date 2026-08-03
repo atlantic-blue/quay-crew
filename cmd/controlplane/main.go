@@ -46,11 +46,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	provider, err := sandbox.NewProvider(
-		os.Getenv("QC_SANDBOX"),
-		os.Getenv("QC_SANDBOX_IMAGE"),
-		splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
-	)
+	// QC_DATA_DIR is where this process writes a workspace's conversation store and a project's
+	// files; QC_DATA_HOST is the same directory as the host daemon sees it, which is what a sandbox
+	// actually mounts. In a container the two differ, so both are needed; run this on the host and
+	// they are the same path. Neither set means state stays in the container and dies with it.
+	storage := sandbox.Storage{Dir: os.Getenv("QC_DATA_DIR"), Host: os.Getenv("QC_DATA_HOST")}
+	if storage.Dir == "" {
+		logger.Warn("no QC_DATA_DIR set: a session's conversation lives inside its container and is destroyed with it")
+	}
+
+	provider, err := sandbox.NewProvider(os.Getenv("QC_SANDBOX"), sandbox.Options{
+		Image:   os.Getenv("QC_SANDBOX_IMAGE"),
+		Mounts:  splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
+		Storage: storage,
+	})
 	if err != nil {
 		logger.Error("sandbox provider config failed", "error", err)
 		os.Exit(1)

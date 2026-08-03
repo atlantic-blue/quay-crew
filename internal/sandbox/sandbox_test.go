@@ -10,7 +10,7 @@ import (
 )
 
 func TestLocalProviderExec(t *testing.T) {
-	box, err := sandbox.LocalProvider{}.Create(context.Background(), "sess-1", nil)
+	box, err := sandbox.LocalProvider{}.Create(context.Background(), sandbox.Config{ID: "sess-1"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestLocalProviderExec(t *testing.T) {
 }
 
 func TestLocalExecRejectsEmptyArgv(t *testing.T) {
-	box, _ := sandbox.LocalProvider{}.Create(context.Background(), "s", nil)
+	box, _ := sandbox.LocalProvider{}.Create(context.Background(), sandbox.Config{ID: "s"})
 	if _, err := box.Exec(context.Background(), sandbox.Spec{}); err == nil {
 		t.Fatal("Exec with empty argv = nil error, want error")
 	}
@@ -42,11 +42,11 @@ func TestLocalExecRejectsEmptyArgv(t *testing.T) {
 
 func TestFakeProvider(t *testing.T) {
 	provider := &sandbox.FakeProvider{Output: "canned"}
-	box, err := provider.Create(context.Background(), "sess-1", nil)
+	box, err := provider.Create(context.Background(), sandbox.Config{ID: "sess-1", Workspace: "ws-1", Project: "prj-1"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if len(provider.Created) != 1 || provider.Created[0] != "sess-1" {
+	if len(provider.Created) != 1 || provider.Created[0].ID != "sess-1" {
 		t.Fatalf("Created not recorded: %+v", provider.Created)
 	}
 	proc, _ := box.Exec(context.Background(), sandbox.Spec{Argv: []string{"claude"}})
@@ -63,17 +63,17 @@ func TestFakeProvider(t *testing.T) {
 }
 
 func TestNewProvider(t *testing.T) {
-	if p, err := sandbox.NewProvider("", "img", nil); err != nil {
+	if p, err := sandbox.NewProvider("", sandbox.Options{Image: "img"}); err != nil {
 		t.Fatalf("default: %v", err)
 	} else if _, ok := p.(sandbox.DockerProvider); !ok {
 		t.Fatalf("default should be DockerProvider, got %T", p)
 	}
-	if p, err := sandbox.NewProvider("local", "", nil); err != nil {
+	if p, err := sandbox.NewProvider("local", sandbox.Options{}); err != nil {
 		t.Fatalf("local: %v", err)
 	} else if _, ok := p.(sandbox.LocalProvider); !ok {
 		t.Fatalf("local should be LocalProvider, got %T", p)
 	}
-	if _, err := sandbox.NewProvider("nope", "", nil); err == nil {
+	if _, err := sandbox.NewProvider("nope", sandbox.Options{}); err == nil {
 		t.Fatal("unknown kind = nil error, want error")
 	}
 }

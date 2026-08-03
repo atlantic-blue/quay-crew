@@ -77,6 +77,11 @@ make sandbox-image
 CLAUDE_CODE_OAUTH_TOKEN=<token> go test -tags=integration -run TestClaudeCodeRunnerRealTurn ./internal/model/
 ```
 
+`TestClaudeConversationSurvivesItsContainer` runs next to it, on the same two conditions. It tells the
+model a number, destroys the container the conversation was running in, creates a new one for the same
+session, and asks for the number back. Two turns of your subscription for the one claim that cannot be
+made with a substitute.
+
 Continuous integration has no subscription, so this test skips there. The token delivery mechanism
 itself, that a value in the sandbox env reaches the process inside the container, is covered by
 `TestDockerProviderDeliversEnv`, which needs only Docker and does run in continuous integration.
@@ -110,10 +115,9 @@ conversation. It reads exactly like a broken token, because nothing gets far eno
 
 One consequence to know: a token set **after** a session's first turn does not reach that session's
 existing sandbox. Turns still work, because a turn also passes the environment, but attaching to that
-session will not authenticate. Attaching to that session will not authenticate. Do **not** stop the session to fix it: stopping runs
-`docker rm -f`, and the conversation transcript lives at `/home/agent/.claude/projects/` inside that
-container, so stopping destroys the conversation you were trying to reach. Until the sandbox state
-sits on a volume, reach an older session with the token passed on the command instead:
+session will not authenticate. Stopping the session and dispatching again gives it a fresh sandbox
+that carries the token, and the conversation comes back with it, because the conversation is on the
+host rather than in the container. Or reach the old container with the token on the command:
 
 ```
 docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude --resume <conversation id>
@@ -121,3 +125,38 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
+
+## Where a session's state lives
+
+A sandbox is a container, and a container's filesystem is thrown away with it. So the two directories
+that matter are mounted in from the host:
+
+```
+~/.quaycrew/data/workspaces/<workspace>/claude                       ->  /home/agent/.claude
+~/.quaycrew/data/workspaces/<workspace>/projects/<project>/workspace  ->  /home/agent/workspace
+```
+
+The first is the model's own store: its settings, the transcripts `--resume` reads, and the
+workspace's `CLAUDE.md`, shared by every project in that workspace. The second is one project's
+working directory: its files and its own `CLAUDE.md`. Both are read write, and both survive the
+container being replaced.
+
+That is also how you give a project context. Write it with an editor:
+
+```
+echo "Supplier is Octopus, account 123." >> ~/.quaycrew/data/workspaces/<workspace>/projects/<project>/workspace/CLAUDE.md
+```
+
+Every thread in that project reads it on the next turn, because the model already looks for
+`CLAUDE.md` in its working directory. Nothing is prepended to your message and nothing is charged for
+a turn that does not need it. An agent can also write these files, which is the trade for keeping the
+conversation in the same place.
+
+`QC_DATA_HOST` moves the directory somewhere else, for example a disk with more room:
+
+```
+QC_DATA_HOST=/Volumes/work/quaycrew make up
+```
+
+Compose gives the control plane its own view of that directory and tells it the host path as well,
+because sandboxes are started on the host daemon and only host paths mean anything to it.

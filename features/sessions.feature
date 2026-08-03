@@ -68,6 +68,14 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "" to the project
     Then the control plane refuses it as invalid
 
+  # A session's state does not all sit at the same level. The conversation the model keeps, and the
+  # workspace's own context, belong to the workspace, so every project in it can resume a thread.
+  # The working files and the project's context belong to the project. The sandbox is told both, and
+  # what it does with them is its own business: a host directory on Docker, a volume elsewhere.
+  Scenario: A session's sandbox is created for its project and its workspace
+    When the operator dispatches "hello" to the project
+    Then the sandbox was created for the session's project and workspace
+
   # The token is set on the sandbox at creation, not only on each turn, so anything the operator
   # starts inside it later is authenticated without the tool carrying a credential around.
   Scenario: The session's sandbox carries the workspace's subscription token

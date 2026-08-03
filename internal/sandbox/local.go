@@ -14,10 +14,16 @@ type LocalProvider struct{}
 
 var _ Provider = LocalProvider{}
 
-// Create returns a host backed sandbox. The id is ignored; there is nothing to provision. The
-// environment is kept and applied to every command, standing in for a container's own environment.
-func (LocalProvider) Create(_ context.Context, _ string, env []string) (Sandbox, error) {
-	return localSandbox{env: env}, nil
+// Create returns a host backed sandbox. There is nothing to provision, so the id, the workspace and
+// the project are all ignored. The environment is kept and applied to every command, standing in
+// for a container's own environment.
+//
+// It keeps no state of its own either, and does not need to: a command here runs on the host as the
+// operator, so the model's command line tool reads and writes the operator's own home directory,
+// which already outlives every session. Mounting state in is what a container needs, because a
+// container's filesystem is thrown away with it.
+func (LocalProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
+	return localSandbox{env: cfg.Env}, nil
 }
 
 type localSandbox struct{ env []string }
