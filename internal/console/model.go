@@ -28,7 +28,19 @@ const (
 	// modeHelp lists every key, opened with a question mark. The header carries only this view's own
 	// commands, the way k9s does, so the rest have to be somewhere.
 	modeHelp
+	// modeConfirm is a destructive key waiting for a yes. It is a mode the keyboard is in, drawn
+	// where the command bar draws, rather than a floating window: the console has no overlay
+	// machinery and this does not need any.
+	modeConfirm
 )
+
+// pending is a destructive action waiting on an answer, and the row it would act on. The row is held
+// rather than looked up again, so a refresh that reorders the list underneath cannot turn a yes into
+// a yes to something else.
+type pending struct {
+	action Action
+	row    Row
+}
 
 // crumbEntry remembers a view that was drilled down from, so escape restores it exactly. It also
 // remembers what the operator drilled into, which is what the breadcrumb reads out: "me" rather than
@@ -107,6 +119,7 @@ type Model struct {
 	quitting bool
 	info     Info
 	source   InfoSource
+	waiting  pending
 }
 
 // New opens the console on the named resource. source describes the crew it is connected to, and may

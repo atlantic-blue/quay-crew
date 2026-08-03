@@ -427,11 +427,20 @@ func (m Model) footer() string {
 		return truncate(prompt.Render(":")+m.input+prompt.Render("_"), m.width)
 	case modeFilter:
 		return truncate(prompt.Render("/")+m.input+prompt.Render("_"), m.width)
+	case modeConfirm:
+		return truncate(m.confirmPrompt(), m.width)
 	case modeBrowse:
 		return truncate(m.breadcrumb(), m.width)
 	default:
 		return ""
 	}
+}
+
+// confirmPrompt names the thing about to be acted on, so a yes is a yes to something in particular
+// rather than to whatever the cursor happened to be over.
+func (m Model) confirmPrompt() string {
+	return prompt.Render(" ") + alert.Render(strings.ToLower(m.waiting.action.Label)+" "+
+		m.active.One()+" "+m.waiting.row.Name()+"?") + faint.Render("  y to confirm, any other key cancels")
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"

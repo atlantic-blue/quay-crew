@@ -77,6 +77,26 @@ Feature: The operator sees the crew from the console
     And the operator presses enter on the selected thread
     Then the console says the thread has no conversation yet
 
+  # Every destructive key asks first. These drive the console's own reducer against the real control
+  # plane, so "nothing was stopped" is a fact about the store rather than about a double.
+  Scenario: Backspace asks before it stops a thread, and stops nothing until yes
+    Given a session started by dispatching "hello"
+    When the operator opens the console and presses backspace on the thread
+    Then the console asks whether to stop that thread
+    And the session is reported as idle
+
+  Scenario: Answering yes stops the thread
+    Given a session started by dispatching "hello"
+    When the operator opens the console and presses backspace on the thread
+    And the operator answers "y"
+    Then the session is reported as stopped
+
+  Scenario: Anything that is not yes cancels, and stops nothing
+    Given a session started by dispatching "hello"
+    When the operator opens the console and presses backspace on the thread
+    And the operator answers "n"
+    Then the session is reported as idle
+
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console

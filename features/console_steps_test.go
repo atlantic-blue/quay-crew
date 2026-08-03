@@ -8,7 +8,9 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
 
@@ -22,6 +24,8 @@ type consoleWorld struct {
 	// opened is the command the console would hand the terminal, and openErr the reason it would not.
 	opened  *exec.Cmd
 	openErr error
+	// model is the real console, driven by keys, for the scenarios about what a key does.
+	model console.Model
 }
 
 type consoleKey struct{}
@@ -171,6 +175,32 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the operator opens the console and presses backspace on the thread$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx).client); err != nil {
+			return err
+		}
+		return c.press(tea.KeyMsg{Type: tea.KeyBackspace})
+	})
+
+	sc.Step(`^the operator answers "([^"]*)"$`, func(ctx context.Context, answer string) error {
+		return consoleFrom(ctx).press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(answer)})
+	})
+
+	sc.Step(`^the console asks whether to stop that thread$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		view := c.model.View()
+		want := "stop thread " + display.ShortID(current.threadID) + "?"
+		if !strings.Contains(view, want) {
+			return fmt.Errorf("the console does not ask %q:\n%s", want, view)
+		}
+		return nil
+	})
+
 	sc.Step(`^the console says the thread has no conversation yet$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if c.openErr == nil {
@@ -256,6 +286,68 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		}
 		return fmt.Errorf("the threads view has no Stop action")
 	})
+}
+
+// drive runs a console command and feeds everything it produces back into the model, which is what
+// the bubbletea runtime does with no terminal in the way. It is how a scenario can press a key
+// against the real control plane and then assert on the store rather than on a double.
+//
+// A batch is unpacked rather than run whole, because one of the console's own commands is the three
+// second refresh clock and a scenario should not wait for it.
+func drive(model console.Model, cmd tea.Cmd) (console.Model, error) {
+	if cmd == nil {
+		return model, nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, inner := range msg {
+			next, err := drive(model, inner)
+			if err != nil {
+				return model, err
+			}
+			model = next
+		}
+		return model, nil
+	case nil:
+		return model, nil
+	default:
+		updated, next := model.Update(msg)
+		typed, isModel := updated.(console.Model)
+		if !isModel {
+			return model, fmt.Errorf("the console returned %T, want a console.Model", updated)
+		}
+		return drive(typed, next)
+	}
+}
+
+// press sends one key through the console and runs whatever it asks for.
+func (c *consoleWorld) press(key tea.KeyMsg) error {
+	updated, cmd := c.model.Update(key)
+	typed, isModel := updated.(console.Model)
+	if !isModel {
+		return fmt.Errorf("the console returned %T, want a console.Model", updated)
+	}
+	next, err := drive(typed, cmd)
+	if err != nil {
+		return err
+	}
+	c.model = next
+	return nil
+}
+
+// openModel builds the real console over the live control plane and loads its opening view. It asks
+// for a refresh rather than calling Init, because Init also starts the refresh clock.
+func (c *consoleWorld) openModel(client quaycrewv1.ControlPlaneServiceClient) error {
+	registry, err := console.NewDefaultRegistry(client)
+	if err != nil {
+		return err
+	}
+	model, err := console.New(registry, console.Default, nil)
+	if err != nil {
+		return err
+	}
+	c.model = model
+	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 }
 
 // pressEnter runs whatever the active view has bound to enter on the single listed row, which is the

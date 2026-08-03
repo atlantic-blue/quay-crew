@@ -37,6 +37,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateFilterKey(msg)
 	case modeBrowse:
 		return m.updateBrowseKey(msg)
+	case modeConfirm:
+		return m.updateConfirmKey(msg)
 	case modeHelp:
 		// Any key closes it. Nothing in here acts on anything, so there is nothing to get wrong.
 		m.mode = modeBrowse
@@ -112,14 +114,37 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 		if !action.Bound(key) {
 			continue
 		}
-		if action.Shell != nil {
-			return m, shellCmd(action, row)
+		if action.Confirm {
+			m.mode, m.waiting = modeConfirm, pending{action: action, row: row}
+			return m, nil
 		}
-		if action.Run != nil {
-			return m, runCmd(action, row)
-		}
+		return m.perform(action, row)
 	}
 	return m, nil
+}
+
+// perform runs an action, whether it was confirmed or never needed to be.
+func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
+	if action.Shell != nil {
+		return m, shellCmd(action, row)
+	}
+	if action.Run != nil {
+		return m, runCmd(action, row)
+	}
+	return m, nil
+}
+
+// updateConfirmKey answers a destructive key. Cancelling is the default: yes is the only thing that
+// acts, and every other key steps back out, because the cost of an accidental cancel is one more
+// keypress and the cost of an accidental yes is a conversation.
+func (m Model) updateConfirmKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	waiting := m.waiting
+	m.mode, m.waiting = modeBrowse, pending{}
+
+	if msg.String() != "y" {
+		return m, nil
+	}
+	return m.perform(waiting.action, waiting.row)
 }
 
 // shellCmd suspends the console, hands the terminal to the command, and restores on exit.

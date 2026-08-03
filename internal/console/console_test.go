@@ -417,7 +417,8 @@ func TestStopActionStopsTheSelectedSession(t *testing.T) {
 	model := newTestModel(t, Threads(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
-	_, cmd := update(t, model, runes("x"))
+	model, _ = update(t, model, runes("x"))
+	_, cmd := update(t, model, runes("y"))
 	if cmd == nil {
 		t.Fatal("stop produced no command")
 	}
@@ -555,6 +556,125 @@ func TestEnterStillDrillsWhereThereIsSomewhereToGo(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("drilling did not trigger a listing")
+	}
+}
+
+// threadsAt builds a threads view with one thread listed and the cursor on it.
+func threadsAt(t *testing.T, client *fakeClient) Model {
+	t.Helper()
+	model := newTestModel(t, Threads(client))
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "1m"}}))
+	return model
+}
+
+// TestBackspaceAsksBeforeItStops is the whole point of the confirmation: the list is full of
+// conversations and there is no way back from stopping the wrong one.
+func TestBackspaceAsksBeforeItStops(t *testing.T) {
+	client := &fakeClient{}
+	model, cmd := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+
+	if model.mode != modeConfirm {
+		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
+	}
+	if cmd != nil {
+		t.Fatal("backspace produced a command, want nothing to happen until yes")
+	}
+	if len(client.stopped) != 0 {
+		t.Fatalf("stopped = %v, want nothing stopped yet", client.stopped)
+	}
+	if view := model.View(); !strings.Contains(view, "stop thread d754610f?") {
+		t.Fatalf("the console does not name what it is about to stop:\n%s", view)
+	}
+}
+
+func TestYesStopsTheThreadItNamed(t *testing.T) {
+	client := &fakeClient{}
+	model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+	model, cmd := update(t, model, runes("y"))
+
+	if model.mode != modeBrowse {
+		t.Fatalf("mode = %v, want back to browsing", model.mode)
+	}
+	if cmd == nil {
+		t.Fatal("yes produced no command")
+	}
+	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
+		t.Fatalf("yes returned %#v, want a clean actionDoneMsg", cmd())
+	}
+	if len(client.stopped) != 1 || client.stopped[0] != "s1" {
+		t.Fatalf("stopped = %v, want [s1]", client.stopped)
+	}
+}
+
+// TestAnythingOtherThanYesCancels: cancelling is the default, because an accidental cancel costs one
+// keypress and an accidental yes costs a conversation.
+func TestAnythingOtherThanYesCancels(t *testing.T) {
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyEsc},
+		runes("n"),
+		runes("Y"),
+		{Type: tea.KeyEnter},
+	} {
+		t.Run(key.String(), func(t *testing.T) {
+			client := &fakeClient{}
+			model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+			model, cmd := update(t, model, key)
+
+			if model.mode != modeBrowse {
+				t.Fatalf("mode = %v, want back to browsing", model.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("%s produced a command, want the action cancelled", key.String())
+			}
+			if len(client.stopped) != 0 {
+				t.Fatalf("stopped = %v, want nothing stopped", client.stopped)
+			}
+		})
+	}
+}
+
+// TestXStopsThroughTheSameConfirmation: the old key is not a way around the question.
+func TestXStopsThroughTheSameConfirmation(t *testing.T) {
+	client := &fakeClient{}
+	model, _ := update(t, threadsAt(t, client), runes("x"))
+
+	if model.mode != modeConfirm {
+		t.Fatalf("mode = %v, want x to ask too", model.mode)
+	}
+	if len(client.stopped) != 0 {
+		t.Fatalf("stopped = %v, want nothing stopped yet", client.stopped)
+	}
+}
+
+// TestAnUnconfirmedActionStillActsAtOnce: attaching is not destructive and must not grow a question.
+func TestAnUnconfirmedActionStillActsAtOnce(t *testing.T) {
+	model, cmd := update(t, threadsAt(t, &fakeClient{}), tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.mode != modeBrowse {
+		t.Fatalf("mode = %v, want attaching to act at once", model.mode)
+	}
+	if cmd == nil {
+		t.Fatal("enter produced no command")
+	}
+}
+
+// TestTheConfirmationSurvivesARefreshUnderneathIt: a listing arriving between the question and the
+// answer must not turn a yes into a yes to a different conversation.
+func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
+	client := &fakeClient{}
+	model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "s2", Label: "aaaa1111", Cells: []string{"other", "acme", "bills", "aaaa1111", "idle", "1m"}},
+		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "2m"}}))
+	_, cmd := update(t, model, runes("y"))
+	if cmd != nil {
+		cmd()
+	}
+
+	if len(client.stopped) != 1 || client.stopped[0] != "s1" {
+		t.Fatalf("stopped = %v, want the thread the console named, [s1]", client.stopped)
 	}
 }
 
@@ -724,7 +844,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	view := model.View()
-	for _, want := range []string{"<enter> Attach", "<s> Shell", "<x> Stop", "<?> Help"} {
+	for _, want := range []string{"<enter> Attach", "<s> Shell", "<backspace> Stop", "<?> Help"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the header does not offer %q:\n%s", want, view)
 		}
