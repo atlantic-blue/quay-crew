@@ -11,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // fakeClient is a control plane double. It embeds the generated interface so unimplemented calls
@@ -628,7 +630,7 @@ func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
 	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Context: "me/house-bills"}})
 
 	view := model.View()
-	for _, want := range []string{"Quay:", "5fd7bee", "Context:", "me/house-bills"} {
+	for _, want := range []string{"Version:", "5fd7bee", "Context:", "me/house-bills"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the status block does not say %q:\n%s", want, view)
 		}
@@ -735,6 +737,25 @@ func TestTheConsoleAsksWhatItIsConnectedTo(t *testing.T) {
 	}
 	if info.info.Address != "somewhere" {
 		t.Fatalf("it recorded %q, want the address it was given", info.info.Address)
+	}
+}
+
+// TestAControlPlaneTooOldToAnswerSaysSo is the case that cost an afternoon: the tool was installed,
+// the stack was not rebuilt, the call did not exist yet, and the console silently showed four fewer
+// lines. Silence reads as the console being broken.
+func TestAControlPlaneTooOldToAnswerSaysSo(t *testing.T) {
+	msg := infoCmd(func(context.Context) (Info, error) {
+		return Info{}, status.Error(codes.Unimplemented, "unknown method GetInfo")
+	})()
+	if _, isBehind := msg.(behindMsg); !isBehind {
+		t.Fatalf("asking an old control plane produced %#v, want it reported as behind", msg)
+	}
+
+	model := newTestModel(t, staticResource("sessions"))
+	model, _ = update(t, model, behindMsg{})
+	view := model.View()
+	if !strings.Contains(view, "Quay:") || !strings.Contains(view, "older than the tool") || !strings.Contains(view, "make upgrade") {
+		t.Fatalf("the status block does not say the crew is behind, or how to fix it:\n%s", view)
 	}
 }
 

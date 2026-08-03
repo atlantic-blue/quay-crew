@@ -127,7 +127,7 @@ func (m Model) statusLines() []string {
 			lines = append(lines, statusKey.Render(pad(key+":", 9))+value)
 		}
 	}
-	add("Quay", m.info.Version)
+	add("Version", m.info.Version)
 	add("Address", m.info.Address)
 	add("Context", m.info.Context)
 	add("Model", m.info.Model)
@@ -136,8 +136,11 @@ func (m Model) statusLines() []string {
 	if m.info.Store != "" {
 		add("State", statePhrase(m.info.StateKept))
 	}
+	if m.info.Behind {
+		add("Quay", alert.Render("this control plane is older than the tool, run make upgrade"))
+	}
 	if len(lines) == 0 {
-		lines = append(lines, statusKey.Render("Quay:    ")+faint.Render("asking what this crew is running"))
+		lines = append(lines, statusKey.Render(pad("Quay:", 9))+faint.Render("asking what this control plane is running"))
 	}
 	return lines
 }

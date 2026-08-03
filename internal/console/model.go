@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // refreshEvery is how often the active view reloads on its own. The operator can always force one.
@@ -52,6 +54,10 @@ type Info struct {
 	Sandbox   string
 	Store     string
 	StateKept bool
+	// Behind says the control plane is older than this tool: old enough that it cannot answer what it
+	// is running. Everything else in here is then blank, and the console has to say why rather than
+	// quietly showing less.
+	Behind bool
 }
 
 // InfoSource fetches that description. It is a function rather than a client so the console stays
@@ -76,6 +82,8 @@ type (
 	actionDoneMsg struct{ err error }
 	// infoMsg carries what the control plane says it is running.
 	infoMsg struct{ info Info }
+	// behindMsg says the control plane is too old to answer at all.
+	behindMsg struct{}
 )
 
 // Model is the console. It is a pure function over messages: Update never performs input or output,
@@ -138,6 +146,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, listCmd(m.active, m.parent)
 	case infoMsg:
 		m.info = msg.info
+		return m, nil
+	case behindMsg:
+		m.info.Behind = true
 		return m, nil
 	case tea.KeyMsg:
 		return m.updateKey(msg)
@@ -275,8 +286,15 @@ func listCmd(resource Resource, parent string) tea.Cmd {
 	}
 }
 
-// infoCmd asks the crew what it is running. A failure is not surfaced as an error: the status block
-// simply says less, and the operator came here to look at sessions.
+// infoCmd asks the crew what it is running.
+//
+// A control plane that does not have the call at all is a different thing from one that failed to
+// answer, and it is the common case after an upgrade: the tool moves ahead of the stack, because
+// installing the tool does not rebuild the stack. That gets reported rather than swallowed, because
+// silently showing four fewer lines reads as the console being broken.
+//
+// Any other failure is still swallowed. The operator came here to look at threads, and a status block
+// that could not be filled in is not a reason to show them an error instead.
 func infoCmd(source InfoSource) tea.Cmd {
 	if source == nil {
 		return nil
@@ -286,10 +304,13 @@ func infoCmd(source InfoSource) tea.Cmd {
 		defer cancel()
 
 		info, err := source(ctx)
-		if err != nil {
-			return nil
+		if err == nil {
+			return infoMsg{info: info}
 		}
-		return infoMsg{info: info}
+		if status.Code(err) == codes.Unimplemented {
+			return behindMsg{}
+		}
+		return nil
 	}
 }
 

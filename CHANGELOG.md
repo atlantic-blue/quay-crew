@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The console says when the control plane is older than the tool**, rather than quietly showing four
+  fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool
+  does not rebuild the stack, so this is the normal state of things after an upgrade, and silence reads
+  as the console being broken. ([#81](https://github.com/atlantic-blue/quay-crew/pull/81))
 - **`quay features`**, and a `features` view in the console: what this build can do and what proves it,
   read from the behaviour specification embedded in the binary. It asks the control plane nothing,
   because a capability belongs to the build rather than to a running stack, and the question is usually
