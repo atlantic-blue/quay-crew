@@ -42,6 +42,10 @@ message Session {
   // archived_at is when the thread was put away. Unset means it is live. Archiving hides a thread
   // from the default listing and deletes nothing, so this is reversible by clearing it.
   google.protobuf.Timestamp archived_at = 9;
+  // permission_mode is what the model is allowed to do without asking, for this thread's turns:
+  // "plan", "acceptEdits" or "bypassPermissions". It belongs to the thread rather than to a turn, so
+  // a thread started to plan something keeps planning.
+  string permission_mode = 10;
 }
 
 message CreateWorkspaceRequest {
@@ -174,6 +178,17 @@ message ArchiveSessionResponse {
   Session session = 1;
 }
 
+// SetSessionPermissionModeRequest changes what a thread's turns may do without asking.
+message SetSessionPermissionModeRequest {
+  string id = 1;
+  // mode is "plan", "acceptEdits" or "bypassPermissions". An unknown one is refused rather than
+  // passed to the model, which would take it as far as its own argument parser and no further.
+  string mode = 2;
+}
+message SetSessionPermissionModeResponse {
+  Session session = 1;
+}
+
 // RestoreSessionRequest brings an archived thread back into the default listing.
 message RestoreSessionRequest {
   string id = 1;
@@ -229,6 +244,7 @@ service ControlPlaneService {
   rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
   rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
+  rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }

@@ -102,6 +102,17 @@ func (r *recordingRunner) turn(i int) (model.Request, bool) {
 	return r.requests[i], true
 }
 
+// lastRequest is the turn the model was asked to run most recently, which is what a scenario about
+// what a turn ran as has to look at.
+func (r *recordingRunner) lastRequest() model.Request {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.requests) == 0 {
+		return model.Request{}
+	}
+	return r.requests[len(r.requests)-1]
+}
+
 func (r *recordingRunner) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -400,6 +411,24 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			return err
 		}
 		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: current.sessionID})
+		return nil
+	})
+	sc.Step(`^the thread is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		_, w.lastErr = w.client.SetSessionPermissionMode(ctx,
+			&quaycrewv1.SetSessionPermissionModeRequest{Id: current.sessionID, Mode: mode})
+		return nil
+	})
+	sc.Step(`^the turn ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
+		w := worldFrom(ctx)
+		got := w.runner.lastRequest().PermissionMode
+		if got != want {
+			return fmt.Errorf("the turn ran as %q, want %q", got, want)
+		}
 		return nil
 	})
 	sc.Step(`^the operator archives the session$`, func(ctx context.Context) error {

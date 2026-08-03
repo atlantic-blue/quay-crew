@@ -6,6 +6,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -177,8 +178,11 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) 
 		Project:   project,
 		ThreadId:  thread,
 		Status:    "idle",
-		CreatedAt: now,
-		UpdatedAt: now,
+		// The mode every turn has run as since the control plane was written, now written down
+		// rather than hardcoded at the point of use.
+		PermissionMode: model.PermissionAcceptEdits,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	m.sessions[session.GetId()] = session
 	m.byThread[threadKey(project, thread)] = session.GetId()
@@ -259,6 +263,19 @@ func (m *Memory) RestartSession(_ context.Context, id string) error {
 		return ErrNotFound
 	}
 	session.Status = "idle"
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return nil
+}
+
+// SetPermissionMode records what a thread's turns may do without asking.
+func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	session.PermissionMode = mode
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }

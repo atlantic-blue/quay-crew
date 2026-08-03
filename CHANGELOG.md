@@ -6,6 +6,16 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 4 August 2026
+
+- **A thread's permission mode, shown and toggled.** Every turn ran `acceptEdits`, hardcoded, and no
+  operator could see it or change it. The mode now belongs to the thread and survives a restart, the
+  listing has a `MODE` column reading `edits`, `plan` or `dangerous`, and `D` in the console flips the
+  selected thread between asking and skipping every permission, through the same confirmation as the
+  other keys that change what a thread is. A mode the model does not understand is refused rather than
+  handed to it, and `bypassPermissions` is refused outright when turns run on the host instead of in a
+  container. ([#105](https://github.com/atlantic-blue/quay-crew/pull/105))
+
 ## 3 August 2026
 
 - **The refusals are in the operator's words, and name the thread on their screen.** "Its conversation

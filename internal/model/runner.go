@@ -39,3 +39,27 @@ func NewRunner(kind, workdir string) (Runner, error) {
 	}
 	return &ClaudeCodeRunner{Bin: "claude", DefaultWorkdir: workdir}, nil
 }
+
+// The permission modes a turn can run in, which are the model's own, not ours.
+const (
+	// PermissionPlan reads and proposes and changes nothing.
+	PermissionPlan = "plan"
+	// PermissionAcceptEdits lets the model edit the files in its working directory without asking.
+	// It is what every turn has run as, hardcoded, since the control plane was written.
+	PermissionAcceptEdits = "acceptEdits"
+	// PermissionBypass lets the model do anything without asking. In a sandbox that means anything to
+	// one container holding one project's files; on the local backend it means anything to the host.
+	PermissionBypass = "bypassPermissions"
+)
+
+// KnownPermissionMode says whether a mode is one the model understands. An unknown one is refused
+// where it is set rather than handed to the model, which would take it as far as its own argument
+// parser and no further.
+func KnownPermissionMode(mode string) bool {
+	switch mode {
+	case PermissionPlan, PermissionAcceptEdits, PermissionBypass:
+		return true
+	default:
+		return false
+	}
+}

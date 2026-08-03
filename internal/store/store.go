@@ -69,6 +69,9 @@ type Store interface {
 	ArchiveSession(ctx context.Context, id string) error
 	// RestoreSession brings an archived thread back into the default listing.
 	RestoreSession(ctx context.Context, id string) error
+	// SetPermissionMode records what a thread's turns may do without asking. Whether the mode is one
+	// the model understands is the control plane's question, not the store's.
+	SetPermissionMode(ctx context.Context, id, mode string) error
 	// RestartSession marks a stopped session idle again. The conversation is untouched, because it
 	// lives on the host rather than in the sandbox that was torn down, which is the whole reason
 	// bringing a thread back is possible at all. Whether the session was stopped in the first place

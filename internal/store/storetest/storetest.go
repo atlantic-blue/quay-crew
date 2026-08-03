@@ -334,6 +334,36 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The mode belongs to the thread, so it has to survive everything the thread survives. A thread
+	// started to plan something that quietly went back to editing files on the next turn would be
+	// worse than never having the setting.
+	t.Run("a thread keeps the permission mode it was given", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		if got := session.GetPermissionMode(); got != "acceptEdits" {
+			t.Fatalf("a new thread runs as %q, want acceptEdits, which is what every turn has run as", got)
+		}
+		if err := s.SetPermissionMode(ctx, session.GetId(), "bypassPermissions"); err != nil {
+			t.Fatalf("SetPermissionMode: %v", err)
+		}
+
+		got, _ := s.GetSession(ctx, session.GetId())
+		if got.GetPermissionMode() != "bypassPermissions" {
+			t.Fatalf("the thread runs as %q, want bypassPermissions", got.GetPermissionMode())
+		}
+		// And the thread it was set on, not every thread in the project.
+		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b")
+		if other.GetPermissionMode() != "acceptEdits" {
+			t.Fatalf("another thread runs as %q, want it untouched", other.GetPermissionMode())
+		}
+		if err := s.SetPermissionMode(ctx, "ghost", "plan"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("setting the mode on a missing session returned %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("a session that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if _, err := s.GetSession(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {

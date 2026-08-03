@@ -25,8 +25,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const defaultPermissionMode = "acceptEdits"
-
 // Info is what this control plane is running, reported over the API so an operator can see which
 // crew they are about to act on. It is configuration: never a secret, and never a health verdict.
 type Info struct {
@@ -276,7 +274,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	resp, err := s.runner.Run(ctx, box, model.Request{
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
-		PermissionMode: defaultPermissionMode,
+		PermissionMode: permissionModeOf(session),
 		Env:            s.turnEnv(ctx, session.GetWorkspace()),
 	})
 	if err != nil {
@@ -286,6 +284,43 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, "idle")
 
 	return &quaycrewv1.DispatchResponse{SessionId: session.GetId(), ThreadId: thread, Reply: resp.Reply}, nil
+}
+
+// permissionModeOf is the mode a thread's turns run in. A thread from before the mode was written
+// down has none, and every one of those has been running acceptEdits, so that is what it keeps.
+func permissionModeOf(session *quaycrewv1.Session) string {
+	if mode := session.GetPermissionMode(); model.KnownPermissionMode(mode) {
+		return mode
+	}
+	return model.PermissionAcceptEdits
+}
+
+// SetSessionPermissionMode changes what a thread's turns may do without asking.
+//
+// The mode belongs to the thread rather than to a turn, so a thread started to plan something keeps
+// planning instead of being re armed on every dispatch. An unknown mode is refused here rather than
+// handed to the model, which would take it as far as its own argument parser and no further.
+func (s *Server) SetSessionPermissionMode(ctx context.Context, req *quaycrewv1.SetSessionPermissionModeRequest) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
+	if !model.KnownPermissionMode(req.GetMode()) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"%q is not a permission mode: use %s, %s or %s",
+			req.GetMode(), model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
+	}
+	// The one place where skipping every permission means the host rather than a container. The local
+	// backend is a stopgap for running without Docker, and arming a turn there gives the model the
+	// machine the operator is sitting at.
+	if req.GetMode() == model.PermissionBypass && s.info.Sandbox == "local" {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"this crew runs turns on the host, not in a container, so %s would give the model your machine",
+			model.PermissionBypass)
+	}
+	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	if err := s.store.SetPermissionMode(ctx, req.GetId(), req.GetMode()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.SetSessionPermissionModeResponse{Session: s.reread(ctx, req.GetId())}, nil
 }
 
 // recordTurn stores the outcome of a turn. A store failure here must not replace the turn's own
