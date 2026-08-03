@@ -11,10 +11,14 @@ import (
 type FakeProvider struct {
 	Output string
 	mu     sync.Mutex
-	// Created records each sandbox's configuration in order, so a test can assert which session,
-	// project and workspace it belongs to and what environment it carries.
+	// Created records the configuration of each sandbox actually made, in order, so a test can assert
+	// which session, project and workspace it belongs to and what environment it carries. Adopting an
+	// existing one is not a creation and does not appear here, which is what lets a scenario say a
+	// second turn made no second sandbox.
 	Created []Config
-	Boxes   []*FakeSandbox
+	// Calls records every request, adopted or not, for a test that cares how often it was asked.
+	Calls []Config
+	Boxes []*FakeSandbox
 	// live is the sandbox each session currently has, so creating twice for one session adopts it.
 	live map[string]*FakeSandbox
 }
@@ -30,10 +34,11 @@ var _ Provider = (*FakeProvider)(nil)
 func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Created = append(f.Created, cfg)
+	f.Calls = append(f.Calls, cfg)
 	if box, live := f.live[cfg.ID]; live && !box.Closed {
 		return box, nil
 	}
+	f.Created = append(f.Created, cfg)
 	box := &FakeSandbox{Output: f.Output}
 	if f.live == nil {
 		f.live = make(map[string]*FakeSandbox)

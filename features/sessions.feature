@@ -203,7 +203,7 @@ Feature: Sessions run in isolated sandboxes
     When the control plane restarts
     And the operator asks how to attach to the session
     Then the control plane names the session's sandbox
-    And a second sandbox has been created for that session
+    And the control plane asked for that session's sandbox
 
   # A handle can outlive what it points at. Every conversation from a sandbox built before state was
   # kept on the host died with that container while the row kept the handle, and resuming one of those
@@ -214,6 +214,24 @@ Feature: Sessions run in isolated sandboxes
     And the operator asks how to attach to the session
     Then the control plane refuses it as not yet ready
     And the refusal says the conversation is gone, in the operator's words
+
+  # The control plane kept a handle to every sandbox it had made and trusted it forever. Anything that
+  # removed a container behind its back left that handle pointing at nothing, and the operator got a
+  # container name for something the daemon had never heard of, over and over:
+  # "Error response from daemon: No such container: quaycrew-1edc8349315233e36bf4fd53".
+  Scenario: A sandbox removed behind the control plane's back is made again
+    Given a session started by dispatching "remember this"
+    When the session's sandbox is removed without telling the control plane
+    And the operator asks how to attach to the session
+    Then the control plane names the session's sandbox
+    And a second sandbox has been created for that session
+
+  Scenario: A turn after its sandbox was removed behind the control plane's back still runs
+    Given a session started by dispatching "remember this"
+    When the session's sandbox is removed without telling the control plane
+    And the operator dispatches "and again" to the same thread
+    Then the reply is "you said: and again"
+    And a second sandbox has been created for that session
 
   Scenario: An archived thread cannot be attached to
     Given a session started by dispatching "hello"

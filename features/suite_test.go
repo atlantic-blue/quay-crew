@@ -260,6 +260,25 @@ func (w *world) keepConversation(ctx context.Context, sessionID string) error {
 
 // conversationDir is where the model keeps a workspace's conversations, one directory per working
 // directory, which is the same path in every sandbox.
+// sandboxesMadeFor counts the sandboxes genuinely made for the current session, which is not the same
+// as the times the provider was asked: adopting one that already exists makes nothing.
+func (w *world) sandboxesMadeFor(want int) error {
+	current, err := w.lastTurn()
+	if err != nil {
+		return err
+	}
+	var made int
+	for _, created := range w.provider.Created {
+		if created.ID == current.sessionID {
+			made++
+		}
+	}
+	if made != want {
+		return fmt.Errorf("%d sandboxes were made for the session, want %d", made, want)
+	}
+	return nil
+}
+
 func (w *world) conversationDir(workspace string) string {
 	return filepath.Join(w.storage.Dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
 }
@@ -457,21 +476,24 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// Restarting starts the container straight away, which is the whole difference between it and
 	// simply marking a row idle: a second sandbox for the same session is the evidence.
 	sc.Step(`^a second sandbox has been created for that session$`, func(ctx context.Context) error {
+		return worldFrom(ctx).sandboxesMadeFor(2)
+	})
+
+	// The control plane must ask the provider rather than answer from the database row. Whether that
+	// starts a container or adopts one already carrying the name is the provider's business; what
+	// matters here is that nobody hands out a container name without asking whether it is there.
+	sc.Step(`^the control plane asked for that session's sandbox$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		current, err := w.lastTurn()
 		if err != nil {
 			return err
 		}
-		var forSession int
-		for _, created := range w.provider.Created {
-			if created.ID == current.sessionID {
-				forSession++
+		for _, call := range w.provider.Calls {
+			if call.ID == current.sessionID {
+				return nil
 			}
 		}
-		if forSession != 2 {
-			return fmt.Errorf("%d sandboxes were created for the session, want 2: one for the first turn and one for the restart", forSession)
-		}
-		return nil
+		return fmt.Errorf("the sandbox provider was never asked about session %s", current.sessionID)
 	})
 
 	// When: workspaces.
