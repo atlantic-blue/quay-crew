@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The console says which crew you are on and what you can press.** A status block naming the
+  address, the model backend, the sandbox, the store and whether a conversation outlives its
+  container, with the key hints beside it. The rows sit in a framed panel titled with their scope and
+  count, `sessions(house-bills)[3]`, ordered by a column marked with an arrow, and the breadcrumb at
+  the bottom reads `me > house-bills > sessions` so it is clear what escape goes back to.
+  ([#72](https://github.com/atlantic-blue/quay-crew/pull/72))
+- **The control plane says what it is running**: the model backend a turn runs against, what a session
+  is isolated in, where workspaces and sessions are kept, and whether a conversation outlives its
+  container. Two stacks look identical from a list of sessions and behave nothing alike.
+  ([#71](https://github.com/atlantic-blue/quay-crew/pull/71))
 - **A session's conversation and files outlive its container.** Every sandbox mounts two directories
   from the host: the workspace's conversation store at `/home/agent/.claude` and the project's working
   directory at `/home/agent/workspace`. Before this, stopping a session ran `docker rm -f` and deleted

@@ -23,6 +23,7 @@ func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "age", Width: 10},
 		},
 		DrillTo: "projects",
+		SortBy:  1,
 		List: func(ctx context.Context, _ string) ([]Row, error) {
 			resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 			if err != nil {
@@ -41,6 +42,7 @@ func workspaceRow(workspace *quaycrewv1.Workspace) Row {
 	// ID stays whole: it is what actions and drilling down use. Only the cell is shortened.
 	return Row{
 		ID:    workspace.GetId(),
+		Label: workspace.GetName(),
 		Cells: []string{display.ShortID(workspace.GetId()), workspace.GetName(), age(workspace.GetCreatedAt())},
 		State: StateReady,
 	}
@@ -58,6 +60,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "age", Width: 0},
 		},
 		DrillTo: "sessions",
+		SortBy:  1,
 		List: func(ctx context.Context, workspace string) ([]Row, error) {
 			resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: workspace})
 			if err != nil {
@@ -78,6 +81,7 @@ func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
 	return Row{
 		ID:     project.GetId(),
 		Parent: project.GetWorkspace(),
+		Label:  project.GetName(),
 		Cells: []string{
 			display.ShortID(project.GetId()),
 			project.GetName(),
@@ -115,6 +119,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "status", Width: 10},
 			{Title: "age", Width: 0},
 		},
+		// Ordered by thread, so a session keeps its place in the list as its age and status change
+		// under it.
+		SortBy:  3,
 		List:    sessionLister(client),
 		Actions: sessionActions(client),
 	}
@@ -159,6 +166,7 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
+		Label:  display.ShortID(session.GetThreadId()),
 		Cells: []string{
 			display.ShortID(session.GetId()),
 			display.Name(workspaceName, session.GetWorkspace()),

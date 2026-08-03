@@ -36,6 +36,8 @@ var (
 	busy = lipgloss.NewStyle().Foreground(ansiYellow)
 	// ready is a healthy, idle row.
 	ready = lipgloss.NewStyle().Foreground(ansiGreen)
+	// frame is the panel's border, dim so it separates without competing with the rows inside it.
+	frame = lipgloss.NewStyle().Faint(true)
 	// prompt is the command bar and the filter bar.
 	prompt = lipgloss.NewStyle().Foreground(ansiCyan).Bold(true)
 )

@@ -44,6 +44,17 @@ type Row struct {
 	Parent string
 	Cells  []string
 	State  State
+	// Label is what to call this row in the breadcrumb after drilling into it, for example a
+	// workspace's name rather than its identifier. Empty falls back to the identifier.
+	Label string
+}
+
+// Name is what to call the row where a human reads it.
+func (r Row) Name() string {
+	if r.Label != "" {
+		return r.Label
+	}
+	return r.ID
 }
 
 // Lister returns the current rows for a resource. Parent is empty for an unscoped view, or the
@@ -77,6 +88,9 @@ type Resource struct {
 	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
 	// does nothing here.
 	DrillTo string
+	// SortBy is the column the console orders rows by, and marks with an arrow so the order is
+	// visible. Rows that tie keep the order the control plane returned them in.
+	SortBy int
 }
 
 // Registry holds the resources the console knows about and resolves what the operator types.

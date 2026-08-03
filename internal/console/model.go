@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,12 +25,30 @@ const (
 	modeFilter
 )
 
-// crumbEntry remembers a view that was drilled down from, so escape restores it exactly.
+// crumbEntry remembers a view that was drilled down from, so escape restores it exactly. It also
+// remembers what the operator drilled into, which is what the breadcrumb reads out: "me" rather than
+// "workspaces".
 type crumbEntry struct {
 	resource string
 	parent   string
 	selected int
+	into     string
 }
+
+// Info is what the crew on the other end of the connection is running. The console shows it so the
+// operator can see which one they are about to act on, the way a cluster name does. It is fetched
+// once: it is configuration, and configuration does not change under a running process.
+type Info struct {
+	Address   string
+	Model     string
+	Sandbox   string
+	Store     string
+	StateKept bool
+}
+
+// InfoSource fetches that description. It is a function rather than a client so the console stays
+// testable with no control plane at all.
+type InfoSource func(ctx context.Context) (Info, error)
 
 // Messages. Everything that touches the network or the clock arrives as one of these, which is what
 // keeps Update a pure function over (model, message).
@@ -47,6 +66,8 @@ type (
 	tickMsg struct{}
 	// actionDoneMsg is an action that finished, successfully or not.
 	actionDoneMsg struct{ err error }
+	// infoMsg carries what the control plane says it is running.
+	infoMsg struct{ info Info }
 )
 
 // Model is the console. It is a pure function over messages: Update never performs input or output,
@@ -66,10 +87,13 @@ type Model struct {
 	err      error
 	stack    []crumbEntry
 	quitting bool
+	info     Info
+	source   InfoSource
 }
 
-// New opens the console on the named resource.
-func New(registry *Registry, start string) (Model, error) {
+// New opens the console on the named resource. source describes the crew it is connected to, and may
+// be nil, in which case the status block says nothing rather than guessing.
+func New(registry *Registry, start string, source InfoSource) (Model, error) {
 	if registry == nil {
 		return Model{}, fmt.Errorf("console: nil registry")
 	}
@@ -77,12 +101,12 @@ func New(registry *Registry, start string) (Model, error) {
 	if !found {
 		return Model{}, fmt.Errorf("console: no resource named %q", start)
 	}
-	return Model{registry: registry, active: resource, width: 100, height: 24}, nil
+	return Model{registry: registry, active: resource, source: source, width: 100, height: 24}, nil
 }
 
-// Init loads the opening view and starts the refresh clock.
+// Init loads the opening view, asks what it is connected to, and starts the refresh clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listCmd(m.active, m.parent), tickCmd())
+	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 }
 
 // Update advances the console. It performs no input or output of its own: anything that talks to the
@@ -104,6 +128,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionDoneMsg:
 		m.err = msg.err
 		return m, listCmd(m.active, m.parent)
+	case infoMsg:
+		m.info = msg.info
+		return m, nil
 	case tea.KeyMsg:
 		return m.updateKey(msg)
 	default:
@@ -148,19 +175,42 @@ func (m Model) clampSelection() Model {
 	return m
 }
 
-// visibleRows is the rows after the filter. An empty filter shows everything.
+// visibleRows is the rows after the filter, in the order the active resource sorts by. An empty
+// filter shows everything.
 func (m Model) visibleRows() []Row {
-	if m.filter == "" {
-		return m.rows
-	}
-	needle := strings.ToLower(m.filter)
-	matched := make([]Row, 0, len(m.rows))
-	for _, row := range m.rows {
-		if rowMatches(row, needle) {
-			matched = append(matched, row)
+	matched := m.rows
+	if m.filter != "" {
+		needle := strings.ToLower(m.filter)
+		matched = make([]Row, 0, len(m.rows))
+		for _, row := range m.rows {
+			if rowMatches(row, needle) {
+				matched = append(matched, row)
+			}
 		}
 	}
-	return matched
+	return sortRows(matched, m.active.SortBy)
+}
+
+// sortRows orders rows by one column, stably, so rows that tie keep the order the control plane
+// returned them in. It copies rather than sorting in place, because the unsorted listing is what a
+// later refresh compares against.
+func sortRows(rows []Row, column int) []Row {
+	if len(rows) < 2 {
+		return rows
+	}
+	sorted := make([]Row, len(rows))
+	copy(sorted, rows)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return cellAt(sorted[i], column) < cellAt(sorted[j], column)
+	})
+	return sorted
+}
+
+func cellAt(row Row, column int) string {
+	if column < 0 || column >= len(row.Cells) {
+		return ""
+	}
+	return row.Cells[column]
 }
 
 func rowMatches(row Row, needle string) bool {
@@ -184,9 +234,10 @@ func (m Model) selectedRowValue() (Row, bool) {
 	return visible[m.selected], true
 }
 
-// bodyHeight is how many rows fit: the window less the breadcrumb, the column header and the footer.
+// bodyHeight is how many rows fit: the window less the status block, the panel's own frame and
+// column header, and the footer line.
 func (m Model) bodyHeight() int {
-	body := m.height - 3
+	body := m.height - len(m.statusLines()) - 4
 	if m.err != nil {
 		body--
 	}
@@ -207,6 +258,24 @@ func listCmd(resource Resource, parent string) tea.Cmd {
 			return errMsg{err: fmt.Errorf("list %s: %w", resource.Name, err)}
 		}
 		return rowsMsg{resource: resource.Name, parent: parent, rows: rows}
+	}
+}
+
+// infoCmd asks the crew what it is running. A failure is not surfaced as an error: the status block
+// simply says less, and the operator came here to look at sessions.
+func infoCmd(source InfoSource) tea.Cmd {
+	if source == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		info, err := source(ctx)
+		if err != nil {
+			return nil
+		}
+		return infoMsg{info: info}
 	}
 }
 

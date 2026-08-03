@@ -149,7 +149,9 @@ func (m Model) drill() (Model, tea.Cmd) {
 		m.err = fmt.Errorf("console: %s drills into unknown resource %q", m.active.Name, m.active.DrillTo)
 		return m, nil
 	}
-	m.stack = append(m.stack, crumbEntry{resource: m.active.Name, parent: m.parent, selected: m.selected})
+	m.stack = append(m.stack, crumbEntry{
+		resource: m.active.Name, parent: m.parent, selected: m.selected, into: row.Name(),
+	})
 	m.active, m.parent = child, row.ID
 	m.rows, m.selected, m.top, m.filter, m.err = nil, 0, 0, "", nil
 	return m, listCmd(m.active, m.parent)
