@@ -32,7 +32,7 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 			return Info{}, err
 		}
 		known.Model, known.Sandbox = resp.GetModel(), resp.GetSandbox()
-		known.Store, known.StateKept = resp.GetStore(), resp.GetStateKept()
+		known.Store, known.State, known.Events = resp.GetStore(), resp.GetState(), resp.GetEvents()
 		return known, nil
 	}
 }

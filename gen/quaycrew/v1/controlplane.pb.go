@@ -1745,9 +1745,13 @@ type GetInfoResponse struct {
 	// store loses every workspace and session when the process restarts, which is worth seeing before
 	// starting work rather than after.
 	Store string `protobuf:"bytes,3,opt,name=store,proto3" json:"store,omitempty"`
-	// state_kept is true when a session's conversation is kept outside its container, so replacing a
-	// sandbox does not destroy the conversation.
-	StateKept     bool `protobuf:"varint,4,opt,name=state_kept,json=stateKept,proto3" json:"state_kept,omitempty"`
+	// state is where a session's conversation and files are kept, for example "host directory". Empty
+	// means they are kept nowhere: they live in the container and are destroyed with it.
+	State string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	// events is the event log a turn is recorded on, for example "redpanda". Empty means nothing is
+	// connected to it, which is the truth today: the log is in the compose stack and no service reads
+	// from or writes to it.
+	Events        string `protobuf:"bytes,5,opt,name=events,proto3" json:"events,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1803,11 +1807,18 @@ func (x *GetInfoResponse) GetStore() string {
 	return ""
 }
 
-func (x *GetInfoResponse) GetStateKept() bool {
+func (x *GetInfoResponse) GetState() string {
 	if x != nil {
-		return x.StateKept
+		return x.State
 	}
-	return false
+	return ""
+}
+
+func (x *GetInfoResponse) GetEvents() string {
+	if x != nil {
+		return x.Events
+	}
+	return ""
 }
 
 var File_quaycrew_v1_controlplane_proto protoreflect.FileDescriptor
@@ -1910,13 +1921,13 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12StopSessionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
 	"\x13StopSessionResponse\"\x10\n" +
-	"\x0eGetInfoRequest\"v\n" +
+	"\x0eGetInfoRequest\"\x85\x01\n" +
 	"\x0fGetInfoResponse\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x18\n" +
 	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
-	"\x05store\x18\x03 \x01(\tR\x05store\x12\x1d\n" +
-	"\n" +
-	"state_kept\x18\x04 \x01(\bR\tstateKept2\xd6\n" +
+	"\x05store\x18\x03 \x01(\tR\x05store\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
+	"\x06events\x18\x05 \x01(\tR\x06events2\xd6\n" +
 	"\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +

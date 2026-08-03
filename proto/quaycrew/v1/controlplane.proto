@@ -163,9 +163,13 @@ message GetInfoResponse {
   // store loses every workspace and session when the process restarts, which is worth seeing before
   // starting work rather than after.
   string store = 3;
-  // state_kept is true when a session's conversation is kept outside its container, so replacing a
-  // sandbox does not destroy the conversation.
-  bool state_kept = 4;
+  // state is where a session's conversation and files are kept, for example "host directory". Empty
+  // means they are kept nowhere: they live in the container and are destroyed with it.
+  string state = 4;
+  // events is the event log a turn is recorded on, for example "redpanda". Empty means nothing is
+  // connected to it, which is the truth today: the log is in the compose stack and no service reads
+  // from or writes to it.
+  string events = 5;
 }
 
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.

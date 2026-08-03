@@ -627,10 +627,10 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 // about itself: which build it is, and the context the operator set.
 func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Context: "me/house-bills"}})
+	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Workspace: "me", Project: "house-bills"}})
 
 	view := model.View()
-	for _, want := range []string{"Version:", "5fd7bee", "Context:", "me/house-bills"} {
+	for _, want := range []string{"Version:", "5fd7bee", "Workspace:", "me", "Project:", "house-bills"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the status block does not say %q:\n%s", want, view)
 		}
@@ -642,7 +642,7 @@ func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
 func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	model, _ = update(t, model, tea.WindowSizeMsg{Width: 150, Height: 30})
-	model, _ = update(t, model, infoMsg{info: Info{Version: "709b79e", Address: "localhost:50051", Context: "demo/default"}})
+	model, _ = update(t, model, infoMsg{info: Info{Version: "709b79e", Address: "localhost:50051", Workspace: "demo", Project: "default"}})
 
 	if !strings.Contains(model.View(), logo[0]) {
 		t.Fatalf("the wordmark is missing when the status block is short:\n%s", model.View())
@@ -654,7 +654,7 @@ func TestTheWordmarkGivesWayToASmallWindow(t *testing.T) {
 	full := newTestModel(t, staticResource("sessions"))
 	full, _ = update(t, full, tea.WindowSizeMsg{Width: 140, Height: 30})
 	full, _ = update(t, full, infoMsg{info: Info{
-		Version: "5fd7bee", Address: "localhost:50051", Context: "me", Model: "echo", Sandbox: "docker", Store: "memory",
+		Version: "5fd7bee", Address: "localhost:50051", Workspace: "me", Model: "echo", Sandbox: "docker", Store: "memory",
 	}})
 	if !strings.Contains(full.View(), logo[0]) {
 		t.Fatalf("a wide window does not carry the wordmark:\n%s", full.View())
@@ -677,11 +677,12 @@ func TestTheWordmarkGivesWayToASmallWindow(t *testing.T) {
 func TestStatusBlockNamesTheCrewItIsConnectedTo(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	model, _ = update(t, model, infoMsg{info: Info{
-		Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres", StateKept: true,
+		Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres",
+		State: "host directory /Users/x/.quaycrew/data",
 	}})
 
 	view := model.View()
-	for _, want := range []string{"localhost:50051", "claude-code", "docker", "postgres", "kept on the host"} {
+	for _, want := range []string{"localhost:50051", "claude-code", "Sandbox engine", "Store engine", "host directory"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the status block does not say %q:\n%s", want, view)
 		}
@@ -692,9 +693,9 @@ func TestStatusBlockNamesTheCrewItIsConnectedTo(t *testing.T) {
 // boolean: "false" is not something anyone reads as "your conversation dies with its container".
 func TestStatusBlockSaysWhenAConversationWouldBeLost(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, infoMsg{info: Info{Address: "here", Store: "memory", StateKept: false}})
+	model, _ = update(t, model, infoMsg{info: Info{Address: "here", Store: "memory"}})
 
-	if !strings.Contains(model.View(), "lost with the container") {
+	if !strings.Contains(model.View(), "lost when it is replaced") {
 		t.Fatalf("the status block does not warn that state is lost:\n%s", model.View())
 	}
 }
@@ -704,7 +705,7 @@ func TestStatusBlockSaysWhenAConversationWouldBeLost(t *testing.T) {
 func TestStatusBlockSaysNothingItWasNotTold(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	view := model.View()
-	for _, unwanted := range []string{"kept on the host", "lost with the container", "postgres", "docker"} {
+	for _, unwanted := range []string{"host directory", "lost when it is replaced", "postgres", "docker"} {
 		if strings.Contains(view, unwanted) {
 			t.Fatalf("the status block claims %q without being told:\n%s", unwanted, view)
 		}
@@ -951,7 +952,8 @@ func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
 	}{
 		{name: "nothing known yet", size: [2]int{120, 24}},
 		{name: "the crew answered", info: Info{
-			Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres", StateKept: true,
+			Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres",
+			State: "host directory /Users/x/.quaycrew/data",
 		}, size: [2]int{120, 24}},
 		{name: "more rows than fit", info: Info{Address: "here"}, rows: 40, size: [2]int{120, 24}},
 		{name: "an error to show", err: errors.New("list sessions: nope"), size: [2]int{120, 24}},

@@ -31,7 +31,7 @@ func initializeInfoSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^a control plane that keeps session state outside the container$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		w.info.StateKept = true
+		w.info.State = "host directory /tmp/quaycrew"
 		// The value is read when the server is built, so stand a new one up over the same store.
 		return w.restart()
 	})
@@ -65,9 +65,10 @@ func initializeInfoSteps(sc *godog.ScenarioContext) {
 		if i.err != nil {
 			return i.err
 		}
-		want := negation == ""
-		if got := i.reported.GetStateKept(); got != want {
-			return fmt.Errorf("it says state kept is %t, want %t", got, want)
+		kept := i.reported.GetState() != ""
+		if want := negation == ""; kept != want {
+			return fmt.Errorf("it reports the state %q, want it %skept outside the container",
+				i.reported.GetState(), negation)
 		}
 		return nil
 	})

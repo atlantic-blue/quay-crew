@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **The status block says what is true, in engines.** `Sandbox engine`, `Store engine` and
+  `Events engine`, `Workspace` and `Project` rather than a borrowed `Context`, and the state line names
+  where a conversation is kept instead of promising it survives. The events line says
+  `none, nothing reads or writes the log yet`, which is the truth: Redpanda is in the compose stack and
+  no service is connected to it. ([#87](https://github.com/atlantic-blue/quay-crew/pull/87))
 - **The console says when the control plane is older than the tool**, rather than quietly showing four
   fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool
   does not rebuild the stack, so this is the normal state of things after an upgrade, and silence reads
