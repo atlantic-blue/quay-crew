@@ -19,7 +19,9 @@ import (
 )
 
 func newServer(runner model.Runner) *controlplane.Server {
-	return controlplane.NewServer(store.NewMemory(), runner, &sandbox.FakeProvider{}, secrets.NewMemory())
+	return controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner, Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
 }
 
 func TestCreateAndListWorkspaces(t *testing.T) {
@@ -93,7 +95,9 @@ func TestDispatchUnknownWorkspace(t *testing.T) {
 
 func TestDispatchInjectsTheWorkspaceSubscriptionToken(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "ok"}
-	s := controlplane.NewServer(store.NewMemory(), runner, &sandbox.FakeProvider{}, secrets.NewMemory())
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner, Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
 	ctx := context.Background()
 
 	wid, pid := newProject(t, s)
@@ -127,7 +131,9 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 
 func TestSetSecretStoresValue(t *testing.T) {
 	secretStore := secrets.NewMemory()
-	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{}, &sandbox.FakeProvider{}, secretStore)
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{}, Provider: &sandbox.FakeProvider{}, Secrets: secretStore,
+	})
 	ctx := context.Background()
 
 	wid, _ := newProject(t, s)
@@ -143,7 +149,9 @@ func TestSetSecretStoresValue(t *testing.T) {
 
 func TestSessionSandboxLifecycle(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := controlplane.NewServer(store.NewMemory(), &model.FakeRunner{Reply: "ok"}, provider, secrets.NewMemory())
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"}, Provider: provider, Secrets: secrets.NewMemory(),
+	})
 	ctx := context.Background()
 
 	wid, pid := newProject(t, s)

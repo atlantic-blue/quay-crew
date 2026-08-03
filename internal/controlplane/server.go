@@ -26,6 +26,30 @@ import (
 
 const defaultPermissionMode = "acceptEdits"
 
+// Info is what this control plane is running, reported over the API so an operator can see which
+// crew they are about to act on. It is configuration: never a secret, and never a health verdict.
+type Info struct {
+	// Model is the backend a turn runs against, for example "claude-code".
+	Model string
+	// Sandbox is what a session is isolated in, for example "docker".
+	Sandbox string
+	// Store is where workspaces and sessions are kept, for example "postgres".
+	Store string
+	// StateKept is true when a conversation lives outside its container and so survives it.
+	StateKept bool
+}
+
+// Config is everything the control plane is built from. It is a struct rather than a parameter list
+// because the list had already reached four and a caller could silently swap two of them.
+type Config struct {
+	Store    store.Store
+	Runner   model.Runner
+	Provider sandbox.Provider
+	Secrets  secrets.Store
+	// Info describes the three above in words, for the console's status block.
+	Info Info
+}
+
 // Server implements quaycrewv1.ControlPlaneServiceServer.
 type Server struct {
 	quaycrewv1.UnimplementedControlPlaneServiceServer
@@ -33,21 +57,33 @@ type Server struct {
 	secrets  secrets.Store
 	runner   model.Runner
 	provider sandbox.Provider
+	info     Info
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
 }
 
-// NewServer builds a control plane over the given store, model runner (the Claude Code adapter by
-// default), sandbox provider (one sandbox per session) and secrets store.
-func NewServer(durable store.Store, runner model.Runner, provider sandbox.Provider, secretStore secrets.Store) *Server {
+// NewServer builds a control plane over a durable store, a model runner (the Claude Code adapter by
+// default), a sandbox provider (one sandbox per session) and a secrets store.
+func NewServer(cfg Config) *Server {
 	return &Server{
-		store:     durable,
-		secrets:   secretStore,
-		runner:    runner,
-		provider:  provider,
+		store:     cfg.Store,
+		secrets:   cfg.Secrets,
+		runner:    cfg.Runner,
+		provider:  cfg.Provider,
+		info:      cfg.Info,
 		sandboxes: make(map[string]sandbox.Sandbox),
 	}
+}
+
+// GetInfo reports what this control plane is running.
+func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quaycrewv1.GetInfoResponse, error) {
+	return &quaycrewv1.GetInfoResponse{
+		Model:     s.info.Model,
+		Sandbox:   s.info.Sandbox,
+		Store:     s.info.Store,
+		StateKept: s.info.StateKept,
+	}, nil
 }
 
 // storeError maps a store failure onto the status the caller should see.

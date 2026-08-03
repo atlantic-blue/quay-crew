@@ -148,6 +148,26 @@ message StopSessionRequest {
 }
 message StopSessionResponse {}
 
+// GetInfoRequest asks what this control plane is running.
+message GetInfoRequest {}
+// GetInfoResponse says what a turn dispatched here would actually do.
+//
+// It carries configuration, never a secret and never a health verdict. The console shows it so the
+// operator can see which crew they are about to act on, the way a cluster name does.
+message GetInfoResponse {
+  // model is the backend a turn runs against, for example "claude-code" or "echo".
+  string model = 1;
+  // sandbox is the isolation a session runs in, for example "docker" or "local".
+  string sandbox = 2;
+  // store is where workspaces and sessions are kept, for example "postgres" or "memory". A memory
+  // store loses every workspace and session when the process restarts, which is worth seeing before
+  // starting work rather than after.
+  string store = 3;
+  // state_kept is true when a session's conversation is kept outside its container, so replacing a
+  // sandbox does not destroy the conversation.
+  bool state_kept = 4;
+}
+
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.
 service ControlPlaneService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
@@ -168,4 +188,6 @@ service ControlPlaneService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
+
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }

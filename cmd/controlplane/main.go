@@ -45,6 +45,9 @@ func main() {
 		logger.Error("model runner config failed", "error", err)
 		os.Exit(1)
 	}
+	// The kinds are resolved through the same functions the constructors use, so what the control
+	// plane says it is running cannot drift from what it built.
+	modelKind, _ := model.ResolveKind(os.Getenv("QC_MODEL"))
 
 	// QC_DATA_DIR is where this process writes a workspace's conversation store and a project's
 	// files; QC_DATA_HOST is the same directory as the host daemon sees it, which is what a sandbox
@@ -64,15 +67,27 @@ func main() {
 		logger.Error("sandbox provider config failed", "error", err)
 		os.Exit(1)
 	}
+	sandboxKind, _ := sandbox.ResolveKind(os.Getenv("QC_SANDBOX"))
 
-	durable, err := openStore(ctx, os.Getenv("QC_DATABASE_URL"), logger)
+	durable, storeKind, err := openStore(ctx, os.Getenv("QC_DATABASE_URL"), logger)
 	if err != nil {
 		logger.Error("store open failed", "error", err)
 		os.Exit(1)
 	}
 	defer durable.Close()
 
-	server := controlplane.NewServer(durable, runner, provider, secrets.NewMemory())
+	server := controlplane.NewServer(controlplane.Config{
+		Store:    durable,
+		Runner:   runner,
+		Provider: provider,
+		Secrets:  secrets.NewMemory(),
+		Info: controlplane.Info{
+			Model:     modelKind,
+			Sandbox:   sandboxKind,
+			Store:     storeKind,
+			StateKept: storage.Dir != "",
+		},
+	})
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
@@ -103,17 +118,17 @@ func main() {
 // openStore returns the durable store. With QC_DATABASE_URL set it is Postgres, and the migrations
 // are applied on the way up. Without it the store is in memory, which loses every workspace and
 // session on restart and is only appropriate for a throwaway stack.
-func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (store.Store, error) {
+func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (store.Store, string, error) {
 	if databaseURL == "" {
 		logger.Warn("no QC_DATABASE_URL set, using the in memory store: workspaces and sessions will not survive a restart")
-		return store.NewMemory(), nil
+		return store.NewMemory(), "memory", nil
 	}
 	durable, err := store.NewPostgres(ctx, databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	logger.Info("store ready", "backend", "postgres")
-	return durable, nil
+	return durable, "postgres", nil
 }
 
 func splitAndTrim(csv string) []string {
