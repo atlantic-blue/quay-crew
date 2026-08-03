@@ -13,10 +13,9 @@ import (
 // consoleWorld is the console's own scenario state, kept beside the shared world rather than inside
 // it so the console scenarios do not widen what every other scenario carries.
 type consoleWorld struct {
-	registry      *console.Registry
-	active        console.Resource
-	rows          []console.Row
-	secondProject string
+	registry *console.Registry
+	active   console.Resource
+	rows     []console.Row
 }
 
 type consoleKey struct{}
@@ -56,24 +55,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, consoleKey{}, &consoleWorld{}), nil
 	})
 
-	sc.Step(`^a second project named "([^"]*)"$`, func(ctx context.Context, name string) error {
-		w, c := worldFrom(ctx), consoleFrom(ctx)
-		resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Name: name})
-		if err != nil {
-			return err
-		}
-		// createProject would move the world's current project, and the background's project is
-		// the one the other steps mean, so record this one separately.
-		c.secondProject = resp.GetProject().GetId()
-		return nil
-	})
-
 	sc.Step(`^the operator dispatches "([^"]*)" to the second project$`, func(ctx context.Context, text string) error {
-		w, c := worldFrom(ctx), consoleFrom(ctx)
-		if c.secondProject == "" {
+		w := worldFrom(ctx)
+		if w.secondProjectID == "" {
 			return fmt.Errorf("no second project was created")
 		}
-		return w.dispatch(ctx, c.secondProject, "", text)
+		return w.dispatch(ctx, w.secondProjectID, "", text)
 	})
 
 	sc.Step(`^the operator opens the console$`, func(ctx context.Context) error {

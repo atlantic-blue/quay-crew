@@ -25,6 +25,36 @@ Feature: Projects hold the crew's work
     When the operator deletes the project
     Then the project is no longer listed
 
+  Scenario: A project can be reached by its name instead of its id
+    Given a project named "acme"
+    When the operator refers to the project as "acme"
+    Then the reference resolves to the project
+
+  Scenario: A project can still be reached by its id
+    Given a project named "acme"
+    When the operator refers to the project by its id
+    Then the reference resolves to the project
+
+  # An id wins over a name, so a project mischievously named after another project's id still
+  # resolves to itself rather than shadowing the other one.
+  Scenario: An id wins over a name that copies it
+    Given a project named "acme"
+    And a second project named after the first project's id
+    When the operator refers to the project by its id
+    Then the reference resolves to the project
+
+  Scenario: A reference matching nothing is refused
+    Given a project named "acme"
+    When the operator refers to the project as "ghost"
+    Then the reference is refused as not found
+
+  Scenario: A name shared by two projects is refused, naming both
+    Given a project named "acme"
+    And a second project named "acme"
+    When the operator refers to the project as "acme"
+    Then the reference is refused as ambiguous
+    And the refusal names both projects
+
   Scenario: A channel cannot be attached to a project that does not exist
     When the operator attaches a "telegram" channel called "family-chat" to project "ghost"
     Then the control plane refuses it as not found

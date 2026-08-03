@@ -44,16 +44,17 @@ You need Docker and a Claude subscription.
    ```
    make install
    quay project create demo
-   quay secret set --project <project id> CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
+   quay secret set --project demo CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
    ```
 
+   `--project` takes the project id or its name, so you never need to copy the id around.
    The secret is scoped to the project. The control plane reads it when running a turn and injects it
    into that session's sandbox; it is never part of the message or the event log.
 
 5. Dispatch a turn and get a real reply:
 
    ```
-   quay dispatch --project <project id> "say pong"
+   quay dispatch --project demo "say pong"
    ```
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first turn and is reused for the

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/project"
 )
 
 const usage = `usage: quay [command]
@@ -21,9 +22,9 @@ press : to switch resource, / to filter, enter to drill in, s to shell into a se
 commands:
   project create <name>            create a project
   project list                     list projects
-  dispatch --project <id> <text>   start or continue a thread (add --thread <id> to continue)
-  sessions [--project <id>]        list sessions
-  secret set --project <id> <key> <value>   set a project secret (for example the model token)
+  dispatch --project <id or name> <text>    start or continue a thread (--thread <id> continues)
+  sessions [--project <id or name>]         list sessions
+  secret set --project <id or name> <key> <value>   set a project secret (for example the model token)
 `
 
 // run executes one CLI invocation against the control plane client, writing output to out.
@@ -51,24 +52,28 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 	fs := flag.NewFlagSet("secret set", flag.ContinueOnError)
 	fs.SetOutput(out)
-	project := fs.String("project", "", "project id (required)")
+	projectRef := fs.String("project", "", "project id or name (required)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *project == "" {
+	if *projectRef == "" {
 		return fmt.Errorf("secret set requires --project")
 	}
 	rest := fs.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: quay secret set --project <id> <key> <value>")
+		return fmt.Errorf("usage: quay secret set --project <id or name> <key> <value>")
 	}
 	key, value := rest[0], rest[1]
 
-	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: *project, Key: key, Value: value}); err != nil {
+	projectID, err := project.Resolve(ctx, client, *projectRef)
+	if err != nil {
+		return err
+	}
+	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Project: projectID, Key: key, Value: value}); err != nil {
 		return err
 	}
 	// Confirm without echoing the value.
-	fmt.Fprintf(out, "set secret %s for project %s\n", key, *project)
+	fmt.Fprintf(out, "set secret %s for project %s\n", key, projectID)
 	return nil
 }
 
@@ -108,12 +113,12 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("dispatch", flag.ContinueOnError)
 	fs.SetOutput(out)
-	project := fs.String("project", "", "project id (required)")
+	projectRef := fs.String("project", "", "project id or name (required)")
 	thread := fs.String("thread", "", "thread id to continue (optional)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *project == "" {
+	if *projectRef == "" {
 		return fmt.Errorf("dispatch requires --project")
 	}
 	text := strings.TrimSpace(strings.Join(fs.Args(), " "))
@@ -121,7 +126,11 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		return fmt.Errorf("dispatch requires message text")
 	}
 
-	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: *project, ThreadId: *thread, Text: text})
+	projectID, err := project.Resolve(ctx, client, *projectRef)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: projectID, ThreadId: *thread, Text: text})
 	if err != nil {
 		return err
 	}
@@ -133,11 +142,19 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
 	fs.SetOutput(out)
-	project := fs.String("project", "", "filter by project id (optional)")
+	projectRef := fs.String("project", "", "filter by project id or name (optional)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: *project})
+	projectID := ""
+	if *projectRef != "" {
+		resolved, err := project.Resolve(ctx, client, *projectRef)
+		if err != nil {
+			return err
+		}
+		projectID = resolved
+	}
+	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
 		return err
 	}

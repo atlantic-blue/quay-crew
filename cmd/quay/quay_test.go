@@ -137,3 +137,57 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatal("unknown command = nil error, want error")
 	}
 }
+
+// TestDispatchAcceptsAProjectName covers the papercut this exists for: the operator types the name
+// they gave the project, not the hex id printed once at creation.
+func TestDispatchAcceptsAProjectName(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	var created bytes.Buffer
+	if err := run(ctx, client, []string{"project", "create", "demo"}, &created); err != nil {
+		t.Fatalf("project create: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := run(ctx, client, []string{"dispatch", "--project", "demo", "hello"}, &out); err != nil {
+		t.Fatalf("dispatch by name: %v", err)
+	}
+	if !strings.Contains(out.String(), "ok") {
+		t.Fatalf("dispatch by name returned %q, want the reply", out.String())
+	}
+}
+
+func TestSessionsAcceptsAProjectName(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	var discard bytes.Buffer
+	if err := run(ctx, client, []string{"project", "create", "demo"}, &discard); err != nil {
+		t.Fatalf("project create: %v", err)
+	}
+	if err := run(ctx, client, []string{"dispatch", "--project", "demo", "hello"}, &discard); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := run(ctx, client, []string{"sessions", "--project", "demo"}, &out); err != nil {
+		t.Fatalf("sessions by name: %v", err)
+	}
+	if strings.Contains(out.String(), "no sessions") {
+		t.Fatalf("sessions by name found nothing: %q", out.String())
+	}
+}
+
+func TestDispatchRejectsAnUnknownProjectReference(t *testing.T) {
+	client := testClient(t)
+	var out bytes.Buffer
+	err := run(context.Background(), client, []string{"dispatch", "--project", "ghost", "hello"}, &out)
+	if err == nil {
+		t.Fatal("dispatch to an unknown project succeeded")
+	}
+	// The operator needs to know it was the project reference that was wrong.
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("the error %q does not name the reference the operator typed", err)
+	}
+}
