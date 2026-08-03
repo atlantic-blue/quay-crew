@@ -603,7 +603,7 @@ func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
 	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Context: "me/house-bills"}})
 
 	view := model.View()
-	for _, want := range []string{"Quay:", "5fd7bee", "Context:", "me/house-bills"} {
+	for _, want := range []string{"Version:", "5fd7bee", "Context:", "me/house-bills"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the status block does not say %q:\n%s", want, view)
 		}
@@ -727,7 +727,7 @@ func TestAControlPlaneTooOldToAnswerSaysSo(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	model, _ = update(t, model, behindMsg{})
 	view := model.View()
-	if !strings.Contains(view, "older than this tool") || !strings.Contains(view, "make upgrade") {
+	if !strings.Contains(view, "Quay:") || !strings.Contains(view, "older than the tool") || !strings.Contains(view, "make upgrade") {
 		t.Fatalf("the status block does not say the crew is behind, or how to fix it:\n%s", view)
 	}
 }
