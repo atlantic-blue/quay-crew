@@ -241,6 +241,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
 	initializeProjectSteps(sc)
+	initializeAddressSteps(sc)
 	initializeAttachSteps(sc)
 	initializeSandboxEnvSteps(sc)
 	initializeWorkspaceSteps(sc)

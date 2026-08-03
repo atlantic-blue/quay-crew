@@ -127,14 +127,13 @@ jobs:
           QC_GRPC_ADDR: localhost:50051
         run: |
           set -euo pipefail
-          workspace=$(go run ./cmd/quay workspace create smoke | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
-          test -n "$workspace"
-          echo "workspace=$workspace"
-          project=$(go run ./cmd/quay project create --workspace "$workspace" bills | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
-          test -n "$project"
-          echo "project=$project"
+          # Creating moves you into it, so the dispatch below needs no address at all: that is the
+          # current context doing its job, in the composed stack rather than in a unit test.
+          go run ./cmd/quay workspace create smoke
+          go run ./cmd/quay project create bills
+          test "$(go run ./cmd/quay use)" = "smoke/bills"
 
-          out=$(go run ./cmd/quay dispatch --project "$project" "hello from ci")
+          out=$(go run ./cmd/quay dispatch "hello from ci")
           echo "$out"
           test "$(printf '%s' "$out" | head -1)" = "hello from ci"
 
@@ -144,7 +143,7 @@ jobs:
           # A second turn on the same thread reuses that one sandbox.
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$thread"
-          go run ./cmd/quay dispatch --project "$project" --thread "$thread" "second turn" >/dev/null
+          go run ./cmd/quay dispatch "smoke/bills/$thread" "second turn" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
 
       # The point of this step: prove a session is really durable. Restarting the control plane
@@ -157,9 +156,8 @@ jobs:
           set -euo pipefail
           workspace=$(go run ./cmd/quay workspace create durable | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
           test -n "$workspace"
-          project=$(go run ./cmd/quay project create --workspace "$workspace" bills | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
-          test -n "$project"
-          out=$(go run ./cmd/quay dispatch --project "$project" "remember this")
+          go run ./cmd/quay project create bills
+          out=$(go run ./cmd/quay dispatch "remember this")
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$thread"
 
@@ -172,7 +170,7 @@ jobs:
           # Capture before matching. Under pipefail a `grep -q` closes the pipe on its first match,
           # which hands the writer a broken pipe and fails the step for the wrong reason.
           workspaces=$(go run ./cmd/quay workspace list)
-          sessions=$(go run ./cmd/quay sessions --project "$project")
+          sessions=$(go run ./cmd/quay sessions durable/bills)
           echo "$workspaces"
           echo "$sessions"
 
@@ -196,9 +194,9 @@ jobs:
           QC_GRPC_ADDR: localhost:50051
         run: |
           set -euo pipefail
-          workspace=$(go run ./cmd/quay workspace create durable-state | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
-          project=$(go run ./cmd/quay project create --workspace "$workspace" bills | sed -n 's/created project \([a-f0-9]*\).*/\1/p')
-          out=$(go run ./cmd/quay dispatch --project "$project" "first turn")
+          go run ./cmd/quay workspace create durable-state
+          go run ./cmd/quay project create bills
+          out=$(go run ./cmd/quay dispatch "first turn")
           session=$(printf '%s' "$out" | sed -n 's/.*session \([a-f0-9]*\),.*/\1/p')
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$session" && test -n "$thread"
@@ -217,7 +215,7 @@ jobs:
             sleep 2
           done
 
-          go run ./cmd/quay dispatch --project "$project" --thread "$thread" "second turn" >/dev/null
+          go run ./cmd/quay dispatch "durable-state/bills/$thread" "second turn" >/dev/null
           kept=$(docker exec "quaycrew-$session" cat /home/agent/.claude/note)
           context=$(docker exec "quaycrew-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"

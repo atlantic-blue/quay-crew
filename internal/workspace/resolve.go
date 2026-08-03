@@ -21,16 +21,22 @@ import (
 // ErrNotFound is returned when a reference matches no workspace, by id or by name.
 var ErrNotFound = errors.New("workspace: no workspace with that id or name")
 
-// AmbiguousError is returned when a name belongs to more than one workspace. It carries the candidate
+// AmbiguousError is returned when a name belongs to more than one thing. It carries the candidate
 // ids so the operator can pick one rather than guess which the tool chose.
 type AmbiguousError struct {
+	// What is the level the name was read at, for example "workspaces".
+	What string
 	Name string
 	IDs  []string
 }
 
 func (e *AmbiguousError) Error() string {
-	return fmt.Sprintf("workspace: %q matches %d workspaces, use one of these ids: %s",
-		e.Name, len(e.IDs), strings.Join(e.IDs, ", "))
+	what := e.What
+	if what == "" {
+		what = "workspaces"
+	}
+	return fmt.Sprintf("workspace: %q matches %d %s, use one of these ids: %s",
+		e.Name, len(e.IDs), what, strings.Join(e.IDs, ", "))
 }
 
 // Resolve turns a reference into a workspace id.
@@ -67,7 +73,7 @@ func Resolve(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, r
 		return matches[0], nil
 	default:
 		sort.Strings(matches)
-		return "", &AmbiguousError{Name: reference, IDs: matches}
+		return "", &AmbiguousError{What: "workspaces", Name: reference, IDs: matches}
 	}
 }
 
@@ -114,6 +120,6 @@ func ResolveProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return matches[0], nil
 	default:
 		sort.Strings(matches)
-		return "", &AmbiguousError{Name: projectRef, IDs: matches}
+		return "", &AmbiguousError{What: "projects", Name: projectRef, IDs: matches}
 	}
 }

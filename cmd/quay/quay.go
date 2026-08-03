@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -20,17 +19,25 @@ const usage = `usage: quay [command]
 with no command, quay opens the console: a full screen view of every resource the crew has.
 press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
 
-commands:
-  workspace create <name>                        create a workspace
-  workspace list                                 list workspaces
-  project create --workspace <ref> <name>        create a project inside a workspace
-  project list [--workspace <ref>]               list projects
-  dispatch --project <ref> <text>                start or continue a thread (--thread <id> continues)
-  sessions [--workspace <ref>] [--project <ref>] list sessions
-  attach <session id>                            open a session's conversation, with its history
-  secret set --workspace <ref> <key> <value>     set a workspace secret (for example the model token)
+you work in one place at a time, and say where with an address: workspace/project/thread.
 
-a <ref> is an id or a name. Add --workspace to a project reference when the name is ambiguous.
+  quay use me/house-bills
+  quay dispatch "when is the electricity bill due"
+
+commands:
+  use [<address>]                         show where you are, or move there
+  workspace create <name>                 create a workspace and move into it
+  workspace list                          list workspaces
+  project create [<workspace>/]<name>     create a project and move into it
+  project list [<workspace>]              list projects
+  dispatch [<address>] <text>             start or continue a thread
+  sessions [<address>]                    list sessions
+  attach <session id>                     open a session's conversation, with its history
+  secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
+
+a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
+may be the shortened id a listing prints. An address typed on the command line applies to that
+command only and does not move you.
 `
 
 // run executes one CLI invocation against the control plane client, writing output to out.
@@ -39,6 +46,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return fmt.Errorf("%s", usage)
 	}
 	switch args[0] {
+	case "use":
+		return runUse(ctx, client, args[1:], out)
 	case "workspace":
 		return runWorkspace(ctx, client, args[1:], out)
 	case "project":
@@ -56,34 +65,96 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	}
 }
 
-func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	if len(args) == 0 || args[0] != "set" {
-		return fmt.Errorf("usage: quay secret set --workspace <id> <key> <value>")
+// locate works out which address a command is about, the one typed or the one the operator is
+// already in, and resolves it, so a command never acts on an address that does not exist.
+func locate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (workspace.Location, error) {
+	path, err := addressFrom(typed)
+	if err != nil {
+		return workspace.Location{}, err
 	}
-	fs := flag.NewFlagSet("secret set", flag.ContinueOnError)
-	fs.SetOutput(out)
-	workspaceRef := fs.String("workspace", "", "workspace id or name (required)")
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-	if *workspaceRef == "" {
-		return fmt.Errorf("secret set requires --workspace")
-	}
-	rest := fs.Args()
-	if len(rest) != 2 {
-		return fmt.Errorf("usage: quay secret set --workspace <id or name> <key> <value>")
-	}
-	key, value := rest[0], rest[1]
+	return workspace.ResolvePath(ctx, client, path)
+}
 
-	workspaceID, err := workspace.Resolve(ctx, client, *workspaceRef)
+// addressFrom returns the address to act on, without touching the control plane.
+func addressFrom(typed string) (workspace.Path, error) {
+	if strings.TrimSpace(typed) != "" {
+		return workspace.ParsePath(typed)
+	}
+	current, err := currentPath()
+	if err != nil {
+		return workspace.Path{}, err
+	}
+	if current.IsZero() {
+		return workspace.Path{}, fmt.Errorf(
+			"you are nowhere yet: run `quay use <workspace>/<project>`, or give an address, for example `quay dispatch me/house-bills \"hello\"`")
+	}
+	return current, nil
+}
+
+// runUse shows where the operator is, or moves them somewhere else.
+func runUse(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) == 0 {
+		current, err := currentPath()
+		if err != nil {
+			return err
+		}
+		if current.IsZero() {
+			fmt.Fprintln(out, "you are nowhere yet: quay use <workspace>/<project>")
+			return nil
+		}
+		fmt.Fprintln(out, current.String())
+		return nil
+	}
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay use <workspace>[/<project>[/<thread>]]")
+	}
+
+	path, err := workspace.ParsePath(args[0])
 	if err != nil {
 		return err
 	}
-	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{Workspace: workspaceID, Key: key, Value: value}); err != nil {
+	// Resolve before recording it, so an address that names nothing is refused now rather than by
+	// every command that comes after.
+	if _, err := workspace.ResolvePath(ctx, client, path); err != nil {
+		return err
+	}
+	return move(path, out)
+}
+
+// move records the new address and says so, so the operator is never guessing where they are.
+func move(path workspace.Path, out io.Writer) error {
+	if err := moveTo(path); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "now in %s\n", path.String())
+	return nil
+}
+
+func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) == 0 || args[0] != "set" {
+		return fmt.Errorf("usage: quay secret set [<workspace>] <key> <value>")
+	}
+	rest := args[1:]
+	typed := ""
+	if len(rest) == 3 {
+		typed, rest = rest[0], rest[1:]
+	}
+	if len(rest) != 2 {
+		return fmt.Errorf("usage: quay secret set [<workspace>] <key> <value>")
+	}
+	key, value := rest[0], rest[1]
+
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+		Workspace: located.WorkspaceID, Key: key, Value: value,
+	}); err != nil {
 		return err
 	}
 	// Confirm without echoing the value.
-	fmt.Fprintf(out, "set secret %s for workspace %s\n", key, workspaceID)
+	fmt.Fprintf(out, "set secret %s for workspace %s\n", key, located.Path.Workspace)
 	return nil
 }
 
@@ -93,7 +164,7 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	switch args[0] {
 	case "create":
-		if len(args) < 2 {
+		if len(args) != 2 {
 			return fmt.Errorf("usage: quay workspace create <name>")
 		}
 		resp, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: args[1]})
@@ -101,7 +172,8 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 			return err
 		}
 		fmt.Fprintf(out, "created workspace %s (%s)\n", resp.GetWorkspace().GetId(), resp.GetWorkspace().GetName())
-		return nil
+		// Creating something is the clearest statement there is of where you want to be.
+		return move(workspace.Path{Workspace: resp.GetWorkspace().GetName()}, out)
 	case "list":
 		resp, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 		if err != nil {
@@ -124,38 +196,34 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(args) == 0 {
 		return fmt.Errorf("usage: quay project <create|list>")
 	}
-	fs := flag.NewFlagSet("project", flag.ContinueOnError)
-	fs.SetOutput(out)
-	workspaceRef := fs.String("workspace", "", "workspace id or name")
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-
 	switch args[0] {
 	case "create":
-		name := strings.TrimSpace(strings.Join(fs.Args(), " "))
-		if *workspaceRef == "" || name == "" {
-			return fmt.Errorf("usage: quay project create --workspace <ref> <name>")
+		if len(args) != 2 {
+			return fmt.Errorf("usage: quay project create [<workspace>/]<name>")
 		}
-		workspaceID, err := workspace.Resolve(ctx, client, *workspaceRef)
+		// The last level is the new project's name, so anything before it says where to put it.
+		holder, projectName := splitLast(args[1])
+		located, err := locate(ctx, client, holder)
 		if err != nil {
 			return err
 		}
-		resp, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{Workspace: workspaceID, Name: name})
+		resp, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+			Workspace: located.WorkspaceID, Name: projectName,
+		})
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(out, "created project %s (%s)\n", resp.GetProject().GetId(), resp.GetProject().GetName())
-		return nil
+		return move(workspace.Path{Workspace: located.Path.Workspace, Project: resp.GetProject().GetName()}, out)
 
 	case "list":
 		scope := ""
-		if *workspaceRef != "" {
-			resolved, err := workspace.Resolve(ctx, client, *workspaceRef)
+		if len(args) > 1 {
+			located, err := locate(ctx, client, args[1])
 			if err != nil {
 				return err
 			}
-			scope = resolved
+			scope = located.WorkspaceID
 		}
 		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: scope})
 		if err != nil {
@@ -167,14 +235,25 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		}
 		names := workspaceNames(ctx, client)
 		for _, p := range resp.GetProjects() {
-			fmt.Fprintf(out, "%s  %s  workspace=%s\n",
-				display.ShortID(p.GetId()), p.GetName(), display.Name(names[p.GetWorkspace()], p.GetWorkspace()))
+			fmt.Fprintf(out, "%s  %s/%s\n",
+				display.ShortID(p.GetId()), display.Name(names[p.GetWorkspace()], p.GetWorkspace()), p.GetName())
 		}
 		return nil
 
 	default:
 		return fmt.Errorf("usage: quay project <create|list>")
 	}
+}
+
+// splitLast divides an address into everything above the last level and the last level itself, which
+// is how a create reads: "me/house-bills" makes "house-bills" inside "me".
+func splitLast(address string) (holder, last string) {
+	trimmed := strings.TrimSpace(address)
+	cut := strings.LastIndex(trimmed, workspace.Separator)
+	if cut < 0 {
+		return "", trimmed
+	}
+	return trimmed[:cut], trimmed[cut+1:]
 }
 
 // workspaceNames maps workspace id to name, so a listing can label rather than print identifiers.
@@ -205,27 +284,23 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 }
 
 func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("dispatch", flag.ContinueOnError)
-	fs.SetOutput(out)
-	projectRef := fs.String("project", "", "project id or name (required)")
-	workspaceRef := fs.String("workspace", "", "workspace id or name, to narrow an ambiguous project name")
-	thread := fs.String("thread", "", "thread id to continue (optional)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *projectRef == "" {
-		return fmt.Errorf("dispatch requires --project")
-	}
-	text := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	typed, words := splitAddressFromText(args)
+	text := strings.TrimSpace(strings.Join(words, " "))
 	if text == "" {
-		return fmt.Errorf("dispatch requires message text")
+		return fmt.Errorf("usage: quay dispatch [<address>] <text>")
 	}
 
-	projectID, err := workspace.ResolveProject(ctx, client, *workspaceRef, *projectRef)
+	located, err := locate(ctx, client, typed)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: projectID, ThreadId: *thread, Text: text})
+	if !located.HasProject() {
+		return needsAProject(ctx, client, located)
+	}
+
+	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: located.ProjectID, ThreadId: located.ThreadID, Text: text,
+	})
 	if err != nil {
 		return err
 	}
@@ -234,31 +309,60 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	return nil
 }
 
+// splitAddressFromText decides whether the first word is an address or the start of the message.
+//
+// An address has to reach a project for a turn to run, so it always carries a separator. That keeps
+// `quay dispatch hello there` a message rather than a mystifying lookup of "hello".
+func splitAddressFromText(args []string) (address string, words []string) {
+	if len(args) > 1 && strings.Contains(args[0], workspace.Separator) {
+		return args[0], args[1:]
+	}
+	return "", args
+}
+
+// needsAProject explains an address that stops at a workspace and lists what it holds, because the
+// next thing the operator needs is the name of one of those projects.
+func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, located workspace.Location) error {
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: located.WorkspaceID})
+	if err != nil {
+		return fmt.Errorf("%s is a workspace: a turn runs in a project inside it", located.Path.Workspace)
+	}
+	if len(resp.GetProjects()) == 0 {
+		return fmt.Errorf("%s holds no projects yet: create one with `quay project create <name>`", located.Path.Workspace)
+	}
+	names := make([]string, 0, len(resp.GetProjects()))
+	for _, project := range resp.GetProjects() {
+		names = append(names, project.GetName())
+	}
+	return fmt.Errorf("%s is a workspace: a turn runs in a project inside it, one of %s",
+		located.Path.Workspace, strings.Join(names, ", "))
+}
+
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
-	fs.SetOutput(out)
-	workspaceRef := fs.String("workspace", "", "filter by workspace id or name (optional)")
-	projectRef := fs.String("project", "", "filter by project id or name (optional)")
-	if err := fs.Parse(args); err != nil {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay sessions [<address>]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+
+	request := &quaycrewv1.ListSessionsRequest{}
+	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
+	// nowhere lists everything, because then the question was about the crew rather than a place.
+	path, err := addressFrom(typed)
+	switch {
+	case err != nil && typed != "":
 		return err
-	}
-	workspaceID := ""
-	if *workspaceRef != "" {
-		resolved, err := workspace.Resolve(ctx, client, *workspaceRef)
+	case err == nil && !path.IsZero():
+		located, err := workspace.ResolvePath(ctx, client, path)
 		if err != nil {
 			return err
 		}
-		workspaceID = resolved
+		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
 	}
-	projectID := ""
-	if *projectRef != "" {
-		resolved, err := workspace.ResolveProject(ctx, client, *workspaceRef, *projectRef)
-		if err != nil {
-			return err
-		}
-		projectID = resolved
-	}
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: workspaceID, Project: projectID})
+
+	resp, err := client.ListSessions(ctx, request)
 	if err != nil {
 		return err
 	}
