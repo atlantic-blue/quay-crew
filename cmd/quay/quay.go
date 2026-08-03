@@ -7,6 +7,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/atlantic-blue/quay-crew/features"
@@ -36,6 +39,7 @@ commands:
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   context [<address>]                     where the files the model reads live
+  context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
 
@@ -417,8 +421,11 @@ func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 // runContext says where the files the model reads live. It asks the control plane rather than working
 // the paths out, because this tool runs on the operator's machine and the layout belongs to the crew.
 func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "edit" {
+		return runContextEdit(ctx, client, args[1:], out)
+	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context [<address>]")
+		return fmt.Errorf("usage: quay context [<address>] | quay context edit [<address>]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -458,6 +465,60 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "  read by the model at %s\n", dir.GetSandbox())
 	}
 	return nil
+}
+
+// runContextEdit opens the project's memory file in the operator's editor. The project's rather than
+// the workspace's, because that is the one somebody means when they say "the context for this work";
+// the workspace's is reached by naming it.
+func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context edit [<address>]")
+	}
+	editor := strings.TrimSpace(os.Getenv("EDITOR"))
+	if editor == "" {
+		return fmt.Errorf("no EDITOR set: export one, or run quay context to see the file and edit it yourself")
+	}
+
+	request := &quaycrewv1.ListContextsRequest{}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	path, err := addressFrom(typed)
+	switch {
+	case err != nil && typed != "":
+		return err
+	case err == nil && !path.IsZero():
+		located, err := workspace.ResolvePath(ctx, client, path)
+		if err != nil {
+			return err
+		}
+		request.Project = located.ProjectID
+	}
+
+	resp, err := client.ListContexts(ctx, request)
+	if err != nil {
+		return err
+	}
+	file := ""
+	for _, dir := range resp.GetDirs() {
+		if dir.GetScope() == "project" {
+			file = dir.GetMemory()
+			break
+		}
+	}
+	if file == "" {
+		return fmt.Errorf("no project to edit context for: say which with quay use, or name one here")
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o777); err != nil {
+		return fmt.Errorf("make room for %s: %w", file, err)
+	}
+
+	parts := strings.Fields(editor)
+	command := exec.Command(parts[0], append(parts[1:], file)...)
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	fmt.Fprintf(out, "editing %s\n", file)
+	return command.Run()
 }
 
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

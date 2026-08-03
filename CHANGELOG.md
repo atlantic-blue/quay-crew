@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **You can edit context from either surface.** `enter` or `e` on a row in the `context` view opens the
+  memory file in your own `$EDITOR`, and `quay context edit [<address>]` does the same from the command
+  line. The directory is made first, so an editor writing into a project whose sandbox has never run
+  does not fail on a path nobody created, and an unset `EDITOR` is said out loud rather than guessed at.
+  ([#112](https://github.com/atlantic-blue/quay-crew/pull/112))
 - **You can find the files the model reads.** `quay context` on the command line and a `context` view in
   the console, both clients of one control plane call: a row per workspace and per project, where it is
   on your machine, where it appears inside a sandbox, and whether `CLAUDE.md` has been written yet. The
