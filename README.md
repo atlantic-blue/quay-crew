@@ -76,8 +76,9 @@ control plane API, and each workspace is isolated from the others.
 ## Quick start
 
 ```sh
+cp deploy/env.example deploy/.env                             # say which model and image to run
 make sandbox-image                                            # the image a session runs in
-QC_SANDBOX_IMAGE=quaycrew-sandbox-claude:local QC_MODEL=claude-code make up
+make up                                                       # bring the stack up
 make install                                                  # build quay and install it over the copy you run
 
 quay workspace create me
@@ -86,8 +87,9 @@ quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
 quay dispatch "say pong"
 ```
 
-Creating something moves you into it, so nothing above says where twice, and `quay use` tells you where
-you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
+Compose reads `deploy/.env` on every command, so the model and image you chose survive a restart and an
+upgrade. Creating something moves you into it, so nothing above says where twice, and `quay use` tells
+you where you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
 subscription. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
 
 Common targets:
