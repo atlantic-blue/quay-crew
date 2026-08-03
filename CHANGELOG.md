@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 3 August 2026
 
+- **`make upgrade` brings the stack back the way you configured it**, and clears the sandboxes from
+  before the upgrade. Two bugs: it restarted compose with the defaults, so a stack started with
+  `QC_MODEL=claude-code` came back running `echo`, and it left every old sandbox running, which blocks
+  those threads from ever starting again because the control plane has forgotten them and their names
+  are taken. Configuration now lives in `deploy/.env`, which compose reads on every command.
+  ([#86](https://github.com/atlantic-blue/quay-crew/pull/86))
 - **The console says when the control plane is older than the tool**, rather than quietly showing four
   fewer lines: `Quay: this control plane is older than the tool, run make upgrade`. Installing the tool
   does not rebuild the stack, so this is the normal state of things after an upgrade, and silence reads
