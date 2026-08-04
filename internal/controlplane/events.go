@@ -6,6 +6,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -29,6 +30,9 @@ func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Session, e
 		return
 	}
 
+	// The id is minted here rather than derived from the turn, because two turns can carry the same
+	// prompt in the same session and still be two different things that happened.
+	event.Id = store.NewID()
 	event.Session = session.GetId()
 	event.Workspace = session.GetWorkspace()
 	event.Project = session.GetProject()

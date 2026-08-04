@@ -40,6 +40,7 @@ commands:
   project list [<workspace>]              list projects
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
+  turns <session id>                      what a session was asked, and what came back
   context [<address>]                     where the files the model reads live
   context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
@@ -138,6 +139,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runAttach(ctx, client, args[1:], out)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
+	case "turns":
+		return runTurns(ctx, client, args[1:], out)
 	case "context":
 		return runContext(ctx, client, args[1:], out)
 	case "secret":

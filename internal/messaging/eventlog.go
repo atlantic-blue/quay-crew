@@ -18,5 +18,10 @@ type Handler func(ctx context.Context, record Record) error
 type EventLog interface {
 	Publish(ctx context.Context, topic string, key, value []byte) error
 	Consume(ctx context.Context, group string, topics []string, handler Handler) error
+	// ConsumePattern consumes every topic matching a regular expression, including ones created
+	// after consumption started. Streams are named after workspaces, and a workspace can be created
+	// while the crew is running, so a consumer subscribed to a list fixed at startup would silently
+	// ignore everything that happens in a workspace made after it.
+	ConsumePattern(ctx context.Context, group, pattern string, handler Handler) error
 	Close()
 }

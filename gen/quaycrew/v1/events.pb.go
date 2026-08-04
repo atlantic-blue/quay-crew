@@ -31,6 +31,10 @@ const (
 // the event carries enough to rebuild a conversation without reading anything else.
 type TurnEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
+	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
+	// record more than once and needs something to recognise it by: the projection writes it as the
+	// primary key and lets a repeat collide harmlessly.
+	Id string `protobuf:"bytes,10,opt,name=id,proto3" json:"id,omitempty"`
 	// session is the session the turn ran in, and the key the record is published under, so one
 	// session's events stay in order on one partition.
 	Session string `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
@@ -82,6 +86,13 @@ func (x *TurnEvent) ProtoReflect() protoreflect.Message {
 // Deprecated: Use TurnEvent.ProtoReflect.Descriptor instead.
 func (*TurnEvent) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_events_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *TurnEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
 }
 
 func (x *TurnEvent) GetSession() string {
@@ -151,8 +162,10 @@ var File_quaycrew_v1_events_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x02\n" +
-	"\tTurnEvent\x12\x18\n" +
+	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa7\x02\n" +
+	"\tTurnEvent\x12\x0e\n" +
+	"\x02id\x18\n" +
+	" \x01(\tR\x02id\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x03 \x01(\tR\aproject\x12\x1b\n" +

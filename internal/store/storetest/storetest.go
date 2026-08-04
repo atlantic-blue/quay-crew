@@ -9,10 +9,13 @@ package storetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Opener hands out handles to one isolated dataset. Calling it twice returns two independent handles
@@ -361,6 +364,139 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if err := s.SetPermissionMode(ctx, "ghost", "plan"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("setting the mode on a missing session returned %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("a session's turns come back in the order they happened", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
+		for i, text := range []string{"first", "second", "third"} {
+			turn := &quaycrewv1.Turn{
+				Id:         fmt.Sprintf("turn-%d", i),
+				Session:    session.GetId(),
+				Prompt:     text,
+				Reply:      "you said: " + text,
+				Status:     "idle",
+				OccurredAt: timestamppb.New(start.Add(time.Duration(i) * time.Minute)),
+			}
+			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
+				t.Fatalf("AppendTurn: %v", err)
+			}
+		}
+
+		turns, err := s.ListTurns(ctx, session.GetId(), 0)
+		if err != nil {
+			t.Fatalf("ListTurns: %v", err)
+		}
+		if len(turns) != 3 {
+			t.Fatalf("%d turns came back, want 3", len(turns))
+		}
+		for i, want := range []string{"first", "second", "third"} {
+			if turns[i].GetPrompt() != want {
+				t.Fatalf("turn %d says %q, want %q: the history is out of order", i, turns[i].GetPrompt(), want)
+			}
+		}
+		if turns[0].GetReply() != "you said: first" || turns[0].GetStatus() != "idle" {
+			t.Fatalf("the first turn came back as %+v, losing what it said", turns[0])
+		}
+	})
+
+	t.Run("the same turn delivered twice is stored once", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		// Delivery from the event log is at least once, so this is not a hypothetical.
+		turn := &quaycrewv1.Turn{
+			Id: "turn-once", Session: session.GetId(), Prompt: "hello",
+			Status: "idle", OccurredAt: timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)),
+		}
+		for range 3 {
+			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
+				t.Fatalf("AppendTurn: %v", err)
+			}
+		}
+
+		turns, err := s.ListTurns(ctx, session.GetId(), 0)
+		if err != nil {
+			t.Fatalf("ListTurns: %v", err)
+		}
+		if len(turns) != 1 {
+			t.Fatalf("%d turns came back, want 1: a replayed record was written again", len(turns))
+		}
+	})
+
+	t.Run("a turn with no id is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		err := s.AppendTurn(ctx, &quaycrewv1.Turn{Session: session.GetId(), Prompt: "hello"},
+			project.GetWorkspace(), project.GetId(), "thread-a")
+		if err == nil {
+			t.Fatal("a turn with no id was accepted, so nothing can recognise it on a replay")
+		}
+	})
+
+	t.Run("a listing keeps the end of a long conversation", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
+		for i := range 5 {
+			turn := &quaycrewv1.Turn{
+				Id: fmt.Sprintf("turn-%d", i), Session: session.GetId(),
+				Prompt: fmt.Sprintf("message %d", i), Status: "idle",
+				OccurredAt: timestamppb.New(start.Add(time.Duration(i) * time.Minute)),
+			}
+			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
+				t.Fatalf("AppendTurn: %v", err)
+			}
+		}
+
+		turns, err := s.ListTurns(ctx, session.GetId(), 2)
+		if err != nil {
+			t.Fatalf("ListTurns: %v", err)
+		}
+		if len(turns) != 2 {
+			t.Fatalf("%d turns came back, want 2", len(turns))
+		}
+		if turns[0].GetPrompt() != "message 3" || turns[1].GetPrompt() != "message 4" {
+			t.Fatalf("the listing kept %q and %q, want the last two: a cap must keep the end", turns[0].GetPrompt(), turns[1].GetPrompt())
+		}
+	})
+
+	t.Run("one session's turns are not another's", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		first, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+		second, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b")
+
+		now := timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC))
+		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "a", Session: first.GetId(), Prompt: "mine", OccurredAt: now},
+			project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
+			t.Fatalf("AppendTurn: %v", err)
+		}
+		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "b", Session: second.GetId(), Prompt: "theirs", OccurredAt: now},
+			project.GetWorkspace(), project.GetId(), "thread-b"); err != nil {
+			t.Fatalf("AppendTurn: %v", err)
+		}
+
+		turns, err := s.ListTurns(ctx, first.GetId(), 0)
+		if err != nil {
+			t.Fatalf("ListTurns: %v", err)
+		}
+		if len(turns) != 1 || turns[0].GetPrompt() != "mine" {
+			t.Fatalf("the first session's history came back as %d turns starting %q", len(turns), turns[0].GetPrompt())
 		}
 	})
 

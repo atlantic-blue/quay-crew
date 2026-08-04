@@ -71,7 +71,7 @@ Once you are at the `quaycrew=#` prompt:
 
 ## What is in there
 
-Six tables. Five are the model, one is bookkeeping.
+Seven tables. Five are the model, one is a projection of the event log, one is bookkeeping.
 
 **`workspaces`** is the top level: a body of work with its own secrets, its own channels and its own
 event log topics. It carries `id`, `name`, timestamps and `deleted_at`. Deletion is soft: a deleted
@@ -107,6 +107,12 @@ shows it and `quay context edit` changes it.
 
 **`channels`** is where an attached chat channel would be recorded: `id`, `workspace`, `kind`. It is
 empty today, and it stays empty until the first chat channel lands. See `docs/EVENTS.md`.
+
+**`turns`** is the read model: one row per turn, carrying what was asked, what came back, the status
+and when. It is written by the projection that consumes `<workspace>.turns` off the event log, not by
+the control plane directly, and it is the one table here that can be thrown away without losing
+anything, because the log can rebuild it. Its `id` comes from the event rather than from the
+database, which is what makes an at least once delivery safe to replay. See `docs/EVENTS.md`.
 
 **`schema_migrations`** is one row per applied migration, with the timestamp it was applied.
 
@@ -160,6 +166,14 @@ from workspaces w
 left join projects p on p.workspace = w.id
 left join sessions s on s.project = p.id
 group by 1 order by 1;
+```
+
+A session's history, which is the same thing `quay turns` prints:
+
+```sql
+select occurred_at, status, left(prompt, 60) as asked, left(reply, 60) as answered
+from turns where session = '<session id>'
+order by occurred_at;
 ```
 
 What the model has been told, and where:
