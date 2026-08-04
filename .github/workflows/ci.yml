@@ -201,10 +201,10 @@ jobs:
           thread=$(printf '%s' "$out" | sed -n 's/.*thread \([a-f0-9]*\))$/\1/p')
           test -n "$session" && test -n "$thread"
 
-          # Stand in for what the model writes into its own conversation store, and for a file the
-          # operator drops into the project.
+          # Stand in for what the model writes into its own conversation store, and for a note
+          # something inside the sandbox writes into its own memory.
           docker exec "quaycrew-$session" sh -c 'echo remembered > /home/agent/.claude/note'
-          docker exec "quaycrew-$session" sh -c 'echo "the bills project" > /home/agent/workspace/CLAUDE.md'
+          docker exec "quaycrew-$session" sh -c 'echo "the bills project" >> /home/agent/workspace/CLAUDE.md'
 
           # Destroy the container, exactly as stopping a session does, and restart the control plane
           # so it does not hold a handle to something that no longer exists.
@@ -219,9 +219,20 @@ jobs:
           kept=$(docker exec "quaycrew-$session" cat /home/agent/.claude/note)
           context=$(docker exec "quaycrew-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"
-          echo "project context: $context"
+          echo "session memory:"
+          echo "$context"
           test "$kept" = "remembered"
-          test "$context" = "the bills project"
+
+          # The note survived the container, and it came back filed under the session: a note written
+          # from inside is about the work in hand, not about the whole crew.
+          case "$context" in
+            *"the bills project"*) ;;
+            *) echo "the note written inside the sandbox did not survive"; exit 1 ;;
+          esac
+          case "$context" in
+            *"quay:session"*) ;;
+            *) echo "the note came back without a level, so nothing knows where it belongs"; exit 1 ;;
+          esac
 
       - name: Sandbox logs on failure
         if: failure()

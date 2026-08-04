@@ -18,6 +18,13 @@ read, or run with `make features`.
   says out loud that nothing records them. The topic is created on first use, which an integration
   test against a real Redpanda caught: the very first record to a new workspace was being rejected and
   quietly dropped. ([#128](https://github.com/atlantic-blue/quay-crew/issues/128))
+- **Four levels of context, and a working directory per session.** Crew, workspace, project and session,
+  layered into the two files the model actually reads: the outer two in the conversation store every
+  session in a workspace sees, the inner two in that session's own working directory. Sessions no
+  longer share a project's working directory, which is what makes the innermost level possible and
+  stops two conversations changing files under each other. What something inside a sandbox writes is
+  read back into the level it belongs to, and a note appended at the end lands on the session.
+  ([#124](https://github.com/atlantic-blue/quay-crew/pull/124))
 - **`make up-observability` starts all four services.** Tempo was pointed at `/etc/tempo.yaml`, a file
   neither in its image nor mounted, so it exited on startup and the profile quietly came up one short.
   Loki and Tempo are now configured from `deploy/loki.yaml` and `deploy/tempo.yaml`, kept here rather

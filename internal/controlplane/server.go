@@ -170,24 +170,52 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 	if len(dirs) != 2 {
 		return
 	}
-	for at, scoped := range []struct {
-		scope store.ContextScope
-		owner string
-	}{
-		{store.ContextWorkspace, session.GetWorkspace()},
-		{store.ContextProject, session.GetProject()},
-	} {
-		kept, err := s.store.GetContext(ctx, scoped.scope, scoped.owner)
-		if err != nil {
-			continue
+	for at, levels := range contextFiles(session) {
+		// Read back first. Something inside the sandbox writing into its own memory has learned
+		// something, and overwriting that on the next turn would make the crew's memory strictly
+		// worse than a text file.
+		scopes := make([]string, 0, len(levels))
+		for _, level := range levels {
+			scopes = append(scopes, string(level.scope))
 		}
-		if onDisk, found := sandbox.ReadMemory(dirs[at]); found && onDisk != kept {
-			if err := s.store.SetContext(ctx, scoped.scope, scoped.owner, onDisk); err != nil {
+		if onDisk, found := sandbox.ReadMemory(dirs[at]); found {
+			written := sandbox.Decompose(onDisk, scopes)
+			for _, level := range levels {
+				body, said := written[string(level.scope)]
+				if !said {
+					continue
+				}
+				if kept, err := s.store.GetContext(ctx, level.scope, level.owner); err == nil && kept != body {
+					_ = s.store.SetContext(ctx, level.scope, level.owner, body)
+				}
+			}
+		}
+
+		sections := make([]sandbox.Section, 0, len(levels))
+		for _, level := range levels {
+			body, err := s.store.GetContext(ctx, level.scope, level.owner)
+			if err != nil {
 				continue
 			}
-			kept = onDisk
+			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}
-		_ = sandbox.WriteMemory(dirs[at], kept)
+		_ = sandbox.WriteMemory(dirs[at], sandbox.Compose(sections))
+	}
+}
+
+// contextLevel is one level of context and whose it is.
+type contextLevel struct {
+	scope store.ContextScope
+	owner string
+}
+
+// contextFiles is what goes in each of a session's two memory files: the outer two levels in the
+// conversation store's directory, which every session in the workspace reads, and the inner two in
+// this session's own working directory, which only it reads.
+func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
+	return [][]contextLevel{
+		{{store.ContextCrew, ""}, {store.ContextWorkspace, session.GetWorkspace()}},
+		{{store.ContextProject, session.GetProject()}, {store.ContextSession, session.GetId()}},
 	}
 }
 
@@ -420,37 +448,12 @@ func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextReque
 	if err := s.store.SetContext(ctx, scope, req.GetOwner(), req.GetBody()); err != nil {
 		return nil, storeError(err, "context")
 	}
-	s.renderContext(ctx, scope, req.GetOwner(), req.GetBody())
 	return &quaycrewv1.SetContextResponse{
 		Dir: &quaycrewv1.ContextDir{
 			Scope: req.GetScope(), Owner: req.GetOwner(),
 			Body: req.GetBody(), Written: req.GetBody() != "",
 		},
 	}, nil
-}
-
-// renderContext writes a scope's context out to the directory it belongs to, so what is on disk and
-// what is in the store do not disagree the moment somebody sets one through the API.
-func (s *Server) renderContext(ctx context.Context, scope store.ContextScope, owner, body string) {
-	cfg := sandbox.Config{ID: "render"}
-	at := 0
-	switch scope {
-	case store.ContextWorkspace:
-		cfg.Workspace, cfg.Project = owner, "render"
-	case store.ContextProject:
-		project, err := s.store.GetProject(ctx, owner)
-		if err != nil {
-			return
-		}
-		cfg.Workspace, cfg.Project, at = project.GetWorkspace(), owner, 1
-	default:
-		return
-	}
-	dirs := s.storage.MyDirs(cfg)
-	if len(dirs) != 2 {
-		return
-	}
-	_ = sandbox.WriteMemory(dirs[at], body)
 }
 
 // contextProjects is the projects a listing covers: one when asked for, else every one the crew has.

@@ -9,6 +9,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -32,6 +33,29 @@ func (c *contextWorld) scoped(scope string) []*quaycrewv1.ContextDir {
 		}
 	}
 	return out
+}
+
+// sessionWorkingDir is the current session's own working directory on disk.
+func sessionWorkingDir(ctx context.Context) (string, error) {
+	w := worldFrom(ctx)
+	current, err := w.lastTurn()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(w.storage.Dir, "workspaces", w.workspaceID,
+		"projects", w.projectID, "sessions", current.sessionID, "workspace"), nil
+}
+
+func sessionMemory(ctx context.Context) (string, error) {
+	dir, err := sessionWorkingDir(ctx)
+	if err != nil {
+		return "", err
+	}
+	body, found := sandbox.ReadMemory(dir)
+	if !found {
+		return "", fmt.Errorf("the session has no memory file at %s", dir)
+	}
+	return body, nil
 }
 
 func initializeContextSteps(sc *godog.ScenarioContext) {
@@ -116,35 +140,57 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator sets context at scope "([^"]*)" to "([^"]*)"$`,
 		func(ctx context.Context, scope, body string) error {
 			w := worldFrom(ctx)
+			// The crew's context is the one level with nothing to own it: it is true everywhere.
+			owner := w.projectID
+			switch store.ContextScope(scope) {
+			case store.ContextCrew:
+				owner = ""
+			case store.ContextWorkspace:
+				owner = w.workspaceID
+			}
 			_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
-				Scope: scope, Owner: w.projectID, Body: body,
+				Scope: scope, Owner: owner, Body: body,
 			})
 			return nil
 		})
 
-	sc.Step(`^the project's memory file on disk reads "([^"]*)"$`, func(ctx context.Context, want string) error {
-		w := worldFrom(ctx)
-		dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "projects", w.projectID, "workspace")
-		body, err := os.ReadFile(filepath.Join(dir, sandbox.MemoryFile))
+	// A session's own working directory, which is where the project's and the session's context land.
+	sc.Step(`^the session's memory file carries "([^"]*)"$`, func(ctx context.Context, want string) error {
+		body, err := sessionMemory(ctx)
 		if err != nil {
-			return fmt.Errorf("the model's memory file was not written: %w", err)
+			return err
 		}
-		if string(body) != want {
-			return fmt.Errorf("the memory file reads %q, want %q", body, want)
+		if !strings.Contains(body, want) {
+			return fmt.Errorf("the session's memory file reads %q, want it to carry %q", body, want)
 		}
 		return nil
 	})
 
-	// Writing the file directly is what an agent inside the sandbox does: the directory is mounted in,
+	// The conversation store's directory, shared by every session in the workspace, which is where the
+	// crew's and the workspace's context land.
+	sc.Step(`^the workspace's memory file carries "([^"]*)"$`, func(ctx context.Context, want string) error {
+		w := worldFrom(ctx)
+		dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "claude")
+		body, err := os.ReadFile(filepath.Join(dir, sandbox.MemoryFile))
+		if err != nil {
+			return fmt.Errorf("the workspace's memory file was not written: %w", err)
+		}
+		if !strings.Contains(string(body), want) {
+			return fmt.Errorf("the workspace's memory file reads %q, want it to carry %q", body, want)
+		}
+		return nil
+	})
+
+	// Appending to the file is what an agent writing a note actually does: the directory is mounted in,
 	// so this process and that container are looking at one place.
-	sc.Step(`^something inside the sandbox writes "([^"]*)" into the project's memory$`,
-		func(ctx context.Context, body string) error {
-			w := worldFrom(ctx)
-			dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "projects", w.projectID, "workspace")
-			if err := os.MkdirAll(dir, 0o777); err != nil {
+	sc.Step(`^something inside the sandbox writes "([^"]*)" into its memory$`,
+		func(ctx context.Context, note string) error {
+			dir, err := sessionWorkingDir(ctx)
+			if err != nil {
 				return err
 			}
-			return os.WriteFile(filepath.Join(dir, sandbox.MemoryFile), []byte(body), 0o666)
+			existing, _ := sandbox.ReadMemory(dir)
+			return sandbox.WriteMemory(dir, strings.TrimRight(existing, "\n")+"\n"+note)
 		})
 
 	sc.Step(`^the project's context reads "([^"]*)"$`, func(ctx context.Context, want string) error {
@@ -154,6 +200,24 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		}
 		if got := projects[0].GetBody(); got != want {
 			return fmt.Errorf("the project's context reads %q, want %q", got, want)
+		}
+		return nil
+	})
+
+	// Asked of the store rather than of a listing, because a session's context belongs to one
+	// conversation and the listing is about a project.
+	sc.Step(`^the session's context reads "([^"]*)"$`, func(ctx context.Context, want string) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		got, err := w.store.GetContext(ctx, store.ContextSession, current.sessionID)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(got, want) {
+			return fmt.Errorf("the session's context reads %q, want it to carry %q", got, want)
 		}
 		return nil
 	})
