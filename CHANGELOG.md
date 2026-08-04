@@ -15,6 +15,15 @@ read, or run with `make features`.
   how topics are named, and the state it is actually in: the boundary and its client exist, nothing
   publishes to it and nothing consumes it, so a stack today holds zero topics. Documentation only, no
   behaviour changed. ([#113](https://github.com/atlantic-blue/quay-crew/issues/113))
+- **The detach key works.** It was `ctrl-o` for one release, and on macOS `^O` is the terminal's own
+  DISCARD character, so the line discipline swallows it and tmux never sees it: the key did nothing.
+  It is `ctrl-space d` now, `ctrl-b d` still works when nothing is nested, and a test refuses every
+  control character a terminal reserves rather than the one spelling that broke.
+  ([#115](https://github.com/atlantic-blue/quay-crew/pull/115))
+- **Editing context works with no `EDITOR` exported.** It refused rather than falling back, which made
+  the whole thing dead on any machine that has not set one, which is most machines. `VISUAL`, then
+  `EDITOR`, then `vi`, which is what git and crontab do.
+  ([#114](https://github.com/atlantic-blue/quay-crew/pull/114))
 - **You can edit context from either surface.** `enter` or `e` on a row in the `context` view opens the
   memory file in your own `$EDITOR`, and `quay context edit [<address>]` does the same from the command
   line. The directory is made first, so an editor writing into a project whose sandbox has never run
