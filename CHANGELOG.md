@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The detach key works.** It was `ctrl-o` for one release, and on macOS `^O` is the terminal's own
+  DISCARD character, so the line discipline swallows it and tmux never sees it: the key did nothing.
+  It is `ctrl-space d` now, `ctrl-b d` still works when nothing is nested, and a test refuses every
+  control character a terminal reserves rather than the one spelling that broke.
+  ([#115](https://github.com/atlantic-blue/quay-crew/pull/115))
 - **Editing context works with no `EDITOR` exported.** It refused rather than falling back, which made
   the whole thing dead on any machine that has not set one, which is most machines. `VISUAL`, then
   `EDITOR`, then `vi`, which is what git and crontab do.
