@@ -47,6 +47,9 @@ type Row struct {
 	// Label is what to call this row in the breadcrumb after drilling into it, for example a
 	// workspace's name rather than its identifier. Empty falls back to the identifier.
 	Label string
+	// Detail is the whole of what a row is about, when the cells can only hold a summary of it. A
+	// level's context is the case: the listing shows its first line and an editor needs all of it.
+	Detail string
 }
 
 // Name is what to call the row where a human reads it.

@@ -959,9 +959,9 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 	client := &fakeClient{contexts: []*quaycrewv1.ContextDir{
 		{Scope: "workspace", Name: "demo", Host: "/data/workspaces/w1/claude",
 			Sandbox: "/home/agent/.claude", Memory: "/data/workspaces/w1/claude/CLAUDE.md"},
-		{Scope: "project", Name: "default", Host: "/data/workspaces/w1/projects/p1/workspace",
+		{Scope: "project", Name: "default", Owner: "p1", Host: "/data/workspaces/w1/projects/p1/workspace",
 			Sandbox: "/home/agent/workspace", Memory: "/data/workspaces/w1/projects/p1/workspace/CLAUDE.md",
-			Written: true},
+			Written: true, Body: "pay the water bill first"},
 	}}
 
 	rows, err := Contexts(client).List(context.Background(), "")
@@ -977,9 +977,12 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 	if got := rows[1].Cells[2]; got != "written" {
 		t.Fatalf("a written memory file reads as %q", got)
 	}
-	// The row's identifier is the file, because that is what any action on it would open.
-	if rows[1].ID != "/data/workspaces/w1/projects/p1/workspace/CLAUDE.md" {
-		t.Fatalf("the row carries %q, want the file to edit", rows[1].ID)
+	// The row carries the level, because that is what an action on it acts on.
+	if rows[1].ID != "project/p1" {
+		t.Fatalf("the row carries %q, want the level to set", rows[1].ID)
+	}
+	if rows[1].Detail != "pay the water bill first" {
+		t.Fatalf("the row carries %q, want the whole of what the level says", rows[1].Detail)
 	}
 }
 
@@ -997,16 +1000,25 @@ func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
 	if edit.Label != "Edit" {
 		t.Fatalf("enter runs %q, want Edit", edit.Label)
 	}
-	command, err := edit.Shell(Row{ID: file})
+	row := Row{Cells: []string{"project", "bills", "written", "pay the water bill"}, Parent: "p1",
+		Detail: "pay the water bill first"}
+	command, err := edit.Shell(row)
 	if err != nil {
 		t.Fatalf("edit: %v", err)
 	}
-	if got := strings.Join(command.Args, " "); got != "vi -u NONE "+file {
-		t.Fatalf("command = %q, want the editor and the file", got)
+	draft := command.Args[len(command.Args)-1]
+	if !strings.HasPrefix(strings.Join(command.Args, " "), "vi -u NONE ") {
+		t.Fatalf("command = %q, want the editor and a file", command.Args)
 	}
-	if _, err := os.Stat(filepath.Dir(file)); err != nil {
-		t.Fatalf("the directory the editor would write into was not made: %v", err)
+	// Seeded with what the level already says, or editing would be starting again every time.
+	seeded, err := os.ReadFile(draft)
+	if err != nil {
+		t.Fatalf("the draft was not written: %v", err)
 	}
+	if string(seeded) != row.Detail {
+		t.Fatalf("the draft reads %q, want what the level already says", seeded)
+	}
+	_ = file
 }
 
 // TestTheEditorIsTheirsThenVi is the order git and crontab use. Refusing when neither is set made the
@@ -1040,13 +1052,14 @@ func TestEditingOpensSomethingWithNoEditorSet(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "CLAUDE.md")
 
 	edit := actionBoundTo(t, Contexts(&fakeClient{}), "e")
-	command, err := edit.Shell(Row{ID: file})
+	command, err := edit.Shell(Row{Cells: []string{"crew", "crew", "", ""}})
 	if err != nil {
 		t.Fatalf("editing with nothing set: %v", err)
 	}
-	if got := strings.Join(command.Args, " "); got != "vi "+file {
-		t.Fatalf("command = %q, want vi and the file", got)
+	if got := command.Args[0]; got != "vi" {
+		t.Fatalf("command = %q, want vi", command.Args)
 	}
+	_ = file
 }
 
 // TestTheContextViewIsRegistered: it is no use if the command bar cannot reach it.
