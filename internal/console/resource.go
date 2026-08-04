@@ -198,6 +198,42 @@ func (r *Registry) Names() []string {
 	return names
 }
 
+// Offer returns the views a typed prefix could mean, by canonical name, in registration order. An
+// empty prefix offers all of them, which is what an operator who has just pressed colon needs: the
+// command bar asks a question and until now gave nothing to answer it with.
+func (r *Registry) Offer(typed string) []string {
+	cleaned := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(typed), ":")))
+	offered := make([]string, 0, len(r.order))
+	for _, name := range r.order {
+		if matchesPrefix(r.byName[name], cleaned) {
+			offered = append(offered, name)
+		}
+	}
+	return offered
+}
+
+// matchesPrefix says whether any spelling of a resource starts with what has been typed.
+func matchesPrefix(resource Resource, prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+	for _, token := range append([]string{resource.Name}, resource.Aliases...) {
+		if strings.HasPrefix(token, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// Spellings returns a resource's name and its aliases, for a list that has to say what to type.
+func (r *Registry) Spellings(name string) []string {
+	resource, found := r.byName[name]
+	if !found {
+		return nil
+	}
+	return append([]string{resource.Name}, resource.Aliases...)
+}
+
 // Tokens returns every name and alias, sorted, for command bar completion.
 func (r *Registry) Tokens() []string {
 	tokens := make([]string, 0, len(r.byToken))

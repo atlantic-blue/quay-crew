@@ -1066,6 +1066,55 @@ func TestTheContextViewIsRegistered(t *testing.T) {
 	}
 }
 
+// TestTheCommandBarOffersWhatItCanOpen: pressing colon asked a question and gave nothing to answer it
+// with, so the only way to learn a view's name was to know it already.
+func TestTheCommandBarOffersWhatItCanOpen(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Threads(client), Archived(client), Projects(client), Contexts(client))
+
+	model, _ = update(t, model, runes(":"))
+	view := model.View()
+	for _, want := range []string{"threads", "archived", "projects", "context"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the command bar does not offer %q:\n%s", want, view)
+		}
+	}
+
+	// Typing narrows it, so a long list becomes the one you meant.
+	model = typeAll(t, model, "a")
+	view = model.View()
+	if !strings.Contains(view, "archived") {
+		t.Fatalf("typing a does not offer archived:\n%s", view)
+	}
+	if strings.Contains(view, "projects") {
+		t.Fatalf("typing a still offers projects:\n%s", view)
+	}
+
+	model = typeAll(t, model, "zzz")
+	if view := model.View(); !strings.Contains(view, "nothing called that") {
+		t.Fatalf("a prefix matching nothing says nothing about it:\n%s", view)
+	}
+}
+
+// TestTheQuestionMarkListsTheViews: the keys were all in there and the views were not, so the command
+// bar was the one thing the help could not help with.
+func TestTheQuestionMarkListsTheViews(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Threads(client), Archived(client), Contexts(client))
+	model, _ = update(t, model, runes("?"))
+
+	view := model.View()
+	for _, want := range []string{"views, with :", "threads", "archived", "context"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the key list does not name %q:\n%s", want, view)
+		}
+	}
+	// And what to type for one, which is the point of listing them.
+	if !strings.Contains(view, "ctx") {
+		t.Fatalf("the key list does not say what to type for the context view:\n%s", view)
+	}
+}
+
 // actionBoundTo returns the action a key runs, failing the test when nothing is bound to it.
 func actionBoundTo(t *testing.T, resource Resource, key string) Action {
 	t.Helper()
