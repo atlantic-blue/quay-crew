@@ -99,12 +99,21 @@ const (
 	ContextWorkspace ContextScope = "workspace"
 	// ContextProject is true of one project, owned by its id.
 	ContextProject ContextScope = "project"
+	// ContextSession is true of one conversation, owned by its session id. It is the innermost level,
+	// and where a note written from inside a sandbox lands.
+	ContextSession ContextScope = "session"
 )
+
+// ContextLevels are the scopes in order, outermost first. They layer: everything the crew knows, then
+// the workspace, then the project, then this one conversation.
+func ContextLevels() []ContextScope {
+	return []ContextScope{ContextCrew, ContextWorkspace, ContextProject, ContextSession}
+}
 
 // KnownContextScope says whether a scope is one of the three.
 func KnownContextScope(scope ContextScope) bool {
 	switch scope {
-	case ContextCrew, ContextWorkspace, ContextProject:
+	case ContextCrew, ContextWorkspace, ContextProject, ContextSession:
 		return true
 	default:
 		return false

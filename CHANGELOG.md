@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **Four levels of context, and a working directory per session.** Crew, workspace, project and session,
+  layered into the two files the model actually reads: the outer two in the conversation store every
+  session in a workspace sees, the inner two in that session's own working directory. Sessions no
+  longer share a project's working directory, which is what makes the innermost level possible and
+  stops two conversations changing files under each other. What something inside a sandbox writes is
+  read back into the level it belongs to, and a note appended at the end lands on the session.
+  ([#121](https://github.com/atlantic-blue/quay-crew/pull/121))
 - **The console says sessions again.** It was threads for a day. The database and the API both say
   session, and one name across the whole system beats a console that translates. `threads`, `thread`
   and `t` still open the view, the way `sessions` did while it was called threads.

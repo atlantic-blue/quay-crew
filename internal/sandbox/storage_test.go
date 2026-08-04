@@ -25,7 +25,7 @@ func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
 	// meaningless to it.
 	want := []sandbox.Mount{
 		{Source: "/on/the/host/workspaces/ws1/claude", Target: sandbox.ConversationPath},
-		{Source: "/on/the/host/workspaces/ws1/projects/prj1/workspace", Target: sandbox.WorkingPath},
+		{Source: "/on/the/host/workspaces/ws1/projects/prj1/sessions/sess/workspace", Target: sandbox.WorkingPath},
 	}
 	for i, mount := range mounts {
 		if mount != want[i] {
@@ -34,7 +34,7 @@ func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
 	}
 
 	// And the directories exist, under this process's own view of the same data directory.
-	for _, relative := range []string{"workspaces/ws1/claude", "workspaces/ws1/projects/prj1/workspace"} {
+	for _, relative := range []string{"workspaces/ws1/claude", "workspaces/ws1/projects/prj1/sessions/sess/workspace"} {
 		info, err := os.Stat(filepath.Join(dir, relative))
 		if err != nil {
 			t.Fatalf("stat %s: %v", relative, err)
@@ -61,7 +61,7 @@ func TestStoragePrepareIsRepeatable(t *testing.T) {
 	}
 	// A file the operator dropped in, or the model wrote, must still be there when the next sandbox
 	// for the same project is created. That is the whole point of the directory.
-	note := filepath.Join(dir, "workspaces/ws1/projects/prj1/workspace", "CLAUDE.md")
+	note := filepath.Join(dir, "workspaces/ws1/projects/prj1/sessions/sess/workspace", "CLAUDE.md")
 	if err := os.WriteFile(note, []byte("the house bills project"), 0o600); err != nil {
 		t.Fatalf("write the project context: %v", err)
 	}
