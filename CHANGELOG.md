@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The console shows a session's history.** `l` on a session opens a `turns` view of what it was
+  asked and what came back, read from the projection, so it answers without starting a container and
+  keeps answering long after the sandbox is gone. A failed turn shows why it failed where the reply
+  would be. Enter still opens the conversation: that is the thing an operator does most on that row,
+  so it keeps the cheapest key, and there is a scenario that fails if anything bound to enter starts
+  descending instead. ([#134](https://github.com/atlantic-blue/quay-crew/issues/134))
 - **The subscription token survives a restart.** Secrets were held in memory, so every `make up` lost
   the token and the next turn failed saying nothing useful. They are kept in Postgres now, sealed with
   a key made once and kept on the host at `~/.quaycrew/data/secrets.key`, so holding the database is

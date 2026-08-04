@@ -456,3 +456,79 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 	}
 	return console.Row{}, false
 }
+
+// initializeTurnsViewSteps registers the steps for the console's history view. They live here rather
+// than with the other turns steps because they drive the console's own reducer.
+func initializeTurnsViewSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		for _, action := range c.active.Actions {
+			if !action.Bound("l") {
+				continue
+			}
+			if action.Descend == "" {
+				return fmt.Errorf("the key bound to l on %s descends into nothing", c.active.Name)
+			}
+			resource, found := c.registry.Get(action.Descend)
+			if !found {
+				return fmt.Errorf("%s descends into %q, which is not registered", c.active.Name, action.Descend)
+			}
+			c.active = resource
+			return c.list(ctx, row.ID)
+		}
+		return fmt.Errorf("the %s view has nothing bound to l", c.active.Name)
+	})
+
+	sc.Step(`^the console is showing turns$`, func(ctx context.Context) error {
+		if got := consoleFrom(ctx).active.Name; got != "turns" {
+			return fmt.Errorf("the console is showing %q, want turns", got)
+		}
+		return nil
+	})
+
+	sc.Step(`^the history lists (\d+) turns? saying "([^"]*)"$`, func(ctx context.Context, want int, asked string) error {
+		c := consoleFrom(ctx)
+		if len(c.rows) != want {
+			return fmt.Errorf("the history lists %d turns, want %d", len(c.rows), want)
+		}
+		if len(c.rows) == 0 {
+			return nil
+		}
+		// Column 2 is what was asked; column 3 is what came back.
+		if got := c.rows[0].Cells[2]; got != asked {
+			return fmt.Errorf("the first turn says %q was asked, want %q", got, asked)
+		}
+		if c.rows[0].Cells[3] == "" {
+			return fmt.Errorf("the first turn shows nothing as the answer")
+		}
+		return nil
+	})
+
+	// Rule 46 in this repository: when a key gains a neighbour, test that the neighbour did not take
+	// its place. Enter opening the conversation is the thing this view is for.
+	sc.Step(`^enter on a session still opens its conversation rather than its history$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		opens := false
+		for _, action := range c.active.Actions {
+			if !action.Bound("enter") {
+				continue
+			}
+			// Every action bound to enter, not the first one: an action added ahead of the opener
+			// would take the key, and one added behind it would be dead. Both are wrong.
+			if action.Descend != "" {
+				return fmt.Errorf("an action bound to enter descends into %q, so enter no longer means open", action.Descend)
+			}
+			if action.Shell != nil {
+				opens = true
+			}
+		}
+		if !opens {
+			return fmt.Errorf("the %s view no longer opens anything on enter", c.active.Name)
+		}
+		return nil
+	})
+}

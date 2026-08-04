@@ -127,6 +127,9 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 
 // perform runs an action, whether it was confirmed or never needed to be.
 func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
+	if action.Descend != "" {
+		return m.descendInto(action.Descend, row)
+	}
 	if action.Shell != nil {
 		return m, shellCmd(action, row)
 	}
@@ -194,9 +197,15 @@ func (m Model) drill() (Model, tea.Cmd) {
 	if !hasRow {
 		return m, nil
 	}
-	child, found := m.registry.Get(m.active.DrillTo)
+	return m.descendInto(m.active.DrillTo, row)
+}
+
+// descendInto opens a resource scoped to one row, remembering where to come back to. It is what both
+// enter and a key bound to Descend do, so escape behaves the same however you got there.
+func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
+	child, found := m.registry.Get(name)
 	if !found {
-		m.err = fmt.Errorf("console: %s drills into unknown resource %q", m.active.Name, m.active.DrillTo)
+		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
 		return m, nil
 	}
 	m.stack = append(m.stack, crumbEntry{

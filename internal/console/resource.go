@@ -89,6 +89,11 @@ type Action struct {
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
 	// this is what tells the crew about it.
 	After func(ctx context.Context, row Row) error
+	// Descend opens another resource scoped to the selected row, the way enter does where a view has
+	// somewhere to drill into. It exists because a session already spends enter on opening the
+	// conversation, which is the thing an operator does most, and a history is worth a key of its own
+	// rather than taking the cheapest one away from what it is used for.
+	Descend string
 }
 
 // Bound says whether a keypress runs this action.
