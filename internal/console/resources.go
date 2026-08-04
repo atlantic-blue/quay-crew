@@ -123,8 +123,8 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "scope", Width: 10},
 			{Title: "name", Width: 18},
-			{Title: "memory", Width: 16},
-			{Title: "edit this file", Width: 0},
+			{Title: "written", Width: 16},
+			{Title: "what it says", Width: 0},
 		},
 		SortBy: 1,
 		Actions: []Action{
@@ -135,18 +135,30 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				Key:   "enter",
 				Also:  []string{"e"},
 				Label: "Edit",
+				// A scratch file, not the rendered one. A level's context is rendered into every
+				// session that reads it, so there is no single file to open, and the crew's is
+				// rendered into every workspace. The store is what is being edited; this is a
+				// window onto it.
 				Shell: func(row Row) (*exec.Cmd, error) {
-					if row.ID == "" {
+					if len(row.Cells) == 0 {
 						return nil, fmt.Errorf("no context selected")
 					}
-					return editorFor(row.ID)
+					// Seeded with what this level already says, so editing is editing rather than
+					// starting again, and quitting without saving changes nothing.
+					draft := draftFor(row)
+					if err := os.WriteFile(draft, []byte(row.Detail), 0o600); err != nil {
+						return nil, fmt.Errorf("make room to write: %w", err)
+					}
+					return editorFor(draft)
 				},
-				// The editor wrote a file; this is what tells the crew. Context lives in the store,
-				// and a file nobody read back is a note left on one machine.
+				// The editor wrote the scratch file; this is what tells the crew.
 				After: func(ctx context.Context, row Row) error {
-					body, _ := sandbox.ReadMemory(filepath.Dir(row.ID))
-					_, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
-						Scope: row.Cells[0], Owner: row.Parent, Body: body,
+					body, err := os.ReadFile(draftFor(row))
+					if err != nil {
+						return fmt.Errorf("reading what you wrote: %w", err)
+					}
+					_, err = client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+						Scope: row.Cells[0], Owner: row.Parent, Body: string(body),
 					})
 					return err
 				},
@@ -193,18 +205,35 @@ func Editor() string {
 	return "vi"
 }
 
+// firstLine is what a level says, in one line. The whole of it is what the model reads, not what
+// somebody scanning a list needs.
+func firstLine(body string) string {
+	line := strings.TrimSpace(body)
+	if cut := strings.IndexByte(line, '\n'); cut >= 0 {
+		line = strings.TrimSpace(line[:cut]) + " ..."
+	}
+	return line
+}
+
+// draftFor is where a level's context is edited: one scratch file per level, kept between edits so a
+// crash or a quit without saving does not lose what was being written.
+func draftFor(row Row) string {
+	return filepath.Join(os.TempDir(), "quay-context-"+row.Cells[0]+"-"+row.Parent+".md")
+}
+
 func contextRow(dir *quaycrewv1.ContextDir) Row {
 	written, state := "not written yet", StateUnknown
 	if dir.GetWritten() {
 		written, state = "written", StateReady
 	}
 	return Row{
-		// The file is what an action on this row would open, so it is the identifier, and the owner is
-		// what setting it has to name.
-		ID:     dir.GetMemory(),
+		// A level is what an action on this row acts on, so the scope and the owner are what it
+		// carries, and the whole of what it says goes in Detail for an editor to open.
+		ID:     dir.GetScope() + "/" + dir.GetOwner(),
 		Parent: dir.GetOwner(),
 		Label:  dir.GetName(),
-		Cells:  []string{dir.GetScope(), dir.GetName(), written, dir.GetMemory()},
+		Detail: dir.GetBody(),
+		Cells:  []string{dir.GetScope(), dir.GetName(), written, firstLine(dir.GetBody())},
 		State:  state,
 	}
 }

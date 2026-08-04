@@ -73,6 +73,20 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// Every level the crew has, so nobody has to know which ones exist to find them.
+	sc.Step(`^it names the crew, a workspace and a project$`, func(ctx context.Context) error {
+		c := contextFrom(ctx)
+		for _, scope := range []string{"crew", "workspace", "project"} {
+			if len(c.scoped(scope)) == 0 {
+				return fmt.Errorf("the listing has no %s level in it", scope)
+			}
+		}
+		if got := len(c.scoped("crew")); got != 1 {
+			return fmt.Errorf("%d crew levels, want exactly 1: there is one crew", got)
+		}
+		return nil
+	})
+
 	sc.Step(`^it names a workspace directory and a project directory$`, func(ctx context.Context) error {
 		c := contextFrom(ctx)
 		if got := len(c.scoped("workspace")); got != 1 {
@@ -83,9 +97,11 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		}
 		for _, dir := range c.dirs {
 			if dir.GetName() == "" {
-				return fmt.Errorf("a %s directory has no name, so a listing of them says nothing", dir.GetScope())
+				return fmt.Errorf("a %s level has no name, so a listing of them says nothing", dir.GetScope())
 			}
-			if dir.GetHost() == "" {
+			// The crew's context belongs to no directory: it is rendered into every workspace's file,
+			// so there is no one file to name and nothing to say here.
+			if dir.GetScope() != "crew" && dir.GetHost() == "" {
 				return fmt.Errorf("the %s directory does not say where it is on the host", dir.GetScope())
 			}
 		}
@@ -94,6 +110,9 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each one says where it appears inside a sandbox$`, func(ctx context.Context) error {
 		for _, dir := range contextFrom(ctx).dirs {
+			if dir.GetScope() == "crew" {
+				continue
+			}
 			want := sandbox.WorkingPath
 			if dir.GetScope() == "workspace" {
 				want = sandbox.ConversationPath
@@ -108,6 +127,9 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each one names the memory file the model reads$`, func(ctx context.Context) error {
 		for _, dir := range contextFrom(ctx).dirs {
+			if dir.GetScope() == "crew" {
+				continue
+			}
 			// It has to sit inside the directory it belongs to, or editing it edits nothing the model
 			// will ever read.
 			if !strings.HasPrefix(dir.GetMemory(), dir.GetHost()+"/") {

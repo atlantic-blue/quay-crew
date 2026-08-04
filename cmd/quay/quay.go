@@ -426,6 +426,9 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(args) > 0 && args[0] == "edit" {
 		return runContextEdit(ctx, client, args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "set" {
+		return runContextSet(ctx, client, args[1:], out)
+	}
 	if len(args) > 1 {
 		return fmt.Errorf("usage: quay context [<address>] | quay context edit [<address>]")
 	}
@@ -435,6 +438,10 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 
 	request := &quaycrewv1.ListContextsRequest{}
+	// The crew's level is in every listing, so asking for it by name is asking for the listing.
+	if typed == "crew" {
+		typed = ""
+	}
 	// An address typed in wins; otherwise the operator's own place narrows it. Standing nowhere shows
 	// the whole crew, because then the question was about the crew.
 	path, err := addressFrom(typed)
@@ -458,15 +465,82 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return nil
 	}
 	for _, dir := range resp.GetDirs() {
-		state := "not written yet"
+		state := "nothing written yet"
 		if dir.GetWritten() {
-			state = "written"
+			state = firstLine(dir.GetBody())
 		}
-		fmt.Fprintf(out, "%s %s\n", dir.GetScope(), dir.GetName())
-		fmt.Fprintf(out, "  edit  %s  (%s)\n", dir.GetMemory(), state)
-		fmt.Fprintf(out, "  read by the model at %s\n", dir.GetSandbox())
+		fmt.Fprintf(out, "%-10s %-20s %s\n", dir.GetScope(), dir.GetName(), state)
 	}
 	return nil
+}
+
+// firstLine is what a level says, in one line, for a listing. The whole of it is what the model reads
+// and not what somebody scanning a list needs.
+func firstLine(body string) string {
+	line := strings.TrimSpace(body)
+	if cut := strings.IndexByte(line, '\n'); cut >= 0 {
+		line = strings.TrimSpace(line[:cut]) + " ..."
+	}
+	if len(line) > 60 {
+		line = line[:57] + "..."
+	}
+	return line
+}
+
+// runContextSet writes a level's context from standard input, which is how a file becomes context:
+//
+//	quay context set crew < ~/notes/how-we-work.md
+//
+// Reading a file rather than taking it as an argument is deliberate: context is prose, often long and
+// full of everything a shell would like to interpret.
+func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context set [<address>|crew] < file")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	scope, owner, name, err := contextTarget(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+
+	body, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("reading what to say: %w", err)
+	}
+	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+		Scope: scope, Owner: owner, Body: string(body),
+	}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s %s now says %d characters\n", scope, name, len(body))
+	return nil
+}
+
+// contextTarget works out which level an address means. The word "crew" is the level above every
+// workspace, a workspace address is that workspace, and anything deeper is its project.
+func contextTarget(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (scope, owner, name string, err error) {
+	if typed == "crew" {
+		return "crew", "", "crew", nil
+	}
+	path, err := addressFrom(typed)
+	if err != nil {
+		return "", "", "", err
+	}
+	if path.IsZero() {
+		return "", "", "", fmt.Errorf("say which context: crew, a workspace, or a workspace/project")
+	}
+	located, err := workspace.ResolvePath(ctx, client, path)
+	if err != nil {
+		return "", "", "", err
+	}
+	// A workspace on its own means the workspace's own context, which is the level an org lives at.
+	if located.ProjectID == "" {
+		return "workspace", located.WorkspaceID, path.Workspace, nil
+	}
+	return "project", located.ProjectID, path.Workspace + "/" + located.Path.Project, nil
 }
 
 // runContextEdit opens the project's memory file in the operator's editor. The project's rather than
