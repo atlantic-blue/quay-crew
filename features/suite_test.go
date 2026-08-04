@@ -28,6 +28,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -136,6 +137,9 @@ type world struct {
 	runner     *recordingRunner
 	secrets    secrets.Store
 	store      store.Store
+	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
+	// it. Setting it to nil is how a scenario says the stack has no broker configured.
+	events *messaging.Memory
 	// storage is a real conversation store on disk, so a scenario can say what the model kept and
 	// what it did not. The scenarios that do not care about it seed every conversation they start.
 	storage sandbox.Storage
@@ -172,8 +176,19 @@ func (w *world) start() error {
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
 	w.store = store.NewMemory()
-	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory"}
+	w.events = messaging.NewMemory()
+	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
 	return w.serve()
+}
+
+// eventLog is the log the control plane is built with. A scenario that unhooks the broker sets
+// w.events to nil, and a typed nil pointer handed to an interface is not nil, so it is spelled out
+// here rather than left to the caller to get right.
+func (w *world) eventLog() messaging.EventLog {
+	if w.events == nil {
+		return nil
+	}
+	return w.events
 }
 
 // restart tears the control plane down and stands a new one up over the same store, model and
@@ -190,7 +205,7 @@ func (w *world) serve() error {
 	w.grpcServer = grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.runner, Provider: w.provider, Secrets: w.secrets,
-		Storage: w.storage, Info: w.info,
+		Storage: w.storage, Info: w.info, Events: w.eventLog(),
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -319,6 +334,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeProjectSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
+	initializeEventsSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
 	initializeSandboxEnvSteps(sc)

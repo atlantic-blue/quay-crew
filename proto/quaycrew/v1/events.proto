@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// Package quaycrew.v1 holds the shared message contracts every service agrees on.
+package quaycrew.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// TurnEvent is written to the event log every time a turn runs, whether it worked or not.
+//
+// This is the audit record: the store keeps the current state of a session, and the log keeps what
+// happened to it, in order. A projection reads these back into a queryable read model, which is why
+// the event carries enough to rebuild a conversation without reading anything else.
+message TurnEvent {
+  // session is the session the turn ran in, and the key the record is published under, so one
+  // session's events stay in order on one partition.
+  string session = 1;
+  // workspace and project are where the session sits, denormalised deliberately: a consumer must not
+  // have to query the store to know what it is reading.
+  string workspace = 2;
+  string project = 3;
+  // thread_id is the channel's own name for the conversation.
+  string thread_id = 4;
+  // prompt is what was asked. reply is what came back, empty when the turn failed.
+  string prompt = 5;
+  string reply = 6;
+  // status is the session's status after the turn: "idle" when it worked, "failed" when it did not.
+  string status = 7;
+  // failure says what went wrong, empty on a turn that worked. It is the operator's sentence, not a
+  // stack trace, and it never carries the contents of the environment a turn ran with.
+  string failure = 8;
+  // occurred_at is when the turn finished.
+  google.protobuf.Timestamp occurred_at = 9;
+}

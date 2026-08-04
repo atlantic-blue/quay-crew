@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **Every turn is written to the event log.** The broker had run in the stack for weeks holding zero
+  topics, because the boundary was built and nothing on either end of it was. The control plane now
+  publishes a turn to `<workspace>.turns` whenever one runs, keyed by session so a conversation stays
+  in order, carrying the prompt, the reply, the status and where the session sits, so a consumer never
+  has to query the store to know what it is reading. A turn that failed is published too, because that
+  is the one somebody comes looking for. Publishing never fails a turn: the turn already happened, and
+  a broker that is unreachable is logged and dropped. A stack with no `QC_KAFKA_SEEDS` runs turns and
+  says out loud that nothing records them. The topic is created on first use, which an integration
+  test against a real Redpanda caught: the very first record to a new workspace was being rejected and
+  quietly dropped. ([#128](https://github.com/atlantic-blue/quay-crew/issues/128))
 - **`make up-observability` starts all four services.** Tempo was pointed at `/etc/tempo.yaml`, a file
   neither in its image nor mounted, so it exited on startup and the profile quietly came up one short.
   Loki and Tempo are now configured from `deploy/loki.yaml` and `deploy/tempo.yaml`, kept here rather

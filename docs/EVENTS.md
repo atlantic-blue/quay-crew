@@ -7,30 +7,23 @@ Read the next section before you go looking for messages in it.
 
 ## What state it is in today
 
-**Nothing publishes to the log and nothing consumes it.** The broker starts, it is healthy, and it
-holds zero topics. That is not a fault to debug, it is the honest position of the project: the
-boundary was built before the things on either end of it.
+**The control plane publishes a turn to the log every time one runs**, on `<workspace>.turns`, keyed
+by session so one session's events stay in order on one partition. A turn that failed is published
+too, because that is the one somebody comes looking for.
 
-What exists:
+**Nothing consumes it yet.** The projection that would read these back into a queryable read model is
+still to build (#17), and with it the console view that would show a session's history (#45).
 
-- `internal/messaging` defines the `EventLog` interface: publish a record to a topic, consume a
-  topic as a group, close.
-- `messaging.Client` implements it over `franz-go`, with the producer connecting lazily so
-  constructing one does not require a running broker.
-- `messaging.Topic(workspace, stream)` names topics, and refuses a name with a dot, a slash or
-  whitespace in it.
-- Unit tests, plus an integration test that runs against a real Redpanda through testcontainers.
+**No chat channel publishes either.** The gateway (`cmd/gateway/main.go`) is still a service skeleton
+that boots telemetry and waits, so the inbound stream a channel would write to does not exist. That
+work is #9 and #10, and it is blocked on a bot token rather than on code.
 
-What does not exist:
+Publishing never fails a turn. The turn already happened by the time the record is written, so a
+broker that is unreachable is logged and the record is dropped: the log is the audit record, and the
+store is the source of truth. That makes the log lossy by design.
 
-- Any publisher. `cmd/gateway/main.go` is a service skeleton: it boots telemetry, logs one line, and
-  waits for a shutdown signal.
-- Any consumer. The read model projection has not been built.
-- Any rows in the `channels` table, because no channel has ever been attached.
-
-The control plane says so rather than letting an empty column read as fine. Its status block reports
-the events engine as `none, nothing reads or writes the log yet`, and that string comes from the
-control plane reporting an empty engine name, not from a display default.
+If `QC_KAFKA_SEEDS` is not set, turns run and nothing records that they did, and the status block
+says `none, nothing reads or writes the log yet` rather than leaving an empty column to read as fine.
 
 ## Why an event log at all
 
@@ -86,18 +79,19 @@ docker exec -it quaycrew-redpanda-1 rpk cluster health  is the broker itself wel
 docker exec -it quaycrew-redpanda-1 rpk cluster info    brokers and addresses
 ```
 
-On a stack today, `rpk topic list` prints its header and nothing else, and `rpk group list` prints
-no groups. A healthy broker with no traffic looks exactly like this:
+One turn through `quay dispatch` creates the topic and puts a record on it, so `rpk topic list` shows
+`<workspace>.turns`. The topic is created by the publisher on first use rather than provisioned ahead
+of time, because a workspace's stream is named after a workspace nobody knew about yet. `rpk group
+list` still prints no groups, because nothing reads.
+
+This is how you watch turns go by, live:
 
 ```
-NAME  PARTITIONS  REPLICAS
+docker exec -it quaycrew-redpanda-1 rpk topic consume demo.turns
 ```
 
-Once there is something on the log, this is how you watch it go by:
-
-```
-docker exec -it quaycrew-redpanda-1 rpk topic consume demo.inbound
-```
+The value is a protobuf `TurnEvent`, so the payload reads as binary in the terminal. What is legible
+without decoding is the key, which is the session identifier, and the topic it landed on.
 
 Add `--num 5` to take a few and stop, or `--offset start` to read a topic from the beginning rather
 than tailing it.
@@ -141,7 +135,7 @@ pass and a real one are indistinguishable otherwise.
 In rough order, each an open issue:
 
 - **First chat channel inbound (#9).** The gateway consumes from a channel and publishes to
-  `workspace.inbound`. This is the smallest change that puts a real message on the log.
+  `workspace.inbound`. Blocked on a bot token rather than on code.
 - **Gated outbound delivery (#10)** and **a second channel (#11).** Replies going back out, and the
   proof that a second channel is additive.
 - **Projection: materialise the read model (#17).** The first consumer, and the thing that makes the
@@ -150,12 +144,13 @@ In rough order, each an open issue:
   console needs before it can show more than the store.
 - **Automation graphs (#42).** The pure reducer over the log.
 
-Until at least the first of those lands, the broker in your stack is a placeholder that costs memory
-and returns nothing. That is a deliberate ordering choice, not an oversight, and it is written down
-here so nobody spends an evening debugging an empty topic list.
+Until a consumer lands, the log accumulates turns that nothing reads. That is the right order to
+build it in, and it is written down here so an empty consumer group list does not read as a fault.
 
 ---
 
-The outputs above were captured from a running stack (`make up`, Redpanda healthy, no topics). The
-empty listing reproduces on any stack where nothing has published; once #9 lands it will not, and
-this section should change with it.
+The `rpk` commands above are the ones to run; the empty listings were captured from a running stack
+on 4 August 2026, before the publisher existed. That a turn reaches a real broker, creates its topic,
+arrives keyed by session and decodes back into the event that was sent is proved by
+`internal/controlplane/events_integration_test.go` against a real Redpanda, not by a screenshot.
+Reproducing the listing yourself needs the stack up and at least one turn dispatched.

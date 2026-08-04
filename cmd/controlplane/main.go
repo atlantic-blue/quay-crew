@@ -16,6 +16,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -76,20 +77,22 @@ func main() {
 	}
 	defer durable.Close()
 
+	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
+	defer events.Close()
+
 	server := controlplane.NewServer(controlplane.Config{
 		Store:    durable,
 		Runner:   runner,
 		Provider: provider,
 		Secrets:  secrets.NewMemory(),
 		Storage:  storage,
+		Events:   events,
 		Info: controlplane.Info{
 			Model:   modelKind,
 			Sandbox: sandboxKind,
 			Store:   storeKind,
 			State:   stateKind(storage),
-			// Nothing publishes to or consumes the event log yet, so there is no engine to name.
-			// It becomes one when a channel or the projection is wired to it.
-			Events: "",
+			Events:  eventsKind,
 		},
 	})
 	grpcServer := grpc.NewServer()
@@ -117,6 +120,27 @@ func main() {
 	if err := shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// openEventLog returns the log turns are published to. With QC_KAFKA_SEEDS set it is Kafka, spoken
+// to Redpanda locally. Without it, turns run and nothing records that they did, which the status
+// block says out loud rather than leaving an empty column to read as fine.
+//
+// The producer connects lazily, so a broker that is not up yet does not stop the control plane from
+// serving. A publish that cannot reach it is dropped rather than failing the turn.
+func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string) {
+	brokers := splitAndTrim(seeds)
+	if len(brokers) == 0 {
+		logger.Warn("no QC_KAFKA_SEEDS set: turns will run without being recorded on the event log")
+		return messaging.Discard{}, ""
+	}
+	client, err := messaging.NewClient(brokers...)
+	if err != nil {
+		logger.Warn("event log unavailable, turns will run without being recorded", "error", err)
+		return messaging.Discard{}, ""
+	}
+	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)
+	return client, "kafka"
 }
 
 // openStore returns the durable store. With QC_DATABASE_URL set it is Postgres, and the migrations
