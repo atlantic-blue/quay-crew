@@ -11,7 +11,7 @@ import (
 )
 
 // Default is the resource the console opens on.
-const Default = "threads"
+const Default = "sessions"
 
 // Registry builds the console's resources against a control plane client. Adding a view to the
 // console means adding a Resource here.
@@ -19,7 +19,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	return NewRegistry(Threads(client), Archived(client), Projects(client), Workspaces(client),
+	return NewRegistry(Sessions(client), Archived(client), Projects(client), Workspaces(client),
 		Contexts(client), Features())
 }
 
