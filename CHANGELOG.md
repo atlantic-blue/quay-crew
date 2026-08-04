@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **`make up-observability` starts all four services.** Tempo was pointed at `/etc/tempo.yaml`, a file
+  neither in its image nor mounted, so it exited on startup and the profile quietly came up one short.
+  Loki and Tempo are now configured from `deploy/loki.yaml` and `deploy/tempo.yaml`, kept here rather
+  than left to an image default that can move underneath the stack, and a test refuses any service
+  that names a config file nobody provides, so the next one cannot fail the same way silently.
+  ([#126](https://github.com/atlantic-blue/quay-crew/issues/126))
 - **The database doc covers the `contexts` table, and says session throughout.** It was written hours
   before context moved into the store and before the console went back to the word the database uses,
   so it described five tables and called a session a thread. Six tables now, with what `scope` and
