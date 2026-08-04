@@ -13,7 +13,7 @@ too, because that is the one somebody comes looking for.
 
 **A projection consumes it.** It subscribes to `^.+\.turns$`, so a workspace created while the crew
 is running is read too, and writes each record into the `turns` table. `quay turns <session>` lists a
-session's history from there. The projection runs inside the control plane process for now, because
+session's history from there, and `l` on a session in the console opens the same thing as a view. The projection runs inside the control plane process for now, because
 it materialises into the store that process already owns.
 
 Delivery from a log is at least once, so the same record arrives more than once: each event carries

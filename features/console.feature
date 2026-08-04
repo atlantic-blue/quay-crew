@@ -111,3 +111,18 @@ Feature: The operator sees the crew from the console
     When the operator opens the console
     And the operator stops the selected session from the console
     Then the session is reported as stopped
+
+  # The history is a second key rather than a replacement: enter on a session opens the conversation,
+  # which is the thing an operator does most, so it keeps the cheapest key.
+  Scenario: The console shows a session's history
+    Given a session started by dispatching "hello"
+    And the projection has caught up
+    When the operator opens the console
+    And the operator asks for the selected session's history
+    Then the console is showing turns
+    And the history lists 1 turn saying "hello"
+
+  Scenario: Asking for a history does not open the conversation
+    Given a session started by dispatching "hello"
+    When the operator opens the console
+    Then enter on a session still opens its conversation rather than its history

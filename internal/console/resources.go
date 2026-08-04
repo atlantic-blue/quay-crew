@@ -298,6 +298,73 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
+// Turns is one session's history: what it was asked, what came back, and when.
+//
+// It reads the projection of the event log rather than the model's own conversation store, so it
+// answers without starting a container and keeps answering for a session whose sandbox is long gone.
+// What it does not have is the working inside a turn, the tool calls and the thinking. Opening the
+// conversation is what that is for, which is why this is a second key rather than a replacement.
+//
+// A reply is one line here. A history is for finding the turn you want; reading it is what enter on
+// the sessions view does.
+func Turns(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "turns",
+		Aliases: []string{"turn", "history", "h"},
+		Columns: []Column{
+			{Title: "when", Width: 10},
+			{Title: "status", Width: 10},
+			{Title: "asked", Width: 34},
+			{Title: "answered", Width: 0},
+		},
+		// Oldest first, the order it happened in, which is the only order a conversation reads in.
+		SortBy: 0,
+		List: func(ctx context.Context, session string) ([]Row, error) {
+			if session == "" {
+				return nil, fmt.Errorf("open a session's history from the sessions view: there is no history without one")
+			}
+			resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: session})
+			if err != nil {
+				return nil, err
+			}
+			rows := make([]Row, 0, len(resp.GetTurns()))
+			for _, turn := range resp.GetTurns() {
+				rows = append(rows, turnRow(turn))
+			}
+			return rows, nil
+		},
+	}
+}
+
+// turnRow is one exchange as a listing row. A failed turn shows why it failed where the reply would
+// have been, because that is the answer to what happened.
+func turnRow(turn *quaycrewv1.Turn) Row {
+	answered := oneLine(turn.GetReply())
+	state := StateReady
+	if turn.GetStatus() == "failed" {
+		answered, state = oneLine(turn.GetFailure()), StateFailed
+	}
+	return Row{
+		ID:     turn.GetId(),
+		Parent: turn.GetSession(),
+		State:  state,
+		Label:  display.ShortID(turn.GetId()),
+		Cells: []string{
+			turn.GetOccurredAt().AsTime().Local().Format("15:04:05"),
+			turn.GetStatus(),
+			oneLine(turn.GetPrompt()),
+			answered,
+		},
+		// The whole of what was said, for a view that can show more than a row.
+		Detail: turn.GetPrompt(),
+	}
+}
+
+// oneLine flattens text onto one line, so a reply that runs to paragraphs does not break the table.
+func oneLine(text string) string {
+	return strings.Join(strings.Fields(text), " ")
+}
+
 // Archived lists the threads that have been put away. Nothing was deleted to get here, so the only
 // action is bringing one back.
 //
@@ -458,6 +525,15 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				// console never has to know how a sandbox is named or how a resume works.
 				return attachCommand(client, row.ID)
 			},
+		},
+		{
+			// The history, beside opening the conversation. Lowercase and cheap, because looking at
+			// what a session has been doing is something an operator does constantly, and it changes
+			// nothing.
+			Key:     "l",
+			Also:    []string{"h"},
+			Label:   "History",
+			Descend: "turns",
 		},
 		{
 			Key:   "s",
