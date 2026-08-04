@@ -13,7 +13,7 @@ read, or run with `make features`.
   console edits any level in your editor through a scratch file rather than the rendered one, because a
   level is rendered into every session that reads it and there is no single file to open. That is the
   path for moving what you already have into the crew.
-  ([#125](https://github.com/atlantic-blue/quay-crew/pull/125))
+  ([#131](https://github.com/atlantic-blue/quay-crew/pull/131))
 - **Every turn is written to the event log.** The broker had run in the stack for weeks holding zero
   topics, because the boundary was built and nothing on either end of it was. The control plane now
   publishes a turn to `<workspace>.turns` whenever one runs, keyed by session so a conversation stays
