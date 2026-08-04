@@ -191,9 +191,27 @@ message ContextDir {
   string sandbox = 4;
   // memory is the file the model reads as its memory for this scope, inside host.
   string memory = 5;
-  // written says whether that file exists yet. An empty directory is the normal state and says
-  // nothing about whether context is set up, so this is the difference worth showing.
+  // written says whether anything has been written at this scope. An empty directory is the normal
+  // state and says nothing about whether context is set up, so this is the difference worth showing.
   bool written = 6;
+  // owner is what to name when setting this context: a workspace or project identifier, and empty
+  // for the crew.
+  string owner = 7;
+  // body is what the model is told at this scope. It comes from the store, which is where context
+  // lives; the file in a sandbox is a rendering of it.
+  string body = 8;
+}
+
+// SetContextRequest records what the model should be told at a scope. The crew's context has no
+// owner; a workspace's and a project's are owned by their identifier.
+message SetContextRequest {
+  // scope is "crew", "workspace" or "project".
+  string scope = 1;
+  string owner = 2;
+  string body = 3;
+}
+message SetContextResponse {
+  ContextDir dir = 1;
 }
 
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
@@ -272,6 +290,7 @@ service ControlPlaneService {
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
   rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
+  rpc SetContext(SetContextRequest) returns (SetContextResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }

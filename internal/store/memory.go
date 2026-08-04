@@ -22,6 +22,8 @@ type Memory struct {
 	deletedPrj map[string]bool
 	sessions   map[string]*quaycrewv1.Session
 	byThread   map[string]string
+	// contexts is what the model should be told, keyed by scope and owner.
+	contexts map[string]string
 }
 
 var _ Store = (*Memory)(nil)
@@ -301,6 +303,26 @@ func (m *Memory) stampArchived(id string, at *timestamppb.Timestamp) error {
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }
+
+// GetContext returns what the model should be told at a scope.
+func (m *Memory) GetContext(_ context.Context, scope ContextScope, owner string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.contexts[contextKey(scope, owner)], nil
+}
+
+// SetContext records what the model should be told at a scope.
+func (m *Memory) SetContext(_ context.Context, scope ContextScope, owner, body string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.contexts == nil {
+		m.contexts = make(map[string]string)
+	}
+	m.contexts[contextKey(scope, owner)] = body
+	return nil
+}
+
+func contextKey(scope ContextScope, owner string) string { return string(scope) + "/" + owner }
 
 // Close is a no op for the in memory store.
 func (m *Memory) Close() {}

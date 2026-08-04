@@ -160,7 +160,17 @@ func shellCmd(action Action, row Row) tea.Cmd {
 			return errMsg{err: fmt.Errorf("%s: nothing to run for %s", action.Label, row.ID)}
 		}
 	}
-	return tea.ExecProcess(command, func(err error) tea.Msg { return actionDoneMsg{err: err} })
+	return tea.ExecProcess(command, func(err error) tea.Msg {
+		if err != nil || action.After == nil {
+			return actionDoneMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := action.After(ctx, row); err != nil {
+			return actionDoneMsg{err: fmt.Errorf("%s %s: %w", action.Label, row.Name(), err)}
+		}
+		return actionDoneMsg{}
+	})
 }
 
 func runCmd(action Action, row Row) tea.Cmd {

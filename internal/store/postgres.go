@@ -351,6 +351,33 @@ func (p *Postgres) stampArchived(ctx context.Context, id, clause string) error {
 	return nil
 }
 
+// GetContext returns what the model should be told at a scope. Nothing written is the normal state
+// and comes back empty rather than as an error.
+func (p *Postgres) GetContext(ctx context.Context, scope ContextScope, owner string) (string, error) {
+	var body string
+	err := p.pool.QueryRow(ctx,
+		`select body from contexts where scope = $1 and owner = $2`, string(scope), owner).Scan(&body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get context: %w", err)
+	}
+	return body, nil
+}
+
+// SetContext records what the model should be told at a scope.
+func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, body string) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into contexts (scope, owner, body) values ($1, $2, $3)
+		on conflict (scope, owner) do update set body = excluded.body, updated_at = now()`,
+		string(scope), owner, body)
+	if err != nil {
+		return fmt.Errorf("set context: %w", err)
+	}
+	return nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

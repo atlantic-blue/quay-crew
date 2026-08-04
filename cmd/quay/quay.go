@@ -16,6 +16,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
 
@@ -499,10 +500,10 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if err != nil {
 		return err
 	}
-	file := ""
+	file, scope, owner := "", "", ""
 	for _, dir := range resp.GetDirs() {
 		if dir.GetScope() == "project" {
-			file = dir.GetMemory()
+			file, scope, owner = dir.GetMemory(), dir.GetScope(), dir.GetOwner()
 			break
 		}
 	}
@@ -517,7 +518,19 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	command := exec.Command(parts[0], append(parts[1:], file)...)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	fmt.Fprintf(out, "editing %s\n", file)
-	return command.Run()
+	if err := command.Run(); err != nil {
+		return err
+	}
+
+	// The editor wrote a file; this tells the crew. Context lives in the store, and a file nobody read
+	// back is a note left on one machine.
+	body, _ := sandbox.ReadMemory(filepath.Dir(file))
+	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+		Scope: scope, Owner: owner, Body: body,
+	}); err != nil {
+		return fmt.Errorf("saving what you wrote: %w", err)
+	}
+	return nil
 }
 
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

@@ -82,6 +82,10 @@ type Action struct {
 	Confirm bool
 	Run     func(ctx context.Context, row Row) error
 	Shell   func(row Row) (*exec.Cmd, error)
+	// After runs once a Shell command has finished, for the part that cannot happen while the
+	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
+	// this is what tells the crew about it.
+	After func(ctx context.Context, row Row) error
 }
 
 // Bound says whether a keypress runs this action.
