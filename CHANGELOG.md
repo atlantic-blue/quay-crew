@@ -11,7 +11,7 @@ read, or run with `make features`.
 - **Editing context works with no `EDITOR` exported.** It refused rather than falling back, which made
   the whole thing dead on any machine that has not set one, which is most machines. `VISUAL`, then
   `EDITOR`, then `vi`, which is what git and crontab do.
-  ([#113](https://github.com/atlantic-blue/quay-crew/pull/113))
+  ([#114](https://github.com/atlantic-blue/quay-crew/pull/114))
 - **You can edit context from either surface.** `enter` or `e` on a row in the `context` view opens the
   memory file in your own `$EDITOR`, and `quay context edit [<address>]` does the same from the command
   line. The directory is made first, so an editor writing into a project whose sandbox has never run
