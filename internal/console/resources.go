@@ -157,14 +157,13 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// editorFor opens a file in the operator's own editor. It is their editor and their file: the crew
-// has no business choosing one, so an unset EDITOR is said out loud rather than guessed at, because
-// guessing wrong drops somebody into an editor they cannot leave.
+// editorFor opens a file in the operator's own editor.
+//
+// VISUAL then EDITOR then vi, which is what git, crontab and everything else that opens a file for
+// you already does. Refusing when neither is set was the purist reading and it made the feature dead
+// on a machine with no EDITOR exported, which is most machines.
 func editorFor(file string) (*exec.Cmd, error) {
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		return nil, fmt.Errorf("no EDITOR set: export one, or edit %s yourself", file)
-	}
+	editor := Editor()
 	// The directory is created for a sandbox that has never run, so an editor writing there does not
 	// fail on a path that is not made yet.
 	if err := os.MkdirAll(filepath.Dir(file), 0o777); err != nil {
@@ -172,6 +171,17 @@ func editorFor(file string) (*exec.Cmd, error) {
 	}
 	parts := strings.Fields(editor)
 	return exec.Command(parts[0], append(parts[1:], file)...), nil
+}
+
+// Editor is the command that opens a file for the operator: whatever they have said they want, and
+// vi when they have said nothing, because it is on every machine this runs on.
+func Editor() string {
+	for _, name := range []string{"VISUAL", "EDITOR"} {
+		if chosen := strings.TrimSpace(os.Getenv(name)); chosen != "" {
+			return chosen
+		}
+	}
+	return "vi"
 }
 
 func contextRow(dir *quaycrewv1.ContextDir) Row {

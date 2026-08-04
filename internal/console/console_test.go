@@ -990,6 +990,7 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "never", "made", "CLAUDE.md")
+	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "vi -u NONE")
 
 	edit := actionBoundTo(t, Contexts(&fakeClient{}), "enter")
@@ -1008,19 +1009,43 @@ func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
 	}
 }
 
-// TestEditingSaysWhenThereIsNoEditor: guessing one drops somebody into an editor they cannot leave.
-func TestEditingSaysWhenThereIsNoEditor(t *testing.T) {
+// TestTheEditorIsTheirsThenVi is the order git and crontab use. Refusing when neither is set made the
+// whole feature dead on a machine with no EDITOR exported, which is most machines, including the one
+// this was built on.
+func TestTheEditorIsTheirsThenVi(t *testing.T) {
+	tests := []struct {
+		name           string
+		visual, editor string
+		want           string
+	}{
+		{"neither set", "", "", "vi"},
+		{"EDITOR set", "", "nano", "nano"},
+		{"VISUAL wins", "code -w", "nano", "code -w"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("VISUAL", test.visual)
+			t.Setenv("EDITOR", test.editor)
+			if got := Editor(); got != test.want {
+				t.Fatalf("Editor() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+// TestEditingOpensSomethingWithNoEditorSet: the operator presses the key and something opens.
+func TestEditingOpensSomethingWithNoEditorSet(t *testing.T) {
+	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
+	file := filepath.Join(t.TempDir(), "CLAUDE.md")
 
 	edit := actionBoundTo(t, Contexts(&fakeClient{}), "e")
-	_, err := edit.Shell(Row{ID: "/somewhere/CLAUDE.md"})
-	if err == nil {
-		t.Fatal("editing with no EDITOR set succeeded, want a reason")
+	command, err := edit.Shell(Row{ID: file})
+	if err != nil {
+		t.Fatalf("editing with nothing set: %v", err)
 	}
-	for _, want := range []string{"EDITOR", "/somewhere/CLAUDE.md"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("the reason is %q, want it to mention %q", err, want)
-		}
+	if got := strings.Join(command.Args, " "); got != "vi "+file {
+		t.Fatalf("command = %q, want vi and the file", got)
 	}
 }
 

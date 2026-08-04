@@ -14,6 +14,7 @@ import (
 
 	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
@@ -474,10 +475,8 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if len(args) > 1 {
 		return fmt.Errorf("usage: quay context edit [<address>]")
 	}
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		return fmt.Errorf("no EDITOR set: export one, or run quay context to see the file and edit it yourself")
-	}
+	// The same choice the console makes: VISUAL, then EDITOR, then vi.
+	editor := console.Editor()
 
 	request := &quaycrewv1.ListContextsRequest{}
 	typed := ""
