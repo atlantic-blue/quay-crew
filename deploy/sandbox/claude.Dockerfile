@@ -27,22 +27,9 @@ WORKDIR /home/agent/workspace
 # working" because nothing ever gets far enough to authenticate.
 #
 # The CLI rewrites this file as it runs; these are only the starting values.
-# The terminal an open conversation runs in, so the operator can leave without ending it.
-#
-# Two prefixes, because this one is very often nested. The operator's own machine is full of tmux
-# sessions, and opening a thread from inside one of them means ctrl-b is eaten by the outer server and
-# never reaches this one. ctrl-o is not taken by anything out there, so it always lands here; ctrl-b
-# stays as the second prefix because it is what the fingers already do when nothing is nested.
-#
-# The status bar is off: this is a way out of a conversation, not a terminal the operator is meant to
-# manage, and a green bar across the bottom of somebody else's screen only asks questions.
-RUN printf '%s\n' \
-    'set -g prefix C-o' \
-    'set -g prefix2 C-b' \
-    'bind C-o send-prefix' \
-    'set -g status off' \
-    'set -g mouse on' \
-    > /home/agent/.tmux.conf
+# The terminal an open conversation runs in. The configuration is a file in the repository rather than
+# a printf here, so a test can read the same thing the image ships.
+COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
 
 RUN mkdir -p /home/agent/.claude \
     && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \
