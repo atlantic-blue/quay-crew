@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The database and the event log are documented.** [`docs/DATABASE.md`](docs/DATABASE.md) covers why
+  a thread survives a restart at all, how to shell in with psql, what every table and column means, the
+  queries worth knowing, and why reading from the prompt is safe while writing from it is not.
+  [`docs/EVENTS.md`](docs/EVENTS.md) covers what the log is for, how to inspect Redpanda with `rpk`,
+  how topics are named, and the state it is actually in: the boundary and its client exist, nothing
+  publishes to it and nothing consumes it, so a stack today holds zero topics. Documentation only, no
+  behaviour changed. ([#113](https://github.com/atlantic-blue/quay-crew/issues/113))
 - **You can edit context from either surface.** `enter` or `e` on a row in the `context` view opens the
   memory file in your own `$EDITOR`, and `quay context edit [<address>]` does the same from the command
   line. The directory is made first, so an editor writing into a project whose sandbox has never run

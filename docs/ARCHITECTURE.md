@@ -98,6 +98,10 @@ Each is its own Go service in its own container.
 - **The channel contract.** The shared inbound and outbound message schema every channel implements.
   Each message carries a `workspace` and a `correlation_id` (which is also the trace id).
 
+`docs/EVENTS.md` is the operator's version of this: how Redpanda runs, how to inspect it with `rpk`,
+how topics are named, and the honest state of the log today, which is that the boundary and its
+client exist while nothing publishes to it or consumes it yet.
+
 ## Workspaces and isolation
 
 A workspace is the unit of isolation, and it is a runtime resource, not a file in the repository.
@@ -244,6 +248,9 @@ pointer orphans a conversation that still exists and cannot be reached again.
 
 Set `QC_DATABASE_URL` to use Postgres. Leave it unset and the store is in memory, which is only
 appropriate for a throwaway stack.
+
+`docs/DATABASE.md` is the operator's version of this section: how to shell in, what every table
+means, the queries worth knowing, and how migrations are added.
 
 ## What the product does, as an executable specification
 
