@@ -66,6 +66,7 @@ type Info struct {
 	Model     string
 	Sandbox   string
 	Store     string
+	Secrets   string
 	State     string
 	Events    string
 	// Behind says the control plane is older than this tool: old enough that it cannot answer what it

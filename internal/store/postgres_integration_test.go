@@ -9,12 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/store/storetest"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"path/filepath"
+	"strings"
 )
 
 // databaseURL addresses the Postgres container shared by every test in this file.
@@ -250,5 +254,65 @@ func dropEverything(t *testing.T) {
 	if _, err := pool.Exec(context.Background(),
 		`drop table if exists sessions, channels, projects, workspaces, schema_migrations cascade`); err != nil {
 		t.Fatalf("drop: %v", err)
+	}
+}
+
+// TestTheSubscriptionTokenSurvivesARestart is the whole point of keeping secrets in the database.
+//
+// Every restart of the stack lost the token, so the next turn failed with nothing useful to say and
+// the operator had to mint and set one again before anything worked. This closes a second store over
+// the same database, which is what a restarted control plane is from the outside.
+func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
+	ctx := context.Background()
+	truncate(t)
+
+	key, err := secrets.KeyAt(filepath.Join(t.TempDir(), "secrets.key"))
+	if err != nil {
+		t.Fatalf("KeyAt: %v", err)
+	}
+
+	before, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	kept, err := secrets.NewPostgres(before.Pool(), key)
+	if err != nil {
+		t.Fatalf("open secrets: %v", err)
+	}
+	const token = "sk-ant-oat-not-a-real-one"
+	if err := kept.Set(ctx, "acme", "CLAUDE_CODE_OAUTH_TOKEN", token); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	before.Close()
+
+	after, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("reopen postgres: %v", err)
+	}
+	t.Cleanup(after.Close)
+	reopened, err := secrets.NewPostgres(after.Pool(), key)
+	if err != nil {
+		t.Fatalf("reopen secrets: %v", err)
+	}
+
+	got, err := reopened.Get(ctx, "acme", "CLAUDE_CODE_OAUTH_TOKEN")
+	if err != nil {
+		t.Fatalf("the token did not survive: %v", err)
+	}
+	if got != token {
+		t.Fatalf("the token came back as %q", got)
+	}
+	if _, err := reopened.Get(ctx, "acme", "never-set"); !errors.Is(err, secrets.ErrNotFound) {
+		t.Fatalf("a secret that was never set returned %v, want ErrNotFound", err)
+	}
+
+	// And it is not sitting in the clear in a table anybody might dump.
+	var sealed []byte
+	if err := after.Pool().QueryRow(ctx,
+		`select sealed from secrets where workspace = 'acme'`).Scan(&sealed); err != nil {
+		t.Fatalf("reading the row: %v", err)
+	}
+	if strings.Contains(string(sealed), token) {
+		t.Fatal("the token is in the database in the clear")
 	}
 }
