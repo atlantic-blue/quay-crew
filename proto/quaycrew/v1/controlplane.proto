@@ -214,6 +214,25 @@ message SetContextResponse {
   ContextDir dir = 1;
 }
 
+// SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
+// one: a value the backend holds must not become readable because a client asked politely. The only
+// reader is the crew itself, at the moment a turn needs it.
+message SecretRef {
+  string workspace = 1;
+  // workspace_name is what to call that workspace where a human reads it.
+  string workspace_name = 2;
+  string name = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+// ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty.
+message ListSecretsRequest {
+  string workspace = 1;
+}
+message ListSecretsResponse {
+  repeated SecretRef secrets = 1;
+}
+
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
   string project = 1;
@@ -312,6 +331,7 @@ service ControlPlaneService {
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);
+  rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
 
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);

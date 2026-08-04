@@ -238,6 +238,45 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 	}
 }
 
+// Secrets lists what each workspace has set, and never what any of it says. There is no action on a
+// row: setting one means typing a value, and a value typed into a full screen console is a value in a
+// terminal's scrollback. `quay secret set` is where that belongs.
+func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "secrets",
+		Aliases: []string{"secret"},
+		Columns: []Column{
+			{Title: "workspace", Width: 20},
+			{Title: "name", Width: 32},
+			{Title: "value", Width: 0},
+		},
+		SortBy: 0,
+		List: func(ctx context.Context, _ string) ([]Row, error) {
+			resp, err := client.ListSecrets(ctx, &quaycrewv1.ListSecretsRequest{})
+			if err != nil {
+				return nil, err
+			}
+			rows := make([]Row, 0, len(resp.GetSecrets()))
+			for _, secret := range resp.GetSecrets() {
+				rows = append(rows, Row{
+					ID:     secret.GetWorkspace() + "/" + secret.GetName(),
+					Parent: secret.GetWorkspace(),
+					Label:  secret.GetName(),
+					Cells: []string{
+						display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()),
+						secret.GetName(),
+						// Said out loud rather than left blank, so nobody wonders whether the column
+						// is empty because the value is empty.
+						"set, and not shown anywhere",
+					},
+					State: StateReady,
+				})
+			}
+			return rows, nil
+		},
+	}
+}
+
 // Features lists what this build of the crew can do, from the specification embedded in it. It is the
 // one view that asks the control plane nothing: a capability belongs to the build, not to a running
 // stack, and this is the view an operator opens before they know what to open.

@@ -67,6 +67,20 @@ Feature: Workspaces hold the crew's work
     Then the reference is refused as ambiguous
     And the refusal names both workspaces
 
+  # An operator needs to know the token is there. What it says is the crew's business: there is no call
+  # that returns a value, so this cannot leak one by mistake rather than by policy.
+  Scenario: The crew says which secrets a workspace has, and never what they say
+    Given a workspace named "acme"
+    And the workspace has the subscription token "tok-xyz"
+    When the operator asks which secrets the workspace has
+    Then it names "CLAUDE_CODE_OAUTH_TOKEN"
+    And the answer carries no value
+
+  Scenario: A workspace with nothing set has nothing to list
+    Given a workspace named "acme"
+    When the operator asks which secrets the workspace has
+    Then it names nothing
+
   Scenario: A channel cannot be attached to a workspace that does not exist
     When the operator attaches a "telegram" channel called "family-chat" to workspace "ghost"
     Then the control plane refuses it as not found

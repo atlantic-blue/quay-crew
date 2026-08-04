@@ -38,6 +38,7 @@ type fakeClient struct {
 	restored         []string
 	modesSet         []string
 	contexts         []*quaycrewv1.ContextDir
+	secrets          []*quaycrewv1.SecretRef
 	listErr          error
 }
 
@@ -93,6 +94,13 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
 	f.archived = append(f.archived, req.GetId())
 	return &quaycrewv1.ArchiveSessionResponse{}, nil
+}
+
+func (f *fakeClient) ListSecrets(_ context.Context, _ *quaycrewv1.ListSecretsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSecretsResponse, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return &quaycrewv1.ListSecretsResponse{Secrets: f.secrets}, nil
 }
 
 func (f *fakeClient) ListContexts(_ context.Context, _ *quaycrewv1.ListContextsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListContextsResponse, error) {
@@ -1695,5 +1703,34 @@ func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestTheSecretsViewNeverShowsAValue is the whole point of the view: an operator needs to know the
+// token is there, and a value on a screen is a value in a terminal's scrollback.
+func TestTheSecretsViewNeverShowsAValue(t *testing.T) {
+	client := &fakeClient{secrets: []*quaycrewv1.SecretRef{
+		{Workspace: "w1", WorkspaceName: "demo", Name: "CLAUDE_CODE_OAUTH_TOKEN"},
+	}}
+
+	rows, err := Secrets(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing secrets: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("the secrets view lists %d rows, want the one that is set", len(rows))
+	}
+	if rows[0].Cells[0] != "demo" || rows[0].Cells[1] != "CLAUDE_CODE_OAUTH_TOKEN" {
+		t.Fatalf("the row reads %v, want the workspace's name and the secret's", rows[0].Cells)
+	}
+	// The value column says the thing is set and nothing else. Said out loud rather than left blank,
+	// so nobody wonders whether the column is empty because the value is.
+	if rows[0].Cells[2] != "set, and not shown anywhere" {
+		t.Fatalf("the value column reads %q, and the only safe thing for it to read is that it is set",
+			rows[0].Cells[2])
+	}
+	// There is nowhere for a value to be, by construction: the reference carries none.
+	if len(Secrets(client).Actions) != 0 {
+		t.Fatal("the secrets view has an action on a row, which is where a value would end up")
 	}
 }
