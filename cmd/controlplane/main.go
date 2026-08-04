@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -77,6 +78,8 @@ func main() {
 	}
 	defer durable.Close()
 
+	credentials, secretsKind := openSecrets(durable, storage, logger)
+
 	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
 	defer events.Close()
 
@@ -84,7 +87,7 @@ func main() {
 		Store:    durable,
 		Runner:   runner,
 		Provider: provider,
-		Secrets:  secrets.NewMemory(),
+		Secrets:  credentials,
 		Storage:  storage,
 		Events:   events,
 		Info: controlplane.Info{
@@ -93,6 +96,7 @@ func main() {
 			Store:   storeKind,
 			State:   stateKind(storage),
 			Events:  eventsKind,
+			Secrets: secretsKind,
 		},
 	})
 	grpcServer := grpc.NewServer()
@@ -141,6 +145,39 @@ func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string
 	}
 	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)
 	return client, "kafka"
+}
+
+// openSecrets returns where a workspace's credentials are kept.
+//
+// Beside the rest of the durable state when there is any, so the subscription token stops being lost
+// on every restart, which is the thing that has made this stack unusable between sessions. Sealed with
+// a key on the host, so holding the database is not enough to read one.
+//
+// The key is made rather than asked for: a step the operator has to perform before anything works is
+// a step that gets skipped. Anything that goes wrong here falls back to memory with the reason said
+// out loud, because a crew that will not start is worse than one that forgets a token.
+func openSecrets(durable store.Store, storage sandbox.Storage, logger *slog.Logger) (secrets.Store, string) {
+	postgres, durableStore := durable.(*store.Postgres)
+	if !durableStore {
+		logger.Warn("secrets are kept in memory: set QC_DATABASE_URL and they will survive a restart")
+		return secrets.NewMemory(), "memory, lost on restart"
+	}
+	if storage.Dir == "" {
+		logger.Warn("secrets are kept in memory: there is nowhere on the host to keep the key that seals them")
+		return secrets.NewMemory(), "memory, lost on restart"
+	}
+
+	key, err := secrets.KeyAt(filepath.Join(storage.Dir, "secrets.key"))
+	if err != nil {
+		logger.Warn("secrets are kept in memory", "error", err)
+		return secrets.NewMemory(), "memory, lost on restart"
+	}
+	kept, err := secrets.NewPostgres(postgres.Pool(), key)
+	if err != nil {
+		logger.Warn("secrets are kept in memory", "error", err)
+		return secrets.NewMemory(), "memory, lost on restart"
+	}
+	return kept, "postgres, sealed"
 }
 
 // openStore returns the durable store. With QC_DATABASE_URL set it is Postgres, and the migrations

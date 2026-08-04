@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The subscription token survives a restart.** Secrets were held in memory, so every `make up` lost
+  the token and the next turn failed saying nothing useful. They are kept in Postgres now, sealed with
+  a key made once and kept on the host at `~/.quaycrew/data/secrets.key`, so holding the database is
+  not enough to read one. The status block says `Secrets: postgres, sealed`, and says it in red when
+  they are still in memory. ([#132](https://github.com/atlantic-blue/quay-crew/pull/132))
 - **Every level of context is visible and settable, from both surfaces.** The crew's own level is in
   every listing, `quay context set [<address>|crew]` takes it from a file on standard input, and the
   console edits any level in your editor through a scratch file rather than the rendered one, because a

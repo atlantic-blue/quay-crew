@@ -40,6 +40,8 @@ type Info struct {
 	State string
 	// Events is the event log a turn is recorded on. Empty means nothing is connected to it.
 	Events string
+	// Secrets is where a workspace's credentials are kept, for example "postgres, sealed".
+	Secrets string
 }
 
 // Config is everything the control plane is built from. It is a struct rather than a parameter list
@@ -106,6 +108,7 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 		Store:   s.info.Store,
 		State:   s.info.State,
 		Events:  s.info.Events,
+		Secrets: s.info.Secrets,
 	}, nil
 }
 

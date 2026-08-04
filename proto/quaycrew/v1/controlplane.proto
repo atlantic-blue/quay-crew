@@ -259,10 +259,17 @@ message GetInfoResponse {
   // state is where a session's conversation and files are kept, for example "host directory". Empty
   // means they are kept nowhere: they live in the container and are destroyed with it.
   string state = 4;
+  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+  // keeps them in memory loses the subscription token on every restart, which is worth seeing before
+  // wondering why a turn stopped working.
   // events is the event log a turn is recorded on, for example "redpanda". Empty means nothing is
   // connected to it, which is the truth today: the log is in the compose stack and no service reads
   // from or writes to it.
   string events = 5;
+  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+  // keeps them in memory loses the subscription token on every restart, which is worth seeing before
+  // wondering why a turn stopped working.
+  string secrets = 6;
 }
 
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.

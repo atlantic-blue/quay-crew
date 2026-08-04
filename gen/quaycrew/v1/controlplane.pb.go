@@ -2458,10 +2458,17 @@ type GetInfoResponse struct {
 	// state is where a session's conversation and files are kept, for example "host directory". Empty
 	// means they are kept nowhere: they live in the container and are destroyed with it.
 	State string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
+	// wondering why a turn stopped working.
 	// events is the event log a turn is recorded on, for example "redpanda". Empty means nothing is
 	// connected to it, which is the truth today: the log is in the compose stack and no service reads
 	// from or writes to it.
-	Events        string `protobuf:"bytes,5,opt,name=events,proto3" json:"events,omitempty"`
+	Events string `protobuf:"bytes,5,opt,name=events,proto3" json:"events,omitempty"`
+	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
+	// wondering why a turn stopped working.
+	Secrets       string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2527,6 +2534,13 @@ func (x *GetInfoResponse) GetState() string {
 func (x *GetInfoResponse) GetEvents() string {
 	if x != nil {
 		return x.Events
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetSecrets() string {
+	if x != nil {
+		return x.Secrets
 	}
 	return ""
 }
@@ -2673,13 +2687,14 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x16RestoreSessionResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"\x10\n" +
-	"\x0eGetInfoRequest\"\x85\x01\n" +
+	"\x0eGetInfoRequest\"\x9f\x01\n" +
 	"\x0fGetInfoResponse\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x18\n" +
 	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
 	"\x05store\x18\x03 \x01(\tR\x05store\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
-	"\x06events\x18\x05 \x01(\tR\x06events2\x84\x0f\n" +
+	"\x06events\x18\x05 \x01(\tR\x06events\x12\x18\n" +
+	"\asecrets\x18\x06 \x01(\tR\asecrets2\x84\x0f\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
 	"\fGetWorkspace\x12 .quaycrew.v1.GetWorkspaceRequest\x1a!.quaycrew.v1.GetWorkspaceResponse\x12Y\n" +
