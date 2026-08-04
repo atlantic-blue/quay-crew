@@ -411,7 +411,11 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 		names[workspace.GetId()] = workspace.GetName()
 	}
 
-	dirs := make([]*quaycrewv1.ContextDir, 0, len(projects)*2)
+	dirs := make([]*quaycrewv1.ContextDir, 0, len(projects)*2+1)
+	// The crew's own context, first, because it is the level everything else sits inside, and however
+	// narrow the question it is part of the answer: every session in the crew reads it. It belongs to
+	// no directory, being rendered into every workspace's file, so there is no one file to name.
+	dirs = append(dirs, s.contextDir(ctx, store.ContextCrew, "", "crew", sandbox.Context{}))
 	seenWorkspace := map[string]bool{}
 	for _, project := range projects {
 		found := s.storage.Contexts(sandbox.Config{

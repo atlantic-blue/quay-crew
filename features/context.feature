@@ -17,7 +17,8 @@ Feature: The operator can find the files the model reads
 
   Scenario: The crew says where a project's context lives
     When the operator asks where context lives
-    Then it names a workspace directory and a project directory
+    Then it names the crew, a workspace and a project
+    And it names a workspace directory and a project directory
     And each one says where it appears inside a sandbox
     And each one names the memory file the model reads
 
