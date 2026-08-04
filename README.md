@@ -92,6 +92,11 @@ upgrade. Creating something moves you into it, so nothing above says where twice
 you where you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
 subscription. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
 
+Two of the services in that stack are worth knowing on their own.
+[`docs/DATABASE.md`](docs/DATABASE.md) is Postgres: why a thread survives a restart, how to shell in
+with psql, and what each table means. [`docs/EVENTS.md`](docs/EVENTS.md) is the event log: what it is
+for, how to inspect it with `rpk`, and why it is empty today.
+
 Common targets:
 
 ```sh
