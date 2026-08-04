@@ -412,6 +412,9 @@ and can send messages and run shell. Two layers reinforce each other.
 2. **Operational telemetry.** Logs, metrics, and traces through an OpenTelemetry pipeline into Grafana,
    with Loki for logs and audit, Tempo for traces, and Prometheus for metrics.
 
+`docs/OBSERVABILITY.md` is the operator's version of this, and the honest one: logs are real today,
+no span or metric is created anywhere yet, and the collector discards what it receives.
+
 ```mermaid
 flowchart LR
   subgraph SVC["Services emit telemetry"]

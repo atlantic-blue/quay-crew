@@ -96,6 +96,8 @@ Two of the services in that stack are worth knowing on their own.
 [`docs/DATABASE.md`](docs/DATABASE.md) is Postgres: why a thread survives a restart, how to shell in
 with psql, and what each table means. [`docs/EVENTS.md`](docs/EVENTS.md) is the event log: what it is
 for, how to inspect it with `rpk`, and why it is empty today.
+[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) is the third: which signals are real, which are
+wired but carry nothing, and what to read when something goes wrong.
 
 Common targets:
 
