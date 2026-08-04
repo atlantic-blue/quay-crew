@@ -16,6 +16,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -51,6 +52,9 @@ type Config struct {
 	// Storage is where a workspace's conversation store lives on the host. The control plane reads it
 	// to tell a thread whose conversation is still there from one whose handle outlived it.
 	Storage sandbox.Storage
+	// Events is the log every turn is written to. Nil means nowhere, which is a stack with no broker
+	// configured rather than an error: turns run, and nothing records that they did.
+	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
 }
@@ -63,6 +67,7 @@ type Server struct {
 	runner   model.Runner
 	provider sandbox.Provider
 	storage  sandbox.Storage
+	events   messaging.EventLog
 	info     Info
 
 	mu        sync.Mutex
@@ -78,9 +83,19 @@ func NewServer(cfg Config) *Server {
 		runner:    cfg.Runner,
 		provider:  cfg.Provider,
 		storage:   cfg.Storage,
+		events:    eventsOr(cfg.Events),
 		info:      cfg.Info,
 		sandboxes: make(map[string]sandbox.Sandbox),
 	}
+}
+
+// eventsOr is the log to publish on, and Discard when there is none, so nothing downstream has to
+// ask whether there is a broker before writing a record.
+func eventsOr(log messaging.EventLog) messaging.EventLog {
+	if log == nil {
+		return messaging.Discard{}
+	}
+	return log
 }
 
 // GetInfo reports what this control plane is running.
@@ -341,6 +356,9 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
+		s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+			Prompt: req.GetText(), Status: "failed", Failure: "the session's sandbox could not be created",
+		})
 		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
 	}
 
@@ -352,9 +370,15 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
+		s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+			Prompt: req.GetText(), Status: "failed", Failure: "the model did not complete the turn",
+		})
 		return nil, status.Errorf(codes.Internal, "run turn: %v", err)
 	}
 	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, "idle")
+	s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+		Prompt: req.GetText(), Reply: resp.Reply, Status: "idle",
+	})
 
 	return &quaycrewv1.DispatchResponse{SessionId: session.GetId(), ThreadId: thread, Reply: resp.Reply}, nil
 }

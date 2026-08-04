@@ -87,6 +87,9 @@ services:
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
       QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quaycrew/data}
+      # Every turn is written to <workspace>.turns here. Unset it and turns still run, with nothing
+      # recording that they did.
+      QC_KAFKA_SEEDS: redpanda:9092
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
@@ -98,6 +101,8 @@ services:
       otel-collector:
         condition: service_started
       postgres:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
 
   # Observability stack. Started only with: make up-observability
