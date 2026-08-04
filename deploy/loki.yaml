@@ -1,0 +1,39 @@
+# Loki for local development: one process, logs on disk, no object store.
+#
+# This is the image's own local-config with reporting turned off. It is kept here rather than left to
+# the image default so the stack is described by this repository: a service pointed at a config file
+# it does not own works until the day the image moves it, and then it fails on somebody's machine
+# with nothing here to explain why.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+ruler:
+  alertmanager_url: http://localhost:9093
+
+# This is a laptop, not a fleet. Nothing about how it is used needs sending anywhere.
+analytics:
+  reporting_enabled: false

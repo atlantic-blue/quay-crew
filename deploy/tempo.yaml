@@ -1,0 +1,31 @@
+# Tempo for local development: one process, traces on disk, no object store.
+#
+# The image ships no default config and the command points at this file, so without it the container
+# exits on startup. Retention is deliberately short: this is a laptop, and a trace older than a day
+# has never once been the thing somebody needed.
+server:
+  http_listen_port: 3200
+
+# Tempo accepts OTLP directly, which is what the collector will forward to once it has an exporter
+# pointed here. Nothing sends traces yet: see docs/OBSERVABILITY.md.
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
