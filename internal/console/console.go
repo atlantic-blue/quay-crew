@@ -20,7 +20,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
 	return NewRegistry(Sessions(client), Turns(client), Archived(client), Projects(client), Workspaces(client),
-		Contexts(client), Features())
+		Contexts(client), Secrets(client), Features())
 }
 
 // InfoFrom asks the control plane what it is running and folds the answer into what the caller

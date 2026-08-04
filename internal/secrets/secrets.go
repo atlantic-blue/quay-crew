@@ -7,6 +7,8 @@ package secrets
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -18,6 +20,10 @@ var ErrNotFound = errors.New("secrets: not found")
 type Store interface {
 	Set(ctx context.Context, workspace, key, value string) error
 	Get(ctx context.Context, workspace, key string) (string, error)
+	// Names lists what a workspace has set, and never what any of it says. A value the backend holds
+	// must not become readable because a client asked politely, so there is no call that returns one:
+	// the only reader is the crew itself, at the moment a turn needs it.
+	Names(ctx context.Context, workspace string) ([]string, error)
 }
 
 // Memory is an in memory Store for development and tests.
@@ -46,6 +52,21 @@ func (m *Memory) Set(_ context.Context, workspace, name, value string) error {
 }
 
 // Get reads a secret value for a workspace.
+// Names lists what a workspace has set, sorted, and never what any of it says.
+func (m *Memory) Names(_ context.Context, workspace string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	prefix := key(workspace, "")
+	names := make([]string, 0, len(m.data))
+	for stored := range m.data {
+		if strings.HasPrefix(stored, prefix) {
+			names = append(names, strings.TrimPrefix(stored, prefix))
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 func (m *Memory) Get(_ context.Context, workspace, name string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

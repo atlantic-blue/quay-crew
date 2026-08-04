@@ -315,6 +315,37 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	return &quaycrewv1.SetSecretResponse{}, nil
 }
 
+// ListSecrets says what each workspace has set, and never what any of it says.
+//
+// The response has no field for a value, so this cannot leak one by mistake rather than by policy.
+// What an operator needs from a list of secrets is whether the thing is there, and everything else
+// about it is the crew's business.
+func (s *Server) ListSecrets(ctx context.Context, req *quaycrewv1.ListSecretsRequest) (*quaycrewv1.ListSecretsResponse, error) {
+	workspaces, err := s.store.ListWorkspaces(ctx)
+	if err != nil {
+		return nil, storeError(err, "list workspaces")
+	}
+
+	out := make([]*quaycrewv1.SecretRef, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		if req.GetWorkspace() != "" && workspace.GetId() != req.GetWorkspace() {
+			continue
+		}
+		names, err := s.secrets.Names(ctx, workspace.GetId())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
+		}
+		for _, name := range names {
+			out = append(out, &quaycrewv1.SecretRef{
+				Workspace:     workspace.GetId(),
+				WorkspaceName: workspace.GetName(),
+				Name:          name,
+			})
+		}
+	}
+	return &quaycrewv1.ListSecretsResponse{Secrets: out}, nil
+}
+
 // CreateProject adds a body of work to a workspace.
 func (s *Server) CreateProject(ctx context.Context, req *quaycrewv1.CreateProjectRequest) (*quaycrewv1.CreateProjectResponse, error) {
 	if req.GetWorkspace() == "" {

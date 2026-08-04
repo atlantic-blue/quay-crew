@@ -28,6 +28,43 @@ func workspaceRefFrom(ctx context.Context) *workspaceRefWorld {
 // initializeWorkspaceSteps registers the steps for addressing a workspace by name or by id. Called from
 // initializeScenario so these keep to their own file.
 func initializeWorkspaceSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator asks which secrets the workspace has$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.ListSecrets(ctx, &quaycrewv1.ListSecretsRequest{Workspace: w.workspaceID})
+		if err != nil {
+			return err
+		}
+		w.lastSecrets = resp
+		return nil
+	})
+
+	sc.Step(`^it names "([^"]*)"$`, func(ctx context.Context, want string) error {
+		w := worldFrom(ctx)
+		for _, secret := range w.lastSecrets.GetSecrets() {
+			if secret.GetName() == want {
+				return nil
+			}
+		}
+		return fmt.Errorf("the listing does not name %q: %v", want, w.lastSecrets.GetSecrets())
+	})
+
+	sc.Step(`^it names nothing$`, func(ctx context.Context) error {
+		if got := len(worldFrom(ctx).lastSecrets.GetSecrets()); got != 0 {
+			return fmt.Errorf("%d secrets listed, want none", got)
+		}
+		return nil
+	})
+
+	sc.Step(`^the answer carries no value$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		// Whatever the workspace's token is, it must not appear anywhere in the answer.
+		token, err := w.secrets.Get(ctx, w.workspaceID, "CLAUDE_CODE_OAUTH_TOKEN")
+		if err == nil && token != "" && strings.Contains(w.lastSecrets.String(), token) {
+			return fmt.Errorf("the listing leaks a value")
+		}
+		return nil
+	})
+
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, workspaceRefKey{}, &workspaceRefWorld{}), nil
 	})

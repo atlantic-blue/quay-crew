@@ -155,6 +155,7 @@ type world struct {
 	turns              []turn
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
+	lastSecrets        *quaycrewv1.ListSecretsResponse
 }
 
 type worldKey struct{}

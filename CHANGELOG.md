@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **A view of what each workspace has set.** `:secrets` in the console and `quay secret list`, naming
+  the workspace and the secret and saying `set, and not shown anywhere` where a value would be. There is
+  no call that returns a value and no field for one, so this cannot leak by mistake rather than by
+  policy. ([#135](https://github.com/atlantic-blue/quay-crew/pull/135))
 - **The console shows a session's history.** `l` on a session opens a `turns` view of what it was
   asked and what came back, read from the projection, so it answers without starting a container and
   keeps answering long after the sandbox is gone. A failed turn shows why it failed where the reply

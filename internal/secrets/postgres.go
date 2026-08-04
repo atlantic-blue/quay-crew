@@ -50,6 +50,30 @@ func (p *Postgres) Set(ctx context.Context, workspace, name, value string) error
 	return nil
 }
 
+// Names lists what a workspace has set, sorted, and never what any of it says. The sealed bytes are
+// not selected at all, so this call cannot leak one by mistake.
+func (p *Postgres) Names(ctx context.Context, workspace string) ([]string, error) {
+	rows, err := p.pool.Query(ctx,
+		`select name from secrets where workspace = $1 order by name`, workspace)
+	if err != nil {
+		return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
+	}
+	defer rows.Close()
+
+	names := make([]string, 0)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
+	}
+	return names, nil
+}
+
 // Get returns a workspace's secret.
 func (p *Postgres) Get(ctx context.Context, workspace, name string) (string, error) {
 	var sealed []byte

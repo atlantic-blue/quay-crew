@@ -45,6 +45,7 @@ commands:
   context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
+  secret list [<workspace>]               which secrets are set, never what they say
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
 may be the shortened id a listing prints. An address typed on the command line applies to that
@@ -215,7 +216,38 @@ func move(path workspace.Path, out io.Writer) error {
 	return nil
 }
 
+// runSecretList says which secrets a workspace has, and never what any of them says.
+func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay secret list [<workspace>]")
+	}
+	request := &quaycrewv1.ListSecretsRequest{}
+	if len(args) == 1 {
+		located, err := workspace.Resolve(ctx, client, args[0])
+		if err != nil {
+			return err
+		}
+		request.Workspace = located
+	}
+	resp, err := client.ListSecrets(ctx, request)
+	if err != nil {
+		return err
+	}
+	if len(resp.GetSecrets()) == 0 {
+		fmt.Fprintln(out, "no secrets set")
+		return nil
+	}
+	for _, secret := range resp.GetSecrets() {
+		fmt.Fprintf(out, "%-20s %-32s set, and not shown anywhere\n",
+			display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()), secret.GetName())
+	}
+	return nil
+}
+
 func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "list" {
+		return runSecretList(ctx, client, args[1:], out)
+	}
 	if len(args) == 0 || args[0] != "set" {
 		return fmt.Errorf("usage: quay secret set [<workspace>] <key> <value>")
 	}
