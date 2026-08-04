@@ -19,6 +19,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/projection"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -99,6 +100,18 @@ func main() {
 			Secrets: secretsKind,
 		},
 	})
+	// The projection reads the log back into the store, so a session's history can be listed without
+	// replaying the log on every request. It runs here rather than as its own service because it
+	// materialises into the store this process already owns; when it needs to scale separately, it
+	// moves out behind the same interfaces.
+	if eventsKind != "" {
+		go func() {
+			if err := projection.New(events, durable, logger).Run(ctx); err != nil && ctx.Err() == nil {
+				logger.Error("projection stopped, so session history will go stale until a restart", "error", err)
+			}
+		}()
+	}
+
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 

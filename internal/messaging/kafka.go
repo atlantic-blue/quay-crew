@@ -88,25 +88,40 @@ func (c *Client) ensureTopic(ctx context.Context, topic string) error {
 // Consume blocks. It returns ctx.Err() when ctx is done, and returns a handler's error unchanged so
 // callers can match it with errors.Is.
 func (c *Client) Consume(ctx context.Context, group string, topics []string, handler Handler) error {
-	if group == "" {
-		return fmt.Errorf("messaging: consume requires a group")
-	}
 	if len(topics) == 0 {
 		return fmt.Errorf("messaging: consume requires at least one topic")
+	}
+	return c.consume(ctx, group, handler, kgo.ConsumeTopics(topics...))
+}
+
+// ConsumePattern consumes every topic matching a regular expression, and keeps up with topics
+// created after it started, which is how a workspace made while the crew is running gets read.
+func (c *Client) ConsumePattern(ctx context.Context, group, pattern string, handler Handler) error {
+	if pattern == "" {
+		return fmt.Errorf("messaging: consume requires a pattern")
+	}
+	return c.consume(ctx, group, handler, kgo.ConsumeTopics(pattern), kgo.ConsumeRegex())
+}
+
+// consume is what both consumers do, differing only in how they were told which topics to read.
+func (c *Client) consume(ctx context.Context, group string, handler Handler, subscription ...kgo.Opt) error {
+	if group == "" {
+		return fmt.Errorf("messaging: consume requires a group")
 	}
 	if handler == nil {
 		return fmt.Errorf("messaging: consume requires a handler")
 	}
 
-	consumer, err := kgo.NewClient(
+	options := append([]kgo.Opt{
 		kgo.SeedBrokers(c.seeds...),
-		kgo.ConsumeTopics(topics...),
 		kgo.ConsumerGroup(group),
 		// A group with no committed offset starts at the beginning of the log, so a new consumer
 		// replays the history rather than seeing only what arrives after it starts.
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		kgo.DisableAutoCommit(),
-	)
+	}, subscription...)
+
+	consumer, err := kgo.NewClient(options...)
 	if err != nil {
 		return fmt.Errorf("messaging: new consumer for group %s: %w", group, err)
 	}

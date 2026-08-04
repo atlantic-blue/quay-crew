@@ -428,3 +428,58 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	}
 	return session, nil
 }
+
+// AppendTurn records a turn. Writing the same one twice is harmless, which is what makes a consumer
+// with at least once delivery safe to replay.
+func (p *Postgres) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error {
+	if turn.GetId() == "" {
+		return errors.New("store: a turn needs an id, because the projection sees the same one twice")
+	}
+	_, err := p.pool.Exec(ctx, `
+		insert into turns (id, session, workspace, project, thread_id, prompt, reply, status, failure, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		on conflict (id) do nothing`,
+		turn.GetId(), turn.GetSession(), workspace, project, thread,
+		turn.GetPrompt(), turn.GetReply(), turn.GetStatus(), turn.GetFailure(), turn.GetOccurredAt().AsTime())
+	if err != nil {
+		return fmt.Errorf("append turn: %w", err)
+	}
+	return nil
+}
+
+// ListTurns returns a session's turns oldest first, capped at limit.
+//
+// The cap takes the most recent, because the end of a conversation is the part somebody is looking
+// for, and then the result is turned back the right way round so it reads as it happened.
+func (p *Postgres) ListTurns(ctx context.Context, session string, limit int) ([]*quaycrewv1.Turn, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, session, prompt, reply, status, failure, occurred_at
+		from turns where session = $1
+		order by occurred_at desc, id desc
+		limit $2`, session, TurnLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("list turns: %w", err)
+	}
+	defer rows.Close()
+
+	turns := make([]*quaycrewv1.Turn, 0)
+	for rows.Next() {
+		var turn quaycrewv1.Turn
+		var occurredAt time.Time
+		if err := rows.Scan(&turn.Id, &turn.Session, &turn.Prompt, &turn.Reply,
+			&turn.Status, &turn.Failure, &occurredAt); err != nil {
+			return nil, fmt.Errorf("scan turn: %w", err)
+		}
+		turn.OccurredAt = timestamppb.New(occurredAt)
+		turns = append(turns, &turn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list turns: %w", err)
+	}
+	// Read back newest first so the limit keeps the end of the conversation; hand it over oldest
+	// first so it reads in the order it happened.
+	for i, j := 0, len(turns)-1; i < j; i, j = i+1, j-1 {
+		turns[i], turns[j] = turns[j], turns[i]
+	}
+	return turns, nil
+}

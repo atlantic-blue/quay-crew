@@ -272,6 +272,32 @@ message GetInfoResponse {
   string secrets = 6;
 }
 
+// Turn is one exchange with the model, read back from the projection of the event log.
+message Turn {
+  string id = 1;
+  string session = 2;
+  // prompt is what was asked, reply is what came back, empty when the turn failed.
+  string prompt = 3;
+  string reply = 4;
+  // status is the session's status after the turn: "idle" when it worked, "failed" when it did not.
+  string status = 5;
+  // failure says what went wrong, empty on a turn that worked.
+  string failure = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+}
+
+// ListTurnsRequest asks for one session's history, most recent last, so a conversation reads the way
+// it happened.
+message ListTurnsRequest {
+  string session = 1;
+  // limit caps how many come back. Zero means a sensible default rather than everything, because a
+  // long running session's history is unbounded and a terminal is not.
+  int32 limit = 2;
+}
+message ListTurnsResponse {
+  repeated Turn turns = 1;
+}
+
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.
 service ControlPlaneService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
@@ -298,6 +324,8 @@ service ControlPlaneService {
   rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
+
+  rpc ListTurns(ListTurnsRequest) returns (ListTurnsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }
