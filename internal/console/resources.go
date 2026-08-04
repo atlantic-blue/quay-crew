@@ -64,7 +64,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "workspace", Width: 18},
 			{Title: "age", Width: 0},
 		},
-		DrillTo: "threads",
+		DrillTo: "sessions",
 		SortBy:  1,
 		List: func(ctx context.Context, workspace string) ([]Row, error) {
 			resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: workspace})
@@ -241,17 +241,17 @@ func Features() Resource {
 	}
 }
 
-// Threads lists conversations, scoped to a project when drilled into from one. The operator can stop
+// Sessions lists conversations, scoped to a project when drilled into from one. The operator can stop
 // one and shell into its container.
 //
-// The console says threads and the control plane says sessions, deliberately. A session is the thread
-// running, inside a sandbox, and that distinction is real inside the control plane. It means nothing
-// to somebody reading a list of fourteen rows, where every one of them is a conversation. So the old
-// name stays as an alias: the command bar should not punish muscle memory.
-func Threads(client quaycrewv1.ControlPlaneServiceClient) Resource {
+// It was called threads for a day. The database calls these sessions and so does the API, and one name
+// across the whole system beats a console that translates: Julian, "we also need to rename threads to
+// sessions as it is how its described in the database". The old name stays as an alias, because the
+// command bar should not punish muscle memory either way.
+func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
-		Name:    "threads",
-		Aliases: []string{"t", "thread", "sessions", "session", "sess", "s"},
+		Name:    "sessions",
+		Aliases: []string{"s", "sess", "session", "threads", "thread", "t"},
 		Columns: []Column{
 			{Title: "id", Width: 10},
 			{Title: "workspace", Width: 16},
@@ -296,7 +296,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				Label: "Restore",
 				Run: func(ctx context.Context, row Row) error {
 					if row.ID == "" {
-						return fmt.Errorf("no thread selected")
+						return fmt.Errorf("no session selected")
 					}
 					_, err := client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: row.ID})
 					return err
@@ -450,7 +450,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			Label: "Restart",
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
-					return fmt.Errorf("no thread selected")
+					return fmt.Errorf("no session selected")
 				}
 				_, err := client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: row.ID})
 				return err
@@ -465,7 +465,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			Confirm: true,
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
-					return fmt.Errorf("no thread selected")
+					return fmt.Errorf("no session selected")
 				}
 				_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{
 					Id: row.ID, Mode: nextPermissionMode(row),
@@ -482,7 +482,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			Confirm: true,
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
-					return fmt.Errorf("no thread selected")
+					return fmt.Errorf("no session selected")
 				}
 				_, err := client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: row.ID})
 				return err

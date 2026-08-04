@@ -108,8 +108,8 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return consoleFrom(ctx).drillInto(ctx, worldFrom(ctx).client, "workspaces", name)
 	})
 
-	sc.Step(`^the console lists (\d+) threads?$`, func(ctx context.Context, want int) error {
-		return expectRows(consoleFrom(ctx), "threads", want)
+	sc.Step(`^the console lists (\d+) sessions?$`, func(ctx context.Context, want int) error {
+		return expectRows(consoleFrom(ctx), "sessions", want)
 	})
 
 	// The command bar resolves what was typed, so this drives the same path a keystroke does rather
@@ -128,23 +128,23 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.list(ctx, "")
 	})
 
-	sc.Step(`^the console is showing threads$`, func(ctx context.Context) error {
-		if got := consoleFrom(ctx).active.Name; got != "threads" {
-			return fmt.Errorf("the console is showing %q, want threads", got)
+	sc.Step(`^the console is showing sessions$`, func(ctx context.Context) error {
+		if got := consoleFrom(ctx).active.Name; got != "sessions" {
+			return fmt.Errorf("the console is showing %q, want sessions", got)
 		}
 		return nil
 	})
 
 	// A session exists only once a turn creates it, so a failing runner is how you get one with no
 	// conversation behind it.
-	sc.Step(`^a thread whose first turn failed$`, func(ctx context.Context) error {
+	sc.Step(`^a session whose first turn failed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.runner.failNext = true
 		_ = w.dispatch(ctx, w.projectID, "", "this turn fails")
 		return nil
 	})
 
-	sc.Step(`^the operator presses enter on the selected thread$`, func(ctx context.Context) error {
+	sc.Step(`^the operator presses enter on the selected session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -154,7 +154,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console opens that thread's conversation$`, func(ctx context.Context) error {
+	sc.Step(`^the console opens that session's conversation$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		if c.openErr != nil {
 			return fmt.Errorf("enter was refused: %w", c.openErr)
@@ -175,7 +175,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator opens the console and presses backspace on the thread$`, func(ctx context.Context) error {
+	sc.Step(`^the operator opens the console and presses backspace on the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if err := c.openModel(worldFrom(ctx).client); err != nil {
 			return err
@@ -187,21 +187,21 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return consoleFrom(ctx).press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(answer)})
 	})
 
-	sc.Step(`^the console asks whether to stop that thread$`, func(ctx context.Context) error {
+	sc.Step(`^the console asks whether to stop that session$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		current, err := w.lastTurn()
 		if err != nil {
 			return err
 		}
 		view := c.model.View()
-		want := "stop thread " + display.ShortID(current.threadID) + "?"
+		want := "stop session " + display.ShortID(current.threadID) + "?"
 		if !strings.Contains(view, want) {
 			return fmt.Errorf("the console does not ask %q:\n%s", want, view)
 		}
 		return nil
 	})
 
-	sc.Step(`^the operator opens the console and archives the thread$`, func(ctx context.Context) error {
+	sc.Step(`^the operator opens the console and archives the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if err := c.openModel(worldFrom(ctx).client); err != nil {
 			return err
@@ -216,7 +216,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.open(ctx, worldFrom(ctx).client, console.Default)
 	})
 
-	sc.Step(`^the archived view lists (\d+) threads?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the archived view lists (\d+) sessions?$`, func(ctx context.Context, want int) error {
 		c := consoleFrom(ctx)
 		if err := c.open(ctx, worldFrom(ctx).client, "archived"); err != nil {
 			return err
@@ -224,7 +224,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return expectRows(c, "archived", want)
 	})
 
-	sc.Step(`^the archived thread still holds its conversation$`, func(ctx context.Context) error {
+	sc.Step(`^the archived session still holds its conversation$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -240,7 +240,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console says the thread has no conversation yet$`, func(ctx context.Context) error {
+	sc.Step(`^the console says the session has no conversation yet$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if c.openErr == nil {
 			return fmt.Errorf("enter opened %v, want a reason the operator can act on", c.opened)
@@ -270,7 +270,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console shows the thread's workspace as "([^"]*)"$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the console shows the session's workspace as "([^"]*)"$`, func(ctx context.Context, want string) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -284,7 +284,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console shows the thread identifier shortened$`, func(ctx context.Context) error {
+	sc.Step(`^the console shows the session identifier shortened$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -308,7 +308,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator stops the selected thread from the console$`, func(ctx context.Context) error {
+	sc.Step(`^the operator stops the selected session from the console$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
 		if err != nil {
@@ -323,7 +323,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			}
 			return action.Run(ctx, row)
 		}
-		return fmt.Errorf("the threads view has no Stop action")
+		return fmt.Errorf("the sessions view has no Stop action")
 	})
 }
 

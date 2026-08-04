@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The console says sessions again.** It was threads for a day. The database and the API both say
+  session, and one name across the whole system beats a console that translates. `threads`, `thread`
+  and `t` still open the view, the way `sessions` did while it was called threads.
+  ([#120](https://github.com/atlantic-blue/quay-crew/pull/120))
 - **Context lives in the database, and the file in a sandbox is a rendering of it.** It was only ever
   files on one machine, which works nowhere else: a pod has no host directory to bind mount and an API
   cannot edit a file on somebody's laptop. Setting it writes the file too, so a running sandbox picks it
