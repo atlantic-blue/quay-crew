@@ -351,6 +351,10 @@ func (p *Postgres) stampArchived(ctx context.Context, id, clause string) error {
 	return nil
 }
 
+// Pool is the connection this store holds, so another durable thing can sit beside it rather than
+// opening a second connection to the same database for the same crew.
+func (p *Postgres) Pool() *pgxpool.Pool { return p.pool }
+
 // GetContext returns what the model should be told at a scope. Nothing written is the normal state
 // and comes back empty rather than as an error.
 func (p *Postgres) GetContext(ctx context.Context, scope ContextScope, owner string) (string, error) {

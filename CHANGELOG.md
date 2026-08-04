@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **The subscription token survives a restart.** Secrets were held in memory, so every `make up` lost
+  the token and the next turn failed saying nothing useful. They are kept in Postgres now, sealed with
+  a key made once and kept on the host at `~/.quaycrew/data/secrets.key`, so holding the database is
+  not enough to read one. The status block says `Secrets: postgres, sealed`, and says it in red when
+  they are still in memory. ([#133](https://github.com/atlantic-blue/quay-crew/pull/133))
 - **A session's history can be read back.** Turns went onto the event log and nothing read them, so a
   conversation was write only from the outside. A projection now consumes every workspace's turn
   stream, by pattern rather than by a list fixed at startup so a workspace created while the crew is

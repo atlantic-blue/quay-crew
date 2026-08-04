@@ -134,6 +134,7 @@ func (m Model) statusLines() []string {
 	add("Model", m.info.Model)
 	add("Sandbox engine", m.info.Sandbox)
 	add("Store engine", m.info.Store)
+	add("Secrets", secretsPhrase(m.info.Secrets))
 	if m.info.Store != "" {
 		add("Events engine", eventsPhrase(m.info.Events))
 		add("State", statePhrase(m.info.State))
@@ -153,6 +154,16 @@ func (m Model) statusLines() []string {
 func statePhrase(where string) string {
 	if where == "" {
 		return alert.Render("in the container, lost when it is replaced")
+	}
+	return where
+}
+
+// secretsPhrase says where a workspace's credentials are kept, and says the cost out loud when they
+// are kept nowhere: the subscription token goes with every restart, and the turn that then fails says
+// nothing about why.
+func secretsPhrase(where string) string {
+	if strings.HasPrefix(where, "memory") {
+		return alert.Render(where)
 	}
 	return where
 }
