@@ -14,7 +14,7 @@ read, or run with `make features`.
   longer share a project's working directory, which is what makes the innermost level possible and
   stops two conversations changing files under each other. What something inside a sandbox writes is
   read back into the level it belongs to, and a note appended at the end lands on the session.
-  ([#121](https://github.com/atlantic-blue/quay-crew/pull/121))
+  ([#124](https://github.com/atlantic-blue/quay-crew/pull/124))
 - **The console says sessions again.** It was threads for a day. The database and the API both say
   session, and one name across the whole system beats a console that translates. `threads`, `thread`
   and `t` still open the view, the way `sessions` did while it was called threads.
