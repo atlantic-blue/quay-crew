@@ -106,18 +106,21 @@ make up-observability
 That starts Grafana, Loki, Tempo and Prometheus alongside the core stack. Grafana is on
 `http://localhost:3000` with anonymous access as an admin, so there is no login.
 
-Three things to know before you spend time in there, all of them true as the compose file stands:
+All four containers start and stay up. Loki and Tempo are configured from `deploy/loki.yaml` and
+`deploy/tempo.yaml`, kept in this repository rather than left to whatever the image happens to ship,
+and both report `ready` on their own health endpoints. Tempo used to exit on startup because it was
+pointed at a config file that did not exist; `deploy/compose_test.go` now refuses any service in the
+stack that names a config file nobody provides.
+
+Two things to know before you spend time in there:
 
 - **Grafana has no data sources provisioned.** It comes up empty and you would add Loki, Tempo and
   Prometheus by hand.
-- **Tempo cannot start.** It is given `-config.file=/etc/tempo.yaml`, and that file is neither in the
-  `grafana/tempo:2.6.0` image nor mounted into it, so the container exits with
-  `failed to read configFile /etc/tempo.yaml`. Loki and Prometheus do ship the defaults they are
-  pointed at, so they start; Prometheus scrapes only itself.
-- **Nothing would reach any of them anyway**, because the collector exports to `debug` only.
+- **Nothing reaches any of them yet**, because the collector exports to `debug` only, and nothing
+  upstream of the collector emits anything either. Prometheus scrapes only itself.
 
-So the profile is scaffolding rather than a working stack. It is written down here rather than left
-for somebody to discover at midnight.
+So the profile now starts cleanly and has nothing to show you. Both halves of that are worth knowing
+before you go looking.
 
 ## What would turn it on
 
@@ -145,7 +148,8 @@ exporting and the question moves downstream, to whether the collector has anywhe
 
 ---
 
-Everything above was checked against a running stack on 4 August 2026, including the Tempo failure,
-which was reproduced by running the image on its own. Reproducing the collector count needs the core
+Everything above was checked against a running stack on 4 August 2026. The four observability
+services were brought up together and each was asked for its own health endpoint: Loki and Tempo both
+answered `ready`, Grafana answered `"database": "ok"`. Reproducing the collector count needs the core
 stack up (`make ps` showing `quaycrew-otel-collector-1`), and the count is expected to change the
 moment #3 lands, at which point this section should change with it.

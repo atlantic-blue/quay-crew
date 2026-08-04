@@ -1,7 +1,7 @@
 # The database
 
-Quay Crew keeps its workspaces, projects, threads and channels in Postgres, a service in the same
-compose stack as everything else. This document is how to run it, how to look inside it, and what
+Quay Crew keeps its workspaces, projects, sessions, context and channels in Postgres, a service in
+the same compose stack as everything else. This document is how to run it, how to look inside it, and what
 each thing in there means.
 
 For the design reasoning behind it, see the Storage section of `docs/ARCHITECTURE.md`. This one is
@@ -12,12 +12,12 @@ for the operator with a terminal open.
 The control plane holds no state of its own. That is the point, and it is worth being blunt about
 what would happen otherwise.
 
-When a thread runs a turn, the model keeps the conversation on its own disk and hands back a handle
+When a session runs a turn, the model keeps the conversation on its own disk and hands back a handle
 to it. That handle is stored as `model_session_id` on the session row, and it is the only pointer to
 that conversation anywhere in the system. Lose the row and the conversation still exists, sitting in
 `~/.quaycrew/data`, unreachable forever. Nothing can reconstruct the handle.
 
-So the database is not a cache and it is not an optimisation. It is the thing that makes a thread
+So the database is not a cache and it is not an optimisation. It is the thing that makes a session
 something you can come back to tomorrow.
 
 There is a second implementation, `store.Memory`, which runs without a database and loses everything
@@ -30,7 +30,7 @@ up:
 no QC_DATABASE_URL set, using the in memory store: workspaces and sessions will not survive a restart
 ```
 
-If you ever see that line in `make logs`, your threads are living on borrowed time.
+If you ever see that line in `make logs`, your sessions are living on borrowed time.
 
 ## How it runs
 
@@ -71,20 +71,21 @@ Once you are at the `quaycrew=#` prompt:
 
 ## What is in there
 
-Five tables. Four are the model, one is bookkeeping.
+Six tables. Five are the model, one is bookkeeping.
 
 **`workspaces`** is the top level: a body of work with its own secrets, its own channels and its own
 event log topics. It carries `id`, `name`, timestamps and `deleted_at`. Deletion is soft: a deleted
 workspace disappears from every read and its rows stay, because the sessions pointing at it still
 hold conversation handles.
 
-**`projects`** sits between a workspace and its threads: `id`, `workspace`, `name`, timestamps,
+**`projects`** sits between a workspace and its sessions: `id`, `workspace`, `name`, timestamps,
 `deleted_at`. Same soft deletion for the same reason. A turn runs inside a project, and the
 project is where the files the model reads live.
 
-**`sessions`** is the interesting one. Each row is a thread.
+**`sessions`** is the interesting one. Each row is a session: one conversation, running in its own
+sandbox. The console calls them sessions too, and `threads` still opens that view.
 
-- `id` is the thread's identity, and the first eight characters are what the console shows you
+- `id` is the session's identity, and the first eight characters are what the console shows you
 - `workspace` and `project` are where it sits
 - `thread_id` is the channel's own idea of the conversation, unique per project, so a channel that
   knows only its own thread identifier always lands back in the same session
@@ -92,10 +93,17 @@ project is where the files the model reads live.
   to colour `running` and `dispatching`, which no code sets yet
 - `model_session_id` is the conversation handle described above. Empty means no turn has succeeded
   yet, so there is nothing to attach to
-- `permission_mode` is what that thread's turns may do without asking, `acceptEdits` by default and
+- `permission_mode` is what that session's turns may do without asking, `acceptEdits` by default and
   `bypassPermissions` once you press `D` in the console
-- `archived_at` is set when you put a thread away with `A`. Archiving hides it from the default
+- `archived_at` is set when you put a session away with `A`. Archiving hides it from the default
   listing, stops it, and closes its sandbox. It deletes nothing
+
+**`contexts`** is the memory the model reads: `scope`, `owner`, `body`, timestamps, keyed on the first
+two columns together. `scope` is `crew`, `workspace` or `project`, and `owner` is the workspace or
+project it belongs to, empty for the crew. It has no foreign key for that reason. The `CLAUDE.md`
+inside a sandbox is a rendering of this row, written when the sandbox is made and read back when
+something inside has changed it, so the store is the truth and the file is a copy. `quay context`
+shows it and `quay context edit` changes it.
 
 **`channels`** is where an attached chat channel would be recorded: `id`, `workspace`, `kind`. It is
 empty today, and it stays empty until the first chat channel lands. See `docs/EVENTS.md`.
@@ -106,17 +114,18 @@ empty today, and it stays empty until the first chat channel lands. See `docs/EV
 erDiagram
     workspaces ||--o{ projects : contains
     workspaces ||--o{ channels : "has attached"
-    projects   ||--o{ sessions : "holds threads"
+    projects   ||--o{ sessions : "holds sessions"
     sessions }o--|| workspaces : "belongs to"
+    contexts   }o..o| projects : "renders into (scope and owner, no key)"
 ```
 
 ## Queries worth knowing
 
-Every thread, live ones first, named by where it sits rather than by its identifier:
+Every session, live ones first, named by where it sits rather than by its identifier:
 
 ```sql
 select w.name || '/' || p.name as address,
-       substr(s.id, 1, 8) as thread,
+       substr(s.id, 1, 8) as session,
        s.status, s.permission_mode,
        s.archived_at is not null as archived,
        s.updated_at
@@ -126,18 +135,18 @@ join workspaces w on w.id = s.workspace
 order by s.updated_at desc;
 ```
 
-Threads with no conversation behind them, which is what "there is nothing to attach to" looks like
+Sessions with no conversation behind them, which is what "there is nothing to attach to" looks like
 from here:
 
 ```sql
-select substr(id, 1, 8) as thread, status, created_at
+select substr(id, 1, 8) as session, status, created_at
 from sessions where model_session_id = '';
 ```
 
 The handle itself, which is also the directory name to look for under `~/.quaycrew/data`:
 
 ```sql
-select substr(id, 1, 8) as thread, model_session_id
+select substr(id, 1, 8) as session, model_session_id
 from sessions where archived_at is null;
 ```
 
@@ -145,12 +154,19 @@ How much is in each project, including what has been put away:
 
 ```sql
 select w.name || '/' || p.name as address,
-       count(s.id) as threads,
+       count(s.id) as sessions,
        count(s.archived_at) as archived
 from workspaces w
 left join projects p on p.workspace = w.id
 left join sessions s on s.project = p.id
 group by 1 order by 1;
+```
+
+What the model has been told, and where:
+
+```sql
+select scope, owner, length(body) as characters, updated_at
+from contexts order by scope, owner;
 ```
 
 ## Read from psql. Do not write from it
@@ -197,7 +213,7 @@ Dump it:
 docker exec quaycrew-postgres-1 pg_dump -U quaycrew quaycrew > quaycrew.sql
 ```
 
-`make down` stops the stack and keeps the volume, so your threads come back with `make up`.
+`make down` stops the stack and keeps the volume, so your sessions come back with `make up`.
 
 Destroying the volume is the one command worth being careful with:
 
@@ -205,11 +221,11 @@ Destroying the volume is the one command worth being careful with:
 docker compose -p quaycrew -f deploy/docker-compose.yml down -v
 ```
 
-That throws away every workspace, project and thread. The conversations themselves stay on disk
+That throws away every workspace, project and session. The conversations themselves stay on disk
 under `~/.quaycrew/data`, and without the rows there is nothing left that knows how to reach them.
 
 ---
 
 The command outputs and shapes above were taken from a running stack (`make up` with Postgres
-healthy, one workspace and its threads created through `quay`). Reproducing them needs the stack up;
+healthy, one workspace and its sessions created through `quay`). Reproducing them needs the stack up;
 `make ps` should show `quaycrew-postgres-1` healthy before any of it will answer.

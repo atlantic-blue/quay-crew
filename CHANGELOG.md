@@ -15,6 +15,17 @@ read, or run with `make features`.
   stops two conversations changing files under each other. What something inside a sandbox writes is
   read back into the level it belongs to, and a note appended at the end lands on the session.
   ([#124](https://github.com/atlantic-blue/quay-crew/pull/124))
+- **`make up-observability` starts all four services.** Tempo was pointed at `/etc/tempo.yaml`, a file
+  neither in its image nor mounted, so it exited on startup and the profile quietly came up one short.
+  Loki and Tempo are now configured from `deploy/loki.yaml` and `deploy/tempo.yaml`, kept here rather
+  than left to an image default that can move underneath the stack, and a test refuses any service
+  that names a config file nobody provides, so the next one cannot fail the same way silently.
+  ([#126](https://github.com/atlantic-blue/quay-crew/issues/126))
+- **The database doc covers the `contexts` table, and says session throughout.** It was written hours
+  before context moved into the store and before the console went back to the word the database uses,
+  so it described five tables and called a session a thread. Six tables now, with what `scope` and
+  `owner` mean and why that table has no foreign key, plus a query for what the model has been told.
+  ([#123](https://github.com/atlantic-blue/quay-crew/issues/123))
 - **Observability is documented, including the part that does not work.**
   [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) says which of the three signals is real: structured
   logs are, and no span or metric is created anywhere in the codebase, so the OpenTelemetry wiring
