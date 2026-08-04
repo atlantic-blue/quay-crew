@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **Observability is documented, including the part that does not work.**
+  [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) says which of the three signals is real: structured
+  logs are, and no span or metric is created anywhere in the codebase, so the OpenTelemetry wiring
+  exports nothing and the collector discards what it receives. It also records that `tempo` in the
+  compose profile is pointed at a config file that is neither in the image nor mounted, so it cannot
+  start, and that Grafana has no data sources provisioned. What to read when something is wrong, and
+  the order the three open issues have to land in.
+  ([#121](https://github.com/atlantic-blue/quay-crew/issues/121))
 - **The console says sessions again.** It was threads for a day. The database and the API both say
   session, and one name across the whole system beats a console that translates. `threads`, `thread`
   and `t` still open the view, the way `sessions` did while it was called threads.
