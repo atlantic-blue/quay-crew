@@ -31,21 +31,30 @@ Feature: The operator can find the files the model reads
     Then the project's context has been written
     And the project's context reads "pay the water bill first"
 
-  # The store is where context lives, and the file in a sandbox is a rendering of it. Rendering it is
-  # the whole point: the model only reads files.
-  Scenario: Setting a project's context writes the file the model reads
+  # The store is where context lives, and the file in a sandbox is a rendering of it, written when the
+  # sandbox is made. Rendering it is the whole point: the model only reads files.
+  Scenario: A project's context reaches the file its sessions read
     When the operator sets the project's context to "pay the water bill first"
-    Then the project's memory file on disk reads "pay the water bill first"
+    And the operator dispatches "hello" to the project
+    Then the session's memory file carries "pay the water bill first"
+
+  # Four levels, two files. The outer two are in the conversation store every session in the workspace
+  # reads; the inner two are in this session's own working directory.
+  Scenario: Every level reaches the session that should read it
+    When the operator sets context at scope "crew" to "no acronyms"
+    And the operator sets the project's context to "pay the water bill first"
+    And the operator dispatches "hello" to the project
+    Then the session's memory file carries "pay the water bill first"
+    And the workspace's memory file carries "no acronyms"
 
   # An agent that writes something into its own memory has learned something. Overwriting that on the
   # next turn would make the crew's memory strictly worse than a text file, so the file wins and is
   # taken into the store.
   Scenario: What an agent writes into its own memory is kept
-    When the operator sets the project's context to "pay the water bill first"
-    And something inside the sandbox writes "and the gas bill is quarterly" into the project's memory
-    And the operator dispatches "hello" to the project
-    And the operator asks where context lives
-    Then the project's context reads "and the gas bill is quarterly"
+    Given a session started by dispatching "hello"
+    When something inside the sandbox writes "the account number is 4471" into its memory
+    And the operator dispatches "and again" to the same thread
+    Then the session's context reads "the account number is 4471"
 
   Scenario: A scope the crew does not have is refused
     When the operator sets context at scope "everything" to "no"

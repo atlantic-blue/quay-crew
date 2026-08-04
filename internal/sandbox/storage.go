@@ -45,6 +45,9 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 	if err := usableAsPath("project", cfg.Project); err != nil {
 		return nil, err
 	}
+	if err := usableAsPath("session", cfg.ID); err != nil {
+		return nil, err
+	}
 
 	mounts := make([]Mount, 0, 2)
 	for _, dir := range layout(cfg) {
@@ -66,13 +69,17 @@ type dir struct {
 	target string
 }
 
-// layout is where a sandbox's two directories go. The workspace's conversation store is shared by
-// every project in it, so a thread started in one project can still be resumed; the working directory
-// belongs to a single project.
+// layout is where a sandbox's two directories go.
+//
+// The conversation store is shared by every project in a workspace, so a session started in one
+// project can still be resumed. The working directory belongs to **one session**, not to the project:
+// a session is a conversation with its own files, and two conversations sharing a working directory
+// means one of them changing a file under the other. It also gives the session a place of its own for
+// what it is told, which is the level the operator asked for.
 func layout(cfg Config) []dir {
 	return []dir{
 		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath},
-		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "workspace"}, WorkingPath},
+		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "sessions", cfg.ID, "workspace"}, WorkingPath},
 	}
 }
 

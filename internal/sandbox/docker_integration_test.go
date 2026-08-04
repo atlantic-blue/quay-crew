@@ -106,27 +106,23 @@ func TestDockerProviderKeepsStateAcrossContainers(t *testing.T) {
 		}
 	}
 
-	// And a different session in the same project reads the same working directory, which is what
-	// makes it the project's shared context rather than one thread's scratch space.
+	// A different session in the same project gets its own working directory and shares the
+	// conversation store. Two conversations in one working directory means one of them changing a
+	// file under the other, and it leaves no level below the project to say anything at.
+	//
+	// This used to assert the opposite, that siblings shared the working directory. Julian: "give each
+	// thread its own working directory".
 	sibling, err := provider.Create(ctx, sandbox.Config{ID: "itest-sibling", Workspace: config.Workspace, Project: config.Project})
 	if err != nil {
 		t.Fatalf("create a sibling session's sandbox: %v", err)
 	}
 	t.Cleanup(func() { _ = sibling.Close(context.Background()) })
 
-	proc, err := sibling.Exec(ctx, sandbox.Spec{Argv: []string{"cat", sandbox.WorkingPath + "/note"}})
-	if err != nil {
-		t.Fatalf("read the project's files from the sibling: %v", err)
+	if out := execOutput(t, ctx, sibling, "sh", "-c", "cat "+sandbox.WorkingPath+"/note 2>&1 || true"); strings.Contains(out, "remembered") {
+		t.Fatalf("the sibling session reads the other one's working directory: %q", out)
 	}
-	out, err := io.ReadAll(proc.Stdout())
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if err := proc.Wait(); err != nil {
-		t.Fatalf("the sibling session cannot see the project's files: %v", err)
-	}
-	if strings.TrimSpace(string(out)) != "remembered" {
-		t.Fatalf("the sibling session reads %q from the project, want 'remembered'", string(out))
+	if out := execOutput(t, ctx, sibling, "cat", sandbox.ConversationPath+"/note"); strings.TrimSpace(out) != "remembered" {
+		t.Fatalf("the sibling session reads %q from the conversation store, want it shared", out)
 	}
 }
 
