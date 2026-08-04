@@ -15,6 +15,10 @@ read, or run with `make features`.
   how topics are named, and the state it is actually in: the boundary and its client exist, nothing
   publishes to it and nothing consumes it, so a stack today holds zero topics. Documentation only, no
   behaviour changed. ([#113](https://github.com/atlantic-blue/quay-crew/issues/113))
+- **The command bar says what it can open.** Pressing `:` asked a question and gave nothing to answer
+  it with, so the only way to learn a view's name was to know it already. It now lists them and narrows
+  as you type, and `?` has a views section saying what to type for each.
+  ([#116](https://github.com/atlantic-blue/quay-crew/pull/116))
 - **The detach key works.** It was `ctrl-o` for one release, and on macOS `^O` is the terminal's own
   DISCARD character, so the line discipline swallows it and tmux never sees it: the key did nothing.
   It is `ctrl-space d` now, `ctrl-b d` still works when nothing is nested, and a test refuses every

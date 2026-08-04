@@ -446,7 +446,7 @@ func (m Model) renderCells(cells []string) string {
 func (m Model) footer() string {
 	switch m.mode {
 	case modeCommand:
-		return truncate(prompt.Render(":")+m.input+prompt.Render("_"), m.width)
+		return truncate(prompt.Render(":")+m.input+prompt.Render("_")+m.offered(), m.width)
 	case modeFilter:
 		return truncate(prompt.Render("/")+m.input+prompt.Render("_"), m.width)
 	case modeConfirm:
@@ -463,6 +463,20 @@ func (m Model) footer() string {
 func (m Model) confirmPrompt() string {
 	return prompt.Render(" ") + alert.Render(strings.ToLower(m.waiting.action.Label)+" "+
 		m.active.One()+" "+m.waiting.row.Name()+"?") + faint.Render("  y to confirm, any other key cancels")
+}
+
+// offered is what the command bar could open, narrowed by what has been typed. Pressing colon used to
+// ask a question with nothing to answer it from, so the only way to learn a view's name was to know
+// it already.
+func (m Model) offered() string {
+	if m.registry == nil {
+		return ""
+	}
+	names := m.registry.Offer(m.input)
+	if len(names) == 0 {
+		return faint.Render("   nothing called that")
+	}
+	return faint.Render("   " + strings.Join(names, "  "))
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
@@ -509,6 +523,14 @@ func (m Model) helpLines() []string {
 	}
 	if m.active.DrillTo != "" {
 		lines = append(lines, "    "+hint("enter", "Drill into "+m.active.DrillTo))
+	}
+
+	// Every view, with what to type for it. The command bar cannot be used by somebody who does not
+	// already know what is in there.
+	lines = append(lines, "", crumb.Render("  views, with :"))
+	for _, name := range m.registry.Names() {
+		spellings := m.registry.Spellings(name)
+		lines = append(lines, "    "+hint(strings.Join(spellings, " "), name))
 	}
 
 	lines = append(lines, "", crumb.Render("  everywhere"))
