@@ -5,6 +5,8 @@ package controlplane_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/projection"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -138,5 +141,84 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 		}
 	case <-consumeCtx.Done():
 		t.Fatalf("no turn arrived on %s within the timeout, so nothing was published to the broker", topic)
+	}
+}
+
+// TestTheProjectionReadsTurnsBackFromARealBroker proves the half a double cannot.
+//
+// The behaviour scenarios drive the projection against an in memory log with a topic list it
+// already knows. This one subscribes by regular expression to a topic that did not exist when the
+// consumer started, against a real broker, which is the arrangement the running crew uses and the
+// one where a wrong pattern or a missing option silently reads nothing forever.
+func TestTheProjectionReadsTurnsBackFromARealBroker(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	log, err := messaging.NewClient(seedBroker)
+	if err != nil {
+		t.Fatalf("event log: %v", err)
+	}
+	defer log.Close()
+
+	runner, err := model.NewRunner("echo", "")
+	if err != nil {
+		t.Fatalf("model runner: %v", err)
+	}
+	durable := store.NewMemory()
+	server := controlplane.NewServer(controlplane.Config{
+		Store:    durable,
+		Runner:   runner,
+		Provider: &sandbox.FakeProvider{},
+		Secrets:  secrets.NewMemory(),
+		Events:   log,
+	})
+
+	// A workspace named for this test, so its stream is one no consumer has seen before.
+	workspace, err := server.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "projected"})
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	project, err := server.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	first, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project.GetProject().GetId(), Text: "hello"})
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	if _, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: project.GetProject().GetId(), ThreadId: first.GetThreadId(), Text: "and again",
+	}); err != nil {
+		t.Fatalf("second dispatch: %v", err)
+	}
+
+	projectionCtx, stopProjection := context.WithCancel(ctx)
+	defer stopProjection()
+	go func() {
+		_ = projection.New(log, durable, slog.New(slog.NewTextHandler(io.Discard, nil))).Run(projectionCtx)
+	}()
+
+	// The projection is a consumer of a live broker, so this waits for it rather than assuming.
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		listed, err := server.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: first.GetSessionId()})
+		if err != nil {
+			t.Fatalf("list turns: %v", err)
+		}
+		if len(listed.GetTurns()) == 2 {
+			if listed.GetTurns()[0].GetPrompt() != "hello" || listed.GetTurns()[1].GetPrompt() != "and again" {
+				t.Fatalf("the history came back as %q then %q, want hello then and again",
+					listed.GetTurns()[0].GetPrompt(), listed.GetTurns()[1].GetPrompt())
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d turns were projected within the timeout, want 2: the consumer is not reading the stream",
+				len(listed.GetTurns()))
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 }

@@ -177,6 +177,9 @@ func (w *world) start() error {
 	w.secrets = secrets.NewMemory()
 	w.store = store.NewMemory()
 	w.events = messaging.NewMemory()
+	// A scenario drives the projection itself and waits for it to finish, so the log says when it
+	// has handed over everything it holds rather than leaving a test to guess with a timeout.
+	w.events.StopWhenDrained = true
 	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
 	return w.serve()
 }
@@ -335,6 +338,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
+	initializeTurnsSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
 	initializeSandboxEnvSteps(sc)

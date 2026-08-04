@@ -11,8 +11,15 @@ Read the next section before you go looking for messages in it.
 by session so one session's events stay in order on one partition. A turn that failed is published
 too, because that is the one somebody comes looking for.
 
-**Nothing consumes it yet.** The projection that would read these back into a queryable read model is
-still to build (#17), and with it the console view that would show a session's history (#45).
+**A projection consumes it.** It subscribes to `^.+\.turns$`, so a workspace created while the crew
+is running is read too, and writes each record into the `turns` table. `quay turns <session>` lists a
+session's history from there. The projection runs inside the control plane process for now, because
+it materialises into the store that process already owns.
+
+Delivery from a log is at least once, so the same record arrives more than once: each event carries
+an id and the insert collides on it, which is what makes a replay harmless. Drop the table and the
+projection rebuilds it from the beginning of the log, which is the point of the log being the write
+side.
 
 **No chat channel publishes either.** The gateway (`cmd/gateway/main.go`) is still a service skeleton
 that boots telemetry and waits, so the inbound stream a channel would write to does not exist. That
@@ -138,8 +145,8 @@ In rough order, each an open issue:
   `workspace.inbound`. Blocked on a bot token rather than on code.
 - **Gated outbound delivery (#10)** and **a second channel (#11).** Replies going back out, and the
   proof that a second channel is additive.
-- **Projection: materialise the read model (#17).** The first consumer, and the thing that makes the
-  log the write side rather than a queue.
+- **Projection: materialise the read model (#17).** Turns are projected. Sandboxes, streams and
+  metrics are not, and neither is anything a channel would produce.
 - **Read surface for the console (#45).** Turns, sandboxes, streams and metrics, which is what the
   console needs before it can show more than the store.
 - **Automation graphs (#42).** The pure reducer over the log.

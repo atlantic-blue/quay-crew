@@ -11,6 +11,10 @@ import "google/protobuf/timestamp.proto";
 // happened to it, in order. A projection reads these back into a queryable read model, which is why
 // the event carries enough to rebuild a conversation without reading anything else.
 message TurnEvent {
+  // id identifies this record. Delivery from the log is at least once, so a consumer sees the same
+  // record more than once and needs something to recognise it by: the projection writes it as the
+  // primary key and lets a repeat collide harmlessly.
+  string id = 10;
   // session is the session the turn ran in, and the key the record is published under, so one
   // session's events stay in order on one partition.
   string session = 1;

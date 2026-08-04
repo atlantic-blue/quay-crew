@@ -19,6 +19,27 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
 
+// The default and the ceiling on how much of a session's history comes back at once. A conversation
+// is unbounded and a terminal is not, so a caller that asks for everything gets the most recent
+// slice of it rather than an answer nobody can read.
+const (
+	defaultTurnLimit = 50
+	maxTurnLimit     = 500
+)
+
+// TurnLimit is how many turns a request for limit actually gets: the default when nothing was asked
+// for, and the ceiling when too much was.
+func TurnLimit(limit int) int {
+	switch {
+	case limit <= 0:
+		return defaultTurnLimit
+	case limit > maxTurnLimit:
+		return maxTurnLimit
+	default:
+		return limit
+	}
+}
+
 // ErrNotFound is returned when a workspace or session does not exist, or has been deleted.
 var ErrNotFound = errors.New("store: not found")
 
@@ -83,6 +104,14 @@ type Store interface {
 	GetContext(ctx context.Context, scope ContextScope, owner string) (string, error)
 	// SetContext records what the model should be told at a scope.
 	SetContext(ctx context.Context, scope ContextScope, owner, body string) error
+
+	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
+	// turn: delivery from the event log is at least once, so a projection replaying a record it has
+	// already written must not double it. The turn's Id is what makes that possible.
+	AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error
+	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads
+	// the way it happened. A limit of zero or less means the default.
+	ListTurns(ctx context.Context, session string, limit int) ([]*quaycrewv1.Turn, error)
 
 	// Close releases whatever the implementation holds open.
 	Close()

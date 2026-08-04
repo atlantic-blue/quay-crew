@@ -40,6 +40,7 @@ const (
 	ControlPlaneService_SetSessionPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetSessionPermissionMode"
 	ControlPlaneService_ListContexts_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListContexts"
 	ControlPlaneService_SetContext_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetContext"
+	ControlPlaneService_ListTurns_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTurns"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 )
 
@@ -70,6 +71,7 @@ type ControlPlaneServiceClient interface {
 	SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
+	ListTurns(ctx context.Context, in *ListTurnsRequest, opts ...grpc.CallOption) (*ListTurnsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 }
 
@@ -291,6 +293,16 @@ func (c *controlPlaneServiceClient) SetContext(ctx context.Context, in *SetConte
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListTurns(ctx context.Context, in *ListTurnsRequest, opts ...grpc.CallOption) (*ListTurnsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTurnsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListTurns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInfoResponse)
@@ -328,6 +340,7 @@ type ControlPlaneServiceServer interface {
 	SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
+	ListTurns(context.Context, *ListTurnsRequest) (*ListTurnsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
@@ -401,6 +414,9 @@ func (UnimplementedControlPlaneServiceServer) ListContexts(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContext not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListTurns(context.Context, *ListTurnsRequest) (*ListTurnsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTurns not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInfo not implemented")
@@ -804,6 +820,24 @@ func _ControlPlaneService_SetContext_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListTurns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTurnsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListTurns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListTurns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListTurns(ctx, req.(*ListTurnsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
@@ -912,6 +946,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetContext",
 			Handler:    _ControlPlaneService_SetContext_Handler,
+		},
+		{
+			MethodName: "ListTurns",
+			Handler:    _ControlPlaneService_ListTurns_Handler,
 		},
 		{
 			MethodName: "GetInfo",

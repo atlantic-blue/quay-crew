@@ -98,6 +98,24 @@ func eventsOr(log messaging.EventLog) messaging.EventLog {
 	return log
 }
 
+// ListTurns returns a session's history, oldest first, from the read model the projection writes.
+//
+// It reads the store rather than the log: the log is the write side and replaying it on every
+// request would make a listing cost more the longer a crew has been running.
+func (s *Server) ListTurns(ctx context.Context, req *quaycrewv1.ListTurnsRequest) (*quaycrewv1.ListTurnsResponse, error) {
+	if req.GetSession() == "" {
+		return nil, status.Error(codes.InvalidArgument, "session is required")
+	}
+	if _, err := s.store.GetSession(ctx, req.GetSession()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	turns, err := s.store.ListTurns(ctx, req.GetSession(), int(req.GetLimit()))
+	if err != nil {
+		return nil, storeError(err, "list turns")
+	}
+	return &quaycrewv1.ListTurnsResponse{Turns: turns}, nil
+}
+
 // GetInfo reports what this control plane is running.
 func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quaycrewv1.GetInfoResponse, error) {
 	return &quaycrewv1.GetInfoResponse{

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -24,6 +26,10 @@ type Memory struct {
 	byThread   map[string]string
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
+	// turns is the projection of the event log, oldest first, and turnSeen is what makes writing the
+	// same record twice harmless.
+	turns    []*quaycrewv1.Turn
+	turnSeen map[string]bool
 }
 
 var _ Store = (*Memory)(nil)
@@ -329,3 +335,42 @@ func (m *Memory) Close() {}
 
 // clone copies a message so a caller cannot mutate what the store holds.
 func clone[T proto.Message](message T) T { return proto.Clone(message).(T) }
+
+// AppendTurn records a turn, ignoring one it has already seen.
+func (m *Memory) AppendTurn(_ context.Context, turn *quaycrewv1.Turn, _, _, _ string) error {
+	if turn.GetId() == "" {
+		return errors.New("store: a turn needs an id, because the projection sees the same one twice")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.turnSeen == nil {
+		m.turnSeen = make(map[string]bool)
+	}
+	if m.turnSeen[turn.GetId()] {
+		return nil
+	}
+	m.turnSeen[turn.GetId()] = true
+	m.turns = append(m.turns, clone(turn))
+	return nil
+}
+
+// ListTurns returns a session's turns oldest first, capped at limit, keeping the most recent when
+// there are more than the cap: the end of a conversation is the part somebody wants.
+func (m *Memory) ListTurns(_ context.Context, session string, limit int) ([]*quaycrewv1.Turn, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make([]*quaycrewv1.Turn, 0)
+	for _, turn := range m.turns {
+		if turn.GetSession() == session {
+			out = append(out, clone(turn))
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].GetOccurredAt().AsTime().Before(out[j].GetOccurredAt().AsTime())
+	})
+	if capped := TurnLimit(limit); len(out) > capped {
+		out = out[len(out)-capped:]
+	}
+	return out, nil
+}

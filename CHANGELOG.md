@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **A session's history can be read back.** Turns went onto the event log and nothing read them, so a
+  conversation was write only from the outside. A projection now consumes every workspace's turn
+  stream, by pattern rather than by a list fixed at startup so a workspace created while the crew is
+  running is read too, and materialises it into a `turns` table. `quay turns <session>` prints what a
+  session was asked and what came back, in the order it happened, without starting a container and
+  long after the sandbox is gone. Delivery from a log is at least once, so each event carries an id
+  and writing the same one twice leaves one turn: there is a conformance test for that against both
+  stores, and an integration test that runs it against a real broker.
+  ([#130](https://github.com/atlantic-blue/quay-crew/issues/130))
 - **Every turn is written to the event log.** The broker had run in the stack for weeks holding zero
   topics, because the boundary was built and nothing on either end of it was. The control plane now
   publishes a turn to `<workspace>.turns` whenever one runs, keyed by session so a conversation stays
