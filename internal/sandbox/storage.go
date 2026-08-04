@@ -156,6 +156,56 @@ func plainIdentifier(id string) bool {
 	return true
 }
 
+// ReadMemory returns what is written in a directory's memory file, and whether there is one. It reads
+// this process's own view of the directory, which is the same place the sandbox writes into.
+func ReadMemory(dir string) (string, bool) {
+	body, err := os.ReadFile(filepath.Join(dir, MemoryFile))
+	if err != nil {
+		return "", false
+	}
+	return string(body), true
+}
+
+// WriteMemory puts a body in a directory's memory file, making the directory if it is not there.
+//
+// An empty body removes the file rather than leaving an empty one, because an empty CLAUDE.md is a
+// thing the model opens and reads nothing from, and "there is no context here" is better said by
+// there being no file.
+func WriteMemory(dir, body string) error {
+	if err := makeWritableDir(dir); err != nil {
+		return err
+	}
+	file := filepath.Join(dir, MemoryFile)
+	if body == "" {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("sandbox: clear %s: %w", file, err)
+		}
+		return nil
+	}
+	if err := os.WriteFile(file, []byte(body), 0o666); err != nil {
+		return fmt.Errorf("sandbox: write %s: %w", file, err)
+	}
+	// The sandbox runs as a user this process did not choose, and it has to be able to write its own
+	// context back.
+	if err := os.Chmod(file, 0o666); err != nil {
+		return fmt.Errorf("sandbox: open up %s to the sandbox user: %w", file, err)
+	}
+	return nil
+}
+
+// MyDirs returns this process's own view of a session's two directories, workspace first, which is
+// what a caller rendering or reading the memory files needs.
+func (s Storage) MyDirs(cfg Config) []string {
+	if s.Dir == "" {
+		return nil
+	}
+	out := make([]string, 0, 2)
+	for _, dir := range layout(cfg) {
+		out = append(out, filepath.Join(append([]string{s.Dir}, dir.parts...)...))
+	}
+	return out
+}
+
 // makeWritableDir creates a directory the sandbox's own user can write to.
 //
 // The sandbox runs as a non root user from its image, and this process does not choose that user's

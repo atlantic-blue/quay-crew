@@ -78,8 +78,37 @@ type Store interface {
 	// is the control plane's question, not the store's.
 	RestartSession(ctx context.Context, id string) error
 
+	// GetContext returns what the model should be told at a scope, and empty when nothing has been
+	// written there. Nothing written is the normal state and is not an error.
+	GetContext(ctx context.Context, scope ContextScope, owner string) (string, error)
+	// SetContext records what the model should be told at a scope.
+	SetContext(ctx context.Context, scope ContextScope, owner, body string) error
+
 	// Close releases whatever the implementation holds open.
 	Close()
+}
+
+// ContextScope is which level a piece of context belongs to. They layer: the crew's is true
+// everywhere, a workspace's inside it, a project's inside that.
+type ContextScope string
+
+const (
+	// ContextCrew is true of everything this crew does. Its owner is empty.
+	ContextCrew ContextScope = "crew"
+	// ContextWorkspace is true of one workspace, owned by its id.
+	ContextWorkspace ContextScope = "workspace"
+	// ContextProject is true of one project, owned by its id.
+	ContextProject ContextScope = "project"
+)
+
+// KnownContextScope says whether a scope is one of the three.
+func KnownContextScope(scope ContextScope) bool {
+	switch scope {
+	case ContextCrew, ContextWorkspace, ContextProject:
+		return true
+	default:
+		return false
+	}
 }
 
 // NewID returns a random identifier for a workspace or a session.

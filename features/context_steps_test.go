@@ -105,15 +105,57 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Writing the file directly is what the operator does with an editor. An empty directory is the
-	// normal state and says nothing, so this is the difference the listing has to show.
-	sc.Step(`^the memory file for the project is written$`, func(ctx context.Context) error {
+	sc.Step(`^the operator sets the project's context to "([^"]*)"$`, func(ctx context.Context, body string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+			Scope: "project", Owner: w.projectID, Body: body,
+		})
+		return w.lastErr
+	})
+
+	sc.Step(`^the operator sets context at scope "([^"]*)" to "([^"]*)"$`,
+		func(ctx context.Context, scope, body string) error {
+			w := worldFrom(ctx)
+			_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+				Scope: scope, Owner: w.projectID, Body: body,
+			})
+			return nil
+		})
+
+	sc.Step(`^the project's memory file on disk reads "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "projects", w.projectID, "workspace")
-		if err := os.MkdirAll(dir, 0o777); err != nil {
-			return err
+		body, err := os.ReadFile(filepath.Join(dir, sandbox.MemoryFile))
+		if err != nil {
+			return fmt.Errorf("the model's memory file was not written: %w", err)
 		}
-		return os.WriteFile(filepath.Join(dir, sandbox.MemoryFile), []byte("# context\n"), 0o666)
+		if string(body) != want {
+			return fmt.Errorf("the memory file reads %q, want %q", body, want)
+		}
+		return nil
+	})
+
+	// Writing the file directly is what an agent inside the sandbox does: the directory is mounted in,
+	// so this process and that container are looking at one place.
+	sc.Step(`^something inside the sandbox writes "([^"]*)" into the project's memory$`,
+		func(ctx context.Context, body string) error {
+			w := worldFrom(ctx)
+			dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "projects", w.projectID, "workspace")
+			if err := os.MkdirAll(dir, 0o777); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(dir, sandbox.MemoryFile), []byte(body), 0o666)
+		})
+
+	sc.Step(`^the project's context reads "([^"]*)"$`, func(ctx context.Context, want string) error {
+		projects := contextFrom(ctx).scoped("project")
+		if len(projects) != 1 {
+			return fmt.Errorf("%d project directories, want 1", len(projects))
+		}
+		if got := projects[0].GetBody(); got != want {
+			return fmt.Errorf("the project's context reads %q, want %q", got, want)
+		}
+		return nil
 	})
 
 	sc.Step(`^the project's context has been written$`, func(ctx context.Context) error {

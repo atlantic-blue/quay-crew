@@ -25,10 +25,31 @@ Feature: The operator can find the files the model reads
     When the operator asks where context lives
     Then no context has been written yet
 
-  Scenario: Writing the memory file changes what it says
-    When the memory file for the project is written
+  Scenario: Setting a project's context is what the listing then reports
+    When the operator sets the project's context to "pay the water bill first"
     And the operator asks where context lives
     Then the project's context has been written
+    And the project's context reads "pay the water bill first"
+
+  # The store is where context lives, and the file in a sandbox is a rendering of it. Rendering it is
+  # the whole point: the model only reads files.
+  Scenario: Setting a project's context writes the file the model reads
+    When the operator sets the project's context to "pay the water bill first"
+    Then the project's memory file on disk reads "pay the water bill first"
+
+  # An agent that writes something into its own memory has learned something. Overwriting that on the
+  # next turn would make the crew's memory strictly worse than a text file, so the file wins and is
+  # taken into the store.
+  Scenario: What an agent writes into its own memory is kept
+    When the operator sets the project's context to "pay the water bill first"
+    And something inside the sandbox writes "and the gas bill is quarterly" into the project's memory
+    And the operator dispatches "hello" to the project
+    And the operator asks where context lives
+    Then the project's context reads "and the gas bill is quarterly"
+
+  Scenario: A scope the crew does not have is refused
+    When the operator sets context at scope "everything" to "no"
+    Then the control plane refuses it as invalid
 
   Scenario: One workspace directory however many projects it holds
     Given a second project named "gardening"

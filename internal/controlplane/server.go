@@ -121,6 +121,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	// a handle here pointing at nothing, and a name is handed to the operator for a container that is
 	// not there. Creating is idempotent, so the daemon is the source of truth and this map is only
 	// what to close later.
+	s.syncContext(ctx, session)
 	box, err := s.provider.Create(ctx, sandbox.Config{
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
@@ -132,6 +133,47 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	}
 	s.sandboxes[session.GetId()] = box
 	return box, nil
+}
+
+// syncContext makes the files the model reads agree with the store, in both directions.
+//
+// The store is where context lives, because a pod has no host directory to mount and an API cannot
+// edit a file on somebody's laptop. The file in the sandbox is a rendering of it, written here.
+//
+// It reads back first. An agent that has written something into its own CLAUDE.md has learned
+// something, and overwriting that on the next turn would make the crew's memory strictly worse than
+// a text file. So a file that differs from the store wins and is taken into the store; then the store
+// is rendered back out, which is a no op when they already agreed.
+//
+// A failure here never fails a turn. Context is what the model would like to know, not what it needs
+// to run, and a turn refused because a file could not be written is worse than a turn that runs
+// without yesterday's notes.
+func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
+	dirs := s.storage.MyDirs(sandbox.Config{
+		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
+	})
+	if len(dirs) != 2 {
+		return
+	}
+	for at, scoped := range []struct {
+		scope store.ContextScope
+		owner string
+	}{
+		{store.ContextWorkspace, session.GetWorkspace()},
+		{store.ContextProject, session.GetProject()},
+	} {
+		kept, err := s.store.GetContext(ctx, scoped.scope, scoped.owner)
+		if err != nil {
+			continue
+		}
+		if onDisk, found := sandbox.ReadMemory(dirs[at]); found && onDisk != kept {
+			if err := s.store.SetContext(ctx, scoped.scope, scoped.owner, onDisk); err != nil {
+				continue
+			}
+			kept = onDisk
+		}
+		_ = sandbox.WriteMemory(dirs[at], kept)
+	}
 }
 
 // closeSandbox tears down and forgets a session's sandbox.
@@ -326,15 +368,65 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 		if len(found) != 2 {
 			continue
 		}
-		// One row per workspace however many projects it holds: the workspace's directory is one
-		// directory, and listing it twice would read as two.
+		// One row per workspace however many projects it holds: the workspace's context is one thing,
+		// and listing it twice would read as two.
 		if !seenWorkspace[project.GetWorkspace()] {
 			seenWorkspace[project.GetWorkspace()] = true
-			dirs = append(dirs, contextDir("workspace", names[project.GetWorkspace()], found[0]))
+			dirs = append(dirs, s.contextDir(ctx, store.ContextWorkspace,
+				project.GetWorkspace(), names[project.GetWorkspace()], found[0]))
 		}
-		dirs = append(dirs, contextDir("project", project.GetName(), found[1]))
+		dirs = append(dirs, s.contextDir(ctx, store.ContextProject,
+			project.GetId(), project.GetName(), found[1]))
 	}
 	return &quaycrewv1.ListContextsResponse{Dirs: dirs}, nil
+}
+
+// SetContext records what the model should be told at a scope, and renders it into every directory
+// that already exists for it, so a sandbox already running picks it up on its next turn.
+func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextRequest) (*quaycrewv1.SetContextResponse, error) {
+	scope := store.ContextScope(req.GetScope())
+	if !store.KnownContextScope(scope) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"%q is not a scope: use %s, %s or %s",
+			req.GetScope(), store.ContextCrew, store.ContextWorkspace, store.ContextProject)
+	}
+	if scope != store.ContextCrew && req.GetOwner() == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "a %s context needs to say which one", scope)
+	}
+	if err := s.store.SetContext(ctx, scope, req.GetOwner(), req.GetBody()); err != nil {
+		return nil, storeError(err, "context")
+	}
+	s.renderContext(ctx, scope, req.GetOwner(), req.GetBody())
+	return &quaycrewv1.SetContextResponse{
+		Dir: &quaycrewv1.ContextDir{
+			Scope: req.GetScope(), Owner: req.GetOwner(),
+			Body: req.GetBody(), Written: req.GetBody() != "",
+		},
+	}, nil
+}
+
+// renderContext writes a scope's context out to the directory it belongs to, so what is on disk and
+// what is in the store do not disagree the moment somebody sets one through the API.
+func (s *Server) renderContext(ctx context.Context, scope store.ContextScope, owner, body string) {
+	cfg := sandbox.Config{ID: "render"}
+	at := 0
+	switch scope {
+	case store.ContextWorkspace:
+		cfg.Workspace, cfg.Project = owner, "render"
+	case store.ContextProject:
+		project, err := s.store.GetProject(ctx, owner)
+		if err != nil {
+			return
+		}
+		cfg.Workspace, cfg.Project, at = project.GetWorkspace(), owner, 1
+	default:
+		return
+	}
+	dirs := s.storage.MyDirs(cfg)
+	if len(dirs) != 2 {
+		return
+	}
+	_ = sandbox.WriteMemory(dirs[at], body)
 }
 
 // contextProjects is the projects a listing covers: one when asked for, else every one the crew has.
@@ -353,14 +445,22 @@ func (s *Server) contextProjects(ctx context.Context, project string) ([]*quaycr
 	return []*quaycrewv1.Project{found}, nil
 }
 
-func contextDir(scope, name string, found sandbox.Context) *quaycrewv1.ContextDir {
+// contextDir describes one scope's context: where its rendering sits, and what the store holds, which
+// is the answer to "what is the model actually told here".
+func (s *Server) contextDir(ctx context.Context, scope store.ContextScope, owner, name string, found sandbox.Context) *quaycrewv1.ContextDir {
+	body, err := s.store.GetContext(ctx, scope, owner)
+	if err != nil {
+		body = ""
+	}
 	return &quaycrewv1.ContextDir{
-		Scope:   scope,
+		Scope:   string(scope),
 		Name:    name,
+		Owner:   owner,
 		Host:    found.Host,
 		Sandbox: found.Sandbox,
 		Memory:  found.Memory,
-		Written: found.Written,
+		Body:    body,
+		Written: body != "",
 	}
 }
 

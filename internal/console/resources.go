@@ -141,6 +141,15 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					}
 					return editorFor(row.ID)
 				},
+				// The editor wrote a file; this is what tells the crew. Context lives in the store,
+				// and a file nobody read back is a note left on one machine.
+				After: func(ctx context.Context, row Row) error {
+					body, _ := sandbox.ReadMemory(filepath.Dir(row.ID))
+					_, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+						Scope: row.Cells[0], Owner: row.Parent, Body: body,
+					})
+					return err
+				},
 			},
 		},
 		List: func(ctx context.Context, _ string) ([]Row, error) {
@@ -190,11 +199,13 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 		written, state = "written", StateReady
 	}
 	return Row{
-		// The file is what an action on this row would open, so it is the identifier.
-		ID:    dir.GetMemory(),
-		Label: dir.GetName(),
-		Cells: []string{dir.GetScope(), dir.GetName(), written, dir.GetMemory()},
-		State: state,
+		// The file is what an action on this row would open, so it is the identifier, and the owner is
+		// what setting it has to name.
+		ID:     dir.GetMemory(),
+		Parent: dir.GetOwner(),
+		Label:  dir.GetName(),
+		Cells:  []string{dir.GetScope(), dir.GetName(), written, dir.GetMemory()},
+		State:  state,
 	}
 }
 

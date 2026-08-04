@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 4 August 2026
 
+- **Context lives in the database, and the file in a sandbox is a rendering of it.** It was only ever
+  files on one machine, which works nowhere else: a pod has no host directory to bind mount and an API
+  cannot edit a file on somebody's laptop. Setting it writes the file too, so a running sandbox picks it
+  up on its next turn, and **what an agent writes into its own memory is read back into the store**
+  rather than overwritten, because an agent that cannot write down what it learned is the problem this
+  project exists to solve. ([#119](https://github.com/atlantic-blue/quay-crew/pull/119))
 - **The database and the event log are documented.** [`docs/DATABASE.md`](docs/DATABASE.md) covers why
   a thread survives a restart at all, how to shell in with psql, what every table and column means, the
   queries worth knowing, and why reading from the prompt is safe while writing from it is not.
