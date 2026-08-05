@@ -6,6 +6,16 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 5 August 2026
+
+- **Leaving a conversation is `ctrl-q`, and ending one no longer takes the work with it.** A conversation
+  runs through a wrapper that keeps its terminal alive: pressing ctrl-d twice used to end the tmux
+  session and everything the model was in the middle of, and now it says the conversation is closed and
+  waits, with enter to open it again. The status line says how to leave, because it was off and there
+  was nothing on screen telling anybody. ctrl-q works because the wrapper turns off flow control first,
+  which is the only reason that key can be a key.
+  ([#137](https://github.com/atlantic-blue/quay-crew/pull/137))
+
 ## 4 August 2026
 
 - **A view of what each workspace has set.** `:secrets` in the console and `quay secret list`, naming

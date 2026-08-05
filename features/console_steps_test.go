@@ -167,7 +167,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		line := strings.Join(c.opened.Args, " ")
-		for _, want := range []string{sandbox.ContainerName(current.sessionID), "claude --resume conversation-1"} {
+		for _, want := range []string{sandbox.ContainerName(current.sessionID), sandbox.OpenConversation, "conversation-1"} {
 			if !strings.Contains(line, want) {
 				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
 			}

@@ -556,7 +556,7 @@ func (m Model) helpLines() []string {
 		// The one key here that is not the console's own. An open conversation runs inside tmux in its
 		// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
 		// ending it, which is what everybody does until somebody tells them otherwise.
-		{"ctrl-space d", "Leave an open conversation running, come back here"},
+		{"ctrl-q", "Leave an open conversation running, come back here"},
 		{"?", "This list"},
 		{"q", "Quit"},
 	} {

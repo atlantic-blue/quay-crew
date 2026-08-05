@@ -692,8 +692,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
-			"claude", "--resume", session.GetModelSessionId(),
-			"--permission-mode", permissionModeOf(session)},
+			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session)},
 	}, nil
 }
 
