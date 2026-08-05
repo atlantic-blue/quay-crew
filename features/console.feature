@@ -126,3 +126,75 @@ Feature: The operator sees the crew from the console
     Given a session started by dispatching "hello"
     When the operator opens the console
     Then enter on a session still opens its conversation rather than its history
+
+  # The wizard makes one thing. It shipped able to make only a whole new crew, because the workspace
+  # and the project questions were both required on the way to anything else, so adding a project to a
+  # workspace that already existed meant dropping to the command line and knowing what to type.
+  #
+  # These drive the console's own reducer against the real control plane, so "and nothing else" is a
+  # fact about the store rather than about a double.
+
+  Scenario: The wizard makes a workspace on its own
+    When the operator answers the wizard with:
+      | workspace |
+      | other     |
+    Then the crew has 2 workspaces
+    And the crew has 1 project
+
+  Scenario: The wizard adds a project to a workspace that already exists
+    When the operator answers the wizard with:
+      | project   |
+      | acme      |
+      | gardening |
+    Then the crew has 2 projects
+    And the crew has 1 workspace
+
+  Scenario: The wizard sets the subscription token on a workspace that already exists
+    When the operator answers the wizard with:
+      | secret           |
+      | acme             |
+      | sk-ant-oat-typed |
+    Then the secrets backend holds "sk-ant-oat-typed" for that workspace
+    And the crew has 1 workspace
+
+  Scenario: The wizard writes the context of a project that already exists
+    When the operator answers the wizard with:
+      | context                  |
+      | acme                     |
+      | house-bills              |
+      | pay the water bill first |
+    And the operator asks where context lives
+    Then the project's context reads "pay the water bill first"
+    And the crew has 1 project
+
+  Scenario: The wizard starts a session in a project that already exists
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | hello       |
+    Then the crew has 1 session
+    And the crew has 1 workspace
+    And the crew has 1 project
+
+  # Escape at any point makes nothing at all. The last row here is typed and never accepted, so escape
+  # lands on a half answered question rather than on a finished one.
+  #
+  # That the wizard also forgets the half typed token is asserted in internal/console, against the
+  # model the moment it closes. From out here the wizard is no longer drawn, so a console still holding
+  # the token would look exactly like one that had dropped it.
+  Scenario: Escaping the wizard makes nothing
+    When the operator abandons the wizard after typing:
+      | secret           |
+      | acme             |
+      | sk-ant-oat-typed |
+    Then the secrets backend holds nothing for that workspace
+    And the crew has 1 workspace
+
+  # The way off the old wizard, not only the way onto the new one. It used to open by asking for a new
+  # workspace name, so the first thing anybody typed was a name.
+  Scenario: A name typed at the first question is refused rather than making a workspace
+    When the operator answers the wizard with:
+      | acme-two |
+    Then the wizard says there is nothing called "acme-two" to make
+    And the crew has 1 workspace

@@ -103,6 +103,14 @@ type (
 	infoMsg struct{ info Info }
 	// behindMsg says the control plane is too old to answer at all.
 	behindMsg struct{}
+	// wizardChoicesMsg carries what a wizard step can be answered with. It names its step so a
+	// listing that came back after the operator moved on is discarded rather than offered for the
+	// wrong question.
+	wizardChoicesMsg struct {
+		step    wizardStep
+		choices []wizardChoice
+		err     error
+	}
 )
 
 // Model is the console. It is a pure function over messages: Update never performs input or output,
@@ -180,6 +188,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case behindMsg:
 		m.info.Behind = true
 		return m, nil
+	case wizardChoicesMsg:
+		return m.applyWizardChoices(msg), nil
 	case tea.KeyMsg:
 		return m.updateKey(msg)
 	default:
