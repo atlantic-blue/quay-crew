@@ -31,6 +31,12 @@ WORKDIR /home/agent/workspace
 # a printf here, so a test can read the same thing the image ships.
 COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
 
+# How a conversation is opened, and what happens when it ends. In the image rather than built into a
+# command line so the shape of it is readable, and so a test can read the same thing the image ships.
+# Executable at copy time, because everything after the image drops to the sandbox's own user and
+# that user cannot chmod a file it does not own.
+COPY --chmod=0755 deploy/sandbox/open-conversation.sh /usr/local/bin/open-conversation
+
 RUN mkdir -p /home/agent/.claude \
     && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \
     && printf '%s\n' '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true,"hasCompletedProjectOnboarding":true}}}' > /home/agent/.claude.json

@@ -83,6 +83,9 @@ const (
 	// MemoryFile is what the model reads as its memory in a directory: user memory in the home
 	// directory, project memory in the working directory. It is the model's own convention, not ours.
 	MemoryFile = "CLAUDE.md"
+	// OpenConversation is what a sandbox runs to open a session's conversation. It keeps the terminal
+	// alive when the conversation ends, so ending one does not take everything running with it.
+	OpenConversation = "open-conversation"
 )
 
 // ContainerPrefix is what a session's container name starts with, so ours are recognisable among

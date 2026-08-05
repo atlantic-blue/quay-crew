@@ -81,7 +81,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
 		// conversation-1 is what the recording runner hands back for a first turn.
-		if !strings.Contains(line, "claude --resume conversation-1") {
+		if !strings.Contains(line, "conversation-1") {
 			return fmt.Errorf("the command is %q, want it to resume the turn's conversation", line)
 		}
 		return nil
@@ -97,7 +97,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
-		for _, want := range []string{"tmux new-session -A -s " + sandbox.AttachedSessionName, "claude --resume"} {
+		for _, want := range []string{
+			"tmux new-session -A -s " + sandbox.AttachedSessionName,
+			// Not claude directly: ending a conversation used to take the whole terminal with it.
+			sandbox.OpenConversation,
+		} {
 			if !strings.Contains(line, want) {
 				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
 			}
@@ -113,7 +117,9 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
-		if !strings.Contains(line, "--permission-mode "+want) {
+		// open-conversation takes the mode as its second argument and passes it to the model, which is
+		// what keeps the whole command one readable line.
+		if !strings.HasSuffix(line, " "+want) {
 			return fmt.Errorf("the command is %q, want it to run as %q", line, want)
 		}
 		return nil

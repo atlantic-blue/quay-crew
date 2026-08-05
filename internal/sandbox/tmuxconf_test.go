@@ -34,6 +34,18 @@ func TestTheDetachPrefixIsNotAKeyTheTerminalEats(t *testing.T) {
 		t.Fatalf("reading the sandbox's tmux configuration: %v", err)
 	}
 
+	// A no prefix binding on a reserved character is allowed only where something turns that
+	// character back into a key. ctrl-q is flow control until open-conversation runs stty -ixon.
+	if strings.Contains(string(config), "bind -n C-q") {
+		script, err := os.ReadFile("../../deploy/sandbox/open-conversation.sh")
+		if err != nil {
+			t.Fatalf("reading what opens a conversation: %v", err)
+		}
+		if !strings.Contains(string(script), "stty -ixon") {
+			t.Fatal("ctrl-q is bound but nothing turns off flow control, so the terminal eats it")
+		}
+	}
+
 	var found int
 	for _, line := range strings.Split(string(config), "\n") {
 		fields := strings.Fields(line)
