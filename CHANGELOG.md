@@ -14,7 +14,7 @@ read, or run with `make features`.
   waits, with enter to open it again. The status line says how to leave, because it was off and there
   was nothing on screen telling anybody. ctrl-q works because the wrapper turns off flow control first,
   which is the only reason that key can be a key.
-  ([#138](https://github.com/atlantic-blue/quay-crew/pull/138))
+  ([#137](https://github.com/atlantic-blue/quay-crew/pull/137))
 
 ## 4 August 2026
 
