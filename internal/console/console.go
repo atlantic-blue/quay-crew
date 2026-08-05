@@ -53,6 +53,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
 	model.info = known
+	model = model.WithClient(client)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)

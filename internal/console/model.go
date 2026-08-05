@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	tea "github.com/charmbracelet/bubbletea"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,6 +33,9 @@ const (
 	// where the command bar draws, rather than a floating window: the console has no overlay
 	// machinery and this does not need any.
 	modeConfirm
+	// modeWizard is making something: a workspace, a project, and whatever else was offered along the
+	// way. Nothing is made until the last step, so leaving it creates nothing.
+	modeWizard
 )
 
 // pending is a destructive action waiting on an answer, and the row it would act on. The row is held
@@ -121,6 +125,16 @@ type Model struct {
 	info     Info
 	source   InfoSource
 	waiting  pending
+	// making is what the wizard has been told so far, and client is what it will ask.
+	making wizard
+	client quaycrewv1.ControlPlaneServiceClient
+}
+
+// WithClient gives the console the crew to ask when it makes something. Listing goes through each
+// resource's own lister, so this is only for the wizard, which makes things no single view owns.
+func (m Model) WithClient(client quaycrewv1.ControlPlaneServiceClient) Model {
+	m.client = client
+	return m
 }
 
 // New opens the console on the named resource. source describes the crew it is connected to, and may

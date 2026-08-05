@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 5 August 2026
 
+- **A wizard that makes things.** `n` in the console asks for a workspace, a project, the subscription
+  token, the project's context and a first message, in the order they depend on each other, and makes
+  them in one pass at the end. Escape at any step makes nothing and forgets everything, including a half
+  typed token. The token is never echoed. The command line could already create all five; the console
+  could create none. ([#139](https://github.com/atlantic-blue/quay-crew/pull/139))
+- **The key list stops cutting its longest entries.** Columns are as wide as the widest entry rather
+  than an even share of the room, because an even share truncates and a key list missing its last few
+  characters is one that lies.
 - **Leaving a conversation is `ctrl-q`, and ending one no longer takes the work with it.** A conversation
   runs through a wrapper that keeps its terminal alive: pressing ctrl-d twice used to end the tmux
   session and everything the model was in the middle of, and now it says the conversation is closed and

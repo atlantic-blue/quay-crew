@@ -1130,8 +1130,8 @@ func TestTheQuestionMarkListsTheViews(t *testing.T) {
 			t.Fatalf("the key list does not name %q:\n%s", want, view)
 		}
 	}
-	// And what to type for one, which is the point of listing them.
-	if !strings.Contains(view, "ctx") {
+	// And the briefest way to type one, which is the point of listing them.
+	if !strings.Contains(view, "<context c>") {
 		t.Fatalf("the key list does not say what to type for the context view:\n%s", view)
 	}
 }
@@ -1322,7 +1322,7 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 
 	model, _ = update(t, model, runes("?"))
 	view := model.View()
-	for _, want := range []string{"help(sessions)", "Quit", "Refresh now", "Filter these rows", "<enter a> Open", "<ctrl-q> Leave an open conversation running"} {
+	for _, want := range []string{"help(sessions)", "Quit", "Refresh now", "Filter these rows", "<enter a> Open", "<ctrl-q> Leave a conversation running"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the key list does not mention %q:\n%s", want, view)
 		}
@@ -1732,5 +1732,174 @@ func TestTheSecretsViewNeverShowsAValue(t *testing.T) {
 	// There is nowhere for a value to be, by construction: the reference carries none.
 	if len(Secrets(client).Actions) != 0 {
 		t.Fatal("the secrets view has an action on a row, which is where a value would end up")
+	}
+}
+
+// wizardClient records everything the wizard asks the crew to make.
+type wizardClient struct {
+	fakeClient
+	workspaces, projects, secrets, contexts, dispatched []string
+}
+
+func (w *wizardClient) CreateWorkspace(_ context.Context, req *quaycrewv1.CreateWorkspaceRequest, _ ...grpc.CallOption) (*quaycrewv1.CreateWorkspaceResponse, error) {
+	w.workspaces = append(w.workspaces, req.GetName())
+	return &quaycrewv1.CreateWorkspaceResponse{Workspace: &quaycrewv1.Workspace{Id: "w1", Name: req.GetName()}}, nil
+}
+
+func (w *wizardClient) CreateProject(_ context.Context, req *quaycrewv1.CreateProjectRequest, _ ...grpc.CallOption) (*quaycrewv1.CreateProjectResponse, error) {
+	w.projects = append(w.projects, req.GetName())
+	return &quaycrewv1.CreateProjectResponse{Project: &quaycrewv1.Project{Id: "p1", Name: req.GetName()}}, nil
+}
+
+func (w *wizardClient) SetSecret(_ context.Context, req *quaycrewv1.SetSecretRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSecretResponse, error) {
+	w.secrets = append(w.secrets, req.GetKey())
+	return &quaycrewv1.SetSecretResponse{}, nil
+}
+
+func (w *wizardClient) SetContext(_ context.Context, req *quaycrewv1.SetContextRequest, _ ...grpc.CallOption) (*quaycrewv1.SetContextResponse, error) {
+	w.contexts = append(w.contexts, req.GetBody())
+	return &quaycrewv1.SetContextResponse{}, nil
+}
+
+func (w *wizardClient) Dispatch(_ context.Context, req *quaycrewv1.DispatchRequest, _ ...grpc.CallOption) (*quaycrewv1.DispatchResponse, error) {
+	w.dispatched = append(w.dispatched, req.GetText())
+	return &quaycrewv1.DispatchResponse{}, nil
+}
+
+func wizardAt(t *testing.T, client *wizardClient) Model {
+	t.Helper()
+	model := newTestModel(t, Sessions(client)).WithClient(client)
+	model, _ = update(t, model, runes("n"))
+	return model
+}
+
+// TestTheWizardMakesTheWholeThing walks the five steps and asserts each answer reached the call it
+// belongs to.
+func TestTheWizardMakesTheWholeThing(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	if model.mode != modeWizard {
+		t.Fatalf("mode = %v, want the wizard open", model.mode)
+	}
+
+	var cmd tea.Cmd
+	for _, answer := range []string{"acme", "bills", "tok-xyz", "pay the water bill first", "hello"} {
+		model = typeAll(t, model, answer)
+		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	}
+	if cmd == nil {
+		t.Fatal("the last step produced no command, so nothing was ever made")
+	}
+	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
+		t.Fatalf("making it returned %#v, want a clean actionDoneMsg", cmd())
+	}
+
+	for what, got := range map[string][]string{
+		"workspaces": client.workspaces,
+		"projects":   client.projects,
+		"secrets":    client.secrets,
+		"contexts":   client.contexts,
+		"dispatched": client.dispatched,
+	} {
+		if len(got) != 1 {
+			t.Fatalf("%s = %v, want exactly one", what, got)
+		}
+	}
+	if client.workspaces[0] != "acme" || client.projects[0] != "bills" {
+		t.Fatalf("made %v and %v", client.workspaces, client.projects)
+	}
+	if client.contexts[0] != "pay the water bill first" || client.dispatched[0] != "hello" {
+		t.Fatalf("context %v, message %v", client.contexts, client.dispatched)
+	}
+}
+
+// TestEscapeInTheWizardMakesNothing is the one behaviour here worth being certain of: a wizard that
+// half creates is worse than no wizard.
+func TestEscapeInTheWizardMakesNothing(t *testing.T) {
+	for _, answered := range []int{0, 1, 2, 3, 4} {
+		client := &wizardClient{}
+		model := wizardAt(t, client)
+		for i := 0; i < answered; i++ {
+			model = typeAll(t, model, "something")
+			model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+
+		if model.mode != modeWizard && model.mode != modeBrowse {
+			t.Fatalf("mode = %v after escape", model.mode)
+		}
+		if model.mode != modeBrowse {
+			t.Fatalf("escape at step %d left the wizard open", answered)
+		}
+		if cmd != nil {
+			t.Fatalf("escape at step %d produced a command", answered)
+		}
+		made := len(client.workspaces) + len(client.projects) + len(client.secrets) +
+			len(client.contexts) + len(client.dispatched)
+		if made != 0 {
+			t.Fatalf("escape at step %d made %d things", answered, made)
+		}
+
+		// And it forgets everything the moment it closes. A cancelled wizard that kept a half typed
+		// token would be carrying one around for the rest of the session.
+		if model.making != (wizard{}) {
+			t.Fatalf("escape at step %d left %+v behind", answered, model.making)
+		}
+	}
+}
+
+// TestTheWizardNeedsTheTwoThingsItIsFor: a workspace and a project are not optional, and the rest are
+// offers that enter skips.
+func TestTheWizardNeedsTheTwoThingsItIsFor(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.err == nil {
+		t.Fatal("an empty workspace name was accepted")
+	}
+	model = typeAll(t, model, "acme")
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.err == nil {
+		t.Fatal("an empty project name was accepted")
+	}
+
+	model = typeAll(t, model, "bills")
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	// Now skip the three offers, which should still make the workspace and the project.
+	var cmd tea.Cmd
+	for i := 0; i < 3; i++ {
+		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	}
+	if cmd == nil {
+		t.Fatal("skipping the offers produced no command")
+	}
+	cmd()
+	if len(client.workspaces) != 1 || len(client.projects) != 1 {
+		t.Fatalf("made %v and %v", client.workspaces, client.projects)
+	}
+	if len(client.secrets)+len(client.contexts)+len(client.dispatched) != 0 {
+		t.Fatal("a skipped offer was made anyway")
+	}
+}
+
+// TestTheWizardNeverShowsTheToken: a value on a screen is a value in that terminal's scrollback, and
+// this one runs every turn the crew makes.
+func TestTheWizardNeverShowsTheToken(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	for _, answer := range []string{"acme", "bills"} {
+		model = typeAll(t, model, answer)
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	}
+	model = typeAll(t, model, "sk-ant-oat-secret")
+
+	view := model.View()
+	if strings.Contains(view, "sk-ant-oat-secret") {
+		t.Fatalf("the token is on screen:\n%s", view)
+	}
+	if !strings.Contains(view, strings.Repeat("*", len("sk-ant-oat-secret"))) {
+		t.Fatalf("nothing shows that anything was typed:\n%s", view)
 	}
 }

@@ -319,23 +319,33 @@ func (m Model) helpBody() []string {
 	return lines
 }
 
-// intoColumns folds a list into however many columns it takes to fit in height lines, reading down
-// each column before starting the next. A list that already fits is left alone.
+// intoColumns folds a list into however many columns fit in height lines, reading down each column
+// before starting the next. A list that already fits is left alone.
 //
-// It stops widening at the point where a column would be too narrow to read, and returns what it has:
-// a window that small cannot show every key, and the caller pads or clips. Everything above that is
-// shown in full.
+// The columns are as wide as the widest entry rather than an even share of the room, because an even
+// share cuts whatever is longer than it and a key list with its last few characters missing is a key
+// list that lies. Fewer columns and everything readable beats more columns and an ellipsis.
 func intoColumns(entries []string, height, width int) []string {
 	if height < 1 || len(entries) <= height {
 		return entries
 	}
-	const narrowest = 24
-	columns := (len(entries) + height - 1) / height
-	if room := width / narrowest; room > 0 && columns > room {
-		columns = room
+	widest := 0
+	for _, entry := range entries {
+		if w := lipgloss.Width(entry); w > widest {
+			widest = w
+		}
 	}
-	if columns < 2 {
-		columns = 2
+
+	const gap = 2
+	columns := 1
+	if widest+gap > 0 {
+		columns = width / (widest + gap)
+	}
+	if columns < 1 {
+		columns = 1
+	}
+	if needed := (len(entries) + height - 1) / height; columns > needed {
+		columns = needed
 	}
 	perColumn := (len(entries) + columns - 1) / columns
 
@@ -351,7 +361,7 @@ func intoColumns(entries []string, height, width int) []string {
 				line += entries[at]
 				break
 			}
-			line += pad(entries[at], width/columns)
+			line += pad(entries[at], widest+gap)
 		}
 		folded = append(folded, line)
 	}
@@ -462,6 +472,8 @@ func (m Model) footer() string {
 		return truncate(prompt.Render("/")+m.input+prompt.Render("_"), m.width)
 	case modeConfirm:
 		return truncate(m.confirmPrompt(), m.width)
+	case modeWizard:
+		return truncate(m.wizardPrompt(), m.width)
 	case modeBrowse:
 		return truncate(m.breadcrumb(), m.width)
 	default:
@@ -488,6 +500,16 @@ func (m Model) offered() string {
 		return faint.Render("   nothing called that")
 	}
 	return faint.Render("   " + strings.Join(names, "  "))
+}
+
+// wizardPrompt asks the step's question and shows what has been typed, which for a secret is asterisks
+// and nothing else.
+func (m Model) wizardPrompt() string {
+	if m.making.step == wizardWorking {
+		return prompt.Render(" making ") + faint.Render(m.making.summary())
+	}
+	return prompt.Render(" "+m.making.prompt()+": ") + m.making.shown() + prompt.Render("_") +
+		faint.Render("   enter accepts, esc cancels and makes nothing")
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
@@ -540,8 +562,9 @@ func (m Model) helpLines() []string {
 	// already know what is in there.
 	lines = append(lines, "", crumb.Render("  views, with :"))
 	for _, name := range m.registry.Names() {
-		spellings := m.registry.Spellings(name)
-		lines = append(lines, "    "+hint(strings.Join(spellings, " "), name))
+		// The name and the shortest way to type it. Every spelling would make one entry wider than the
+		// column and push what follows off the edge, and the command bar offers them all anyway.
+		lines = append(lines, "    "+hint(strings.Join(shortestSpelling(m.registry.Spellings(name)), " "), name))
 	}
 
 	lines = append(lines, "", crumb.Render("  everywhere"))
@@ -556,13 +579,29 @@ func (m Model) helpLines() []string {
 		// The one key here that is not the console's own. An open conversation runs inside tmux in its
 		// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
 		// ending it, which is what everybody does until somebody tells them otherwise.
-		{"ctrl-q", "Leave an open conversation running, come back here"},
+		{"n", "Make a workspace, project, session"},
+		{"ctrl-q", "Leave a conversation running"},
 		{"?", "This list"},
 		{"q", "Quit"},
 	} {
 		lines = append(lines, "    "+hint(pair[0], pair[1]))
 	}
 	return append(lines, "", faint.Render("  any key closes this"))
+}
+
+// shortestSpelling is a resource's name and the briefest alias for it, which is what somebody wants
+// from a list they are reading to find out what to type.
+func shortestSpelling(spellings []string) []string {
+	if len(spellings) < 2 {
+		return spellings
+	}
+	shortest := spellings[1]
+	for _, spelling := range spellings[1:] {
+		if len(spelling) < len(shortest) {
+			shortest = spelling
+		}
+	}
+	return []string{spellings[0], shortest}
 }
 
 // pad right pads to a display width, leaving anything already wider alone.
