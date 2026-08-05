@@ -39,6 +39,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateBrowseKey(msg)
 	case modeConfirm:
 		return m.updateConfirmKey(msg)
+	case modeWizard:
+		return m.updateWizardKey(msg)
 	case modeHelp:
 		// Any key closes it. Nothing in here acts on anything, so there is nothing to get wrong.
 		m.mode = modeBrowse
@@ -62,6 +64,14 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "?":
 		m.mode = modeHelp
+		return m, nil
+	case "n":
+		// Making something is not a thing any one view owns, so it is not an action on a row.
+		if m.client == nil {
+			m.err = fmt.Errorf("this console cannot make anything: it was opened without a crew")
+			return m, nil
+		}
+		m.mode, m.making, m.err = modeWizard, wizard{}, nil
 		return m, nil
 	case "r", "g":
 		// Refreshing is the key reached for constantly, so it holds the short obvious letter. `g` is
