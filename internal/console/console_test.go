@@ -1903,3 +1903,67 @@ func TestTheWizardNeverShowsTheToken(t *testing.T) {
 		t.Fatalf("nothing shows that anything was typed:\n%s", view)
 	}
 }
+
+// TestTheWizardClosesWhenItHasMadeSomething. Answering the last question made everything and then
+// left the console drawn on the wizard forever: the refreshed list underneath was never seen, so
+// nothing looked like it had happened, and the next enter was accepted as an answer to the step that
+// was already working, whose prompt is the literal string "making it".
+//
+// Julian, driving it: "the current wizard doesnt work, it fails to create anything", then "it says
+// making it: this one is needed".
+func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	var cmd tea.Cmd
+	for _, answer := range []string{"acme", "bills", "", "", ""} {
+		model = typeAll(t, model, answer)
+		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	}
+	if cmd == nil {
+		t.Fatal("the last answer produced no command, so nothing was ever made")
+	}
+	// Run it and feed the answer back, which is what the runtime does.
+	model, _ = update(t, model, cmd())
+
+	if model.mode != modeBrowse {
+		t.Fatalf("the wizard is still open after making it, mode = %v", model.mode)
+	}
+	if model.making != (wizard{}) {
+		t.Fatalf("the finished wizard left %+v behind", model.making)
+	}
+}
+
+// TestKeysWhileTheWizardIsWorkingAreNotAnswers: until the crew answers, the wizard is asking nothing,
+// so a keypress is not an answer to anything. Enter used to be accepted as an empty answer to the
+// working step and refused as "making it: this one is needed", which names no question the operator
+// was ever asked.
+func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	for _, answer := range []string{"acme", "bills", "", "", ""} {
+		model = typeAll(t, model, answer)
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	}
+	if model.making.step != wizardWorking {
+		t.Fatalf("the wizard is at step %v, want it working", model.making.step)
+	}
+
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.err != nil {
+		t.Fatalf("enter while working reported %q, want nothing: the operator was asked no question", model.err)
+	}
+	if cmd != nil {
+		t.Fatal("enter while working asked the crew to make it a second time")
+	}
+
+	model = typeAll(t, model, "stray")
+	if model.making.typed != "" {
+		t.Fatalf("keys while working were kept as %q", model.making.typed)
+	}
+	// Escape is the one key that still works, so a crew that never answers is not a trap.
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.mode != modeBrowse {
+		t.Fatalf("escape while working left the console in %v", model.mode)
+	}
+}

@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 5 August 2026
 
+- **The wizard closes when it has made what it was asked for.** It made everything correctly and then
+  stayed drawn over the list it had already refreshed, so nothing looked like it had happened, and the
+  next enter was taken as an answer to the step that was already working, whose prompt is the words
+  `making it`. Julian, driving it: "it fails to create anything", then "it says making it: this one is
+  needed". A key other than escape now does nothing while the crew is making it, because the wizard is
+  asking nothing at that point. ([#140](https://github.com/atlantic-blue/quay-crew/issues/140))
 - **A wizard that makes things.** `n` in the console asks for a workspace, a project, the subscription
   token, the project's context and a first message, in the order they depend on each other, and makes
   them in one pass at the end. Escape at any step makes nothing and forgets everything, including a half
