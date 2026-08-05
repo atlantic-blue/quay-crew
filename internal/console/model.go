@@ -181,6 +181,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case actionDoneMsg:
 		m.err = msg.err
+		// The wizard is finished the moment the crew answers, so it closes and the refreshed list
+		// shows what it made. Left open it drew "making it" over a list it had already updated, which
+		// reads as nothing having happened at all. A refusal comes back on the list rather than
+		// trapping the operator on a question that is no longer being asked.
+		if m.mode == modeWizard {
+			m.mode, m.making = modeBrowse, wizard{}
+		}
 		return m, listCmd(m.active, m.parent)
 	case infoMsg:
 		m.info = msg.info

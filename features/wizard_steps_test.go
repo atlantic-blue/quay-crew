@@ -7,6 +7,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
@@ -77,6 +78,35 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 		}
 		if got := len(listed.GetSessions()); got != want {
 			return fmt.Errorf("the crew has %d sessions, want %d", got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console is asking nothing$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		if strings.Contains(view, "esc cancels and makes nothing") {
+			return fmt.Errorf("the wizard is still asking a question:\n%s", view)
+		}
+		if strings.Contains(view, "making ") {
+			return fmt.Errorf("the console is still drawn on the wizard working:\n%s", view)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console lists the session the wizard started$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		// Asked of the control plane rather than of the world, because this turn was dispatched by
+		// the console rather than by a step.
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+		if err != nil {
+			return err
+		}
+		if len(listed.GetSessions()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetSessions()))
+		}
+		view := c.model.View()
+		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
+			return fmt.Errorf("the console does not list the session the wizard made:\n%s", view)
 		}
 		return nil
 	})

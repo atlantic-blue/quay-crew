@@ -198,3 +198,19 @@ Feature: The operator sees the crew from the console
       | acme-two |
     Then the wizard says there is nothing called "acme-two" to make
     And the crew has 1 workspace
+
+  # The wizard made everything it was asked for and then stayed drawn over the list it had already
+  # refreshed, so nothing looked like it had happened, and the next enter was taken as an answer to a
+  # question nobody was asked.
+  #
+  # What a key does while the crew is still making it is a table test in internal/console instead: out
+  # here the make completes inside the step, so there is no working window to press a key into, and a
+  # scenario written for it passed against its own mutation.
+  Scenario: The wizard closes when it has made what it was asked for, and the list shows it
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | hello       |
+    Then the console is asking nothing
+    And the console lists the session the wizard started
