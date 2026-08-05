@@ -126,9 +126,19 @@ func (w wizard) summary() string {
 func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
-		// Nothing has been made yet, by construction, so there is nothing to undo.
+		// Nothing has been made yet, by construction, so there is nothing to undo. Escape works while
+		// the crew is being asked too, so a crew that never answers is not a trap.
 		m.mode, m.making = modeBrowse, wizard{}
 		return m, nil
+	}
+	if m.making.step == wizardWorking {
+		// The crew is making it and the wizard is asking nothing, so a key is not an answer to
+		// anything. Enter used to be taken as an empty answer to this step and refused as "making it:
+		// this one is needed", naming no question anybody was asked.
+		return m, nil
+	}
+
+	switch msg.String() {
 	case "enter":
 		next, err := m.making.accept()
 		if err != nil {

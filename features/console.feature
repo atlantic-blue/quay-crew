@@ -126,3 +126,20 @@ Feature: The operator sees the crew from the console
     Given a session started by dispatching "hello"
     When the operator opens the console
     Then enter on a session still opens its conversation rather than its history
+
+  # The wizard made everything it was asked for and then stayed drawn over the list it had already
+  # refreshed, so nothing looked like it had happened, and the next enter was taken as an answer to a
+  # question nobody was asked. These drive the console's own reducer against the real control plane.
+  # What a key does while the crew is still making it is a table test in internal/console instead: out
+  # here the make completes inside the step, so there is no working window to press a key into, and a
+  # scenario written for it passed against its own mutation.
+  Scenario: The wizard closes when it has made what it was asked for, and the list shows it
+    When the operator makes something from the wizard, answering:
+      | acme-two  |
+      | gardening |
+      |           |
+      |           |
+      | hello     |
+    Then the console is asking nothing
+    And the console lists the session the wizard started
+    And the crew has 2 workspaces
