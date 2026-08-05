@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 5 August 2026
 
+- **The wizard makes one thing at a time.** `n` asks what to make first, then only the questions that
+  thing needs, and where a question needs a parent it offers what the crew already has instead of a
+  blank name. A workspace, a project, the subscription token, a project's context or a session, each on
+  its own. It could previously only make a whole new crew from nothing, so there was no way to add a
+  project to a workspace you had, or set a token on one. Making a project makes a project and nothing
+  else. ([#138](https://github.com/atlantic-blue/quay-crew/issues/138))
 - **The wizard closes when it has made what it was asked for.** It made everything correctly and then
   stayed drawn over the list it had already refreshed, so nothing looked like it had happened, and the
   next enter was taken as an answer to the step that was already working, whose prompt is the words

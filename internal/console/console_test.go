@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1739,6 +1740,9 @@ func TestTheSecretsViewNeverShowsAValue(t *testing.T) {
 type wizardClient struct {
 	fakeClient
 	workspaces, projects, secrets, contexts, dispatched []string
+	// projectsIn is the workspace each project was made in, so a scenario can say the parent was the
+	// one that already existed rather than one made on the way.
+	projectsIn []string
 }
 
 func (w *wizardClient) CreateWorkspace(_ context.Context, req *quaycrewv1.CreateWorkspaceRequest, _ ...grpc.CallOption) (*quaycrewv1.CreateWorkspaceResponse, error) {
@@ -1748,6 +1752,7 @@ func (w *wizardClient) CreateWorkspace(_ context.Context, req *quaycrewv1.Create
 
 func (w *wizardClient) CreateProject(_ context.Context, req *quaycrewv1.CreateProjectRequest, _ ...grpc.CallOption) (*quaycrewv1.CreateProjectResponse, error) {
 	w.projects = append(w.projects, req.GetName())
+	w.projectsIn = append(w.projectsIn, req.GetWorkspace())
 	return &quaycrewv1.CreateProjectResponse{Project: &quaycrewv1.Project{Id: "p1", Name: req.GetName()}}, nil
 }
 
@@ -1766,121 +1771,292 @@ func (w *wizardClient) Dispatch(_ context.Context, req *quaycrewv1.DispatchReque
 	return &quaycrewv1.DispatchResponse{}, nil
 }
 
+// made is everything the wizard asked the crew for, in one number. It is what "and nothing else" is
+// asserted against.
+func (w *wizardClient) made() int {
+	return len(w.workspaces) + len(w.projects) + len(w.secrets) + len(w.contexts) + len(w.dispatched)
+}
+
+// wizardAt opens the console on a crew that already has a workspace and a project in it, which is the
+// situation the wizard could do nothing with: everything it made, it made from nothing.
 func wizardAt(t *testing.T, client *wizardClient) Model {
 	t.Helper()
+	client.fakeClient.workspaces = []*quaycrewv1.Workspace{{Id: "w-acme", Name: "acme"}}
+	client.fakeClient.projects = []*quaycrewv1.Project{{Id: "p-bills", Workspace: "w-acme", Name: "house-bills"}}
 	model := newTestModel(t, Sessions(client)).WithClient(client)
 	model, _ = update(t, model, runes("n"))
 	return model
 }
 
-// TestTheWizardMakesTheWholeThing walks the five steps and asserts each answer reached the call it
-// belongs to.
-func TestTheWizardMakesTheWholeThing(t *testing.T) {
+// answer types one answer and accepts it, running whatever the console asks for and feeding the
+// result back, which is what the bubbletea runtime does with no terminal in the way. A step that
+// offers what already exists loads it that way, so the next answer has something to resolve against.
+func answer(t *testing.T, model Model, text string) (Model, tea.Cmd) {
+	t.Helper()
+	model = typeAll(t, model, text)
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil || !model.making.picking() {
+		// Anything else is the command that makes something, and it is the caller's to run once.
+		return model, cmd
+	}
+	model, _ = update(t, model, cmd())
+	return model, nil
+}
+
+// answerAll walks a whole wizard and returns the command the last answer produced, which is the one
+// that makes something.
+func answerAll(t *testing.T, model Model, answers ...string) (Model, tea.Cmd) {
+	t.Helper()
+	var cmd tea.Cmd
+	for _, text := range answers {
+		model, cmd = answer(t, model, text)
+	}
+	return model, cmd
+}
+
+// TestTheWizardMakesOneThing is the whole point of it: each kind can be made on its own, against a
+// crew that already has a workspace and a project, and each touches exactly one call.
+func TestTheWizardMakesOneThing(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		answers []string
+		want    func(*wizardClient) []string
+	}{
+		{"workspace", []string{"workspace", "other"}, func(c *wizardClient) []string { return c.workspaces }},
+		{"project", []string{"project", "acme", "gardening"}, func(c *wizardClient) []string { return c.projects }},
+		{"secret", []string{"secret", "acme", "tok-xyz"}, func(c *wizardClient) []string { return c.secrets }},
+		{"context", []string{"context", "acme", "house-bills", "the water bill"}, func(c *wizardClient) []string { return c.contexts }},
+		{"session", []string{"session", "acme", "house-bills", "hello"}, func(c *wizardClient) []string { return c.dispatched }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &wizardClient{}
+			model := wizardAt(t, client)
+			if model.mode != modeWizard {
+				t.Fatalf("mode = %v, want the wizard open", model.mode)
+			}
+
+			model, cmd := answerAll(t, model, test.answers...)
+			if cmd == nil {
+				t.Fatal("the last answer produced no command, so nothing was ever made")
+			}
+			done := cmd()
+			if msg, isDone := done.(actionDoneMsg); !isDone || msg.err != nil {
+				t.Fatalf("making it returned %#v, want a clean actionDoneMsg", done)
+			}
+			// Carried through to what the operator is left with, not stopped at the call: the answer
+			// goes back in the way the runtime feeds it, and the console has to come back to its list.
+			model, _ = update(t, model, done)
+			if model.mode != modeBrowse {
+				t.Fatalf("the wizard is still open after making a %s, mode = %v", test.name, model.mode)
+			}
+
+			if got := test.want(client); len(got) != 1 {
+				t.Fatalf("the %s call was asked for %v, want exactly one", test.name, got)
+			}
+			// The one that matters: a wizard opened to add a project must not leave a workspace
+			// behind it, which is what it did when every path started by making one.
+			if client.made() != 1 {
+				t.Fatalf("making a %s touched %d calls, want only its own: workspaces %v, projects %v, "+
+					"secrets %v, contexts %v, dispatched %v", test.name, client.made(),
+					client.workspaces, client.projects, client.secrets, client.contexts, client.dispatched)
+			}
+		})
+	}
+}
+
+// TestPickingAnExistingParentMakesNoSecondOne: the pick step resolves against what the crew has, so
+// answering "acme" where there is an "acme" reuses it. The identifier proves it, because a workspace
+// made on the way would carry the double's own new one.
+func TestPickingAnExistingParentMakesNoSecondOne(t *testing.T) {
 	client := &wizardClient{}
 	model := wizardAt(t, client)
-	if model.mode != modeWizard {
-		t.Fatalf("mode = %v, want the wizard open", model.mode)
-	}
 
-	var cmd tea.Cmd
-	for _, answer := range []string{"acme", "bills", "tok-xyz", "pay the water bill first", "hello"} {
-		model = typeAll(t, model, answer)
-		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	}
+	_, cmd := answerAll(t, model, "project", "acme", "gardening")
 	if cmd == nil {
-		t.Fatal("the last step produced no command, so nothing was ever made")
+		t.Fatal("no command, so nothing was made")
 	}
-	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
-		t.Fatalf("making it returned %#v, want a clean actionDoneMsg", cmd())
-	}
+	cmd()
 
-	for what, got := range map[string][]string{
-		"workspaces": client.workspaces,
-		"projects":   client.projects,
-		"secrets":    client.secrets,
-		"contexts":   client.contexts,
-		"dispatched": client.dispatched,
-	} {
-		if len(got) != 1 {
-			t.Fatalf("%s = %v, want exactly one", what, got)
+	if len(client.workspaces) != 0 {
+		t.Fatalf("picking an existing workspace made %v", client.workspaces)
+	}
+	if len(client.projectsIn) != 1 || client.projectsIn[0] != "w-acme" {
+		t.Fatalf("the project was made in %v, want the workspace that already existed", client.projectsIn)
+	}
+}
+
+// TestTheWizardOffersWhatExists: a step that needs a parent shows what there is. Naming a workspace
+// the operator cannot see is how it ended up only able to make new ones.
+func TestTheWizardOffersWhatExists(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	model, _ = answer(t, model, "project")
+
+	if view := model.View(); !strings.Contains(view, "acme") {
+		t.Fatalf("the workspace step does not offer the workspace that exists:\n%s", view)
+	}
+	if !strings.Contains(model.View(), "which workspace") {
+		t.Fatalf("the step does not say what it is asking:\n%s", model.View())
+	}
+}
+
+// TestTheWizardRefusesAParentThatDoesNotExist: the step picks, it never creates, so a name matching
+// nothing is refused rather than quietly made.
+func TestTheWizardRefusesAParentThatDoesNotExist(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	model, _ = answer(t, model, "project")
+	model, cmd := answer(t, model, "ghost")
+
+	if model.err == nil {
+		t.Fatal("a workspace that does not exist was accepted")
+	}
+	if !strings.Contains(model.err.Error(), "ghost") {
+		t.Fatalf("the refusal is %q, want it to name what was typed", model.err)
+	}
+	if cmd != nil {
+		t.Fatal("the refusal still produced a command")
+	}
+	if client.made() != 0 {
+		t.Fatal("a refused parent made something anyway")
+	}
+}
+
+// TestTheWizardRefusesAnAmbiguousKind: a secret and a session are one keystroke apart, so "s" has to
+// name both rather than pick the first.
+func TestTheWizardRefusesAnAmbiguousKind(t *testing.T) {
+	client := &wizardClient{}
+	model, _ := answer(t, wizardAt(t, client), "s")
+
+	if model.err == nil {
+		t.Fatal("\"s\" was accepted as one of secret and session")
+	}
+	for _, want := range []string{"secret", "session"} {
+		if !strings.Contains(model.err.Error(), want) {
+			t.Fatalf("the refusal is %q, want it to name %q", model.err, want)
 		}
 	}
-	if client.workspaces[0] != "acme" || client.projects[0] != "bills" {
-		t.Fatalf("made %v and %v", client.workspaces, client.projects)
+	if model.making.kind != kindUnchosen {
+		t.Fatalf("the wizard chose %v anyway", model.making.kind)
 	}
-	if client.contexts[0] != "pay the water bill first" || client.dispatched[0] != "hello" {
-		t.Fatalf("context %v, message %v", client.contexts, client.dispatched)
+}
+
+// TestTheWizardTakesAKindByItsPrefix: one keystroke where only one kind starts with it.
+func TestTheWizardTakesAKindByItsPrefix(t *testing.T) {
+	client := &wizardClient{}
+	model, _ := answer(t, wizardAt(t, client), "w")
+
+	if model.err != nil {
+		t.Fatalf("\"w\" was refused: %v", model.err)
+	}
+	if model.making.kind != kindWorkspace {
+		t.Fatalf("\"w\" made %v, want a workspace", model.making.kind)
+	}
+}
+
+// TestTheOldWizardIsRefusedRatherThanSwallowed is rule 46 in this repository: when an interface is
+// replaced, test the way off it, not only the way onto it. The wizard used to open by asking for a
+// new workspace name, so the first thing anybody types is still a name, and it must be refused
+// loudly and name what to type instead rather than becoming the answer to a different question.
+func TestTheOldWizardIsRefusedRatherThanSwallowed(t *testing.T) {
+	client := &wizardClient{}
+	model, cmd := answer(t, wizardAt(t, client), "acme-two")
+
+	if model.err == nil {
+		t.Fatal("a workspace name typed at the first question was accepted")
+	}
+	if !strings.Contains(model.err.Error(), "acme-two") {
+		t.Fatalf("the refusal is %q, want it to name what was typed", model.err)
+	}
+	// Naming what to type instead is the difference between a refusal and a dead end.
+	for _, want := range []string{"workspace", "project", "secret", "context", "session"} {
+		if !strings.Contains(model.err.Error(), want) {
+			t.Fatalf("the refusal is %q, want it to name %q as something that can be made", model.err, want)
+		}
+	}
+	if cmd != nil || client.made() != 0 {
+		t.Fatalf("the old form made %d things", client.made())
 	}
 }
 
 // TestEscapeInTheWizardMakesNothing is the one behaviour here worth being certain of: a wizard that
 // half creates is worse than no wizard.
+//
+// It walks every kind, escaping at every point in each, including partway through typing the answer
+// that is never accepted. That last one is the case that matters: a secret typed and abandoned.
 func TestEscapeInTheWizardMakesNothing(t *testing.T) {
-	for _, answered := range []int{0, 1, 2, 3, 4} {
-		client := &wizardClient{}
-		model := wizardAt(t, client)
-		for i := 0; i < answered; i++ {
-			model = typeAll(t, model, "something")
-			model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-		}
-		model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	for _, walk := range [][]string{
+		{"workspace", "other"},
+		{"project", "acme", "gardening"},
+		{"secret", "acme", "tok-xyz"},
+		{"context", "acme", "house-bills", "the water bill"},
+		{"session", "acme", "house-bills", "hello"},
+	} {
+		for answered := 0; answered < len(walk); answered++ {
+			name := fmt.Sprintf("%s after %d", walk[0], answered)
+			t.Run(name, func(t *testing.T) {
+				client := &wizardClient{}
+				model := wizardAt(t, client)
+				for i := 0; i < answered; i++ {
+					model, _ = answer(t, model, walk[i])
+				}
+				// Typed but never accepted, so escape lands on a half answered question.
+				model = typeAll(t, model, walk[answered])
+				model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
 
-		if model.mode != modeWizard && model.mode != modeBrowse {
-			t.Fatalf("mode = %v after escape", model.mode)
-		}
-		if model.mode != modeBrowse {
-			t.Fatalf("escape at step %d left the wizard open", answered)
-		}
-		if cmd != nil {
-			t.Fatalf("escape at step %d produced a command", answered)
-		}
-		made := len(client.workspaces) + len(client.projects) + len(client.secrets) +
-			len(client.contexts) + len(client.dispatched)
-		if made != 0 {
-			t.Fatalf("escape at step %d made %d things", answered, made)
-		}
+				if model.mode != modeBrowse {
+					t.Fatalf("escape left the wizard open, mode = %v", model.mode)
+				}
+				if cmd != nil {
+					t.Fatal("escape produced a command")
+				}
+				if client.made() != 0 {
+					t.Fatalf("escape made %d things", client.made())
+				}
 
-		// And it forgets everything the moment it closes. A cancelled wizard that kept a half typed
-		// token would be carrying one around for the rest of the session.
-		if model.making != (wizard{}) {
-			t.Fatalf("escape at step %d left %+v behind", answered, model.making)
+				// And it forgets everything the moment it closes, asserted here rather than through
+				// the view, because a closed wizard is not drawn: a console still holding the token
+				// looks exactly like one that dropped it. A cancelled wizard that kept a half typed
+				// token would be carrying one around for the rest of the session.
+				if !reflect.DeepEqual(model.making, wizard{}) {
+					t.Fatalf("escape left %+v behind", model.making)
+				}
+			})
 		}
 	}
 }
 
-// TestTheWizardNeedsTheTwoThingsItIsFor: a workspace and a project are not optional, and the rest are
-// offers that enter skips.
-func TestTheWizardNeedsTheTwoThingsItIsFor(t *testing.T) {
-	client := &wizardClient{}
-	model := wizardAt(t, client)
+// TestEveryWizardQuestionIsNeeded: the wizard makes one thing now, so a question it asks is part of
+// that thing rather than an offer alongside it. Enter on an empty answer refuses and names what is
+// missing.
+func TestEveryWizardQuestionIsNeeded(t *testing.T) {
+	for _, walk := range [][]string{
+		{"workspace", "other"},
+		{"project", "acme", "gardening"},
+		{"secret", "acme", "tok-xyz"},
+		{"context", "acme", "house-bills", "the water bill"},
+		{"session", "acme", "house-bills", "hello"},
+	} {
+		for answered := 0; answered < len(walk); answered++ {
+			t.Run(fmt.Sprintf("%s question %d", walk[0], answered), func(t *testing.T) {
+				client := &wizardClient{}
+				model := wizardAt(t, client)
+				for i := 0; i < answered; i++ {
+					model, _ = answer(t, model, walk[i])
+				}
+				model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
-	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	if model.err == nil {
-		t.Fatal("an empty workspace name was accepted")
-	}
-	model = typeAll(t, model, "acme")
-	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	if model.err == nil {
-		t.Fatal("an empty project name was accepted")
-	}
-
-	model = typeAll(t, model, "bills")
-	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	// Now skip the three offers, which should still make the workspace and the project.
-	var cmd tea.Cmd
-	for i := 0; i < 3; i++ {
-		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	}
-	if cmd == nil {
-		t.Fatal("skipping the offers produced no command")
-	}
-	cmd()
-	if len(client.workspaces) != 1 || len(client.projects) != 1 {
-		t.Fatalf("made %v and %v", client.workspaces, client.projects)
-	}
-	if len(client.secrets)+len(client.contexts)+len(client.dispatched) != 0 {
-		t.Fatal("a skipped offer was made anyway")
+				if model.err == nil {
+					t.Fatal("an empty answer was accepted")
+				}
+				if cmd != nil {
+					t.Fatal("an empty answer produced a command")
+				}
+				if client.made() != 0 {
+					t.Fatalf("an empty answer made %d things", client.made())
+				}
+			})
+		}
 	}
 }
 
@@ -1889,10 +2065,7 @@ func TestTheWizardNeedsTheTwoThingsItIsFor(t *testing.T) {
 func TestTheWizardNeverShowsTheToken(t *testing.T) {
 	client := &wizardClient{}
 	model := wizardAt(t, client)
-	for _, answer := range []string{"acme", "bills"} {
-		model = typeAll(t, model, answer)
-		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	}
+	model, _ = answerAll(t, model, "secret", "acme")
 	model = typeAll(t, model, "sk-ant-oat-secret")
 
 	view := model.View()
@@ -1913,13 +2086,7 @@ func TestTheWizardNeverShowsTheToken(t *testing.T) {
 // making it: this one is needed".
 func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 	client := &wizardClient{}
-	model := wizardAt(t, client)
-
-	var cmd tea.Cmd
-	for _, answer := range []string{"acme", "bills", "", "", ""} {
-		model = typeAll(t, model, answer)
-		model, cmd = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	}
+	model, cmd := answerAll(t, wizardAt(t, client), "project", "acme", "gardening")
 	if cmd == nil {
 		t.Fatal("the last answer produced no command, so nothing was ever made")
 	}
@@ -1929,7 +2096,7 @@ func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 	if model.mode != modeBrowse {
 		t.Fatalf("the wizard is still open after making it, mode = %v", model.mode)
 	}
-	if model.making != (wizard{}) {
+	if !reflect.DeepEqual(model.making, wizard{}) {
 		t.Fatalf("the finished wizard left %+v behind", model.making)
 	}
 }
@@ -1940,13 +2107,9 @@ func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 // was ever asked.
 func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	client := &wizardClient{}
-	model := wizardAt(t, client)
-	for _, answer := range []string{"acme", "bills", "", "", ""} {
-		model = typeAll(t, model, answer)
-		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	}
-	if model.making.step != wizardWorking {
-		t.Fatalf("the wizard is at step %v, want it working", model.making.step)
+	model, _ := answerAll(t, wizardAt(t, client), "project", "acme", "gardening")
+	if model.making.step() != stepWorking {
+		t.Fatalf("the wizard is at step %v, want it working", model.making.step())
 	}
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})

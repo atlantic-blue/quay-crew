@@ -504,12 +504,21 @@ func (m Model) offered() string {
 
 // wizardPrompt asks the step's question and shows what has been typed, which for a secret is asterisks
 // and nothing else.
+//
+// A step that chooses from what the crew already has shows what there is, narrowed by what has been
+// typed, the same way the command bar does. Asking somebody to name a workspace they cannot see is how
+// the wizard ended up only able to make new ones.
 func (m Model) wizardPrompt() string {
-	if m.making.step == wizardWorking {
+	if m.making.step() == stepWorking {
 		return prompt.Render(" making ") + faint.Render(m.making.summary())
 	}
-	return prompt.Render(" "+m.making.prompt()+": ") + m.making.shown() + prompt.Render("_") +
-		faint.Render("   enter accepts, esc cancels and makes nothing")
+	line := prompt.Render(" "+m.making.prompt()+": ") + m.making.shown() + prompt.Render("_")
+	if offers := m.making.offers(); len(offers) > 0 {
+		line += faint.Render("   " + strings.Join(offers, "  "))
+	} else if m.making.picking() && m.making.loaded {
+		line += faint.Render("   nothing here yet")
+	}
+	return line + faint.Render("   enter accepts, esc cancels and makes nothing")
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
@@ -576,10 +585,10 @@ func (m Model) helpLines() []string {
 		{":", "Switch resource"},
 		{"/", "Filter these rows"},
 		{"r g", "Refresh now"},
+		{"n", "Make one thing"},
 		// The one key here that is not the console's own. An open conversation runs inside tmux in its
 		// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
 		// ending it, which is what everybody does until somebody tells them otherwise.
-		{"n", "Make a workspace, project, session"},
 		{"ctrl-q", "Leave a conversation running"},
 		{"?", "This list"},
 		{"q", "Quit"},
