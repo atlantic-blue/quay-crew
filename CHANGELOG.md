@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`quay` rebuilds a panel left over from an older build.** Opening it reattached to the tmux session
+  already there, whose panes were still running the binary from before the upgrade, so a fix that had
+  shipped was not in what you were looking at however many times you ran `make upgrade`. The panel
+  records the build that made it and is made again when that differs. A panel from this build is still
+  just reattached to, or every open would restart the conversation you were reading.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **A session can drive the crew from inside its sandbox.** The sandbox image carries `quay`, the
   sandbox joins the control plane's network, and the control plane puts its own address into every
   sandbox, so an agent in a session runs `quay workspace create` and it works with nothing to

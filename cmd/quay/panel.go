@@ -44,6 +44,7 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		return err
 	}
 	layout := panel.Layout{
+		Version:    version,
 		Header:     []string{self, "header"},
 		HeaderRows: rows,
 		Width:      width,
@@ -61,8 +62,12 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 // rather than split again.
 func openPanel(layout panel.Layout, out io.Writer) error {
 	asked := layout.HasSession()
+	open := exec.Command(asked[0], asked[1:]...).Run() == nil
 	term := panel.Terminal{
-		AlreadyOpen: exec.Command(asked[0], asked[1:]...).Run() == nil,
+		AlreadyOpen: open,
+		// An open panel built by a different build is torn down and made again. Its panes are running
+		// the old binary, so reattaching to it shows yesterday's tool however many times you upgrade.
+		Stale: open && builtBy(layout) != version,
 		// tmux sets this for everything it runs, so it is how a program knows it is already inside
 		// one. From in there the panel is switched to rather than attached, because tmux refuses a
 		// second client on a terminal that already has one.
@@ -205,4 +210,15 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		Workspace: current.Workspace,
 		Project:   current.Project,
 	}, conversationBeside(ctx, client), publishView)
+}
+
+// builtBy is the build that made the panel that is already open, and empty when it did not say, which
+// is every panel made before this was recorded.
+func builtBy(layout panel.Layout) string {
+	argv := panel.Built(layout.Session)
+	out, err := exec.Command(argv[0], argv[1:]...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

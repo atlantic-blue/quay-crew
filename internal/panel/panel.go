@@ -35,6 +35,9 @@ type Layout struct {
 	Right []string
 	// Session is the tmux session to live in.
 	Session string
+	// Version is the build opening the panel, recorded on the session so a later open can tell that
+	// what is running in the panes is older than the tool.
+	Version string
 	// Width and Height are the terminal the panel is being opened from. The session is built at that
 	// size rather than at tmux's default, because tmux scales the panes it already has when a client
 	// of a different size attaches: a header given ten rows in an eighty by twenty four window comes
@@ -48,6 +51,10 @@ type Terminal struct {
 	// AlreadyOpen says the panel's tmux session exists. It is then moved to rather than built again:
 	// splitting an open panel every time it is opened is how you end up with eleven panes.
 	AlreadyOpen bool
+	// Stale says the open panel was built by a different version of the tool. Its panes are still
+	// running the old binary, so reattaching shows yesterday's build however many times the tool is
+	// upgraded, and an upgrade looks like it did nothing.
+	Stale bool
 	// InsideTmux says the operator is already inside tmux. It changes how the panel is shown and not
 	// what it is: tmux refuses to attach a client that is already attached, so from in here the
 	// client is switched to the panel instead. Without this the panel was built correctly, left
@@ -64,12 +71,18 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 	if session == "" {
 		session = SessionName
 	}
-	if term.AlreadyOpen {
+	if term.AlreadyOpen && !term.Stale {
 		return [][]string{show(term, session)}, nil
 	}
 
 	target := session + ":" + WindowName
-	built := [][]string{
+	built := make([][]string, 0, 8)
+	if term.Stale {
+		// The old one goes, or new-session reattaches to it and nothing changes. Killing a panel is
+		// safe: a conversation lives in its sandbox and its store, not in the pane looking at it.
+		built = append(built, []string{"tmux", "kill-session", "-t", session})
+	}
+	built = append(built, [][]string{
 		// Detached, so the layout is finished before anybody looks at it. Attaching first would show
 		// one pane growing into three.
 		//
@@ -88,9 +101,24 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 		// The console has the keyboard when the panel opens, because that is what the operator came
 		// to use. The conversation is one pane away, and the header is not typed into at all.
 		{"tmux", "select-pane", "-t", target + ".1"},
+		// What built it, so opening it again after an upgrade can tell that these panes are running
+		// the old binary.
+		{"tmux", "set-option", "-t", session, VersionOption, l.Version},
 		show(term, session),
-	}
+	}...)
 	return built, nil
+}
+
+// VersionOption is where the panel records the build that made it. A tmux user option, so it travels
+// with the session and needs nothing of ours to remember it.
+const VersionOption = "@quay-version"
+
+// Built asks tmux which build made the panel that is already open.
+func Built(session string) []string {
+	if session == "" {
+		session = SessionName
+	}
+	return []string{"tmux", "show-options", "-qv", "-t", session, VersionOption}
 }
 
 // newSession builds the panel's window, at the size of the terminal opening it where that is known.
