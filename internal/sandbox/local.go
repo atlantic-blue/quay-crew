@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+	"sync"
 )
 
 // LocalProvider hands out host backed sandboxes. It is a stopgap: a local sandbox does not isolate
@@ -34,10 +36,47 @@ var _ Sandbox = localSandbox{}
 type cmdProcess struct {
 	cmd    *exec.Cmd
 	stdout io.Reader
+	stderr *tail
 }
 
 func (p *cmdProcess) Stdout() io.Reader { return p.stdout }
 func (p *cmdProcess) Wait() error       { return p.cmd.Wait() }
+func (p *cmdProcess) Stderr() string    { return p.stderr.String() }
+
+// stderrTail is how much of a failing command's error stream is kept. Enough to carry the reason,
+// bounded so a command that fails by writing forever cannot take the control plane with it.
+const stderrTail = 8 << 10
+
+// newCmdProcess starts cmd with its error stream captured into a bounded tail.
+func newCmdProcess(cmd *exec.Cmd, stdout io.Reader) *cmdProcess {
+	kept := &tail{limit: stderrTail}
+	cmd.Stderr = kept
+	return &cmdProcess{cmd: cmd, stdout: stdout, stderr: kept}
+}
+
+// tail keeps the last limit bytes written to it and throws away what came before, so a command that
+// writes megabytes before dying still costs one buffer. The reason a command failed is at the end.
+type tail struct {
+	mu    sync.Mutex
+	limit int
+	kept  []byte
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.kept = append(t.kept, p...)
+	if len(t.kept) > t.limit {
+		t.kept = t.kept[len(t.kept)-t.limit:]
+	}
+	return len(p), nil
+}
+
+func (t *tail) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimSpace(string(t.kept))
+}
 
 // Exec runs spec.Argv on the host and streams its stdout.
 func (l localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
@@ -56,10 +95,13 @@ func (l localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: stdout pipe: %w", err)
 	}
+	// Built before Start, because that is what attaches the error stream. Setting it afterwards
+	// compiles, runs, and captures nothing at all.
+	proc := newCmdProcess(cmd, stdout)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("sandbox: start %s: %w", spec.Argv[0], err)
 	}
-	return &cmdProcess{cmd: cmd, stdout: stdout}, nil
+	return proc, nil
 }
 
 // Close is a no op for the host backend.

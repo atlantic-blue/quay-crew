@@ -84,10 +84,10 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 		return Response{}, fmt.Errorf("model: exec: %w", err)
 	}
 
-	resp, parseErr := parseStream(proc.Stdout())
+	resp, refused, unparsed, parseErr := parseStream(proc.Stdout())
 	waitErr := proc.Wait()
 	if waitErr != nil {
-		return Response{}, fmt.Errorf("model: run exited: %w", waitErr)
+		return Response{}, fmt.Errorf("model: %s", why(refused, proc.Stderr(), unparsed, waitErr, req.Env))
 	}
 	if parseErr != nil {
 		return Response{}, fmt.Errorf("model: parse stream: %w", parseErr)
@@ -95,12 +95,45 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 	return resp, nil
 }
 
+// why explains a turn that failed, in the order the explanations are worth anything.
+//
+// Every model failure used to read "run exited: exit status 1", which is the same sentence for an
+// expired token, a network failure, a missing binary and the model refusing the request. The reason
+// is nearly always somewhere: the model says so in its own stream, and what is left says so on the
+// error stream. Only when both are silent is the exit status all there is.
+//
+// Everything here goes through redact first. This runs with the subscription token in its
+// environment, and an error is a thing people paste.
+func why(refused, stderr, unparsed string, exit error, env map[string]string) string {
+	if refused != "" {
+		return redact(refused, env)
+	}
+	if said := firstOf(stderr, unparsed); said != "" {
+		return fmt.Sprintf("run exited: %v, saying: %s", exit, redact(said, env))
+	}
+	return fmt.Sprintf("run exited: %v, and it said nothing about why", exit)
+}
+
+func firstOf(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // streamEvent is the subset of the Claude Code stream JSON we read.
 type streamEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"session_id"`
 	Result    string `json:"result"`
-	Message   struct {
+	// IsError and APIErrorStatus are how the model says the turn did not do what was asked. They
+	// arrive on the result event, on standard output, in the same stream as a reply: the reason a
+	// turn failed is usually here rather than on the error stream, and it was being parsed past.
+	IsError        bool `json:"is_error"`
+	APIErrorStatus int  `json:"api_error_status"`
+	Message        struct {
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -108,11 +141,18 @@ type streamEvent struct {
 	} `json:"message"`
 }
 
-// parseStream reads streamed JSON events and extracts the session id and the final reply. It prefers
-// the "result" event's text and falls back to the concatenated assistant text.
-func parseStream(r io.Reader) (Response, error) {
+// parseStream reads streamed JSON events and extracts the session id, the final reply, and the
+// model's own account of refusing the turn. It prefers the "result" event's text and falls back to
+// the concatenated assistant text.
+// It also keeps whatever arrived on that stream and was not a stream event at all. Something running
+// in place of the model writes there too, and it is the only account of the failure there is: the
+// Docker command line reports "executable file not found" on standard output rather than on the error
+// stream, so a turn against an image with no model in it explained itself as an exit status until
+// this was kept. Found by running it, not by reading it.
+func parseStream(r io.Reader) (Response, string, string, error) {
 	var resp Response
-	var assistant strings.Builder
+	var refused string
+	var assistant, unparsed strings.Builder
 
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
@@ -123,7 +163,15 @@ func parseStream(r io.Reader) (Response, error) {
 		}
 		var event streamEvent
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue // ignore non JSON lines
+			// Not a stream event. Keep a bounded amount of it, because when the model never ran
+			// this is the only thing that says why.
+			if unparsed.Len() < unparsedKept {
+				if unparsed.Len() > 0 {
+					unparsed.WriteString("\n")
+				}
+				unparsed.WriteString(line)
+			}
+			continue
 		}
 		if event.SessionID != "" {
 			resp.ModelSessionID = event.SessionID
@@ -139,13 +187,26 @@ func parseStream(r io.Reader) (Response, error) {
 			if event.Result != "" {
 				resp.Reply = event.Result
 			}
+			if event.IsError {
+				refused = event.Result
+				if refused == "" {
+					refused = "the model refused the turn and gave no reason"
+				}
+				if event.APIErrorStatus != 0 {
+					refused = fmt.Sprintf("%s (status %d)", refused, event.APIErrorStatus)
+				}
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return Response{}, err
+		return Response{}, "", "", err
 	}
 	if resp.Reply == "" {
 		resp.Reply = assistant.String()
 	}
-	return resp, nil
+	return resp, refused, unparsed.String(), nil
 }
+
+// unparsedKept bounds what is remembered of output that was not a stream event, so a command that
+// prints megabytes of something else cannot be held in memory whole.
+const unparsedKept = 4 << 10

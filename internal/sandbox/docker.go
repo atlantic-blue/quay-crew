@@ -110,10 +110,11 @@ func (s *dockerSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: stdout pipe: %w", err)
 	}
+	proc := newCmdProcess(cmd, stdout)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("sandbox: docker exec: %w", err)
 	}
-	return &cmdProcess{cmd: cmd, stdout: stdout}, nil
+	return proc, nil
 }
 
 // Close removes the session's container.

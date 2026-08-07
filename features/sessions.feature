@@ -249,3 +249,30 @@ Feature: Sessions run in isolated sandboxes
     When the operator stops the session
     And the operator asks how to attach to the session
     Then the control plane refuses it as not yet ready
+
+  # Every model failure read "run exited: exit status 1": the same sentence for an expired token, a
+  # network failure, a missing binary in the image and the model refusing outright. The reason was
+  # there the whole time, on standard output, in the stream the reply comes from.
+  #
+  # These run the real model adapter over a sandbox that fails on purpose, because a double handing
+  # back a canned error cannot say anything about an explanation built out of a stream.
+  Scenario: A failed turn says why, in the model's own words
+    Given the workspace has the subscription token "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
+    And the model refuses the turn saying "Failed to authenticate. API Error: 401 Invalid bearer token"
+    When the operator dispatches "hello" to the project
+    Then the refusal says "401 Invalid bearer token"
+
+  # The turn runs with the subscription token in its environment, so every place a failure can quote
+  # is a place the token turns up. A tool that prints one because a turn failed is a worse defect
+  # than the one it is explaining.
+  Scenario: A failed turn never carries the subscription token
+    Given the workspace has the subscription token "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
+    And the model refuses the turn quoting the token back
+    When the operator dispatches "hello" to the project
+    Then the refusal carries no token
+    And the refusal says something was taken out
+
+  Scenario: A turn that failed before the model said anything falls back to the error stream
+    Given the sandbox fails with nothing on standard output, saying "claude: command not found"
+    When the operator dispatches "hello" to the project
+    Then the refusal says "claude: command not found"
