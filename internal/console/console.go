@@ -95,3 +95,58 @@ func Plain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out
 	}
 	return nil
 }
+
+// HeaderOnly renders the header block a console would draw, with nothing under it. The panel draws it
+// in a pane of its own, across the full width, above the list and the conversation.
+//
+// It goes through the same code the console's own header does rather than a copy of it, because two
+// renderings of one header drift, and the one nobody is looking at drifts first.
+func HeaderOnly(registry *Registry, view string, info Info, width, height int) ([]string, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("console: nil registry")
+	}
+	resource, found := registry.Get(view)
+	if !found {
+		return nil, fmt.Errorf("console: no resource named %q", view)
+	}
+	model := Model{registry: registry, active: resource, info: info, width: width, height: height}
+	lines := model.headerLines()
+	// Never taller than the pane it is drawn in. A header that overflows scrolls, and what scrolls
+	// away is its own first line.
+	if height > 0 && len(lines) > height {
+		lines = lines[:height]
+	}
+	return lines, nil
+}
+
+// HeaderHeight is how many rows the header needs at a size, so the panel can give its pane exactly
+// that many and no more.
+func HeaderHeight(registry *Registry, view string, info Info, width, height int) int {
+	lines, err := HeaderOnly(registry, view, info, width, height)
+	if err != nil {
+		return 0
+	}
+	return len(lines)
+}
+
+// RunBare is the panel's lower left: the console with no header of its own, because the pane above is
+// drawing it across both halves. It says which view it moves to through publish, so that header names
+// this view's keys rather than the keys of the view it opened on.
+func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
+	beside func(selected string) ([]string, error), publish func(view string) error) error {
+	registry, err := NewDefaultRegistry(client)
+	if err != nil {
+		return err
+	}
+	model, err := New(registry, Default, InfoFrom(client, known))
+	if err != nil {
+		return err
+	}
+	model = model.WithInfo(known).WithClient(client).Beside(beside).
+		WithoutHeader().WithViewPublisher(publish)
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
+	if _, err := program.Run(); err != nil {
+		return fmt.Errorf("console: %w", err)
+	}
+	return nil
+}

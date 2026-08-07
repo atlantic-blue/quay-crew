@@ -2287,40 +2287,30 @@ func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	}
 }
 
-// TestPressingPAgainClosesTheOneItOpened, rather than whichever pane happens to be beside the console
-// now. A conversation the operator opened somewhere else is not this key's to close.
-func TestPressingPAgainClosesTheOneItOpened(t *testing.T) {
-	t.Setenv("TMUX_PANE", "%3")
-	opened := 0
-	model := newTestModel(t, Sessions(&fakeClient{})).
-		Beside(func(string) ([]string, error) {
-			opened++
-			return []string{"quay", "attach", "s1"}, nil
+// TestPressingPClosesTheConversationBesideIt, which may be one the console never opened: `quay` opens
+// the panel with a conversation already there, so a console that only knew about the ones it opened
+// would answer the first p by opening a second.
+//
+// It is asked of tmux instead: the pane at the same top and further right is the conversation. A pane
+// above or below is the header.
+func TestPressingPClosesTheConversationBesideIt(t *testing.T) {
+	listing := "%1 0 0\n%2 0 11\n%3 100 11\n"
+	for _, test := range []struct {
+		name  string
+		me    string
+		want  string
+		found bool
+	}{
+		{"a conversation to the right", "%2", "%3", true},
+		{"nothing to the right", "%3", "", false},
+		{"the header, which has no conversation beside it", "%1", "", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, found := rightOf(listing, test.me)
+			if found != test.found || got != test.want {
+				t.Fatalf("beside %s is %q (%v), want %q (%v)", test.me, got, found, test.want, test.found)
+			}
 		})
-
-	// The console learns which pane it opened the way the runtime tells it.
-	model, _ = update(t, model, conversationMsg{pane: "%7"})
-	if model.conversation != "%7" {
-		t.Fatalf("the console remembers %q as the conversation it opened", model.conversation)
-	}
-
-	model, cmd := update(t, model, runes("p"))
-	if cmd == nil {
-		t.Fatal("p with a conversation open produced no command")
-	}
-	if opened != 0 {
-		t.Fatal("p opened a second conversation instead of closing the one already there")
-	}
-	// Closing tells the console it has none, and the key opens again after that.
-	model, _ = update(t, model, conversationMsg{})
-	if model.conversation != "" {
-		t.Fatalf("the console still thinks %q is open", model.conversation)
-	}
-	if _, cmd := update(t, model, runes("p")); cmd == nil {
-		t.Fatal("p no longer opens a conversation after one was closed")
-	}
-	if opened != 1 {
-		t.Fatalf("p asked for %d conversations after closing one, want 1", opened)
 	}
 }
 

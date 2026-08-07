@@ -142,6 +142,12 @@ type Model struct {
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
 	client quaycrewv1.ControlPlaneServiceClient
+	// headless leaves the header to the pane above, which draws it across both halves. Drawing it
+	// here as well would show it twice and cost the list the rows.
+	headless bool
+	// publish says which view the console moved to, so the header drawn in that pane names this
+	// view's keys rather than the keys of whichever view it was started on.
+	publish func(view string) error
 	// beside opens a conversation next to the console, and is nil when nobody gave it one to open.
 	// The console does not know which conversation: it hands over the row under the cursor, which may
 	// be nothing, and gets back the command to run.
@@ -149,6 +155,20 @@ type Model struct {
 	// conversation is the tmux pane the console opened, so the key closes the one it opened rather
 	// than whichever pane happens to be beside it now. Empty means none is open.
 	conversation string
+}
+
+// WithoutHeader leaves the header to the pane above.
+func (m Model) WithoutHeader() Model {
+	m.headless = true
+	return m
+}
+
+// WithViewPublisher tells the console where to say which view it is on, so a header drawn in another
+// pane can name this view's keys. Without it those hints would be the ones for whichever view the
+// console opened on, and would go quietly wrong the moment anybody drilled in.
+func (m Model) WithViewPublisher(publish func(view string) error) Model {
+	m.publish = publish
+	return m
 }
 
 // WithInfo puts what is already known about the crew on the screen straight away, rather than an
@@ -187,7 +207,20 @@ func New(registry *Registry, start string, source InfoSource) (Model, error) {
 
 // Init loads the opening view, asks what it is connected to, and starts the refresh clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
+	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), m.publishCmd(), tickCmd())
+}
+
+// publishCmd says which view the console is on, and does nothing when nobody asked.
+func (m Model) publishCmd() tea.Cmd {
+	if m.publish == nil {
+		return nil
+	}
+	publish, view := m.publish, m.active.Name
+	return func() tea.Msg {
+		// A header that cannot be told where we are is not a reason to stop showing the crew.
+		_ = publish(view)
+		return nil
+	}
 }
 
 // Update advances the console. It performs no input or output of its own: anything that talks to the
@@ -232,7 +265,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.conversation, m.err = msg.pane, nil
 		return m, nil
 	case tea.KeyMsg:
-		return m.updateKey(msg)
+		// The view can change under a key, and whoever draws the header needs to hear about it.
+		before := m.active.Name
+		next, cmd := m.updateKey(msg)
+		if next.active.Name != before {
+			return next, tea.Batch(cmd, next.publishCmd())
+		}
+		return next, cmd
 	default:
 		return m, nil
 	}

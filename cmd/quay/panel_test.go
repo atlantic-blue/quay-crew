@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,5 +78,58 @@ func TestWhereNamesTheAddressInTheRefusal(t *testing.T) {
 				t.Fatalf("where = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+// TestQuayOpensTheCrewNotJustTheConsole. One command: `quay` opens the header, the console and a
+// conversation. Nothing tested this until a mutation that made `quay` open the console alone stayed
+// green, which is the whole of what was asked for going unwatched.
+func TestQuayOpensTheCrewNotJustTheConsole(t *testing.T) {
+	panelRan, aloneRan := false, false
+	err := openTheCrew(
+		func() error { panelRan = true; return nil },
+		func() error { aloneRan = true; return nil },
+	)
+	if err != nil {
+		t.Fatalf("openTheCrew: %v", err)
+	}
+	if !panelRan {
+		t.Fatal("quay did not open the crew")
+	}
+	if aloneRan {
+		t.Fatal("quay opened the console as well as the crew")
+	}
+}
+
+// TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt: a crew with no conversation in it is the
+// first run, and refusing to open at all then would be absurd.
+func TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt(t *testing.T) {
+	aloneRan := false
+	err := openTheCrew(
+		func() error { return fmt.Errorf("there is no conversation to put beside the console yet") },
+		func() error { aloneRan = true; return nil },
+	)
+	if err != nil {
+		t.Fatalf("openTheCrew: %v", err)
+	}
+	if !aloneRan {
+		t.Fatal("quay refused to open at all with nothing to put beside the console")
+	}
+}
+
+// TestThePanelCommandIsRefused is rule 46 in this repository: when a command is removed, test the way
+// off it. `quay panel` is in somebody's fingers and in these notes, so it has to fail loudly and name
+// what to type instead rather than being taken for an unknown word.
+func TestThePanelCommandIsRefused(t *testing.T) {
+	err := run(context.Background(), testClient(t), []string{"panel"}, io.Discard, "")
+	if err == nil {
+		t.Fatal("quay panel was accepted")
+	}
+	if !strings.Contains(err.Error(), "`quay` on its own") {
+		t.Fatalf("the refusal is %q, want it to name what to type instead", err)
+	}
+	// And it is gone from the usage, or it reads as still being a command.
+	if strings.Contains(usage, "panel [<session id>]") {
+		t.Fatal("the usage still lists a panel command")
 	}
 }

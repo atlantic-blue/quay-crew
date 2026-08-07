@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/panel"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
@@ -20,11 +21,12 @@ import (
 //
 // Named a session opens that one. Named nothing it opens the newest conversation where you are
 // standing, which is the one you were last talking to.
+// runPanel is what `quay` does: it opens the crew. The header across the top, the console under it on
+// the left, and a conversation on the right.
+//
+// There is no separate command for it. Julian: "I dont understand why I need quay panel, is confusing,
+// I need one command only, the panel should appear when I press quay and toggled with the key p".
 func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer, addr string) error {
-	if len(args) > 1 {
-		return fmt.Errorf("usage: quay panel [<session id>]")
-	}
-
 	sessionID, err := panelSession(ctx, client, args)
 	if err != nil {
 		return err
@@ -37,14 +39,21 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		self = "quay"
 	}
 	width, height := terminalSize()
+	rows, err := headerRows(ctx, client, addr, width, height)
+	if err != nil {
+		return err
+	}
 	layout := panel.Layout{
-		Width:  width,
-		Height: height,
-		Left:   []string{self},
-		Right:  []string{self, "attach", sessionID},
+		Header:     []string{self, "header"},
+		HeaderRows: rows,
+		Width:      width,
+		Height:     height,
+		// The header is drawn in the pane above, across both halves, so this one draws none.
+		Left:  []string{self, "console"},
+		Right: []string{self, "attach", sessionID},
 	}
 
-	fmt.Fprintf(out, "opening the panel on %s\n", display.ShortID(sessionID))
+	fmt.Fprintf(out, "opening on %s\n", display.ShortID(sessionID))
 	return openPanel(layout, out)
 }
 
@@ -164,4 +173,36 @@ func argsFor(selected string) []string {
 		return nil
 	}
 	return []string{selected}
+}
+
+// headerRows is how tall the header pane has to be, measured from the header itself rather than
+// guessed. A guess one line short cuts the last line off, and one line long leaves a gap.
+func headerRows(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string, width, height int) (int, error) {
+	registry, err := console.NewDefaultRegistry(client)
+	if err != nil {
+		return 0, err
+	}
+	rows := console.HeaderHeight(registry, console.Default, headerInfo(ctx, client, addr), width, height)
+	if rows < 1 {
+		return 0, fmt.Errorf("the header would have no rows to draw in")
+	}
+	return rows, nil
+}
+
+// runBareConsole is the panel's lower left: the console with no header of its own, saying which view
+// it moves to so the header in the pane above names that view's keys.
+func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: quay console, and quay runs it for you")
+	}
+	current, err := currentPath()
+	if err != nil {
+		current = workspace.Path{}
+	}
+	return console.RunBare(ctx, client, console.Info{
+		Version:   version,
+		Address:   addr,
+		Workspace: current.Workspace,
+		Project:   current.Project,
+	}, conversationBeside(ctx, client), publishView)
 }
