@@ -44,6 +44,9 @@ type Info struct {
 	Events string
 	// Secrets is where a workspace's credentials are kept, for example "postgres, sealed".
 	Secrets string
+	// SandboxBuild is the build of the crew the sandbox image was made from. Empty means the image
+	// does not say, and nothing is then claimed about it.
+	SandboxBuild string
 }
 
 // Config is everything the control plane is built from. It is a struct rather than a parameter list
@@ -132,12 +135,13 @@ func (s *Server) ListTurns(ctx context.Context, req *quaycrewv1.ListTurnsRequest
 // GetInfo reports what this control plane is running.
 func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quaycrewv1.GetInfoResponse, error) {
 	return &quaycrewv1.GetInfoResponse{
-		Model:   s.info.Model,
-		Sandbox: s.info.Sandbox,
-		Store:   s.info.Store,
-		State:   s.info.State,
-		Events:  s.info.Events,
-		Secrets: s.info.Secrets,
+		Model:        s.info.Model,
+		Sandbox:      s.info.Sandbox,
+		Store:        s.info.Store,
+		State:        s.info.State,
+		Events:       s.info.Events,
+		Secrets:      s.info.Secrets,
+		SandboxBuild: s.info.SandboxBuild,
 	}, nil
 }
 

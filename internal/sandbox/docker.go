@@ -150,3 +150,31 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 	}
 	return append(args, d.Image, "sleep", "infinity")
 }
+
+// BuildLabel is where a sandbox image records which build of the crew it was made from. `make
+// sandbox-image` stamps it; anything reading it treats an image without one as saying nothing.
+const BuildLabel = "com.quaycrew.build"
+
+// ImageBuild is the build a sandbox image was made from, read from its label, and empty when there is
+// no answer to be had: no image name, no daemon, no image pulled yet, or an image made before this
+// was stamped.
+//
+// Empty is deliberately not a verdict. A crew that cannot see which build its image came from should
+// say nothing about it rather than accuse a perfectly good image of being stale, so every caller
+// treats empty as "unknown" and shows nothing.
+func ImageBuild(ctx context.Context, image string) string {
+	if image == "" {
+		return ""
+	}
+	out, err := exec.CommandContext(ctx, "docker", "image", "inspect",
+		"--format", "{{index .Config.Labels \""+BuildLabel+"\"}}", image).Output()
+	if err != nil {
+		return ""
+	}
+	build := strings.TrimSpace(string(out))
+	// Docker prints this for a label that is not there, and it is not a build.
+	if build == "<no value>" {
+		return ""
+	}
+	return build
+}

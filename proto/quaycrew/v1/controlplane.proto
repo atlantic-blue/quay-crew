@@ -301,6 +301,12 @@ message GetInfoResponse {
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
   // wondering why a turn stopped working.
   string secrets = 6;
+  // sandbox_build is the build of the crew the sandbox image was made from, for example "37b070b".
+  // Sessions run whatever that image holds, so an image older than the tool means the crew moved on
+  // and the containers did not: the `quay` inside one is from that build, or is not there at all.
+  // Empty means the image says nothing about which build it came from, which is every image made
+  // before this was stamped, and nothing is claimed about it either way.
+  string sandbox_build = 7;
 }
 
 // Turn is one exchange with the model, read back from the projection of the event log.

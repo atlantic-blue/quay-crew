@@ -160,7 +160,26 @@ func (m Model) statusLines() []string {
 		lines = append(lines, statusKey.Render(pad("Quay:", 16))+
 			alert.Render("this control plane is older than the tool, run make upgrade"))
 	}
+	if m.info.SandboxStale() {
+		lines = append(lines, statusKey.Render(pad("Sandboxes:", 16))+
+			alert.Render("running the image from "+m.info.SandboxBuild+
+				", older than this build, run make sandbox-image"))
+	}
 	return lines
+}
+
+// sandboxImagePhrase names the build every session is running, and says in red when the crew has
+// moved on from it. Sessions run whatever that image holds, so an image left behind is a crew whose
+// conversations are on the build from before, with the quay inside them older than the crew or not
+// there at all. An image that does not say which build it is is left out rather than guessed at.
+func sandboxImagePhrase(info Info) string {
+	if info.SandboxBuild == "" {
+		return ""
+	}
+	if info.SandboxStale() {
+		return alert.Render(info.SandboxBuild + ", older than this build, run make sandbox-image")
+	}
+	return info.SandboxBuild
 }
 
 // statePhrase says where a conversation is kept. Empty means nowhere: it lives in the container and
@@ -670,6 +689,7 @@ func (m Model) crewLines() []string {
 	add("Project", m.info.Project)
 	add("Model", m.info.Model)
 	add("Sandbox engine", m.info.Sandbox)
+	add("Sandbox image", sandboxImagePhrase(m.info))
 	add("Store engine", m.info.Store)
 	add("Secrets", secretsPhrase(m.info.Secrets))
 	if m.info.Store != "" {

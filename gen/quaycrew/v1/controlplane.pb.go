@@ -2729,7 +2729,13 @@ type GetInfoResponse struct {
 	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
 	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
 	// wondering why a turn stopped working.
-	Secrets       string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
+	Secrets string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
+	// sandbox_build is the build of the crew the sandbox image was made from, for example "37b070b".
+	// Sessions run whatever that image holds, so an image older than the tool means the crew moved on
+	// and the containers did not: the `quay` inside one is from that build, or is not there at all.
+	// Empty means the image says nothing about which build it came from, which is every image made
+	// before this was stamped, and nothing is claimed about it either way.
+	SandboxBuild  string `protobuf:"bytes,7,opt,name=sandbox_build,json=sandboxBuild,proto3" json:"sandbox_build,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2802,6 +2808,13 @@ func (x *GetInfoResponse) GetEvents() string {
 func (x *GetInfoResponse) GetSecrets() string {
 	if x != nil {
 		return x.Secrets
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetSandboxBuild() string {
+	if x != nil {
+		return x.SandboxBuild
 	}
 	return ""
 }
@@ -3159,14 +3172,15 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x16RestoreSessionResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"\x10\n" +
-	"\x0eGetInfoRequest\"\x9f\x01\n" +
+	"\x0eGetInfoRequest\"\xc4\x01\n" +
 	"\x0fGetInfoResponse\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x18\n" +
 	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
 	"\x05store\x18\x03 \x01(\tR\x05store\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
 	"\x06events\x18\x05 \x01(\tR\x06events\x12\x18\n" +
-	"\asecrets\x18\x06 \x01(\tR\asecrets\"\xcd\x01\n" +
+	"\asecrets\x18\x06 \x01(\tR\asecrets\x12#\n" +
+	"\rsandbox_build\x18\a \x01(\tR\fsandboxBuild\"\xcd\x01\n" +
 	"\x04Turn\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\asession\x18\x02 \x01(\tR\asession\x12\x16\n" +
