@@ -27,15 +27,21 @@ type Layout struct {
 	Session string
 }
 
+// Terminal is what the panel is being opened from. These cannot be worked out from here without
+// running something, so they are handed in.
+type Terminal struct {
+	// AlreadyOpen says the panel's tmux session exists. It is then moved to rather than built again:
+	// splitting an open panel every time it is opened is how you end up with eleven panes.
+	AlreadyOpen bool
+	// InsideTmux says the operator is already inside tmux. It changes how the panel is shown and not
+	// what it is: tmux refuses to attach a client that is already attached, so from in here the
+	// client is switched to the panel instead. Without this the panel was built correctly, left
+	// running, and never appeared.
+	InsideTmux bool
+}
+
 // Commands is every tmux invocation needed to put the panel on the screen, in order.
-//
-// Two shapes, because they are genuinely different situations. A panel that is already open is
-// reattached to, and must not be split again: splitting an open panel every time it is opened is how
-// you end up with eleven panes. A panel that is not open yet is built and then attached to.
-//
-// running says whether the tmux session already exists, which is the one thing this cannot work out
-// for itself without running something.
-func (l Layout) Commands(running bool) ([][]string, error) {
+func (l Layout) Commands(term Terminal) ([][]string, error) {
 	if err := l.check(); err != nil {
 		return nil, err
 	}
@@ -43,8 +49,8 @@ func (l Layout) Commands(running bool) ([][]string, error) {
 	if session == "" {
 		session = SessionName
 	}
-	if running {
-		return [][]string{{"tmux", "attach-session", "-t", session}}, nil
+	if term.AlreadyOpen {
+		return [][]string{show(term, session)}, nil
 	}
 
 	target := session + ":" + WindowName
@@ -57,9 +63,19 @@ func (l Layout) Commands(running bool) ([][]string, error) {
 		// The console has the keyboard when the panel opens, because that is what the operator came
 		// to use. The conversation is one pane away.
 		{"tmux", "select-pane", "-t", target + ".0"},
-		{"tmux", "attach-session", "-t", session},
+		show(term, session),
 	}
 	return built, nil
+}
+
+// show is how the operator ends up looking at the panel. From a plain terminal that is attaching a
+// client to it. From inside tmux there is already a client, and tmux will not attach a second one, so
+// the one that is there is moved instead.
+func show(term Terminal, session string) []string {
+	if term.InsideTmux {
+		return []string{"tmux", "switch-client", "-t", session}
+	}
+	return []string{"tmux", "attach-session", "-t", session}
 }
 
 // HasSession is the tmux invocation that answers whether the panel is already open. It is here rather

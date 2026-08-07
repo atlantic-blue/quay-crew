@@ -64,7 +64,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		p.commands, p.err = panel.Layout{
 			Left:  []string{"quay"},
 			Right: []string{"quay", "attach", newest},
-		}.Commands(false)
+		}.Commands(panel.Terminal{})
 		return nil
 	})
 

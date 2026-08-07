@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The panel opens from inside tmux.** It was being built correctly and then never shown: tmux
+  refuses to attach a client that is already inside one, so the two panes sat there running while the
+  terminal said `sessions should be nested with care` and nothing appeared. From inside tmux the
+  client is switched to the panel instead of attaching a second one.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`quay panel`: the console and a conversation, side by side, half the width each.** The console
   shows the crew and a conversation shows one thread, and using both meant losing sight of one. tmux
   does the splitting, the same tmux that already keeps an open conversation alive behind `ctrl-q`.
