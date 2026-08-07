@@ -331,6 +331,17 @@ Feature: Sessions run in isolated sandboxes
     Then the driver has been told what quay is
     And what it was told names the words a crew is made of
 
+  # Being told is not the same as being able to read it. The manual is written into the store, and the
+  # driver only ever sees the file: a driver made before any of this had a memory file with none of
+  # the crew's marks in it, that file was read back as an edit of what it had never seen, and the
+  # manual was gone again before anybody opened the conversation.
+  Scenario: A driver that already had notes reads both them and the manual
+    Given a driver made before the crew described itself
+    And its memory file already says "the boiler code is 1985"
+    When the operator opens the driver
+    Then the driver's memory file says what quay is
+    And the driver's memory file still says "the boiler code is 1985"
+
   # An operator who edits it has a reason to, and overwriting on every open would make it the one
   # context nobody can change.
   Scenario: Opening the driver again does not overwrite what it has been told

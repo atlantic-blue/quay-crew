@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -217,12 +218,57 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 				if !said {
 					continue
 				}
-				if kept, err := s.store.GetContext(ctx, level.scope, level.owner); err == nil && kept != body {
-					_ = s.store.SetContext(ctx, level.scope, level.owner, body)
+				kept, err := s.store.GetContext(ctx, level.scope, level.owner)
+				if err != nil || kept == body {
+					continue
 				}
+				// An unmarked file was never rendered by the crew, so what is in it cannot be an
+				// edit of what the store holds: whoever wrote it had never seen the store's body.
+				// Treating it as one costs the store's body entirely, which is how a driver taught
+				// the manual lost it again on the first sync after being told. Both are kept.
+				if !sandbox.Marked(onDisk) {
+					body = join(kept, body)
+					if body == kept {
+						continue
+					}
+				}
+				_ = s.store.SetContext(ctx, level.scope, level.owner, body)
 			}
 		}
+	}
+	s.renderContext(ctx, session)
+}
 
+// join puts two bodies together, keeping both, and keeps the first as it is when it already says the
+// second.
+func join(kept, added string) string {
+	switch {
+	case strings.TrimSpace(kept) == "":
+		return added
+	case strings.TrimSpace(added) == "", strings.Contains(kept, strings.TrimSpace(added)):
+		return kept
+	default:
+		return strings.TrimRight(kept, "\n") + "\n\n" + added
+	}
+}
+
+// renderContext writes what the store holds into the files the model reads, and reads nothing back.
+//
+// It is the direction the operator's own edits travel. `quay context set` is somebody saying what the
+// context is now, so the store wins over whatever the file said, and reading back first here would
+// hand the change straight back to the file it is meant to replace.
+//
+// A model already running in the sandbox does not see this. The command line tool reads its memory
+// when a conversation starts, so a change lands on the next turn or the next time the conversation is
+// opened, not in the middle of one.
+func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session) {
+	dirs := s.storage.MyDirs(sandbox.Config{
+		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
+	})
+	if len(dirs) != 2 {
+		return
+	}
+	for at, levels := range contextFiles(session) {
 		sections := make([]sandbox.Section, 0, len(levels))
 		for _, level := range levels {
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
@@ -850,4 +896,7 @@ func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
 		// to open the crew over it would be worse than opening one that has to ask.
 		return
 	}
+	// Out to the file the driver reads, rather than waiting for its sandbox to be made. Notes it
+	// already had are kept: this is the crew adding what it is, not replacing what was there.
+	s.syncContext(ctx, session)
 }

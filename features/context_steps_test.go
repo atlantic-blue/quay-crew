@@ -196,6 +196,29 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
+	sc.Step(`^the operator sets the session's context to "([^"]*)"$`, func(ctx context.Context, body string) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+			Scope: string(store.ContextSession), Owner: current.sessionID, Body: body,
+		})
+		return w.lastErr
+	})
+
+	// A CLAUDE.md that was there before the crew ever wrote one: no marks in it, because nothing
+	// composed it. An operator who dropped a file into the working directory leaves exactly this.
+	sc.Step(`^the sandbox's memory file is replaced with "([^"]*)" and no marks$`,
+		func(ctx context.Context, body string) error {
+			dir, err := sessionWorkingDir(ctx)
+			if err != nil {
+				return err
+			}
+			return sandbox.WriteMemory(dir, body)
+		})
+
 	sc.Step(`^the operator sets context at scope "([^"]*)" to "([^"]*)"$`,
 		func(ctx context.Context, scope, body string) error {
 			w := worldFrom(ctx)
