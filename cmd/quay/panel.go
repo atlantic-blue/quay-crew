@@ -46,9 +46,16 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 // openPanel runs the tmux invocations the layout asks for. A panel already open is reattached to
 // rather than split again.
 func openPanel(layout panel.Layout, out io.Writer) error {
-	running := exec.Command(layout.HasSession()[0], layout.HasSession()[1:]...).Run() == nil
+	asked := layout.HasSession()
+	term := panel.Terminal{
+		AlreadyOpen: exec.Command(asked[0], asked[1:]...).Run() == nil,
+		// tmux sets this for everything it runs, so it is how a program knows it is already inside
+		// one. From in there the panel is switched to rather than attached, because tmux refuses a
+		// second client on a terminal that already has one.
+		InsideTmux: os.Getenv("TMUX") != "",
+	}
 
-	commands, err := layout.Commands(running)
+	commands, err := layout.Commands(term)
 	if err != nil {
 		return err
 	}
