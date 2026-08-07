@@ -261,9 +261,37 @@ func endConversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneSe
 		if err != nil {
 			return err
 		}
-		// Nothing to end is not a failure: it is the state the next open wants anyway.
-		_ = exec.Command("docker", "exec", spec.GetSandbox(),
-			"tmux", "kill-session", "-t", sandbox.AttachedSessionName).Run()
+		return endConversation(spec.GetSandbox(), inTheSandbox)
+	}
+}
+
+// inTheSandbox runs a command inside a session's container and returns whatever it had to say.
+func inTheSandbox(box string, argv ...string) ([]byte, error) {
+	return exec.Command("docker", append([]string{"exec", box}, argv...)...).CombinedOutput()
+}
+
+// endConversation ends the conversation running in a sandbox, and says so when it could not.
+//
+// The failure to end it is the whole thing worth reporting, because the pane is reopened straight
+// after: a conversation that is still running is attached to rather than started, so it comes back
+// with its history and the key reads as doing nothing at all. That is what it did, quietly, whenever
+// the container was not running, or the image was too old to have tmux in it.
+//
+// Whether it worked is answered by asking, not by the exit status. Ending a conversation that was
+// never there fails too, and that is the state the next open wants anyway, so what matters is whether
+// one is still running afterwards.
+func endConversation(box string, run func(box string, argv ...string) ([]byte, error)) error {
+	if box == "" {
+		return fmt.Errorf("the crew did not say which sandbox the conversation is in")
+	}
+	out, err := run(box, "tmux", "kill-session", "-t", sandbox.AttachedSessionName)
+	if err == nil {
 		return nil
 	}
+	if _, running := run(box, "tmux", "has-session", "-t", sandbox.AttachedSessionName); running != nil {
+		// Nothing left to end, which is what the next open wants.
+		return nil
+	}
+	return fmt.Errorf("the conversation in %s could not be ended, so opening it again comes back to "+
+		"the one that is there: %s", box, strings.TrimSpace(string(out)))
 }
