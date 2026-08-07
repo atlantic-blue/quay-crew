@@ -75,10 +75,6 @@ func (m Model) headerLines() []string {
 		}
 		lines = append(lines, truncate(combined, m.width))
 	}
-	if m.inPanel {
-		// The wordmark is in tmux's status line, above both halves.
-		return lines
-	}
 	return m.withLogo(lines)
 }
 
@@ -95,6 +91,7 @@ var everywhereKeys = [][2]string{
 	{"/", "Filter these rows"},
 	{"r g", "Refresh now"},
 	{"n", "Make one thing"},
+	{"p", "Show or hide the conversation beside this"},
 	// The one key here that is not the console's own. An open conversation runs inside tmux in its
 	// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
 	// ending it, which is what everybody does until somebody tells them otherwise.
@@ -151,26 +148,19 @@ func (m Model) statusLines() []string {
 			lines = append(lines, statusKey.Render(pad(key+":", 16))+value)
 		}
 	}
-	if !m.inPanel {
-		// tmux is drawing these across the top of the panel, and twice is once too many.
-		add("Version", m.info.Version)
-		add("Address", m.info.Address)
-		add("Workspace", m.info.Workspace)
-		add("Project", m.info.Project)
-	}
-	// Where you are and which crew you are pointed at are what anybody needs at a glance. What the
-	// crew is running underneath is a question, and a question has a view: :stats. Keeping it here
-	// made the header ten lines, and a header that tall in a pane of its own has to scroll, which is
-	// how the top of it goes missing.
-	if !m.inPanel {
-		add("Model", m.info.Model)
-		add("Sandbox engine", m.info.Sandbox)
-		add("Store engine", m.info.Store)
-		add("Secrets", secretsPhrase(m.info.Secrets))
-		if m.info.Store != "" {
-			add("Events engine", eventsPhrase(m.info.Events))
-			add("State", statePhrase(m.info.State))
-		}
+	add("Version", m.info.Version)
+	add("Address", m.info.Address)
+	add("Workspace", m.info.Workspace)
+	add("Project", m.info.Project)
+	// Also in the :stats view, which is where to read them when a conversation beside the console has
+	// squeezed the header. They stay here because this is the header the operator asked to keep.
+	add("Model", m.info.Model)
+	add("Sandbox engine", m.info.Sandbox)
+	add("Store engine", m.info.Store)
+	add("Secrets", secretsPhrase(m.info.Secrets))
+	if m.info.Store != "" {
+		add("Events engine", eventsPhrase(m.info.Events))
+		add("State", statePhrase(m.info.State))
 	}
 	if m.info.Behind {
 		add("Quay", alert.Render("this control plane is older than the tool, run make upgrade"))

@@ -7,9 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/panel"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
@@ -38,12 +38,10 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	}
 	width, height := terminalSize()
 	layout := panel.Layout{
-		Status: statusLines(self, addr),
 		Width:  width,
 		Height: height,
-		// The console draws no status block here: tmux is drawing it across the top.
-		Left:  []string{self, "console"},
-		Right: []string{self, "attach", sessionID},
+		Left:   []string{self},
+		Right:  []string{self, "attach", sessionID},
 	}
 
 	fmt.Fprintf(out, "opening the panel on %s\n", display.ShortID(sessionID))
@@ -132,48 +130,6 @@ func where(current workspace.Path) string {
 	return " in " + current.Workspace + "/" + current.Project
 }
 
-// runBareConsole is the panel's left half: the console with no header of its own, saying which view
-// it moves to so the header in the pane above can name that view's keys.
-func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
-	if len(args) != 0 {
-		return fmt.Errorf("usage: quay console, and the panel runs it for you")
-	}
-	current, err := currentPath()
-	if err != nil {
-		current = workspace.Path{}
-	}
-	return console.RunBare(ctx, client, console.Info{
-		Version:   version,
-		Address:   addr,
-		Workspace: current.Workspace,
-		Project:   current.Project,
-	})
-}
-
-// statusLines are the header, as tmux status lines: where you are and which crew, with the wordmark
-// on the right of the first one so it is there whatever else is.
-//
-// Where you are is asked again on tmux's own interval rather than baked in, because `quay use` in the
-// other pane moves it. The rest is fixed for the life of the panel: which build this is, and where it
-// dialled.
-func statusLines(self, addr string) []string {
-	where := "#(" + self + " use)"
-	return []string{
-		" " + statusKey("Version") + version + "#[align=right]" + wordmark + " ",
-		" " + statusKey("Address") + addr,
-		" " + statusKey("Where") + where,
-	}
-}
-
-// wordmark is the name, on one line. The console's own block letters are six lines tall and tmux draws
-// at most five, so the panel wears the short one.
-const wordmark = "▌ QUAY CREW ▐"
-
-// statusKey pads a label the way the console's status block does, so the two look like one tool.
-func statusKey(label string) string {
-	return fmt.Sprintf("%-16s", label+":")
-}
-
 // terminalSize is the terminal the panel is being opened from, so tmux builds the window at that size
 // rather than at its own default and then scaling everything when a client attaches.
 func terminalSize() (int, int) {
@@ -182,4 +138,30 @@ func terminalSize() (int, int) {
 		return 120, 40
 	}
 	return width, height
+}
+
+// conversationBeside is what the console runs when it is asked to put a conversation next to itself.
+// The row under the cursor wins, because that is the conversation being looked at; with nothing
+// selected it falls back to the one last spoken to, the same rule `quay panel` uses.
+func conversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) ([]string, error) {
+	return func(selected string) ([]string, error) {
+		self, err := os.Executable()
+		if err != nil {
+			self = "quay"
+		}
+		sessionID, err := panelSession(ctx, client, argsFor(selected))
+		if err != nil {
+			return nil, err
+		}
+		return []string{self, "attach", sessionID}, nil
+	}
+}
+
+// argsFor turns the row under the cursor into the argument panelSession takes, which is none when
+// there is no row or the row is not a session.
+func argsFor(selected string) []string {
+	if strings.TrimSpace(selected) == "" {
+		return nil
+	}
+	return []string{selected}
 }

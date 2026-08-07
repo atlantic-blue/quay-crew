@@ -11,6 +11,7 @@ package panel
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // SessionName is the tmux session the panel lives in. One name, so opening the panel twice comes back
@@ -20,19 +21,8 @@ const SessionName = "quay-panel"
 // WindowName names the window inside it, so panes can be addressed without counting.
 const WindowName = "panel"
 
-// MaxStatusLines is how many lines tmux will draw as a status line. Asking for six is refused by tmux
-// with "unknown value", so the header is held to this rather than finding out at runtime.
-const MaxStatusLines = 5
-
 // Layout is what the panel is made of: the command in each region, and what to call the whole thing.
 type Layout struct {
-	// Status is the header, as tmux status lines. It is not a pane: tmux draws its own status line
-	// across the full width, at a height it owns, and it cannot scroll. A pane would have needed a
-	// process to draw it, and that process could not see which view the console was on.
-	//
-	// tmux takes at most five. Each entry is a tmux format string, so a value that moves can be a
-	// command in #() rather than something baked in when the panel opened.
-	Status []string
 	// Left is the console.
 	Left []string
 	// Right is the conversation driving it.
@@ -84,31 +74,9 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 		// The console has the keyboard when the panel opens, because that is what the operator came
 		// to use. The conversation is one pane away.
 		{"tmux", "select-pane", "-t", target + ".0"},
+		show(term, session),
 	}
-	built = append(built, l.statusCommands(session)...)
-	return append(built, show(term, session)), nil
-}
-
-// statusCommands turn the header into tmux's own status line: how many lines it has, where it sits,
-// how often the parts that move are asked again, and what each line says.
-func (l Layout) statusCommands(session string) [][]string {
-	commands := [][]string{
-		{"tmux", "set-option", "-t", session, "status", strconv.Itoa(len(l.Status))},
-		// Above the panes, because it is a header.
-		{"tmux", "set-option", "-t", session, "status-position", "top"},
-		// How often the moving parts are asked again. Where you are standing changes when `quay use`
-		// runs in the other pane, and a header saying the wrong place is worse than one saying none.
-		{"tmux", "set-option", "-t", session, "status-interval", "2"},
-		// tmux colours its status line green by default, which is a bar, not a header.
-		{"tmux", "set-option", "-t", session, "status-style", "default"},
-	}
-	for index, line := range l.Status {
-		commands = append(commands, []string{
-			"tmux", "set-option", "-t", session,
-			fmt.Sprintf("status-format[%d]", index), line,
-		})
-	}
-	return commands
+	return built, nil
 }
 
 // newSession builds the panel's window, at the size of the terminal opening it where that is known.
@@ -141,14 +109,6 @@ func (l Layout) HasSession() []string {
 }
 
 func (l Layout) check() error {
-	if len(l.Status) == 0 {
-		return fmt.Errorf("panel: nothing to put in the header")
-	}
-	// tmux draws at most five status lines, and asking for more is refused rather than silently
-	// losing whichever ones did not fit.
-	if len(l.Status) > MaxStatusLines {
-		return fmt.Errorf("panel: a header of %d lines, and tmux draws at most %d", len(l.Status), MaxStatusLines)
-	}
 	if len(l.Left) == 0 {
 		return fmt.Errorf("panel: nothing to put in the left half")
 	}
@@ -156,4 +116,38 @@ func (l Layout) check() error {
 		return fmt.Errorf("panel: nothing to put in the right half")
 	}
 	return nil
+}
+
+// Beside puts a conversation next to a pane that is already on the screen, which is what the console
+// does when the operator presses the key for it. The panel is the same thing built in one go; this is
+// the same thing built around a console that is already running.
+//
+// target is the pane to split, as tmux's own pane identifier. Nothing else changes: the console keeps
+// drawing its own header, which is the header the operator asked to keep.
+func Beside(target string, right []string) ([][]string, error) {
+	if strings.TrimSpace(target) == "" {
+		return nil, fmt.Errorf("panel: no pane to open a conversation beside")
+	}
+	if len(right) == 0 {
+		return nil, fmt.Errorf("panel: nothing to put in the conversation")
+	}
+	// -d leaves the keyboard where it is. The operator asked to see a conversation, not to start
+	// typing into it, and having the cursor jump out of the list is the thing that would annoy.
+	return [][]string{
+		append([]string{"tmux", "split-window", "-h", "-d", "-l", "50%", "-t", target}, right...),
+	}, nil
+}
+
+// Away closes the conversation again and gives the console its own header back.
+func Away(pane string) ([][]string, error) {
+	if strings.TrimSpace(pane) == "" {
+		return nil, fmt.Errorf("panel: no conversation to close")
+	}
+	return [][]string{{"tmux", "kill-pane", "-t", pane}}, nil
+}
+
+// Opened is the tmux invocation that says which pane the conversation ended up in, so the console can
+// close the one it opened rather than whichever pane happens to be beside it now.
+func Opened(target string) []string {
+	return []string{"tmux", "list-panes", "-F", "#{pane_id}", "-t", target}
 }

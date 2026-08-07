@@ -96,6 +96,60 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return consoleFrom(ctx).drillInto(ctx, worldFrom(ctx).client, "projects", name)
 	})
 
+	// The header the operator is actually looking at, asserted whole. The console renders it from what
+	// the control plane says about itself, so these drive the real thing rather than a description of
+	// it.
+	sc.Step(`^the operator looks at the console$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).openModel(worldFrom(ctx))
+	})
+
+	sc.Step(`^the operator opens the console with a conversation beside it$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx)); err != nil {
+			return err
+		}
+		// Half the width, which is what a conversation on the right leaves the console.
+		return c.press(tea.WindowSizeMsg{Width: 84, Height: 41})
+	})
+
+	sc.Step(`^the header names the crew it is pointed at$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		for _, want := range []string{"Version", "Workspace"} {
+			if !strings.Contains(view, want) {
+				return fmt.Errorf("the header does not name %q:\n%s", want, view)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the header names what the crew is running$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		for _, want := range []string{"Sandbox engine", "Store engine"} {
+			if !strings.Contains(view, want) {
+				return fmt.Errorf("the header does not name %q:\n%s", want, view)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the header says what the keys on this view do$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		if !strings.Contains(view, "Open") {
+			return fmt.Errorf("the header does not say what enter does:\n%s", view)
+		}
+		return nil
+	})
+
+	// The one that was missed. Suppressing every other line left this branch as the only one that
+	// could fire, so the console drew it under a header that had already answered.
+	sc.Step(`^the header never asks a question it has already answered$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		if strings.Contains(view, "asking what this control plane is running") {
+			return fmt.Errorf("the header asks what the control plane is running, and it has been told:\n%s", view)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator opens the console$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, console.Default)
 	})
@@ -177,7 +231,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator opens the console and presses backspace on the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.openModel(worldFrom(ctx).client); err != nil {
+		if err := c.openModel(worldFrom(ctx)); err != nil {
 			return err
 		}
 		return c.press(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -203,7 +257,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator opens the console and archives the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.openModel(worldFrom(ctx).client); err != nil {
+		if err := c.openModel(worldFrom(ctx)); err != nil {
 			return err
 		}
 		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")}); err != nil {
@@ -360,7 +414,7 @@ func drive(model console.Model, cmd tea.Cmd) (console.Model, error) {
 }
 
 // press sends one key through the console and runs whatever it asks for.
-func (c *consoleWorld) press(key tea.KeyMsg) error {
+func (c *consoleWorld) press(key tea.Msg) error {
 	updated, cmd := c.model.Update(key)
 	typed, isModel := updated.(console.Model)
 	if !isModel {
@@ -376,16 +430,31 @@ func (c *consoleWorld) press(key tea.KeyMsg) error {
 
 // openModel builds the real console over the live control plane and loads its opening view. It asks
 // for a refresh rather than calling Init, because Init also starts the refresh clock.
-func (c *consoleWorld) openModel(client quaycrewv1.ControlPlaneServiceClient) error {
+func (c *consoleWorld) openModel(w *world) error {
+	client := w.client
 	registry, err := console.NewDefaultRegistry(client)
 	if err != nil {
 		return err
 	}
-	model, err := console.New(registry, console.Default, nil)
+	// Where the operator is standing, which is what the console reads from its own context file and
+	// what the header names.
+	known := console.Info{
+		Version: "test", Address: "bufconn",
+		Workspace: w.workspaceName, Project: w.projectName,
+	}
+	model, err := console.New(registry, console.Default, console.InfoFrom(client, known))
 	if err != nil {
 		return err
 	}
-	c.model = model
+	// Ask the crew what it is running, the same way the console does on the way up, so the header a
+	// scenario reads is filled in from the control plane rather than being the empty one a console
+	// shows before its first answer. Asked here rather than by running Init, because Init also starts
+	// the three second refresh clock and a scenario should not wait for it.
+	described, err := console.InfoFrom(client, known)(context.Background())
+	if err != nil {
+		return err
+	}
+	c.model = model.WithInfo(described)
 	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 }
 

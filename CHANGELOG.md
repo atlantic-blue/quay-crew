@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`p` shows or hides a conversation beside the console.** It opens the one under the cursor, or the
+  one last spoken to when nothing is selected, and pressing it again closes the one it opened. It works
+  in `quay`, not only in `quay panel`, so you do not have to decide before opening the console whether
+  you wanted a conversation next to it.
+- **The console keeps its own header, always.** It was replaced in the panel by a status line tmux
+  drew, and what came back had lost the wordmark and the engines and sat on top of the console's own
+  rows. Julian: "where is the header? this is a mess", then "I want this header always present". The
+  status line is gone: the header is the console's, full width on its own and squeezed to half when a
+  conversation is beside it. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The panel's header is tmux's own status line, and the panel is two panes again.** It was a third
   pane, which meant a process to draw it, and that process could not see which view the console was on,
   so the console had to publish it. tmux draws a status line itself, across the full width, at a height

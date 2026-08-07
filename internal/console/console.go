@@ -49,7 +49,10 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 
 // Run opens the full screen console and returns when the operator quits. known is what the caller
 // can say without asking anybody: the build, the address, and the current context.
-func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info) error {
+// beside is how the console opens a conversation next to itself when the key for it is pressed. It is
+// handed in because picking which conversation, and how to open it, belongs to the command line.
+func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
+	beside func(selected string) ([]string, error)) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -60,28 +63,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	}
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
-	model.info = known
-	model = model.WithClient(client)
-	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
-	if _, err := program.Run(); err != nil {
-		return fmt.Errorf("console: %w", err)
-	}
-	return nil
-}
-
-// RunBare is the console as the panel's left half: tmux draws the header across the top, so this
-// draws its key hints and its rows and nothing else.
-func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info) error {
-	registry, err := NewDefaultRegistry(client)
-	if err != nil {
-		return err
-	}
-	model, err := New(registry, Default, InfoFrom(client, known))
-	if err != nil {
-		return err
-	}
-	model.info = known
-	model = model.WithClient(client).InPanel()
+	model = model.WithInfo(known).WithClient(client).Beside(beside)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)

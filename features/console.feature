@@ -214,3 +214,24 @@ Feature: The operator sees the crew from the console
       | hello       |
     Then the console is asking nothing
     And the console lists the session the wizard started
+
+  # The header is the console's own, and it is there whatever else is on the screen. It was taken away
+  # once, replaced by a status line tmux drew, and what came back had lost the wordmark and the engines
+  # and sat on top of the console's own rows. Julian, with a screenshot: "where is the header? this is
+  # a mess", then "I want this header always present".
+  #
+  # These drive the console's own reducer against the real control plane, so what is asserted is the
+  # header the operator would actually be looking at.
+  Scenario: The header says what the crew is, whatever is beside it
+    When the operator looks at the console
+    Then the header names the crew it is pointed at
+    And the header names what the crew is running
+    And the header says what the keys on this view do
+    And the header never asks a question it has already answered
+
+  # Half the width is what a conversation opened beside the console leaves it.
+  Scenario: The header is still there with a conversation beside it
+    When the operator opens the console with a conversation beside it
+    Then the header names the crew it is pointed at
+    And the header says what the keys on this view do
+    And the header never asks a question it has already answered
