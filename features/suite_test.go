@@ -139,8 +139,10 @@ type world struct {
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
 	realRunner model.Runner
-	secrets    secrets.Store
-	store      store.Store
+	// reachable is the address a session is told to dial for the crew, empty when it cannot reach it.
+	reachable string
+	secrets   secrets.Store
+	store     store.Store
 	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
 	// it. Setting it to nil is how a scenario says the stack has no broker configured.
 	events *messaging.Memory
@@ -213,7 +215,7 @@ func (w *world) serve() error {
 	w.grpcServer = grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
-		Storage: w.storage, Info: w.info, Events: w.eventLog(),
+		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -358,6 +360,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSandboxEnvSteps(sc)
 	initializeWorkspaceSteps(sc)
 	initializeWizardSteps(sc)
+	initializeReachableSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns

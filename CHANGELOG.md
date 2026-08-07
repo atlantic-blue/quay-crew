@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **A session can drive the crew from inside its sandbox.** The sandbox image carries `quay`, the
+  sandbox joins the control plane's network, and the control plane puts its own address into every
+  sandbox, so an agent in a session runs `quay workspace create` and it works with nothing to
+  configure. That is what makes the conversation beside the console able to do anything rather than
+  just talk about it.
+  It is off unless it is turned on: a session that can drive the crew can also stop other sessions.
+  `deploy/env.example` turns it on for a local stack, and without both the network and the address a
+  sandbox reaches nothing of ours. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The wordmark is drawn in the panel's header again.** A height check left over from when the
   wordmark was six lines of block letters dropped it from any pane shorter than seven rows, and the
   header pane is one row by design. One line costs no rows, so only width can stop it now.

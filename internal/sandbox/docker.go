@@ -19,6 +19,13 @@ type DockerProvider struct {
 	Mounts []string
 	// Storage keeps the workspace's conversation store and the project's files on the host.
 	Storage Storage
+	// Network is the container network sessions join. Empty leaves them on the daemon's default,
+	// where the control plane is not reachable by name.
+	//
+	// Joining the control plane's network is what lets a session drive the crew: run `quay` inside
+	// one and it reaches the same interface the operator's does. That is a deliberate widening, so it
+	// is configuration rather than the default, and off means a sandbox can talk to nothing of ours.
+	Network string
 }
 
 var _ Provider = DockerProvider{}
@@ -48,17 +55,7 @@ func (d DockerProvider) Create(ctx context.Context, cfg Config) (Sandbox, error)
 		return adopted, nil
 	}
 
-	args := []string{"run", "--detach", "--name", name}
-	for _, entry := range cfg.Env {
-		args = append(args, "--env", entry)
-	}
-	for _, mount := range kept {
-		args = append(args, "-v", mount.Source+":"+mount.Target)
-	}
-	for _, mount := range d.Mounts {
-		args = append(args, "-v", mount)
-	}
-	args = append(args, d.Image, "sleep", "infinity")
+	args := d.runArgs(name, cfg, kept)
 
 	if out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("sandbox: create container: %w: %s", err, out)
@@ -123,4 +120,24 @@ func (s *dockerSandbox) Close(ctx context.Context) error {
 		return fmt.Errorf("sandbox: remove container: %w", err)
 	}
 	return nil
+}
+
+// runArgs is the whole `docker run` for a session's sandbox. It is a function of its own so a test can
+// read what the daemon would be asked for without a daemon: whether the sandbox joins a network at all
+// is the difference between a session that can drive the crew and one that cannot.
+func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
+	args := []string{"run", "--detach", "--name", name}
+	if d.Network != "" {
+		args = append(args, "--network", d.Network)
+	}
+	for _, entry := range cfg.Env {
+		args = append(args, "--env", entry)
+	}
+	for _, mount := range kept {
+		args = append(args, "-v", mount.Source+":"+mount.Target)
+	}
+	for _, mount := range d.Mounts {
+		args = append(args, "-v", mount)
+	}
+	return append(args, d.Image, "sleep", "infinity")
 }

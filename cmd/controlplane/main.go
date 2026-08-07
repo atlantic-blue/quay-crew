@@ -65,6 +65,8 @@ func main() {
 		Image:   os.Getenv("QC_SANDBOX_IMAGE"),
 		Mounts:  splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
 		Storage: storage,
+		// The network sessions join. Unset leaves them where they cannot reach the crew.
+		Network: os.Getenv("QC_SANDBOX_NETWORK"),
 	})
 	if err != nil {
 		logger.Error("sandbox provider config failed", "error", err)
@@ -91,6 +93,8 @@ func main() {
 		Secrets:  credentials,
 		Storage:  storage,
 		Events:   events,
+		// Where a session dials to reach this control plane. Unset means it cannot.
+		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
 		Info: controlplane.Info{
 			Model:   modelKind,
 			Sandbox: sandboxKind,

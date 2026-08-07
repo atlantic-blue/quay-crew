@@ -108,3 +108,28 @@ func TestFakeProviderAdoptsASessionsSandbox(t *testing.T) {
 		t.Fatal("a closed sandbox was handed back, want a fresh one")
 	}
 }
+
+// TestASandboxJoinsNoNetworkByDefault. A session that can reach the control plane can drive the crew,
+// and can stop other sessions with it, so reaching it is configuration rather than the default.
+func TestASandboxJoinsNoNetworkByDefault(t *testing.T) {
+	plain := sandbox.DockerProvider{Image: "quaycrew-sandbox-claude:local"}
+	if plain.Network != "" {
+		t.Fatalf("a sandbox joins %q with nothing configured", plain.Network)
+	}
+}
+
+// TestOptionsCarryTheNetworkThroughToTheBackend: the provider is built by converting the options
+// across, so a field added to one and not the other silently does nothing.
+func TestOptionsCarryTheNetworkThroughToTheBackend(t *testing.T) {
+	provider, err := sandbox.NewProvider(sandbox.KindDocker, sandbox.Options{Image: "img", Network: "quaycrew_default"})
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+	docker, isDocker := provider.(sandbox.DockerProvider)
+	if !isDocker {
+		t.Fatalf("NewProvider gave %T, want the Docker backend", provider)
+	}
+	if docker.Network != "quaycrew_default" {
+		t.Fatalf("the backend joins %q, want the network it was configured with", docker.Network)
+	}
+}

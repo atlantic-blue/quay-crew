@@ -11,6 +11,9 @@ type Options struct {
 	// Storage is where a workspace's conversation store and a project's files are kept so they
 	// outlive the container. Leave it empty and they do not.
 	Storage Storage
+	// Network is the container network sessions join. Empty leaves them where they cannot reach the
+	// control plane, which is the default.
+	Network string
 }
 
 // Kinds of sandbox. The default isolates each session in its own container.
