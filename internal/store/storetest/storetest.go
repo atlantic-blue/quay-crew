@@ -14,6 +14,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -534,6 +535,35 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if len(within) != 1 {
 			t.Fatalf("the workspace has %d projects, want 1", len(within))
+		}
+	})
+
+	// Two stores, one rule. The driver was made in each of them separately, and only one of the two
+	// said which mode it starts in, so a crew on Postgres and a crew on memory disagreed about
+	// whether the session driving them could act at all.
+	t.Run("the driver is created able to act, and is the same one every time", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "me", "house bills")
+
+		driver, err := s.FindOrCreateDriver(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("FindOrCreateDriver: %v", err)
+		}
+		if !driver.GetDriver() {
+			t.Fatal("the session made to drive the crew is not marked as the driver")
+		}
+		if got := driver.GetPermissionMode(); got != model.PermissionBypass {
+			t.Fatalf("the driver is created in %q, want %q: one that asks before every step describes "+
+				"the task instead of doing it", got, model.PermissionBypass)
+		}
+
+		again, err := s.FindOrCreateDriver(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("FindOrCreateDriver again: %v", err)
+		}
+		if again.GetId() != driver.GetId() {
+			t.Fatalf("opening the driver twice gave %s then %s", driver.GetId(), again.GetId())
 		}
 	})
 

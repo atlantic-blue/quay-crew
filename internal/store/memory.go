@@ -390,12 +390,15 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 	}
 	now := timestamppb.New(time.Now().UTC())
 	session := &quaycrewv1.Session{
-		Id:             NewID(),
-		Workspace:      owner.GetWorkspace(),
-		Project:        project,
-		ThreadId:       NewID(),
-		Status:         "idle",
-		PermissionMode: model.PermissionAcceptEdits,
+		Id:        NewID(),
+		Workspace: owner.GetWorkspace(),
+		Project:   project,
+		ThreadId:  NewID(),
+		Status:    "idle",
+		// The driver acts for the operator rather than doing work of its own, and a driver that stops
+		// to ask before every step describes the task instead of doing it. What bounds it is the
+		// sandbox, which is the same boundary it would have either way.
+		PermissionMode: model.PermissionBypass,
 		Driver:         true,
 		CreatedAt:      now,
 		UpdatedAt:      now,

@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The driver is made able to act rather than to ask.** It was created in the same mode as any other
+  thread, so the one session whose whole job is to drive the crew stopped and asked before every step:
+  asked to make a project, it described how you would go about making one. It is created able to act
+  now. What bounds it is the sandbox, which is the same boundary it had in either mode, and `D` in the
+  console still sets it back to asking like any other thread. A driver made before this keeps the mode
+  it has; `D` moves it.
+  The rule went into the store conformance suite rather than into one of the two stores, because the
+  driver is created separately in each and only one of them said which mode it starts in.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`make upgrade` rebuilds the sandbox image, and a stale one says so.** Upgrading fast forwarded the
   checkout, reinstalled the tool and rebuilt the stack, and never touched the sandbox image. Sessions
   run whatever that image holds, so the tool and the control plane moved forward while every
