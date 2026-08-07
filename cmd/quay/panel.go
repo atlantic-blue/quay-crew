@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"github.com/charmbracelet/x/term"
 )
+
+// errNothingBeside is the one reason opening the crew falls back to the console on its own: there is
+// nothing to put beside it yet, which is what a crew nobody has used yet looks like. Every other
+// failure is the operator's to see.
+var errNothingBeside = errors.New("nothing to put beside the console yet")
 
 // runPanel puts the console and a conversation side by side, each on half the screen.
 //
@@ -231,8 +237,8 @@ func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	switch len(listed.GetProjects()) {
 	case 0:
-		return "", fmt.Errorf("there is no project for the crew to open in: make one with `quay`, " +
-			"press n, and choose project")
+		return "", fmt.Errorf("%w: there is no project for the crew to open in, make one with `quay`, "+
+			"press n, and choose project", errNothingBeside)
 	case 1:
 		return listed.GetProjects()[0].GetId(), nil
 	default:

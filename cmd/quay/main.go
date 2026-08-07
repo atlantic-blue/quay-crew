@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -58,11 +59,22 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 //
 // One command opens everything. A crew with no conversation in it is the first run, and refusing to
 // open at all then would be absurd, so the console opens on its own.
+//
+// That is the only reason it falls back. Every failure used to land here and come out as a single
+// console pane: tmux missing, a crew with two projects and nowhere named to open, a header that would
+// not fit. They all looked identical from the outside, which is a panel that sometimes does not
+// appear and never says why. Anything else is reported, because every one of those refusals already
+// names what to do about it and the operator cannot act on a message nobody prints.
 func openTheCrew(panel, alone func() error) error {
-	if err := panel(); err == nil {
+	err := panel()
+	switch {
+	case err == nil:
 		return nil
+	case errors.Is(err, errNothingBeside):
+		return alone()
+	default:
+		return err
 	}
-	return alone()
 }
 
 func openConsoleAlone(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) error {

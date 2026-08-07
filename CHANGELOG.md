@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **When the crew cannot open, it says why.** Opening the panel and failing fell back to a single
+  console pane, whatever the reason: tmux missing, a crew with two projects and nowhere named to open
+  in, a header with no room to draw. All of them looked identical from the outside, so the panel read
+  as a thing that sometimes does not appear, and the reason was printed nowhere. There is one reason
+  left to fall back on, a crew with nothing to put beside the console yet, which is what a first run
+  looks like. Every other failure is reported, and each of those refusals already names what to do
+  about it. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The driver is made able to act rather than to ask.** It was created in the same mode as any other
   thread, so the one session whose whole job is to drive the crew stopped and asked before every step:
   asked to make a project, it described how you would go about making one. It is created able to act

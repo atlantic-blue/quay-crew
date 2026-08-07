@@ -106,7 +106,7 @@ func TestQuayOpensTheCrewNotJustTheConsole(t *testing.T) {
 func TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt(t *testing.T) {
 	aloneRan := false
 	err := openTheCrew(
-		func() error { return fmt.Errorf("there is no conversation to put beside the console yet") },
+		func() error { return fmt.Errorf("%w: no conversation yet", errNothingBeside) },
 		func() error { aloneRan = true; return nil },
 	)
 	if err != nil {
@@ -131,5 +131,28 @@ func TestThePanelCommandIsRefused(t *testing.T) {
 	// And it is gone from the usage, or it reads as still being a command.
 	if strings.Contains(usage, "panel [<session id>]") {
 		t.Fatal("the usage still lists a panel command")
+	}
+}
+
+// TestQuaySaysWhyTheCrewCouldNotOpen. Every failure to open the panel used to come out as a single
+// console pane: tmux missing, a crew with two projects and nowhere named to open, a header with no
+// room to draw in. All of them looked the same from the outside, so the panel read as a thing that
+// sometimes does not appear, and the reason was never printed anywhere.
+func TestQuaySaysWhyTheCrewCouldNotOpen(t *testing.T) {
+	aloneRan := false
+	err := openTheCrew(
+		func() error {
+			return fmt.Errorf("panel: new-session: exec: \"tmux\": executable file not found in $PATH")
+		},
+		func() error { aloneRan = true; return nil },
+	)
+	if err == nil {
+		t.Fatal("opening the crew failed and quay said nothing about it")
+	}
+	if !strings.Contains(err.Error(), "tmux") {
+		t.Fatalf("the failure is reported as %q, and it does not say what went wrong", err)
+	}
+	if aloneRan {
+		t.Fatal("quay opened a single console pane over a failure that was not about having nothing to put beside it")
 	}
 }
