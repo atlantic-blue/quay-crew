@@ -18,15 +18,17 @@ func lines(commands [][]string) string {
 // TestThePanelIsTwoHalvesSideBySide: the whole point of it. Half the screen each, split left and
 // right, the console in one and the conversation in the other.
 func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
-	commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
 	got := lines(commands)
 
 	for _, want := range []string{
-		"tmux new-session -d -s quay-panel -n panel quay",
-		"tmux split-window -h -l 50% -t quay-panel:panel quay attach s1",
+		"tmux new-session -d -s quay-panel -n panel quay header",
+		"tmux split-window -v -t quay-panel:panel.0 quay console",
+		"tmux split-window -h -l 50% -t quay-panel:panel.1 quay attach s1",
+		"tmux resize-pane -t quay-panel:panel.0 -y 10",
 		"tmux attach-session -t quay-panel",
 	} {
 		if !strings.Contains(got, want) {
@@ -39,29 +41,31 @@ func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
 // is the difference: without it tmux stacks the panes and the console loses half its rows instead of
 // half its width.
 func TestThePanelSplitsSideBySideRatherThanStacked(t *testing.T) {
-	commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
+	// The split that divides the two halves is the one inside the lower region. The other one is the
+	// full width cut that puts the header above them, and it is vertical on purpose.
 	for _, argv := range commands {
-		if argv[1] != "split-window" {
+		if argv[1] != "split-window" || !strings.Contains(line(argv), ".1") {
 			continue
 		}
 		if !strings.Contains(line(argv), " -h ") {
-			t.Fatalf("the split is stacked, not side by side: %s", line(argv))
+			t.Fatalf("the two halves are stacked, not side by side: %s", line(argv))
 		}
 		if strings.Contains(line(argv), " -v ") {
-			t.Fatalf("the split is vertical: %s", line(argv))
+			t.Fatalf("the two halves are divided vertically: %s", line(argv))
 		}
 		return
 	}
-	t.Fatal("the panel never splits the window, so it is not a panel")
+	t.Fatal("the panel never divides the lower half, so there are no two halves")
 }
 
 // TestTheConsoleHasTheKeyboard: the operator opened the panel to use the console, so the cursor lands
 // there rather than in the conversation, which is one pane away.
 func TestTheConsoleHasTheKeyboard(t *testing.T) {
-	commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
@@ -74,8 +78,8 @@ func TestTheConsoleHasTheKeyboard(t *testing.T) {
 	if selected == "" {
 		t.Fatal("the panel never says which pane has the keyboard, so it is whichever was made last")
 	}
-	// Pane 0 is the one new-session made, which is the console.
-	if !strings.HasSuffix(selected, ".0") {
+	// Pane 0 is the header, which nothing is typed into. Pane 1 is the console.
+	if !strings.HasSuffix(selected, ".1") {
 		t.Fatalf("the keyboard starts in %q, want the console", selected)
 	}
 }
@@ -83,7 +87,7 @@ func TestTheConsoleHasTheKeyboard(t *testing.T) {
 // TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain: the layout is built once. Splitting on every
 // open is how a two pane panel becomes eleven panes by lunchtime.
 func TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain(t *testing.T) {
-	commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{AlreadyOpen: true})
+	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{AlreadyOpen: true})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
@@ -103,7 +107,7 @@ func TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain(t *testing.T) {
 // TestTheSessionNameIsTheSameEveryTime, because that is what makes opening it twice come back to the
 // one already open rather than starting a second.
 func TestTheSessionNameIsTheSameEveryTime(t *testing.T) {
-	layout := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}
+	layout := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}
 	asked := line(layout.HasSession())
 
 	commands, err := layout.Commands(Terminal{})
@@ -125,9 +129,11 @@ func TestAHalfEmptyPanelIsRefused(t *testing.T) {
 		name   string
 		layout Layout
 	}{
-		{"no console", Layout{Right: []string{"quay", "attach", "s1"}}},
-		{"no conversation", Layout{Left: []string{"quay"}}},
-		{"neither", Layout{}},
+		{"no console", Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Right: []string{"quay", "attach", "s1"}}},
+		{"no conversation", Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}}},
+		{"no header", Layout{HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}},
+		{"a header with no rows", Layout{Header: []string{"quay", "header"}, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}},
+		{"none of it", Layout{}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := test.layout.Commands(Terminal{}); err == nil {
@@ -144,7 +150,7 @@ func TestAHalfEmptyPanelIsRefused(t *testing.T) {
 // Julian, having run it: "cant see the two panes". The terminal said `sessions should be nested with
 // care, unset $TMUX to force`, and the two panes were sitting there the whole time.
 func TestThePanelOpensFromInsideTmux(t *testing.T) {
-	layout := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}
+	layout := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}
 
 	commands, err := layout.Commands(Terminal{InsideTmux: true})
 	if err != nil {
@@ -166,7 +172,7 @@ func TestThePanelOpensFromInsideTmux(t *testing.T) {
 
 // TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux: same refusal, on the path that only reattaches.
 func TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux(t *testing.T) {
-	commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.
+	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.
 		Commands(Terminal{AlreadyOpen: true, InsideTmux: true})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -186,7 +192,7 @@ func TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux(t *testing.T) {
 // attaching rather than being swept up in the fix for the nested one.
 func TestThePanelStillAttachesFromAPlainTerminal(t *testing.T) {
 	for _, open := range []bool{false, true} {
-		commands, err := Layout{Left: []string{"quay"}, Right: []string{"quay", "attach", "s1"}}.
+		commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.
 			Commands(Terminal{AlreadyOpen: open})
 		if err != nil {
 			t.Fatalf("Commands: %v", err)
@@ -198,5 +204,93 @@ func TestThePanelStillAttachesFromAPlainTerminal(t *testing.T) {
 		if strings.Contains(got, "switch-client") {
 			t.Fatalf("a plain terminal switches a client it does not have (already open: %v):\n%s", open, got)
 		}
+	}
+}
+
+// TestTheHeaderSpansBothHalves. Julian: "we need the header to be the full horizontal width and then
+// the two panels", and then "keep the header as it is, make it full width".
+//
+// A tmux pane is a rectangle, so a header reaching across both halves cannot belong to either of
+// them: the window is split top and bottom first, and only the bottom is split left and right. Do it
+// the other way round and there is no full width row left to put a header in.
+func TestTheHeaderSpansBothHalves(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 10,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+
+	order := make([]string, 0, len(commands))
+	for _, argv := range commands {
+		if argv[1] == "split-window" {
+			order = append(order, line(argv))
+		}
+	}
+	if len(order) != 2 {
+		t.Fatalf("want two splits, one full width and one side by side, got:\n%s", strings.Join(order, "\n"))
+	}
+	if !strings.Contains(order[0], "-v ") {
+		t.Fatalf("the first split is not full width, so the header cannot span both halves:\n%s", order[0])
+	}
+	if !strings.Contains(order[1], "-h ") {
+		t.Fatalf("the second split does not divide the lower half left and right:\n%s", order[1])
+	}
+	// The side by side split has to happen inside the lower half, not against the whole window.
+	if !strings.Contains(order[1], "-t quay-panel:panel.1") {
+		t.Fatalf("the side by side split is not inside the lower half:\n%s", order[1])
+	}
+}
+
+// TestTheHeaderGetsExactlyTheRowsItNeeds: a share of the window leaves a gap under the header on a
+// tall terminal and cuts its last lines off on a short one.
+func TestTheHeaderGetsExactlyTheRowsItNeeds(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 12,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	got := lines(commands)
+	if !strings.Contains(got, "resize-pane -t quay-panel:panel.0 -y 12") {
+		t.Fatalf("the header is not given the rows it asked for:\n%s", got)
+	}
+	if strings.Contains(got, "new-session") && strings.Contains(got, "-l 50%\" -t quay-panel:panel.0") {
+		t.Fatalf("the header was given a share of the window instead of its rows:\n%s", got)
+	}
+}
+
+// TestThePanelIsBuiltAtTheTerminalsSize. tmux scales the panes a session already has when a client of
+// a different size attaches, so a header given ten rows in tmux's default eighty by twenty four came
+// back as twenty one rows in a taller terminal. Building it at the real size is what makes the rows
+// the header asked for the rows it gets.
+func TestThePanelIsBuiltAtTheTerminalsSize(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 10,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Width: 180, Height: 46,
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	if !strings.Contains(lines(commands), "-x 180 -y 46") {
+		t.Fatalf("the panel is not built at the terminal's size:\n%s", lines(commands))
+	}
+}
+
+// TestAPanelWithNoSizeStillOpens: a terminal that cannot be measured is not a reason to refuse, and
+// tmux has a default for exactly this.
+func TestAPanelWithNoSizeStillOpens(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 10,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	if strings.Contains(lines(commands), " -x ") {
+		t.Fatalf("it passed a size it does not have:\n%s", lines(commands))
 	}
 }

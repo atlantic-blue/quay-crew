@@ -2130,3 +2130,88 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 		t.Fatalf("escape while working left the console in %v", model.mode)
 	}
 }
+
+// TestTheBareConsoleDrawsNoHeader: in the panel the header is drawn in the pane above, across both
+// halves, and drawing it here as well would show it twice and cost the list the rows it takes.
+func TestTheBareConsoleDrawsNoHeader(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	full := newTestModel(t, Sessions(client))
+	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
+	bare := full.WithoutHeader()
+
+	if len(full.headerLines()) == 0 {
+		t.Fatal("the ordinary console draws no header, so this test proves nothing")
+	}
+	if got := len(bare.headerLines()); got != 0 {
+		t.Fatalf("the bare console still draws %d header lines", got)
+	}
+	if strings.Contains(bare.View(), "localhost:50051") {
+		t.Fatalf("the bare console still shows the status block:\n%s", bare.View())
+	}
+}
+
+// TestTheBareConsoleGivesItsRowsTheHeadersSpace: the point of not drawing the header is the rows it
+// frees, so the list has to actually get them.
+func TestTheBareConsoleGivesItsRowsTheHeadersSpace(t *testing.T) {
+	client := &fakeClient{}
+	full := newTestModel(t, Sessions(client))
+	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
+
+	gained := full.WithoutHeader().bodyHeight() - full.bodyHeight()
+	if gained != len(full.headerLines()) {
+		t.Fatalf("the list gained %d rows and the header took %d", gained, len(full.headerLines()))
+	}
+}
+
+// TestTheConsoleSaysWhichViewItMovedTo. The header is a separate process in the panel, so without
+// this its key hints would be the ones for whichever view the console opened on, and would go quietly
+// wrong the moment anybody drilled in.
+func TestTheConsoleSaysWhichViewItMovedTo(t *testing.T) {
+	client := &fakeClient{workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "acme"}}}
+	said := make([]string, 0, 2)
+	model := newTestModel(t, Workspaces(client), Projects(client)).
+		WithViewPublisher(func(view string) error {
+			said = append(said, view)
+			return nil
+		})
+
+	// Opening says where it starts, or a header drawn before the first key would name nothing. Only
+	// that command is run, not the whole of Init: one of Init's commands is the three second refresh
+	// clock, and a test should not wait for it.
+	runAll(t, model.publishCmd())
+	if len(said) != 1 || said[0] != "workspaces" {
+		t.Fatalf("opening said %v, want the view it opened on", said)
+	}
+
+	model, _ = update(t, model, rowsFor(model, row("w1", "w1", "acme")))
+	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	runAll(t, cmd)
+
+	if len(said) != 2 || said[1] != "projects" {
+		t.Fatalf("drilling in said %v, want it to name the view moved to", said)
+	}
+}
+
+// TestTheConsoleSaysNothingWhenNobodyIsListening: outside the panel there is no header to tell, and
+// writing a file for nobody on every keypress would be a strange thing to do.
+func TestTheConsoleSaysNothingWhenNobodyIsListening(t *testing.T) {
+	model := newTestModel(t, Workspaces(&fakeClient{}))
+	if cmd := model.publishCmd(); cmd != nil {
+		t.Fatal("the console tried to say where it is with nobody listening")
+	}
+}
+
+// runAll runs a command and everything it batches, which is what the runtime does.
+func runAll(t *testing.T, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, inner := range msg {
+			runAll(t, inner)
+		}
+	default:
+	}
+}

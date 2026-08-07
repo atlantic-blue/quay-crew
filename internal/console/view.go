@@ -46,6 +46,9 @@ func (m Model) View() string {
 // headerLines is the status block with the key hints beside it: what this crew is on the left, what
 // the keyboard does on the right.
 func (m Model) headerLines() []string {
+	if m.headless {
+		return nil
+	}
 	status := m.statusLines()
 	hints := m.hintLines()
 

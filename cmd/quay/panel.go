@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/panel"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
@@ -18,7 +19,7 @@ import (
 //
 // Named a session opens that one. Named nothing it opens the newest conversation where you are
 // standing, which is the one you were last talking to.
-func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer, addr string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("usage: quay panel [<session id>]")
 	}
@@ -34,8 +35,19 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		// anyway. Refusing to open the panel over this would be a strange place to stop.
 		self = "quay"
 	}
+	rows, err := headerRows(ctx, client, addr)
+	if err != nil {
+		return err
+	}
+	width, height := headerSize()
 	layout := panel.Layout{
-		Left:  []string{self},
+		Header:     []string{self, "header"},
+		HeaderRows: rows,
+		Width:      width,
+		Height:     height,
+		// The console draws no header of its own here: the pane above is drawing it, across both
+		// halves, and drawing it twice is how the list loses rows it did not need to lose.
+		Left:  []string{self, "console"},
 		Right: []string{self, "attach", sessionID},
 	}
 
@@ -123,4 +135,37 @@ func where(current workspace.Path) string {
 		return " in " + current.Workspace
 	}
 	return " in " + current.Workspace + "/" + current.Project
+}
+
+// headerRows is how tall the header pane has to be, measured from the header itself rather than
+// guessed. A guess that is one line short cuts the last line off, and one line long leaves a gap.
+func headerRows(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) (int, error) {
+	registry, err := console.NewDefaultRegistry(client)
+	if err != nil {
+		return 0, err
+	}
+	width, height := headerSize()
+	rows := console.HeaderHeight(registry, console.Default, headerInfo(ctx, client, addr), width, height)
+	if rows < 1 {
+		return 0, fmt.Errorf("the header would have no rows to draw in")
+	}
+	return rows, nil
+}
+
+// runBareConsole is the panel's left half: the console with no header of its own, saying which view
+// it moves to so the header in the pane above can name that view's keys.
+func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: quay console, and the panel runs it for you")
+	}
+	current, err := currentPath()
+	if err != nil {
+		current = workspace.Path{}
+	}
+	return console.RunBare(ctx, client, console.Info{
+		Version:   version,
+		Address:   addr,
+		Workspace: current.Workspace,
+		Project:   current.Project,
+	}, publishView)
 }
