@@ -57,6 +57,17 @@ Feature: The operator can find the files the model reads
     And the operator dispatches "and again" to the same thread
     Then the session's context reads "the account number is 4471"
 
+  # A memory file with none of the crew's marks was written by somebody who had never seen what the
+  # store holds, so it is not an edit of it. Read as one it replaced the store's body outright, which
+  # is how a driver taught what quay is lost the manual again moments later.
+  Scenario: A memory file the crew never wrote does not replace what the store holds
+    Given a session started by dispatching "hello"
+    When the operator sets the session's context to "the meter is under the stairs"
+    And the sandbox's memory file is replaced with "notes from before any of this" and no marks
+    And the operator dispatches "and again" to the same thread
+    Then the session's memory file carries "the meter is under the stairs"
+    And the session's memory file carries "notes from before any of this"
+
   Scenario: A scope the crew does not have is refused
     When the operator sets context at scope "everything" to "no"
     Then the control plane refuses it as invalid

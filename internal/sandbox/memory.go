@@ -38,6 +38,14 @@ func Compose(sections []Section) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
+// Marked says whether a memory file was composed by the crew, which is what its marks are evidence
+// of. A file with none of them was written by somebody else: it may be a note an agent left, or a
+// CLAUDE.md that was there before any of this existed, but whoever wrote it had never seen what the
+// store holds, so it cannot be read as an edit of it.
+func Marked(body string) bool {
+	return strings.Contains(body, sectionOpen)
+}
+
 // Decompose reads a memory file back into what each level says.
 //
 // Anything before the first mark, or under a mark this build does not know, belongs to the last scope

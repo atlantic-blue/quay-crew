@@ -3,9 +3,11 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 )
@@ -175,6 +177,44 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// A driver from before the crew described itself: it exists, and nothing has ever been written
+	// into its context.
+	sc.Step(`^a driver made before the crew described itself$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		opened, err := w.client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		w.drivers = append(w.drivers, opened.GetSession())
+		return w.store.SetContext(ctx, store.ContextSession, opened.GetSession().GetId(), "")
+	})
+
+	sc.Step(`^its memory file already says "([^"]*)"$`, func(ctx context.Context, body string) error {
+		return sandbox.WriteMemory(driverWorkingDir(ctx), body)
+	})
+
+	sc.Step(`^the driver's memory file says what quay is$`, func(ctx context.Context) error {
+		body, found := sandbox.ReadMemory(driverWorkingDir(ctx))
+		if !found {
+			return fmt.Errorf("the driver has no memory file at all")
+		}
+		if !strings.Contains(body, "quay context set") {
+			return fmt.Errorf("the driver's memory file does not say what quay is:\n%s", body)
+		}
+		return nil
+	})
+
+	sc.Step(`^the driver's memory file still says "([^"]*)"$`, func(ctx context.Context, want string) error {
+		body, found := sandbox.ReadMemory(driverWorkingDir(ctx))
+		if !found {
+			return fmt.Errorf("the driver has no memory file at all")
+		}
+		if !strings.Contains(body, want) {
+			return fmt.Errorf("the driver's memory file no longer says %q:\n%s", want, body)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator writes their own instructions into the driver$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		return w.store.SetContext(ctx, store.ContextSession, w.drivers[0].GetId(), "my own instructions")
@@ -191,4 +231,15 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// driverWorkingDir is the driver's own working directory on disk, which is where the file it reads
+// as its memory lives.
+func driverWorkingDir(ctx context.Context) string {
+	w := worldFrom(ctx)
+	if len(w.drivers) == 0 {
+		return ""
+	}
+	return filepath.Join(w.storage.Dir, "workspaces", w.workspaceID,
+		"projects", w.projectID, "sessions", w.drivers[0].GetId(), "workspace")
 }

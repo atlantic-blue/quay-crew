@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **A memory file the crew never wrote no longer replaces what the store holds.** A `CLAUDE.md` with
+  none of the crew's marks in it was read back as an edit of the context the store holds, which is
+  impossible: whoever wrote that file had never seen the store's body. It replaced it outright. That
+  is why a driver taught what quay is lost the manual moments later, the file already in its working
+  directory was claimed as its context and the manual was gone before anybody opened the
+  conversation. An unmarked file is added to what the store holds now rather than replacing it, so
+  both survive, and the manual is written out to the file the driver reads when it is taught rather
+  than waiting for a sandbox to be made.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The header stops repeating down the screen.** It redrew by printing after what was already there,
   so every second added another header to the pane's history and the pane scrolled: seventeen of them
   stacked up. It draws on the alternate screen now, where nothing it writes becomes scrollback, homes
