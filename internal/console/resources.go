@@ -313,8 +313,7 @@ func Features() Resource {
 // one and shell into its container.
 //
 // It was called threads for a day. The database calls these sessions and so does the API, and one name
-// across the whole system beats a console that translates: Julian, "we also need to rename threads to
-// sessions as it is how its described in the database". The old name stays as an alias, because the
+// across the whole system beats a console that translates. The old name stays as an alias, because the
 // command bar should not punish muscle memory either way.
 func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
@@ -633,7 +632,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			// Backspace is the primary key, Julian's ask, and it asks before it acts. `x` still works.
+			// Backspace is the primary key, and it asks before it acts. `x` still works.
 			Key:     "backspace",
 			Also:    []string{"x"},
 			Label:   "Stop",

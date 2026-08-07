@@ -2,7 +2,7 @@
 // session rather than by somebody scanning a terminal.
 //
 // It exists because a session sitting in the panel beside the console knows nothing about the crew it
-// is next to. Julian: "the claude session needs quay context as it doesnt know what to do at all".
+// is next to, so it is told with this.
 //
 // Most of it is assembled rather than written: the commands are the same usage text `quay` shows with
 // no arguments, and what the crew can do comes from the behaviour specification embedded in the

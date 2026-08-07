@@ -24,8 +24,8 @@ import (
 // runPanel is what `quay` does: it opens the crew. The header across the top, the console under it on
 // the left, and a conversation on the right.
 //
-// There is no separate command for it. Julian: "I dont understand why I need quay panel, is confusing,
-// I need one command only, the panel should appear when I press quay and toggled with the key p".
+// There is no separate command for it: a second command to open the thing the first command is for
+// reads as a second product.
 func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer, addr string) error {
 	sessionID, err := panelSession(ctx, client, args)
 	if err != nil {

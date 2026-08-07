@@ -105,8 +105,7 @@ var everywhereKeys = [][2]string{
 
 // logo is the wordmark, on one line. It was six lines of block letters, which made the header six rows
 // tall for one row of text: the header sat above both halves of the panel and took a tenth of the
-// window to say the name. Julian: "the header has lots of space now", then "it occupies too much
-// space".
+// window to say the name.
 var logo = []string{"▐ QUAY CREW ▌"}
 
 // withLogo puts the wordmark against the right edge, growing the header to fit it when the header is
@@ -146,8 +145,7 @@ func (m Model) statusLines() []string {
 	// wordmark off the screen: the header is as wide as the console, and the console is half the
 	// window once a conversation is beside it.
 	//
-	// Julian: "the quay logo dissapears because there is too much text, lets leave only: the logo +
-	// version, and help".
+	//
 	lines := []string{statusKey.Render(pad("Version:", 16)) + m.info.Version}
 	if m.info.Version == "" {
 		lines = []string{statusKey.Render(pad("Version:", 16)) + faint.Render("unknown")}

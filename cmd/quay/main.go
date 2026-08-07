@@ -56,9 +56,8 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 // openTheCrew is what `quay` with no arguments does: the panel, and the console on its own when there
 // is nothing to put beside it yet.
 //
-// One command. Julian: "I dont understand why I need quay panel, is confusing, I need one command
-// only, the panel should appear when I press quay and toggled with the key p". A crew with no
-// conversation in it is exactly the first run, and refusing to open at all then would be absurd.
+// One command opens everything. A crew with no conversation in it is the first run, and refusing to
+// open at all then would be absurd, so the console opens on its own.
 func openTheCrew(panel, alone func() error) error {
 	if err := panel(); err == nil {
 		return nil

@@ -917,7 +917,7 @@ func rowIDs(rows []Row) []string {
 	return out
 }
 
-// TestTheDangerousToggleAsksAndFlipsBothWays is the toggle Julian asked for. Arming a thread asks
+// TestTheDangerousToggleAsksAndFlipsBothWays. Arming a thread asks
 // first, like every key that changes what it is allowed to do, and pressing it again puts it back.
 func TestTheDangerousToggleAsksAndFlipsBothWays(t *testing.T) {
 	client := &fakeClient{}
@@ -1315,8 +1315,7 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 // ---------- view ----------
 
-// TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse. Julian: "the quay logo dissapears
-// because there is too much text, lets leave only: the logo + version, and help".
+// TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse.
 //
 // The header is as wide as the console, and the console is half the window once a conversation is
 // beside it. A column of key hints and ten lines of status left no room for the wordmark, so both
@@ -1441,8 +1440,7 @@ func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
 }
 
 // TestTheHeaderCostsOneRow. It sits above both halves of the panel, so every row it takes is a row the
-// list and the conversation lose. Julian: "the header has lots of space now", then "it occupies too
-// much space".
+// list and the conversation lose.
 func TestTheHeaderCostsOneRow(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{}))
 	model.info = Info{
@@ -2151,8 +2149,8 @@ func TestTheWizardNeverShowsTheToken(t *testing.T) {
 // nothing looked like it had happened, and the next enter was accepted as an answer to the step that
 // was already working, whose prompt is the literal string "making it".
 //
-// Julian, driving it: "the current wizard doesnt work, it fails to create anything", then "it says
-// making it: this one is needed".
+// Driving it produced no sign that anything had been made, and then the refusal "making it: this one
+// is needed", which names no question anybody was asked.
 func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 	client := &wizardClient{}
 	model, cmd := answerAll(t, wizardAt(t, client), "project", "acme", "gardening")
