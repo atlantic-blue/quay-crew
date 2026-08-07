@@ -708,3 +708,93 @@ func compactDuration(elapsed time.Duration) string {
 		return fmt.Sprintf("%dd", int(elapsed.Hours())/24)
 	}
 }
+
+// Stats is what the crew is running underneath: which model backend, which sandbox and store engines,
+// where secrets and state are kept, whether anything is reading the event log.
+//
+// It used to be six lines of the header, which made the header ten lines tall. A header that tall in a
+// pane of its own has to scroll, and what scrolls away is the top of it. This is a question, and a
+// question gets a view: the header keeps what anybody needs at a glance.
+func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "stats",
+		Aliases: []string{"stat", "engines", "status"},
+		Columns: []Column{
+			{Title: "what", Width: 22},
+			{Title: "running", Width: 0},
+		},
+		SortBy: -1,
+		List: func(ctx context.Context, _ string) ([]Row, error) {
+			described, err := client.GetInfo(ctx, &quaycrewv1.GetInfoRequest{})
+			if err != nil {
+				return nil, err
+			}
+			// In the order they matter when something is wrong: what runs a turn, where it runs,
+			// what survives a restart, then what is watching.
+			stats := []struct{ what, running string }{
+				{"Model", described.GetModel()},
+				{"Sandbox engine", described.GetSandbox()},
+				{"Store engine", described.GetStore()},
+				{"Secrets", secretsPhrase(described.GetSecrets())},
+				{"Events engine", eventsPhrase(described.GetEvents())},
+				{"State", statePhrase(described.GetState())},
+			}
+			rows := make([]Row, 0, len(stats))
+			for _, stat := range stats {
+				running := stat.running
+				if running == "" {
+					running = "not saying"
+				}
+				rows = append(rows, Row{
+					ID:    stat.what,
+					Label: stat.what,
+					Cells: []string{stat.what, running},
+					State: StateReady,
+				})
+			}
+			return rows, nil
+		},
+	}
+}
+
+// Keys is every key the console answers to, as a view rather than only as the overlay behind the
+// question mark. The header carries this view's own keys; the rest have to be somewhere you can leave
+// open beside what you are doing.
+func Keys(registry *Registry) Resource {
+	return Resource{
+		Name:    "keys",
+		Aliases: []string{"key", "hotkeys", "bindings"},
+		Columns: []Column{
+			{Title: "view", Width: 14},
+			{Title: "key", Width: 16},
+			{Title: "does", Width: 0},
+		},
+		SortBy: -1,
+		List: func(context.Context, string) ([]Row, error) {
+			rows := make([]Row, 0, 32)
+			add := func(view, key, does string) {
+				rows = append(rows, Row{
+					ID:    view + " " + key,
+					Label: key,
+					Cells: []string{view, key, does},
+					State: StateReady,
+				})
+			}
+			for _, everywhere := range everywhereKeys {
+				add("everywhere", everywhere[0], everywhere[1])
+			}
+			if registry != nil {
+				for _, name := range registry.Names() {
+					resource, found := registry.Get(name)
+					if !found {
+						continue
+					}
+					for _, action := range resource.Actions {
+						add(name, strings.Join(shortestSpelling(action.Keys()), " "), action.Label)
+					}
+				}
+			}
+			return rows, nil
+		},
+	}
+}

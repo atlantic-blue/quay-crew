@@ -20,14 +20,19 @@ const SessionName = "quay-panel"
 // WindowName names the window inside it, so panes can be addressed without counting.
 const WindowName = "panel"
 
+// MaxStatusLines is how many lines tmux will draw as a status line. Asking for six is refused by tmux
+// with "unknown value", so the header is held to this rather than finding out at runtime.
+const MaxStatusLines = 5
+
 // Layout is what the panel is made of: the command in each region, and what to call the whole thing.
 type Layout struct {
-	// Header spans the full width above the other two. It is a pane of its own because a tmux pane is
-	// a rectangle, so a header that reaches across both halves cannot belong to either of them.
-	Header []string
-	// HeaderRows is how tall the header pane is. The header is a fixed number of lines, so it is
-	// given exactly those rather than a share of the window that changes with the terminal.
-	HeaderRows int
+	// Status is the header, as tmux status lines. It is not a pane: tmux draws its own status line
+	// across the full width, at a height it owns, and it cannot scroll. A pane would have needed a
+	// process to draw it, and that process could not see which view the console was on.
+	//
+	// tmux takes at most five. Each entry is a tmux format string, so a value that moves can be a
+	// command in #() rather than something baked in when the panel opened.
+	Status []string
 	// Left is the console.
 	Left []string
 	// Right is the conversation driving it.
@@ -72,23 +77,38 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 		// Detached, so the layout is finished before anybody looks at it. Attaching first would show
 		// one pane growing into three.
 		//
-		// The header is made first and the rest is split off underneath it, because the full width
-		// split has to happen before the side by side one: split the window left and right first and
-		// there is no full width row left to put a header in.
-		append(l.newSession(session), l.Header...),
-		// -v puts this below the header, still spanning the whole width. This is the console.
-		append([]string{"tmux", "split-window", "-v", "-t", target + ".0"}, l.Left...),
-		// -h then divides that lower half left and right, which is where the conversation goes.
-		append([]string{"tmux", "split-window", "-h", "-l", "50%", "-t", target + ".1"}, l.Right...),
-		// Exactly the rows the header needs. Given a share of the window instead, it would grow a gap
-		// underneath it on a tall terminal and cut its own last lines off on a short one.
-		{"tmux", "resize-pane", "-t", target + ".0", "-y", strconv.Itoa(l.HeaderRows)},
+		append(l.newSession(session), l.Left...),
+		// -h divides the window left and right: the console keeps the left, the conversation takes
+		// the right. Two panes, because the header is not one.
+		append([]string{"tmux", "split-window", "-h", "-l", "50%", "-t", target + ".0"}, l.Right...),
 		// The console has the keyboard when the panel opens, because that is what the operator came
 		// to use. The conversation is one pane away.
-		{"tmux", "select-pane", "-t", target + ".1"},
-		show(term, session),
+		{"tmux", "select-pane", "-t", target + ".0"},
 	}
-	return built, nil
+	built = append(built, l.statusCommands(session)...)
+	return append(built, show(term, session)), nil
+}
+
+// statusCommands turn the header into tmux's own status line: how many lines it has, where it sits,
+// how often the parts that move are asked again, and what each line says.
+func (l Layout) statusCommands(session string) [][]string {
+	commands := [][]string{
+		{"tmux", "set-option", "-t", session, "status", strconv.Itoa(len(l.Status))},
+		// Above the panes, because it is a header.
+		{"tmux", "set-option", "-t", session, "status-position", "top"},
+		// How often the moving parts are asked again. Where you are standing changes when `quay use`
+		// runs in the other pane, and a header saying the wrong place is worse than one saying none.
+		{"tmux", "set-option", "-t", session, "status-interval", "2"},
+		// tmux colours its status line green by default, which is a bar, not a header.
+		{"tmux", "set-option", "-t", session, "status-style", "default"},
+	}
+	for index, line := range l.Status {
+		commands = append(commands, []string{
+			"tmux", "set-option", "-t", session,
+			fmt.Sprintf("status-format[%d]", index), line,
+		})
+	}
+	return commands
 }
 
 // newSession builds the panel's window, at the size of the terminal opening it where that is known.
@@ -121,17 +141,19 @@ func (l Layout) HasSession() []string {
 }
 
 func (l Layout) check() error {
-	if len(l.Header) == 0 {
+	if len(l.Status) == 0 {
 		return fmt.Errorf("panel: nothing to put in the header")
+	}
+	// tmux draws at most five status lines, and asking for more is refused rather than silently
+	// losing whichever ones did not fit.
+	if len(l.Status) > MaxStatusLines {
+		return fmt.Errorf("panel: a header of %d lines, and tmux draws at most %d", len(l.Status), MaxStatusLines)
 	}
 	if len(l.Left) == 0 {
 		return fmt.Errorf("panel: nothing to put in the left half")
 	}
 	if len(l.Right) == 0 {
 		return fmt.Errorf("panel: nothing to put in the right half")
-	}
-	if l.HeaderRows < 1 {
-		return fmt.Errorf("panel: a header of %d rows would not be visible", l.HeaderRows)
 	}
 	return nil
 }

@@ -43,6 +43,15 @@ type fakeClient struct {
 	listErr          error
 }
 
+// GetInfo describes the crew the stats view reads. The double answers with something for every field,
+// because a field the control plane does not answer for is a different scenario.
+func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grpc.CallOption) (*quaycrewv1.GetInfoResponse, error) {
+	return &quaycrewv1.GetInfoResponse{
+		Model: "claude-code", Sandbox: "docker", Store: "postgres",
+		Secrets: "postgres", Events: "kafka", State: "host",
+	}, nil
+}
+
 func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
@@ -2131,87 +2140,95 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	}
 }
 
-// TestTheBareConsoleDrawsNoHeader: in the panel the header is drawn in the pane above, across both
-// halves, and drawing it here as well would show it twice and cost the list the rows it takes.
-func TestTheBareConsoleDrawsNoHeader(t *testing.T) {
+// TestTheConsoleInThePanelDrawsNoStatusBlock: tmux draws the essentials across the top of the panel,
+// and drawing them here as well would show them twice and cost the list the rows.
+func TestTheConsoleInThePanelDrawsNoStatusBlock(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 	full := newTestModel(t, Sessions(client))
-	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
-	bare := full.WithoutHeader()
+	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme", Model: "claude-code"}
+	inPanel := full.InPanel()
 
-	if len(full.headerLines()) == 0 {
-		t.Fatal("the ordinary console draws no header, so this test proves nothing")
+	if !strings.Contains(full.View(), "localhost:50051") {
+		t.Fatal("the ordinary console shows no address, so this test proves nothing")
 	}
-	if got := len(bare.headerLines()); got != 0 {
-		t.Fatalf("the bare console still draws %d header lines", got)
+	if strings.Contains(inPanel.View(), "localhost:50051") {
+		t.Fatalf("the panel's console still draws the status block:\n%s", inPanel.View())
 	}
-	if strings.Contains(bare.View(), "localhost:50051") {
-		t.Fatalf("the bare console still shows the status block:\n%s", bare.View())
+	if strings.Contains(inPanel.View(), logo[0]) {
+		t.Fatalf("the panel's console still draws the wordmark, which is in the status line:\n%s", inPanel.View())
 	}
 }
 
-// TestTheBareConsoleGivesItsRowsTheHeadersSpace: the point of not drawing the header is the rows it
-// frees, so the list has to actually get them.
-func TestTheBareConsoleGivesItsRowsTheHeadersSpace(t *testing.T) {
+// TestTheConsoleInThePanelKeepsItsKeyHints. They belong to the view and change with it, which is
+// exactly what a header drawn by tmux cannot do.
+func TestTheConsoleInThePanelKeepsItsKeyHints(t *testing.T) {
 	client := &fakeClient{}
-	full := newTestModel(t, Sessions(client))
-	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
+	inPanel := newTestModel(t, Sessions(client)).InPanel()
+	inPanel.info = Info{Version: "dev"}
 
-	gained := full.WithoutHeader().bodyHeight() - full.bodyHeight()
-	if gained != len(full.headerLines()) {
-		t.Fatalf("the list gained %d rows and the header took %d", gained, len(full.headerLines()))
+	shown := inPanel.View()
+	if len(inPanel.headerLines()) == 0 {
+		t.Fatalf("the panel's console draws no hints at all:\n%s", shown)
+	}
+	if !strings.Contains(shown, "Open") {
+		t.Fatalf("the panel's console does not say what enter does:\n%s", shown)
 	}
 }
 
-// TestTheConsoleSaysWhichViewItMovedTo. The header is a separate process in the panel, so without
-// this its key hints would be the ones for whichever view the console opened on, and would go quietly
-// wrong the moment anybody drilled in.
-func TestTheConsoleSaysWhichViewItMovedTo(t *testing.T) {
-	client := &fakeClient{workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "acme"}}}
-	said := make([]string, 0, 2)
-	model := newTestModel(t, Workspaces(client), Projects(client)).
-		WithViewPublisher(func(view string) error {
-			said = append(said, view)
-			return nil
-		})
+// TestTheConsoleInThePanelGivesItsRowsTheStatusBlocksSpace: the point of not drawing it is the rows.
+func TestTheConsoleInThePanelGivesItsRowsTheStatusBlocksSpace(t *testing.T) {
+	full := newTestModel(t, Sessions(&fakeClient{}))
+	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme", Model: "claude-code"}
 
-	// Opening says where it starts, or a header drawn before the first key would name nothing. Only
-	// that command is run, not the whole of Init: one of Init's commands is the three second refresh
-	// clock, and a test should not wait for it.
-	runAll(t, model.publishCmd())
-	if len(said) != 1 || said[0] != "workspaces" {
-		t.Fatalf("opening said %v, want the view it opened on", said)
-	}
-
-	model, _ = update(t, model, rowsFor(model, row("w1", "w1", "acme")))
-	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
-	runAll(t, cmd)
-
-	if len(said) != 2 || said[1] != "projects" {
-		t.Fatalf("drilling in said %v, want it to name the view moved to", said)
+	if full.InPanel().bodyHeight() <= full.bodyHeight() {
+		t.Fatalf("the list gained nothing: %d rows against %d", full.InPanel().bodyHeight(), full.bodyHeight())
 	}
 }
 
-// TestTheConsoleSaysNothingWhenNobodyIsListening: outside the panel there is no header to tell, and
-// writing a file for nobody on every keypress would be a strange thing to do.
-func TestTheConsoleSaysNothingWhenNobodyIsListening(t *testing.T) {
-	model := newTestModel(t, Workspaces(&fakeClient{}))
-	if cmd := model.publishCmd(); cmd != nil {
-		t.Fatal("the console tried to say where it is with nobody listening")
+// TestTheStatsViewCarriesWhatTheHeaderStoppedShowing, or the information was not moved, it was lost.
+func TestTheStatsViewCarriesWhatTheHeaderStoppedShowing(t *testing.T) {
+	client := &fakeClient{}
+	rows, err := Stats(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing the stats: %v", err)
 	}
-}
-
-// runAll runs a command and everything it batches, which is what the runtime does.
-func runAll(t *testing.T, cmd tea.Cmd) {
-	t.Helper()
-	if cmd == nil {
-		return
+	shown := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		shown[row.Cells[0]] = true
 	}
-	switch msg := cmd().(type) {
-	case tea.BatchMsg:
-		for _, inner := range msg {
-			runAll(t, inner)
+	for _, want := range []string{"Model", "Sandbox engine", "Store engine", "Secrets", "Events engine", "State"} {
+		if !shown[want] {
+			t.Fatalf("the stats view does not carry %q, so moving it out of the header lost it", want)
 		}
-	default:
+	}
+}
+
+// TestTheKeysViewCarriesEveryKeyThatWorksEverywhere, from the same list the overlay reads, so the two
+// cannot drift.
+func TestTheKeysViewCarriesEveryKeyThatWorksEverywhere(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	view, found := registry.Get("keys")
+	if !found {
+		t.Fatal("the console has no keys view")
+	}
+	rows, err := view.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing the keys: %v", err)
+	}
+	shown := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		shown[row.Cells[1]] = true
+	}
+	for _, everywhere := range everywhereKeys {
+		if !shown[everywhere[0]] {
+			t.Fatalf("the keys view leaves out %q, which works everywhere", everywhere[0])
+		}
+	}
+	// And a view's own keys, or it is only half a list.
+	if len(rows) <= len(everywhereKeys) {
+		t.Fatalf("the keys view carries %d rows and only the everywhere keys", len(rows))
 	}
 }

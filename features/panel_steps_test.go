@@ -62,9 +62,9 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 			return nil
 		}
 		p.commands, p.err = panel.Layout{
-			Header: []string{"quay", "header"}, HeaderRows: 10,
-			Left:  []string{"quay", "console"},
-			Right: []string{"quay", "attach", newest},
+			Status: []string{" Version: dev", " Where: #(quay use)"},
+			Left:   []string{"quay", "console"},
+			Right:  []string{"quay", "attach", newest},
 		}.Commands(panel.Terminal{})
 		return nil
 	})
@@ -105,6 +105,19 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		got := panelFrom(ctx).line()
 		if !strings.Contains(got, "select-pane") || !strings.Contains(got, ".0") {
 			return fmt.Errorf("the panel does not put the keyboard in the console:\n%s", got)
+		}
+		return nil
+	})
+
+	// Julian: "why does header need a process?" It does not: a pane runs a program, and tmux draws
+	// its own status line.
+	sc.Step(`^the header is drawn by tmux rather than by a pane$`, func(ctx context.Context) error {
+		got := panelFrom(ctx).line()
+		if panes := strings.Count(got, "split-window") + 1; panes != 2 {
+			return fmt.Errorf("the panel has %d panes, want two:\n%s", panes, got)
+		}
+		if !strings.Contains(got, "status-position top") {
+			return fmt.Errorf("the header is not tmux's status line above the panes:\n%s", got)
 		}
 		return nil
 	})

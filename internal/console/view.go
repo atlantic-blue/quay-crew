@@ -46,9 +46,6 @@ func (m Model) View() string {
 // headerLines is the status block with the key hints beside it: what this crew is on the left, what
 // the keyboard does on the right.
 func (m Model) headerLines() []string {
-	if m.headless {
-		return nil
-	}
 	status := m.statusLines()
 	hints := m.hintLines()
 
@@ -78,10 +75,34 @@ func (m Model) headerLines() []string {
 		}
 		lines = append(lines, truncate(combined, m.width))
 	}
+	if m.inPanel {
+		// The wordmark is in tmux's status line, above both halves.
+		return lines
+	}
 	return m.withLogo(lines)
 }
 
 // logo is the wordmark, drawn on the right of the header the way k9s draws its own.
+// everywhereKeys are the keys that work in every view. One list, read by the overlay behind the
+// question mark and by the keys view, because two lists of the same keys drift and the one nobody is
+// looking at drifts first.
+var everywhereKeys = [][2]string{
+	{"↑↓ jk", "Move"},
+	{"pgup pgdn", "Page"},
+	{"enter", "Drill in"},
+	{"esc", "Back, or clear the filter"},
+	{":", "Switch resource"},
+	{"/", "Filter these rows"},
+	{"r g", "Refresh now"},
+	{"n", "Make one thing"},
+	// The one key here that is not the console's own. An open conversation runs inside tmux in its
+	// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
+	// ending it, which is what everybody does until somebody tells them otherwise.
+	{"ctrl-q", "Leave a conversation running"},
+	{"?", "This list"},
+	{"q", "Quit"},
+}
+
 var logo = []string{
 	"  ██████  ██    ██  █████  ██    ██",
 	" ██    ██ ██    ██ ██   ██  ██  ██ ",
@@ -106,7 +127,7 @@ func (m Model) withLogo(lines []string) []string {
 	if m.width-room-2 < lipgloss.Width(logo[0]) {
 		return lines
 	}
-	// The header, the panel's frame and header, the footer, and at least a few rows to look at.
+	// The header, the panel's frame and header, the footer, and at least a few rows to look at. The
 	if m.height-len(logo)-4 < 3 {
 		return lines
 	}
@@ -130,17 +151,26 @@ func (m Model) statusLines() []string {
 			lines = append(lines, statusKey.Render(pad(key+":", 16))+value)
 		}
 	}
-	add("Version", m.info.Version)
-	add("Address", m.info.Address)
-	add("Workspace", m.info.Workspace)
-	add("Project", m.info.Project)
-	add("Model", m.info.Model)
-	add("Sandbox engine", m.info.Sandbox)
-	add("Store engine", m.info.Store)
-	add("Secrets", secretsPhrase(m.info.Secrets))
-	if m.info.Store != "" {
-		add("Events engine", eventsPhrase(m.info.Events))
-		add("State", statePhrase(m.info.State))
+	if !m.inPanel {
+		// tmux is drawing these across the top of the panel, and twice is once too many.
+		add("Version", m.info.Version)
+		add("Address", m.info.Address)
+		add("Workspace", m.info.Workspace)
+		add("Project", m.info.Project)
+	}
+	// Where you are and which crew you are pointed at are what anybody needs at a glance. What the
+	// crew is running underneath is a question, and a question has a view: :stats. Keeping it here
+	// made the header ten lines, and a header that tall in a pane of its own has to scroll, which is
+	// how the top of it goes missing.
+	if !m.inPanel {
+		add("Model", m.info.Model)
+		add("Sandbox engine", m.info.Sandbox)
+		add("Store engine", m.info.Store)
+		add("Secrets", secretsPhrase(m.info.Secrets))
+		if m.info.Store != "" {
+			add("Events engine", eventsPhrase(m.info.Events))
+			add("State", statePhrase(m.info.State))
+		}
 	}
 	if m.info.Behind {
 		add("Quay", alert.Render("this control plane is older than the tool, run make upgrade"))
@@ -580,22 +610,7 @@ func (m Model) helpLines() []string {
 	}
 
 	lines = append(lines, "", crumb.Render("  everywhere"))
-	for _, pair := range [][2]string{
-		{"↑↓ jk", "Move"},
-		{"pgup pgdn", "Page"},
-		{"enter", "Drill in"},
-		{"esc", "Back, or clear the filter"},
-		{":", "Switch resource"},
-		{"/", "Filter these rows"},
-		{"r g", "Refresh now"},
-		{"n", "Make one thing"},
-		// The one key here that is not the console's own. An open conversation runs inside tmux in its
-		// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
-		// ending it, which is what everybody does until somebody tells them otherwise.
-		{"ctrl-q", "Leave a conversation running"},
-		{"?", "This list"},
-		{"q", "Quit"},
-	} {
+	for _, pair := range everywhereKeys {
 		lines = append(lines, "    "+hint(pair[0], pair[1]))
 	}
 	return append(lines, "", faint.Render("  any key closes this"))

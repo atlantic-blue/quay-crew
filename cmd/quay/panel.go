@@ -13,6 +13,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/panel"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
+	"github.com/charmbracelet/x/term"
 )
 
 // runPanel puts the console and a conversation side by side, each on half the screen.
@@ -35,18 +36,12 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		// anyway. Refusing to open the panel over this would be a strange place to stop.
 		self = "quay"
 	}
-	rows, err := headerRows(ctx, client, addr)
-	if err != nil {
-		return err
-	}
-	width, height := headerSize()
+	width, height := terminalSize()
 	layout := panel.Layout{
-		Header:     []string{self, "header"},
-		HeaderRows: rows,
-		Width:      width,
-		Height:     height,
-		// The console draws no header of its own here: the pane above is drawing it, across both
-		// halves, and drawing it twice is how the list loses rows it did not need to lose.
+		Status: statusLines(self, addr),
+		Width:  width,
+		Height: height,
+		// The console draws no status block here: tmux is drawing it across the top.
 		Left:  []string{self, "console"},
 		Right: []string{self, "attach", sessionID},
 	}
@@ -137,21 +132,6 @@ func where(current workspace.Path) string {
 	return " in " + current.Workspace + "/" + current.Project
 }
 
-// headerRows is how tall the header pane has to be, measured from the header itself rather than
-// guessed. A guess that is one line short cuts the last line off, and one line long leaves a gap.
-func headerRows(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) (int, error) {
-	registry, err := console.NewDefaultRegistry(client)
-	if err != nil {
-		return 0, err
-	}
-	width, height := headerSize()
-	rows := console.HeaderHeight(registry, console.Default, headerInfo(ctx, client, addr), width, height)
-	if rows < 1 {
-		return 0, fmt.Errorf("the header would have no rows to draw in")
-	}
-	return rows, nil
-}
-
 // runBareConsole is the panel's left half: the console with no header of its own, saying which view
 // it moves to so the header in the pane above can name that view's keys.
 func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
@@ -167,5 +147,39 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	}, publishView)
+	})
+}
+
+// statusLines are the header, as tmux status lines: where you are and which crew, with the wordmark
+// on the right of the first one so it is there whatever else is.
+//
+// Where you are is asked again on tmux's own interval rather than baked in, because `quay use` in the
+// other pane moves it. The rest is fixed for the life of the panel: which build this is, and where it
+// dialled.
+func statusLines(self, addr string) []string {
+	where := "#(" + self + " use)"
+	return []string{
+		" " + statusKey("Version") + version + "#[align=right]" + wordmark + " ",
+		" " + statusKey("Address") + addr,
+		" " + statusKey("Where") + where,
+	}
+}
+
+// wordmark is the name, on one line. The console's own block letters are six lines tall and tmux draws
+// at most five, so the panel wears the short one.
+const wordmark = "▌ QUAY CREW ▐"
+
+// statusKey pads a label the way the console's status block does, so the two look like one tool.
+func statusKey(label string) string {
+	return fmt.Sprintf("%-16s", label+":")
+}
+
+// terminalSize is the terminal the panel is being opened from, so tmux builds the window at that size
+// rather than at its own default and then scaling everything when a client attaches.
+func terminalSize() (int, int) {
+	width, height, err := term.GetSize(os.Stdout.Fd())
+	if err != nil || width == 0 {
+		return 120, 40
+	}
+	return width, height
 }

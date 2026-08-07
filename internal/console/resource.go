@@ -160,6 +160,12 @@ func NewRegistry(resources ...Resource) (*Registry, error) {
 	return registry, nil
 }
 
+// Add registers a resource after the registry exists, which the keys view needs because it reads the
+// registry it lives in.
+func (r *Registry) Add(resource Resource) error {
+	return r.add(resource)
+}
+
 func (r *Registry) add(resource Resource) error {
 	if resource.Name == "" {
 		return fmt.Errorf("console: resource has no name")
