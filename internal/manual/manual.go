@@ -18,9 +18,44 @@ import (
 	"github.com/atlantic-blue/quay-crew/features"
 )
 
-// Text is the whole document. commands is the tool's own usage, handed in rather than reached for, so
-// this package does not have to know where the command line keeps it.
-func Text(commands string) string {
+// Commands is the command list, which is also what `quay` prints with no arguments. It lives here so
+// the tool and the document a session is told with cannot describe two different tools.
+const Commands = `usage: quay [command]
+
+with no command, quay opens the console: a full screen view of every resource the crew has.
+press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
+
+you work in one place at a time, and say where with an address: workspace/project/thread.
+
+  quay use me/house-bills
+  quay dispatch "when is the electricity bill due"
+
+commands:
+  version                                 print which build this is
+  features                                what this crew can do, and what proves it
+  manual                                  what quay is and how to drive it, to pipe into a context
+  use [<address>]                         show where you are, or move there
+  workspace create <name>                 create a workspace and move into it
+  workspace list                          list workspaces
+  project create [<workspace>/]<name>     create a project and move into it
+  project list [<workspace>]              list projects
+  dispatch [<address>] <text>             start or continue a thread
+  sessions [<address>]                    list sessions
+  turns <session id>                      what a session was asked, and what came back
+  context [<address>]                     where the files the model reads live
+  context edit [<address>]                open a project's context in $EDITOR
+  attach <session id>                     open a session's conversation, with its history
+  secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
+  secret list [<workspace>]               which secrets are set, never what they say
+
+a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
+may be the shortened id a listing prints. An address typed on the command line applies to that
+command only and does not move you.
+`
+
+// Text is the whole document.
+func Text() string {
+	commands := Commands
 	var out strings.Builder
 
 	out.WriteString(preamble)

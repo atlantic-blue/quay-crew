@@ -10,7 +10,7 @@ import (
 // TestTheManualNamesTheWords. A session told nothing about the crew guesses at the model, and the
 // words here are load bearing: a project is not a workspace, and a sandbox is not a session.
 func TestTheManualNamesTheWords(t *testing.T) {
-	got := Text("quay dispatch <text>")
+	got := Text()
 	for _, word := range []string{"workspace", "project", "thread", "session", "sandbox"} {
 		if !strings.Contains(got, word) {
 			t.Fatalf("the manual never says %q", word)
@@ -24,19 +24,21 @@ func TestTheManualNamesTheWords(t *testing.T) {
 
 // TestTheManualCarriesTheCommandsItWasGiven, whole and unedited. A second copy of the command list
 // would be one more thing to keep in step, and it would be the copy nobody looks at that goes stale.
-func TestTheManualCarriesTheCommandsItWasGiven(t *testing.T) {
-	commands := "  dispatch [<address>] <text>   start or continue a thread\n  sessions   list sessions"
-	got := Text(commands)
-
-	if !strings.Contains(got, strings.TrimSpace(commands)) {
-		t.Fatalf("the manual does not carry the commands it was handed:\n%s", got)
+func TestTheManualCarriesTheRealCommandList(t *testing.T) {
+	got := Text()
+	if !strings.Contains(got, strings.TrimSpace(Commands)) {
+		t.Fatalf("the manual does not carry the command list the tool prints:\n%s", got)
+	}
+	// A command renamed changes one string, so the tool and the document cannot drift.
+	if !strings.Contains(got, "quay context set") {
+		t.Fatalf("the manual never says how to set a context:\n%s", got)
 	}
 }
 
 // TestTheManualIsGeneratedFromTheSpecification, not copied from it. Every feature the binary carries
 // has to turn up, or the manual describes a tool that is not the one running.
 func TestTheManualIsGeneratedFromTheSpecification(t *testing.T) {
-	got := Text("quay")
+	got := Text()
 
 	all := features.All()
 	if len(all) == 0 {
@@ -57,7 +59,7 @@ func TestTheManualIsGeneratedFromTheSpecification(t *testing.T) {
 // TestTheManualSaysHowToBeTold. The point of it is that a session can be handed something, so it has
 // to say how anything gets told anything, and that context is files rather than prompt text.
 func TestTheManualSaysHowToBeTold(t *testing.T) {
-	got := Text("quay")
+	got := Text()
 	for _, want := range []string{
 		"quay context set",
 		"/home/agent/workspace",
@@ -73,7 +75,7 @@ func TestTheManualSaysHowToBeTold(t *testing.T) {
 // TestTheManualCarriesNoCredential. It is written into a project's context, which is mounted into
 // every sandbox in it and readable by everything running there.
 func TestTheManualCarriesNoCredential(t *testing.T) {
-	got := Text("quay secret set [<workspace>] <key> <value>   set a workspace secret")
+	got := Text()
 
 	// The command may be named. A value never appears, because this document has never seen one.
 	for _, never := range []string{"sk-ant-", "CLAUDE_CODE_OAUTH_TOKEN="} {

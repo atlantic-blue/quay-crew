@@ -364,6 +364,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWizardSteps(sc)
 	initializeReachableSteps(sc)
 	initializeDriverSteps(sc)
+	initializeDriverContextSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns

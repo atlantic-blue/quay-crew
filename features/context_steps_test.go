@@ -70,7 +70,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator loads the manual as the project's context$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
-			Scope: "project", Owner: w.projectID, Body: manual.Text("quay dispatch [<address>] <text>"),
+			Scope: "project", Owner: w.projectID, Body: manual.Text(),
 		})
 		return w.lastErr
 	})

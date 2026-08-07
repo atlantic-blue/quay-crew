@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The driver opens knowing what quay is.** Opening the crew writes the manual into the driver's own
+  context, so an agent in it starts with the model, the commands and what the crew can actually do,
+  rather than having to be told every time. Its own level, not the project's, because the project's
+  context belongs to the work being done there. Written once: an operator who edits it has a reason
+  to, and overwriting on every open would make it the one context nobody can change.
+  The command list moved into `internal/manual`, so what `quay` prints and what a session is told are
+  one string and cannot describe two different tools.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The driver is its own session, and the only one that can drive the crew.** `quay` opens the
   project's driver rather than whichever conversation happened to be newest, creating it the first
   time. One per project, held by a unique index rather than by reading first and writing after.

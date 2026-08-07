@@ -322,3 +322,19 @@ Feature: Sessions run in isolated sandboxes
     And the operator opens the driver again
     Then it is the same driver both times
     And the crew has one driver
+
+  # The driver opens knowing what quay is, rather than having to be told every time. It is the crew
+  # describing itself: the command list the tool prints, and the behaviour specification the binary
+  # carries, neither of which can drift from what the tool actually does.
+  Scenario: The driver opens knowing what quay is
+    When the operator opens the driver
+    Then the driver has been told what quay is
+    And what it was told names the words a crew is made of
+
+  # An operator who edits it has a reason to, and overwriting on every open would make it the one
+  # context nobody can change.
+  Scenario: Opening the driver again does not overwrite what it has been told
+    When the operator opens the driver
+    And the operator writes their own instructions into the driver
+    And the operator opens the driver again
+    Then the driver still carries their own instructions
