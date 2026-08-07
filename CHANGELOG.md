@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`N` says when it could not end the conversation.** Ending the conversation beside the console
+  discarded whatever the attempt had to say, and the pane is reopened straight after. A conversation
+  that is still running is attached to rather than started, so it came back with its history and the
+  key read as doing nothing at all. A container that is not running and an image too old to have tmux
+  in it both ended nothing, silently. Whether it worked is answered by asking afterwards rather than
+  by the exit status, because ending a conversation that was never there fails too and that is the
+  state the next open wants. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **When the crew cannot open, it says why.** Opening the panel and failing fell back to a single
   console pane, whatever the reason: tmux missing, a crew with two projects and nowhere named to open
   in, a header with no room to draw. All of them looked identical from the outside, so the panel read

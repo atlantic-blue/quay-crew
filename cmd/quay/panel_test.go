@@ -156,3 +156,55 @@ func TestQuaySaysWhyTheCrewCouldNotOpen(t *testing.T) {
 		t.Fatal("quay opened a single console pane over a failure that was not about having nothing to put beside it")
 	}
 }
+
+// TestEndingAConversationSaysWhenItCouldNotEndIt.
+//
+// `N` ends the conversation beside the console and reopens the pane. The reopen attaches to the
+// conversation rather than starting one, so if the ending failed the same conversation comes back
+// with its history and the key reads as doing nothing whatsoever. That failure was discarded: a
+// container that is not running, or an image too old to have tmux in it, both ended nothing and said
+// nothing.
+func TestEndingAConversationSaysWhenItCouldNotEndIt(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		run     func(box string, argv ...string) ([]byte, error)
+		says    bool
+		because string
+	}{
+		{
+			name: "it ended",
+			run: func(_ string, _ ...string) ([]byte, error) {
+				return nil, nil
+			},
+			because: "the conversation is gone, so the next open starts one",
+		},
+		{
+			name: "there was nothing to end",
+			run: func(_ string, argv ...string) ([]byte, error) {
+				if argv[1] == "has-session" {
+					return []byte("can't find session: quay"), fmt.Errorf("exit status 1")
+				}
+				return []byte("can't find session: quay"), fmt.Errorf("exit status 1")
+			},
+			because: "no conversation is the state the next open wants anyway",
+		},
+		{
+			name: "the conversation is still running afterwards",
+			run: func(_ string, argv ...string) ([]byte, error) {
+				if argv[1] == "has-session" {
+					return nil, nil
+				}
+				return []byte("Error response from daemon: container is not running"), fmt.Errorf("exit status 1")
+			},
+			says:    true,
+			because: "the next open comes back to the conversation that is still there",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := endConversation("quaycrew-c9964dc2", tc.run)
+			if said := err != nil; said != tc.says {
+				t.Fatalf("ending it reported %v, want a report: %v, because %s", err, tc.says, tc.because)
+			}
+		})
+	}
+}
