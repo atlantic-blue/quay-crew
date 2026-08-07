@@ -15,6 +15,6 @@ func runManual(args []string, out io.Writer) error {
 	if len(args) != 0 {
 		return fmt.Errorf("usage: quay manual, and pipe it: quay manual | quay context set <address>")
 	}
-	fmt.Fprint(out, manual.Text(usage))
+	fmt.Fprint(out, manual.Text())
 	return nil
 }

@@ -16,6 +16,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
@@ -827,5 +828,26 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
+	s.teachDriver(ctx, session)
 	return &quaycrewv1.OpenDriverResponse{Session: session}, nil
+}
+
+// teachDriver writes what quay is into the driver's own context, so it opens knowing what it is for
+// rather than having to be told every time. It is the crew describing itself: the command list the
+// tool prints, and the behaviour specification the binary carries.
+//
+// The driver's own level, not the project's, because the project's context belongs to the work being
+// done there and a session driving the crew is not that work.
+//
+// Written once. An operator who edits it has a reason to, and overwriting that on every open would
+// make it the one context nobody can change.
+func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
+	if existing, err := s.store.GetContext(ctx, store.ContextSession, session.GetId()); err == nil && existing != "" {
+		return
+	}
+	if err := s.store.SetContext(ctx, store.ContextSession, session.GetId(), manual.Text()); err != nil {
+		// A driver that has not been told what quay is still opens, and can be told by hand. Refusing
+		// to open the crew over it would be worse than opening one that has to ask.
+		return
+	}
 }

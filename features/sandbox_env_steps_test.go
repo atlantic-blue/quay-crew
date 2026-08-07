@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -138,6 +139,55 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		}
 		if drivers != 1 {
 			return fmt.Errorf("the project has %d drivers, want 1", drivers)
+		}
+		return nil
+	})
+}
+
+// What the driver has been told, which is the crew describing itself.
+func initializeDriverContextSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the driver has been told what quay is$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.drivers) == 0 {
+			return fmt.Errorf("no driver was opened")
+		}
+		told, err := w.store.GetContext(ctx, store.ContextSession, w.drivers[0].GetId())
+		if err != nil {
+			return fmt.Errorf("read what the driver was told: %w", err)
+		}
+		if !strings.Contains(told, "quay context set") {
+			return fmt.Errorf("the driver was not told how anything gets told anything:\n%s", told)
+		}
+		return nil
+	})
+
+	sc.Step(`^what it was told names the words a crew is made of$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		told, err := w.store.GetContext(ctx, store.ContextSession, w.drivers[0].GetId())
+		if err != nil {
+			return err
+		}
+		for _, word := range []string{"workspace", "project", "thread", "session", "sandbox"} {
+			if !strings.Contains(told, word) {
+				return fmt.Errorf("the driver was never told what a %s is", word)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator writes their own instructions into the driver$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		return w.store.SetContext(ctx, store.ContextSession, w.drivers[0].GetId(), "my own instructions")
+	})
+
+	sc.Step(`^the driver still carries their own instructions$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		told, err := w.store.GetContext(ctx, store.ContextSession, w.drivers[len(w.drivers)-1].GetId())
+		if err != nil {
+			return err
+		}
+		if told != "my own instructions" {
+			return fmt.Errorf("opening the driver again overwrote what the operator wrote:\n%s", told)
 		}
 		return nil
 	})
