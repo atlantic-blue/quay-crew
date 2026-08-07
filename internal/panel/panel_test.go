@@ -273,3 +273,68 @@ func TestTheHeaderSpansBothHalves(t *testing.T) {
 		}
 	}
 }
+
+// TestAPanelBuiltByAnOlderToolIsMadeAgain. Reattaching to an open panel is right until the tool has
+// been upgraded: the panes are still running the old binary, so the fix that shipped this morning is
+// not in what you are looking at, however many times you upgrade.
+//
+// It is what "still cant see the bloody logo man" turned out to be. The logo was drawn correctly by
+// the new build, and the panel on screen was the old one.
+func TestAPanelBuiltByAnOlderToolIsMadeAgain(t *testing.T) {
+	layout := Layout{
+		Version: "038fdd6",
+		Header:  []string{"quay", "header"}, HeaderRows: 1,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}
+	commands, err := layout.Commands(Terminal{AlreadyOpen: true, Stale: true})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	got := lines(commands)
+
+	if !strings.HasPrefix(got, "tmux kill-session -t quay-panel") {
+		t.Fatalf("the old panel is not taken down first, so new-session reattaches to it:\n%s", got)
+	}
+	if !strings.Contains(got, "new-session") || strings.Count(got, "split-window") != 2 {
+		t.Fatalf("the panel is not built again:\n%s", got)
+	}
+}
+
+// TestAPanelBuiltByThisToolIsJustReattachedTo, or every open would tear down the conversation you were
+// reading and start it again.
+func TestAPanelBuiltByThisToolIsJustReattachedTo(t *testing.T) {
+	commands, err := Layout{
+		Version: "038fdd6",
+		Header:  []string{"quay", "header"}, HeaderRows: 1,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{AlreadyOpen: true})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	got := lines(commands)
+
+	for _, never := range []string{"kill-session", "new-session", "split-window"} {
+		if strings.Contains(got, never) {
+			t.Fatalf("opening a current panel runs %s:\n%s", never, got)
+		}
+	}
+}
+
+// TestThePanelRecordsWhatBuiltIt, or nothing can tell that it is stale.
+func TestThePanelRecordsWhatBuiltIt(t *testing.T) {
+	commands, err := Layout{
+		Version: "038fdd6",
+		Header:  []string{"quay", "header"}, HeaderRows: 1,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	if !strings.Contains(lines(commands), VersionOption+" 038fdd6") {
+		t.Fatalf("the panel does not record the build that made it:\n%s", lines(commands))
+	}
+	// And the same option is what gets read back.
+	if !strings.Contains(strings.Join(Built(""), " "), VersionOption) {
+		t.Fatalf("what is read back is not what was written: %v", Built(""))
+	}
+}
