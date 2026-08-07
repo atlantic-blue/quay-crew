@@ -89,6 +89,10 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		m.mode, m.making, m.err = modeWizard, wizard{}, nil
 		return m, nil
+	case "N":
+		// A fresh conversation in place of the one beside the console. Opening the crew comes back to
+		// the one you were in, which is what you want almost always and not quite always.
+		return m.startFreshConversation()
 	case "p":
 		// Show the conversation beside the console, or hide the one already there. The panel builds
 		// this in one go; this is the same thing without having to decide before opening the console.

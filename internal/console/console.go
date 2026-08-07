@@ -52,7 +52,7 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 // beside is how the console opens a conversation next to itself when the key for it is pressed. It is
 // handed in because picking which conversation, and how to open it, belongs to the command line.
 func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
-	beside func(selected string) ([]string, error)) error {
+	beside func(selected string) ([]string, error), freshen func(selected string) error) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	}
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
-	model = model.WithInfo(known).WithClient(client).Beside(beside)
+	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
@@ -133,7 +133,8 @@ func HeaderHeight(registry *Registry, view string, info Info, width, height int)
 // drawing it across both halves. It says which view it moves to through publish, so that header names
 // this view's keys rather than the keys of the view it opened on.
 func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
-	beside func(selected string) ([]string, error), publish func(view string) error) error {
+	beside func(selected string) ([]string, error), freshen func(selected string) error,
+	publish func(view string) error) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -142,7 +143,7 @@ func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, k
 	if err != nil {
 		return err
 	}
-	model = model.WithInfo(known).WithClient(client).Beside(beside).
+	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
 		WithoutHeader().WithViewPublisher(publish)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {

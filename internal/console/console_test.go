@@ -2327,8 +2327,8 @@ func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
 	}
 }
 
-// TestPressingPOpensTheConversationUnderTheCursor: the row being looked at is the one meant, and the
-// console hands it over rather than deciding for itself which conversation is interesting.
+// TestPressingPHandsOverTheRowUnderTheCursor, and what is made of it is the command line's business:
+// the panel always opens the driver, whatever the cursor is on.
 func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	asked := make([]string, 0, 1)
@@ -2400,5 +2400,73 @@ func TestTheWordmarkIsDrawnInAHeaderOfOneRow(t *testing.T) {
 		if !strings.Contains(strings.Join(lines, "\n"), logo[0]) {
 			t.Fatalf("at height %d the wordmark is gone:\n%s", height, strings.Join(lines, "\n"))
 		}
+	}
+}
+
+// TestNStartsAFreshConversationAndPEndsNothing. Opening the crew comes back to the conversation you
+// were in, because it runs in a tmux session inside the sandbox that is attached to rather than
+// started when it is already there. That is what ctrl-q is for, and it is why the driver could never
+// give you a clean start.
+//
+// So N ends the one that is there and opens a new one, and p is left alone: it shows and hides.
+func TestNStartsAFreshConversationAndPEndsNothing(t *testing.T) {
+	t.Setenv("TMUX_PANE", "%3")
+	ended := 0
+	model := newTestModel(t, Sessions(&fakeClient{})).
+		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil }).
+		Freshen(func(string) error { ended++; return nil })
+
+	if _, cmd := update(t, model, runes("N")); cmd == nil {
+		t.Fatal("N produced no command")
+	}
+	// p only shows and hides, so it must never end anything.
+	if _, cmd := update(t, model, runes("p")); cmd == nil {
+		t.Fatal("p produced no command")
+	}
+	if ended != 0 {
+		t.Fatalf("p ended %d conversations, and it is the key that shows and hides one", ended)
+	}
+}
+
+// TestNWithNoWayToEndOneSaysSo rather than opening a second conversation beside the first.
+func TestNWithNoWayToEndOneSaysSo(t *testing.T) {
+	t.Setenv("TMUX_PANE", "%3")
+	model := newTestModel(t, Sessions(&fakeClient{})).
+		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil })
+
+	model, cmd := update(t, model, runes("N"))
+	if cmd != nil {
+		t.Fatal("N opened something with no way to end what was there")
+	}
+	if model.err == nil {
+		t.Fatal("N did nothing and said nothing")
+	}
+}
+
+// TestTheFreshConversationKeyIsInTheHelp, or nobody finds it.
+func TestTheFreshConversationKeyIsInTheHelp(t *testing.T) {
+	model := tallTestModel(t, Sessions(&fakeClient{}))
+	model.mode = modeHelp
+	if !strings.Contains(model.View(), "fresh conversation") {
+		t.Fatalf("the help does not mention the key for a fresh conversation:\n%s", model.View())
+	}
+}
+
+// TestNReplacesTheConversationBesideItRatherThanAddingOne. `quay` opens the conversation itself, so
+// the console never held that pane's identifier: acting on what it remembered opened a fourth pane
+// beside the third and left the old conversation running in it.
+//
+// Asked of tmux instead, the same way the key that shows and hides one does.
+func TestNReplacesTheConversationBesideItRatherThanAddingOne(t *testing.T) {
+	// Two panes side by side under a header: the console at %2, a conversation at %3.
+	listing := "%1 0 0\n%2 0 4\n%3 100 4\n"
+	got, found := rightOf(listing, "%2")
+	if !found || got != "%3" {
+		t.Fatalf("the console finds %q beside it, want the conversation pane", got)
+	}
+	// And it is found without the console ever having opened it, which is the case that broke.
+	model := newTestModel(t, Sessions(&fakeClient{}))
+	if model.conversation != "" {
+		t.Fatal("this test assumes a console that opened nothing")
 	}
 }

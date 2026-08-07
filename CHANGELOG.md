@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`N` starts a fresh conversation beside the console.** Opening the crew comes back to the one you
+  were in, because it runs in a tmux session inside the sandbox that is attached to rather than started
+  when it is already there. That is what `ctrl-q` is for, and it meant the driver could never give you
+  a clean start. `N` ends the one that is there and opens a new one; `p` is unchanged and only shows
+  and hides.
+  The conversation beside the console is always the driver now, whatever the cursor is on. It was the
+  row under the cursor for a while, which reads well until you press the key for a fresh conversation
+  and it ends whichever session you happened to be scrolled to.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The driver opens knowing what quay is.** Opening the crew writes the manual into the driver's own
   context, so an agent in it starts with the model, the commands and what the crew can actually do,
   rather than having to be told every time. Its own level, not the project's, because the project's
