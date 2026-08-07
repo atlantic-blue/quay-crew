@@ -177,6 +177,15 @@ func row(id string, cells ...string) Row {
 	return Row{ID: id, Cells: cells}
 }
 
+// tallTestModel is a console with room for the whole help panel, which is taller than the default
+// window now that it carries what the header used to.
+func tallTestModel(t *testing.T, resources ...Resource) Model {
+	t.Helper()
+	model := newTestModel(t, resources...)
+	model.height = 60
+	return model
+}
+
 func newTestModel(t *testing.T, resources ...Resource) Model {
 	t.Helper()
 	registry, err := NewRegistry(resources...)
@@ -1131,7 +1140,9 @@ func TestTheCommandBarOffersWhatItCanOpen(t *testing.T) {
 // bar was the one thing the help could not help with.
 func TestTheQuestionMarkListsTheViews(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Archived(client), Contexts(client))
+	// Tall enough to show the whole panel at once: everything the header used to carry lives in it
+	// now, and a shorter window scrolls rather than dropping the end.
+	model := tallTestModel(t, Sessions(client), Archived(client), Contexts(client))
 	model, _ = update(t, model, runes("?"))
 
 	view := model.View()
@@ -1304,22 +1315,50 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 // ---------- view ----------
 
-// TestTheHeaderShowsThisViewsOwnCommands: the header carries the verbs for what is on screen, and
-// the key that lists the rest. A header that lists every key teaches the operator to stop reading it.
-func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
+// TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse. Julian: "the quay logo dissapears
+// because there is too much text, lets leave only: the logo + version, and help".
+//
+// The header is as wide as the console, and the console is half the window once a conversation is
+// beside it. A column of key hints and ten lines of status left no room for the wordmark, so both
+// moved into the help panel and the header keeps what cannot be looked up.
+func TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Workspaces(client))
-	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
+	model := newTestModel(t, Sessions(client))
+	model.info = Info{
+		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
+		Project: "quay-crew", Model: "claude-code", Sandbox: "docker", Store: "postgres",
+	}
+	shown := strings.Join(model.headerLines(), "\n")
 
-	view := model.View()
-	for _, want := range []string{"<enter> Open", "<s> Shell", "<R> Restart", "<backspace> Stop", "<?> Help"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("the header does not offer %q:\n%s", want, view)
+	if !strings.Contains(shown, "21fca40") {
+		t.Fatalf("the header does not say which build this is:\n%s", shown)
+	}
+	if !strings.Contains(shown, "Help") {
+		t.Fatalf("the header does not say how to reach everything else:\n%s", shown)
+	}
+	if !strings.Contains(shown, logo[0]) {
+		t.Fatalf("the wordmark is missing from the header:\n%s", shown)
+	}
+	for _, moved := range []string{"localhost:50051", "Sandbox engine", "Open", "Restart"} {
+		if strings.Contains(shown, moved) {
+			t.Fatalf("the header still carries %q, which belongs in the help panel:\n%s", moved, shown)
 		}
 	}
-	for _, unwanted := range []string{"Quit", "Refresh", "Resource"} {
-		if strings.Contains(view, unwanted) {
-			t.Fatalf("the header lists %q, which belongs behind the question mark:\n%s", unwanted, view)
+}
+
+// TestTheWordmarkSurvivesAConversationBesideIt, which is the whole reason the rest moved out: the
+// console is half the window then, and the wordmark was the thing that lost.
+func TestTheWordmarkSurvivesAConversationBesideIt(t *testing.T) {
+	// Down to half of a 168 column window, which is what a conversation beside the console leaves.
+	// The wordmark is 35 columns wide, so below roughly 80 it genuinely does not fit and is dropped
+	// rather than drawn over the top of something.
+	for _, width := range []int{170, 99, 84} {
+		model := newTestModel(t, Sessions(&fakeClient{}))
+		model.width = width
+		model.info = Info{Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez"}
+
+		if !strings.Contains(strings.Join(model.headerLines(), "\n"), logo[0]) {
+			t.Fatalf("at %d columns the wordmark is gone:\n%s", width, strings.Join(model.headerLines(), "\n"))
 		}
 	}
 }
@@ -1327,7 +1366,7 @@ func TestTheHeaderShowsThisViewsOwnCommands(t *testing.T) {
 // TestTheQuestionMarkListsEveryKey is where the keys the header does not show have to live.
 func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client), Workspaces(client))
+	model := tallTestModel(t, Sessions(client), Workspaces(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
 	model, _ = update(t, model, runes("?"))
@@ -1348,17 +1387,29 @@ func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 	}
 }
 
-// TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding covers the two things only the tool knows
-// about itself: which build it is, and the context the operator set.
-func TestTheStatusBlockNamesTheBuildAndWhereYouAreStanding(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051", Workspace: "me", Project: "house-bills"}})
+// TestTheHelpPanelCarriesWhatTheHeaderDropped. The information was moved, not deleted, and the help
+// panel is where it went.
+func TestTheHelpPanelCarriesWhatTheHeaderDropped(t *testing.T) {
+	model := tallTestModel(t, Sessions(&fakeClient{}))
+	model.info = Info{
+		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
+		Project: "quay-crew", Model: "claude-code", Sandbox: "docker", Store: "postgres",
+		Secrets: "postgres", Events: "kafka", State: "host",
+	}
+	model, _ = update(t, model, runes("?"))
+	shown := model.View()
 
-	view := model.View()
-	for _, want := range []string{"Version:", "5fd7bee", "Workspace:", "me", "Project:", "house-bills"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("the status block does not say %q:\n%s", want, view)
+	for _, want := range []string{
+		"this crew", "localhost:50051", "juliantellez", "quay-crew", "claude-code",
+		"Sandbox engine", "Store engine", "Secrets", "Events engine", "State",
+	} {
+		if !strings.Contains(shown, want) {
+			t.Fatalf("the help panel does not carry %q, so moving it out of the header lost it:\n%s", want, shown)
 		}
+	}
+	// And this view's own keys, which also left the header.
+	if !strings.Contains(shown, "Open") {
+		t.Fatalf("the help panel does not say what enter does:\n%s", shown)
 	}
 }
 
@@ -1397,31 +1448,27 @@ func TestTheWordmarkGivesWayToASmallWindow(t *testing.T) {
 	}
 }
 
-// TestStatusBlockNamesTheCrewItIsConnectedTo covers the question the block exists to answer: which
-// crew am I about to act on. Two stacks list identical sessions and behave nothing alike.
-func TestStatusBlockNamesTheCrewItIsConnectedTo(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, infoMsg{info: Info{
-		Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres",
-		State: "host directory /Users/x/.quaycrew/data",
-	}})
+// TestTheHelpPanelSaysWhichCrewItIsConnectedTo, so an operator with two of them can tell which one
+// they are about to act on.
+func TestTheHelpPanelSaysWhichCrewItIsConnectedTo(t *testing.T) {
+	model := tallTestModel(t, Sessions(&fakeClient{}))
+	model.info = Info{Version: "dev", Address: "localhost:50051", Store: "postgres"}
+	model, _ = update(t, model, runes("?"))
 
-	view := model.View()
-	for _, want := range []string{"localhost:50051", "claude-code", "Sandbox engine", "Store engine", "host directory"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("the status block does not say %q:\n%s", want, view)
-		}
+	if !strings.Contains(model.View(), "localhost:50051") {
+		t.Fatalf("the help panel does not say which crew this is:\n%s", model.View())
 	}
 }
 
-// TestStatusBlockSaysWhenAConversationWouldBeLost is the reason state is in words rather than a
-// boolean: "false" is not something anyone reads as "your conversation dies with its container".
-func TestStatusBlockSaysWhenAConversationWouldBeLost(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, infoMsg{info: Info{Address: "here", Store: "memory"}})
+// TestTheHelpPanelSaysWhenAConversationWouldBeLost, which is the one line in there that is a warning
+// rather than a fact.
+func TestTheHelpPanelSaysWhenAConversationWouldBeLost(t *testing.T) {
+	model := tallTestModel(t, Sessions(&fakeClient{}))
+	model.info = Info{Version: "dev", Store: "postgres", State: ""}
+	model, _ = update(t, model, runes("?"))
 
 	if !strings.Contains(model.View(), "lost when it is replaced") {
-		t.Fatalf("the status block does not warn that state is lost:\n%s", model.View())
+		t.Fatalf("the help panel does not warn that state is lost:\n%s", model.View())
 	}
 }
 
@@ -2140,53 +2187,51 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	}
 }
 
-// TestTheHeaderIsThereWhateverElseIsOnTheScreen. Julian, with a screenshot of plain quay: "I want this
-// header always present". It was taken away in the panel and replaced with a tmux status line, and the
-// replacement lost the wordmark and the engines and looked like a mess next to the console's own rows.
-//
-// The header is the console's, always: the crew's description on the left, this view's keys beside it,
-// and the wordmark.
-func TestTheHeaderIsThereWhateverElseIsOnTheScreen(t *testing.T) {
-	info := Info{
-		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
-		Project: "juliantellez-com", Model: "claude-code", Sandbox: "docker", Store: "postgres",
-		Secrets: "postgres", Events: "kafka", State: "host directory /Users/x/.quaycrew/data",
-	}
-	// Wide enough for the wordmark, and half of that, which is what a conversation beside it leaves.
-	for _, width := range []int{170, 84} {
-		model := newTestModel(t, Sessions(&fakeClient{}))
-		model.width = width
-		model.info = info
-		shown := strings.Join(model.headerLines(), "\n")
+// TestTheHelpPanelScrollsRatherThanDroppingItsEnd. Everything the header used to carry is in there
+// now, so on a short window there is more of it than there is room. Cutting the end silently is how a
+// panel missing half its keys looks exactly like a complete one.
+func TestTheHelpPanelScrollsRatherThanDroppingItsEnd(t *testing.T) {
+	client := &fakeClient{}
+	model := newTestModel(t, Sessions(client), Workspaces(client), Contexts(client))
+	model.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme", Store: "postgres"}
+	model, _ = update(t, model, runes("?"))
 
-		for _, want := range []string{"21fca40", "localhost:50051", "juliantellez", "claude-code", "postgres"} {
-			if !strings.Contains(shown, want) {
-				t.Fatalf("at %d columns the header does not say %q:\n%s", width, want, shown)
-			}
-		}
-		if !strings.Contains(shown, "Open") {
-			t.Fatalf("at %d columns the header does not say what enter does:\n%s", width, shown)
-		}
+	first := model.View()
+	if !strings.Contains(first, "more, ↑↓ to scroll") {
+		t.Fatalf("a short window shows everything, so this test proves nothing:\n%s", first)
+	}
+	// What is off the end is reachable, not gone.
+	for i := 0; i < 30; i++ {
+		model, _ = update(t, model, runes("j"))
+	}
+	if model.mode != modeHelp {
+		t.Fatal("scrolling closed the help panel")
+	}
+	if !strings.Contains(model.View(), "Quit") {
+		t.Fatalf("scrolling down never reaches the end of the panel:\n%s", model.View())
+	}
+	// And any other key still closes it.
+	model, _ = update(t, model, runes("x"))
+	if model.mode != modeBrowse {
+		t.Fatal("a key that is not a movement no longer closes the help panel")
+	}
+	if model.helpTop != 0 {
+		t.Fatalf("the help panel stayed scrolled to %d after closing", model.helpTop)
 	}
 }
 
-// TestTheHeaderNeverAsksAQuestionItHasAnswered. This is the one that was missed: every status line was
-// suppressed in the panel, which left the branch saying nothing is known yet as the only one that
-// could fire, so the console drew "asking what this control plane is running" under a header that had
-// already answered. The test at the time asserted the address was gone, not that the header was right.
-//
-// So it is asserted whole now: given what the crew said, every line is a line about the crew.
-func TestTheHeaderNeverAsksAQuestionItHasAnswered(t *testing.T) {
-	model := newTestModel(t, Sessions(&fakeClient{}))
-	model.info = Info{Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez"}
-
-	shown := strings.Join(model.headerLines(), "\n")
-	if strings.Contains(shown, "asking what this control plane is running") {
-		t.Fatalf("the header asks a question it has answered:\n%s", shown)
+// TestTheHelpPanelNeverAsksAQuestionItHasAnswered: the branch that says nothing is known yet fires
+// only when nothing is known. It used to be the last one standing when the others were suppressed,
+// so the console drew "asking what this control plane is running" under a header that had answered.
+func TestTheHelpPanelNeverAsksAQuestionItHasAnswered(t *testing.T) {
+	told := tallTestModel(t, Sessions(&fakeClient{}))
+	told.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
+	if strings.Contains(strings.Join(told.crewLines(), "\n"), "still asking") {
+		t.Fatalf("the help panel asks what it has been told:\n%s", strings.Join(told.crewLines(), "\n"))
 	}
-	// And the placeholder is still there when it is the truth, or this passes by deleting it.
-	empty := newTestModel(t, Sessions(&fakeClient{}))
-	if !strings.Contains(strings.Join(empty.headerLines(), "\n"), "asking what this control plane is running") {
+	// And it still says so when it is the truth, or this passes by deleting the line.
+	untold := tallTestModel(t, Sessions(&fakeClient{}))
+	if !strings.Contains(strings.Join(untold.crewLines(), "\n"), "still asking") {
 		t.Fatal("a console that has been told nothing says nothing about it")
 	}
 }
@@ -2316,7 +2361,7 @@ func TestPressingPClosesTheConversationBesideIt(t *testing.T) {
 
 // TestTheKeyIsInTheHelp, or nobody finds it.
 func TestTheKeyIsInTheHelp(t *testing.T) {
-	model := newTestModel(t, Sessions(&fakeClient{}))
+	model := tallTestModel(t, Sessions(&fakeClient{}))
 	model.mode = modeHelp
 	if !strings.Contains(model.View(), "conversation beside") {
 		t.Fatalf("the help does not mention the key that shows a conversation:\n%s", model.View())

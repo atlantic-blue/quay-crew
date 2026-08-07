@@ -215,23 +215,29 @@ Feature: The operator sees the crew from the console
     Then the console is asking nothing
     And the console lists the session the wizard started
 
-  # The header is the console's own, and it is there whatever else is on the screen. It was taken away
-  # once, replaced by a status line tmux drew, and what came back had lost the wordmark and the engines
-  # and sat on top of the console's own rows. Julian, with a screenshot: "where is the header? this is
-  # a mess", then "I want this header always present".
+  # The header is the wordmark, which build this is, and how to reach everything else. It carried the
+  # crew's description and this view's keys until there was no room left for the wordmark, which is
+  # what the operator noticed: "the quay logo dissapears because there is too much text, lets leave
+  # only: the logo + version, and help".
   #
-  # These drive the console's own reducer against the real control plane, so what is asserted is the
-  # header the operator would actually be looking at.
-  Scenario: The header says what the crew is, whatever is beside it
+  # These drive the console's own reducer against the real control plane, so what is asserted is what
+  # the operator would be looking at.
+  Scenario: The header keeps the wordmark, the build and the way to everything else
     When the operator looks at the console
-    Then the header names the crew it is pointed at
-    And the header names what the crew is running
-    And the header says what the keys on this view do
-    And the header never asks a question it has already answered
+    Then the header shows the wordmark
+    And the header says which build this is
+    And the header says how to reach everything else
+    And the header does not carry what the help panel carries
 
-  # Half the width is what a conversation opened beside the console leaves it.
-  Scenario: The header is still there with a conversation beside it
+  # Half the width is what a conversation opened beside the console leaves it, and the wordmark going
+  # missing there is the whole reason the rest moved out.
+  Scenario: The wordmark survives a conversation beside the console
     When the operator opens the console with a conversation beside it
-    Then the header names the crew it is pointed at
-    And the header says what the keys on this view do
-    And the header never asks a question it has already answered
+    Then the header shows the wordmark
+
+  Scenario: The help panel carries everything the header dropped
+    When the operator looks at the console and asks for help
+    Then the help panel names the crew it is pointed at
+    And the help panel names what the crew is running
+    And the help panel says what the keys on this view do
+    And the help panel never asks a question it has already answered
