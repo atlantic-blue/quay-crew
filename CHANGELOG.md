@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The header is the wordmark, which build this is, and how to reach everything else.** It carried the
+  crew's description and this view's keys, which at half the window left no room for the wordmark and
+  pushed it off the screen. Julian: "the quay logo dissapears because there is too much text, lets
+  leave only: the logo + version, and help", then "it occupies too much space". One row now: the
+  wordmark is one line rather than six of block letters, and it survives a conversation beside the
+  console at every width worth drawing a console in.
+- **The help panel carries everything the header dropped**, on top of what it already had: where the
+  crew is, where you are standing in it, and what it is running underneath. It scrolls with the arrow
+  keys when a short window cannot show all of it, rather than cutting the end off silently, which is
+  how a panel missing half its keys looks exactly like a complete one.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`quay` is the panel. There is no `quay panel`.** Running `quay` opens the crew: the header across
   the whole width, the console under it on the left, and a conversation on the right. `p` shows or
   hides the conversation. Julian: "I dont understand why I need quay panel, is confusing, I need one

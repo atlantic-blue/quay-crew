@@ -182,7 +182,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was allowed, expected a refusal")
 		}
 		// A refusal that only says no leaves the operator staring at a thread they cannot open, and one
-		// written in our words leaves them asking what it means. Julian, reading the first version of
+		// written in our words leaves them asking what it means. Reading the first version of
 		// this sentence: "it predates state?"
 		for _, want := range []string{"no conversation left", "quay dispatch"} {
 			if !strings.Contains(a.err.Error(), want) {

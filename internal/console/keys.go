@@ -42,8 +42,24 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case modeWizard:
 		return m.updateWizardKey(msg)
 	case modeHelp:
-		// Any key closes it. Nothing in here acts on anything, so there is nothing to get wrong.
-		m.mode = modeBrowse
+		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
+		// nothing in here acts on anything, so there is nothing to get wrong.
+		switch msg.String() {
+		case "up", "k":
+			m.helpTop--
+		case "down", "j":
+			m.helpTop++
+		case "pgup", "ctrl+b":
+			m.helpTop -= m.bodyHeight()
+		case "pgdown", "ctrl+f":
+			m.helpTop += m.bodyHeight()
+		default:
+			m.mode, m.helpTop = modeBrowse, 0
+			return m, nil
+		}
+		if m.helpTop < 0 {
+			m.helpTop = 0
+		}
 		return m, nil
 	default:
 		return m, nil

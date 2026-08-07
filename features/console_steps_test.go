@@ -112,40 +112,82 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.WindowSizeMsg{Width: 84, Height: 41})
 	})
 
-	sc.Step(`^the header names the crew it is pointed at$`, func(ctx context.Context) error {
+	sc.Step(`^the operator looks at the console and asks for help$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx)); err != nil {
+			return err
+		}
+		// Tall enough for the whole panel, which is what a real terminal usually is. A shorter one
+		// scrolls, and that is a table test in internal/console.
+		if err := c.press(tea.WindowSizeMsg{Width: 170, Height: 60}); err != nil {
+			return err
+		}
+		return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	})
+
+	sc.Step(`^the header shows the wordmark$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		for _, want := range []string{"Version", "Workspace"} {
-			if !strings.Contains(view, want) {
-				return fmt.Errorf("the header does not name %q:\n%s", want, view)
+		if !strings.Contains(view, "QUAY CREW") {
+			return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
+		}
+		return nil
+	})
+
+	sc.Step(`^the header says which build this is$`, func(ctx context.Context) error {
+		if !strings.Contains(consoleFrom(ctx).model.View(), "Version") {
+			return fmt.Errorf("the header does not say which build this is")
+		}
+		return nil
+	})
+
+	sc.Step(`^the header says how to reach everything else$`, func(ctx context.Context) error {
+		if !strings.Contains(consoleFrom(ctx).model.View(), "Help") {
+			return fmt.Errorf("the header does not say how to reach everything else")
+		}
+		return nil
+	})
+
+	sc.Step(`^the header does not carry what the help panel carries$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		for _, moved := range []string{"Sandbox engine", "Store engine"} {
+			if strings.Contains(view, moved) {
+				return fmt.Errorf("the header still carries %q:\n%s", moved, view)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the header names what the crew is running$`, func(ctx context.Context) error {
+	sc.Step(`^the help panel names the crew it is pointed at$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		for _, want := range []string{"this crew", "Workspace", "Address"} {
+			if !strings.Contains(view, want) {
+				return fmt.Errorf("the help panel does not name %q:\n%s", want, view)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the help panel names what the crew is running$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
 		for _, want := range []string{"Sandbox engine", "Store engine"} {
 			if !strings.Contains(view, want) {
-				return fmt.Errorf("the header does not name %q:\n%s", want, view)
+				return fmt.Errorf("the help panel does not name %q:\n%s", want, view)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the header says what the keys on this view do$`, func(ctx context.Context) error {
-		view := consoleFrom(ctx).model.View()
-		if !strings.Contains(view, "Open") {
-			return fmt.Errorf("the header does not say what enter does:\n%s", view)
+	sc.Step(`^the help panel says what the keys on this view do$`, func(ctx context.Context) error {
+		if !strings.Contains(consoleFrom(ctx).model.View(), "Open") {
+			return fmt.Errorf("the help panel does not say what enter does")
 		}
 		return nil
 	})
 
-	// The one that was missed. Suppressing every other line left this branch as the only one that
-	// could fire, so the console drew it under a header that had already answered.
-	sc.Step(`^the header never asks a question it has already answered$`, func(ctx context.Context) error {
+	sc.Step(`^the help panel never asks a question it has already answered$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		if strings.Contains(view, "asking what this control plane is running") {
-			return fmt.Errorf("the header asks what the control plane is running, and it has been told:\n%s", view)
+		if strings.Contains(view, "still asking what this control plane is running") {
+			return fmt.Errorf("the help panel asks what the control plane is running, and it has been told:\n%s", view)
 		}
 		return nil
 	})

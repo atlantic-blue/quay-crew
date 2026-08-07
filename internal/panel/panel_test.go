@@ -37,9 +37,8 @@ func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
 	}
 }
 
-// TestThePanelSplitsSideBySideRatherThanStacked. Julian chose side by side from two mockups, and -h
-// is the difference: without it tmux stacks the panes and the console loses half its rows instead of
-// half its width.
+// TestThePanelSplitsSideBySideRatherThanStacked: -h is the difference. Without it tmux stacks the
+// panes and the console loses half its rows instead of half its width.
 func TestThePanelSplitsSideBySideRatherThanStacked(t *testing.T) {
 	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
@@ -145,8 +144,8 @@ func TestAHalfEmptyPanelIsRefused(t *testing.T) {
 // building it: tmux refuses to attach a client that is already inside one, so the panel was made,
 // left running, and never appeared.
 //
-// Julian, having run it: "cant see the two panes". The terminal said `sessions should be nested with
-// care, unset $TMUX to force`, and the two panes were sitting there the whole time.
+// The terminal said `sessions should be nested with care, unset $TMUX to force`, and the two panes
+// were sitting there the whole time.
 func TestThePanelOpensFromInsideTmux(t *testing.T) {
 	layout := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}
 
@@ -238,9 +237,9 @@ func TestAPanelWithNoSizeStillOpens(t *testing.T) {
 	}
 }
 
-// TestTheHeaderSpansBothHalves. Julian: "the header should be the whole width". A tmux pane is a
-// rectangle, so the window is cut top and bottom first and only the lower part is split left and
-// right. Do it the other way round and there is no full width row left to put a header in.
+// TestTheHeaderSpansBothHalves. A tmux pane is a rectangle, so the window is cut top and bottom first
+// and only the lower part is split left and right. Do it the other way round and there is no full
+// width row left to put a header in.
 func TestTheHeaderSpansBothHalves(t *testing.T) {
 	commands, err := Layout{
 		Header: []string{"quay", "header"}, HeaderRows: 10,

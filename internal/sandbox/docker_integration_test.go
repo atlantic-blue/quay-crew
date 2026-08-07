@@ -110,7 +110,7 @@ func TestDockerProviderKeepsStateAcrossContainers(t *testing.T) {
 	// conversation store. Two conversations in one working directory means one of them changing a
 	// file under the other, and it leaves no level below the project to say anything at.
 	//
-	// This used to assert the opposite, that siblings shared the working directory. Julian: "give each
+	// This used to assert the opposite, that siblings shared the working directory. The decision: "give each
 	// thread its own working directory".
 	sibling, err := provider.Create(ctx, sandbox.Config{ID: "itest-sibling", Workspace: config.Workspace, Project: config.Project})
 	if err != nil {

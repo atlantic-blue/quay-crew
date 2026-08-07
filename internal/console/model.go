@@ -148,6 +148,9 @@ type Model struct {
 	// publish says which view the console moved to, so the header drawn in that pane names this
 	// view's keys rather than the keys of whichever view it was started on.
 	publish func(view string) error
+	// helpTop is how far the help panel is scrolled. Everything the header used to carry is in there,
+	// so on a short window it is taller than the room it has.
+	helpTop int
 	// beside opens a conversation next to the console, and is nil when nobody gave it one to open.
 	// The console does not know which conversation: it hands over the row under the cursor, which may
 	// be nothing, and gets back the command to run.

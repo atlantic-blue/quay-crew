@@ -103,14 +103,10 @@ var everywhereKeys = [][2]string{
 	{"q", "Quit"},
 }
 
-var logo = []string{
-	"  ██████  ██    ██  █████  ██    ██",
-	" ██    ██ ██    ██ ██   ██  ██  ██ ",
-	" ██    ██ ██    ██ ███████   ████  ",
-	" ██ ▄▄ ██ ██    ██ ██   ██    ██   ",
-	"  ██████   ██████  ██   ██    ██   ",
-	"     ▀▀                            ",
-}
+// logo is the wordmark, on one line. It was six lines of block letters, which made the header six rows
+// tall for one row of text: the header sat above both halves of the panel and took a tenth of the
+// window to say the name.
+var logo = []string{"▐ QUAY CREW ▌"}
 
 // withLogo puts the wordmark against the right edge, growing the header to fit it when the header is
 // shorter, which it is against a control plane too old to say what it is running.
@@ -145,31 +141,18 @@ func (m Model) withLogo(lines []string) []string {
 // whether any of it survives a restart. Anything the control plane did not say is left out rather
 // than guessed at.
 func (m Model) statusLines() []string {
-	lines := make([]string, 0, 6)
-	add := func(key, value string) {
-		if value != "" {
-			lines = append(lines, statusKey.Render(pad(key+":", 16))+value)
-		}
-	}
-	add("Version", m.info.Version)
-	add("Address", m.info.Address)
-	add("Workspace", m.info.Workspace)
-	add("Project", m.info.Project)
-	// Also in the :stats view, which is where to read them when a conversation beside the console has
-	// squeezed the header. They stay here because this is the header the operator asked to keep.
-	add("Model", m.info.Model)
-	add("Sandbox engine", m.info.Sandbox)
-	add("Store engine", m.info.Store)
-	add("Secrets", secretsPhrase(m.info.Secrets))
-	if m.info.Store != "" {
-		add("Events engine", eventsPhrase(m.info.Events))
-		add("State", statePhrase(m.info.State))
+	// Only which build this is. Everything else moved into the help panel, because it crowded the
+	// wordmark off the screen: the header is as wide as the console, and the console is half the
+	// window once a conversation is beside it.
+	//
+	//
+	lines := []string{statusKey.Render(pad("Version:", 16)) + m.info.Version}
+	if m.info.Version == "" {
+		lines = []string{statusKey.Render(pad("Version:", 16)) + faint.Render("unknown")}
 	}
 	if m.info.Behind {
-		add("Quay", alert.Render("this control plane is older than the tool, run make upgrade"))
-	}
-	if len(lines) == 0 {
-		lines = append(lines, statusKey.Render(pad("Quay:", 16))+faint.Render("asking what this control plane is running"))
+		lines = append(lines, statusKey.Render(pad("Quay:", 16))+
+			alert.Render("this control plane is older than the tool, run make upgrade"))
 	}
 	return lines
 }
@@ -330,10 +313,30 @@ func (m Model) panelBottom() string {
 // looks complete. Adding one binding used to push the last one off the bottom with nothing to say so.
 func (m Model) helpBody() []string {
 	height := m.bodyHeight() + 1
-	entries := intoColumns(m.helpLines(), height, m.innerWidth())
+
+	// The crew block is drawn at full width, and only the keys are folded into columns. Folded in
+	// together, one long line about where state is kept made every column that wide, which left room
+	// for one column, which pushed the keys off the end of the panel. They were not shortened, they
+	// were dropped, and a help panel missing half its keys looks exactly like a complete one.
+	described := m.crewBlock()
+	entries := described
+	if room := height - len(described); room > 0 {
+		entries = append(described, intoColumns(m.helpLines(), room, m.innerWidth())...)
+	}
+
+	// Scrolled rather than cut. Everything the header used to carry lives here now, so on a short
+	// window there is more of this than there is room, and dropping the end of it silently is how a
+	// help panel missing half its keys looks exactly like a complete one.
+	top := m.helpTop
+	if top > len(entries)-height {
+		top = len(entries) - height
+	}
+	if top < 0 {
+		top = 0
+	}
 
 	lines := make([]string, 0, height)
-	for _, line := range entries {
+	for _, line := range entries[top:] {
 		if len(lines) == height {
 			break
 		}
@@ -341,6 +344,10 @@ func (m Model) helpBody() []string {
 	}
 	for len(lines) < height {
 		lines = append(lines, m.fit(""))
+	}
+	if hidden := len(entries) - top - height; hidden > 0 {
+		lines[len(lines)-1] = m.fit(faint.Render(
+			fmt.Sprintf("    %d more, ↑↓ to scroll", hidden)))
 	}
 	return lines
 }
@@ -566,17 +573,9 @@ func (m Model) breadcrumb() string {
 // Only this view's commands, deliberately. k9s puts the view's verbs up here and everything else
 // behind a question mark, and a header that lists every key teaches the operator to stop reading it.
 func (m Model) hintParts() []string {
-	parts := make([]string, 0, len(m.active.Actions)+3)
-	for _, action := range m.active.Actions {
-		parts = append(parts, hint(action.Key, action.Label))
-	}
-	if m.active.DrillTo != "" {
-		parts = append(parts, hint("enter", m.active.DrillTo))
-	}
-	if len(m.stack) > 0 || m.filter != "" {
-		parts = append(parts, hint("esc", "Back"))
-	}
-	return append(parts, hint("?", "Help"))
+	// One hint, and it is the one that leads to all the others. This view's keys are in the help
+	// panel with everything else; listing them here is what crowded out the wordmark.
+	return []string{hint("?", "Help")}
 }
 
 // helpLines is every key, this view's own first and then the ones that work everywhere. This is what
@@ -647,4 +646,42 @@ func truncate(text string, width int) string {
 		runes = runes[:len(runes)-1]
 	}
 	return string(runes) + "…"
+}
+
+// crewLines describe the crew this console is pointed at: where it is, where you are standing in it,
+// and what it is running underneath. They were the header until the header had no room left for the
+// wordmark, and they are also the stats view, which is the one to leave open beside what you are
+// doing.
+func (m Model) crewLines() []string {
+	lines := make([]string, 0, 9)
+	add := func(key, value string) {
+		if value != "" {
+			lines = append(lines, hint(pad(key, 16), value))
+		}
+	}
+	add("Address", m.info.Address)
+	add("Workspace", m.info.Workspace)
+	add("Project", m.info.Project)
+	add("Model", m.info.Model)
+	add("Sandbox engine", m.info.Sandbox)
+	add("Store engine", m.info.Store)
+	add("Secrets", secretsPhrase(m.info.Secrets))
+	if m.info.Store != "" {
+		add("Events engine", eventsPhrase(m.info.Events))
+		add("State", statePhrase(m.info.State))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, faint.Render("still asking what this control plane is running"))
+	}
+	return lines
+}
+
+// crewBlock is what the crew is, drawn at full width above the keys. The header carries the wordmark
+// and which build this is; everything it used to carry is here.
+func (m Model) crewBlock() []string {
+	lines := []string{crumb.Render("  this crew")}
+	for _, described := range m.crewLines() {
+		lines = append(lines, "    "+described)
+	}
+	return append(lines, "")
 }

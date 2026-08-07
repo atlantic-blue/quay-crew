@@ -109,8 +109,8 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Julian: "the header should be the whole width". It is a pane of its own above the two halves,
-	// because a tmux pane is a rectangle and one reaching across both cannot belong to either.
+	// The header is a pane of its own above the two halves, because a tmux pane is a rectangle and one
+	// reaching across both cannot belong to either.
 	sc.Step(`^the header spans the whole width above both halves$`, func(ctx context.Context) error {
 		got := panelFrom(ctx).line()
 		splits := make([]string, 0, 2)
