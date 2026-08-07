@@ -103,10 +103,16 @@ var everywhereKeys = [][2]string{
 	{"q", "Quit"},
 }
 
-// logo is the wordmark, on one line. It was six lines of block letters, which made the header six rows
-// tall for one row of text: the header sat above both halves of the panel and took a tenth of the
-// window to say the name.
-var logo = []string{"▐ QUAY CREW ▌"}
+// logo is the wordmark: the same block letters as always, at half the height. Every row carries two
+// rows of the original through the half block characters, so this is the logo rather than the name
+// written out in text, and it costs three rows instead of six.
+//
+// Three rows is what the header costs, because the logo is the tallest thing in it.
+var logo = []string{
+	" ▄█▀▀▀▀█▄ ██    ██ ▄█▀▀▀█▄ ▀█▄  ▄█▀ ",
+	" ██ ▄▄ ██ ██    ██ ██▀▀▀██   ▀██▀   ",
+	"  ▀▀▀██▀   ▀▀▀▀▀▀  ▀▀   ▀▀    ▀▀    ",
+}
 
 // withLogo puts the wordmark against the right edge, growing the header to fit it when the header is
 // shorter, which it is against a control plane too old to say what it is running.

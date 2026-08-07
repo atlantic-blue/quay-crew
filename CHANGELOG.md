@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The logo is the logo again.** It had been replaced with the name written out in text, which is not
+  what was asked for: "you have replaced it with some text". The block letters are back, at half the
+  height, each row carrying two rows of the original through the half block characters. Three rows
+  rather than six, so the header still costs little.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`quay` rebuilds a panel left over from an older build.** Opening it reattached to the tmux session
   already there, whose panes were still running the binary from before the upgrade, so a fix that had
   shipped was not in what you were looking at however many times you ran `make upgrade`. The panel
