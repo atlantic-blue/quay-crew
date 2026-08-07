@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`quay manual`: quay describing itself, to be loaded as a session's context.** A session sitting in
+  the panel beside the console knew nothing about the crew it was next to. Pipe it where it is needed:
+  `quay manual | quay context set me/house-bills`. Most of it is assembled rather than written, from the
+  tool's own usage and the behaviour specification embedded in the binary, so neither half can drift
+  from what the tool actually does. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The panel's header spans the full width, above both halves.** Three regions now: the header across
   the top, then the console and a conversation side by side underneath. A tmux pane is a rectangle, so
   the header is a pane of its own, given exactly the rows it needs. With the whole width it lays its
