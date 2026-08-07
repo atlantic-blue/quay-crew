@@ -197,6 +197,16 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 // to run, and a turn refused because a file could not be written is worse than a turn that runs
 // without yesterday's notes.
 func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
+	s.syncContextExcept(ctx, session, contextLevel{})
+}
+
+// syncContextExcept is syncContext with one level exempt from the read back, because somebody has
+// just set it.
+//
+// `quay context set` is the operator saying what a level is now. Reading the file back for that level
+// first would hand them back the very body they were replacing, so at that one level the store wins
+// and everything else is still read back and kept.
+func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Session, settled contextLevel) {
 	dirs := s.storage.MyDirs(sandbox.Config{
 		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
 	})
@@ -214,6 +224,9 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 		if onDisk, found := sandbox.ReadMemory(dirs[at]); found {
 			written := sandbox.Decompose(onDisk, scopes)
 			for _, level := range levels {
+				if level == settled {
+					continue
+				}
 				body, said := written[string(level.scope)]
 				if !said {
 					continue
@@ -278,6 +291,39 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}
 		_ = sandbox.WriteMemory(dirs[at], sandbox.Compose(sections))
+	}
+}
+
+// renderTo writes a changed context out to every live session that reads it, so a change reaches the
+// sandboxes that are already running rather than waiting for each of them to be replaced.
+//
+// Archived threads are left alone. They are put away, their sandboxes are gone, and the render would
+// only create directories for conversations nobody is having.
+func (s *Server) renderTo(ctx context.Context, scope store.ContextScope, owner string) {
+	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
+	if err != nil {
+		return
+	}
+	for _, session := range sessions {
+		if reads(session, scope, owner) {
+			s.syncContextExcept(ctx, session, contextLevel{scope, owner})
+		}
+	}
+}
+
+// reads says whether a session's memory files carry this level of context.
+func reads(session *quaycrewv1.Session, scope store.ContextScope, owner string) bool {
+	switch scope {
+	case store.ContextCrew:
+		return true
+	case store.ContextWorkspace:
+		return session.GetWorkspace() == owner
+	case store.ContextProject:
+		return session.GetProject() == owner
+	case store.ContextSession:
+		return session.GetId() == owner
+	default:
+		return false
 	}
 }
 
@@ -561,6 +607,10 @@ func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextReque
 	if err := s.store.SetContext(ctx, scope, req.GetOwner(), req.GetBody()); err != nil {
 		return nil, storeError(err, "context")
 	}
+	// Out to the sessions that read it. Without this a context only reached a sandbox when that
+	// sandbox was created, so telling a running thread something did nothing you could see until it
+	// was replaced, which is not a thing an operator would think to do.
+	s.renderTo(ctx, scope, req.GetOwner())
 	return &quaycrewv1.SetContextResponse{
 		Dir: &quaycrewv1.ContextDir{
 			Scope: req.GetScope(), Owner: req.GetOwner(),
