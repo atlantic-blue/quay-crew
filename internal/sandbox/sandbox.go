@@ -19,10 +19,16 @@ type Spec struct {
 	Env []string
 }
 
-// Process is a running command with a streaming stdout.
+// Process is a running command with a streaming stdout, and whatever it had to say about going
+// wrong.
 type Process interface {
 	Stdout() io.Reader
 	Wait() error
+	// Stderr is the tail of what the command wrote to its error stream, available once Wait has
+	// returned. It is the tail rather than the whole thing, and a string rather than a reader,
+	// because nothing reads it until the command has already failed: a reader nobody drains stops
+	// the command dead as soon as the pipe fills.
+	Stderr() string
 }
 
 // Sandbox is one session's isolated environment. Commands exec inside it; it lives across the

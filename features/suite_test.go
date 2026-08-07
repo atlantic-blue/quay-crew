@@ -135,6 +135,10 @@ type world struct {
 	client     quaycrewv1.ControlPlaneServiceClient
 	provider   *sandbox.FakeProvider
 	runner     *recordingRunner
+	// realRunner replaces the recording double when a scenario is about what the real one does with
+	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
+	// an explanation built from a stream.
+	realRunner model.Runner
 	secrets    secrets.Store
 	store      store.Store
 	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
@@ -208,7 +212,7 @@ func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.grpcServer = grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
-		Store: w.store, Runner: w.runner, Provider: w.provider, Secrets: w.secrets,
+		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(),
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
@@ -224,6 +228,14 @@ func (w *world) serve() error {
 	w.conn = conn
 	w.client = quaycrewv1.NewControlPlaneServiceClient(conn)
 	return nil
+}
+
+// turnRunner is what runs a turn: the recording double, unless a scenario asked for the real one.
+func (w *world) turnRunner() model.Runner {
+	if w.realRunner != nil {
+		return w.realRunner
+	}
+	return w.runner
 }
 
 func (w *world) stop() {
@@ -346,6 +358,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSandboxEnvSteps(sc)
 	initializeWorkspaceSteps(sc)
 	initializeWizardSteps(sc)
+	initializeFailureSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {

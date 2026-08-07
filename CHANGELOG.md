@@ -6,6 +6,20 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 6 August 2026
+
+- **A failed turn says why.** Every model failure read `run turn: model: run exited: exit status 1`,
+  which is the same sentence for an expired token, a network failure, a missing model in the sandbox
+  image and the model refusing outright. It now carries the reason: the model's own words where it got
+  far enough to say anything, and what came back from the sandbox where it did not. A rejected token
+  now reads `Failed to authenticate. API Error: 401 OAuth access token is invalid. (status 401)`, and
+  a sandbox with no model in it names the binary it could not find.
+  ([#51](https://github.com/atlantic-blue/quay-crew/issues/51))
+- **Nothing a failed turn says can carry the subscription token.** A turn runs with the token in its
+  environment, so every place a failure can quote is a place it turns up. Values passed in this turn's
+  environment are matched exactly, and the published token shape is matched as well for one this
+  process never held.
+
 ## 5 August 2026
 
 - **The wizard makes one thing at a time.** `n` asks what to make first, then only the questions that
