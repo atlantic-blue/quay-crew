@@ -59,6 +59,12 @@ type Config struct {
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
+	// Reachable is the address a session should dial to reach this control plane, put into every
+	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the crew without being told where it is.
+	//
+	// Empty means a session cannot reach the crew at all, which is the default: a session that can
+	// drive the crew can also stop other sessions, so it is turned on rather than assumed.
+	Reachable string
 }
 
 // Server implements quaycrewv1.ControlPlaneServiceServer.
@@ -69,8 +75,10 @@ type Server struct {
 	runner   model.Runner
 	provider sandbox.Provider
 	storage  sandbox.Storage
-	events   messaging.EventLog
-	info     Info
+	// reachable is where a session dials to reach this control plane. Empty means it cannot.
+	reachable string
+	events    messaging.EventLog
+	info      Info
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
@@ -87,6 +95,7 @@ func NewServer(cfg Config) *Server {
 		storage:   cfg.Storage,
 		events:    eventsOr(cfg.Events),
 		info:      cfg.Info,
+		reachable: cfg.Reachable,
 		sandboxes: make(map[string]sandbox.Sandbox),
 	}
 }
@@ -604,12 +613,25 @@ func environ(values map[string]string) []string {
 // Claude Code subscription token, if one is set. A workspace that has not set it (or a model backend
 // that does not need it) simply runs with no extra env, so the lookup never fails a turn.
 func (s *Server) turnEnv(ctx context.Context, workspace string) map[string]string {
-	token, err := s.secrets.Get(ctx, workspace, model.ClaudeCodeOAuthTokenEnv)
-	if err != nil || token == "" {
+	env := map[string]string{}
+	// Where to reach the crew, so `quay` run inside a session works with nothing to configure. It
+	// carries no credential: it is an address, and reaching it at all depends on the sandbox being on
+	// a network that can, which is the same decision made once in configuration.
+	if s.reachable != "" {
+		env[grpcAddrEnv] = s.reachable
+	}
+	if token, err := s.secrets.Get(ctx, workspace, model.ClaudeCodeOAuthTokenEnv); err == nil && token != "" {
+		env[model.ClaudeCodeOAuthTokenEnv] = token
+	}
+	if len(env) == 0 {
 		return nil
 	}
-	return map[string]string{model.ClaudeCodeOAuthTokenEnv: token}
+	return env
 }
+
+// grpcAddrEnv is what the quay command line reads to find a control plane. A session gets it so the
+// tool inside a sandbox needs no arguments.
+const grpcAddrEnv = "QC_GRPC_ADDR"
 
 // ListSessions lists sessions, optionally filtered by workspace.
 func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {

@@ -4,6 +4,16 @@
 # The image carries no credentials. The subscription token is injected at turn time as
 # CLAUDE_CODE_OAUTH_TOKEN (minted by `claude setup-token`, stored as a per project secret), so the
 # same image is safe to build, share, and run anywhere.
+# quay itself, so a session can drive the crew from inside its sandbox. Built here rather than mounted
+# from the host, because the host's binary is built for the host: a darwin build does not run in a
+# linux container, and the cloud has no host to mount from at all.
+FROM golang:1.25 AS tool
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/quay ./cmd/quay
+
 FROM node:22-slim
 
 # git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network.
@@ -12,6 +22,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @anthropic-ai/claude-code
+
+# Reaching the control plane is a separate decision, made once in configuration: without a network
+# that can reach it and an address to dial, this is a command that says it cannot connect.
+COPY --from=tool /out/quay /usr/local/bin/quay
 
 # Run as a non-root user. The session's work lives under this user's home, which is thrown away with
 # the container.

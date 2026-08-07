@@ -77,6 +77,11 @@ services:
       # Each session gets its own container on the host daemon, a sibling of this one.
       QC_SANDBOX: docker
       QC_SANDBOX_IMAGE: ${QC_SANDBOX_IMAGE:-alpine:3.22}
+      # The network a session's sandbox joins, and the address it dials to reach this control plane.
+      # Together they are what lets a session drive the crew: `quay` inside a sandbox then reaches the
+      # same interface the operator's does. Unset either and it cannot, which is the default.
+      QC_SANDBOX_NETWORK: ${QC_SANDBOX_NETWORK:-}
+      QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-}
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
       # Claude Code CLI and its credentials is in place.
       QC_MODEL: ${QC_MODEL:-echo}
