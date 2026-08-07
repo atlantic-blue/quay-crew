@@ -58,5 +58,5 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	})
+	}, conversationBeside(ctx, client))
 }

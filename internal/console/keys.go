@@ -73,6 +73,10 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		m.mode, m.making, m.err = modeWizard, wizard{}, nil
 		return m, nil
+	case "p":
+		// Show the conversation beside the console, or hide the one already there. The panel builds
+		// this in one go; this is the same thing without having to decide before opening the console.
+		return m.toggleConversation()
 	case "r", "g":
 		// Refreshing is the key reached for constantly, so it holds the short obvious letter. `g` is
 		// what the help has said since the console shipped, so it keeps working.

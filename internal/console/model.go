@@ -103,6 +103,12 @@ type (
 	infoMsg struct{ info Info }
 	// behindMsg says the control plane is too old to answer at all.
 	behindMsg struct{}
+	// conversationMsg is a conversation opened beside the console, or closed. pane is the one that
+	// was opened, and is empty when it was closed.
+	conversationMsg struct {
+		pane string
+		err  error
+	}
 	// wizardChoicesMsg carries what a wizard step can be answered with. It names its step so a
 	// listing that came back after the operator moved on is discarded rather than offered for the
 	// wrong question.
@@ -136,16 +142,26 @@ type Model struct {
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
 	client quaycrewv1.ControlPlaneServiceClient
-	// inPanel says the console is the panel's left half. tmux draws the header there, as its own
-	// status line across the full width, so the status block and the wordmark are not drawn here as
-	// well. The key hints stay: they belong to this view and change with it.
-	inPanel bool
+	// beside opens a conversation next to the console, and is nil when nobody gave it one to open.
+	// The console does not know which conversation: it hands over the row under the cursor, which may
+	// be nothing, and gets back the command to run.
+	beside func(selected string) ([]string, error)
+	// conversation is the tmux pane the console opened, so the key closes the one it opened rather
+	// than whichever pane happens to be beside it now. Empty means none is open.
+	conversation string
 }
 
-// InPanel is the console as the panel's left half: no status block and no wordmark, because tmux is
-// drawing those across the top, and the key hints kept, because they belong to this view.
-func (m Model) InPanel() Model {
-	m.inPanel = true
+// WithInfo puts what is already known about the crew on the screen straight away, rather than an
+// empty status block that fills in a moment later when the control plane answers.
+func (m Model) WithInfo(info Info) Model {
+	m.info = info
+	return m
+}
+
+// Beside tells the console how to put a conversation next to itself, which is what the key for it
+// does. Without one the key says so rather than doing nothing.
+func (m Model) Beside(open func(selected string) ([]string, error)) Model {
+	m.beside = open
 	return m
 }
 
@@ -208,6 +224,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case wizardChoicesMsg:
 		return m.applyWizardChoices(msg), nil
+	case conversationMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.conversation, m.err = msg.pane, nil
+		return m, nil
 	case tea.KeyMsg:
 		return m.updateKey(msg)
 	default:

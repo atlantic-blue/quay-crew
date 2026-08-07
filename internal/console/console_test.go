@@ -2140,48 +2140,54 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	}
 }
 
-// TestTheConsoleInThePanelDrawsNoStatusBlock: tmux draws the essentials across the top of the panel,
-// and drawing them here as well would show them twice and cost the list the rows.
-func TestTheConsoleInThePanelDrawsNoStatusBlock(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
-	full := newTestModel(t, Sessions(client))
-	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme", Model: "claude-code"}
-	inPanel := full.InPanel()
+// TestTheHeaderIsThereWhateverElseIsOnTheScreen. Julian, with a screenshot of plain quay: "I want this
+// header always present". It was taken away in the panel and replaced with a tmux status line, and the
+// replacement lost the wordmark and the engines and looked like a mess next to the console's own rows.
+//
+// The header is the console's, always: the crew's description on the left, this view's keys beside it,
+// and the wordmark.
+func TestTheHeaderIsThereWhateverElseIsOnTheScreen(t *testing.T) {
+	info := Info{
+		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
+		Project: "juliantellez-com", Model: "claude-code", Sandbox: "docker", Store: "postgres",
+		Secrets: "postgres", Events: "kafka", State: "host directory /Users/x/.quaycrew/data",
+	}
+	// Wide enough for the wordmark, and half of that, which is what a conversation beside it leaves.
+	for _, width := range []int{170, 84} {
+		model := newTestModel(t, Sessions(&fakeClient{}))
+		model.width = width
+		model.info = info
+		shown := strings.Join(model.headerLines(), "\n")
 
-	if !strings.Contains(full.View(), "localhost:50051") {
-		t.Fatal("the ordinary console shows no address, so this test proves nothing")
-	}
-	if strings.Contains(inPanel.View(), "localhost:50051") {
-		t.Fatalf("the panel's console still draws the status block:\n%s", inPanel.View())
-	}
-	if strings.Contains(inPanel.View(), logo[0]) {
-		t.Fatalf("the panel's console still draws the wordmark, which is in the status line:\n%s", inPanel.View())
-	}
-}
-
-// TestTheConsoleInThePanelKeepsItsKeyHints. They belong to the view and change with it, which is
-// exactly what a header drawn by tmux cannot do.
-func TestTheConsoleInThePanelKeepsItsKeyHints(t *testing.T) {
-	client := &fakeClient{}
-	inPanel := newTestModel(t, Sessions(client)).InPanel()
-	inPanel.info = Info{Version: "dev"}
-
-	shown := inPanel.View()
-	if len(inPanel.headerLines()) == 0 {
-		t.Fatalf("the panel's console draws no hints at all:\n%s", shown)
-	}
-	if !strings.Contains(shown, "Open") {
-		t.Fatalf("the panel's console does not say what enter does:\n%s", shown)
+		for _, want := range []string{"21fca40", "localhost:50051", "juliantellez", "claude-code", "postgres"} {
+			if !strings.Contains(shown, want) {
+				t.Fatalf("at %d columns the header does not say %q:\n%s", width, want, shown)
+			}
+		}
+		if !strings.Contains(shown, "Open") {
+			t.Fatalf("at %d columns the header does not say what enter does:\n%s", width, shown)
+		}
 	}
 }
 
-// TestTheConsoleInThePanelGivesItsRowsTheStatusBlocksSpace: the point of not drawing it is the rows.
-func TestTheConsoleInThePanelGivesItsRowsTheStatusBlocksSpace(t *testing.T) {
-	full := newTestModel(t, Sessions(&fakeClient{}))
-	full.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme", Model: "claude-code"}
+// TestTheHeaderNeverAsksAQuestionItHasAnswered. This is the one that was missed: every status line was
+// suppressed in the panel, which left the branch saying nothing is known yet as the only one that
+// could fire, so the console drew "asking what this control plane is running" under a header that had
+// already answered. The test at the time asserted the address was gone, not that the header was right.
+//
+// So it is asserted whole now: given what the crew said, every line is a line about the crew.
+func TestTheHeaderNeverAsksAQuestionItHasAnswered(t *testing.T) {
+	model := newTestModel(t, Sessions(&fakeClient{}))
+	model.info = Info{Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez"}
 
-	if full.InPanel().bodyHeight() <= full.bodyHeight() {
-		t.Fatalf("the list gained nothing: %d rows against %d", full.InPanel().bodyHeight(), full.bodyHeight())
+	shown := strings.Join(model.headerLines(), "\n")
+	if strings.Contains(shown, "asking what this control plane is running") {
+		t.Fatalf("the header asks a question it has answered:\n%s", shown)
+	}
+	// And the placeholder is still there when it is the truth, or this passes by deleting it.
+	empty := newTestModel(t, Sessions(&fakeClient{}))
+	if !strings.Contains(strings.Join(empty.headerLines(), "\n"), "asking what this control plane is running") {
+		t.Fatal("a console that has been told nothing says nothing about it")
 	}
 }
 
@@ -2230,5 +2236,99 @@ func TestTheKeysViewCarriesEveryKeyThatWorksEverywhere(t *testing.T) {
 	// And a view's own keys, or it is only half a list.
 	if len(rows) <= len(everywhereKeys) {
 		t.Fatalf("the keys view carries %d rows and only the everywhere keys", len(rows))
+	}
+}
+
+// TestPressingPWithNoCrewSaysSo rather than looking like a key that does nothing.
+func TestPressingPWithNoCrewSaysSo(t *testing.T) {
+	model, cmd := update(t, newTestModel(t, Sessions(&fakeClient{})), runes("p"))
+	if cmd != nil {
+		t.Fatal("p tried to open something with nothing to open")
+	}
+	if model.err == nil {
+		t.Fatal("p did nothing and said nothing")
+	}
+}
+
+// TestPressingPOutsideTmuxSaysWhatToRun. tmux is what splits the screen, so outside it there is
+// nothing to split, and a key that silently does nothing reads as broken.
+func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
+	t.Setenv("TMUX_PANE", "")
+	model := newTestModel(t, Sessions(&fakeClient{})).
+		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil })
+
+	model, cmd := update(t, model, runes("p"))
+	if cmd != nil {
+		t.Fatal("p tried to split a screen with no tmux to split it")
+	}
+	if model.err == nil || !strings.Contains(model.err.Error(), "quay panel") {
+		t.Fatalf("p said %v, want it to name what to run", model.err)
+	}
+}
+
+// TestPressingPOpensTheConversationUnderTheCursor: the row being looked at is the one meant, and the
+// console hands it over rather than deciding for itself which conversation is interesting.
+func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
+	t.Setenv("TMUX_PANE", "%3")
+	asked := make([]string, 0, 1)
+	model := newTestModel(t, Sessions(&fakeClient{})).
+		Beside(func(selected string) ([]string, error) {
+			asked = append(asked, selected)
+			return []string{"quay", "attach", selected}, nil
+		})
+	model, _ = update(t, model, rowsFor(model, row("s1", "s1", "acme"), row("s2", "s2", "acme")))
+	model, _ = update(t, model, runes("j"))
+
+	if _, cmd := update(t, model, runes("p")); cmd == nil {
+		t.Fatal("p produced no command inside tmux")
+	}
+	if len(asked) != 1 || asked[0] != "s2" {
+		t.Fatalf("p asked to open %v, want the row under the cursor", asked)
+	}
+}
+
+// TestPressingPAgainClosesTheOneItOpened, rather than whichever pane happens to be beside the console
+// now. A conversation the operator opened somewhere else is not this key's to close.
+func TestPressingPAgainClosesTheOneItOpened(t *testing.T) {
+	t.Setenv("TMUX_PANE", "%3")
+	opened := 0
+	model := newTestModel(t, Sessions(&fakeClient{})).
+		Beside(func(string) ([]string, error) {
+			opened++
+			return []string{"quay", "attach", "s1"}, nil
+		})
+
+	// The console learns which pane it opened the way the runtime tells it.
+	model, _ = update(t, model, conversationMsg{pane: "%7"})
+	if model.conversation != "%7" {
+		t.Fatalf("the console remembers %q as the conversation it opened", model.conversation)
+	}
+
+	model, cmd := update(t, model, runes("p"))
+	if cmd == nil {
+		t.Fatal("p with a conversation open produced no command")
+	}
+	if opened != 0 {
+		t.Fatal("p opened a second conversation instead of closing the one already there")
+	}
+	// Closing tells the console it has none, and the key opens again after that.
+	model, _ = update(t, model, conversationMsg{})
+	if model.conversation != "" {
+		t.Fatalf("the console still thinks %q is open", model.conversation)
+	}
+	if _, cmd := update(t, model, runes("p")); cmd == nil {
+		t.Fatal("p no longer opens a conversation after one was closed")
+	}
+	if opened != 1 {
+		t.Fatalf("p asked for %d conversations after closing one, want 1", opened)
+	}
+}
+
+// TestTheKeyIsInTheHelp, or nobody finds it.
+func TestTheKeyIsInTheHelp(t *testing.T) {
+	model := newTestModel(t, Sessions(&fakeClient{}))
+	model.mode = modeHelp
+	if !strings.Contains(model.View(), "conversation beside") {
+		t.Fatalf("the help does not mention the key that shows a conversation:\n%s", model.View())
 	}
 }
