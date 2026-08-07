@@ -103,14 +103,11 @@ var everywhereKeys = [][2]string{
 	{"q", "Quit"},
 }
 
-var logo = []string{
-	"  ██████  ██    ██  █████  ██    ██",
-	" ██    ██ ██    ██ ██   ██  ██  ██ ",
-	" ██    ██ ██    ██ ███████   ████  ",
-	" ██ ▄▄ ██ ██    ██ ██   ██    ██   ",
-	"  ██████   ██████  ██   ██    ██   ",
-	"     ▀▀                            ",
-}
+// logo is the wordmark, on one line. It was six lines of block letters, which made the header six rows
+// tall for one row of text: the header sat above both halves of the panel and took a tenth of the
+// window to say the name. Julian: "the header has lots of space now", then "it occupies too much
+// space".
+var logo = []string{"▐ QUAY CREW ▌"}
 
 // withLogo puts the wordmark against the right edge, growing the header to fit it when the header is
 // shorter, which it is against a control plane too old to say what it is running.

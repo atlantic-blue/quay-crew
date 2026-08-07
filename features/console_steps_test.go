@@ -127,8 +127,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the header shows the wordmark$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		// The first row of the block letters, which is the thing that went missing.
-		if !strings.Contains(view, "██████  ██    ██") {
+		if !strings.Contains(view, "QUAY CREW") {
 			return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
 		}
 		return nil

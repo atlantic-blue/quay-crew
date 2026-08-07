@@ -1425,26 +1425,39 @@ func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
 	}
 }
 
-// TestTheWordmarkGivesWayToASmallWindow: branding is the first thing to drop when there is no room.
-func TestTheWordmarkGivesWayToASmallWindow(t *testing.T) {
-	full := newTestModel(t, staticResource("sessions"))
-	full, _ = update(t, full, tea.WindowSizeMsg{Width: 140, Height: 30})
-	full, _ = update(t, full, infoMsg{info: Info{
-		Version: "5fd7bee", Address: "localhost:50051", Workspace: "me", Model: "echo", Sandbox: "docker", Store: "memory",
-	}})
-	if !strings.Contains(full.View(), logo[0]) {
-		t.Fatalf("a wide window does not carry the wordmark:\n%s", full.View())
-	}
+// TestTheWordmarkFitsWhereverTheHeaderDoes. It used to be six lines of block letters, so it was the
+// first thing dropped when the window was small and the whole header cost six rows to say the name.
+// One line fits beside the version at every width worth drawing a console in.
+func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
+	for _, size := range [][2]int{{140, 30}, {84, 24}, {70, 30}, {140, 12}} {
+		model := newTestModel(t, staticResource("sessions"))
+		model, _ = update(t, model, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051"}})
 
-	narrow, _ := update(t, full, tea.WindowSizeMsg{Width: 70, Height: 30})
-	if strings.Contains(narrow.View(), logo[0]) {
-		t.Fatalf("a narrow window still carries the wordmark:\n%s", narrow.View())
+		if !strings.Contains(model.View(), logo[0]) {
+			t.Fatalf("at %dx%d the wordmark is gone:\n%s", size[0], size[1], model.View())
+		}
 	}
+}
 
-	// And a short one keeps its rows rather than its branding.
-	short, _ := update(t, full, tea.WindowSizeMsg{Width: 140, Height: 12})
-	if strings.Contains(short.View(), logo[0]) {
-		t.Fatalf("a short window spends its rows on the wordmark:\n%s", short.View())
+// TestTheHeaderCostsOneRow. It sits above both halves of the panel, so every row it takes is a row the
+// list and the conversation lose. Julian: "the header has lots of space now", then "it occupies too
+// much space".
+func TestTheHeaderCostsOneRow(t *testing.T) {
+	model := newTestModel(t, Sessions(&fakeClient{}))
+	model.info = Info{
+		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
+		Model: "claude-code", Sandbox: "docker", Store: "postgres",
+	}
+	if got := len(model.headerLines()); got != 1 {
+		t.Fatalf("the header is %d rows:\n%s", got, strings.Join(model.headerLines(), "\n"))
+	}
+	// One row, and it still carries all three things.
+	only := model.headerLines()[0]
+	for _, want := range []string{"21fca40", "Help", logo[0]} {
+		if !strings.Contains(only, want) {
+			t.Fatalf("the header's one row does not carry %q:\n%s", want, only)
+		}
 	}
 }
 

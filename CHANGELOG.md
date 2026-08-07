@@ -11,8 +11,9 @@ read, or run with `make features`.
 - **The header is the wordmark, which build this is, and how to reach everything else.** It carried the
   crew's description and this view's keys, which at half the window left no room for the wordmark and
   pushed it off the screen. Julian: "the quay logo dissapears because there is too much text, lets
-  leave only: the logo + version, and help". Six rows now, and the wordmark survives a conversation
-  beside the console.
+  leave only: the logo + version, and help", then "it occupies too much space". One row now: the
+  wordmark is one line rather than six of block letters, and it survives a conversation beside the
+  console at every width worth drawing a console in.
 - **The help panel carries everything the header dropped**, on top of what it already had: where the
   crew is, where you are standing in it, and what it is running underneath. It scrolls with the arrow
   keys when a short window cannot show all of it, rather than cutting the end off silently, which is
