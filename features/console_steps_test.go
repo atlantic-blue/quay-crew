@@ -127,7 +127,8 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the header shows the wordmark$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		if !strings.Contains(view, "QUAY CREW") {
+		// A row of the block letters, so this passes only on the logo and not on the name written out.
+		if !strings.Contains(view, "▄█▀▀▀▀█▄") {
 			return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
 		}
 		return nil

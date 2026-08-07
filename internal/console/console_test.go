@@ -1428,7 +1428,9 @@ func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
 // first thing dropped when the window was small and the whole header cost six rows to say the name.
 // One line fits beside the version at every width worth drawing a console in.
 func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
-	for _, size := range [][2]int{{140, 30}, {84, 24}, {70, 30}, {140, 12}} {
+	// The logo is 36 columns wide, so below roughly 60 it does not fit beside the version and is
+	// dropped rather than drawn over it. Height never stops it: it is drawn on rows the header has.
+	for _, size := range [][2]int{{140, 30}, {100, 24}, {84, 12}, {140, 3}} {
 		model := newTestModel(t, staticResource("sessions"))
 		model, _ = update(t, model, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051"}})
@@ -1439,22 +1441,25 @@ func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
 	}
 }
 
-// TestTheHeaderCostsOneRow. It sits above both halves of the panel, so every row it takes is a row the
-// list and the conversation lose.
-func TestTheHeaderCostsOneRow(t *testing.T) {
+// TestTheHeaderCostsTheLogosRows and nothing more. It sits above both halves of the panel, so every
+// row it takes is a row the list and the conversation lose: the logo is half the height it was, and
+// the header is the logo plus what fits beside it rather than ten lines of status and a column of
+// keys.
+func TestTheHeaderCostsTheLogosRows(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{}))
 	model.info = Info{
 		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
 		Model: "claude-code", Sandbox: "docker", Store: "postgres",
 	}
-	if got := len(model.headerLines()); got != 1 {
-		t.Fatalf("the header is %d rows:\n%s", got, strings.Join(model.headerLines(), "\n"))
+	if got := len(model.headerLines()); got != len(logo) {
+		t.Fatalf("the header is %d rows and the logo is %d:\n%s",
+			got, len(logo), strings.Join(model.headerLines(), "\n"))
 	}
-	// One row, and it still carries all three things.
-	only := model.headerLines()[0]
+	// And it still carries all three things, the version and the way to help beside the logo.
+	shown := strings.Join(model.headerLines(), "\n")
 	for _, want := range []string{"21fca40", "Help", logo[0]} {
-		if !strings.Contains(only, want) {
-			t.Fatalf("the header's one row does not carry %q:\n%s", want, only)
+		if !strings.Contains(shown, want) {
+			t.Fatalf("the header does not carry %q:\n%s", want, shown)
 		}
 	}
 }
