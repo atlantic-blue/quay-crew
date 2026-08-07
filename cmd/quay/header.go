@@ -11,6 +11,8 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 )
 
@@ -33,10 +35,17 @@ func runHeader(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		return err
 	}
 
+	// The alternate screen, so redrawing never touches the scrollback. Without it every redraw is
+	// another header in the pane's history and the pane scrolls: seventeen headers stacked up the
+	// screen, which is what it looked like.
+	defer fmt.Fprint(out, leaveAlternateScreen)
+
+	first := true
 	for {
-		if err := drawHeader(ctx, registry, client, out, addr); err != nil {
+		if err := drawHeader(ctx, registry, client, out, addr, first); err != nil {
 			return err
 		}
+		first = false
 		select {
 		case <-ctx.Done():
 			return nil
@@ -48,16 +57,14 @@ func runHeader(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // drawHeader paints one frame: the whole pane, cleared and rewritten. The header is a handful of
 // lines and it is redrawn once a second, so there is nothing here worth the complexity of working out
 // which of them changed.
-func drawHeader(ctx context.Context, registry *console.Registry, client quaycrewv1.ControlPlaneServiceClient, out io.Writer, addr string) error {
+func drawHeader(ctx context.Context, registry *console.Registry, client quaycrewv1.ControlPlaneServiceClient, out io.Writer, addr string, first bool) error {
 	width, height := headerSize()
 	lines, err := console.HeaderOnly(registry, currentView(), headerInfo(ctx, client, addr), width, height)
 	if err != nil {
 		return err
 	}
 	// Home the cursor and clear, rather than scrolling: a pane that scrolls loses its own top line.
-	fmt.Fprint(out, "\033[H\033[2J")
-	fmt.Fprint(out, strings.Join(lines, "\n"))
-	return nil
+	return paintHeader(out, lines, width, first)
 }
 
 // headerSize is the pane the header has to fit. A pane with no terminal behind it is being captured
@@ -133,3 +140,37 @@ func publishView(view string) error {
 	}
 	return os.WriteFile(path, []byte(view+"\n"), 0o644) //nolint:gosec // a view name, not a secret
 }
+
+// truncateWidth cuts a line to a printed width, counting what is displayed rather than what is
+// stored: the header is styled, so most of its bytes are escape sequences that take up no room.
+func truncateWidth(line string, width int) string {
+	if width < 1 || lipgloss.Width(line) <= width {
+		return line
+	}
+	return ansi.Truncate(line, width, "")
+}
+
+// paintHeader draws one frame: the whole pane, homed and cleared and rewritten. Printing after what is
+// already there scrolls, and what scrolls in a pane this short is the header itself.
+func paintHeader(out io.Writer, lines []string, width int, first bool) error {
+	// The alternate screen on the first frame, so nothing this draws ever becomes scrollback. Without
+	// it every redraw is another header in the pane's history and the pane scrolls.
+	if first {
+		fmt.Fprint(out, alternateScreen)
+	}
+	fmt.Fprint(out, "\033[H\033[2J")
+	for index, line := range lines {
+		if index > 0 {
+			fmt.Fprint(out, "\r\n")
+		}
+		fmt.Fprint(out, truncateWidth(line, width-1))
+	}
+	return nil
+}
+
+// The alternate screen. Redrawing there never touches the scrollback, so a pane that redraws every
+// second does not fill with old headers and start scrolling.
+const (
+	alternateScreen      = "\033[?1049h"
+	leaveAlternateScreen = "\033[?1049l"
+)
