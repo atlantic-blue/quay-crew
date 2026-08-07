@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/atlantic-blue/quay-crew/internal/panel"
@@ -30,8 +31,11 @@ func (m Model) toggleConversation() (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.conversation != "" {
-		return m, closeConversationCmd(m.conversation)
+	// Asked of tmux rather than remembered, because `quay` opens the conversation itself and the
+	// console did not put it there. A console that only knew about the ones it opened would answer
+	// the first p by opening a second.
+	if beside, found := m.besideMe(here); found {
+		return m, closeConversationCmd(beside)
 	}
 	selected := ""
 	if row, found := m.selectedRowValue(); found {
@@ -108,4 +112,64 @@ func panesBeside(here string) (map[string]bool, error) {
 		}
 	}
 	return panes, nil
+}
+
+// besideMe is the pane immediately to the right of this one, which is where a conversation beside the
+// console sits. Same top, further left: a pane above or below is the header, not the conversation.
+func (m Model) besideMe(here string) (string, bool) {
+	argv := panel.Rightward(here)
+	output, err := exec.Command(argv[0], argv[1:]...).Output()
+	if err != nil {
+		return "", false
+	}
+	return rightOf(string(output), here)
+}
+
+// rightOf is the pane immediately to the right of here, from what tmux listed. Same top, further left:
+// a pane above or below is the header, not a conversation.
+func rightOf(listing, here string) (string, bool) {
+	mine, found := paneAt(listing, here)
+	if !found {
+		return "", false
+	}
+	beside, bestLeft := "", 0
+	for _, line := range strings.Split(strings.TrimSpace(listing), "\n") {
+		id, left, top, ok := parsePane(line)
+		if !ok || id == here || top != mine.top || left <= mine.left {
+			continue
+		}
+		// The nearest one, so a window split three ways closes the neighbour rather than the far end.
+		if beside == "" || left < bestLeft {
+			beside, bestLeft = id, left
+		}
+	}
+	return beside, beside != ""
+}
+
+type paneBox struct{ left, top int }
+
+func paneAt(listing, want string) (paneBox, bool) {
+	for _, line := range strings.Split(strings.TrimSpace(listing), "\n") {
+		if id, left, top, ok := parsePane(line); ok && id == want {
+			return paneBox{left: left, top: top}, true
+		}
+	}
+	return paneBox{}, false
+}
+
+// parsePane reads one line of what tmux was asked for: the pane, then where it starts.
+func parsePane(line string) (id string, left, top int, ok bool) {
+	parts := strings.Fields(strings.TrimSpace(line))
+	if len(parts) != 3 {
+		return "", 0, 0, false
+	}
+	left, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, 0, false
+	}
+	top, err = strconv.Atoi(parts[2])
+	if err != nil {
+		return "", 0, 0, false
+	}
+	return parts[0], left, top, true
 }

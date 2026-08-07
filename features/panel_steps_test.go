@@ -62,7 +62,8 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 			return nil
 		}
 		p.commands, p.err = panel.Layout{
-			Left:  []string{"quay"},
+			Header: []string{"quay", "header"}, HeaderRows: 10,
+			Left:  []string{"quay", "console"},
 			Right: []string{"quay", "attach", newest},
 		}.Commands(panel.Terminal{})
 		return nil
@@ -78,8 +79,8 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		got := p.line()
-		if !strings.Contains(got, "new-session") || !strings.Contains(got, "split-window") {
-			return fmt.Errorf("the panel is not two halves:\n%s", got)
+		if strings.Count(got, "split-window") != 2 {
+			return fmt.Errorf("the panel is not a header over two halves:\n%s", got)
 		}
 		if !strings.Contains(got, "attach "+current.sessionID) {
 			return fmt.Errorf("the panel does not open the session the control plane made:\n%s", got)
@@ -102,8 +103,30 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console has the keyboard$`, func(ctx context.Context) error {
 		got := panelFrom(ctx).line()
-		if !strings.Contains(got, "select-pane") || !strings.Contains(got, ".0") {
+		if !strings.Contains(got, "select-pane") || !strings.Contains(got, ".1") {
 			return fmt.Errorf("the panel does not put the keyboard in the console:\n%s", got)
+		}
+		return nil
+	})
+
+	// Julian: "the header should be the whole width". It is a pane of its own above the two halves,
+	// because a tmux pane is a rectangle and one reaching across both cannot belong to either.
+	sc.Step(`^the header spans the whole width above both halves$`, func(ctx context.Context) error {
+		got := panelFrom(ctx).line()
+		splits := make([]string, 0, 2)
+		for _, line := range strings.Split(got, "\n") {
+			if strings.Contains(line, "split-window") {
+				splits = append(splits, line)
+			}
+		}
+		if len(splits) != 2 {
+			return fmt.Errorf("want a full width cut then a side by side one:\n%s", got)
+		}
+		if !strings.Contains(splits[0], " -v ") {
+			return fmt.Errorf("the header does not span both halves:\n%s", splits[0])
+		}
+		if !strings.Contains(got, "resize-pane") {
+			return fmt.Errorf("the header is not given its own rows:\n%s", got)
 		}
 		return nil
 	})

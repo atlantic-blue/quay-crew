@@ -45,7 +45,6 @@ commands:
   context [<address>]                     where the files the model reads live
   context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
-  panel [<session id>]                    the console and a conversation, side by side
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
   secret list [<workspace>]               which secrets are set, never what they say
 
@@ -143,7 +142,16 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "attach":
 		return runAttach(ctx, client, args[1:], out)
 	case "panel":
-		return runPanel(ctx, client, args[1:], out, addr)
+		// The way off the command that used to open this. `quay` opens the crew itself now, so this
+		// is refused loudly rather than being taken for an address or an unknown word.
+		return fmt.Errorf("there is no panel command: `quay` on its own opens the crew, and p shows " +
+			"or hides the conversation beside it")
+	// Internal: the panes quay opens run these. Not in the usage, because they are not commands
+	// anybody types.
+	case "header":
+		return runHeader(ctx, client, args[1:], out, addr)
+	case "console":
+		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
 	case "turns":

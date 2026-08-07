@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`quay` is the panel. There is no `quay panel`.** Running `quay` opens the crew: the header across
+  the whole width, the console under it on the left, and a conversation on the right. `p` shows or
+  hides the conversation. Julian: "I dont understand why I need quay panel, is confusing, I need one
+  command only, the panel should appear when I press quay and toggled with the key p", and "the header
+  should be the whole width".
+  The header is the console's own, drawn in a pane of its own so it can reach across both halves, and
+  held at exactly its own rows when the terminal is resized. With no conversation to open yet, `quay`
+  opens the console on its own rather than refusing.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`p` shows or hides a conversation beside the console.** It opens the one under the cursor, or the
   one last spoken to when nothing is selected, and pressing it again closes the one it opened. It works
   in `quay`, not only in `quay panel`, so you do not have to decide before opening the console whether

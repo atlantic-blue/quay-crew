@@ -47,6 +47,26 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		return console.Plain(ctx, client, os.Stdout)
 	}
+	return openTheCrew(
+		func() error { return runPanel(ctx, client, nil, os.Stdout, addr) },
+		func() error { return openConsoleAlone(ctx, client, addr) },
+	)
+}
+
+// openTheCrew is what `quay` with no arguments does: the panel, and the console on its own when there
+// is nothing to put beside it yet.
+//
+// One command. Julian: "I dont understand why I need quay panel, is confusing, I need one command
+// only, the panel should appear when I press quay and toggled with the key p". A crew with no
+// conversation in it is exactly the first run, and refusing to open at all then would be absurd.
+func openTheCrew(panel, alone func() error) error {
+	if err := panel(); err == nil {
+		return nil
+	}
+	return alone()
+}
+
+func openConsoleAlone(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) error {
 	current, err := currentPath()
 	if err != nil {
 		// Not being able to read where you are standing is not a reason to refuse to open the
