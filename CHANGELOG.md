@@ -6,6 +6,15 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 7 August 2026
+
+- **`quay panel`: the console and a conversation, side by side, half the width each.** The console
+  shows the crew and a conversation shows one thread, and using both meant losing sight of one. tmux
+  does the splitting, the same tmux that already keeps an open conversation alive behind `ctrl-q`.
+  Named a session it opens that one; named nothing it opens the conversation you were last in, and
+  refuses rather than opening half a panel when there is none.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 ## 6 August 2026
 
 - **A failed turn says why.** Every model failure read `run turn: model: run exited: exit status 1`,

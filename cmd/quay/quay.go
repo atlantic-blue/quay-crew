@@ -44,6 +44,7 @@ commands:
   context [<address>]                     where the files the model reads live
   context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
+  panel [<session id>]                    the console and a conversation, side by side
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
   secret list [<workspace>]               which secrets are set, never what they say
 
@@ -138,6 +139,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runDispatch(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out)
+	case "panel":
+		return runPanel(ctx, client, args[1:], out)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
 	case "turns":
