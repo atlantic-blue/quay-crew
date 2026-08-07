@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The header stops repeating down the screen.** It redrew by printing after what was already there,
+  so every second added another header to the pane's history and the pane scrolled: seventeen of them
+  stacked up. It draws on the alternate screen now, where nothing it writes becomes scrollback, homes
+  the cursor and clears rather than printing on the end, and cuts each line a column short of the pane
+  so a line reaching the last column cannot wrap and push the one below it out.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`N` starts a fresh conversation beside the console.** Opening the crew comes back to the one you
   were in, because it runs in a tmux session inside the sandbox that is attached to rather than started
   when it is already there. That is what `ctrl-q` is for, and it meant the driver could never give you
