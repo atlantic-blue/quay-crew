@@ -77,6 +77,17 @@ type Info struct {
 	// is running. Everything else in here is then blank, and the console has to say why rather than
 	// quietly showing less.
 	Behind bool
+	// SandboxBuild is the build the sandbox image was made from. Empty means the image does not say,
+	// and nothing is then shown: a crew that cannot see which build its image came from should say
+	// nothing rather than accuse a good image of being old.
+	SandboxBuild string
+}
+
+// SandboxStale says every session is running an image from a build the crew has moved on from.
+// Upgrading rebuilds the tool and the stack, and a sandbox image left behind means each conversation
+// keeps running the build from before, with the quay inside it older than the crew or missing.
+func (i Info) SandboxStale() bool {
+	return i.Version != "" && i.SandboxBuild != "" && i.SandboxBuild != i.Version
 }
 
 // InfoSource fetches that description. It is a function rather than a client so the console stays

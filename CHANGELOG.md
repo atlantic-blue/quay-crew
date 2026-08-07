@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **`make upgrade` rebuilds the sandbox image, and a stale one says so.** Upgrading fast forwarded the
+  checkout, reinstalled the tool and rebuilt the stack, and never touched the sandbox image. Sessions
+  run whatever that image holds, so the tool and the control plane moved forward while every
+  conversation carried on in a container from the build before, with a `quay` inside it older than the
+  crew or not in the image at all. That is why a driver had no `quay` to drive anything with.
+  The image now carries the build it was made from as a label, the tool inside it reports the same
+  build, and the crew reads the label back: the console's header says in red when the sandboxes are
+  running an image older than the build, and the help panel names the build they are on. An image
+  from before this was stamped says nothing, and the crew then claims nothing about it rather than
+  calling a good image old. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **A context change reaches a session that is already running.** Context only travelled to a sandbox
   when that sandbox was made, so telling a running thread something did nothing you could see until it
   was replaced, and nobody replaces a container to deliver a note. `quay context set` writes out to

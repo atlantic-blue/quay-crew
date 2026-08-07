@@ -96,6 +96,7 @@ func headerInfo(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	info.Secrets = described.GetSecrets()
 	info.State = described.GetState()
 	info.Events = described.GetEvents()
+	info.SandboxBuild = described.GetSandboxBuild()
 	return info
 }
 

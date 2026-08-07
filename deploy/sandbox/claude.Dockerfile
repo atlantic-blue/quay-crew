@@ -12,9 +12,19 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/quay ./cmd/quay
+
+# Which build this image was made from. The tool inside a sandbox reports it, and the image carries
+# it as a label so the crew can say when its sandboxes are running something older than itself.
+ARG QC_VERSION=unknown
+RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$QC_VERSION" -o /out/quay ./cmd/quay
 
 FROM node:22-slim
+
+# Read by the control plane through `docker image inspect`, which is how a stale image is noticed at
+# all: sessions run whatever this image holds, and an image from an older build holds an older quay,
+# or none.
+ARG QC_VERSION=unknown
+LABEL com.quaycrew.build=$QC_VERSION
 
 # git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network.
 RUN apt-get update \

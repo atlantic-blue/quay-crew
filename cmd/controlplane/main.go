@@ -75,6 +75,9 @@ func main() {
 		os.Exit(1)
 	}
 	sandboxKind, _ := sandbox.ResolveKind(os.Getenv("QC_SANDBOX"))
+	// Which build the sandbox image was made from, read once at startup: it is configuration, and an
+	// image is not rebuilt under a running control plane without restarting this stack anyway.
+	sandboxBuild := sandbox.ImageBuild(ctx, os.Getenv("QC_SANDBOX_IMAGE"))
 
 	durable, storeKind, err := openStore(ctx, os.Getenv("QC_DATABASE_URL"), logger)
 	if err != nil {
@@ -104,6 +107,9 @@ func main() {
 			State:   stateKind(storage),
 			Events:  eventsKind,
 			Secrets: secretsKind,
+			// What the sandboxes are running, so the tool can say when the crew has moved on and
+			// they have not.
+			SandboxBuild: sandboxBuild,
 		},
 	})
 	// The projection reads the log back into the store, so a session's history can be listed without

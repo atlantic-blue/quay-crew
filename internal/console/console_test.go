@@ -2470,3 +2470,65 @@ func TestNReplacesTheConversationBesideItRatherThanAddingOne(t *testing.T) {
 		t.Fatal("this test assumes a console that opened nothing")
 	}
 }
+
+// TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild. `make upgrade` rebuilt the tool and the
+// stack and left the sandbox image alone, so every conversation carried on running the build from
+// before: the quay inside a sandbox was older than the crew, or was not in the image at all. Nothing
+// on screen said so, which is the half that made it cost an evening.
+func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, tc := range []struct {
+		name    string
+		info    Info
+		says    bool
+		because string
+	}{
+		{
+			name:    "an image from an older build",
+			info:    Info{Version: "37b070b", SandboxBuild: "5d8b08f"},
+			says:    true,
+			because: "the sandboxes are running a build the crew has moved on from",
+		},
+		{
+			name:    "an image from this build",
+			info:    Info{Version: "37b070b", SandboxBuild: "37b070b"},
+			because: "the image is the build that is running, so there is nothing to say",
+		},
+		{
+			name:    "an image that does not say which build it is",
+			info:    Info{Version: "37b070b"},
+			because: "an image made before this was stamped says nothing, and neither should the crew",
+		},
+		{
+			name:    "a tool that does not know its own build",
+			info:    Info{SandboxBuild: "5d8b08f"},
+			because: "with nothing to compare against, older than what",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lines, err := HeaderOnly(registry, Default, tc.info, 200, 24)
+			if err != nil {
+				t.Fatalf("HeaderOnly: %v", err)
+			}
+			header := strings.Join(lines, "\n")
+			if said := strings.Contains(header, "make sandbox-image"); said != tc.says {
+				t.Fatalf("the header says the image is stale: %v, want %v, because %s\n%s",
+					said, tc.says, tc.because, header)
+			}
+		})
+	}
+}
+
+// TestTheHelpPanelNamesTheBuildTheSandboxesRun, so the operator can tell which build their sessions
+// are on without guessing from what a conversation cannot do.
+func TestTheHelpPanelNamesTheBuildTheSandboxesRun(t *testing.T) {
+	model := tallTestModel(t, Sessions(&fakeClient{}))
+	model.mode = modeHelp
+	model.info = Info{Version: "37b070b", SandboxBuild: "5d8b08f"}
+	if !strings.Contains(model.View(), "5d8b08f") {
+		t.Fatalf("the help panel does not name the build the sandboxes run:\n%s", model.View())
+	}
+}

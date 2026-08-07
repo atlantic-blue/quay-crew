@@ -40,7 +40,7 @@ start: up
 
 ## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
 sandbox-image:
-	docker build -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
+	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
 
 ## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
 upgrade:
@@ -66,6 +66,9 @@ upgrade:
 		echo "moved from $$before to $$after"; \
 	fi
 	@$(MAKE) --no-print-directory install
+	@echo "rebuilding the sandbox image. Sessions run whatever it holds, so leaving it behind means"
+	@echo "upgrading the tool and the stack while every conversation keeps the build from before."
+	@$(MAKE) --no-print-directory sandbox-image
 	@if [ ! -f deploy/.env ]; then \
 		echo "note: no deploy/.env, so the stack comes up with the defaults in the compose file."; \
 		echo "      copy deploy/env.example to deploy/.env to keep your model and image across upgrades."; \
