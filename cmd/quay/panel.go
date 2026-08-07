@@ -13,6 +13,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/panel"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"github.com/charmbracelet/x/term"
 )
@@ -154,27 +155,22 @@ func terminalSize() (int, int) {
 // conversationBeside is what the console runs when it is asked to put a conversation next to itself.
 // The row under the cursor wins, because that is the conversation being looked at; with nothing
 // selected it falls back to the one last spoken to, the same rule `quay panel` uses.
+// The conversation beside the console is always the driver, whatever the cursor is on. It was the row
+// under the cursor for a while, which reads well until you press the key for a fresh conversation:
+// that ended whichever session the cursor happened to be over while the pane beside you carried on
+// showing the driver.
 func conversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) ([]string, error) {
-	return func(selected string) ([]string, error) {
+	return func(string) ([]string, error) {
 		self, err := os.Executable()
 		if err != nil {
 			self = "quay"
 		}
-		sessionID, err := panelSession(ctx, client, argsFor(selected))
+		sessionID, err := panelSession(ctx, client, nil)
 		if err != nil {
 			return nil, err
 		}
 		return []string{self, "attach", sessionID}, nil
 	}
-}
-
-// argsFor turns the row under the cursor into the argument panelSession takes, which is none when
-// there is no row or the row is not a session.
-func argsFor(selected string) []string {
-	if strings.TrimSpace(selected) == "" {
-		return nil
-	}
-	return []string{selected}
 }
 
 // headerRows is how tall the header pane has to be, measured from the header itself rather than
@@ -206,7 +202,7 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	}, conversationBeside(ctx, client), publishView)
+	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), publishView)
 }
 
 // builtBy is the build that made the panel that is already open, and empty when it did not say, which
@@ -241,5 +237,27 @@ func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		return listed.GetProjects()[0].GetId(), nil
 	default:
 		return "", fmt.Errorf("say where to open: `quay use <workspace>/<project>` first")
+	}
+}
+
+// endConversationBeside ends the conversation the driver is in, so the next open starts one.
+//
+// The conversation runs in a tmux session inside the sandbox, attached to rather than started when it
+// is already there, which is what makes coming back to it work. Ending that session is what makes the
+// next open a fresh start.
+func endConversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) error {
+	return func(string) error {
+		sessionID, err := panelSession(ctx, client, nil)
+		if err != nil {
+			return err
+		}
+		spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
+		if err != nil {
+			return err
+		}
+		// Nothing to end is not a failure: it is the state the next open wants anyway.
+		_ = exec.Command("docker", "exec", spec.GetSandbox(),
+			"tmux", "kill-session", "-t", sandbox.AttachedSessionName).Run()
+		return nil
 	}
 }

@@ -173,3 +173,46 @@ func parsePane(line string) (id string, left, top int, ok bool) {
 	}
 	return parts[0], left, top, true
 }
+
+// startFreshConversation ends the one the driver is in and opens a new one in its place.
+//
+// Coming back to the conversation you were in is what opening the crew does, and what ctrl-q is for.
+// This is the other thing somebody wants sometimes: a clean start, without losing the old one by
+// accident. Ending it here is deliberate and asked for.
+func (m Model) startFreshConversation() (Model, tea.Cmd) {
+	if m.beside == nil || m.freshen == nil {
+		m.err = fmt.Errorf("this console cannot open a conversation: it was opened without a crew")
+		return m, nil
+	}
+	here := os.Getenv("TMUX_PANE")
+	if here == "" {
+		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `quay` from tmux")
+		return m, nil
+	}
+
+	selected := ""
+	if row, found := m.selectedRowValue(); found {
+		selected = row.ID
+	}
+	right, err := m.beside(selected)
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	// The pane beside the console, asked of tmux rather than remembered: `quay` opens the conversation
+	// itself, so the console did not put it there and does not know its identifier. Remembering was
+	// how this opened a fourth pane instead of replacing the third.
+	beside, _ := m.besideMe(here)
+	freshen := m.freshen
+	return m, func() tea.Msg {
+		// The old one goes first, or reopening comes straight back to it: the conversation runs in a
+		// tmux session inside the sandbox that is attached to rather than started when it is there.
+		if err := freshen(selected); err != nil {
+			return conversationMsg{err: err}
+		}
+		if beside != "" {
+			closeConversationCmd(beside)()
+		}
+		return openConversationCmd(here, right)()
+	}
+}

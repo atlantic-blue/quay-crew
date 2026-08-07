@@ -95,6 +95,7 @@ var everywhereKeys = [][2]string{
 	{"r g", "Refresh now"},
 	{"n", "Make one thing"},
 	{"p", "Show or hide the conversation beside this"},
+	{"N", "Start a fresh conversation beside this"},
 	// The one key here that is not the console's own. An open conversation runs inside tmux in its
 	// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
 	// ending it, which is what everybody does until somebody tells them otherwise.

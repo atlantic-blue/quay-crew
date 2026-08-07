@@ -155,6 +155,9 @@ type Model struct {
 	// The console does not know which conversation: it hands over the row under the cursor, which may
 	// be nothing, and gets back the command to run.
 	beside func(selected string) ([]string, error)
+	// freshen ends the conversation the driver is in, so the next open starts one rather than coming
+	// back to it. Nil when nobody gave the console a way to.
+	freshen func(selected string) error
 	// conversation is the tmux pane the console opened, so the key closes the one it opened rather
 	// than whichever pane happens to be beside it now. Empty means none is open.
 	conversation string
@@ -171,6 +174,13 @@ func (m Model) WithoutHeader() Model {
 // console opened on, and would go quietly wrong the moment anybody drilled in.
 func (m Model) WithViewPublisher(publish func(view string) error) Model {
 	m.publish = publish
+	return m
+}
+
+// Freshen tells the console how to end the conversation beside it, which is what the key for a new
+// one does before opening it again.
+func (m Model) Freshen(end func(selected string) error) Model {
+	m.freshen = end
 	return m
 }
 
