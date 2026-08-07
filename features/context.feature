@@ -65,3 +65,11 @@ Feature: The operator can find the files the model reads
     Given a second project named "gardening"
     When the operator asks where context lives
     Then it names 1 workspace directory and 2 project directories
+
+  # A session sitting beside the console knows nothing about the crew it is next to. The manual is
+  # quay describing itself, and loading it as a project's context is how a session is told.
+  Scenario: The manual can be loaded as a project's context
+    When the operator loads the manual as the project's context
+    And the operator asks where context lives
+    Then the project's context names the words a crew is made of
+    And the project's context says how to set a context

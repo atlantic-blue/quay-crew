@@ -33,6 +33,7 @@ you work in one place at a time, and say where with an address: workspace/projec
 commands:
   version                                 print which build this is
   features                                what this crew can do, and what proves it
+  manual                                  what quay is and how to drive it, to pipe into a context
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
@@ -127,6 +128,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "version":
 		fmt.Fprintln(out, version)
 		return nil
+	case "manual":
+		return runManual(args[1:], out)
 	case "features":
 		return runFeatures(args[1:], out)
 	case "use":

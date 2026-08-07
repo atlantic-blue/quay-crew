@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
@@ -61,6 +62,42 @@ func sessionMemory(ctx context.Context) (string, error) {
 func initializeContextSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, contextKey{}, &contextWorld{}), nil
+	})
+
+	// The manual is what a session is told when it is asked to drive the crew. Loading it is the
+	// ordinary context path, so this says the document is loadable and carries what a session needs,
+	// not that setting a context works.
+	sc.Step(`^the operator loads the manual as the project's context$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+			Scope: "project", Owner: w.projectID, Body: manual.Text("quay dispatch [<address>] <text>"),
+		})
+		return w.lastErr
+	})
+
+	sc.Step(`^the project's context names the words a crew is made of$`, func(ctx context.Context) error {
+		projects := contextFrom(ctx).scoped("project")
+		if len(projects) != 1 {
+			return fmt.Errorf("%d project directories, want 1", len(projects))
+		}
+		body := projects[0].GetBody()
+		for _, word := range []string{"workspace", "project", "thread", "session", "sandbox"} {
+			if !strings.Contains(body, word) {
+				return fmt.Errorf("the context never says %q, so a session would be guessing", word)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the project's context says how to set a context$`, func(ctx context.Context) error {
+		projects := contextFrom(ctx).scoped("project")
+		if len(projects) != 1 {
+			return fmt.Errorf("%d project directories, want 1", len(projects))
+		}
+		if !strings.Contains(projects[0].GetBody(), "quay context set") {
+			return fmt.Errorf("the context never says how anything gets told anything")
+		}
+		return nil
 	})
 
 	sc.Step(`^the operator asks where context lives$`, func(ctx context.Context) error {
