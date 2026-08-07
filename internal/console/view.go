@@ -120,11 +120,10 @@ func (m Model) withLogo(lines []string) []string {
 			room = width
 		}
 	}
+	// Width is the only thing that can stop it. The wordmark is one line, drawn at the right of a line
+	// that is there anyway, so it costs no rows: a height check here dropped it from the panel's
+	// header pane, which is one row tall by design and has nothing underneath it to starve.
 	if m.width-room-2 < lipgloss.Width(logo[0]) {
-		return lines
-	}
-	// The header, the panel's frame and header, the footer, and at least a few rows to look at. The
-	if m.height-len(logo)-4 < 3 {
 		return lines
 	}
 

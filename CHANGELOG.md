@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The wordmark is drawn in the panel's header again.** A height check left over from when the
+  wordmark was six lines of block letters dropped it from any pane shorter than seven rows, and the
+  header pane is one row by design. One line costs no rows, so only width can stop it now.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The header is the wordmark, which build this is, and how to reach everything else.** It carried the
   crew's description and this view's keys, which at half the window left no room for the wordmark and
   pushed it off the screen. Julian: "the quay logo dissapears because there is too much text, lets
