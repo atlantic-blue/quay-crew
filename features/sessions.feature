@@ -276,3 +276,27 @@ Feature: Sessions run in isolated sandboxes
     Given the sandbox fails with nothing on standard output, saying "claude: command not found"
     When the operator dispatches "hello" to the project
     Then the refusal says "claude: command not found"
+
+  # The console shows the crew and a conversation shows one thread, and using both meant losing sight
+  # of one. The panel puts them on the screen at once, half the width each, side by side.
+  #
+  # tmux does the splitting, the same tmux that already keeps an open conversation alive behind
+  # ctrl-q. These assert on the commands the panel would run rather than running them, the way the
+  # attach scenarios do, because a scenario that took over the terminal could not report anything.
+  Scenario: The panel puts the console and a conversation side by side
+    Given a session started by dispatching "hello"
+    When the operator opens the panel
+    Then the panel puts the console in one half and that conversation in the other
+    And each half is 50% of the width
+    And the console has the keyboard
+
+  Scenario: The panel opens the conversation you were last in
+    Given a session started by dispatching "the older one"
+    And a session started by dispatching "the newer one" on a new thread
+    When the operator opens the panel
+    Then the panel opens the newer conversation
+
+  Scenario: The panel refuses rather than opening half of one
+    When the operator opens the panel
+    Then the panel says there is no conversation to put beside the console
+    And it says how to start one
