@@ -323,6 +323,23 @@ Feature: Sessions run in isolated sandboxes
     Then it is the same driver both times
     And the crew has one driver
 
+  # The driver acts for the operator rather than doing work of its own, and one that stops to ask
+  # before every step describes the task instead of doing it: asked to make a project it explained
+  # how you would go about making one. What bounds it is the sandbox, which is the same boundary it
+  # would have in any mode.
+  Scenario: The driver is made able to act rather than to ask
+    When the operator opens the driver
+    And the driver is sent "make me a project"
+    Then the turn ran in permission mode "bypassPermissions"
+
+  # A mode set on the driver is the driver's, the same as any other thread: made able to act is not
+  # the same as held there.
+  Scenario: The driver can be set back to asking
+    When the operator opens the driver
+    And the driver is set to permission mode "acceptEdits"
+    And the driver is sent "make me a project"
+    Then the turn ran in permission mode "acceptEdits"
+
   # The driver opens knowing what quay is, rather than having to be told every time. It is the crew
   # describing itself: the command list the tool prints, and the behaviour specification the binary
   # carries, neither of which can drift from what the tool actually does.

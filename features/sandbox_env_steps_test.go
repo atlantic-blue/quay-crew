@@ -110,6 +110,16 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		return w.dispatch(ctx, w.projectID, w.drivers[0].GetThreadId(), text)
 	})
 
+	sc.Step(`^the driver is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
+		w := worldFrom(ctx)
+		if len(w.drivers) == 0 {
+			return fmt.Errorf("no driver was opened")
+		}
+		_, err := w.client.SetSessionPermissionMode(ctx,
+			&quaycrewv1.SetSessionPermissionModeRequest{Id: w.drivers[0].GetId(), Mode: mode})
+		return err
+	})
+
 	sc.Step(`^it is the same driver both times$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.drivers) != 2 {

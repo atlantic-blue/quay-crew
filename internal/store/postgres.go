@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -496,11 +497,14 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 	if err != nil {
 		return nil, err
 	}
+	// Created dangerous. The driver acts for the operator rather than doing work of its own, and a
+	// driver that stops to ask before every step describes the task instead of doing it. What bounds
+	// it is the sandbox, which is the same boundary it would have either way.
 	if _, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, thread_id, status, driver)
-		values ($1, $2, $3, $4, 'idle', true)
+		insert into sessions (id, workspace, project, thread_id, status, driver, permission_mode)
+		values ($1, $2, $3, $4, 'idle', true, $5)
 		on conflict do nothing`,
-		NewID(), owner.GetWorkspace(), project, NewID()); err != nil {
+		NewID(), owner.GetWorkspace(), project, NewID(), model.PermissionBypass); err != nil {
 		return nil, fmt.Errorf("open the driver: %w", err)
 	}
 	rows, err := p.pool.Query(ctx, `
