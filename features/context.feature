@@ -57,6 +57,14 @@ Feature: The operator can find the files the model reads
     And the operator dispatches "and again" to the same thread
     Then the session's context reads "the account number is 4471"
 
+  # Context only ever reached a sandbox when that sandbox was made, so telling a thread something
+  # while it was running did nothing you could see until it was replaced, and nobody replaces a
+  # container to deliver a note.
+  Scenario: A context change reaches a session that is already running
+    Given a session started by dispatching "hello"
+    When the operator sets the project's context to "pay the water bill first"
+    Then the session's memory file carries "pay the water bill first"
+
   # A memory file with none of the crew's marks was written by somebody who had never seen what the
   # store holds, so it is not an edit of it. Read as one it replaced the store's body outright, which
   # is how a driver taught what quay is lost the manual again moments later.

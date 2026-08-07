@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **A context change reaches a session that is already running.** Context only travelled to a sandbox
+  when that sandbox was made, so telling a running thread something did nothing you could see until it
+  was replaced, and nobody replaces a container to deliver a note. `quay context set` writes out to
+  every live session that reads the level it changed. The level just set wins over the file for that
+  one write, because a set that hands you back the body you were replacing is not a set; every other
+  level is still read back and kept.
+  A model already running does not see it mid conversation. The command line tool reads its memory
+  when a conversation starts, so it lands on the next turn or the next time the conversation is
+  opened. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **A memory file the crew never wrote no longer replaces what the store holds.** A `CLAUDE.md` with
   none of the crew's marks in it was read back as an edit of the context the store holds, which is
   impossible: whoever wrote that file had never seen the store's body. It replaced it outright. That
