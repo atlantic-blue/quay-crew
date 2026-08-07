@@ -8,6 +8,21 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The panel's header is tmux's own status line, and the panel is two panes again.** It was a third
+  pane, which meant a process to draw it, and that process could not see which view the console was on,
+  so the console had to publish it. tmux draws a status line itself, across the full width, at a height
+  it owns and with no scrollback to scroll into. Julian: "why does header need a process?" It does not.
+  Gone with it: the `quay header` command, the alternate screen handling, the view publishing and the
+  resize hook that held the pane at a height.
+- **The header is the bare essentials and the wordmark.** Which build, which crew, and where you are
+  standing, asked again while you work so `quay use` in the other pane moves it.
+- **`:stats` is what the crew is running underneath**: the model backend, the sandbox and store
+  engines, where secrets and state are kept, whether anything reads the event log. It was six lines of
+  the header, which is what made the header too tall to be fixed.
+- **`:keys` is every key the console answers to**, as a view you can leave open beside what you are
+  doing rather than only an overlay behind the question mark. It reads the same list the overlay does.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **`quay manual`: quay describing itself, to be loaded as a session's context.** A session sitting in
   the panel beside the console knew nothing about the crew it was next to. Pipe it where it is needed:
   `quay manual | quay context set me/house-bills`. Most of it is assembled rather than written, from the

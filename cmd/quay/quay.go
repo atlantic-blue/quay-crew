@@ -144,8 +144,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runAttach(ctx, client, args[1:], out)
 	case "panel":
 		return runPanel(ctx, client, args[1:], out, addr)
-	case "header":
-		return runHeader(ctx, client, args[1:], out, addr)
 	case "console":
 		// The panel's left half. The header is drawn in the pane above it, across both halves, so
 		// this one draws none of its own.

@@ -19,8 +19,16 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	return NewRegistry(Sessions(client), Turns(client), Archived(client), Projects(client), Workspaces(client),
-		Contexts(client), Secrets(client), Features())
+	registry, err := NewRegistry(Sessions(client), Turns(client), Archived(client), Projects(client),
+		Workspaces(client), Contexts(client), Secrets(client), Features(), Stats(client))
+	if err != nil {
+		return nil, err
+	}
+	// The keys view reads the registry it lives in, so it is added once that exists.
+	if err := registry.Add(Keys(registry)); err != nil {
+		return nil, err
+	}
+	return registry, nil
 }
 
 // InfoFrom asks the control plane what it is running and folds the answer into what the caller
@@ -61,10 +69,9 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	return nil
 }
 
-// RunBare is the console with its header left to somebody else, which is what the panel's left half
-// is. It says which view it moves to through publish, so the header drawn in another pane names this
-// view's keys rather than the keys of the view it opened on.
-func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info, publish func(view string) error) error {
+// RunBare is the console as the panel's left half: tmux draws the header across the top, so this
+// draws its key hints and its rows and nothing else.
+func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -74,7 +81,7 @@ func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, k
 		return err
 	}
 	model.info = known
-	model = model.WithClient(client).WithoutHeader().WithViewPublisher(publish)
+	model = model.WithClient(client).InPanel()
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
@@ -105,31 +112,4 @@ func Plain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out
 		fmt.Fprintln(out, strings.Join(row.Cells, "  "))
 	}
 	return nil
-}
-
-// HeaderOnly renders the header block a console would draw, with nothing under it. The panel draws it
-// in a pane of its own, across the full width, above the list and the conversation.
-//
-// It goes through the same code the console's own header does rather than a copy of it, because two
-// renderings of one header drift, and the one nobody is looking at drifts first.
-func HeaderOnly(registry *Registry, view string, info Info, width, height int) ([]string, error) {
-	if registry == nil {
-		return nil, fmt.Errorf("console: nil registry")
-	}
-	resource, found := registry.Get(view)
-	if !found {
-		return nil, fmt.Errorf("console: no resource named %q", view)
-	}
-	model := Model{registry: registry, active: resource, info: info, width: width, height: height}
-	return model.headerLines(), nil
-}
-
-// HeaderHeight is how many rows the header needs at a size, so the panel can give its pane exactly
-// that many and no more.
-func HeaderHeight(registry *Registry, view string, info Info, width, height int) int {
-	lines, err := HeaderOnly(registry, view, info, width, height)
-	if err != nil {
-		return 0
-	}
-	return len(lines)
 }
