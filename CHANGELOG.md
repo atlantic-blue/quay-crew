@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The panel's header spans the full width, above both halves.** Three regions now: the header across
+  the top, then the console and a conversation side by side underneath. A tmux pane is a rectangle, so
+  the header is a pane of its own, given exactly the rows it needs. With the whole width it lays its
+  key hints out in columns instead of one.
+  The console draws no header inside the panel and says which view it has moved to, so the header names
+  that view's keys rather than the keys of whichever view the panel opened on.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The panel opens from inside tmux.** It was being built correctly and then never shown: tmux
   refuses to attach a client that is already inside one, so the two panes sat there running while the
   terminal said `sessions should be nested with care` and nothing appeared. From inside tmux the

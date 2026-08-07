@@ -116,7 +116,7 @@ func refuseFlags(args []string) error {
 }
 
 // run executes one CLI invocation against the control plane client, writing output to out.
-func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer, addr string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
 	}
@@ -140,7 +140,13 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "attach":
 		return runAttach(ctx, client, args[1:], out)
 	case "panel":
-		return runPanel(ctx, client, args[1:], out)
+		return runPanel(ctx, client, args[1:], out, addr)
+	case "header":
+		return runHeader(ctx, client, args[1:], out, addr)
+	case "console":
+		// The panel's left half. The header is drawn in the pane above it, across both halves, so
+		// this one draws none of its own.
+		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions":
 		return runSessions(ctx, client, args[1:], out)
 	case "turns":

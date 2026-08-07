@@ -42,7 +42,7 @@ func main() {
 // With no terminal attached the console prints plain lines instead, so `quay | grep` still works.
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) > 0 {
-		return run(ctx, client, args, os.Stdout)
+		return run(ctx, client, args, os.Stdout, addr)
 	}
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		return console.Plain(ctx, client, os.Stdout)

@@ -53,7 +53,7 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 func mustRun(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...string) string {
 	t.Helper()
 	var out bytes.Buffer
-	if err := run(context.Background(), client, args, &out); err != nil {
+	if err := run(context.Background(), client, args, &out, ""); err != nil {
 		t.Fatalf("quay %s: %v", strings.Join(args, " "), err)
 	}
 	return out.String()
@@ -161,7 +161,7 @@ func TestDispatchFromAWorkspaceSaysWhichProjectsItHolds(t *testing.T) {
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "use", "me")
 
-	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard)
+	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("dispatching from a workspace succeeded, want a refusal")
 	}
@@ -173,7 +173,7 @@ func TestDispatchFromAWorkspaceSaysWhichProjectsItHolds(t *testing.T) {
 
 func TestDispatchWithNowhereToGoExplainsItself(t *testing.T) {
 	client := testClient(t)
-	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard)
+	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("dispatch with no context succeeded, want a refusal")
 	}
@@ -200,7 +200,7 @@ func TestUseRefusesAnAddressThatNamesNothing(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 
-	err := run(context.Background(), client, []string{"use", "ghost/bills"}, io.Discard)
+	err := run(context.Background(), client, []string{"use", "ghost/bills"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("use of an unknown address succeeded")
 	}
@@ -235,7 +235,7 @@ func TestSecretSet(t *testing.T) {
 func TestSecretSetNeedsAKeyAndAValue(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "acme")
-	if err := run(context.Background(), client, []string{"secret", "set", "only-key"}, io.Discard); err == nil {
+	if err := run(context.Background(), client, []string{"secret", "set", "only-key"}, io.Discard, ""); err == nil {
 		t.Fatal("secret set without a value = nil error, want error")
 	}
 }
@@ -244,7 +244,7 @@ func TestSecretSetNeedsAKeyAndAValue(t *testing.T) {
 // somebody who has not started a stack yet, so it must not need one.
 func TestFeaturesNeedsNoControlPlane(t *testing.T) {
 	var out bytes.Buffer
-	if err := run(context.Background(), nil, []string{"features"}, &out); err != nil {
+	if err := run(context.Background(), nil, []string{"features"}, &out, ""); err != nil {
 		t.Fatalf("quay features with no client: %v", err)
 	}
 	if !strings.Contains(out.String(), "sandbox") {
@@ -252,7 +252,7 @@ func TestFeaturesNeedsNoControlPlane(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := run(context.Background(), nil, []string{"features", "address"}, &out); err != nil {
+	if err := run(context.Background(), nil, []string{"features", "address"}, &out, ""); err != nil {
 		t.Fatalf("quay features address: %v", err)
 	}
 	if !strings.Contains(out.String(), "address") && !strings.Contains(out.String(), "Address") {
@@ -263,7 +263,7 @@ func TestFeaturesNeedsNoControlPlane(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := run(context.Background(), nil, []string{"features", "quantum"}, &out); err != nil {
+	if err := run(context.Background(), nil, []string{"features", "quantum"}, &out, ""); err != nil {
 		t.Fatalf("quay features quantum: %v", err)
 	}
 	if !strings.Contains(out.String(), "nothing here mentions") {
@@ -287,7 +287,7 @@ func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
 		{"dispatch", "--thread", "abc123", "hello"},
 		{"secret", "set", "--workspace", "demo", "KEY", "value"},
 	} {
-		err := run(context.Background(), client, invocation, io.Discard)
+		err := run(context.Background(), client, invocation, io.Discard, "")
 		if err == nil {
 			t.Fatalf("quay %s was accepted, want it refused", strings.Join(invocation, " "))
 		}
@@ -300,7 +300,7 @@ func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
 
 // TestAnyOtherFlagIsRefusedToo, so the next thing that gets replaced by an address cannot repeat this.
 func TestAnyOtherFlagIsRefusedToo(t *testing.T) {
-	err := run(context.Background(), testClient(t), []string{"dispatch", "--force", "hello"}, io.Discard)
+	err := run(context.Background(), testClient(t), []string{"dispatch", "--force", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("an unknown flag was accepted")
 	}
@@ -321,7 +321,7 @@ func TestAMessageIsStillAMessage(t *testing.T) {
 }
 
 func TestUnknownCommand(t *testing.T) {
-	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard); err == nil {
+	if err := run(context.Background(), testClient(t), []string{"bogus"}, io.Discard, ""); err == nil {
 		t.Fatal("unknown command = nil error, want error")
 	}
 }

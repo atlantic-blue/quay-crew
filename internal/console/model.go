@@ -136,6 +136,28 @@ type Model struct {
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
 	client quaycrewv1.ControlPlaneServiceClient
+	// headless leaves the header to somebody else. In the panel it is drawn in its own pane across
+	// the full width, and drawing it here as well would show it twice.
+	headless bool
+	// publish says which view the console moved to, so a header drawn elsewhere can name this view's
+	// keys rather than the keys of whichever view it was started on. It is a function because the
+	// console does not own where that goes, and nil when nobody is listening.
+	publish func(view string) error
+}
+
+// WithoutHeader leaves the header to whoever is drawing it, and is how the panel avoids drawing it
+// twice.
+func (m Model) WithoutHeader() Model {
+	m.headless = true
+	return m
+}
+
+// WithViewPublisher tells the console where to say which view it is on. The header the panel draws in
+// another pane is a separate process, so without this its key hints would be the ones for whichever
+// view the console opened on, and would go quietly wrong the moment anybody drilled in.
+func (m Model) WithViewPublisher(publish func(view string) error) Model {
+	m.publish = publish
+	return m
 }
 
 // WithClient gives the console the crew to ask when it makes something. Listing goes through each
@@ -158,9 +180,25 @@ func New(registry *Registry, start string, source InfoSource) (Model, error) {
 	return Model{registry: registry, active: resource, source: source, width: 100, height: 24}, nil
 }
 
-// Init loads the opening view, asks what it is connected to, and starts the refresh clock.
+// Init loads the opening view, asks what it is connected to, says where it is standing, and starts
+// the refresh clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
+	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), m.publishCmd(), tickCmd())
+}
+
+// publishCmd says which view the console is on, and does nothing at all when nobody asked.
+func (m Model) publishCmd() tea.Cmd {
+	if m.publish == nil {
+		return nil
+	}
+	publish, view := m.publish, m.active.Name
+	return func() tea.Msg {
+		if err := publish(view); err != nil {
+			// A header that cannot be told where we are is not a reason to stop showing the crew.
+			return nil
+		}
+		return nil
+	}
 }
 
 // Update advances the console. It performs no input or output of its own: anything that talks to the
@@ -198,7 +236,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case wizardChoicesMsg:
 		return m.applyWizardChoices(msg), nil
 	case tea.KeyMsg:
-		return m.updateKey(msg)
+		// The view can change under a key, and whoever is drawing the header needs to hear about it.
+		before := m.active.Name
+		next, cmd := m.updateKey(msg)
+		if next.active.Name != before {
+			return next, tea.Batch(cmd, next.publishCmd())
+		}
+		return next, cmd
 	default:
 		return m, nil
 	}
