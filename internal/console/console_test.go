@@ -2378,3 +2378,22 @@ func TestTheKeyIsInTheHelp(t *testing.T) {
 		t.Fatalf("the help does not mention the key that shows a conversation:\n%s", model.View())
 	}
 }
+
+// TestTheWordmarkIsDrawnInAHeaderOfOneRow. The panel's header pane is one row tall, and a height check
+// left over from the six line wordmark dropped the wordmark from every pane shorter than seven rows.
+// The header was the only thing in it, so there was nothing underneath to starve.
+func TestTheWordmarkIsDrawnInAHeaderOfOneRow(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, height := range []int{1, 2, 6, 24} {
+		lines, err := HeaderOnly(registry, Default, Info{Version: "b8919a4"}, 200, height)
+		if err != nil {
+			t.Fatalf("HeaderOnly at height %d: %v", height, err)
+		}
+		if !strings.Contains(strings.Join(lines, "\n"), logo[0]) {
+			t.Fatalf("at height %d the wordmark is gone:\n%s", height, strings.Join(lines, "\n"))
+		}
+	}
+}
