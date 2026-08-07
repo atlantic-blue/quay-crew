@@ -171,7 +171,8 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
-		Env:       environ(s.turnEnv(ctx, session.GetWorkspace())),
+		Env:       environ(s.turnEnv(ctx, session)),
+		Driver:    session.GetDriver(),
 	})
 	if err != nil {
 		return nil, err
@@ -427,7 +428,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session),
-		Env:            s.turnEnv(ctx, session.GetWorkspace()),
+		Env:            s.turnEnv(ctx, session),
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
@@ -612,15 +613,15 @@ func environ(values map[string]string) []string {
 // turnEnv gathers the environment a turn runs with from the workspace's secrets. Right now that is the
 // Claude Code subscription token, if one is set. A workspace that has not set it (or a model backend
 // that does not need it) simply runs with no extra env, so the lookup never fails a turn.
-func (s *Server) turnEnv(ctx context.Context, workspace string) map[string]string {
+func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[string]string {
 	env := map[string]string{}
-	// Where to reach the crew, so `quay` run inside a session works with nothing to configure. It
-	// carries no credential: it is an address, and reaching it at all depends on the sandbox being on
-	// a network that can, which is the same decision made once in configuration.
-	if s.reachable != "" {
+	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
+	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
+	// not on a network that could reach it anyway.
+	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 	}
-	if token, err := s.secrets.Get(ctx, workspace, model.ClaudeCodeOAuthTokenEnv); err == nil && token != "" {
+	if token, err := s.secrets.Get(ctx, session.GetWorkspace(), model.ClaudeCodeOAuthTokenEnv); err == nil && token != "" {
 		env[model.ClaudeCodeOAuthTokenEnv] = token
 	}
 	if len(env) == 0 {
@@ -666,7 +667,10 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	if session.GetModelSessionId() == "" {
+	// A driver with no conversation yet is opened rather than refused: it is made the moment somebody
+	// opens the crew, and telling them to dispatch a turn to the thing they just opened is a loop.
+	// Everything below is about a conversation that exists, so it is skipped too.
+	if session.GetModelSessionId() == "" && !session.GetDriver() {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"thread %s has no conversation yet: send it a message with quay dispatch first",
 			display.ShortID(session.GetThreadId()))
@@ -687,7 +691,8 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	// In the operator's words, not ours. "Its conversation predates state on the host" is a sentence
 	// only somebody who worked on this understands, and it named an identifier twenty four characters
 	// long that appears nowhere on their screen.
-	if !s.storage.HasConversation(session.GetWorkspace(), session.GetModelSessionId()) {
+	if session.GetModelSessionId() != "" &&
+		!s.storage.HasConversation(session.GetWorkspace(), session.GetModelSessionId()) {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"thread %s has no conversation left: it was saved inside a sandbox that has since been "+
 				"removed, from before conversations were kept on this machine. Send this thread a "+
@@ -810,4 +815,17 @@ func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionReq
 	}
 	s.closeSandbox(ctx, req.GetId())
 	return &quaycrewv1.StopSessionResponse{}, nil
+}
+
+// OpenDriver returns the project's driver, the session that drives the crew, creating it the first
+// time somebody opens it. It is what `quay` opens beside the console.
+func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverRequest) (*quaycrewv1.OpenDriverResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "a driver belongs to a project, so name one")
+	}
+	session, err := s.store.FindOrCreateDriver(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.OpenDriverResponse{Session: session}, nil
 }

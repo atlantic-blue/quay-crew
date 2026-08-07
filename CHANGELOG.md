@@ -8,6 +8,19 @@ read, or run with `make features`.
 
 ## 7 August 2026
 
+- **The driver is its own session, and the only one that can drive the crew.** `quay` opens the
+  project's driver rather than whichever conversation happened to be newest, creating it the first
+  time. One per project, held by a unique index rather than by reading first and writing after.
+  A session is marked as the driver, and everything that widens is gated on that mark: only the driver
+  joins the control plane's network, only the driver is told where the crew is, and only the driver
+  gets the host paths you hand it with `QC_DRIVER_MOUNTS`. An ordinary session can reach nothing of
+  ours and sees nothing of the machine.
+  That last part is what makes it the glue: without host paths it can reach the crew and has nothing
+  to bring to it. Hand it your hub read only and it can load a ticket folder as a project's context.
+  Opening a driver that has never spoken starts a conversation rather than refusing, because it is
+  made the moment you open the crew and telling you to dispatch a turn to the thing you just opened is
+  a loop. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **The logo is the logo again.** It had been replaced with the name written out in text, which is not
   what was asked for: "you have replaced it with some text". The block letters are back, at half the
   height, each row carrying two rows of the original through the half block characters. Three rows

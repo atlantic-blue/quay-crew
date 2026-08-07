@@ -19,13 +19,17 @@ type DockerProvider struct {
 	Mounts []string
 	// Storage keeps the workspace's conversation store and the project's files on the host.
 	Storage Storage
-	// Network is the container network sessions join. Empty leaves them on the daemon's default,
+	// Network is the container network the driver joins. Empty leaves it on the daemon's default,
 	// where the control plane is not reachable by name.
 	//
-	// Joining the control plane's network is what lets a session drive the crew: run `quay` inside
-	// one and it reaches the same interface the operator's does. That is a deliberate widening, so it
-	// is configuration rather than the default, and off means a sandbox can talk to nothing of ours.
+	// Only the driver joins it. Joining is what lets a session drive the crew, and a session that can
+	// drive the crew can also stop other sessions, so it is the one session marked for it rather than
+	// every session in the crew.
 	Network string
+	// DriverMounts are host paths the driver gets and an ordinary session does not, each
+	// "host:container[:ro]". They are what makes the driver the glue between the machine and the
+	// crew: without them it can reach the control plane and see nothing to bring to it.
+	DriverMounts []string
 }
 
 var _ Provider = DockerProvider{}
@@ -127,8 +131,13 @@ func (s *dockerSandbox) Close(ctx context.Context) error {
 // is the difference between a session that can drive the crew and one that cannot.
 func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
 	args := []string{"run", "--detach", "--name", name}
-	if d.Network != "" {
+	if cfg.Driver && d.Network != "" {
 		args = append(args, "--network", d.Network)
+	}
+	if cfg.Driver {
+		for _, mount := range d.DriverMounts {
+			args = append(args, "-v", mount)
+		}
 	}
 	for _, entry := range cfg.Env {
 		args = append(args, "--env", entry)

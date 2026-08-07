@@ -19,7 +19,13 @@ conversation="$1"
 mode="$2"
 
 while true; do
-    claude --resume "$conversation" --permission-mode "$mode" || true
+    # No conversation yet means this is the first time it has been opened, so one is started rather
+    # than resumed. The driver is made the moment somebody opens the crew and has never spoken.
+    if [ -n "$conversation" ]; then
+        claude --resume "$conversation" --permission-mode "$mode" || true
+    else
+        claude --permission-mode "$mode" || true
+    fi
 
     printf '\n  This conversation is closed. Nothing was lost: it is on disk and can be opened again.\n'
     printf '  Press enter to open it, or ctrl-q to leave this running and go back.\n\n'

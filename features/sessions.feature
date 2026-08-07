@@ -305,12 +305,20 @@ Feature: Sessions run in isolated sandboxes
   # A session that can reach the control plane can drive the crew: make a workspace, start a thread,
   # write a context, the same way the operator does. It is a real widening, so it is turned on rather
   # than assumed, and the sandbox is what bounds it.
-  Scenario: A session is told where to reach the crew when the crew can be reached
+  Scenario: The driver is told where to reach the crew
     Given a crew that sessions can reach at "controlplane:50051"
-    When the operator dispatches "hello" to the project
+    When the operator opens the driver
+    And the driver is sent "hello"
     Then the sandbox carries the address of the crew
     And the sandbox carries no address it was not given
 
-  Scenario: A session is told nothing when the crew cannot be reached
+  Scenario: An ordinary session is told nothing, even when the crew can be reached
+    Given a crew that sessions can reach at "controlplane:50051"
     When the operator dispatches "hello" to the project
     Then the sandbox carries no address at all
+
+  Scenario: The driver is the same session every time it is opened
+    When the operator opens the driver
+    And the operator opens the driver again
+    Then it is the same driver both times
+    And the crew has one driver

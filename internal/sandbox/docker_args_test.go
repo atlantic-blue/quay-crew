@@ -5,14 +5,26 @@ import (
 	"testing"
 )
 
-// TestASandboxJoinsTheNetworkItWasGiven. Reaching the control plane is what lets a session drive the
-// crew, and a sandbox on the daemon's default network cannot reach it at all.
-func TestASandboxJoinsTheNetworkItWasGiven(t *testing.T) {
-	provider := DockerProvider{Image: "img", Network: "quaycrew_default"}
-	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")
+// TestTheDriverJoinsTheNetworkAndAnOrdinarySessionDoesNot. Reaching the control plane is what lets a
+// session drive the crew, and a session that can drive the crew can also stop other sessions, so it is
+// the one session marked for it rather than every session in the crew.
+func TestTheDriverJoinsTheNetworkAndAnOrdinarySessionDoesNot(t *testing.T) {
+	provider := DockerProvider{Image: "img", Network: "quaycrew_default", DriverMounts: []string{"/hub:/hub:ro"}}
 
-	if !strings.Contains(got, "--network quaycrew_default") {
-		t.Fatalf("the sandbox does not join the network it was given:\n%s", got)
+	driver := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1", Driver: true}, nil), " ")
+	if !strings.Contains(driver, "--network quaycrew_default") {
+		t.Fatalf("the driver does not join the network:\n%s", driver)
+	}
+	if !strings.Contains(driver, "-v /hub:/hub:ro") {
+		t.Fatalf("the driver does not get the host paths it was given:\n%s", driver)
+	}
+
+	ordinary := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
+	if strings.Contains(ordinary, "--network") {
+		t.Fatalf("an ordinary session joins the crew's network:\n%s", ordinary)
+	}
+	if strings.Contains(ordinary, "/hub") {
+		t.Fatalf("an ordinary session gets the driver's host paths:\n%s", ordinary)
 	}
 }
 
@@ -31,7 +43,7 @@ func TestASandboxJoinsNothingWithNoNetworkConfigured(t *testing.T) {
 func TestTheSandboxStillCarriesItsEnvironmentAndMounts(t *testing.T) {
 	provider := DockerProvider{Image: "img", Network: "net", Mounts: []string{"/a:/b:ro"}}
 	got := strings.Join(provider.runArgs("quaycrew-s1", Config{
-		ID: "s1", Env: []string{"QC_GRPC_ADDR=controlplane:50051"},
+		ID: "s1", Driver: true, Env: []string{"QC_GRPC_ADDR=controlplane:50051"},
 	}, []Mount{{Source: "/host", Target: "/home/agent/.claude"}}), " ")
 
 	for _, want := range []string{
