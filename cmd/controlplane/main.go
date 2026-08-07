@@ -65,8 +65,10 @@ func main() {
 		Image:   os.Getenv("QC_SANDBOX_IMAGE"),
 		Mounts:  splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
 		Storage: storage,
-		// The network sessions join. Unset leaves them where they cannot reach the crew.
-		Network: os.Getenv("QC_SANDBOX_NETWORK"),
+		// The network the driver joins, and the host paths only it gets. Unset leaves the driver
+		// where it can reach nothing and see nothing of the machine.
+		Network:      os.Getenv("QC_SANDBOX_NETWORK"),
+		DriverMounts: splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
 	})
 	if err != nil {
 		logger.Error("sandbox provider config failed", "error", err)

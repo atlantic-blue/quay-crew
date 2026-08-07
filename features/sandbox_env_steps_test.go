@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
 )
 
@@ -74,4 +75,70 @@ func onlySandboxEnv(w *world) (map[string]string, error) {
 		env[key] = value
 	}
 	return env, nil
+}
+
+// The driver: the one session that drives the crew rather than doing work inside it.
+func initializeDriverSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator opens the driver$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		opened, err := w.client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		w.drivers = append(w.drivers, opened.GetSession())
+		return nil
+	})
+
+	sc.Step(`^the operator opens the driver again$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		opened, err := w.client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		w.drivers = append(w.drivers, opened.GetSession())
+		return nil
+	})
+
+	sc.Step(`^the driver is sent "([^"]*)"$`, func(ctx context.Context, text string) error {
+		w := worldFrom(ctx)
+		if len(w.drivers) == 0 {
+			return fmt.Errorf("no driver was opened")
+		}
+		return w.dispatch(ctx, w.projectID, w.drivers[0].GetThreadId(), text)
+	})
+
+	sc.Step(`^it is the same driver both times$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.drivers) != 2 {
+			return fmt.Errorf("the driver was opened %d times, want 2", len(w.drivers))
+		}
+		if w.drivers[0].GetId() != w.drivers[1].GetId() {
+			return fmt.Errorf("opening the crew twice gave two drivers, %s and %s",
+				w.drivers[0].GetId(), w.drivers[1].GetId())
+		}
+		if !w.drivers[0].GetDriver() {
+			return fmt.Errorf("the session opened is not marked as the driver")
+		}
+		return nil
+	})
+
+	// One per project. Two would each think they were the one, and the second would be reached by
+	// nobody.
+	sc.Step(`^the crew has one driver$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		drivers := 0
+		for _, session := range listed.GetSessions() {
+			if session.GetDriver() {
+				drivers++
+			}
+		}
+		if drivers != 1 {
+			return fmt.Errorf("the project has %d drivers, want 1", drivers)
+		}
+		return nil
+	})
 }

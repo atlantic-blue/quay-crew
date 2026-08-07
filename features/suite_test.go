@@ -141,8 +141,10 @@ type world struct {
 	realRunner model.Runner
 	// reachable is the address a session is told to dial for the crew, empty when it cannot reach it.
 	reachable string
-	secrets   secrets.Store
-	store     store.Store
+	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
+	drivers []*quaycrewv1.Session
+	secrets secrets.Store
+	store   store.Store
 	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
 	// it. Setting it to nil is how a scenario says the stack has no broker configured.
 	events *messaging.Memory
@@ -361,6 +363,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkspaceSteps(sc)
 	initializeWizardSteps(sc)
 	initializeReachableSteps(sc)
+	initializeDriverSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns

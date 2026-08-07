@@ -374,3 +374,33 @@ func (m *Memory) ListTurns(_ context.Context, session string, limit int) ([]*qua
 	}
 	return out, nil
 }
+
+// FindOrCreateDriver returns the project's driver, creating it the first time somebody opens it.
+func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycrewv1.Session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner, err := m.getProjectLocked(project)
+	if err != nil {
+		return nil, err
+	}
+	for _, session := range m.sessions {
+		if session.GetProject() == project && session.GetDriver() {
+			return clone(session), nil
+		}
+	}
+	now := timestamppb.New(time.Now().UTC())
+	session := &quaycrewv1.Session{
+		Id:             NewID(),
+		Workspace:      owner.GetWorkspace(),
+		Project:        project,
+		ThreadId:       NewID(),
+		Status:         "idle",
+		PermissionMode: model.PermissionAcceptEdits,
+		Driver:         true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	m.sessions[session.GetId()] = session
+	m.byThread[threadKey(project, session.GetThreadId())] = session.GetId()
+	return clone(session), nil
+}

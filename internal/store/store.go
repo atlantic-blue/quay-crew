@@ -78,6 +78,9 @@ type Store interface {
 	// FindOrCreateSession returns the session for a project's thread, creating it on first use, so
 	// a channel that only knows its own thread id always lands in the same session.
 	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error)
+	// FindOrCreateDriver returns the project's driver, the session that drives the crew rather than
+	// doing work inside it, creating it the first time somebody opens it. One per project.
+	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error)
 	// RecordTurn stores the model conversation handle and the session's status after a turn. An
 	// empty modelSessionID leaves the stored handle alone, so a failed turn cannot erase it.
 	RecordTurn(ctx context.Context, id, modelSessionID, status string) error

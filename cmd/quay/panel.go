@@ -99,21 +99,18 @@ func panelSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		return resolveSession(ctx, client, args[0])
 	}
 
-	current, err := currentPath()
-	if err != nil {
-		current = workspace.Path{}
-	}
-	listed, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+	project, err := driverProject(ctx, client)
 	if err != nil {
 		return "", err
 	}
 
-	newest, found := newestSession(listed.GetSessions())
-	if !found {
-		return "", fmt.Errorf("there is no conversation to put beside the console yet%s: "+
-			"start one with `quay dispatch \"hello\"`, then open the panel again", where(current))
+	// The driver, made the first time the crew is opened. Not whichever conversation happens to be
+	// newest: that is somebody else's work, and opening the crew should not drop you into it.
+	opened, err := client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: project})
+	if err != nil {
+		return "", err
 	}
-	return newest, nil
+	return opened.GetSession().GetId(), nil
 }
 
 // newestSession is the conversation most recently spoken to, which is the one the operator was last
@@ -221,4 +218,28 @@ func builtBy(layout panel.Layout) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// driverProject is the project the driver belongs to: where the operator is standing, or the only
+// project there is when they are standing nowhere yet.
+func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) (string, error) {
+	if current, err := currentPath(); err == nil && current.Project != "" {
+		resolved, err := workspace.ResolveProject(ctx, client, current.Workspace, current.Project)
+		if err == nil {
+			return resolved, nil
+		}
+	}
+	listed, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		return "", err
+	}
+	switch len(listed.GetProjects()) {
+	case 0:
+		return "", fmt.Errorf("there is no project for the crew to open in: make one with `quay`, " +
+			"press n, and choose project")
+	case 1:
+		return listed.GetProjects()[0].GetId(), nil
+	default:
+		return "", fmt.Errorf("say where to open: `quay use <workspace>/<project>` first")
+	}
 }

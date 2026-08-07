@@ -57,6 +57,10 @@ type Config struct {
 	// readable for the life of the container, for example through docker inspect, so pass only what
 	// the session needs.
 	Env []string
+	// Driver says this sandbox belongs to the session that drives the crew. It joins the control
+	// plane's network and gets the host paths the operator handed the driver; an ordinary session
+	// gets neither, and can reach nothing of ours.
+	Driver bool
 }
 
 // Provider mints a Sandbox per session.

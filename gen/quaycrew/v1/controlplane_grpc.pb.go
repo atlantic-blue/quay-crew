@@ -31,6 +31,7 @@ const (
 	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSecrets"
 	ControlPlaneService_Dispatch_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/Dispatch"
+	ControlPlaneService_OpenDriver_FullMethodName               = "/quaycrew.v1.ControlPlaneService/OpenDriver"
 	ControlPlaneService_ListSessions_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSessions"
 	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
 	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
@@ -63,6 +64,7 @@ type ControlPlaneServiceClient interface {
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
 	Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error)
+	OpenDriver(ctx context.Context, in *OpenDriverRequest, opts ...grpc.CallOption) (*OpenDriverResponse, error)
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
 	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
@@ -199,6 +201,16 @@ func (c *controlPlaneServiceClient) Dispatch(ctx context.Context, in *DispatchRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DispatchResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_Dispatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) OpenDriver(ctx context.Context, in *OpenDriverRequest, opts ...grpc.CallOption) (*OpenDriverResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpenDriverResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_OpenDriver_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +355,7 @@ type ControlPlaneServiceServer interface {
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
 	Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error)
+	OpenDriver(context.Context, *OpenDriverRequest) (*OpenDriverResponse, error)
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
 	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
@@ -400,6 +413,9 @@ func (UnimplementedControlPlaneServiceServer) ListSecrets(context.Context, *List
 }
 func (UnimplementedControlPlaneServiceServer) Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Dispatch not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) OpenDriver(context.Context, *OpenDriverRequest) (*OpenDriverResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenDriver not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
@@ -674,6 +690,24 @@ func _ControlPlaneService_Dispatch_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_OpenDriver_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenDriverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).OpenDriver(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_OpenDriver_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).OpenDriver(ctx, req.(*OpenDriverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSessionsRequest)
 	if err := dec(in); err != nil {
@@ -944,6 +978,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Dispatch",
 			Handler:    _ControlPlaneService_Dispatch_Handler,
+		},
+		{
+			MethodName: "OpenDriver",
+			Handler:    _ControlPlaneService_OpenDriver_Handler,
 		},
 		{
 			MethodName: "ListSessions",
