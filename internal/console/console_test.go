@@ -906,7 +906,9 @@ func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listing archived: %v", err)
 	}
-	if got := rows[0].Cells[6]; got != "2h" {
+	// The last cell, not the sixth: columns have been added since and the point of this test is the
+	// stamp at the end of the row rather than where it happens to sit.
+	if got := rows[0].Cells[len(rows[0].Cells)-1]; got != "2h" {
 		t.Fatalf("the last column reads %q, want 2h, when it was put away", got)
 	}
 }
@@ -2577,5 +2579,156 @@ func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T
 	}
 	if !strings.Contains(secondArgs, "PS1=4b7de057 juliantellez-com") {
 		t.Fatalf("the prompt does not name the thread and its project:\n%s", secondArgs)
+	}
+}
+
+// TestAThreadsCostIsInTheListing, in the three numbers that matter, formatted for a column seven
+// characters wide.
+func TestAThreadsCostIsInTheListing(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
+		Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle",
+		UpdatedAt: timestamppb.New(time.Now()),
+		Usage: &quaycrewv1.Usage{
+			Input: 52, Output: 6917, CacheRead: 1723404, CacheWritten: 87875,
+		},
+	}}}
+
+	rows, err := Sessions(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing sessions: %v", err)
+	}
+	cells := strings.Join(rows[0].Cells, "|")
+	for _, want := range []string{"52", "6.9k", "1.7M"} {
+		if !strings.Contains(cells, want) {
+			t.Errorf("the row does not carry %s:\n%s", want, cells)
+		}
+	}
+}
+
+// TestAThreadThatHasSpentNothingSaysNothing. A conversation nobody has had has not cost zero, it has
+// no cost, and a column of zeroes reads as a crew that is free.
+func TestAThreadThatHasSpentNothingSaysNothing(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
+		Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle",
+		UpdatedAt: timestamppb.New(time.Now()),
+	}}}
+
+	rows, err := Sessions(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing sessions: %v", err)
+	}
+	for _, cell := range rows[0].Cells {
+		if cell == "0" {
+			t.Fatalf("a thread that has spent nothing reports a zero:\n%v", rows[0].Cells)
+		}
+	}
+}
+
+// TestTokensReadAsNumbersAPersonCanCompare at a glance, in seven characters.
+func TestTokensReadAsNumbersAPersonCanCompare(t *testing.T) {
+	for _, tc := range []struct {
+		count int64
+		want  string
+	}{
+		{0, ""},
+		{52, "52"},
+		{999, "999"},
+		{1000, "1k"},
+		{6917, "6.9k"},
+		{87875, "87.9k"},
+		{1723404, "1.7M"},
+		{12000000, "12M"},
+	} {
+		if got := tokens(tc.count); got != tc.want {
+			t.Errorf("%d reads as %q, want %q", tc.count, got, tc.want)
+		}
+		if len(tokens(tc.count)) > 7 {
+			t.Errorf("%d reads as %q, which does not fit its column", tc.count, tokens(tc.count))
+		}
+	}
+}
+
+// TestTheCacheColumnGivesWayFirstOnANarrowWindow.
+//
+// A panel puts the console in half the window, and a line too long is cut at whatever happens to be
+// at the end rather than at whatever matters least. At half a window the age of a thread is worth
+// more than what it read from a cache.
+//
+// The order is the rule, not any particular width: the width a column goes at is arithmetic and will
+// move the next time one is added.
+func TestTheCacheColumnGivesWayFirstOnANarrowWindow(t *testing.T) {
+	went := []string{}
+	seen := map[string]bool{}
+	for width := 200; width >= 40; width-- {
+		model := newTestModel(t, Sessions(&fakeClient{}))
+		model.width, model.height = width, 40
+		drawn := map[string]bool{}
+		for _, column := range model.columns() {
+			drawn[column.Title] = true
+		}
+		for _, column := range Sessions(&fakeClient{}).Columns {
+			if !drawn[column.Title] && !seen[column.Title] {
+				seen[column.Title] = true
+				went = append(went, column.Title)
+			}
+		}
+	}
+
+	if len(went) < 3 {
+		t.Fatalf("narrowing the window to 40 columns dropped only %v", went)
+	}
+	if got := strings.Join(went[:3], " then "); got != "cache then out then in" {
+		t.Fatalf("the columns gave way %s, want cache then out then in", got)
+	}
+	// Everything a thread is stays. A listing that has given up its identifier to keep a token count
+	// has the priority backwards.
+	for _, keep := range []string{"id", "status", "age"} {
+		for _, gone := range went {
+			if gone == keep {
+				t.Errorf("%s gave way, and it should never: %v", keep, went)
+			}
+		}
+	}
+}
+
+// TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway. Dropping the seventh column and then reading
+// the seventh cell into it puts a thread's age under a heading that says something else, which is
+// worse than not drawing the column at all.
+func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
+		Id: "s1", Workspace: "acme", Project: "p1", ThreadId: "t1", Status: "idle",
+		UpdatedAt: timestamppb.New(time.Now()),
+		Usage:     &quaycrewv1.Usage{Input: 52, Output: 6917, CacheRead: 1723404},
+	}}}
+	rows, err := Sessions(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing sessions: %v", err)
+	}
+
+	// Wide enough for everything but the cache, which is the first to go.
+	model := newTestModel(t, Sessions(client))
+	model.height = 40
+	for model.width = 200; model.width > 40; model.width-- {
+		gone := true
+		for _, column := range model.columns() {
+			if column.Title == "cache" {
+				gone = false
+			}
+		}
+		if gone {
+			break
+		}
+	}
+	line := model.renderCells(rows[0].Cells)
+
+	if !strings.Contains(line, "6.9k") {
+		t.Fatalf("the output column is drawn and its cell is missing:\n%s", line)
+	}
+	if strings.Contains(line, "1.7M") {
+		t.Fatalf("the cache column gave way and its cell was drawn anyway:\n%s", line)
+	}
+	// The age is the flexible column at the end, and it must still be at the end.
+	if !strings.HasSuffix(strings.TrimRight(line, " "), rows[0].Cells[len(rows[0].Cells)-1]) {
+		t.Fatalf("the last cell is not under the last column:\n%s", line)
 	}
 }

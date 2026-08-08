@@ -35,6 +35,13 @@ const (
 type Column struct {
 	Title string
 	Width int
+	// Give is the order in which a column is dropped when the window is too narrow to hold them all:
+	// 1 goes first, then 2, and so on. Zero means it is never dropped.
+	//
+	// Without this a resource that declares more columns than fit has its line cut, and what is cut
+	// is the last column rather than the least useful one. A thread's age is worth more at half a
+	// window than the tokens it read from a cache.
+	Give int
 }
 
 // Row is one listed item: the cells to show, the identifier actions operate on, and the parent it
