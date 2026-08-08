@@ -11,7 +11,9 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"github.com/mattn/go-isatty"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 // version is the build this binary is, stamped in at compile time by `make install` and by the
@@ -20,7 +22,8 @@ import (
 var version = "dev"
 
 func main() {
-	addr := os.Getenv("QC_GRPC_ADDR")
+	told := os.Getenv("QC_GRPC_ADDR")
+	addr := told
 	if addr == "" {
 		addr = "localhost:50051"
 	}
@@ -34,9 +37,41 @@ func main() {
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	if err := dispatch(context.Background(), client, os.Args[1:], addr); err != nil {
-		fmt.Fprintln(os.Stderr, "quay:", err)
+		fmt.Fprintln(os.Stderr, "quay:", unreachable(err, told, inAContainer()))
 		os.Exit(1)
 	}
+}
+
+// dockerEnvFile is the file Docker puts in every container it runs. Its presence is how a process
+// knows it is inside one without being told.
+const dockerEnvFile = "/.dockerenv"
+
+// inAContainer says whether this quay is running inside a container, which for this tool means inside
+// a session's sandbox.
+func inAContainer() bool {
+	_, err := os.Stat(dockerEnvFile)
+	return err == nil
+}
+
+// unreachable turns "connection refused" inside a sandbox into the thing that is actually wrong.
+//
+// A session that was never told where the crew is falls back to localhost, and localhost inside a
+// container is the container: there is nothing there and there never will be. The dial error names an
+// address the operator did not choose and cannot fix, which reads as the crew being down. What is
+// actually true is that this session was not given the two pieces of configuration that let it reach
+// the crew at all, and neither of them can be set from in here.
+func unreachable(err error, told string, sandboxed bool) error {
+	if err == nil || !sandboxed || told != "" {
+		return err
+	}
+	if status.Code(err) != codes.Unavailable {
+		return err
+	}
+	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
+		"address it fell back to. It reaches the control plane only when the crew is set up for it: "+
+		"QC_SANDBOX_NETWORK and QC_SANDBOX_CONTROL_PLANE on the control plane, which is deploy/.env "+
+		"on a compose stack, see deploy/env.example. Then start this thread again, because a sandbox "+
+		"keeps the configuration it was made with. (%w)", err)
 }
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.

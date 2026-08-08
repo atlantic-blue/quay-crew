@@ -6,6 +6,18 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 8 August 2026
+
+- **A session says when it was not told where the crew is.** `quay` inside a sandbox that was never
+  given an address falls back to localhost, and localhost inside a container is the container, so it
+  printed `dial tcp [::1]:50051: connect: connection refused` while the control plane was up the whole
+  time. That reads as the crew being down and it is not: this session was not given the two pieces of
+  configuration that let it reach the crew, and neither can be set from in there. It now says which
+  ones, and that a sandbox keeps the configuration it was made with, so the thread has to be started
+  again. Only inside a container, only when nothing was given, only on a refusal to connect: on the
+  operator's own machine localhost is where their stack runs and the dial error is the right answer.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 ## 7 August 2026
 
 - **`N` says when it could not end the conversation.** Ending the conversation beside the console
