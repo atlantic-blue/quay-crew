@@ -29,6 +29,10 @@ read, or run with `make features`.
   it needs no network: the checkout arrives, the memory file beside it survives, and the second run leaves
   the session's own work alone. That real run is also what caught the helper being handed to git with no
   configuration key, which every unit test had passed straight over.
+  The continuous integration run now builds the sandbox image, so this test and the commit test from
+  earlier today actually execute there. Both had been skipping: they need a container with git in it, and
+  nothing in the pipeline was setting one, so the two things only a real container can prove were running
+  on one laptop and nowhere else, while the check reported a pass.
   Not covered by a test: a private clone over https, which needs a real token against a real host.
   Fifth slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
   [#179](https://github.com/atlantic-blue/quay-crew/issues/179).

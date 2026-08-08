@@ -67,9 +67,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      # The sandbox image, so the tests that need a container with git in it actually run. Without it
+      # they skip, and a skipped test reads as a passing one: cloning a repository and making a commit
+      # are the two things in here that only a real container can prove, and both were running on one
+      # laptop and nowhere else.
+      - name: Build the sandbox image
+        run: make sandbox-image
+
       # testcontainers spins up Redpanda in Docker (available on the runner) to test the
       # messaging client and networking against a real broker.
       - name: Integration tests
+        env:
+          QC_TEST_SANDBOX_IMAGE: quaycrew-sandbox-claude:local
         run: go test -tags=integration -count=1 ./...
 
   containers:
