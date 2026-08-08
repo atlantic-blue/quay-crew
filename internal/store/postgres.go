@@ -162,24 +162,27 @@ func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Proje
 		createdAt       time.Time
 	)
 	// The join is what stops a project outliving the workspace it belongs to.
+	var remote string
 	err := p.pool.QueryRow(ctx, `
-		select p.workspace, p.name, p.created_at
+		select p.workspace, p.name, p.created_at, p.remote
 		from projects p join workspaces w on w.id = p.workspace
 		where p.id = $1 and p.deleted_at is null and w.deleted_at is null`, id,
-	).Scan(&workspace, &name, &createdAt)
+	).Scan(&workspace, &name, &createdAt, &remote)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get project: %w", err)
 	}
-	return &quaycrewv1.Project{Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt)}, nil
+	return &quaycrewv1.Project{
+		Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt), Remote: remote,
+	}, nil
 }
 
 // ListProjects returns live projects, filtered to one workspace when set, newest first.
 func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error) {
 	rows, err := p.pool.Query(ctx, `
-		select p.id, p.workspace, p.name, p.created_at
+		select p.id, p.workspace, p.name, p.created_at, p.remote
 		from projects p join workspaces w on w.id = p.workspace
 		where p.deleted_at is null and w.deleted_at is null and ($1 = '' or p.workspace = $1)
 		order by p.created_at desc, p.id`, workspace)
@@ -191,18 +194,32 @@ func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quayc
 	out := make([]*quaycrewv1.Project, 0)
 	for rows.Next() {
 		var (
-			id, owner, name string
-			createdAt       time.Time
+			id, owner, name, remote string
+			createdAt               time.Time
 		)
-		if err := rows.Scan(&id, &owner, &name, &createdAt); err != nil {
+		if err := rows.Scan(&id, &owner, &name, &createdAt, &remote); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
-		out = append(out, &quaycrewv1.Project{Id: id, Workspace: owner, Name: name, CreatedAt: timestamppb.New(createdAt)})
+		out = append(out, &quaycrewv1.Project{
+			Id: id, Workspace: owner, Name: name, CreatedAt: timestamppb.New(createdAt), Remote: remote,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
 	return out, nil
+}
+
+// SetProjectRemote records the repository a project's sessions work in.
+func (p *Postgres) SetProjectRemote(ctx context.Context, project, remote string) error {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return err
+	}
+	if _, err := p.pool.Exec(ctx,
+		`update projects set remote = $2, updated_at = now() where id = $1`, project, remote); err != nil {
+		return fmt.Errorf("set project remote: %w", err)
+	}
+	return nil
 }
 
 // DeleteProject soft deletes a project, leaving its sessions intact.

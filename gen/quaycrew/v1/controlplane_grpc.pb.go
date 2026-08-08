@@ -27,6 +27,7 @@ const (
 	ControlPlaneService_GetProject_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetProject"
 	ControlPlaneService_ListProjects_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListProjects"
 	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
+	ControlPlaneService_SetProjectRemote_FullMethodName         = "/quaycrew.v1.ControlPlaneService/SetProjectRemote"
 	ControlPlaneService_AttachChannel_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -65,6 +66,7 @@ type ControlPlaneServiceClient interface {
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
+	SetProjectRemote(ctx context.Context, in *SetProjectRemoteRequest, opts ...grpc.CallOption) (*SetProjectRemoteResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -173,6 +175,16 @@ func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *Delet
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteProjectResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SetProjectRemote(ctx context.Context, in *SetProjectRemoteRequest, opts ...grpc.CallOption) (*SetProjectRemoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProjectRemoteResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetProjectRemote_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -413,6 +425,7 @@ type ControlPlaneServiceServer interface {
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
+	SetProjectRemote(context.Context, *SetProjectRemoteRequest) (*SetProjectRemoteResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -470,6 +483,9 @@ func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetProjectRemote(context.Context, *SetProjectRemoteRequest) (*SetProjectRemoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectRemote not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -698,6 +714,24 @@ func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SetProjectRemote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProjectRemoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetProjectRemote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetProjectRemote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetProjectRemote(ctx, req.(*SetProjectRemoteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1136,6 +1170,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteProject",
 			Handler:    _ControlPlaneService_DeleteProject_Handler,
+		},
+		{
+			MethodName: "SetProjectRemote",
+			Handler:    _ControlPlaneService_SetProjectRemote_Handler,
 		},
 		{
 			MethodName: "AttachChannel",

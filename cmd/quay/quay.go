@@ -303,11 +303,14 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	switch args[0] {
 	case "create":
-		if len(args) != 2 {
-			return fmt.Errorf("usage: quay project create [<workspace>/]<name>")
+		// A remote here rather than a second command, because a project made for a repository is the
+		// common case and naming it afterwards is a step somebody forgets.
+		rest, remote := takeRemote(args[1:])
+		if len(rest) != 1 {
+			return fmt.Errorf("usage: quay project create [<workspace>/]<name> [--remote <url>]")
 		}
 		// The last level is the new project's name, so anything before it says where to put it.
-		holder, projectName := splitLast(args[1])
+		holder, projectName := splitLast(rest[0])
 		located, err := locate(ctx, client, holder)
 		if err != nil {
 			return err
@@ -319,7 +322,18 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			return err
 		}
 		fmt.Fprintf(out, "created project %s (%s)\n", resp.GetProject().GetId(), resp.GetProject().GetName())
+		if remote != "" {
+			if _, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
+				Project: resp.GetProject().GetId(), Remote: remote,
+			}); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "its sessions will work in %s\n", remote)
+		}
 		return move(workspace.Path{Workspace: located.Path.Workspace, Project: resp.GetProject().GetName()}, out)
+
+	case "remote":
+		return runProjectRemote(ctx, client, args[1:], out)
 
 	case "list":
 		scope := ""
@@ -346,8 +360,80 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return nil
 
 	default:
-		return fmt.Errorf("usage: quay project <create|list>")
+		return fmt.Errorf("usage: quay project <create|list|remote>")
 	}
+}
+
+// runProjectRemote shows or changes the repository a project's sessions work in.
+func runProjectRemote(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	switch {
+	case len(args) == 0:
+		located, err := locate(ctx, client, "")
+		if err != nil {
+			return err
+		}
+		project, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: located.ProjectID})
+		if err != nil {
+			return err
+		}
+		if project.GetProject().GetRemote() == "" {
+			fmt.Fprintf(out, "%s has no remote, so its sessions start with an empty directory\n",
+				located.Path.Project)
+			return nil
+		}
+		fmt.Fprintln(out, project.GetProject().GetRemote())
+		return nil
+
+	case args[0] == "set" && len(args) == 2, args[0] == "set" && len(args) == 3:
+		typed, remote := "", args[1]
+		if len(args) == 3 {
+			typed, remote = args[1], args[2]
+		}
+		located, err := locate(ctx, client, typed)
+		if err != nil {
+			return err
+		}
+		resp, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
+			Project: located.ProjectID, Remote: remote,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s works in %s\n", located.Path.Project, resp.GetProject().GetRemote())
+		fmt.Fprintf(out, "a session started from here clones it on its first turn\n")
+		return nil
+
+	case args[0] == "clear" && len(args) == 1:
+		located, err := locate(ctx, client, "")
+		if err != nil {
+			return err
+		}
+		if _, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
+			Project: located.ProjectID,
+		}); err != nil {
+			return err
+		}
+		// The checkouts that exist are left where they are: taking a remote away says where new work
+		// comes from, not that a conversation should lose what it is working on.
+		fmt.Fprintf(out, "%s has no remote now; the checkouts already made are untouched\n", located.Path.Project)
+		return nil
+
+	default:
+		return fmt.Errorf("usage: quay project remote [set [<address>] <url> | clear]")
+	}
+}
+
+// takeRemote pulls a --remote out of a command's arguments and hands back the rest.
+func takeRemote(args []string) (rest []string, remote string) {
+	for at := 0; at < len(args); at++ {
+		if args[at] == "--remote" && at+1 < len(args) {
+			remote = args[at+1]
+			at++
+			continue
+		}
+		rest = append(rest, args[at])
+	}
+	return rest, remote
 }
 
 // splitLast divides an address into everything above the last level and the last level itself, which

@@ -25,6 +25,9 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
+  // remote is the repository this project's sessions work in, cloned into each session's working
+  // directory on its first turn. Empty is a project with no code in it, which is most of them.
+  string remote = 5;
 }
 
 // A session is one model thread inside a project. It carries its workspace too, denormalised from
@@ -112,6 +115,16 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
+// SetProjectRemoteRequest names the repository a project's sessions work in. An empty remote takes it
+// away, and leaves the checkouts that already exist alone.
+message SetProjectRemoteRequest {
+  string project = 1;
+  string remote = 2;
+}
+message SetProjectRemoteResponse {
+  Project project = 1;
+}
+
 message DeleteProjectRequest {
   string id = 1;
 }
@@ -449,6 +462,7 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc SetProjectRemote(SetProjectRemoteRequest) returns (SetProjectRemoteResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

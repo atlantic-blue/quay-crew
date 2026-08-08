@@ -253,8 +253,8 @@ if the rest waits:
    Done.
 4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
    Done, in [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
-5. A repository reaches a sandbox: a project names a remote and a session clones it. A git skill with no
-   repository to work in does nothing, so this comes before the skills themselves.
+5. A repository reaches a sandbox: a project names a remote and a session clones it. Done. A git skill
+   with no repository to work in does nothing, which is why it came before the skills themselves.
 6. The git skill, and then `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does
    things that cannot be undone, so they are attached separately.
