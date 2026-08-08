@@ -8,6 +8,31 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A project names the repository its sessions work in, and the first turn clones it.** A session's
+  working directory started empty, so the skills work had built the way to describe git and there was
+  nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
+  project that already exists. The remote sits on the project rather than the workspace, because a body of
+  work is one repository.
+  It clones into a directory under the working directory, not into it, because the memory file the model
+  reads is written there before the container exists and git refuses to clone into somewhere that is not
+  empty.
+  Three things about the command, and each is the reason it is built rather than formatted. It clones only
+  when there is no checkout yet, because a sandbox is adopted across turns and a second clone either fails
+  or throws away what the first turn did. The remote is a positional argument and never part of the
+  script, because it comes from a person and a remote inside a command can end that command and start
+  another. The credential is read from `GH_TOKEN` in the environment by a helper at the moment git asks, so
+  no token is ever in an argument list, which anything that can inspect the container could read.
+  A remote is refused when it is set rather than when a clone runs, because the person who typed it is
+  there to read the refusal, and one carrying a credential is refused outright: it would otherwise be a
+  password in the database and in every listing that prints a project.
+  Proved by cloning for real inside a container, twice, from a bare repository made in the container so
+  it needs no network: the checkout arrives, the memory file beside it survives, and the second run leaves
+  the session's own work alone. That real run is also what caught the helper being handed to git with no
+  configuration key, which every unit test had passed straight over.
+  Not covered by a test: a private clone over https, which needs a real token against a real host.
+  Fifth slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
+  [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
 - **A workspace can be given a skill of its own, imported and pinned.** The crew's skills directory
   reaches every session, which is the crew level. This is the other one: `quay skill import` reads a
   skill's directory and sends its files, and `quay skill attach` gives it to a workspace, so a token for

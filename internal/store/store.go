@@ -81,6 +81,10 @@ type Store interface {
 	// ListProjects lists every project, or one workspace's when workspace is set.
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
+	// SetProjectRemote records the repository a project's sessions work in. Its own call rather than an
+	// argument to CreateProject, so a project that already exists can be given one and every existing
+	// caller of CreateProject stays as it is.
+	SetProjectRemote(ctx context.Context, project, remote string) error
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
 	// lands in the same session.

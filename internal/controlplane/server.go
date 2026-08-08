@@ -297,8 +297,55 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	if err := s.readySkills(ctx, session, box); err != nil {
 		return nil, err
 	}
+	if err := s.cloneRemote(ctx, session, box); err != nil {
+		return nil, err
+	}
 	s.sandboxes[session.GetId()] = box
 	return box, nil
+}
+
+// cloneRemote puts the project's repository in front of the session, once.
+//
+// A session's working directory starts empty, so a git skill had nothing to work in: the crew could
+// describe how to commit and there was nowhere to commit. This is where the code comes from.
+//
+// Once per container, and the command itself is what makes that true: it clones only when the checkout
+// is not already there. A sandbox is adopted across turns, so a command that cloned every time would
+// either fail on the second turn or throw away whatever the first one did. The check is inside the
+// container because that is the only place that knows what this container has, which is the same reason
+// a skill's setup checks its own marker there.
+//
+// It clones into a directory under the working directory rather than into it. The memory file the model
+// reads is written there before the sandbox exists, and git refuses to clone into somewhere that is not
+// empty.
+//
+// A failure fails the turn, unlike context. Being asked to work in a repository that is not there is
+// worse than being told the clone did not work: the model improvises, and an improvised repository looks
+// like an answer.
+func (s *Server) cloneRemote(ctx context.Context, session *quaycrewv1.Session, box sandbox.Sandbox) error {
+	project, err := s.store.GetProject(ctx, session.GetProject())
+	if err != nil || project.GetRemote() == "" {
+		return nil
+	}
+	spec, err := sandbox.CloneSpec(project.GetRemote(), sandbox.WorkingPath)
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, "%v", err)
+	}
+	proc, err := box.Exec(ctx, spec)
+	if err != nil {
+		return status.Errorf(codes.Internal, "clone %s: %v", project.GetRemote(), err)
+	}
+	_, _ = io.Copy(io.Discard, proc.Stdout())
+	if err := proc.Wait(); err != nil {
+		// The remote and what git said, and never the credential: it is not in the command, and what
+		// comes back on the error stream is git's own words.
+		return status.Errorf(codes.FailedPrecondition,
+			"could not clone %s into this session: %v: %s. The crew reads the credential from the "+
+				"workspace secret %s, so check that is set with quay secret set %s %s <value>",
+			project.GetRemote(), err, proc.Stderr(), sandbox.CredentialEnv,
+			session.GetWorkspace(), sandbox.CredentialEnv)
+	}
+	return nil
 }
 
 // heldSkills is what a session holds, from both places a skill can come from, sorted by name.
@@ -802,6 +849,33 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 		return nil, storeError(err, "project")
 	}
 	return &quaycrewv1.DeleteProjectResponse{}, nil
+}
+
+// SetProjectRemote names the repository this project's sessions work in.
+//
+// The remote is checked here rather than when a clone runs. A refusal at the moment somebody sets it is
+// read by the person who typed it; the same refusal on a first turn arrives at whoever was trying to get
+// work done, hours later, with nothing pointing back at where it came from.
+//
+// Sessions already running keep the checkout they have. A remote is where new work comes from, not an
+// instruction to replace what a conversation is in the middle of.
+func (s *Server) SetProjectRemote(ctx context.Context, req *quaycrewv1.SetProjectRemoteRequest) (*quaycrewv1.SetProjectRemoteResponse, error) {
+	if req.GetRemote() != "" {
+		if err := sandbox.UsableRemote(req.GetRemote()); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if _, err := sandbox.RepositoryName(req.GetRemote()); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	if err := s.store.SetProjectRemote(ctx, req.GetProject(), req.GetRemote()); err != nil {
+		return nil, storeError(err, "project")
+	}
+	project, err := s.store.GetProject(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetProjectRemoteResponse{Project: project}, nil
 }
 
 // Dispatch starts or continues a thread, running one turn through the model runner.

@@ -37,8 +37,11 @@ commands:
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
-  project create [<workspace>/]<name>     create a project and move into it
+  project create [<workspace>/]<name> [--remote <url>]
+                                          create a project, optionally naming its repository
   project list [<workspace>]              list projects
+  project remote [set [<address>] <url> | clear]
+                                          the repository a project's sessions work in
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   turns <session id>                      what a session was asked, and what came back

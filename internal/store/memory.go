@@ -163,6 +163,19 @@ func (m *Memory) ListProjects(_ context.Context, workspace string) ([]*quaycrewv
 	return out, nil
 }
 
+// SetProjectRemote records the repository a project's sessions work in.
+func (m *Memory) SetProjectRemote(_ context.Context, project, remote string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, err := m.getProjectLocked(project)
+	if err != nil {
+		return err
+	}
+	// getProjectLocked hands back a copy, so the stored one is what has to change.
+	m.projects[held.GetId()].Remote = remote
+	return nil
+}
+
 // DeleteProject soft deletes a project.
 func (m *Memory) DeleteProject(_ context.Context, id string) error {
 	m.mu.Lock()

@@ -734,6 +734,56 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a project remembers the repository its sessions work in", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+
+		// Nothing is the normal state: most projects have no code in them.
+		if got := project.GetRemote(); got != "" {
+			t.Errorf("a new project works in %q, want nothing", got)
+		}
+
+		const remote = "https://github.com/atlantic-blue/quay-crew.git"
+		if err := s.SetProjectRemote(ctx, project.GetId(), remote); err != nil {
+			t.Fatalf("SetProjectRemote: %v", err)
+		}
+		read, err := s.GetProject(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		if read.GetRemote() != remote {
+			t.Errorf("it works in %q, want %q", read.GetRemote(), remote)
+		}
+		// The listing carries it too: a client that has to fetch each project one at a time to find out
+		// where its code is would be a listing nobody uses.
+		list, err := s.ListProjects(ctx, project.GetWorkspace())
+		if err != nil {
+			t.Fatalf("ListProjects: %v", err)
+		}
+		if len(list) != 1 || list[0].GetRemote() != remote {
+			t.Errorf("the listing says %+v, want the remote in it", list)
+		}
+
+		if err := s.SetProjectRemote(ctx, project.GetId(), ""); err != nil {
+			t.Fatalf("clearing the remote: %v", err)
+		}
+		read, err = s.GetProject(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetProject after clearing: %v", err)
+		}
+		if read.GetRemote() != "" {
+			t.Errorf("it still works in %q after being cleared", read.GetRemote())
+		}
+	})
+
+	t.Run("a remote cannot be set on a project that does not exist", func(t *testing.T) {
+		s := newDataset(t)(t)
+		if err := s.SetProjectRemote(context.Background(), "ghost", "https://example.com/a/b.git"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetProjectRemote on a missing project returned %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("a skill is imported with its files and comes back whole", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
