@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **What a skill costs, in [`docs/SKILLS.md`](docs/SKILLS.md).** The design said nothing about how
+  big a brief may be, and a skill whose brief is a manual is paid for on every session that holds it.
+  A brief is now short by construction: it says when to use the skill and what it can do, and the
+  detail lives in files in the skill's own mounted directory that the model opens only when it needs
+  them. Measured rather than asserted: one real crew rendered 51,727 bytes of context into every
+  session in every workspace, about thirteen thousand tokens before a word was typed, none of it a
+  skill. A level that reaches everything gets filled until it hurts, and skills would be next.
+
 - **A design for skills, in [`docs/SKILLS.md`](docs/SKILLS.md).** A session opens knowing nothing
   about how you work, and `git` in the image with no identity and no credential is the shape of that
   gap. A skill is a capability written down as code: a brief, the binaries it needs, the secrets it
