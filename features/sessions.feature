@@ -219,6 +219,21 @@ Feature: Sessions run in isolated sandboxes
     Then the control plane names the session's sandbox
     And the command opens the conversation the crew holds
 
+  # Tokens are what a crew costs, and the conversations that cost the most never pass through the
+  # control plane: an operator talking in the panel is talking to the sandbox. The model's own
+  # transcript is the only record, so that is what the crew reads.
+  Scenario: A thread reports what its conversation has cost
+    Given a session started by dispatching "hello"
+    When the model has written 52 in, 6917 out and 1723404 read from cache
+    And the operator lists the sessions
+    Then the thread reports 52 tokens in and 6917 out
+    And the thread reports 1723404 read from the cache
+
+  Scenario: A thread nobody has spoken in reports no cost at all
+    When the operator opens the driver
+    And the operator lists the sessions
+    Then the driver reports no cost, rather than a cost of nothing
+
   # A conversation started inside a sandbox picks its own identifier and tells nobody, so every
   # conversation opened from the panel was one the crew could not name: no history to read back, no
   # tokens to count, and no way to tell one transcript in a workspace from another. The crew names it

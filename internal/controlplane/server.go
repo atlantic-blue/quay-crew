@@ -745,6 +745,9 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	if err != nil {
 		return nil, storeError(err, "list sessions")
 	}
+	for _, session := range sessions {
+		s.withUsage(session)
+	}
 	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
 }
 
@@ -754,7 +757,27 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
+	s.withUsage(session)
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
+}
+
+// withUsage puts what a thread's conversation has cost onto it, read from the transcript the model
+// keeps rather than from anything the crew recorded.
+//
+// It has to come from there: the conversations worth counting are the ones held in the panel, and
+// those never pass through the control plane at all. A thread nobody has spoken in is left without a
+// figure rather than reported as costing nothing, because those are different things.
+func (s *Server) withUsage(session *quaycrewv1.Session) {
+	spent := s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId())
+	if spent.Empty() {
+		return
+	}
+	session.Usage = &quaycrewv1.Usage{
+		Input:        spent.Input,
+		Output:       spent.Output,
+		CacheRead:    spent.CacheRead,
+		CacheWritten: spent.CacheWritten,
+	}
 }
 
 // AttachSession describes how to open a session's conversation.
