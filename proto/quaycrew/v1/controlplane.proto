@@ -25,9 +25,16 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
-  // remote is the repository this project's sessions work in, cloned into each session's working
-  // directory on its first turn. Empty is a project with no code in it, which is most of them.
-  string remote = 5;
+}
+
+// A repository a workspace works in. Every session in the workspace gets a checkout of it, cloned into
+// its working directory on the first turn.
+message Repository {
+  string workspace = 1;
+  // name is the directory the checkout lands in, derived from the remote, and what it is removed by.
+  string name = 2;
+  string remote = 3;
+  google.protobuf.Timestamp added_at = 4;
 }
 
 // A session is one model thread inside a project. It carries its workspace too, denormalised from
@@ -115,14 +122,29 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
-// SetProjectRemoteRequest names the repository a project's sessions work in. An empty remote takes it
-// away, and leaves the checkouts that already exist alone.
-message SetProjectRemoteRequest {
-  string project = 1;
+// AddRepositoryRequest gives a workspace a repository to work in.
+message AddRepositoryRequest {
+  string workspace = 1;
   string remote = 2;
 }
-message SetProjectRemoteResponse {
-  Project project = 1;
+message AddRepositoryResponse {
+  Repository repository = 1;
+}
+
+// RemoveRepositoryRequest takes one away, by the name the listing shows. The checkouts already made are
+// left where they are: this says where new work comes from, not that a conversation should lose what it
+// is in the middle of.
+message RemoveRepositoryRequest {
+  string workspace = 1;
+  string name = 2;
+}
+message RemoveRepositoryResponse {}
+
+message ListRepositoriesRequest {
+  string workspace = 1;
+}
+message ListRepositoriesResponse {
+  repeated Repository repositories = 1;
 }
 
 message DeleteProjectRequest {
@@ -462,7 +484,9 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
-  rpc SetProjectRemote(SetProjectRemoteRequest) returns (SetProjectRemoteResponse);
+  rpc AddRepository(AddRepositoryRequest) returns (AddRepositoryResponse);
+  rpc RemoveRepository(RemoveRepositoryRequest) returns (RemoveRepositoryResponse);
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

@@ -29,39 +29,29 @@ func clones(ctx context.Context) []sandbox.Spec {
 
 // initializeCloneSteps covers where the code a session works in comes from.
 func initializeCloneSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the project works in "([^"]*)"$`, func(ctx context.Context, remote string) error {
+	sc.Step(`^the workspace works in "([^"]*)"$`, func(ctx context.Context, remote string) error {
 		w := worldFrom(ctx)
-		_, err := w.client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
-			Project: w.projectID, Remote: remote,
+		_, err := w.client.AddRepository(ctx, &quaycrewv1.AddRepositoryRequest{
+			Workspace: w.workspaceID, Remote: remote,
 		})
 		return err
 	})
 
-	sc.Step(`^the operator sets the project's remote to "([^"]*)"$`, func(ctx context.Context, remote string) error {
+	sc.Step(`^the operator adds the repository "([^"]*)"$`, func(ctx context.Context, remote string) error {
 		w := worldFrom(ctx)
-		_, err := w.client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
-			Project: w.projectID, Remote: remote,
+		_, err := w.client.AddRepository(ctx, &quaycrewv1.AddRepositoryRequest{
+			Workspace: w.workspaceID, Remote: remote,
 		})
 		w.lastErr = err
 		return nil
 	})
 
-	sc.Step(`^the operator clears the project's remote$`, func(ctx context.Context) error {
+	sc.Step(`^the operator stops working in "([^"]*)"$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		_, err := w.client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{Project: w.projectID})
+		_, err := w.client.RemoveRepository(ctx, &quaycrewv1.RemoveRepositoryRequest{
+			Workspace: w.workspaceID, Name: name,
+		})
 		return err
-	})
-
-	sc.Step(`^the project has no remote$`, func(ctx context.Context) error {
-		w := worldFrom(ctx)
-		resp, err := w.client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: w.projectID})
-		if err != nil {
-			return err
-		}
-		if got := resp.GetProject().GetRemote(); got != "" {
-			return fmt.Errorf("the project still works in %q", got)
-		}
-		return nil
 	})
 
 	sc.Step(`^the clone will fail saying "([^"]*)"$`, func(ctx context.Context, said string) error {
@@ -83,12 +73,16 @@ func initializeCloneSteps(sc *godog.ScenarioContext) {
 		if len(ran) == 0 {
 			return fmt.Errorf("nothing was cloned, so the session has no repository to work in")
 		}
-		for _, argument := range ran[0].Argv {
-			if argument == remote {
-				return nil
+		var cloned []string
+		for _, spec := range ran {
+			for _, argument := range spec.Argv {
+				if argument == remote {
+					return nil
+				}
 			}
+			cloned = append(cloned, spec.Argv[len(spec.Argv)-2])
 		}
-		return fmt.Errorf("it cloned %v, want %q among the arguments", ran[0].Argv, remote)
+		return fmt.Errorf("it cloned %v, want %q among them", cloned, remote)
 	})
 
 	sc.Step(`^every clone it asked for was conditional on there being no checkout$`, func(ctx context.Context) error {

@@ -734,53 +734,81 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a project remembers the repository its sessions work in", func(t *testing.T) {
+	t.Run("a workspace remembers the repositories it works in", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house bills")
-
-		// Nothing is the normal state: most projects have no code in them.
-		if got := project.GetRemote(); got != "" {
-			t.Errorf("a new project works in %q, want nothing", got)
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
 		}
 
-		const remote = "https://github.com/atlantic-blue/quay-crew.git"
-		if err := s.SetProjectRemote(ctx, project.GetId(), remote); err != nil {
-			t.Fatalf("SetProjectRemote: %v", err)
-		}
-		read, err := s.GetProject(ctx, project.GetId())
-		if err != nil {
-			t.Fatalf("GetProject: %v", err)
-		}
-		if read.GetRemote() != remote {
-			t.Errorf("it works in %q, want %q", read.GetRemote(), remote)
-		}
-		// The listing carries it too: a client that has to fetch each project one at a time to find out
-		// where its code is would be a listing nobody uses.
-		list, err := s.ListProjects(ctx, project.GetWorkspace())
-		if err != nil {
-			t.Fatalf("ListProjects: %v", err)
-		}
-		if len(list) != 1 || list[0].GetRemote() != remote {
-			t.Errorf("the listing says %+v, want the remote in it", list)
+		// Nothing is the normal state: most workspaces have no code in them.
+		if held, err := s.WorkspaceRepositories(ctx, workspace.GetId()); err != nil || len(held) != 0 {
+			t.Fatalf("a new workspace works in %d repositories (%v), want none", len(held), err)
 		}
 
-		if err := s.SetProjectRemote(ctx, project.GetId(), ""); err != nil {
-			t.Fatalf("clearing the remote: %v", err)
-		}
-		read, err = s.GetProject(ctx, project.GetId())
+		const first = "https://github.com/atlantic-blue/quay-crew.git"
+		added, err := s.AddRepository(ctx, workspace.GetId(), "quay-crew", first)
 		if err != nil {
-			t.Fatalf("GetProject after clearing: %v", err)
+			t.Fatalf("AddRepository: %v", err)
 		}
-		if read.GetRemote() != "" {
-			t.Errorf("it still works in %q after being cleared", read.GetRemote())
+		if added.GetName() != "quay-crew" || added.GetRemote() != first {
+			t.Errorf("it added %+v", added)
+		}
+		if added.GetAddedAt() == nil {
+			t.Error("the repository came back with no added time")
+		}
+
+		// Several, because a workspace routinely spans more than one: a service and its infrastructure.
+		if _, err := s.AddRepository(ctx, workspace.GetId(), "org-cdk",
+			"https://github.com/atlantic-blue/org-cdk.git"); err != nil {
+			t.Fatalf("AddRepository, the second: %v", err)
+		}
+		held, err := s.WorkspaceRepositories(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceRepositories: %v", err)
+		}
+		if len(held) != 2 {
+			t.Fatalf("the workspace works in %d repositories, want 2", len(held))
+		}
+		// Oldest first, so a listing does not shuffle between reads.
+		if held[0].GetName() != "quay-crew" || held[1].GetName() != "org-cdk" {
+			t.Errorf("they came back as %s then %s, want the order they were added in",
+				held[0].GetName(), held[1].GetName())
+		}
+
+		// Adding the same one again changes nothing, so a script that runs twice is harmless.
+		if _, err := s.AddRepository(ctx, workspace.GetId(), "quay-crew", first); err != nil {
+			t.Fatalf("adding the same repository twice: %v", err)
+		}
+		if held, _ := s.WorkspaceRepositories(ctx, workspace.GetId()); len(held) != 2 {
+			t.Errorf("adding the same one twice left %d repositories, want 2", len(held))
+		}
+
+		if err := s.RemoveRepository(ctx, workspace.GetId(), "quay-crew"); err != nil {
+			t.Fatalf("RemoveRepository: %v", err)
+		}
+		held, err = s.WorkspaceRepositories(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceRepositories after removing: %v", err)
+		}
+		if len(held) != 1 || held[0].GetName() != "org-cdk" {
+			t.Errorf("removing one left %+v, want the other one", held)
 		}
 	})
 
-	t.Run("a remote cannot be set on a project that does not exist", func(t *testing.T) {
+	t.Run("a repository needs a workspace that exists, and one that is not there cannot be removed", func(t *testing.T) {
 		s := newDataset(t)(t)
-		if err := s.SetProjectRemote(context.Background(), "ghost", "https://example.com/a/b.git"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("SetProjectRemote on a missing project returned %v, want ErrNotFound", err)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		if _, err := s.AddRepository(ctx, "ghost", "a", "https://example.com/a/b.git"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("adding to a workspace that does not exist returned %v, want ErrNotFound", err)
+		}
+		if err := s.RemoveRepository(ctx, workspace.GetId(), "never-added"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("removing one the workspace does not have returned %v, want ErrNotFound", err)
 		}
 	})
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -320,4 +321,112 @@ func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
 	if strings.Contains(string(sealed), token) {
 		t.Fatal("the token is in the database in the clear")
 	}
+}
+
+// TestTheRemoteMovesFromTheProjectToTheWorkspace proves the migration carries what a crew already had.
+//
+// A remote sat on the project for one commit, and somebody who upgraded in that window has one set. A
+// migration that silently dropped it would leave a crew whose sessions stop cloning, with nothing saying
+// why, and the row it came from already gone.
+func TestTheRemoteMovesFromTheProjectToTheWorkspace(t *testing.T) {
+	ctx := context.Background()
+	dropEverything(t)
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+
+	// Bring the schema up to the commit before this one, so the old column is really there.
+	applyThrough(t, ctx, pool, "0010_project_remote")
+
+	if _, err := pool.Exec(ctx, `
+		insert into workspaces (id, name) values ('w1', 'acme');
+		insert into projects (id, workspace, name, remote)
+		values ('p1', 'w1', 'house bills', 'https://github.com/atlantic-blue/quay-crew.git'),
+		       ('p2', 'w1', 'gardening', 'https://github.com/atlantic-blue/quay-crew.git'),
+		       ('p3', 'w1', 'nothing here', '')`); err != nil {
+		t.Fatalf("seed the old shape: %v", err)
+	}
+
+	if err := store.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	rows, err := pool.Query(ctx,
+		`select name, remote from workspace_repositories where workspace = 'w1' order by name`)
+	if err != nil {
+		t.Fatalf("read the repositories: %v", err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var name, remote string
+		if err := rows.Scan(&name, &remote); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, name+" "+remote)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read the repositories: %v", err)
+	}
+
+	// One row, not two: both projects named the same repository, and a workspace works in it once. The
+	// project with nothing set brings nothing.
+	want := "quay-crew https://github.com/atlantic-blue/quay-crew.git"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("the workspace works in %v, want exactly [%q]", got, want)
+	}
+
+	// And the column it came from is gone, so there is one place a repository lives.
+	var stillThere bool
+	if err := pool.QueryRow(ctx, `
+		select exists (select 1 from information_schema.columns
+		               where table_name = 'projects' and column_name = 'remote')`).Scan(&stillThere); err != nil {
+		t.Fatalf("check the old column: %v", err)
+	}
+	if stillThere {
+		t.Error("projects still has a remote column, so a repository has two homes")
+	}
+}
+
+// applyThrough runs the migrations in order up to and including one of them, and records them as
+// applied, so a test can stand on the schema as it was at a particular commit.
+func applyThrough(t *testing.T, ctx context.Context, pool *pgxpool.Pool, last string) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `
+		create table if not exists schema_migrations (
+			version text primary key, applied_at timestamptz not null default now())`); err != nil {
+		t.Fatalf("create schema_migrations: %v", err)
+	}
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		t.Fatalf("read the migrations: %v", err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".up.sql") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		version := strings.TrimSuffix(name, ".up.sql")
+		body, err := os.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if _, err := pool.Exec(ctx, string(body)); err != nil {
+			t.Fatalf("apply %s: %v", name, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`insert into schema_migrations (version) values ($1) on conflict do nothing`, version); err != nil {
+			t.Fatalf("record %s: %v", version, err)
+		}
+		if version == last {
+			return
+		}
+	}
+	t.Fatalf("no migration called %s", last)
 }

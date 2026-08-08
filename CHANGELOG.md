@@ -8,6 +8,22 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A repository belongs to the workspace, and a workspace can work in several.** It sat on the project
+  for one commit and that was the wrong level: the workspace is already where a credential lives and where
+  a skill attaches, which are the two things a repository needs, and every project in a workspace almost
+  always works in the same code. Several rather than one, because a workspace routinely spans more than
+  one: a service and its infrastructure, or a frontend and the api behind it.
+  `quay repository add <url>`, `quay repository list`, `quay repository remove <name>`. Each lands in a
+  directory of its own under every session's working directory, named after the repository, and two
+  remotes that would want the same directory are refused when the second is added rather than the second
+  one quietly never being cloned.
+  `quay project remote` and `--remote` are gone and say so, naming the command to use instead. A flag that
+  is ignored is worse than one that never existed: `--remote` absorbed silently would have become the
+  project's name.
+  The migration carries over anything already set on a project, folding two projects that named the same
+  repository into the one row, and that carry over is tested against a real database rather than assumed.
+  For [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
 - **A project names the repository its sessions work in, and the first turn clones it.** A session's
   working directory started empty, so the skills work had built the way to describe git and there was
   nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
