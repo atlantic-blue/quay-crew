@@ -12,6 +12,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
@@ -2730,5 +2731,74 @@ func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
 	// The age is the flexible column at the end, and it must still be at the end.
 	if !strings.HasSuffix(strings.TrimRight(line, " "), rows[0].Cells[len(rows[0].Cells)-1]) {
 		t.Fatalf("the last cell is not under the last column:\n%s", line)
+	}
+}
+
+// TestTheHeaderCarriesWhatTheCrewHasCost, beside the build, where the operator is looking while they
+// work rather than only when they go and look at the listing.
+func TestTheHeaderCarriesWhatTheCrewHasCost(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	spent := sandbox.Usage{Input: 52, Output: 6917, CacheRead: 1723404}
+	lines, err := HeaderOnly(registry, Default, Info{Version: "a348a05", Spent: spent}, 200, 24)
+	if err != nil {
+		t.Fatalf("HeaderOnly: %v", err)
+	}
+	header := strings.Join(lines, "\n")
+	for _, want := range []string{"6.9k", "52", "1.7M"} {
+		if !strings.Contains(header, want) {
+			t.Errorf("the header does not carry %s:\n%s", want, header)
+		}
+	}
+}
+
+// TestACrewThatHasSpentNothingSaysNothingInTheHeader. A row of zeroes beside the build reads as a
+// crew that is free, and it is the first thing anybody sees.
+func TestACrewThatHasSpentNothingSaysNothingInTheHeader(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	lines, err := HeaderOnly(registry, Default, Info{Version: "a348a05"}, 200, 24)
+	if err != nil {
+		t.Fatalf("HeaderOnly: %v", err)
+	}
+	if strings.Contains(strings.Join(lines, "\n"), "⟳") {
+		t.Fatalf("a crew nobody has used reports a cost:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+// TestTheTotalGivesWayBeforeTheWordmark. The header is one row. The wordmark is what makes the panel
+// look like something rather than a terminal with tables in it, and the total is a number the
+// operator can also get from the listing, so the number goes first.
+func TestTheTotalGivesWayBeforeTheWordmark(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	info := Info{Version: "a348a05", Spent: sandbox.Usage{Input: 52, Output: 6917, CacheRead: 1723404}}
+
+	lostTotal, lostWordmark := 0, 0
+	for width := 200; width >= 20; width-- {
+		lines, err := HeaderOnly(registry, Default, info, width, 24)
+		if err != nil {
+			t.Fatalf("HeaderOnly at %d: %v", width, err)
+		}
+		header := strings.Join(lines, "\n")
+		if lostTotal == 0 && !strings.Contains(header, "⟳") {
+			lostTotal = width
+		}
+		if lostWordmark == 0 && !strings.Contains(header, logo[0]) {
+			lostWordmark = width
+		}
+	}
+	if lostTotal == 0 {
+		t.Fatal("the total never gives way, so at some width it is pushing the wordmark off")
+	}
+	if lostWordmark != 0 && lostWordmark >= lostTotal {
+		t.Fatalf("the wordmark went at %d columns and the total at %d: the total should go first",
+			lostWordmark, lostTotal)
 	}
 }

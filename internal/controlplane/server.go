@@ -145,6 +145,43 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 	}, nil
 }
 
+// GetUsage adds up what every conversation in the crew has cost.
+//
+// It is a running total rather than configuration, which is why it is not part of GetInfo: that call
+// answers what a turn dispatched here would do, and it is fetched once because the answer does not
+// change under a running process. This one changes with every turn.
+//
+// Archived threads are counted. What a piece of work came to does not stop being true because the
+// thread was put away, and a total that quietly shrinks when somebody tidies up is worse than no
+// total at all.
+func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*quaycrewv1.GetUsageResponse, error) {
+	var total sandbox.Usage
+	var threads int64
+	for _, archived := range []bool{false, true} {
+		sessions, err := s.store.ListSessions(ctx, store.SessionFilter{Archived: archived})
+		if err != nil {
+			return nil, storeError(err, "list sessions")
+		}
+		for _, session := range sessions {
+			spent := s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId())
+			if spent.Empty() {
+				continue
+			}
+			total = total.Add(spent)
+			threads++
+		}
+	}
+	return &quaycrewv1.GetUsageResponse{
+		Total: &quaycrewv1.Usage{
+			Input:        total.Input,
+			Output:       total.Output,
+			CacheRead:    total.CacheRead,
+			CacheWritten: total.CacheWritten,
+		},
+		Threads: threads,
+	}, nil
+}
+
 // storeError maps a store failure onto the status the caller should see.
 func storeError(err error, what string) error {
 	if errors.Is(err, store.ErrNotFound) {

@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"sort"
 	"strings"
 	"time"
@@ -77,6 +78,8 @@ type Info struct {
 	// is running. Everything else in here is then blank, and the console has to say why rather than
 	// quietly showing less.
 	Behind bool
+	// Spent is what every conversation in the crew has cost so far. Zero is a crew nobody has used.
+	Spent sandbox.Usage
 	// SandboxBuild is the build the sandbox image was made from. Empty means the image does not say,
 	// and nothing is then shown: a crew that cannot see which build its image came from should say
 	// nothing rather than accuse a good image of being old.
@@ -255,7 +258,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tickMsg:
-		return m, tea.Batch(listCmd(m.active, m.parent), tickCmd())
+		// The description is refreshed with the rows now, not only at startup. It carries what the
+		// crew has cost, which changes with every turn, and a total from when the console opened is
+		// worse than none: it looks live and is not.
+		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 	case rowsMsg:
 		return m.applyRows(msg), nil
 	case errMsg:
