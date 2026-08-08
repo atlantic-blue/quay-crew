@@ -22,6 +22,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/projection"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc"
@@ -75,6 +76,18 @@ func main() {
 		os.Exit(1)
 	}
 	sandboxKind, _ := sandbox.ResolveKind(os.Getenv("QC_SANDBOX"))
+	// The skills the operator has written, read from files. A skill that does not make sense stops
+	// the crew starting rather than going quietly missing later, because a capability that is absent
+	// without a reason is one the session improvises around.
+	skills, err := skill.Load(os.Getenv("QC_SKILLS_DIR"))
+	if err != nil {
+		logger.Error("skills", "error", err)
+		os.Exit(1)
+	}
+	if len(skills) > 0 && os.Getenv("QC_SKILLS_HOST") == "" {
+		logger.Warn("skills are not mounted: set QC_SKILLS_HOST to the skills directory as the host sees it",
+			"skills", len(skills))
+	}
 	// Which build the sandbox image was made from, read once at startup: it is configuration, and an
 	// image is not rebuilt under a running control plane without restarting this stack anyway.
 	sandboxBuild := sandbox.ImageBuild(ctx, os.Getenv("QC_SANDBOX_IMAGE"))
@@ -103,6 +116,10 @@ func main() {
 		// Which of a workspace's secrets a sandbox is given, by name. The model's own token is
 		// always carried and does not need naming.
 		SandboxSecrets: splitAndTrim(os.Getenv("QC_SANDBOX_SECRETS")),
+		// The capabilities a session is given, and where they are on the host so they can be mounted.
+		Skills:       skills,
+		SkillsHost:   os.Getenv("QC_SKILLS_HOST"),
+		SandboxImage: os.Getenv("QC_SANDBOX_IMAGE"),
 		// Who a commit made inside a sandbox is by. Both or neither: git refuses on either missing.
 		GitAuthor: controlplane.Identity{
 			Name:  os.Getenv("QC_GIT_AUTHOR_NAME"),

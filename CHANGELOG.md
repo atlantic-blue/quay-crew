@@ -8,6 +8,24 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A skill reaches a session.** A skill is a directory with `skill.yaml`, a `SKILL.md` the model
+  reads, and whatever else it needs. Put one in the crew's skills directory and every session gets it:
+  the brief lands in the memory file it already reads, the directory is mounted read only beside the
+  working directory, and the secrets the skill names are carried in.
+  It refuses rather than half working. A skill naming a secret the workspace has not set is refused
+  before a container is made, saying which secret and how to set it. A skill naming a binary the image
+  does not carry is refused once the container can be asked, naming the binary and the image to add it
+  to. A capability that silently does nothing is worse than one that is absent, because the model
+  improvises around it and the improvisation reads as the answer.
+  Read only, because a session that can rewrite its own instructions can give itself a capability
+  nobody approved. `bin/setup` runs once per container rather than once per turn. A brief is marked in
+  the memory file like every other section, so it is never read back into the crew's context and
+  rendered beside itself from then on.
+  First of the pull requests in issue #143's skills plan. Attaching a skill at a level rather than to
+  the whole crew, and pinning a session to the version it started with, are the next one.
+
+## 8 August 2026
+
 - **A session can commit as you.** `git` has been in the sandbox image the whole time and unusable,
   because a container has no identity and the tool refuses to commit rather than guessing. That
   refusal is correct and it is a wall to walk into halfway through a piece of work.

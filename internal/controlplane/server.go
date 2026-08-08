@@ -11,6 +11,8 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"io"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -64,6 +67,15 @@ type Config struct {
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
+	// Skills are the capabilities the crew has been given, read from files. Every session gets them
+	// today; attaching one at a level is the next piece of work. See docs/SKILLS.md.
+	Skills []skill.Skill
+	// SkillsHost is the skills directory as the host daemon sees it, which is what a bind mount needs.
+	// Empty means skills are not mounted, the same way an unset data directory means state is not kept.
+	SkillsHost string
+	// SandboxImage is the image a session runs in, named in the refusal when a skill needs a binary
+	// that is not in it. Knowing which image to go and fix is most of that message.
+	SandboxImage string
 	// GitAuthor is who a commit made inside a sandbox is by: a name and an address, both or neither.
 	//
 	// It is configuration rather than a secret. Without it `git` is in the image and unusable: the
@@ -111,8 +123,12 @@ type Server struct {
 	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor Identity
-	events    messaging.EventLog
-	info      Info
+	// skills are the capabilities a session is given, and where they are on the host.
+	skills       []skill.Skill
+	skillsHost   string
+	sandboxImage string
+	events       messaging.EventLog
+	info         Info
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
@@ -132,6 +148,9 @@ func NewServer(cfg Config) *Server {
 		reachable:      cfg.Reachable,
 		sandboxSecrets: cfg.SandboxSecrets,
 		gitAuthor:      cfg.GitAuthor,
+		skills:         cfg.Skills,
+		skillsHost:     cfg.SkillsHost,
+		sandboxImage:   cfg.SandboxImage,
 		sandboxes:      make(map[string]sandbox.Sandbox),
 	}
 }
@@ -213,6 +232,18 @@ func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*
 	}, nil
 }
 
+// sandboxError maps a sandbox failure onto the status the caller should see.
+//
+// A refusal that already says what it is keeps saying it. Wrapping everything as Internal turned "the
+// github skill needs gh and the image does not have it", which the operator can act on, into a server
+// fault, which reads as the crew being broken.
+func sandboxError(err error, what string) error {
+	if _, said := status.FromError(err); said && status.Code(err) != codes.Unknown {
+		return err
+	}
+	return status.Errorf(codes.Internal, "%s: %v", what, err)
+}
+
 // storeError maps a store failure onto the status the caller should see.
 func storeError(err error, what string) error {
 	if errors.Is(err, store.ErrNotFound) {
@@ -241,18 +272,120 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	// not there. Creating is idempotent, so the daemon is the source of truth and this map is only
 	// what to close later.
 	s.syncContext(ctx, session)
+	// What the session is missing, said before a container exists rather than discovered inside one.
+	// A capability that silently does not work is worse than one that is absent, because the model
+	// improvises around it and the operator reads the improvisation as the answer.
+	if err := s.skillsAreUsable(ctx, session); err != nil {
+		return nil, err
+	}
 	box, err := s.provider.Create(ctx, sandbox.Config{
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
 		Env:       environ(s.turnEnv(ctx, session)),
+		Mounts:    s.skillMounts(),
 		Driver:    session.GetDriver(),
 	})
 	if err != nil {
 		return nil, err
 	}
+	if err := s.readySkills(ctx, box); err != nil {
+		return nil, err
+	}
 	s.sandboxes[session.GetId()] = box
 	return box, nil
+}
+
+// skillMounts is where each of the crew's skills appears inside a sandbox, read only.
+func (s *Server) skillMounts() []sandbox.Mount {
+	if s.skillsHost == "" {
+		return nil
+	}
+	mounts := make([]sandbox.Mount, 0, len(s.skills))
+	for _, given := range s.skills {
+		mounts = append(mounts, sandbox.Mount{
+			Source:   path.Join(s.skillsHost, given.Name),
+			Target:   path.Join(sandbox.SkillsPath, given.Name),
+			ReadOnly: true,
+		})
+	}
+	return mounts
+}
+
+// skillsAreUsable refuses when a skill names a secret the workspace has not set.
+//
+// Before the sandbox, because this is the half that can be answered without one, and a refusal that
+// arrives before anything is built is cheaper to read and cheaper to fix. The binaries are the other
+// half and they can only be answered inside the container, which readySkills does.
+func (s *Server) skillsAreUsable(ctx context.Context, session *quaycrewv1.Session) error {
+	for _, given := range s.skills {
+		for _, name := range given.SecretNames() {
+			value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
+			if err == nil && value != "" {
+				continue
+			}
+			return status.Errorf(codes.FailedPrecondition,
+				"the %s skill needs the secret %s, which this workspace has not set: %s. "+
+					"Set it with quay secret set %s %s <value>",
+				given.Name, name, given.Secrets[name], session.GetWorkspace(), name)
+		}
+	}
+	return nil
+}
+
+// readySkills checks the sandbox has what its skills need, and runs each skill's setup once.
+//
+// Inside the container because that is the only place that knows what the image carries. Once,
+// because a sandbox is adopted across turns and a setup script run on every turn is a script whose
+// author has to think about being run a thousand times. The marker lives in the container, so a
+// replaced container runs setup again, which is right: it is the container that was set up.
+func (s *Server) readySkills(ctx context.Context, box sandbox.Sandbox) error {
+	for _, given := range s.skills {
+		for _, binary := range given.Binaries {
+			if s.has(ctx, box, binary) {
+				continue
+			}
+			_ = box.Close(ctx)
+			return status.Errorf(codes.FailedPrecondition,
+				"the %s skill needs %s and the sandbox image does not have it. Add it to %s",
+				given.Name, binary, s.imageName())
+		}
+		if !given.HasSetup {
+			continue
+		}
+		at := path.Join(sandbox.SkillsPath, given.Name)
+		marker := path.Join("/tmp", ".quay-setup-"+given.Name)
+		proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
+			"[ -f " + marker + " ] || { " + path.Join(at, skill.SetupFile) + " && touch " + marker + "; }"}})
+		if err != nil {
+			return status.Errorf(codes.Internal, "set up the %s skill: %v", given.Name, err)
+		}
+		_, _ = io.Copy(io.Discard, proc.Stdout())
+		if err := proc.Wait(); err != nil {
+			return status.Errorf(codes.FailedPrecondition,
+				"the %s skill could not set itself up in the sandbox: %v: %s",
+				given.Name, err, proc.Stderr())
+		}
+	}
+	return nil
+}
+
+// has says whether a command is in the sandbox.
+func (s *Server) has(ctx context.Context, box sandbox.Sandbox, binary string) bool {
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", "command -v " + binary}})
+	if err != nil {
+		return false
+	}
+	_, _ = io.Copy(io.Discard, proc.Stdout())
+	return proc.Wait() == nil
+}
+
+// imageName is the image to go and fix, and something readable when the crew was not told which it is.
+func (s *Server) imageName() string {
+	if s.sandboxImage == "" {
+		return "the sandbox image"
+	}
+	return s.sandboxImage
 }
 
 // syncContext makes the files the model reads agree with the store, in both directions.
@@ -292,6 +425,13 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		scopes := make([]string, 0, len(levels))
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
+		}
+		// The briefs are marks this build knows about, and they are read from the skill rather than
+		// from the store. Named here so they are not folded into the innermost level, which is where
+		// anything unrecognised goes: a brief taken into a session's own context would be written
+		// back to the store, and then rendered twice, and then again.
+		for _, given := range s.skills {
+			scopes = append(scopes, skillScope(given.Name))
 		}
 		if onDisk, found := sandbox.ReadMemory(dirs[at]); found {
 			written := sandbox.Decompose(onDisk, scopes)
@@ -362,6 +502,13 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			}
 			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}
+		// The briefs, in the file the session reads, after everything the store owns. They are
+		// rendered from the skill's own file every time rather than kept, so editing a skill and
+		// making a new sandbox is all it takes, and nothing about a skill is ever read back into the
+		// crew's context.
+		if at == innerFile {
+			sections = append(sections, s.briefs()...)
+		}
 		_ = sandbox.WriteMemory(dirs[at], sandbox.Compose(sections))
 	}
 }
@@ -397,6 +544,34 @@ func reads(session *quaycrewv1.Session, scope store.ContextScope, owner string) 
 	default:
 		return false
 	}
+}
+
+// innerFile is the memory file in a session's own working directory, the one carrying the project's
+// context, the session's own, and the briefs of the skills it has been given.
+const innerFile = 1
+
+// briefs are what each of the crew's skills says about itself, as sections of a memory file.
+//
+// Short by construction, because every one of them is read at the start of every conversation the
+// session has. The detail lives in the skill's own directory, mounted beside the working directory,
+// and costs nothing until the model opens it.
+func (s *Server) briefs() []sandbox.Section {
+	sections := make([]sandbox.Section, 0, len(s.skills))
+	for _, given := range s.skills {
+		body := given.Brief
+		if s.skillsHost != "" {
+			body += "\n\nThe rest of this skill is in " + path.Join(sandbox.SkillsPath, given.Name) + "."
+		}
+		sections = append(sections, sandbox.Section{Scope: skillScope(given.Name), Body: body})
+	}
+	return sections
+}
+
+// skillScope marks a brief in a memory file. Marked like every other section, so a skill's brief is
+// never mistaken for something a session wrote and taken into the crew's context: that is exactly
+// what happens to unmarked text, by design, and it is the last thing that should happen to this.
+func skillScope(name string) string {
+	return "skill:" + name
 }
 
 // contextLevel is one level of context and whose it is.
@@ -586,7 +761,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
 			Prompt: req.GetText(), Status: "failed", Failure: "the session's sandbox could not be created",
 		})
-		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
+		return nil, sandboxError(err, "create sandbox")
 	}
 
 	resp, err := s.runner.Run(ctx, box, model.Request{
@@ -809,7 +984,11 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 	// needs and not everything the workspace happens to hold. A name with nothing set against it is
 	// skipped rather than refused: a crew configured for a skill nobody has set up yet should still
 	// run its turns.
-	for _, name := range append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...) {
+	named := append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...)
+	for _, given := range s.skills {
+		named = append(named, given.SecretNames()...)
+	}
+	for _, name := range named {
 		if _, already := env[name]; already {
 			continue
 		}
@@ -930,7 +1109,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	// operator a container name the daemon has never heard of. The conversation is on the host, so a
 	// fresh container over the same mounts is the same conversation.
 	if _, err := s.sandboxFor(ctx, session); err != nil {
-		return nil, status.Errorf(codes.Internal, "start sandbox: %v", err)
+		return nil, sandboxError(err, "start sandbox")
 	}
 	// Inside tmux, so the operator can leave without ending what they opened. Detaching returns them
 	// to the console with the model still running; the only way back before this was to kill the
@@ -968,7 +1147,7 @@ func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSess
 			"session %s is %s, not stopped, so there is nothing to restart", req.GetId(), session.GetStatus())
 	}
 	if _, err := s.sandboxFor(ctx, session); err != nil {
-		return nil, status.Errorf(codes.Internal, "create sandbox: %v", err)
+		return nil, sandboxError(err, "create sandbox")
 	}
 	if err := s.store.RestartSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
