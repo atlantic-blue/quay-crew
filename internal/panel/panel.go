@@ -1,11 +1,7 @@
-// Package panel puts the crew and a conversation on the screen at once: the console on the left, the
-// thread driving it on the right, each on half the width.
+// Package panel puts the console and a conversation on the screen at once, each on half the width.
 //
-// tmux does the splitting. It is already how an open conversation is kept alive, which is what makes
-// ctrl-q able to leave one running, and it already survives a connection dropping. The alternative is
-// rendering other programs inside the console, which means writing a terminal emulator inside a
-// terminal: resize, escape sequences, mouse, the alternate screen. That is a large piece of work
-// which buys nothing until the two halves need to talk to each other.
+// tmux does the splitting. It already keeps an open conversation alive and survives a connection
+// dropping; the alternative is a terminal emulator inside a terminal.
 package panel
 
 import (
@@ -98,13 +94,9 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
 		{"tmux", "set-hook", "-t", session, "client-attached",
 			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
-		// Cycling panes skips the header. It is one row of text with nothing to type into, so landing
-		// on it is a keypress wasted and then another to get out. The hook bounces the selection on to
-		// the console, which makes the pane keys a toggle between the two halves that are actually
-		// used. Scoped to this window, so the operator's own tmux sessions keep their behaviour.
-		//
-		// It does not recurse: the bounce selects pane 1, the hook runs again, and the condition is
-		// false the second time.
+		// The header has nothing to type into, so the pane keys bounce off it and become a toggle
+		// between the two halves. Scoped to this window, so other tmux sessions are unchanged, and it
+		// does not recurse: the bounce selects pane 1 and the condition is false the second time.
 		{"tmux", "set-hook", "-w", "-t", target, "after-select-pane",
 			"if -F '#{==:#{pane_index},0}' 'select-pane -t " + target + ".1'"},
 		// Which pane has the keyboard, said in the colour the console already uses for the row the
@@ -180,12 +172,8 @@ func (l Layout) check() error {
 	return nil
 }
 
-// Beside puts a conversation next to a pane that is already on the screen, which is what the console
-// does when the operator presses the key for it. The panel is the same thing built in one go; this is
-// the same thing built around a console that is already running.
-//
-// target is the pane to split, as tmux's own pane identifier. Nothing else changes: the console keeps
-// drawing its own header, which is the header the operator asked to keep.
+// Beside splits target, tmux's own pane identifier, to put a conversation next to a console that is
+// already running. The panel builds the same layout in one go.
 func Beside(target string, right []string) ([][]string, error) {
 	if strings.TrimSpace(target) == "" {
 		return nil, fmt.Errorf("panel: no pane to open a conversation beside")
