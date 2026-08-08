@@ -15,8 +15,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/google/uuid"
 )
 
@@ -41,6 +43,19 @@ func TurnLimit(limit int) int {
 
 // ErrNotFound covers deleted as well as never existed.
 var ErrNotFound = errors.New("store: not found")
+
+// ErrSkillChanged is returned when a version of a skill is imported again carrying a different skill.
+//
+// It is a refusal rather than an overwrite because a workspace pins the version it holds. Overwriting
+// would change a skill under sessions already using it, silently, which is exactly what pinning is
+// for. The way forward is to raise the version in the manifest.
+var ErrSkillChanged = errors.New("store: that version of the skill is already imported and differs")
+
+// Imported is a skill the crew holds: the skill as its author wrote it, and when it came in.
+type Imported struct {
+	skill.Skill
+	ImportedAt time.Time
+}
 
 // SessionFilter narrows a listing. The zero value is every live session the crew has.
 type SessionFilter struct {
@@ -97,6 +112,27 @@ type Store interface {
 	GetContext(ctx context.Context, scope ContextScope, owner string) (string, error)
 	// SetContext records what the model should be told at a scope.
 	SetContext(ctx context.Context, scope ContextScope, owner, body string) error
+
+	// ImportSkill takes a skill into the crew at the version its manifest declares.
+	//
+	// Importing the same name and version again is fine when it is the same skill and refused when it
+	// is not, because a workspace pins a version: a version that changed underneath it would be a
+	// skill changing under a session already using it, which is the one thing pinning exists to stop.
+	ImportSkill(ctx context.Context, imported Imported) error
+	// GetSkill returns one revision of a skill, its files included.
+	GetSkill(ctx context.Context, name string, version int) (Imported, error)
+	// ListSkills returns the newest revision of every skill the crew holds, without their files. A
+	// listing is read to see what exists, and the files are the largest part of a skill.
+	ListSkills(ctx context.Context) ([]Imported, error)
+	// AttachSkill gives a workspace a skill, pinned to the newest revision the crew holds now.
+	// Attaching one it already holds moves it to that revision.
+	AttachSkill(ctx context.Context, workspace, name string) (Imported, error)
+	// DetachSkill takes a skill away from a workspace. The skill stays imported, because another
+	// workspace may hold it and because importing it again should not be the price of a change of mind.
+	DetachSkill(ctx context.Context, workspace, name string) error
+	// WorkspaceSkills returns the skills a workspace holds, at the versions it pinned, files included,
+	// which is what a sandbox needs to be built.
+	WorkspaceSkills(ctx context.Context, workspace string) ([]Imported, error)
 
 	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
 	// turn: delivery from the event log is at least once, so a projection replaying a record it has

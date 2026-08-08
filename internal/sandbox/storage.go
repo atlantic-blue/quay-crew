@@ -6,6 +6,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 )
 
 // Storage keeps a sandbox's state on the host, so removing a container does not destroy the
@@ -186,6 +188,99 @@ func WriteMemory(dir, body string) error {
 	// context back.
 	if err := os.Chmod(file, 0o666); err != nil {
 		return fmt.Errorf("sandbox: open up %s to the sandbox user: %w", file, err)
+	}
+	return nil
+}
+
+// SkillsDir is what a workspace's own skills directory is called under its directory in the data
+// directory. The crew's skills live wherever the operator keeps them and do not come through here.
+const SkillsDir = "skills"
+
+// WorkspaceSkillsDir is where this process writes a workspace's own skills, and whether there is
+// anywhere to write them at all. An unconfigured data directory keeps nothing, the same as everything
+// else here.
+func (s Storage) WorkspaceSkillsDir(workspace string) (string, bool) {
+	if s.Dir == "" || usableAsPath("workspace", workspace) != nil {
+		return "", false
+	}
+	return filepath.Join(s.Dir, "workspaces", workspace, SkillsDir), true
+}
+
+// WorkspaceSkillsHost is the same directory as the host daemon sees it, which is what a bind mount
+// source has to be: the control plane may be in a container, and its own view of a path means nothing
+// to the daemon starting sandboxes beside it.
+func (s Storage) WorkspaceSkillsHost(workspace string) (string, bool) {
+	if s.Dir == "" || s.Host == "" || usableAsPath("workspace", workspace) != nil {
+		return "", false
+	}
+	return path.Join(s.Host, "workspaces", workspace, SkillsDir), true
+}
+
+// WriteSkills puts a workspace's skills in the directory a sandbox reads them from, and takes away the
+// ones it no longer holds.
+//
+// The files are written rather than mounted from wherever they were authored, because a skill lives in
+// the store: a crew on a pod has no host directory to go back to, and a skill has to be whole wherever
+// the crew runs. This is the same shape as the memory file, which is a rendering of the store too.
+//
+// Detaching removes the directory. A brief left behind is a capability the model can still read about
+// and no longer has, which is worse than not having it, because it will try.
+func WriteSkills(root string, skills []skill.Skill) error {
+	held := make(map[string]bool, len(skills))
+	for _, one := range skills {
+		held[one.Name] = true
+	}
+
+	// Take away what is no longer held before writing, so a rename lands as a rename rather than as
+	// both names existing at once.
+	entries, err := os.ReadDir(root)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("sandbox: read %s: %w", root, err)
+	}
+	for _, entry := range entries {
+		if held[entry.Name()] {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return fmt.Errorf("sandbox: remove %s: %w", filepath.Join(root, entry.Name()), err)
+		}
+	}
+
+	if len(skills) == 0 {
+		// Nothing held means no directory, rather than an empty one, for the same reason an empty
+		// memory file is removed: there being nothing there says it better.
+		if err := os.RemoveAll(root); err != nil {
+			return fmt.Errorf("sandbox: remove %s: %w", root, err)
+		}
+		return nil
+	}
+
+	for _, one := range skills {
+		for _, file := range one.Files {
+			// The paths were checked when the skill was built, and they are checked again here because
+			// this is the line that writes them: a skill that reached the store through an older build
+			// must not be able to write outside its own directory now.
+			target := filepath.Join(root, one.Name, filepath.FromSlash(file.Path))
+			if !strings.HasPrefix(target, filepath.Join(root, one.Name)+string(filepath.Separator)) {
+				return fmt.Errorf("sandbox: skill %s carries file %q, which does not stay inside its own directory",
+					one.Name, file.Path)
+			}
+			if err := makeWritableDir(filepath.Dir(target)); err != nil {
+				return err
+			}
+			mode := os.FileMode(0o666)
+			if file.Executable {
+				mode = 0o777
+			}
+			if err := os.WriteFile(target, file.Body, mode); err != nil {
+				return fmt.Errorf("sandbox: write %s: %w", target, err)
+			}
+			// The mode is filtered through the umask on create, and a setup script that is not
+			// executable fails inside the container with nothing pointing back here.
+			if err := os.Chmod(target, mode); err != nil {
+				return fmt.Errorf("sandbox: open up %s to the sandbox user: %w", target, err)
+			}
+		}
 	}
 	return nil
 }

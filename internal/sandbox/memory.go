@@ -17,6 +17,17 @@ const (
 	sectionClose = " -->"
 )
 
+// SkillsScope is the mark the index of a workspace's skills is written under.
+//
+// It is a section like a level of context and deliberately not one of them. A level is something
+// somebody wrote and the crew keeps; this is rendered from the skills the workspace holds, so reading
+// it back would store a derived thing as though a person had typed it.
+//
+// It still has to be named when a memory file is read back, because text under a mark the build does
+// not know is swept into the innermost level rather than dropped. Named, it is recognised and left
+// where it is.
+const SkillsScope = "skills"
+
 // Section is one level's contribution to a memory file.
 type Section struct {
 	// Scope names the level, for example "crew".

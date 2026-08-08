@@ -42,6 +42,10 @@ const (
 	ControlPlaneService_SetSessionPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetSessionPermissionMode"
 	ControlPlaneService_ListContexts_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListContexts"
 	ControlPlaneService_SetContext_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetContext"
+	ControlPlaneService_ImportSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportSkill"
+	ControlPlaneService_ListSkills_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSkills"
+	ControlPlaneService_AttachSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/AttachSkill"
+	ControlPlaneService_DetachSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/DetachSkill"
 	ControlPlaneService_ListTurns_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTurns"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
@@ -76,6 +80,10 @@ type ControlPlaneServiceClient interface {
 	SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
+	ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error)
+	ListSkills(ctx context.Context, in *ListSkillsRequest, opts ...grpc.CallOption) (*ListSkillsResponse, error)
+	AttachSkill(ctx context.Context, in *AttachSkillRequest, opts ...grpc.CallOption) (*AttachSkillResponse, error)
+	DetachSkill(ctx context.Context, in *DetachSkillRequest, opts ...grpc.CallOption) (*DetachSkillResponse, error)
 	ListTurns(ctx context.Context, in *ListTurnsRequest, opts ...grpc.CallOption) (*ListTurnsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -321,6 +329,46 @@ func (c *controlPlaneServiceClient) SetContext(ctx context.Context, in *SetConte
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportSkillResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ImportSkill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListSkills(ctx context.Context, in *ListSkillsRequest, opts ...grpc.CallOption) (*ListSkillsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSkillsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListSkills_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AttachSkill(ctx context.Context, in *AttachSkillRequest, opts ...grpc.CallOption) (*AttachSkillResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachSkillResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AttachSkill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) DetachSkill(ctx context.Context, in *DetachSkillRequest, opts ...grpc.CallOption) (*DetachSkillResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachSkillResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_DetachSkill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListTurns(ctx context.Context, in *ListTurnsRequest, opts ...grpc.CallOption) (*ListTurnsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListTurnsResponse)
@@ -380,6 +428,10 @@ type ControlPlaneServiceServer interface {
 	SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
+	ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error)
+	ListSkills(context.Context, *ListSkillsRequest) (*ListSkillsResponse, error)
+	AttachSkill(context.Context, *AttachSkillRequest) (*AttachSkillResponse, error)
+	DetachSkill(context.Context, *DetachSkillRequest) (*DetachSkillResponse, error)
 	ListTurns(context.Context, *ListTurnsRequest) (*ListTurnsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -463,6 +515,18 @@ func (UnimplementedControlPlaneServiceServer) ListContexts(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContext not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportSkill not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListSkills(context.Context, *ListSkillsRequest) (*ListSkillsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSkills not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AttachSkill(context.Context, *AttachSkillRequest) (*AttachSkillResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachSkill not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) DetachSkill(context.Context, *DetachSkillRequest) (*DetachSkillResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachSkill not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListTurns(context.Context, *ListTurnsRequest) (*ListTurnsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTurns not implemented")
@@ -908,6 +972,78 @@ func _ControlPlaneService_SetContext_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ImportSkill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportSkillRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ImportSkill(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ImportSkill_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ImportSkill(ctx, req.(*ImportSkillRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListSkills_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSkillsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListSkills(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListSkills_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListSkills(ctx, req.(*ListSkillsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AttachSkill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachSkillRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AttachSkill(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AttachSkill_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AttachSkill(ctx, req.(*AttachSkillRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_DetachSkill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachSkillRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).DetachSkill(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_DetachSkill_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).DetachSkill(ctx, req.(*DetachSkillRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListTurns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListTurnsRequest)
 	if err := dec(in); err != nil {
@@ -1060,6 +1196,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetContext",
 			Handler:    _ControlPlaneService_SetContext_Handler,
+		},
+		{
+			MethodName: "ImportSkill",
+			Handler:    _ControlPlaneService_ImportSkill_Handler,
+		},
+		{
+			MethodName: "ListSkills",
+			Handler:    _ControlPlaneService_ListSkills_Handler,
+		},
+		{
+			MethodName: "AttachSkill",
+			Handler:    _ControlPlaneService_AttachSkill_Handler,
+		},
+		{
+			MethodName: "DetachSkill",
+			Handler:    _ControlPlaneService_DetachSkill_Handler,
 		},
 		{
 			MethodName: "ListTurns",

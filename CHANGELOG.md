@@ -8,6 +8,27 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A workspace can be given a skill of its own, imported and pinned.** The crew's skills directory
+  reaches every session, which is the crew level. This is the other one: `quay skill import` reads a
+  skill's directory and sends its files, and `quay skill attach` gives it to a workspace, so a token for
+  one capability is not handed to every session the crew has. The files travel rather than the path,
+  because the control plane runs in a container where a directory on your machine means nothing, and a
+  crew on a pod has no host directory to go back to for whatever it did not copy.
+  A workspace pins the version it attached. Importing a newer revision does not move it, and importing a
+  different skill under a version already held is refused rather than overwriting what a running session
+  is using.
+  What reaches a session is now one line per skill rather than each brief. The line says the skill exists
+  and where to read it; the brief is a file beside it, opened when that kind of work comes up. This is a
+  change to what shipped earlier today, and the reason is measured rather than guessed: this crew's four
+  levels of context reached 51,727 bytes at the workspace, paid by every session before a word was typed.
+  Both sources are mounted read only at the same path, so nothing in a sandbox can rewrite what it was
+  granted, and where a name is held by both the workspace's own wins.
+  Proved by importing a real directory through the real command line tool into a real Postgres, then
+  reading the brief and the environment from inside the container the session runs in. Six mutations
+  checked red, two of which found assertions that were passing for the wrong reason.
+  Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
+  [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
 - **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
   against 24,132, and some files were over half comment. Five entries in this file quoted the operator
   by name, typos and all, and comments narrated their own redesigns: it was called that for a day, it

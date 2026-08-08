@@ -132,6 +132,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runContext(ctx, client, args[1:], out)
 	case "secret":
 		return runSecret(ctx, client, args[1:], out)
+	case "skill":
+		return runSkill(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}

@@ -15,6 +15,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -732,6 +733,223 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the resumed session lost its conversation handle: %q", same.GetModelSessionId())
 		}
 	})
+
+	t.Run("a skill is imported with its files and comes back whole", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportSkill(ctx, aSkill("github", 3)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+
+		held, err := s.GetSkill(ctx, "github", 3)
+		if err != nil {
+			t.Fatalf("GetSkill: %v", err)
+		}
+		if held.Summary != "Open pull requests." {
+			t.Errorf("summary is %q", held.Summary)
+		}
+		if got := fmt.Sprint(held.Binaries); got != "[git gh]" {
+			t.Errorf("binaries are %s, want [git gh]", got)
+		}
+		if len(held.Secrets) != 1 || held.Secrets["GH_TOKEN"] == "" {
+			t.Fatalf("secrets are %+v, want GH_TOKEN with something saying what it is", held.Secrets)
+		}
+		if len(held.Files) != 3 {
+			t.Fatalf("files came back as %d, want the 3 that went in", len(held.Files))
+		}
+		if held.ImportedAt.IsZero() {
+			t.Error("the skill came back with no import time")
+		}
+		// The executable bit has to survive the round trip, or a setup script arrives unable to run and
+		// the failure surfaces inside a container with nothing pointing back here.
+		for _, file := range held.Files {
+			if file.Path == "bin/setup" && !file.Executable {
+				t.Error("bin/setup lost its executable bit in the store")
+			}
+			if file.Path == "SKILL.md" && file.Executable {
+				t.Error("SKILL.md came back executable, so the bit is not stored per file")
+			}
+		}
+	})
+
+	t.Run("importing the same version twice is harmless, and importing a different skill as it is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportSkill(ctx, aSkill("github", 3)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+		// The same skill again, which is what a pull that changed nothing produces.
+		if err := s.ImportSkill(ctx, aSkill("github", 3)); err != nil {
+			t.Fatalf("importing the same skill twice: %v", err)
+		}
+
+		changed := aSkill("github", 3)
+		changed.Brief = "a different brief entirely"
+		changed.Files[0].Body = []byte("a different brief entirely")
+		if err := s.ImportSkill(ctx, changed); !errors.Is(err, store.ErrSkillChanged) {
+			t.Fatalf("importing a changed skill at the same version returned %v, want ErrSkillChanged", err)
+		}
+
+		held, err := s.GetSkill(ctx, "github", 3)
+		if err != nil {
+			t.Fatalf("GetSkill: %v", err)
+		}
+		if held.Brief == "a different brief entirely" {
+			t.Error("the refused import changed the skill anyway, so a session's pin means nothing")
+		}
+	})
+
+	t.Run("a listing gives the newest revision of each skill and not its files", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		for _, one := range []store.Imported{aSkill("git", 1), aSkill("github", 1), aSkill("github", 2)} {
+			if err := s.ImportSkill(ctx, one); err != nil {
+				t.Fatalf("ImportSkill %s v%d: %v", one.Name, one.Version, err)
+			}
+		}
+
+		list, err := s.ListSkills(ctx)
+		if err != nil {
+			t.Fatalf("ListSkills: %v", err)
+		}
+		if len(list) != 2 {
+			t.Fatalf("ListSkills returned %d, want one row per name", len(list))
+		}
+		if list[0].Name != "git" || list[1].Name != "github" {
+			t.Fatalf("ListSkills returned %s and %s, want them sorted", list[0].Name, list[1].Name)
+		}
+		if list[1].Version != 2 {
+			t.Errorf("github came back at version %d, want the newest, 2", list[1].Version)
+		}
+		// A listing is the cheapest call and the files are the largest part of a skill.
+		for _, held := range list {
+			if len(held.Files) != 0 {
+				t.Errorf("%s carried %d files into a listing", held.Name, len(held.Files))
+			}
+			if len(held.Secrets) == 0 {
+				t.Errorf("%s carried no secrets, and a listing has to say what a skill needs", held.Name)
+			}
+		}
+	})
+
+	t.Run("a workspace holds the skills attached to it, pinned to a version", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+
+		if held, err := s.WorkspaceSkills(ctx, workspace.GetId()); err != nil || len(held) != 0 {
+			t.Fatalf("a new workspace holds %d skills (%v), want none", len(held), err)
+		}
+		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+
+		attached, err := s.AttachSkill(ctx, workspace.GetId(), "github")
+		if err != nil {
+			t.Fatalf("AttachSkill: %v", err)
+		}
+		if attached.Version != 1 {
+			t.Errorf("attached version %d, want 1", attached.Version)
+		}
+
+		held, err := s.WorkspaceSkills(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceSkills: %v", err)
+		}
+		if len(held) != 1 || held[0].Name != "github" {
+			t.Fatalf("the workspace holds %+v, want github", held)
+		}
+		// The files come with it, because this is the call a sandbox is built from.
+		if len(held[0].Files) == 0 {
+			t.Error("a workspace's skills came back without their files, so nothing could be mounted")
+		}
+
+		// A newer revision imported does not move a workspace that pinned the older one, which is what
+		// stops a skill changing under a session already using it.
+		if err := s.ImportSkill(ctx, aSkill("github", 2)); err != nil {
+			t.Fatalf("ImportSkill v2: %v", err)
+		}
+		held, err = s.WorkspaceSkills(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceSkills after a new revision: %v", err)
+		}
+		if len(held) != 1 || held[0].Version != 1 {
+			t.Fatalf("the workspace moved to %+v on its own, want it pinned at version 1", held)
+		}
+
+		// Attaching again is how it moves.
+		if _, err := s.AttachSkill(ctx, workspace.GetId(), "github"); err != nil {
+			t.Fatalf("AttachSkill again: %v", err)
+		}
+		held, err = s.WorkspaceSkills(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceSkills after re-attaching: %v", err)
+		}
+		if len(held) != 1 || held[0].Version != 2 {
+			t.Fatalf("re-attaching left the workspace at %+v, want version 2", held)
+		}
+
+		if err := s.DetachSkill(ctx, workspace.GetId(), "github"); err != nil {
+			t.Fatalf("DetachSkill: %v", err)
+		}
+		if held, err := s.WorkspaceSkills(ctx, workspace.GetId()); err != nil || len(held) != 0 {
+			t.Fatalf("the workspace still holds %d skills (%v) after detaching", len(held), err)
+		}
+		// Detaching does not unimport: another workspace may hold it, and changing your mind should not
+		// cost a re-import.
+		if _, err := s.GetSkill(ctx, "github", 2); err != nil {
+			t.Errorf("detaching removed the skill from the crew: %v", err)
+		}
+	})
+
+	t.Run("attaching what does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+
+		if _, err := s.AttachSkill(ctx, workspace.GetId(), "terraform"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching a skill the crew has not imported returned %v, want ErrNotFound", err)
+		}
+		if _, err := s.AttachSkill(ctx, "ghost", "github"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching to a workspace that does not exist returned %v, want ErrNotFound", err)
+		}
+		if _, err := s.GetSkill(ctx, "github", 9); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("reading a version that was never imported returned %v, want ErrNotFound", err)
+		}
+		if err := s.DetachSkill(ctx, workspace.GetId(), "github"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("detaching a skill the workspace does not hold returned %v, want ErrNotFound", err)
+		}
+	})
+}
+
+// aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two
+// binaries, a named secret, and a setup script that has to stay executable.
+func aSkill(name string, version int) store.Imported {
+	return store.Imported{Skill: skill.Skill{
+		Name:     name,
+		Version:  version,
+		Summary:  "Open pull requests.",
+		Binaries: []string{"git", "gh"},
+		Secrets:  map[string]string{"GH_TOKEN": "a token with repo scope"},
+		Brief:    "how it is done here",
+		Files: []skill.File{
+			{Path: "SKILL.md", Body: []byte("how it is done here")},
+			{Path: "bin/setup", Body: []byte("#!/bin/sh\n"), Executable: true},
+			{Path: "skill.yaml", Body: []byte("name: " + name + "\n")},
+		},
+	}}
 }
 
 // newProject creates a workspace and a project inside it, which is the smallest setup a session
