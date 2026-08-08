@@ -289,8 +289,14 @@ type Runner interface {
 
 A run is an instance of a graph: an identifier, the graph version it is pinned to, a small state map,
 and one current node. An event arrives, the reducer evaluates the current node's outgoing edges, and
-returns the next state plus commands to emit. Every transition is written back to the log as an
-event, so run state is derived rather than stored, and any run can be reconstructed by replay.
+returns the next state plus commands to emit.
+
+**A run lives in Postgres, and each transition is published to the log as the audit record.** That is
+the same split the rest of the system already makes, and it is the split the log forces: publishing a
+turn is deliberately lossy, because a broker that cannot be reached must never fail a turn that
+already happened, and with `QC_KAFKA_SEEDS` unset nothing is published at all. A run whose next
+transition depended on an event that was dropped would sit on that node forever with nothing to say
+so, which is why the log cannot be the place a run's position is kept.
 
 A stream and a reducer is the more powerful arrangement, strictly. Any control flow can be written as
 a reducer, including branching computed at run time and steps chosen by the model. A graph cannot
@@ -302,22 +308,27 @@ Power is not what is wanted at this layer, legibility is.
 
 Five node types, and a sixth needs an argument:
 
-- `dispatch` sends a turn to a session and waits for the result.
+- `dispatch` sends a turn to the run's own thread and waits for the result.
 - `wait` waits for an external event, a timer or a webhook or a channel message.
 - `ask` puts a question to the operator through the gated outbound and waits for the reply.
 - `choice` branches on state, pure, no side effect.
 - `done` ends the run.
 
 Every node either waits on something or is pure, so the reducer never blocks and there is no
-goroutine per run.
+goroutine per run. `Dispatch` on the control plane is a synchronous call that returns the reply, so
+the blocking is done by an executor beside the reducer: it takes the commands the reducer returned,
+makes the call, and feeds the result back in as an event. One goroutine per outstanding dispatch,
+never one per run, and the reducer itself still touches no Docker, no Postgres and no model.
 
-Graphs are authored as files, loaded into the store, and versioned:
+Graphs are authored as files, loaded into the store, and versioned. A run is addressed at a project,
+because that is what a dispatch needs, so the trigger carries `workspace/project` and no node names a
+session:
 
 ```yaml
 name: fix-red-pull-request
 on: { event: pull_request.check_failed }
 nodes:
-  fix:   { type: dispatch, session: "{{workspace}}", prompt: "CI is red on {{url}}. Diagnose and fix." }
+  fix:   { type: dispatch, prompt: "CI is red on {{url}}. Diagnose and fix." }
   ok:    { type: choice, on: { result.exit_code: 0 } }
   ask:   { type: ask, text: "Fixed {{url}} locally. Push?" }
 edges:
@@ -326,6 +337,30 @@ edges:
   - [ok, done, "false"]
   - [ask, push, "yes"]
 ```
+
+### A run owns its thread
+
+**The thread identifier is the run identifier.** `Dispatch` resolves a thread through
+`FindOrCreateSession(project, thread)`, so a thread identifier that does not exist yet is created and
+the same one later continues the conversation. A dispatch node therefore passes the run's own
+identifier every time, and four things follow:
+
+- **The reducer keeps no session handle.** The address is derived from the run it already holds, so
+  there is nothing to store and nothing to go stale.
+- **A restart mid run resumes.** The next dispatch lands in the same thread and the same sandbox, so
+  the model's own state across the run survives it.
+- **Correlation stops being a heuristic.** Turn events are keyed by session, and the session belongs
+  to the run, so a turn event on it is unambiguously this run's, even when the operator types into
+  that thread by hand. `TurnEvent` needs no run identifier for this, which is why the first version
+  changes nothing in `proto/`.
+- **The run owns the sandbox lifetime.** `done` archives the session, otherwise every run leaves a
+  container behind. Archived threads are listed apart from live ones, so a finished run takes itself
+  out of the way.
+
+A thread identifier is free form and unique within its project, so a run names its thread after the
+graph and a short run identifier, `fix-red-pull-request-a1b2c3d4`. The console then reads as what the
+run is doing without waiting for labels; labels become the thing that groups runs rather than the
+thing that names them.
 
 ### Where it sits
 
@@ -345,10 +380,10 @@ sequenceDiagram
     participant YOU as operator
 
     EV->>LOG: check failed on a pull request
-    LOG->>FLOW: event, partitioned by run id
+    LOG->>FLOW: event
     Note over FLOW: Advance(run, event)<br/>edge matches, next node is dispatch
     FLOW->>LOG: run advanced, now at node dispatch
-    FLOW->>API: Dispatch turn into the session
+    FLOW->>API: Dispatch into the run's own thread
     API->>SBX: run the turn
     SBX-->>API: result, exit code 0
     API->>LOG: turn finished
@@ -363,7 +398,8 @@ sequenceDiagram
 
 ### Constraints that hold the design together
 
-- **Partition the log by run identifier.** One run's events are then totally ordered, so no locking.
+- **One run's events must be totally ordered, so no locking.** Turn events are already keyed by
+  session, and a run owns its session, so the partitioning that exists gives this for nothing.
 - **Pin the graph version on the run.** Otherwise editing a file changes an automation that is
   halfway through.
 - **No expression language.** Three comparison operators to start. Accepting arbitrary expressions
