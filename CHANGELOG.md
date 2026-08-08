@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A thread reports what its conversation has cost.** Four numbers, read from the transcript the
+  model keeps: what was sent, what came back, what was read from the cache and what was written to it.
+  It has to come from there, because the conversations worth counting are the ones held in the panel
+  and those never pass through the control plane at all.
+  Four rather than two, because two would be a lie by omission. On a real conversation the input was
+  52 tokens and the cache read was 1,723,404: almost everything sent is the context being read again
+  every turn, so inbound and outbound alone would show the 52 and hide the rest.
+  A thread nobody has spoken in reports nothing rather than a cost of nothing, a torn last line is
+  skipped rather than failing the whole file, since the tool appends as it goes, and each transcript
+  is counted once until it changes, so a console refreshing every few seconds does not reparse every
+  conversation in the crew.
+
+## 8 August 2026
+
 - **The crew names a conversation instead of learning what it was called.** A conversation started
   inside a sandbox picked its own identifier and told nobody, so every conversation opened from the
   panel was one the crew could not name: no history to read back, nothing to attribute a cost to, and

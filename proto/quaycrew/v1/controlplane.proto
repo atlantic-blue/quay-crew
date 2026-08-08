@@ -50,6 +50,25 @@ message Session {
   // plane's own interface, and whatever host paths the operator handed it, which an ordinary session
   // does not.
   bool driver = 11;
+  // usage is what this thread's conversation has cost so far, read from the transcript the model
+  // keeps. Unset for a thread nobody has spoken in.
+  Usage usage = 12;
+}
+
+// Usage is what a conversation has cost, in tokens.
+//
+// Four numbers rather than two. On a real conversation the input was 52 tokens and the cache read was
+// 1,723,404, because almost everything sent is the context being read again on every turn: reporting
+// only what was sent and what came back would show the 52 and hide the rest.
+message Usage {
+  // input is what was sent and charged as new, not counting anything served from the cache.
+  int64 input = 1;
+  // output is what came back.
+  int64 output = 2;
+  // cache_read is context the model read from its cache rather than being sent again.
+  int64 cache_read = 3;
+  // cache_written is context put into the cache to be read on later turns.
+  int64 cache_written = 4;
 }
 
 message CreateWorkspaceRequest {
