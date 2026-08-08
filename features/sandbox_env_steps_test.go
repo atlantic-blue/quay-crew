@@ -22,6 +22,46 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return w.restart()
 	})
 
+	// Which of a workspace's secrets a session is given. Named here, set separately: the crew carries
+	// a name only when there is a value behind it.
+	sc.Step(`^a crew that gives its sessions the secret "([^"]*)"$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		w.sandboxSecrets = append(w.sandboxSecrets, name)
+		return w.restart()
+	})
+
+	sc.Step(`^the workspace has the secret "([^"]*)" set to "([^"]*)"$`,
+		func(ctx context.Context, name, value string) error {
+			w := worldFrom(ctx)
+			_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+				Workspace: w.workspaceID, Key: name, Value: value,
+			})
+			return err
+		})
+
+	sc.Step(`^the sandbox carries "([^"]*)" set to "([^"]*)"$`,
+		func(ctx context.Context, name, value string) error {
+			env, err := onlySandboxEnv(worldFrom(ctx))
+			if err != nil {
+				return err
+			}
+			if got := env[name]; got != value {
+				return fmt.Errorf("the sandbox carries %s=%q, want %q", name, got, value)
+			}
+			return nil
+		})
+
+	sc.Step(`^the sandbox carries nothing called "([^"]*)"$`, func(ctx context.Context, name string) error {
+		env, err := onlySandboxEnv(worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if got, set := env[name]; set {
+			return fmt.Errorf("the sandbox carries %s=%q, and it was never named", name, got)
+		}
+		return nil
+	})
+
 	sc.Step(`^the sandbox carries the address of the crew$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		env, err := onlySandboxEnv(w)

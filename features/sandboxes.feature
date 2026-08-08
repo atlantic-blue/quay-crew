@@ -36,3 +36,33 @@ Feature: A sandbox keeps a session's state outside itself
     When the operator dispatches "hello" to the project
     And the operator dispatches "hello" to the second project
     Then the sandboxes were created for one workspace but different projects
+
+  # A sandbox holds a value for the life of its container and the model can read it, which is the
+  # point of giving it one. So a session is handed the secrets it needs by name, not everything the
+  # workspace happens to hold. Before this only the model's own token could reach a sandbox at all,
+  # hardcoded, so a workspace could keep a token for anything else and no session could ever use it.
+  Scenario: A session is given the secrets the crew named, and no others
+    Given a crew that gives its sessions the secret "GITHUB_TOKEN"
+    And a workspace named "acme"
+    And a project named "house-bills"
+    And the workspace has the secret "GITHUB_TOKEN" set to "ghp-1234"
+    And the workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries "GITHUB_TOKEN" set to "ghp-1234"
+    And the sandbox carries nothing called "STRIPE_KEY"
+
+  Scenario: A name with nothing set against it is skipped rather than refused
+    Given a crew that gives its sessions the secret "GITHUB_TOKEN"
+    And a workspace named "acme"
+    And a project named "house-bills"
+    When the operator dispatches "hello" to the project
+    Then the reply is "you said: hello"
+    And the sandbox carries nothing called "GITHUB_TOKEN"
+
+  # The model's token is how a turn runs at all, so it is carried without being named.
+  Scenario: The model's own token needs no naming
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    And the workspace has the subscription token "tok-xyz"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries "CLAUDE_CODE_OAUTH_TOKEN" set to "tok-xyz"
