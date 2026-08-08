@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **The licence the readme has always claimed.** `README.md` said "Apache License 2.0. See LICENSE"
+  and there was no such file, which on a public repository means all rights reserved and a link to
+  nothing. Apache 2.0 verbatim, copyright Atlantic Blue Solutions Limited.
+
+## 8 August 2026
+
 - **A skill reaches a session.** A skill is a directory with `skill.yaml`, a `SKILL.md` the model
   reads, and whatever else it needs. Put one in the crew's skills directory and every session gets it:
   the brief lands in the memory file it already reads, the directory is mounted read only beside the
