@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **`make upgrade` names the configuration your `deploy/.env` does not have.** An upgrade adds
+  configuration and nobody's copy grows with it. Compose fills a key that is not there with an empty
+  string, so whatever it turns on is off and nothing says why, which is exactly how a driver came to
+  report the control plane refusing connections for an evening. `make env-check` compares the two and
+  names the difference, and an upgrade runs it. It says nothing when there is nothing to say.
+  ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
+
 - **A session says when it was not told where the crew is.** `quay` inside a sandbox that was never
   given an address falls back to localhost, and localhost inside a container is the container, so it
   printed `dial tcp [::1]:50051: connect: connection refused` while the control plane was up the whole
