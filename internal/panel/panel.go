@@ -98,6 +98,20 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
 		{"tmux", "set-hook", "-t", session, "client-attached",
 			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
+		// Cycling panes skips the header. It is one row of text with nothing to type into, so landing
+		// on it is a keypress wasted and then another to get out. The hook bounces the selection on to
+		// the console, which makes the pane keys a toggle between the two halves that are actually
+		// used. Scoped to this window, so the operator's own tmux sessions keep their behaviour.
+		//
+		// It does not recurse: the bounce selects pane 1, the hook runs again, and the condition is
+		// false the second time.
+		{"tmux", "set-hook", "-w", "-t", target, "after-select-pane",
+			"if -F '#{==:#{pane_index},0}' 'select-pane -t " + target + ".1'"},
+		// Which pane has the keyboard, said in the colour the console already uses for the row the
+		// cursor is on. Three panes and a one row header make an unlit border hard to read, and the
+		// operator should never have to type something to find out where they are.
+		{"tmux", "set-option", "-w", "-t", target, "pane-active-border-style", "fg=colour6,bold"},
+		{"tmux", "set-option", "-w", "-t", target, "pane-border-style", "fg=colour240"},
 		// The console has the keyboard when the panel opens, because that is what the operator came
 		// to use. The conversation is one pane away, and the header is not typed into at all.
 		{"tmux", "select-pane", "-t", target + ".1"},

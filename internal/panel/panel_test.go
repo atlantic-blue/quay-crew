@@ -338,3 +338,88 @@ func TestThePanelRecordsWhatBuiltIt(t *testing.T) {
 		t.Fatalf("what is read back is not what was written: %v", Built(""))
 	}
 }
+
+// TestCyclingPanesSkipsTheHeader. The header is one row of text with nothing to type into, so landing
+// on it costs a keypress to arrive and another to leave, and the panel's two useful halves are three
+// presses apart instead of one.
+func TestCyclingPanesSkipsTheHeader(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 1,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+
+	bounce := ""
+	for _, argv := range commands {
+		if argv[1] == "set-hook" && contains(argv, "after-select-pane") {
+			bounce = line(argv)
+		}
+	}
+	if bounce == "" {
+		t.Fatal("nothing stops the pane keys landing on the header, which has nothing to interact with")
+	}
+	// Scoped to this window. A hook on the server would change every tmux session the operator has.
+	if !contains(strings.Fields(bounce), "-w") {
+		t.Fatalf("the hook is not scoped to the panel's window, so it changes tmux everywhere:\n%s", bounce)
+	}
+	if !strings.Contains(bounce, "pane_index},0") {
+		t.Fatalf("the hook does not test for the header pane:\n%s", bounce)
+	}
+	if !strings.Contains(bounce, "select-pane") {
+		t.Fatalf("the hook notices the header and does not move off it:\n%s", bounce)
+	}
+}
+
+// TestTheActivePaneIsVisiblyTheActiveOne. Three panes, one of them a single row, and an unlit border
+// between them: the operator could not tell which half had the keyboard without typing something to
+// find out.
+func TestTheActivePaneIsVisiblyTheActiveOne(t *testing.T) {
+	commands, err := Layout{
+		Header: []string{"quay", "header"}, HeaderRows: 1,
+		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+	}.Commands(Terminal{})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+
+	// The style itself, not the command line it arrives on. Comparing whole lines compares the option
+	// names too, which differ whatever the colours are, so the check below would pass with both
+	// borders drawn identically.
+	active, inactive := "", ""
+	activeLine, inactiveLine := "", ""
+	for _, argv := range commands {
+		switch {
+		case contains(argv, "pane-active-border-style"):
+			active, activeLine = argv[len(argv)-1], line(argv)
+		case contains(argv, "pane-border-style"):
+			inactive, inactiveLine = argv[len(argv)-1], line(argv)
+		}
+	}
+	if active == "" {
+		t.Fatal("the pane with the keyboard is drawn the same as the ones without it")
+	}
+	if inactive == "" {
+		t.Fatal("only the active border is styled, so it is lit against whatever the terminal defaults to")
+	}
+	if active == inactive {
+		t.Fatalf("both borders are drawn %q, which says nothing about where the keyboard is", active)
+	}
+	for _, styled := range []string{activeLine, inactiveLine} {
+		if !contains(strings.Fields(styled), "-w") {
+			t.Fatalf("the style is not scoped to the panel's window, so it changes tmux everywhere:\n%s", styled)
+		}
+	}
+}
+
+// contains says whether argv holds a word, so a test can find a command by what it does rather than
+// by counting its position in the list.
+func contains(argv []string, want string) bool {
+	for _, arg := range argv {
+		if arg == want {
+			return true
+		}
+	}
+	return false
+}
