@@ -7,22 +7,15 @@ the token, and the vocabulary of permission modes are all Claude Code's, spread 
 Principle 6 in [`ARCHITECTURE.md`](ARCHITECTURE.md) says the model provider is configuration. This
 document is the delta between that sentence and the code, and a plan to close it.
 
-## The name is wrong, and the wrong name hides the hard part
+A **driver** is the unit: everything the crew needs to know to run one agent command line tool inside
+a sandbox. Its argument vectors, how to read what it says back, where it keeps a conversation, the
+secret it authenticates with, and its own vocabulary for autonomy.
 
-"Model agnostic" suggests the crew talks to models and could talk to a different one. It does not. It
-runs a command line agent that talks to a model on its own. Swapping Claude Code for the Codex
-command line tool is not changing a model, it is changing an entire agent: its own loop, its own
-context management, its own tools, its own idea of what a conversation is.
-
-So the unit is a **driver**: everything the crew needs to know to run one agent command line tool
-inside a sandbox. Calling it that is not tidiness. It sets the boundary at the place the seams
-actually are, and it makes the limitation obvious, which the old name hid: **a driver does not choose
-where the model runs.** Driving the Codex command line tool sends the code to a different vendor, not
-to nowhere. Only a driver whose agent can be pointed at an endpoint you control answers the question
-a regulated operator is actually asking.
-
-That property belongs on the driver, declared, because it is the one an operator has to answer to
-somebody else.
+One property of a driver is worth stating up front because it has to be answered to somebody else. A
+driver does not by itself decide where the model runs: swapping Claude Code for another vendor's
+command line tool sends the code somewhere else rather than nowhere. So the driver declares where its
+model runs, and the crew writes that with the turn, and an operator can read it off the log rather
+than reason about a configuration file.
 
 ## What is already true
 
@@ -51,13 +44,15 @@ seam at all.
    layout is why a conversation survives its container, and it is Claude Code's, not ours.
 5. **Vocabulary.** `PermissionPlan`, `PermissionAcceptEdits` and `PermissionBypass` sit in
    [`internal/model/runner.go`](../internal/model/runner.go) under a comment saying they are the
-   model's own and not ours. The comment is correct, which is the problem: one agent's words are in
-   the shared package, and `ClaudeCodeOAuthTokenEnv` is beside them.
+   model's own and not ours, which is exactly right and is why they read oddly there: one agent's
+   words are in the shared package. `ClaudeCodeOAuthTokenEnv` is already in the driver's own file and
+   is the shape the rest of this is aiming at.
 
-A sixth thing is a naming collision rather than a leak. `Runner` is already two unrelated interfaces:
-the one that runs a turn, and the automation graph reducer in [`ARCHITECTURE.md`](ARCHITECTURE.md)
-whose method is `Advance`. Introducing `Driver` for the first and leaving `Runner` to the reducer
-resolves it without renaming anything that ships.
+A sixth thing is worth noting and does not have to be acted on. `Runner` currently names two
+unrelated interfaces: the one that runs a turn, and the automation graph reducer in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) whose method is `Advance`. If a new interface is introduced for
+the first anyway, calling it `Driver` clears the collision as a side effect, with nothing that ships
+having to be renamed.
 
 ## The shape
 
