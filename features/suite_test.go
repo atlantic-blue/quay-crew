@@ -143,6 +143,8 @@ type world struct {
 	reachable string
 	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
 	sandboxSecrets []string
+	// gitAuthor is who a commit made inside a sandbox is by.
+	gitAuthor controlplane.Identity
 	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
 	drivers []*quaycrewv1.Session
 	secrets secrets.Store
@@ -220,7 +222,7 @@ func (w *world) serve() error {
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
-		SandboxSecrets: w.sandboxSecrets,
+		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor,
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 

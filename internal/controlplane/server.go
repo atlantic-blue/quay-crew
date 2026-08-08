@@ -64,6 +64,12 @@ type Config struct {
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
+	// GitAuthor is who a commit made inside a sandbox is by: a name and an address, both or neither.
+	//
+	// It is configuration rather than a secret. Without it `git` is in the image and unusable: the
+	// tool refuses to commit at all rather than guessing, which is the right call and a wall to walk
+	// into halfway through a piece of work.
+	GitAuthor Identity
 	// SandboxSecrets are the workspace secrets a session's sandbox is given, by name. The model's own
 	// token is always carried and does not need naming here.
 	//
@@ -79,6 +85,18 @@ type Config struct {
 	Reachable string
 }
 
+// Identity is who a commit is by.
+type Identity struct {
+	Name  string
+	Email string
+}
+
+// Complete says whether this is enough to commit with. Half of one is worse than none: git refuses
+// either way, and a half identity looks configured.
+func (i Identity) Complete() bool {
+	return strings.TrimSpace(i.Name) != "" && strings.TrimSpace(i.Email) != ""
+}
+
 // Server implements quaycrewv1.ControlPlaneServiceServer.
 type Server struct {
 	quaycrewv1.UnimplementedControlPlaneServiceServer
@@ -91,8 +109,10 @@ type Server struct {
 	reachable string
 	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
 	sandboxSecrets []string
-	events         messaging.EventLog
-	info           Info
+	// gitAuthor is who a commit made inside a sandbox is by.
+	gitAuthor Identity
+	events    messaging.EventLog
+	info      Info
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
@@ -111,6 +131,7 @@ func NewServer(cfg Config) *Server {
 		info:           cfg.Info,
 		reachable:      cfg.Reachable,
 		sandboxSecrets: cfg.SandboxSecrets,
+		gitAuthor:      cfg.GitAuthor,
 		sandboxes:      make(map[string]sandbox.Sandbox),
 	}
 }
@@ -768,6 +789,16 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 	// not on a network that could reach it anyway.
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
+	}
+	// Who a commit is by. All four, because git wants an author and a committer and refuses on either
+	// missing: setting the author alone produces "Committer identity unknown" and a wall of advice,
+	// halfway through whatever the session was doing. The committer is the author, because a session
+	// commits as the operator rather than on behalf of somebody else.
+	if s.gitAuthor.Complete() {
+		env["GIT_AUTHOR_NAME"] = s.gitAuthor.Name
+		env["GIT_AUTHOR_EMAIL"] = s.gitAuthor.Email
+		env["GIT_COMMITTER_NAME"] = s.gitAuthor.Name
+		env["GIT_COMMITTER_EMAIL"] = s.gitAuthor.Email
 	}
 	// The workspace's secrets, by name. The model's own token is always one of them, because a
 	// sandbox without it cannot run a turn at all; the rest are the ones the crew has been told to

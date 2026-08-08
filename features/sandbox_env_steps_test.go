@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
@@ -58,6 +59,51 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		}
 		if got, set := env[name]; set {
 			return fmt.Errorf("the sandbox carries %s=%q, and it was never named", name, got)
+		}
+		return nil
+	})
+
+	sc.Step(`^a crew whose commits are by "([^"]*)" at "([^"]*)"$`,
+		func(ctx context.Context, name, email string) error {
+			w := worldFrom(ctx)
+			w.gitAuthor = controlplane.Identity{Name: name, Email: email}
+			return w.restart()
+		})
+
+	sc.Step(`^a crew whose commits are by "([^"]*)" at no address$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		w.gitAuthor = controlplane.Identity{Name: name}
+		return w.restart()
+	})
+
+	// All four, because git wants an author and a committer and refuses on either missing.
+	sc.Step(`^the sandbox can commit as "([^"]*)" at "([^"]*)"$`,
+		func(ctx context.Context, name, email string) error {
+			env, err := onlySandboxEnv(worldFrom(ctx))
+			if err != nil {
+				return err
+			}
+			for key, want := range map[string]string{
+				"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+				"GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email,
+			} {
+				if got := env[key]; got != want {
+					return fmt.Errorf("the sandbox carries %s=%q, want %q, and git refuses without all four",
+						key, got, want)
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the sandbox carries no part of an identity$`, func(ctx context.Context) error {
+		env, err := onlySandboxEnv(worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		for key := range env {
+			if strings.HasPrefix(key, "GIT_AUTHOR_") || strings.HasPrefix(key, "GIT_COMMITTER_") {
+				return fmt.Errorf("the sandbox carries %s, and half an identity is refused the same as none", key)
+			}
 		}
 		return nil
 	})

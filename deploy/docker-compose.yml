@@ -87,6 +87,9 @@ services:
       # Which of a workspace's secrets a session's sandbox is given, by name. The model's own token
       # is always carried. Everything else is named here or it does not travel.
       QC_SANDBOX_SECRETS: ${QC_SANDBOX_SECRETS:-}
+      # Who a commit made inside a sandbox is by. Both or neither: git refuses on either missing.
+      QC_GIT_AUTHOR_NAME: ${QC_GIT_AUTHOR_NAME:-}
+      QC_GIT_AUTHOR_EMAIL: ${QC_GIT_AUTHOR_EMAIL:-}
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
       # Claude Code CLI and its credentials is in place.
       QC_MODEL: ${QC_MODEL:-echo}
