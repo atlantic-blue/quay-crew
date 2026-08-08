@@ -118,6 +118,31 @@ in the hands of something that decides what to do next on its own. Scope it to w
 set it per workspace rather than per crew, and treat attaching a credential bearing skill as the same
 kind of decision as turning on the driver's network access.
 
+## What it costs
+
+Every attached skill's brief is in the file the model reads when a conversation starts, so a skill is
+not free and a skill whose brief is a manual is expensive on every session that holds it.
+
+The measurement that matters was taken on a real crew rather than imagined. Its four levels of context
+rendered to 51,727 bytes at the workspace, roughly thirteen thousand tokens, and every session in
+every workspace paid it before a word was typed, because all of it sat at the crew level. Nothing in
+that file was a skill. The lesson is not about skills at all: it is that a level which reaches
+everything will be filled until it hurts, and skills are the next thing that would fill it.
+
+So a brief is short by construction, and the mount is what makes that possible:
+
+- **`SKILL.md` says when to use this skill and what it can do.** A page, not a manual. It is loaded
+  every time, so it is written as though it were.
+- **The detail lives in files in the skill's own directory**, which is mounted and which the model
+  reads only when it needs them. A convention document, a checklist, an example, a reference. None of
+  it costs anything until something opens it.
+- **A skill is attached at a level, so nothing is loaded everywhere.** This is the structural
+  difference from context as it stands: context at the crew level reaches every session
+  unconditionally, and a skill reaches the sessions somebody attached it to.
+
+The rule of thumb that follows: if a brief is long enough that you would skim it, the model is paying
+for it on every turn and reading it no more carefully than you would.
+
 ## Binaries
 
 A skill cannot conjure a binary. `gh` is not in the sandbox image, and no amount of markdown will put
@@ -173,6 +198,8 @@ adapter maps it onto its own. A skill is not rewritten for either.
 - **Secrets are named, never carried.** A value in a skill file is a value in a git repository.
 - **Refuse early and say what is missing.** A capability that silently does not work is worse than
   one that is absent, because the model will improvise around it.
+- **A brief is short and the detail is on disk.** Everything loaded at conversation start is paid for
+  on every session that holds the skill. See [What it costs](#what-it-costs).
 - **No fetching at turn time.** A skill is imported deliberately, not resolved from the network while
   a turn is waiting.
 
