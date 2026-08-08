@@ -14,6 +14,7 @@ document describes the design, the stack, and the delivery plan.
 4. **Auditable and observable by construction.** Structured logs and an audit stream, distributed
    traces, and metrics flow through OpenTelemetry from the first line of every service.
 5. **Reviewed changes only.** An agent can propose a skill or a memory, but nothing self applies.
+   What a skill is, and how one reaches a session, is in [SKILLS.md](SKILLS.md).
 6. **Bring your own model.** The model provider is configuration.
 7. **Runs the same locally and in the cloud.** One containerised build, backends swapped by config.
 
