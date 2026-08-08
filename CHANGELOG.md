@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **Cycling panes skips the header, and the pane with the keyboard is lit.** The header is one row of
+  text with nothing to type into, so the pane keys landed on it and cost a press to arrive and another
+  to leave, which put the two halves you actually use three presses apart. A hook scoped to the
+  panel's window bounces the selection on to the console, so the keys are a toggle between the console
+  and the conversation. The active pane's border is drawn in the same colour the console uses for the
+  row the cursor is on, and the inactive ones are dimmed, because three panes and an unlit border meant
+  typing something to find out where you were. Both are window scoped: your own tmux sessions are
+  unchanged. An open panel picks this up the next time it is rebuilt, which this build triggers.
+
+## 8 August 2026
+
 - **What a skill costs, in [`docs/SKILLS.md`](docs/SKILLS.md).** The design said nothing about how
   big a brief may be, and a skill whose brief is a manual is paid for on every session that holds it.
   A brief is now short by construction: it says when to use the skill and what it can do, and the
