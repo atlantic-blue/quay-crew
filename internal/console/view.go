@@ -442,7 +442,8 @@ func (m Model) innerWidth() int {
 // columnHeader is the black on green title bar, marked with an arrow on the column the rows are
 // ordered by, because an order you cannot see is an order you cannot trust.
 func (m Model) columnHeader() string {
-	return headerBar.Render(m.fit(m.renderCells(titles(m.active.Columns, m.active.SortBy))))
+	columns := m.columns()
+	return headerBar.Render(m.fit(m.renderCellsIn(columns, titles(columns, m.active.SortBy))))
 }
 
 // fit makes a line exactly the width inside the panel: padded when it is short, cut when it is long.
@@ -454,16 +455,70 @@ func (m Model) fit(text string) string {
 	return pad(truncate(text, m.innerWidth()), m.innerWidth())
 }
 
-func titles(columns []Column, sortedBy int) []string {
+func titles(columns []visible, sortedBy int) []string {
 	out := make([]string, len(columns))
 	for i, column := range columns {
 		out[i] = strings.ToUpper(column.Title)
-		if i == sortedBy {
+		if column.at == sortedBy {
 			out[i] += "↑"
 		}
 	}
 	return out
 }
+
+// visible is a column that is being drawn, and where its cell sits in a row. The two come apart as
+// soon as a column is dropped: the fourth column drawn may be the fifth cell in the row.
+type visible struct {
+	Column
+	at int
+}
+
+// columns is the active resource's columns, less any that had to give way to the width available.
+//
+// A line too long for the panel is cut, and what is cut is whatever happens to be at the end rather
+// than whatever matters least. So a resource says which of its columns may give way and in what
+// order, and the narrower the window the fewer are drawn.
+func (m Model) columns() []visible {
+	drawn := make([]visible, 0, len(m.active.Columns))
+	for at, column := range m.active.Columns {
+		drawn = append(drawn, visible{Column: column, at: at})
+	}
+	for m.tooWide(drawn) {
+		next := -1
+		for index, column := range drawn {
+			if column.Give == 0 {
+				continue
+			}
+			if next < 0 || column.Give < drawn[next].Give {
+				next = index
+			}
+		}
+		if next < 0 {
+			// Nothing left that is allowed to go. The line is cut, which is the old behaviour and
+			// the right one: a window this narrow cannot show the columns that matter either.
+			return drawn
+		}
+		drawn = append(drawn[:next], drawn[next+1:]...)
+	}
+	return drawn
+}
+
+// tooWide says whether these columns need more room than there is. The flexible column is counted at
+// its smallest, because a column squeezed to nothing is not a column anybody can read.
+func (m Model) tooWide(columns []visible) bool {
+	need := len(columns)
+	for _, column := range columns {
+		if column.Width == 0 {
+			need += minimumFlex
+			continue
+		}
+		need += column.Width
+	}
+	return need > m.innerWidth()
+}
+
+// minimumFlex is the least room the flexible column is given before other columns start giving way.
+const minimumFlex = 8
 
 // bodyLines renders the visible slice of rows, padding to a fixed height so the footer does not
 // jump around as the list grows and shrinks.
@@ -496,21 +551,31 @@ func (m Model) rowLine(row Row, isSelected bool) string {
 // renderCells lays cells out in the active resource's columns. A zero width column takes whatever
 // space is left, and at most one should have it.
 func (m Model) renderCells(cells []string) string {
-	columns := m.active.Columns
+	return m.renderCellsIn(m.columns(), cells)
+}
+
+// renderCellsIn lays cells out in the columns given, which are the ones that fit.
+func (m Model) renderCellsIn(columns []visible, cells []string) string {
 	fixed := 0
 	for _, column := range columns {
 		fixed += column.Width
 	}
 	flex := m.innerWidth() - fixed - len(columns)
-	if flex < 8 {
-		flex = 8
+	if flex < minimumFlex {
+		flex = minimumFlex
 	}
 
 	parts := make([]string, 0, len(columns))
 	for index, column := range columns {
+		// Where the cell sits in the row, which is not where the column sits on the screen once one
+		// has been dropped. Titles arrive already in the order they are drawn.
+		from := column.at
+		if len(cells) == len(columns) {
+			from = index
+		}
 		cell := ""
-		if index < len(cells) {
-			cell = cells[index]
+		if from < len(cells) {
+			cell = cells[from]
 		}
 		width := column.Width
 		if width == 0 {

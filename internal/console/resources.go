@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -326,6 +327,12 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
 			{Title: "mode", Width: 12},
+			// What the conversation has cost. The cache is the largest of the three by a long way and
+			// the first to give way, because at half a window the age of a thread is worth more than
+			// what it read from a cache.
+			{Title: "in", Width: 7, Give: 3},
+			{Title: "out", Width: 7, Give: 2},
+			{Title: "cache", Width: 7, Give: 1},
 			{Title: "age", Width: 0},
 		},
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
@@ -413,6 +420,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "archived",
 		Aliases: []string{"arch", "archive"},
+		// The same shape as the live view, because both are drawn from the same row. An archived
+		// thread's cost is still worth seeing: it is what that piece of work came to.
 		Columns: []Column{
 			{Title: "id", Width: 10},
 			{Title: "workspace", Width: 16},
@@ -420,6 +429,9 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "thread", Width: 10},
 			{Title: "status", Width: 10},
 			{Title: "mode", Width: 12},
+			{Title: "in", Width: 7, Give: 3},
+			{Title: "out", Width: 7, Give: 2},
+			{Title: "cache", Width: 7, Give: 1},
 			{Title: "archived", Width: 0},
 		},
 		SortBy: 3,
@@ -499,6 +511,9 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 			display.ShortID(session.GetThreadId()),
 			session.GetStatus(),
 			permissionLabel(session.GetPermissionMode()),
+			tokens(session.GetUsage().GetInput()),
+			tokens(session.GetUsage().GetOutput()),
+			tokens(session.GetUsage().GetCacheRead()),
 			// The last column is how long ago it was put away in the archived view, and how long ago
 			// it was touched everywhere else. A live thread has no archived stamp, so one rule covers
 			// both without either view having to say which it is.
@@ -506,6 +521,32 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 		},
 		State: stateFromStatus(session.GetStatus()),
 	}
+}
+
+// tokens is a count in a column seven characters wide: 52, 6.9k, 1.7M.
+//
+// Nothing at all for a thread that has spent nothing, because a conversation nobody has had has not
+// cost zero, it has no cost. A column of zeroes would read as a crew that is free.
+func tokens(count int64) string {
+	switch {
+	case count <= 0:
+		return ""
+	case count < 1000:
+		return strconv.FormatInt(count, 10)
+	case count < 1_000_000:
+		return trimZero(float64(count)/1000) + "k"
+	case count < 1_000_000_000:
+		return trimZero(float64(count)/1_000_000) + "M"
+	default:
+		return trimZero(float64(count)/1_000_000_000) + "B"
+	}
+}
+
+// trimZero renders one decimal place, and drops it when it says nothing: 1.7 and 12 rather than 1.7
+// and 12.0, so the column stays narrow where it can.
+func trimZero(value float64) string {
+	rendered := strconv.FormatFloat(value, 'f', 1, 64)
+	return strings.TrimSuffix(rendered, ".0")
 }
 
 // permissionLabel is what a thread's mode reads as in a listing. A thread from before the mode was

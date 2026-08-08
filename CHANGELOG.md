@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **What a thread has cost is in the listing.** Three columns, `in`, `out` and `cache`, read from the
+  transcript the model keeps, in numbers a person can compare at a glance: 52, 6.9k, 1.7M. A thread
+  that has spent nothing shows nothing, because a conversation nobody has had has not cost zero.
+- **A column can give way when the window is too narrow to hold them all.** A line too long was cut at
+  whatever happened to be at the end rather than at whatever mattered least, which in a panel is most
+  of the time, since the console has half the window. A resource now says which columns may go and in
+  what order: the cache first, then what came back, then what was sent, and never a thread's
+  identifier, status or age.
+
+## 8 August 2026
+
 - **A thread reports what its conversation has cost.** Four numbers, read from the transcript the
   model keeps: what was sent, what came back, what was read from the cache and what was written to it.
   It has to come from there, because the conversations worth counting are the ones held in the panel
