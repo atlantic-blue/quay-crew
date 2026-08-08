@@ -137,7 +137,12 @@ func truncate(t *testing.T) {
 	if !exists {
 		return
 	}
-	if _, err := pool.Exec(ctx, `truncate sessions, channels, workspaces restart identity cascade`); err != nil {
+	// Skills and contexts are named here rather than left to the cascade. Nothing references them from
+	// workspaces, so they survived a truncate that claimed to leave nothing behind: a skill is keyed by
+	// its own name, so one subtest's github was still there for the next one to attach, at a version it
+	// never imported. The cascade then takes skill_secrets, skill_files and workspace_skills.
+	if _, err := pool.Exec(ctx,
+		`truncate sessions, channels, workspaces, skills, contexts restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

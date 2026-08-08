@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +28,10 @@ type Memory struct {
 	byThread   map[string]string
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
+	// skills is every revision the crew holds, keyed by name and version, and attached is which
+	// version of which skill each workspace pinned.
+	skills   map[string]Imported
+	attached map[string]map[string]int
 	// turns is the projection of the event log, oldest first, and turnSeen is what makes writing the
 	// same record twice harmless.
 	turns    []*quaycrewv1.Turn
@@ -155,6 +161,19 @@ func (m *Memory) ListProjects(_ context.Context, workspace string) ([]*quaycrewv
 		}
 	}
 	return out, nil
+}
+
+// SetProjectRemote records the repository a project's sessions work in.
+func (m *Memory) SetProjectRemote(_ context.Context, project, remote string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, err := m.getProjectLocked(project)
+	if err != nil {
+		return err
+	}
+	// getProjectLocked hands back a copy, so the stored one is what has to change.
+	m.projects[held.GetId()].Remote = remote
+	return nil
 }
 
 // DeleteProject soft deletes a project.
@@ -329,6 +348,129 @@ func (m *Memory) SetContext(_ context.Context, scope ContextScope, owner, body s
 }
 
 func contextKey(scope ContextScope, owner string) string { return string(scope) + "/" + owner }
+
+// ImportSkill takes a skill into the crew, refusing a version that already exists carrying something
+// different.
+func (m *Memory) ImportSkill(_ context.Context, imported Imported) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.skills == nil {
+		m.skills = make(map[string]Imported)
+	}
+	key := skillKey(imported.Name, imported.Version)
+	if held, already := m.skills[key]; already {
+		if held.Fingerprint() != imported.Fingerprint() {
+			return fmt.Errorf("%w: %s version %d", ErrSkillChanged, imported.Name, imported.Version)
+		}
+		return nil
+	}
+	// Stamped here because Postgres stamps it in the table's default, and a store that leaves it empty
+	// is a double that accepts what the real one would not.
+	if imported.ImportedAt.IsZero() {
+		imported.ImportedAt = time.Now().UTC()
+	}
+	m.skills[key] = imported
+	return nil
+}
+
+// GetSkill returns one revision of a skill.
+func (m *Memory) GetSkill(_ context.Context, name string, version int) (Imported, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	held, found := m.skills[skillKey(name, version)]
+	if !found {
+		return Imported{}, ErrNotFound
+	}
+	return held, nil
+}
+
+// ListSkills returns the newest revision of every skill, without their files.
+func (m *Memory) ListSkills(_ context.Context) ([]Imported, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	newest := make(map[string]Imported, len(m.skills))
+	for _, held := range m.skills {
+		if seen, found := newest[held.Name]; !found || held.Version > seen.Version {
+			newest[held.Name] = held
+		}
+	}
+	out := make([]Imported, 0, len(newest))
+	for _, held := range newest {
+		held.Files = nil
+		out = append(out, held)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// AttachSkill gives a workspace a skill at the newest revision the crew holds.
+func (m *Memory) AttachSkill(_ context.Context, workspace, name string) (Imported, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, found := m.workspaces[workspace]; !found || m.deleted[workspace] {
+		return Imported{}, ErrNotFound
+	}
+	newest, found := m.newestSkill(name)
+	if !found {
+		return Imported{}, ErrNotFound
+	}
+	if m.attached == nil {
+		m.attached = make(map[string]map[string]int)
+	}
+	if m.attached[workspace] == nil {
+		m.attached[workspace] = make(map[string]int)
+	}
+	m.attached[workspace][name] = newest.Version
+	return newest, nil
+}
+
+// DetachSkill takes a skill away from a workspace.
+func (m *Memory) DetachSkill(_ context.Context, workspace, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, found := m.attached[workspace]
+	if !found {
+		return ErrNotFound
+	}
+	if _, found := held[name]; !found {
+		return ErrNotFound
+	}
+	delete(held, name)
+	return nil
+}
+
+// WorkspaceSkills returns what a workspace holds, at the versions it pinned.
+func (m *Memory) WorkspaceSkills(_ context.Context, workspace string) ([]Imported, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Imported, 0, len(m.attached[workspace]))
+	for name, version := range m.attached[workspace] {
+		held, found := m.skills[skillKey(name, version)]
+		if !found {
+			continue
+		}
+		out = append(out, held)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// newestSkill is the highest version of a name the crew holds. Callers hold the lock.
+func (m *Memory) newestSkill(name string) (Imported, bool) {
+	var newest Imported
+	var found bool
+	for _, held := range m.skills {
+		if held.Name != name {
+			continue
+		}
+		if !found || held.Version > newest.Version {
+			newest, found = held, true
+		}
+	}
+	return newest, found
+}
+
+func skillKey(name string, version int) string { return name + "\x00" + strconv.Itoa(version) }
 
 // Close is a no op for the in memory store.
 func (m *Memory) Close() {}
