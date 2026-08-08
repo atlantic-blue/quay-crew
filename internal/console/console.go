@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -43,6 +44,18 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 		known.Model, known.Sandbox = resp.GetModel(), resp.GetSandbox()
 		known.Store, known.State, known.Events = resp.GetStore(), resp.GetState(), resp.GetEvents()
 		known.Secrets = resp.GetSecrets()
+		known.SandboxBuild = resp.GetSandboxBuild()
+		// What the crew has cost, which is a running total rather than configuration, so it comes
+		// from its own call. A crew that cannot answer still has a header worth drawing, so this
+		// failure is swallowed where the one above is not.
+		if spent, err := client.GetUsage(ctx, &quaycrewv1.GetUsageRequest{}); err == nil {
+			known.Spent = sandbox.Usage{
+				Input:        spent.GetTotal().GetInput(),
+				Output:       spent.GetTotal().GetOutput(),
+				CacheRead:    spent.GetTotal().GetCacheRead(),
+				CacheWritten: spent.GetTotal().GetCacheWritten(),
+			}
+		}
 		return known, nil
 	}
 }

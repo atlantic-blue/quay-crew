@@ -49,8 +49,15 @@ func (m Model) headerLines() []string {
 	if m.headless {
 		return nil
 	}
-	status := m.statusLines()
 	hints := m.hintLines()
+	// Built without the total first, and again with it only if the whole block still leaves room for
+	// the wordmark. The block is what decides, not the line the total sits on: the key hints beside
+	// the status are usually the widest thing in it, so measuring the status line alone let the
+	// wordmark go at a wider window than the total did, which is the wrong way round.
+	status := m.statusLines("")
+	if spent := m.spent(); spent != "" && m.roomFor(status, hints, spent) {
+		status = m.statusLines(spent)
+	}
 
 	widest := 0
 	for _, line := range status {
@@ -146,16 +153,48 @@ func (m Model) withLogo(lines []string) []string {
 // statusLines is the crew this console is pointed at: where it is, what a turn would run in, and
 // whether any of it survives a restart. Anything the control plane did not say is left out rather
 // than guessed at.
-func (m Model) statusLines() []string {
+// roomFor says whether the header block would still leave the wordmark somewhere to go once the
+// total is added to its first line.
+func (m Model) roomFor(status, hints []string, spent string) bool {
+	widest := lipgloss.Width(spent)
+	for index, line := range status {
+		width := lipgloss.Width(line)
+		if index == 0 {
+			width += lipgloss.Width(spent)
+		}
+		if width > widest {
+			widest = width
+		}
+	}
+	longest := 0
+	for index := range status {
+		line := " " + pad(status[index], widest+3)
+		if index < len(hints) {
+			line += hints[index]
+		}
+		if width := lipgloss.Width(line); width > longest {
+			longest = width
+		}
+	}
+	for index := len(status); index < len(hints); index++ {
+		if width := lipgloss.Width(" " + pad("", widest+3) + hints[index]); width > longest {
+			longest = width
+		}
+	}
+	return m.width-longest-2 >= lipgloss.Width(logo[0])
+}
+
+func (m Model) statusLines(spent string) []string {
 	// Only which build this is. Everything else moved into the help panel, because it crowded the
 	// wordmark off the screen: the header is as wide as the console, and the console is half the
 	// window once a conversation is beside it.
 	//
 	//
-	lines := []string{statusKey.Render(pad("Version:", 16)) + m.info.Version}
-	if m.info.Version == "" {
-		lines = []string{statusKey.Render(pad("Version:", 16)) + faint.Render("unknown")}
+	build := m.info.Version
+	if build == "" {
+		build = faint.Render("unknown")
 	}
+	lines := []string{statusKey.Render(pad("Version:", 16)) + build + spent}
 	if m.info.Behind {
 		lines = append(lines, statusKey.Render(pad("Quay:", 16))+
 			alert.Render("this control plane is older than the tool, run make upgrade"))
@@ -180,6 +219,21 @@ func sandboxImagePhrase(info Info) string {
 		return alert.Render(info.SandboxBuild + ", older than this build, run make sandbox-image")
 	}
 	return info.SandboxBuild
+}
+
+// spentBeside is what the crew has cost, drawn on the same line as the build when there is room for
+// it and the wordmark both.
+//
+// It gives way before the wordmark does, deliberately. The header is one row and the wordmark is what
+// makes the panel look like something rather than a terminal with tables in it; a number the operator
+// can get from the listing is the cheaper thing to lose.
+func (m Model) spent() string {
+	if m.info.Spent.Empty() {
+		return ""
+	}
+	return "   " + statusKey.Render("↑") + tokens(m.info.Spent.Output) +
+		statusKey.Render(" ↓") + tokens(m.info.Spent.Input) +
+		statusKey.Render(" ⟳") + tokens(m.info.Spent.CacheRead)
 }
 
 // statePhrase says where a conversation is kept. Empty means nowhere: it lives in the container and
@@ -236,7 +290,8 @@ func (m Model) hintLines() []string {
 
 	// Tall enough to read, matching the status block when that is taller so the two end together,
 	// and never so tall that the rows have nowhere left to go.
-	height := len(m.statusLines())
+	// The total sits on a line that is there either way, so it does not change how tall this is.
+	height := len(m.statusLines(""))
 	if height < 4 {
 		height = 4
 	}

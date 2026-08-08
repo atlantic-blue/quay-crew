@@ -328,6 +328,16 @@ message GetInfoResponse {
   string sandbox_build = 7;
 }
 
+// GetUsageRequest asks what the crew has cost so far.
+message GetUsageRequest {}
+// GetUsageResponse is every conversation the crew holds, added up.
+message GetUsageResponse {
+  Usage total = 1;
+  // threads is how many conversations went into the total, so a number with nothing behind it can be
+  // told from a crew that has genuinely spent nothing.
+  int64 threads = 2;
+}
+
 // Turn is one exchange with the model, read back from the projection of the event log.
 message Turn {
   string id = 1;
@@ -386,4 +396,7 @@ service ControlPlaneService {
   rpc ListTurns(ListTurnsRequest) returns (ListTurnsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  // GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
+  // configuration, which is why it is not part of GetInfo.
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
 }

@@ -11,6 +11,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
@@ -97,6 +98,16 @@ func headerInfo(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	info.State = described.GetState()
 	info.Events = described.GetEvents()
 	info.SandboxBuild = described.GetSandboxBuild()
+	// What the crew has cost. Its own call, because it is a running total rather than configuration,
+	// and the header is redrawn every second so it stays true.
+	if spent, err := client.GetUsage(ctx, &quaycrewv1.GetUsageRequest{}); err == nil {
+		info.Spent = sandbox.Usage{
+			Input:        spent.GetTotal().GetInput(),
+			Output:       spent.GetTotal().GetOutput(),
+			CacheRead:    spent.GetTotal().GetCacheRead(),
+			CacheWritten: spent.GetTotal().GetCacheWritten(),
+		}
+	}
 	return info
 }
 

@@ -8,6 +8,19 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **What the crew has cost is in the header.** Beside the build, so it is in front of you while you
+  work rather than only when you go and look at a listing: what came back, what was sent, what was
+  read from the cache. Its own call rather than part of `GetInfo`, because that one answers what a
+  turn dispatched here would do and is fetched once, and this changes with every turn. The console
+  refreshes it with the rows now instead of at startup, since a total from when the console opened
+  looks live and is not.
+  It gives way before the wordmark, deliberately: the number is also in the listing, and the wordmark
+  is what makes the panel look like something. Archived threads are counted, because what a piece of
+  work came to does not stop being true when the thread is put away, and a total that shrinks when
+  somebody tidies up is worse than no total.
+
+## 8 August 2026
+
 - **What a thread has cost is in the listing.** Three columns, `in`, `out` and `cache`, read from the
   transcript the model keeps, in numbers a person can compare at a glance: 52, 6.9k, 1.7M. A thread
   that has spent nothing shows nothing, because a conversation nobody has had has not cost zero.
