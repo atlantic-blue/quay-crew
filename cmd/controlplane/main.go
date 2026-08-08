@@ -103,6 +103,11 @@ func main() {
 		// Which of a workspace's secrets a sandbox is given, by name. The model's own token is
 		// always carried and does not need naming.
 		SandboxSecrets: splitAndTrim(os.Getenv("QC_SANDBOX_SECRETS")),
+		// Who a commit made inside a sandbox is by. Both or neither: git refuses on either missing.
+		GitAuthor: controlplane.Identity{
+			Name:  os.Getenv("QC_GIT_AUTHOR_NAME"),
+			Email: os.Getenv("QC_GIT_AUTHOR_EMAIL"),
+		},
 		Info: controlplane.Info{
 			Model:   modelKind,
 			Sandbox: sandboxKind,

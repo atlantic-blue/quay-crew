@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A session can commit as you.** `git` has been in the sandbox image the whole time and unusable,
+  because a container has no identity and the tool refuses to commit rather than guessing. That
+  refusal is correct and it is a wall to walk into halfway through a piece of work.
+  `QC_GIT_AUTHOR_NAME` and `QC_GIT_AUTHOR_EMAIL` are carried into every sandbox, as the author and the
+  committer both, because git names them separately and refuses on either missing. Half of one is
+  carried as none of one: it is refused the same way and it looks configured, which sends the operator
+  looking for the problem somewhere else.
+  Proved by committing in a real container and reading the author back, rather than by asserting four
+  variables were set. That assertion would have passed just as happily with the wrong names in them.
+  Second slice of [`docs/SKILLS.md`](docs/SKILLS.md). Per workspace identity arrives with skills; this
+  is the crew's.
+
+## 8 August 2026
+
 - **A workspace's secrets reach a sandbox by name.** One line decided what a session could ever be
   given: the model's own token, hardcoded, and nothing else. A workspace could hold a credential for
   anything at all and no session could use it, which is why `git` sits in the image with no way to

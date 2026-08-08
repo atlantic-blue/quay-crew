@@ -5,6 +5,7 @@ package sandbox_test
 import (
 	"context"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -215,5 +216,54 @@ func stopContainer(t *testing.T, ctx context.Context, name string) {
 	t.Helper()
 	if out, err := exec.CommandContext(ctx, "docker", "stop", name).CombinedOutput(); err != nil {
 		t.Fatalf("stopping %s: %v: %s", name, err, out)
+	}
+}
+
+// TestASessionCanActuallyCommit is the whole point of an identity, and the only way to know it is
+// right is to make a commit in a real container and read the author back.
+//
+// The environment is what carries it: git reads GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and the committer
+// pair beside them, and refuses when any is missing rather than guessing. A test that asserted the
+// four variables were set would have passed just as happily with the wrong names.
+func TestASessionCanActuallyCommit(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to an image with git in it")
+	}
+
+	provider := sandbox.DockerProvider{Image: image}
+	box, err := provider.Create(ctx, sandbox.Config{
+		ID: "gitidentity" + strings.Repeat("0", 13),
+		Env: []string{
+			"GIT_AUTHOR_NAME=A Name", "GIT_AUTHOR_EMAIL=a@example.com",
+			"GIT_COMMITTER_NAME=A Name", "GIT_COMMITTER_EMAIL=a@example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create the sandbox: %v", err)
+	}
+	defer func() { _ = box.Close(ctx) }()
+
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
+		"cd /tmp && git init -q repo && cd repo && echo hi > a.txt && git add a.txt && " +
+			"git commit -q -m probe && git log --format='%an <%ae>|%cn <%ce>' -1"}})
+	if err != nil {
+		t.Fatalf("run git in the sandbox: %v", err)
+	}
+	said, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read what git said: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("git refused to commit: %v: %s", err, proc.Stderr())
+	}
+
+	// The author and the committer, both of them, because git names them separately and a session
+	// commits as the operator rather than on behalf of somebody else.
+	if got := strings.TrimSpace(string(said)); got != "A Name <a@example.com>|A Name <a@example.com>" {
+		t.Fatalf("the commit is by %q", got)
 	}
 }

@@ -66,3 +66,22 @@ Feature: A sandbox keeps a session's state outside itself
     And the workspace has the subscription token "tok-xyz"
     When the operator dispatches "hello" to the project
     Then the sandbox carries "CLAUDE_CODE_OAUTH_TOKEN" set to "tok-xyz"
+
+  # `git` has been in the sandbox image the whole time and unusable, because a container has no
+  # identity: the tool refuses to commit rather than guessing, which is right and is a wall to walk
+  # into halfway through a piece of work.
+  Scenario: A session can commit as the operator
+    Given a crew whose commits are by "A Name" at "a@example.com"
+    And a workspace named "acme"
+    And a project named "house-bills"
+    When the operator dispatches "hello" to the project
+    Then the sandbox can commit as "A Name" at "a@example.com"
+
+  # Half of one is worse than none. Git refuses either way, and a half identity looks configured, so
+  # the operator goes looking for the problem somewhere else.
+  Scenario: Half an identity is carried as none of one
+    Given a crew whose commits are by "A Name" at no address
+    And a workspace named "acme"
+    And a project named "house-bills"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries no part of an identity
