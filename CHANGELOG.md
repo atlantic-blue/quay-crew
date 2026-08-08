@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **The rest of the commentary, trimmed to the same rule.** The control plane, the console's model,
+  its resource registry and the command line tool, on top of the files in the pass before. A comment
+  earns its place by saying something the code cannot: a constraint from outside, a trap, or why the
+  obvious way fails. Everything else is gone rather than reworded.
+
+## 8 August 2026
+
 - **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
   against 24,132, and some files were over half comment. Five entries in this file quoted the operator
   by name, typos and all, and comments narrated their own redesigns: it was called that for a day, it
