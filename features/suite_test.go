@@ -168,6 +168,7 @@ type world struct {
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
 	lastSecrets        *quaycrewv1.ListSecretsResponse
+	lastSkills         *quaycrewv1.ListSkillsResponse
 }
 
 type worldKey struct{}
@@ -373,6 +374,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeUsageSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
+	initializeSkillSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {

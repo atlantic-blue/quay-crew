@@ -23,9 +23,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Info is what this control plane is running, reported over the API so an operator can see which
@@ -74,8 +76,10 @@ type Config struct {
 	// token is always carried and does not need naming here.
 	//
 	// Named rather than all of them, because a sandbox holds a value for the life of its container
-	// and the model can read it. This is where a skill's declared secrets will come from once skills
-	// exist; until then it is the operator saying what a session may reach. See docs/SKILLS.md.
+	// and the model can read it.
+	//
+	// A skill names its own secrets and those reach a session that holds it without being listed here.
+	// This is the crew wide list: what every session may reach whatever it holds.
 	SandboxSecrets []string
 	// Reachable is the address a session should dial to reach this control plane, put into every
 	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the crew without being told where it is.
@@ -289,9 +293,16 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		// Read back first. Something inside the sandbox writing into its own memory has learned
 		// something, and overwriting that on the next turn would make the crew's memory strictly
 		// worse than a text file.
-		scopes := make([]string, 0, len(levels))
+		scopes := make([]string, 0, len(levels)+1)
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
+		}
+		// The skills index is a section in the same file and is not a level. It is named so the read back
+		// recognises its mark and leaves it where it is: text under a mark this build does not know is
+		// swept into the innermost level instead, which would store the index as though the operator had
+		// typed it and then render it again underneath itself on the next turn.
+		if at == 0 {
+			scopes = append(scopes, sandbox.SkillsScope)
 		}
 		if onDisk, found := sandbox.ReadMemory(dirs[at]); found {
 			written := sandbox.Decompose(onDisk, scopes)
@@ -354,7 +365,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 		return
 	}
 	for at, levels := range contextFiles(session) {
-		sections := make([]sandbox.Section, 0, len(levels))
+		sections := make([]sandbox.Section, 0, len(levels)+1)
 		for _, level := range levels {
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
 			if err != nil {
@@ -362,8 +373,42 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			}
 			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}
+		// Skills sit in the outer file, beside the workspace's own context, because a skill is attached
+		// to a workspace and every session in it holds the same set.
+		if at == 0 {
+			if index := s.renderSkills(ctx, session, dirs[at]); index != "" {
+				sections = append(sections, sandbox.Section{Scope: sandbox.SkillsScope, Body: index})
+			}
+		}
 		_ = sandbox.WriteMemory(dirs[at], sandbox.Compose(sections))
 	}
+}
+
+// renderSkills puts the workspace's skills on disk where the session reads them, and returns the index
+// that says they are there.
+//
+// The files and the index are written together on purpose. An index naming a brief that is not on disk
+// sends the model to open a file that does not exist, and files with no index are a capability nothing
+// ever mentions.
+//
+// A failure here does not fail a turn, for the same reason a context failure does not: a turn that runs
+// without a skill is worse than no turn at all only if the skill was the point, and the model is told
+// what it holds rather than made to depend on it.
+func (s *Server) renderSkills(ctx context.Context, session *quaycrewv1.Session, dir string) string {
+	held, err := s.store.WorkspaceSkills(ctx, session.GetWorkspace())
+	if err != nil {
+		return ""
+	}
+	skills := make([]skill.Skill, 0, len(held))
+	for _, one := range held {
+		skills = append(skills, one.Skill)
+	}
+	if err := sandbox.WriteSkills(dir, skills); err != nil {
+		return ""
+	}
+	// The path is the one inside the container, because the reader of the index is the model, and its
+	// view of that directory is the mount rather than the host path this process just wrote to.
+	return skill.Index(sandbox.ConversationPath, skills)
 }
 
 // renderTo writes a changed context out to every live session that reads it, so a change reaches the
@@ -731,6 +776,103 @@ func (s *Server) contextDir(ctx context.Context, scope store.ContextScope, owner
 // The mode belongs to the thread rather than to a turn, so a thread started to plan something keeps
 // planning instead of being re armed on every dispatch. An unknown mode is refused here rather than
 // handed to the model, which would take it as far as its own argument parser and no further.
+// ImportSkill takes a skill into the crew from the files a client read out of its directory.
+//
+// The files travel and this side validates, because the control plane runs in a container where a path
+// on the operator's machine means nothing, and because one validator is one answer: a client that
+// checked for itself would be a second, quietly different, set of rules.
+func (s *Server) ImportSkill(ctx context.Context, req *quaycrewv1.ImportSkillRequest) (*quaycrewv1.ImportSkillResponse, error) {
+	files := make([]skill.File, 0, len(req.GetFiles()))
+	for _, file := range req.GetFiles() {
+		files = append(files, skill.File{
+			Path:       file.GetPath(),
+			Body:       file.GetBody(),
+			Executable: file.GetExecutable(),
+		})
+	}
+	loaded, err := skill.FromFiles(files)
+	if err != nil {
+		// The refusal is the skill package's own sentence, which names what is wrong and what to do
+		// about it. Wrapping it in something vaguer would lose the only useful part.
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	imported := store.Imported{Skill: loaded}
+	if err := s.store.ImportSkill(ctx, imported); err != nil {
+		if errors.Is(err, store.ErrSkillChanged) {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"%s version %d is already imported and is a different skill. Raise the version in %s: a workspace pins the version it holds, so changing one underneath it would change what a running session can do.",
+				loaded.Name, loaded.Version, skill.ManifestFile)
+		}
+		return nil, storeError(err, "import skill")
+	}
+	stored, err := s.store.GetSkill(ctx, loaded.Name, loaded.Version)
+	if err != nil {
+		return nil, storeError(err, "read the imported skill")
+	}
+	return &quaycrewv1.ImportSkillResponse{Skill: asSkill(stored)}, nil
+}
+
+// ListSkills says what the crew can do, or what one workspace holds.
+func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsRequest) (*quaycrewv1.ListSkillsResponse, error) {
+	var held []store.Imported
+	var err error
+	if req.GetWorkspace() != "" {
+		held, err = s.store.WorkspaceSkills(ctx, req.GetWorkspace())
+	} else {
+		held, err = s.store.ListSkills(ctx)
+	}
+	if err != nil {
+		return nil, storeError(err, "list skills")
+	}
+	out := make([]*quaycrewv1.Skill, 0, len(held))
+	for _, one := range held {
+		out = append(out, asSkill(one))
+	}
+	return &quaycrewv1.ListSkillsResponse{Skills: out}, nil
+}
+
+// AttachSkill gives a workspace a skill, and puts it in front of the sessions already running there
+// rather than waiting for each of them to be replaced.
+func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillRequest) (*quaycrewv1.AttachSkillResponse, error) {
+	attached, err := s.store.AttachSkill(ctx, req.GetWorkspace(), req.GetName())
+	if err != nil {
+		return nil, storeError(err, "attach skill")
+	}
+	s.renderTo(ctx, store.ContextWorkspace, req.GetWorkspace())
+	return &quaycrewv1.AttachSkillResponse{Skill: asSkill(attached)}, nil
+}
+
+// DetachSkill takes a skill away from a workspace, and takes its files off the sessions that held it.
+func (s *Server) DetachSkill(ctx context.Context, req *quaycrewv1.DetachSkillRequest) (*quaycrewv1.DetachSkillResponse, error) {
+	if err := s.store.DetachSkill(ctx, req.GetWorkspace(), req.GetName()); err != nil {
+		return nil, storeError(err, "detach skill")
+	}
+	s.renderTo(ctx, store.ContextWorkspace, req.GetWorkspace())
+	return &quaycrewv1.DetachSkillResponse{}, nil
+}
+
+// asSkill renders a skill for a client. The files never travel back: a client asked what the crew can
+// do, not for a copy of every script.
+func asSkill(one store.Imported) *quaycrewv1.Skill {
+	out := &quaycrewv1.Skill{
+		Name:     one.Name,
+		Version:  int32(one.Version),
+		Summary:  one.Summary,
+		Binaries: one.Binaries,
+	}
+	if !one.ImportedAt.IsZero() {
+		out.ImportedAt = timestamppb.New(one.ImportedAt)
+	}
+	for _, secret := range one.Secrets {
+		out.Secrets = append(out.Secrets, &quaycrewv1.SkillSecret{
+			Name:    secret.Name,
+			Purpose: secret.Purpose,
+		})
+	}
+	return out
+}
+
 func (s *Server) SetSessionPermissionMode(ctx context.Context, req *quaycrewv1.SetSessionPermissionModeRequest) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
 	if !model.KnownPermissionMode(req.GetMode()) {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -809,7 +951,19 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 	// needs and not everything the workspace happens to hold. A name with nothing set against it is
 	// skipped rather than refused: a crew configured for a skill nobody has set up yet should still
 	// run its turns.
-	for _, name := range append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...) {
+	// A skill names the secrets it needs, and a session holding it gets those and no others. This is
+	// what makes the naming worth anything: a workspace can hold a token for one capability without
+	// every session in it being handed the token, because only the sessions whose workspace holds that
+	// skill ask for the name.
+	wanted := append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...)
+	if held, err := s.store.WorkspaceSkills(ctx, session.GetWorkspace()); err == nil {
+		for _, one := range held {
+			for _, secret := range one.Secrets {
+				wanted = append(wanted, secret.Name)
+			}
+		}
+	}
+	for _, name := range wanted {
 		if _, already := env[name]; already {
 			continue
 		}

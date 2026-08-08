@@ -47,6 +47,10 @@ commands:
   attach <session id>                     open a session's conversation, with its history
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
   secret list [<workspace>]               which secrets are set, never what they say
+  skill import <directory>                take a skill into the crew from its directory
+  skill list [<workspace>]                what the crew can do, or what one workspace holds
+  skill attach [<workspace>] <name>       give a workspace a skill, so its sessions hold it
+  skill detach [<workspace>] <name>       take a skill away from a workspace
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
 may be the shortened id a listing prints. An address typed on the command line applies to that

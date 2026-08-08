@@ -8,6 +8,25 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A workspace can be given a skill, and its sessions hold it.** A skill is a directory in a git
+  repository: a manifest saying what it needs, a brief saying how the work is done, and whatever
+  reference sits beside them. `quay skill import` reads that directory and sends the files, because the
+  control plane runs in a container where a path on your machine means nothing, and a crew on a pod has
+  no host directory to go back to. `quay skill attach` gives it to a workspace, pinned to the version
+  the crew held at that moment, so a skill edited in its repository cannot change a session that is
+  already using it.
+  What reaches a session is one line per skill and not a page: the line says the skill exists and when
+  to reach for it, and the brief beside it is opened only when that kind of work comes up. That is the
+  measured reason rather than a guess, because this crew's four levels of context reached 51,727 bytes
+  at the workspace, paid by every session before a word was typed.
+  A skill names the secrets it needs and never carries them, so a session holding the github skill gets
+  `GH_TOKEN` and a session in a workspace that does not hold it never sees the value at all.
+  Proved by importing a real directory through the real command line tool into a real Postgres, then
+  reading the brief and the environment from inside the container the session runs in. `gh` is
+  confirmed still absent from the sandbox image, which is the next slice.
+  Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
+  [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
 - **A session can commit as you.** `git` has been in the sandbox image the whole time and unusable,
   because a container has no identity and the tool refuses to commit rather than guessing. That
   refusal is correct and it is a wall to walk into halfway through a piece of work.
