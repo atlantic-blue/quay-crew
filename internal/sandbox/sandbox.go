@@ -72,6 +72,10 @@ const (
 	ConversationPath = "/home/agent/.claude"
 	WorkingPath      = "/home/agent/workspace"
 	SkillsPath       = "/home/agent/skills"
+	// SharedPath is the workspace's own volume, mounted read write into every session in it. The
+	// repositories a workspace works in are cloned here once and shared; anything else a workspace
+	// accumulates and wants its sessions to see can live here too.
+	SharedPath = "/home/agent/shared"
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
 	// opening a thread twice lands in the one already running.
 	AttachedSessionName = "quay"

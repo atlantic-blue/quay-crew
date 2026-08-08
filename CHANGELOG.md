@@ -8,14 +8,47 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
-<<<<<<< HEAD
+- **A workspace has a volume, and its repositories are cloned into it once.** The volume is a directory
+  of the workspace's own, mounted read write into every session in it, and it is general: repositories are
+  the first thing to live there, and anything else a workspace accumulates and wants its sessions to share
+  can follow without a feature each.
+  The clone happens inside the container, so a repository the operator has never had on their machine
+  works exactly like one they have, and it happens once for the workspace rather than once per session.
+  The difference is one copy of a large checkout against one per conversation.
+  Each session then gets its own git working tree of it, on a branch named after the session, linked into
+  its working directory where the model starts. A working tree rather than the shared checkout because git
+  allows one per branch: two conversations in one directory share an index, and the first checkout moves
+  the ground under the other.
+  The working trees live in the volume rather than under a session's own directory, which looks like a
+  detail and is not. A clone records where every working tree cut from it lives, and that record is shared;
+  a session's directory is at the same path inside every container, so two sessions would register the
+  same path and the second would prune the first, leaving it holding a tree its clone had forgotten. Two
+  sessions in one workspace is what found that, and nothing with one session ever would.
+  Proved in a real container: one clone, two working trees, two branches, one session's commit invisible
+  to the other, and asking again leaving a session's own work alone.
+
+- **A repository belongs to the workspace, and a workspace can work in several.** It sat on the project
+  for one commit and that was the wrong level: the workspace is already where a credential lives and where
+  a skill attaches, which are the two things a repository needs, and every project in a workspace almost
+  always works in the same code. Several rather than one, because a workspace routinely spans more than
+  one: a service and its infrastructure, or a frontend and the api behind it.
+  `quay repository add <url>`, `quay repository list`, `quay repository remove <name>`. Each lands in a
+  directory of its own under every session's working directory, named after the repository, and two
+  remotes that would want the same directory are refused when the second is added rather than the second
+  one quietly never being cloned.
+  `quay project remote` and `--remote` are gone and say so, naming the command to use instead. A flag that
+  is ignored is worse than one that never existed: `--remote` absorbed silently would have become the
+  project's name.
+  The migration carries over anything already set on a project, folding two projects that named the same
+  repository into the one row, and that carry over is tested against a real database rather than assumed.
+  For [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
 - **The rest of the commentary, trimmed to the same rule.** The control plane, the console's model,
   its resource registry and the command line tool, on top of the files in the pass before. A comment
   earns its place by saying something the code cannot: a constraint from outside, a trap, or why the
   obvious way fails. Everything else is gone rather than reworded.
 
 ## 8 August 2026
-=======
 - **A project names the repository its sessions work in, and the first turn clones it.** A session's
   working directory started empty, so the skills work had built the way to describe git and there was
   nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
@@ -65,7 +98,6 @@ read, or run with `make features`.
   checked red, two of which found assertions that were passing for the wrong reason.
   Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
   [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
->>>>>>> origin/main
 
 - **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
   against 24,132, and some files were over half comment. Five entries in this file quoted the operator

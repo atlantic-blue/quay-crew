@@ -46,7 +46,7 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 		return nil, err
 	}
 
-	mounts := make([]Mount, 0, 2)
+	mounts := make([]Mount, 0, len(layout(cfg)))
 	for _, dir := range layout(cfg) {
 		if err := makeWritableDir(filepath.Join(append([]string{s.Dir}, dir.parts...)...)); err != nil {
 			return nil, err
@@ -64,6 +64,10 @@ func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 type dir struct {
 	parts  []string
 	target string
+	// memory says this directory carries a memory file the model reads, which is what makes it a level
+	// of context. Not every mounted directory is one: the workspace's volume is shared storage, and a
+	// listing of where context lives should not offer it as somewhere to write context.
+	memory bool
 }
 
 // layout is where a sandbox's two directories go.
@@ -75,9 +79,34 @@ type dir struct {
 // what it is told, which is the level the operator asked for.
 func layout(cfg Config) []dir {
 	return []dir{
-		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath},
-		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "sessions", cfg.ID, "workspace"}, WorkingPath},
+		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath, true},
+		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "sessions", cfg.ID, "workspace"}, WorkingPath, true},
+		// The workspace's own volume, shared by every session in it. A repository is cloned here once
+		// rather than per session, which is the difference between one copy of a large checkout and one
+		// per conversation, and it is what lets two sessions share the history they are working on.
+		{[]string{"workspaces", cfg.Workspace, "volume"}, SharedPath, false},
 	}
+}
+
+// memoryDirs are the ones carrying a memory file, in order, which is what everything about context
+// means by a session's directories.
+func memoryDirs(cfg Config) []dir {
+	out := make([]dir, 0, 2)
+	for _, one := range layout(cfg) {
+		if one.memory {
+			out = append(out, one)
+		}
+	}
+	return out
+}
+
+// VolumeDir is the workspace's shared volume as this process sees it, and VolumeHost as the host daemon
+// does, which is what a bind mount source has to be.
+func (s Storage) VolumeDir(workspace string) (string, bool) {
+	if s.Dir == "" || usableAsPath("workspace", workspace) != nil {
+		return "", false
+	}
+	return filepath.Join(s.Dir, "workspaces", workspace, "volume"), true
 }
 
 // Context describes a directory the model reads, for a caller that wants to show or edit it rather
@@ -103,7 +132,7 @@ func (s Storage) Contexts(cfg Config) []Context {
 		return nil
 	}
 	out := make([]Context, 0, 2)
-	for _, dir := range layout(cfg) {
+	for _, dir := range memoryDirs(cfg) {
 		host := path.Join(append([]string{s.Host}, dir.parts...)...)
 		mine := filepath.Join(append([]string{s.Dir}, dir.parts...)...)
 		_, err := os.Stat(filepath.Join(mine, MemoryFile))
@@ -285,14 +314,15 @@ func WriteSkills(root string, skills []skill.Skill) error {
 	return nil
 }
 
-// MyDirs returns this process's own view of a session's two directories, workspace first, which is
-// what a caller rendering or reading the memory files needs.
+// MyDirs returns this process's own view of a session's two memory directories, workspace first, which
+// is what a caller rendering or reading the memory files needs. The workspace's volume is not one of
+// them: it is shared storage rather than somewhere the model is told anything.
 func (s Storage) MyDirs(cfg Config) []string {
 	if s.Dir == "" {
 		return nil
 	}
 	out := make([]string, 0, 2)
-	for _, dir := range layout(cfg) {
+	for _, dir := range memoryDirs(cfg) {
 		out = append(out, filepath.Join(append([]string{s.Dir}, dir.parts...)...))
 	}
 	return out

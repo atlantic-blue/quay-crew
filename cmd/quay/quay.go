@@ -59,14 +59,21 @@ func mentions(feature features.Feature, needle string) bool {
 	return strings.Contains(haystack, needle)
 }
 
-// removedFlags are the flags addresses replaced. They are refused by name rather than ignored,
+// removedFlags are the flags this tool used to take. They are refused by name rather than ignored,
 // because ignoring one is worse than not having it: `quay dispatch --project default "hello"` reads
 // as a perfectly good command, and what actually happened was that the flag and its value became the
 // first three words of the message.
+// Each entry carries the whole of its own advice, because what to do instead differs: the three that
+// addresses replaced are answered by an address, and the fourth is answered by a different command.
 var removedFlags = map[string]string{
-	"--project":   "an address names the project: quay dispatch <workspace>/<project> \"...\"",
-	"--workspace": "an address names the workspace: quay sessions <workspace>",
-	"--thread":    "an address names the thread: quay dispatch <workspace>/<project>/<thread> \"...\"",
+	"--project": "an address names the project: quay dispatch <workspace>/<project> \"...\"" +
+		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
+	"--workspace": "an address names the workspace: quay sessions <workspace>" +
+		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
+	"--thread": "an address names the thread: quay dispatch <workspace>/<project>/<thread> \"...\"" +
+		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
+	"--remote": "a repository belongs to the workspace now, so every project in it works in the same " +
+		"code: quay repository add <url>",
 }
 
 // refuseFlags returns an error when an invocation uses a flag. This tool has none: everything it used
@@ -80,7 +87,7 @@ func refuseFlags(args []string) error {
 		}
 		name, _, _ := strings.Cut(arg, "=")
 		if instead, removed := removedFlags[name]; removed {
-			return fmt.Errorf("%s is gone: %s\n\nor move there once and stop saying it: quay use <workspace>/<project>", name, instead)
+			return fmt.Errorf("%s is gone: %s", name, instead)
 		}
 		return fmt.Errorf("quay takes no flags, and %s is not one: say where with an address instead\n\n%s", name, usage)
 	}
@@ -134,6 +141,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSecret(ctx, client, args[1:], out)
 	case "skill":
 		return runSkill(ctx, client, args[1:], out)
+	case "repository":
+		return runRepository(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}
@@ -303,14 +312,11 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	switch args[0] {
 	case "create":
-		// A remote here rather than a second command, because a project made for a repository is the
-		// common case and naming it afterwards is a step somebody forgets.
-		rest, remote := takeRemote(args[1:])
-		if len(rest) != 1 {
-			return fmt.Errorf("usage: quay project create [<workspace>/]<name> [--remote <url>]")
+		if len(args) != 2 {
+			return fmt.Errorf("usage: quay project create [<workspace>/]<name>")
 		}
 		// The last level is the new project's name, so anything before it says where to put it.
-		holder, projectName := splitLast(rest[0])
+		holder, projectName := splitLast(args[1])
 		located, err := locate(ctx, client, holder)
 		if err != nil {
 			return err
@@ -322,18 +328,14 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			return err
 		}
 		fmt.Fprintf(out, "created project %s (%s)\n", resp.GetProject().GetId(), resp.GetProject().GetName())
-		if remote != "" {
-			if _, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
-				Project: resp.GetProject().GetId(), Remote: remote,
-			}); err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "its sessions will work in %s\n", remote)
-		}
 		return move(workspace.Path{Workspace: located.Path.Workspace, Project: resp.GetProject().GetName()}, out)
 
 	case "remote":
-		return runProjectRemote(ctx, client, args[1:], out)
+		// The way off the command that used to be here. Refused by name rather than treated as an
+		// unknown word, because it is still in somebody's fingers and in their notes.
+		return fmt.Errorf(
+			"there is no project remote command: a repository belongs to the workspace now, so every " +
+				"project in it works in the same code. Use quay repository <add|list|remove>")
 
 	case "list":
 		scope := ""
@@ -362,78 +364,6 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	default:
 		return fmt.Errorf("usage: quay project <create|list|remote>")
 	}
-}
-
-// runProjectRemote shows or changes the repository a project's sessions work in.
-func runProjectRemote(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	switch {
-	case len(args) == 0:
-		located, err := locate(ctx, client, "")
-		if err != nil {
-			return err
-		}
-		project, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: located.ProjectID})
-		if err != nil {
-			return err
-		}
-		if project.GetProject().GetRemote() == "" {
-			fmt.Fprintf(out, "%s has no remote, so its sessions start with an empty directory\n",
-				located.Path.Project)
-			return nil
-		}
-		fmt.Fprintln(out, project.GetProject().GetRemote())
-		return nil
-
-	case args[0] == "set" && len(args) == 2, args[0] == "set" && len(args) == 3:
-		typed, remote := "", args[1]
-		if len(args) == 3 {
-			typed, remote = args[1], args[2]
-		}
-		located, err := locate(ctx, client, typed)
-		if err != nil {
-			return err
-		}
-		resp, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
-			Project: located.ProjectID, Remote: remote,
-		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "%s works in %s\n", located.Path.Project, resp.GetProject().GetRemote())
-		fmt.Fprintf(out, "a session started from here clones it on its first turn\n")
-		return nil
-
-	case args[0] == "clear" && len(args) == 1:
-		located, err := locate(ctx, client, "")
-		if err != nil {
-			return err
-		}
-		if _, err := client.SetProjectRemote(ctx, &quaycrewv1.SetProjectRemoteRequest{
-			Project: located.ProjectID,
-		}); err != nil {
-			return err
-		}
-		// The checkouts that exist are left where they are: taking a remote away says where new work
-		// comes from, not that a conversation should lose what it is working on.
-		fmt.Fprintf(out, "%s has no remote now; the checkouts already made are untouched\n", located.Path.Project)
-		return nil
-
-	default:
-		return fmt.Errorf("usage: quay project remote [set [<address>] <url> | clear]")
-	}
-}
-
-// takeRemote pulls a --remote out of a command's arguments and hands back the rest.
-func takeRemote(args []string) (rest []string, remote string) {
-	for at := 0; at < len(args); at++ {
-		if args[at] == "--remote" && at+1 < len(args) {
-			remote = args[at+1]
-			at++
-			continue
-		}
-		rest = append(rest, args[at])
-	}
-	return rest, remote
 }
 
 // splitLast divides an address into everything above the last level and the last level itself, which

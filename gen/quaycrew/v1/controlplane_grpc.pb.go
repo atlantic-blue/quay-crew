@@ -27,7 +27,9 @@ const (
 	ControlPlaneService_GetProject_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetProject"
 	ControlPlaneService_ListProjects_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListProjects"
 	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
-	ControlPlaneService_SetProjectRemote_FullMethodName         = "/quaycrew.v1.ControlPlaneService/SetProjectRemote"
+	ControlPlaneService_AddRepository_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AddRepository"
+	ControlPlaneService_RemoveRepository_FullMethodName         = "/quaycrew.v1.ControlPlaneService/RemoveRepository"
+	ControlPlaneService_ListRepositories_FullMethodName         = "/quaycrew.v1.ControlPlaneService/ListRepositories"
 	ControlPlaneService_AttachChannel_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -66,7 +68,9 @@ type ControlPlaneServiceClient interface {
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
-	SetProjectRemote(ctx context.Context, in *SetProjectRemoteRequest, opts ...grpc.CallOption) (*SetProjectRemoteResponse, error)
+	AddRepository(ctx context.Context, in *AddRepositoryRequest, opts ...grpc.CallOption) (*AddRepositoryResponse, error)
+	RemoveRepository(ctx context.Context, in *RemoveRepositoryRequest, opts ...grpc.CallOption) (*RemoveRepositoryResponse, error)
+	ListRepositories(ctx context.Context, in *ListRepositoriesRequest, opts ...grpc.CallOption) (*ListRepositoriesResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -181,10 +185,30 @@ func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *Delet
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) SetProjectRemote(ctx context.Context, in *SetProjectRemoteRequest, opts ...grpc.CallOption) (*SetProjectRemoteResponse, error) {
+func (c *controlPlaneServiceClient) AddRepository(ctx context.Context, in *AddRepositoryRequest, opts ...grpc.CallOption) (*AddRepositoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetProjectRemoteResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SetProjectRemote_FullMethodName, in, out, cOpts...)
+	out := new(AddRepositoryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AddRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RemoveRepository(ctx context.Context, in *RemoveRepositoryRequest, opts ...grpc.CallOption) (*RemoveRepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveRepositoryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RemoveRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListRepositories(ctx context.Context, in *ListRepositoriesRequest, opts ...grpc.CallOption) (*ListRepositoriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRepositoriesResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListRepositories_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +449,9 @@ type ControlPlaneServiceServer interface {
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
-	SetProjectRemote(context.Context, *SetProjectRemoteRequest) (*SetProjectRemoteResponse, error)
+	AddRepository(context.Context, *AddRepositoryRequest) (*AddRepositoryResponse, error)
+	RemoveRepository(context.Context, *RemoveRepositoryRequest) (*RemoveRepositoryResponse, error)
+	ListRepositories(context.Context, *ListRepositoriesRequest) (*ListRepositoriesResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -484,8 +510,14 @@ func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *Lis
 func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) SetProjectRemote(context.Context, *SetProjectRemoteRequest) (*SetProjectRemoteResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetProjectRemote not implemented")
+func (UnimplementedControlPlaneServiceServer) AddRepository(context.Context, *AddRepositoryRequest) (*AddRepositoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddRepository not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RemoveRepository(context.Context, *RemoveRepositoryRequest) (*RemoveRepositoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveRepository not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListRepositories(context.Context, *ListRepositoriesRequest) (*ListRepositoriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRepositories not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -718,20 +750,56 @@ func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_SetProjectRemote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetProjectRemoteRequest)
+func _ControlPlaneService_AddRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddRepositoryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SetProjectRemote(ctx, in)
+		return srv.(ControlPlaneServiceServer).AddRepository(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_SetProjectRemote_FullMethodName,
+		FullMethod: ControlPlaneService_AddRepository_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SetProjectRemote(ctx, req.(*SetProjectRemoteRequest))
+		return srv.(ControlPlaneServiceServer).AddRepository(ctx, req.(*AddRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RemoveRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RemoveRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RemoveRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RemoveRepository(ctx, req.(*RemoveRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListRepositories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRepositoriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListRepositories(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListRepositories_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListRepositories(ctx, req.(*ListRepositoriesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1172,8 +1240,16 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_DeleteProject_Handler,
 		},
 		{
-			MethodName: "SetProjectRemote",
-			Handler:    _ControlPlaneService_SetProjectRemote_Handler,
+			MethodName: "AddRepository",
+			Handler:    _ControlPlaneService_AddRepository_Handler,
+		},
+		{
+			MethodName: "RemoveRepository",
+			Handler:    _ControlPlaneService_RemoveRepository_Handler,
+		},
+		{
+			MethodName: "ListRepositories",
+			Handler:    _ControlPlaneService_ListRepositories_Handler,
 		},
 		{
 			MethodName: "AttachChannel",

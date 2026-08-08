@@ -8,7 +8,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
+func TestStoragePrepareMountsTheWorkspaceTheProjectAndTheVolume(t *testing.T) {
 	dir := t.TempDir()
 	storage := sandbox.Storage{Dir: dir, Host: "/on/the/host"}
 
@@ -16,8 +16,8 @@ func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
-	if len(mounts) != 2 {
-		t.Fatalf("got %d mounts (%+v), want 2", len(mounts), mounts)
+	if len(mounts) != 3 {
+		t.Fatalf("got %d mounts (%+v), want 3", len(mounts), mounts)
 	}
 
 	// The source is the path the host daemon sees, not the path this process writes through. The
@@ -26,6 +26,9 @@ func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
 	want := []sandbox.Mount{
 		{Source: "/on/the/host/workspaces/ws1/claude", Target: sandbox.ConversationPath},
 		{Source: "/on/the/host/workspaces/ws1/projects/prj1/sessions/sess/workspace", Target: sandbox.WorkingPath},
+		// The workspace's own volume, the same directory for every session in it, which is what makes a
+		// repository cloned once visible to all of them.
+		{Source: "/on/the/host/workspaces/ws1/volume", Target: sandbox.SharedPath},
 	}
 	for i, mount := range mounts {
 		if mount != want[i] {
@@ -34,7 +37,11 @@ func TestStoragePrepareMountsTheWorkspaceAndTheProject(t *testing.T) {
 	}
 
 	// And the directories exist, under this process's own view of the same data directory.
-	for _, relative := range []string{"workspaces/ws1/claude", "workspaces/ws1/projects/prj1/sessions/sess/workspace"} {
+	for _, relative := range []string{
+		"workspaces/ws1/claude",
+		"workspaces/ws1/projects/prj1/sessions/sess/workspace",
+		"workspaces/ws1/volume",
+	} {
 		info, err := os.Stat(filepath.Join(dir, relative))
 		if err != nil {
 			t.Fatalf("stat %s: %v", relative, err)
@@ -188,5 +195,25 @@ func TestHasConversationSaysYesWhenItCannotTell(t *testing.T) {
 				t.Fatal("want it to say yes when it cannot tell")
 			}
 		})
+	}
+}
+
+// The volume is shared storage, not a level of context. Offering it as somewhere to write context would
+// invite the operator to put something there that the model is never told about.
+func TestTheVolumeIsNotAContext(t *testing.T) {
+	storage := sandbox.Storage{Dir: t.TempDir(), Host: "/on/the/host"}
+	cfg := sandbox.Config{ID: "sess", Workspace: "ws1", Project: "prj1"}
+
+	contexts := storage.Contexts(cfg)
+	if len(contexts) != 2 {
+		t.Fatalf("there are %d contexts (%+v), want the workspace's and the session's", len(contexts), contexts)
+	}
+	for _, one := range contexts {
+		if one.Sandbox == sandbox.SharedPath {
+			t.Errorf("the volume is listed as somewhere context lives: %+v", one)
+		}
+	}
+	if dirs := storage.MyDirs(cfg); len(dirs) != 2 {
+		t.Errorf("MyDirs gives %d directories (%v), want the two carrying a memory file", len(dirs), dirs)
 	}
 }

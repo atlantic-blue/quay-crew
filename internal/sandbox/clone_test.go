@@ -9,7 +9,7 @@ import (
 // part of the script, and no credential value appears in the command at all.
 func TestACloneKeepsTheRemoteOutOfTheScriptAndTheTokenOutOfEverything(t *testing.T) {
 	const remote = "https://github.com/atlantic-blue/quay-crew.git"
-	spec, err := CloneSpec(remote, WorkingPath)
+	spec, err := CloneSpec(remote, SharedPath)
 	if err != nil {
 		t.Fatalf("CloneSpec: %v", err)
 	}
@@ -38,7 +38,9 @@ func TestACloneKeepsTheRemoteOutOfTheScriptAndTheTokenOutOfEverything(t *testing
 
 	// Once per container. A sandbox is adopted across turns, and a clone that runs every turn either
 	// fails or throws away what the last one did.
-	if !strings.Contains(script, "-d") || !strings.Contains(script, ".git") {
+	// The guard, not the flag it happens to use: a worktree's .git is a file rather than a directory, so
+	// both of these test for existence rather than for a directory.
+	if !strings.Contains(script, `"$2/.git"`) || !strings.Contains(script, "||") {
 		t.Errorf("the script clones unconditionally, so a second turn would clone again: %q", script)
 	}
 
@@ -59,11 +61,73 @@ func TestACloneKeepsTheRemoteOutOfTheScriptAndTheTokenOutOfEverything(t *testing
 		}
 	}
 
-	// Into a directory of its own: the working directory already holds the memory file the model reads,
-	// and git refuses to clone into somewhere that is not empty.
+	// Into the workspace's volume, which every session in the workspace shares, so a second conversation
+	// costs no second copy of the history.
 	target := spec.Argv[len(spec.Argv)-1]
-	if target != WorkingPath+"/quay-crew" {
-		t.Errorf("it clones into %q, want a directory of its own under the working directory", target)
+	if target != SharedPath+"/"+RepositoriesDir+"/quay-crew" {
+		t.Errorf("it clones into %q, want the workspace's volume", target)
+	}
+	if strings.HasPrefix(target, WorkingPath) {
+		t.Errorf("it clones into %q, which belongs to one session: every session in the workspace would get its own copy", target)
+	}
+}
+
+// A worktree rather than the shared checkout, because git allows one working tree per branch: two
+// sessions in one directory share an index, and the first checkout moves the ground under the other.
+func TestEachSessionGetsItsOwnWorkingTreeOnItsOwnBranch(t *testing.T) {
+	clone := SharedPath + "/" + RepositoriesDir + "/quay-crew"
+	first := WorktreeSpec(clone, WorktreePath("aaaa1111", "quay-crew"),
+		WorkingPath+"/quay-crew", SessionBranch("aaaa1111"))
+	// The second session's command, to compare against the first: the same link in its own container,
+	// and a registered path and a branch of its own.
+	second := WorktreeSpec(clone, WorktreePath("bbbb2222", "quay-crew"),
+		WorkingPath+"/quay-crew", SessionBranch("bbbb2222"))
+	if strings.Join(first.Argv, " ") == strings.Join(second.Argv, " ") {
+		t.Error("two sessions are given the identical command, so they cannot have separate trees")
+	}
+
+	script, arguments := first.Argv[2], first.Argv[3:]
+	if !strings.Contains(script, "worktree add") {
+		t.Errorf("it does not make a worktree: %q", script)
+	}
+	// Pruned first, or a session whose directory was cleared away leaves the clone believing a worktree
+	// is still there and refusing to make it again.
+	if !strings.Contains(script, "worktree prune") {
+		t.Errorf("it never prunes, so a cleared session directory would leave a registration behind: %q", script)
+	}
+	// Only when it is not already there, because every turn asks.
+	if !strings.Contains(script, "-e") {
+		t.Errorf("it makes a worktree unconditionally: %q", script)
+	}
+	for _, want := range []string{clone, WorktreePath("aaaa1111", "quay-crew"), WorkingPath + "/quay-crew", "quay/aaaa1111"} {
+		found := false
+		for _, argument := range arguments {
+			if argument == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q is not among the arguments %v", want, arguments)
+		}
+	}
+
+	// Two sessions, two branches. The same branch in two worktrees is the one thing git refuses.
+	if SessionBranch("aaaa1111") == SessionBranch("bbbb2222") {
+		t.Error("two sessions would be given the same branch, which git will not allow in two worktrees")
+	}
+	// The registered path differs per session. It is the same string in every container otherwise, and a
+	// clone's record of its working trees is shared: two sessions registering one path means the second
+	// prunes the first and leaves it holding a tree its clone has forgotten.
+	if WorktreePath("aaaa1111", "quay-crew") == WorktreePath("bbbb2222", "quay-crew") {
+		t.Error("two sessions would register the same working tree path in one shared clone")
+	}
+	if !strings.HasPrefix(WorktreePath("aaaa1111", "quay-crew"), SharedPath+"/") {
+		t.Errorf("the working tree is at %q, which is not a path every container agrees on",
+			WorktreePath("aaaa1111", "quay-crew"))
+	}
+	// And it is linked into the session's working directory, which is where the model starts.
+	if !strings.Contains(strings.Join(first.Argv, " "), WorkingPath+"/quay-crew") {
+		t.Errorf("nothing puts it where the model will look: %v", first.Argv)
 	}
 }
 

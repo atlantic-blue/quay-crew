@@ -81,10 +81,15 @@ type Store interface {
 	// ListProjects lists every project, or one workspace's when workspace is set.
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
-	// SetProjectRemote records the repository a project's sessions work in. Its own call rather than an
-	// argument to CreateProject, so a project that already exists can be given one and every existing
-	// caller of CreateProject stays as it is.
-	SetProjectRemote(ctx context.Context, project, remote string) error
+	// AddRepository gives a workspace a repository to work in, returning it with the name its checkout
+	// will land under. Adding one the workspace already has under that name is not an error and changes
+	// nothing, so a script that adds the same repository twice is harmless.
+	AddRepository(ctx context.Context, workspace, name, remote string) (*quaycrewv1.Repository, error)
+	// RemoveRepository takes one away by name. The checkouts already made are left alone.
+	RemoveRepository(ctx context.Context, workspace, name string) error
+	// WorkspaceRepositories are the repositories a workspace works in, oldest first, which is what a
+	// session's sandbox is built from.
+	WorkspaceRepositories(ctx context.Context, workspace string) ([]*quaycrewv1.Repository, error)
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
 	// lands in the same session.
