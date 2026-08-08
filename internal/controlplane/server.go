@@ -76,14 +76,10 @@ type Config struct {
 	// SkillsHost is the skills directory as the host daemon sees it, which is what a bind mount needs.
 	// Empty means skills are not mounted, the same way an unset data directory means state is not kept.
 	SkillsHost string
-	// SandboxImage is the image a session runs in, named in the refusal when a skill needs a binary
-	// that is not in it. Knowing which image to go and fix is most of that message.
+	// SandboxImage is named in the refusal when a skill needs a binary that is not in it.
 	SandboxImage string
-	// GitAuthor is who a commit made inside a sandbox is by: a name and an address, both or neither.
-	//
-	// It is configuration rather than a secret. Without it `git` is in the image and unusable: the
-	// tool refuses to commit at all rather than guessing, which is the right call and a wall to walk
-	// into halfway through a piece of work.
+	// GitAuthor is who a commit made inside a sandbox is by: both a name and an address, or neither.
+	// Without it git refuses to commit rather than guessing.
 	GitAuthor Identity
 	// SandboxSecrets are the workspace secrets a session's sandbox is given, by name. The model's own
 	// token is always carried and does not need naming here.
@@ -200,15 +196,9 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 	}, nil
 }
 
-// GetUsage adds up what every conversation in the crew has cost.
-//
-// It is a running total rather than configuration, which is why it is not part of GetInfo: that call
-// answers what a turn dispatched here would do, and it is fetched once because the answer does not
-// change under a running process. This one changes with every turn.
-//
-// Archived threads are counted. What a piece of work came to does not stop being true because the
-// thread was put away, and a total that quietly shrinks when somebody tidies up is worse than no
-// total at all.
+// GetUsage adds up what every conversation in the crew has cost. Its own call rather than part of
+// GetInfo, which answers configuration and is fetched once. Archived threads are counted: a total
+// that shrinks when somebody tidies up is worse than no total.
 func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*quaycrewv1.GetUsageResponse, error) {
 	var total sandbox.Usage
 	var threads int64
@@ -257,16 +247,11 @@ func storeError(err error, what string) error {
 	return status.Errorf(codes.Internal, "%s: %v", what, err)
 }
 
-// sandboxFor returns the session's sandbox, creating it on first use so it is reused across turns.
+// sandboxFor returns the session's sandbox, creating it on first use.
 //
-// The sandbox is told which project and workspace the session belongs to, because the state that
-// has to outlive it does not all sit at the same level: the conversation store and the workspace's
-// context belong to the workspace, the working files and the project's context to the project.
-//
-// The workspace's environment is set on the sandbox itself, not just on each turn, so anything the
-// operator starts inside it later (attaching to the conversation, for instance) is authenticated
-// without the tool carrying the credential around. A token set after a session's first turn will not
-// reach that session's existing sandbox: stop the session to get a fresh one.
+// The environment is set on the sandbox itself rather than on each turn, so attaching to the
+// conversation is authenticated too. A token set after the first turn does not reach the existing
+// sandbox: stop the session to get a fresh one.
 func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -606,15 +591,11 @@ func join(kept, added string) string {
 	}
 }
 
-// renderContext writes what the store holds into the files the model reads, and reads nothing back.
+// renderContext writes what the store holds into the files the model reads, and reads nothing back:
+// `quay context set` is the operator saying what the context is now, so the store wins.
 //
-// It is the direction the operator's own edits travel. `quay context set` is somebody saying what the
-// context is now, so the store wins over whatever the file said, and reading back first here would
-// hand the change straight back to the file it is meant to replace.
-//
-// A model already running in the sandbox does not see this. The command line tool reads its memory
-// when a conversation starts, so a change lands on the next turn or the next time the conversation is
-// opened, not in the middle of one.
+// A conversation already running does not see it. The tool reads its memory at the start, so a change
+// lands on the next turn or the next open.
 func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session) {
 	dirs := s.storage.MyDirs(sandbox.Config{
 		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
@@ -1271,18 +1252,10 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 		env["GIT_COMMITTER_NAME"] = s.gitAuthor.Name
 		env["GIT_COMMITTER_EMAIL"] = s.gitAuthor.Email
 	}
-	// The workspace's secrets, by name. The model's own token is always one of them, because a
-	// sandbox without it cannot run a turn at all; the rest are the ones the crew has been told to
-	// carry.
-	//
-	// By name rather than all of them. A sandbox holds a value for the life of its container and the
-	// model can read it, which is the point of giving it one, so the crew hands over what a session
-	// needs and not everything the workspace happens to hold. A name with nothing set against it is
-	// skipped rather than refused: a crew configured for a skill nobody has set up yet should still
-	// run its turns.
-	// A skill names the secrets it needs, and a session gets the ones its own skills name. That is what
-	// makes naming them worth anything: a workspace can hold a token for one capability without every
-	// session in the crew being handed it, because only the sessions holding that skill ask for the name.
+	// By name rather than all of them: a sandbox holds a value for the life of its container and the
+	// model can read it. The model's own token is always carried, and a name with nothing set against
+	// it is skipped rather than refused. A skill contributes the names it declares, so a workspace can
+	// hold a token for one capability without every session in the crew being handed it.
 	named := append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...)
 	for _, given := range s.heldSkills(ctx, session) {
 		named = append(named, given.SecretNames()...)
@@ -1376,8 +1349,8 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	// every conversation opened from the panel was one the crew could not name: no history to read
 	// back, no tokens to count, and no way to tell one transcript in the workspace from another.
 	//
-	// Assigned here rather than when the session is made, because this is the moment a conversation
-	// starts to exist, and a thread that is only ever dispatched to gets its identifier from the turn.
+	// Assigned here rather than at creation: this is the moment a conversation starts to exist, and a
+	// thread that is only dispatched to gets its identifier from the turn.
 	if session.GetModelSessionId() == "" {
 		named := store.NewConversationID()
 		if err := s.store.RecordTurn(ctx, session.GetId(), named, session.GetStatus()); err != nil {
@@ -1418,8 +1391,8 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 // is only safe because a session's state lives on the host now: the sandbox this creates is a new
 // container over the same conversation store and the same project files.
 //
-// The sandbox comes first and the status second. A sandbox that will not start leaves the session
-// stopped, which is what it is, rather than idle and unreachable.
+// The sandbox comes first: one that will not start leaves the session stopped rather than idle and
+// unreachable.
 func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSessionRequest) (*quaycrewv1.RestartSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
@@ -1523,11 +1496,8 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 // rather than having to be told every time. It is the crew describing itself: the command list the
 // tool prints, and the behaviour specification the binary carries.
 //
-// The driver's own level, not the project's, because the project's context belongs to the work being
-// done there and a session driving the crew is not that work.
-//
-// Written once. An operator who edits it has a reason to, and overwriting that on every open would
-// make it the one context nobody can change.
+// The driver's own level, not the project's, and written once: overwriting on every open would make
+// it the one context nobody can change.
 func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
 	if existing, err := s.store.GetContext(ctx, store.ContextSession, session.GetId()); err == nil && existing != "" {
 		return

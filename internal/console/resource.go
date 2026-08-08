@@ -1,9 +1,5 @@
-// Package console is the operator's full screen terminal interface. It is a registry of resources,
-// one listed at a time, in the shape of k9s: a command bar switches views, enter drills down, escape
-// goes back, and the footer says which keys do what here.
-//
-// The registry is the point. Every resource the crew has should be inspectable from the same place,
-// so adding a view is declaring a Resource, never building a screen.
+// Package console is the operator's full screen terminal interface, in the shape of k9s. The registry
+// is the point: adding a view is declaring a Resource, never building a screen.
 package console
 
 import (
@@ -35,12 +31,8 @@ const (
 type Column struct {
 	Title string
 	Width int
-	// Give is the order in which a column is dropped when the window is too narrow to hold them all:
-	// 1 goes first, then 2, and so on. Zero means it is never dropped.
-	//
-	// Without this a resource that declares more columns than fit has its line cut, and what is cut
-	// is the last column rather than the least useful one. A thread's age is worth more at half a
-	// window than the tokens it read from a cache.
+	// Give is the order a column is dropped in when the window is too narrow: 1 goes first, zero
+	// never. Without it the line is cut at the end rather than at the least useful column.
 	Give int
 }
 
@@ -71,14 +63,11 @@ func (r Row) Name() string {
 // identifier drilled down from, for example a workspace id when listing that workspace's sessions.
 type Lister func(ctx context.Context, parent string) ([]Row, error)
 
-// Action is a key bound operation on the selected row.
+// Action is a key bound operation on the selected row. Exactly one of Run and Shell is set; Shell
+// runs with the console suspended.
 //
-// Exactly one of Run and Shell is set. Run performs the action and returns. Shell returns a command
-// to run with the console suspended, which is how shelling into a session's container works.
-//
-// Shell returns an error rather than a nil command when it cannot proceed, so the operator is told
-// why. "Nothing to run" is not a reason, and the reasons here are ones they can act on: a session
-// with no conversation yet, or one that has been stopped.
+// Shell returns an error rather than a nil command when it cannot proceed, because "nothing to run"
+// is not a reason the operator can act on.
 type Action struct {
 	Key string
 	// Also are further keys that do the same thing. The header shows Key alone, so the hints stay one
