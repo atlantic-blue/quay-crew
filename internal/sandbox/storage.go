@@ -10,16 +10,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 )
 
-// Storage keeps a sandbox's state on the host rather than in the container layer.
+// Storage keeps a sandbox's state on the host, so removing a container does not destroy the
+// conversation the database holds a handle to. The same directories carry the context the model
+// reads, because it already looks for CLAUDE.md in its home and working directories.
 //
-// Without it a session's conversation lives only inside its container, so removing that container
-// destroys the conversation the database still holds a handle to. With it, the same directory is
-// also where a workspace and a project keep the context the model reads, because the model's command
-// line tool already looks for CLAUDE.md in its home directory and in its working directory. One
-// mechanism, both problems.
-//
-// The directories are bind mounted rather than kept in a named volume so the operator can drop a
-// file into a project with an editor instead of a throwaway container.
+// Bind mounted rather than a named volume, so the operator can edit a project's files directly.
 type Storage struct {
 	// Dir is the data directory as this process sees it. Empty keeps nothing, which is the old
 	// behaviour: state lives in the container and dies with it.
@@ -127,16 +122,11 @@ func (s Storage) Contexts(cfg Config) []Context {
 // directory.
 const ConversationFile = ".jsonl"
 
-// HasConversation says whether a workspace's conversation store still holds a conversation.
+// HasConversation says whether a workspace's store still holds one. A handle is a pointer into a
+// store this process does not own, so it can outlive what it points at.
 //
-// A session's handle is a pointer into a store this process does not own, so a handle can outlive
-// what it points at: every conversation from a sandbox created before state was kept on the host died
-// with that container, while the row kept the handle. Resuming one of those prints "No conversation
-// found" and exits, which from the console looks like nothing happening at all.
-//
-// It answers true whenever it cannot tell. An unconfigured store keeps nothing on the host, and
-// refusing every attach because there is nowhere to look would be worse than the failure this exists
-// to explain.
+// True whenever it cannot tell: refusing every attach because there is nowhere to look would be worse
+// than the failure this exists to explain.
 func (s Storage) HasConversation(workspace, conversation string) bool {
 	if s.Dir == "" || workspace == "" || conversation == "" {
 		return true
@@ -202,9 +192,29 @@ func WriteMemory(dir, body string) error {
 	return nil
 }
 
-// SkillsDir is where a workspace's skills sit inside the directory that carries them, on the host and
-// in a container alike.
+// SkillsDir is what a workspace's own skills directory is called under its directory in the data
+// directory. The crew's skills live wherever the operator keeps them and do not come through here.
 const SkillsDir = "skills"
+
+// WorkspaceSkillsDir is where this process writes a workspace's own skills, and whether there is
+// anywhere to write them at all. An unconfigured data directory keeps nothing, the same as everything
+// else here.
+func (s Storage) WorkspaceSkillsDir(workspace string) (string, bool) {
+	if s.Dir == "" || usableAsPath("workspace", workspace) != nil {
+		return "", false
+	}
+	return filepath.Join(s.Dir, "workspaces", workspace, SkillsDir), true
+}
+
+// WorkspaceSkillsHost is the same directory as the host daemon sees it, which is what a bind mount
+// source has to be: the control plane may be in a container, and its own view of a path means nothing
+// to the daemon starting sandboxes beside it.
+func (s Storage) WorkspaceSkillsHost(workspace string) (string, bool) {
+	if s.Dir == "" || s.Host == "" || usableAsPath("workspace", workspace) != nil {
+		return "", false
+	}
+	return path.Join(s.Host, "workspaces", workspace, SkillsDir), true
+}
 
 // WriteSkills puts a workspace's skills in the directory a sandbox reads them from, and takes away the
 // ones it no longer holds.
@@ -215,8 +225,7 @@ const SkillsDir = "skills"
 //
 // Detaching removes the directory. A brief left behind is a capability the model can still read about
 // and no longer has, which is worse than not having it, because it will try.
-func WriteSkills(dir string, skills []skill.Skill) error {
-	root := filepath.Join(dir, SkillsDir)
+func WriteSkills(root string, skills []skill.Skill) error {
 	held := make(map[string]bool, len(skills))
 	for _, one := range skills {
 		held[one.Name] = true

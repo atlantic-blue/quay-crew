@@ -752,11 +752,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if got := fmt.Sprint(held.Binaries); got != "[git gh]" {
 			t.Errorf("binaries are %s, want [git gh]", got)
 		}
-		if len(held.Secrets) != 1 || held.Secrets[0].Name != "GH_TOKEN" {
-			t.Fatalf("secrets are %+v, want one named GH_TOKEN", held.Secrets)
-		}
-		if held.Secrets[0].Purpose == "" {
-			t.Error("the secret came back with nothing saying what it is, so a refusal cannot name it")
+		if len(held.Secrets) != 1 || held.Secrets["GH_TOKEN"] == "" {
+			t.Fatalf("secrets are %+v, want GH_TOKEN with something saying what it is", held.Secrets)
 		}
 		if len(held.Files) != 3 {
 			t.Fatalf("files came back as %d, want the 3 that went in", len(held.Files))
@@ -945,7 +942,7 @@ func aSkill(name string, version int) store.Imported {
 		Version:  version,
 		Summary:  "Open pull requests.",
 		Binaries: []string{"git", "gh"},
-		Secrets:  []skill.Secret{{Name: "GH_TOKEN", Purpose: "a token with repo scope"}},
+		Secrets:  map[string]string{"GH_TOKEN": "a token with repo scope"},
 		Brief:    "how it is done here",
 		Files: []skill.File{
 			{Path: "SKILL.md", Body: []byte("how it is done here")},

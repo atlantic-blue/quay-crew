@@ -22,16 +22,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// The default and the ceiling on how much of a session's history comes back at once. A conversation
-// is unbounded and a terminal is not, so a caller that asks for everything gets the most recent
-// slice of it rather than an answer nobody can read.
+// A conversation is unbounded and a terminal is not, so asking for everything gets the most recent
+// slice of it.
 const (
 	defaultTurnLimit = 50
 	maxTurnLimit     = 500
 )
 
-// TurnLimit is how many turns a request for limit actually gets: the default when nothing was asked
-// for, and the ceiling when too much was.
+// TurnLimit applies the default when nothing was asked for and the ceiling when too much was.
 func TurnLimit(limit int) int {
 	switch {
 	case limit <= 0:
@@ -43,7 +41,7 @@ func TurnLimit(limit int) int {
 	}
 }
 
-// ErrNotFound is returned when a workspace or session does not exist, or has been deleted.
+// ErrNotFound covers deleted as well as never existed.
 var ErrNotFound = errors.New("store: not found")
 
 // ErrSkillChanged is returned when a version of a skill is imported again carrying a different skill.
@@ -60,23 +58,17 @@ type Imported struct {
 }
 
 // SessionFilter narrows a listing. The zero value is every live session the crew has.
-//
-// It is a struct rather than a list of arguments because the third one would have been a bare
-// boolean at a call site, where nobody reading it could tell what true meant.
 type SessionFilter struct {
-	// Project wins over Workspace when both are set, because it is the narrower of the two.
+	// Project wins over Workspace when both are set, being the narrower.
 	Workspace string
 	Project   string
-	// Archived asks for the threads that have been put away instead of the live ones. A listing is
-	// one or the other and never both: the default view must not quietly grow back the threads
-	// somebody deliberately hid.
+	// Archived asks for the threads put away instead of the live ones, never both: the default view
+	// must not quietly grow back the threads somebody hid.
 	Archived bool
 }
 
-// Store persists workspaces, channels and sessions.
-//
-// Workspaces are soft deleted: a deleted workspace is invisible to every read, and its rows stay so the
-// sessions that reference it keep their history.
+// Store persists workspaces, channels and sessions. Workspaces are soft deleted, so the sessions
+// that reference one keep their history.
 type Store interface {
 	CreateWorkspace(ctx context.Context, name string) (*quaycrewv1.Workspace, error)
 	GetWorkspace(ctx context.Context, id string) (*quaycrewv1.Workspace, error)
@@ -84,28 +76,25 @@ type Store interface {
 	DeleteWorkspace(ctx context.Context, id string) error
 	AttachChannel(ctx context.Context, workspace, id, kind string) (*quaycrewv1.Channel, error)
 
-	// CreateProject adds a body of work to a workspace. Threads happen inside a project.
 	CreateProject(ctx context.Context, workspace, name string) (*quaycrewv1.Project, error)
 	GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error)
 	// ListProjects lists every project, or one workspace's when workspace is set.
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
 
-	// FindOrCreateSession returns the session for a project's thread, creating it on first use, so
-	// a channel that only knows its own thread id always lands in the same session.
+	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
+	// lands in the same session.
 	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error)
-	// FindOrCreateDriver returns the project's driver, the session that drives the crew rather than
-	// doing work inside it, creating it the first time somebody opens it. One per project.
+	// FindOrCreateDriver returns the project's driver, one per project, creating it on first open.
 	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error)
-	// RecordTurn stores the model conversation handle and the session's status after a turn. An
-	// empty modelSessionID leaves the stored handle alone, so a failed turn cannot erase it.
+	// RecordTurn leaves the stored handle alone when modelSessionID is empty, so a failed turn cannot
+	// erase it.
 	RecordTurn(ctx context.Context, id, modelSessionID, status string) error
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
-	// ListSessions returns the sessions a filter selects.
 	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
-	// ArchiveSession puts a thread away: it disappears from the default listing and nothing else
-	// happens to it. The row, the conversation handle and the files on the host all stay.
+	// ArchiveSession only hides a thread from the default listing. The row, the conversation handle
+	// and the files on the host all stay.
 	ArchiveSession(ctx context.Context, id string) error
 	// RestoreSession brings an archived thread back into the default listing.
 	RestoreSession(ctx context.Context, id string) error

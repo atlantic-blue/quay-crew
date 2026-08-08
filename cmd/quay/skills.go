@@ -40,7 +40,7 @@ func runSkillImport(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	}
 	// Read and validate here as well as on the other side, so a malformed skill is refused before it is
 	// sent anywhere. The control plane refuses it too, and that is the check that counts.
-	loaded, err := skill.Load(args[0])
+	loaded, err := skill.One(args[0])
 	if err != nil {
 		return err
 	}

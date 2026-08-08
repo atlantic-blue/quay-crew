@@ -43,11 +43,11 @@ func (p *Postgres) ImportSkill(ctx context.Context, imported Imported) error {
 		imported.Fingerprint()); err != nil {
 		return fmt.Errorf("import skill %s: %w", imported.Name, err)
 	}
-	for _, secret := range imported.Secrets {
+	for _, name := range imported.SecretNames() {
 		if _, err := tx.Exec(ctx, `
 			insert into skill_secrets (name, version, secret, purpose) values ($1, $2, $3, $4)`,
-			imported.Name, imported.Version, secret.Name, secret.Purpose); err != nil {
-			return fmt.Errorf("import skill %s secret %s: %w", imported.Name, secret.Name, err)
+			imported.Name, imported.Version, name, imported.Secrets[name]); err != nil {
+			return fmt.Errorf("import skill %s secret %s: %w", imported.Name, name, err)
 		}
 	}
 	for _, file := range imported.Files {
@@ -213,11 +213,14 @@ func (p *Postgres) fillSecrets(ctx context.Context, held *Imported) error {
 	defer rows.Close()
 	held.Secrets = nil
 	for rows.Next() {
-		var secret skill.Secret
-		if err := rows.Scan(&secret.Name, &secret.Purpose); err != nil {
+		var name, purpose string
+		if err := rows.Scan(&name, &purpose); err != nil {
 			return fmt.Errorf("read skill %s secrets: %w", held.Name, err)
 		}
-		held.Secrets = append(held.Secrets, secret)
+		if held.Secrets == nil {
+			held.Secrets = map[string]string{}
+		}
+		held.Secrets[name] = purpose
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("read skill %s secrets: %w", held.Name, err)

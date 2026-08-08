@@ -1,40 +1,106 @@
-Feature: A workspace can be given a skill, and its sessions hold it
+Feature: A session is given the skills the crew has
 
-  A session opens knowing nothing about how the operator works. Ask it to open a pull request and it
-  finds git in the image, no identity, no credential and no gh, and it improvises.
+  A session opens knowing nothing about how the operator works. A skill is a capability written down
+  as code: a brief the model reads, the binaries it needs, the secrets it names, and its own setup.
+  The design is in docs/SKILLS.md.
 
-  A skill is the missing piece: a capability written down as a directory in a git repository, imported
-  into the crew, attached to the workspaces that want it. The files travel rather than the path,
-  because the control plane runs in a container and a directory on somebody's laptop means nothing to
-  it, and because the crew has to be whole on a pod where there is no host directory to go back to.
-
-  What reaches a session is one line per skill and not a page: the line says the skill exists and when
-  to reach for it, and the brief beside it is opened only when that kind of work comes up. The cost of
-  getting this wrong is measured rather than imagined. This crew's four levels of context reached
-  51,727 bytes at the workspace, paid by every session before a word was typed.
+  These scenarios drive the control plane over its real interface. The sandbox is a double, so they
+  say what a session is given rather than that a real daemon mounted it; the mounting itself is proved
+  against Docker in the sandbox package.
 
   Background:
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: A workspace with no skills says so
+  # A crew with no skills is every crew before this, and the memory file must not grow a heading for
+  # something that does not exist.
+  Scenario: A session with no skills is told nothing about any
+    When the operator dispatches "hello" to the project
+    Then the session's memory file mentions no skill
+
+  # One line per skill, in the file the session already reads, marked the same way every other section
+  # is. The line says the skill exists and where to read it; the brief is a file beside it, opened when
+  # that kind of work comes up. A page per skill on every conversation is what this avoids, and the
+  # number behind that is measured: this crew's context reached 51,727 bytes at the workspace.
+  Scenario: The memory file names a skill and where to read it
+    Given the crew has a skill "git" that says "Branch first. Stage named files."
+    When the operator dispatches "hello" to the project
+    Then the memory file names the "git" skill and where its brief is
+    And the memory file does not carry "Branch first. Stage named files."
+
+  # The detail costs nothing until the model opens it, which is the whole reason a brief can be short.
+  Scenario: The rest of a skill is mounted, and is not in the memory file
+    Given the crew has a skill "git" that says "Branch first."
+    And the git skill has a file "reference.md" saying "every flag, at length"
+    When the operator dispatches "hello" to the project
+    Then the sandbox mounts the git skill read only
+    And the memory file does not carry "every flag, at length"
+
+  # A skill is code the operator wrote and the session is given, not something it edits: a session
+  # that can rewrite its own instructions can give itself a capability nobody approved.
+  Scenario: A session cannot write to its skills
+    Given the crew has a skill "git" that says "Branch first."
+    When the operator dispatches "hello" to the project
+    Then the sandbox mounts the git skill read only
+
+  # The index is rendered from what the session holds, every turn. Taken into the crew's context it
+  # would be stored, then rendered beside itself, then again, which is exactly what happens to unmarked
+  # text in a memory file and is by design. It is marked so it cannot be mistaken for that.
+  Scenario: The index is never taken into the crew's own context
+    Given the crew has a skill "git" that says "Branch first."
+    When the operator dispatches "hello" to the project
+    And the operator dispatches "and again" to the same thread
+    Then no context the crew holds mentions the git skill
+    And the memory file names the "git" skill exactly once
+
+  # A capability that silently does not work is worse than one that is absent, because the model
+  # improvises around it and the operator reads the improvisation as the answer.
+  Scenario: A skill needing a secret the workspace has not set is refused before the turn runs
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    When the operator dispatches "hello" to the project
+    Then the control plane refuses it as the wrong state
+    And the refusal names the secret and how to set it
+    And no sandbox has been created
+
+  Scenario: A skill needing a binary the image does not carry is refused, and names the image
+    Given the crew has a skill "github" needing the binary "gh"
+    And the sandbox image does not carry "gh"
+    When the operator dispatches "hello" to the project
+    Then the control plane refuses it as the wrong state
+    And the refusal names the binary and the image to add it to
+
+  # A session gets what its skills name and nothing else, which is the rule the whole design turns on.
+  Scenario: A skill's secret reaches the sandbox, and nothing else does
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And the workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries "GH_TOKEN" set to "ghp-1234"
+    And the sandbox carries nothing called "STRIPE_KEY"
+
+  # The crew's skills directory is one way in and reaches every session. The other is importing a skill
+  # into the store and attaching it to a workspace, which is where a credential belongs: a token for one
+  # capability should not be handed to every session the crew has.
+  #
+  # The files travel rather than the path, because the control plane runs in a container where a
+  # directory on the operator's machine means nothing, and a crew on a pod has no host directory to go
+  # back to for whatever it did not copy.
+  Scenario: A workspace with no skills attached says so
     When the operator lists the workspace's skills
     Then the workspace holds no skills
 
   Scenario: A skill is imported and the crew says what it can do
     When the operator imports the "github" skill
     Then the crew holds the "github" skill
-    And the listing says the skill needs "gh"
+    And the listing says the skill needs "git"
     And the listing names the secret "GH_TOKEN" and what it is for
 
   Scenario: A malformed skill is refused, and says what is wrong
     When the operator imports a skill whose manifest has no version
-    Then the crew refuses it saying "version of 1 or more"
-    And the crew holds no skills
+    Then the crew refuses it saying "no version"
+    And the crew holds no imported skills
 
-  # A brief is loaded whenever the model does that kind of work, so it is a page. The reference goes in
-  # other files in the skill's directory, which cost nothing until something opens one.
   Scenario: A brief longer than a page is refused
     When the operator imports a skill whose brief is longer than a page
     Then the crew refuses it saying "read only when they are needed"
@@ -42,48 +108,42 @@ Feature: A workspace can be given a skill, and its sessions hold it
   Scenario: Attaching a skill puts it in front of the workspace's sessions
     Given the operator imported the "github" skill
     When the operator attaches the "github" skill to the workspace
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator dispatches "hello" to the project
-    Then the workspace's memory file names the "github" skill
-    And the workspace's memory file says when to use it
-    And the session can read the skill's brief at the path the memory file gives
-
-  # The index is what every conversation pays for. The brief is not in it, which is the whole design.
-  Scenario: The brief itself is not in the memory file
-    Given the operator imported the "github" skill
-    And the operator attached the "github" skill to the workspace
-    When the operator dispatches "hello" to the project
-    Then the workspace's memory file does not carry the body of the brief
+    Then the memory file names the "github" skill and where its brief is
+    And the sandbox mounts the workspace's github skill read only
+    And the brief the memory file points at is on disk
 
   Scenario: A skill reaches a session that is already running
     Given the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And a session started by dispatching "hello"
     When the operator attaches the "github" skill to the workspace
-    Then the workspace's memory file names the "github" skill
+    Then the memory file names the "github" skill and where its brief is
 
-  # A brief left behind is a capability the model can still read about and no longer has, which is
-  # worse than never having had it, because it will try.
+  # A brief left behind is a capability the model reads about and no longer has, which is worse than
+  # never having had it, because it will try.
   Scenario: Detaching a skill takes it off the sessions that held it
     Given the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
     And a session started by dispatching "hello"
     When the operator detaches the "github" skill from the workspace
-    Then the workspace's memory file does not name the "github" skill
-    And the "github" skill's directory is gone from the session
+    Then the memory file does not name the "github" skill
+    And the "github" skill's directory is gone from the workspace
 
-  # Detaching the only skill takes the whole directory, which is a different path through the code from
-  # taking one away and leaving the rest. Both matter: a stale brief is a capability the model reads
-  # about and no longer has.
   Scenario: Detaching one of two skills leaves the other
     Given the operator imported the "github" skill
-    And the operator imported the "git" skill
+    And the operator imported the "notes" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
-    And the operator attached the "git" skill to the workspace
+    And the operator attached the "notes" skill to the workspace
     And a session started by dispatching "hello"
     When the operator detaches the "github" skill from the workspace
-    Then the workspace's memory file does not name the "github" skill
-    And the workspace's memory file names the "git" skill
-    And the "github" skill's directory is gone from the session
-    And the "git" skill's directory is still there
+    Then the memory file does not name the "github" skill
+    And the memory file names the "notes" skill and where its brief is
+    And the "github" skill's directory is gone from the workspace
+    And the "notes" skill's directory is still there
 
   Scenario: A skill attached to one workspace does not reach another
     Given a second workspace named "other"
@@ -91,22 +151,7 @@ Feature: A workspace can be given a skill, and its sessions hold it
     When the operator attaches the "github" skill to the workspace
     Then the second workspace holds no skills
 
-  # A session holding a skill gets the secrets that skill names, and a session that does not hold it
-  # never sees them. A sandbox holds a value for the life of its container and the model can read it,
-  # which is the point of giving it one and the reason not to give it every one.
-  Scenario: A skill's secret reaches a session that holds it
-    Given the operator imported the "github" skill
-    And the workspace has the secret "GH_TOKEN" set to "a-real-token"
-    When the operator attaches the "github" skill to the workspace
-    And the operator dispatches "hello" to the project
-    Then the sandbox carries "GH_TOKEN" set to "a-real-token"
-
-  Scenario: A secret a skill does not name does not reach a session
-    Given the workspace has the secret "GH_TOKEN" set to "a-real-token"
-    When the operator dispatches "hello" to the project
-    Then the sandbox carries nothing called "GH_TOKEN"
-
-  # A workspace pins the version it holds. Importing a newer revision must not change what a session
+  # A workspace pins the version it attached. Importing a newer revision must not change what a session
   # already using the older one can do.
   Scenario: A newer revision does not move a workspace on its own
     Given the operator imported the "github" skill
@@ -123,22 +168,24 @@ Feature: A workspace can be given a skill, and its sessions hold it
 
   # Context is read back when something inside a sandbox edits it, because an agent writing into its own
   # memory has learned something. A skill is the opposite: it is a capability somebody granted, so an
-  # edit from inside is not an edit of it. Nothing self applies.
-  Scenario: A brief edited from inside the sandbox does not survive
+  # edit from inside is not an edit of it.
+  Scenario: A brief edited on the host does not survive
     Given the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
     And a session started by dispatching "hello"
-    When something inside the sandbox rewrites the "github" brief
+    When something rewrites the "github" brief where the session reads it
     And the operator dispatches "and again" to the same thread
     Then the "github" brief reads what the crew holds
 
-  # The index is rendered from what the workspace holds, so it is not something the operator wrote. Read
-  # back as though it were, it would land in the workspace's own context and then be rendered again
-  # underneath itself on every turn.
-  Scenario: The skills index does not leak into the workspace's context
-    Given the operator imported the "github" skill
-    And the operator attached the "github" skill to the workspace
-    And the operator sets context at scope "workspace" to "no acronyms"
-    When the operator dispatches "hello" to the project
-    And the operator dispatches "and again" to the same thread
-    Then the workspace's context still reads "no acronyms"
+  # A name can be held by both: the crew's directory and a workspace that imported one. Two mounts on one
+  # target is a container that will not start, so the workspace's wins, being the narrower and more
+  # deliberate statement of what that workspace should hold.
+  Scenario: A workspace's own skill wins over the crew's of the same name
+    Given the crew has a skill "github" that says "the crew's own version"
+    And the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    When the operator attaches the "github" skill to the workspace
+    And the operator dispatches "hello" to the project
+    Then the sandbox mounts the workspace's github skill read only
+    And the memory file names the "github" skill exactly once

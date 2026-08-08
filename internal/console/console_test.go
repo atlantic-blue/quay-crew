@@ -1197,7 +1197,8 @@ func TestTheConsoleCallsThemSessions(t *testing.T) {
 	if !strings.Contains(view, "<sessions>") {
 		t.Fatalf("the breadcrumb does not say sessions:\n%s", view)
 	}
-	// The word it had for a day is gone from the chrome, and lives on only as something to type.
+	// The old name is something to type and nothing the chrome says, or the console is translating
+	// between two words for one thing.
 	if strings.Contains(view, "threads") {
 		t.Fatalf("the console still says threads somewhere:\n%s", view)
 	}
@@ -1429,9 +1430,9 @@ func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
 	}
 }
 
-// TestTheWordmarkFitsWhereverTheHeaderDoes. It used to be six lines of block letters, so it was the
-// first thing dropped when the window was small and the whole header cost six rows to say the name.
-// One line fits beside the version at every width worth drawing a console in.
+// TestTheWordmarkFitsWhereverTheHeaderDoes. Six lines of block letters cost six rows to say the name
+// and are the first thing dropped when the window is small. One line fits beside the version at every
+// width worth drawing a console in.
 func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
 	// The logo is 36 columns wide, so below roughly 60 it does not fit beside the version and is
 	// dropped rather than drawn over it. Height never stops it: it is drawn on rows the header has.
@@ -2179,9 +2180,9 @@ func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 }
 
 // TestKeysWhileTheWizardIsWorkingAreNotAnswers: until the crew answers, the wizard is asking nothing,
-// so a keypress is not an answer to anything. Enter used to be accepted as an empty answer to the
-// working step and refused as "making it: this one is needed", which names no question the operator
-// was ever asked.
+// so a keypress is not an answer to anything. Accepted as an empty answer to the working step, enter
+// is refused as "making it: this one is needed", which names no question the operator was ever
+// asked.
 func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	client := &wizardClient{}
 	model, _ := answerAll(t, wizardAt(t, client), "project", "acme", "gardening")
@@ -2242,8 +2243,8 @@ func TestTheHelpPanelScrollsRatherThanDroppingItsEnd(t *testing.T) {
 }
 
 // TestTheHelpPanelNeverAsksAQuestionItHasAnswered: the branch that says nothing is known yet fires
-// only when nothing is known. It used to be the last one standing when the others were suppressed,
-// so the console drew "asking what this control plane is running" under a header that had answered.
+// only when nothing is known. Left as the last branch standing when the others are suppressed, it
+// draws "asking what this control plane is running" under a header that has answered.
 func TestTheHelpPanelNeverAsksAQuestionItHasAnswered(t *testing.T) {
 	told := tallTestModel(t, Sessions(&fakeClient{}))
 	told.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}

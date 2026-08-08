@@ -8,24 +8,57 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
-- **A workspace can be given a skill, and its sessions hold it.** A skill is a directory in a git
-  repository: a manifest saying what it needs, a brief saying how the work is done, and whatever
-  reference sits beside them. `quay skill import` reads that directory and sends the files, because the
-  control plane runs in a container where a path on your machine means nothing, and a crew on a pod has
-  no host directory to go back to. `quay skill attach` gives it to a workspace, pinned to the version
-  the crew held at that moment, so a skill edited in its repository cannot change a session that is
-  already using it.
-  What reaches a session is one line per skill and not a page: the line says the skill exists and when
-  to reach for it, and the brief beside it is opened only when that kind of work comes up. That is the
-  measured reason rather than a guess, because this crew's four levels of context reached 51,727 bytes
-  at the workspace, paid by every session before a word was typed.
-  A skill names the secrets it needs and never carries them, so a session holding the github skill gets
-  `GH_TOKEN` and a session in a workspace that does not hold it never sees the value at all.
+- **A workspace can be given a skill of its own, imported and pinned.** The crew's skills directory
+  reaches every session, which is the crew level. This is the other one: `quay skill import` reads a
+  skill's directory and sends its files, and `quay skill attach` gives it to a workspace, so a token for
+  one capability is not handed to every session the crew has. The files travel rather than the path,
+  because the control plane runs in a container where a directory on your machine means nothing, and a
+  crew on a pod has no host directory to go back to for whatever it did not copy.
+  A workspace pins the version it attached. Importing a newer revision does not move it, and importing a
+  different skill under a version already held is refused rather than overwriting what a running session
+  is using.
+  What reaches a session is now one line per skill rather than each brief. The line says the skill exists
+  and where to read it; the brief is a file beside it, opened when that kind of work comes up. This is a
+  change to what shipped earlier today, and the reason is measured rather than guessed: this crew's four
+  levels of context reached 51,727 bytes at the workspace, paid by every session before a word was typed.
+  Both sources are mounted read only at the same path, so nothing in a sandbox can rewrite what it was
+  granted, and where a name is held by both the workspace's own wins.
   Proved by importing a real directory through the real command line tool into a real Postgres, then
-  reading the brief and the environment from inside the container the session runs in. `gh` is
-  confirmed still absent from the sandbox image, which is the next slice.
+  reading the brief and the environment from inside the container the session runs in. Six mutations
+  checked red, two of which found assertions that were passing for the wrong reason.
   Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
   [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
+- **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
+  against 24,132, and some files were over half comment. Five entries in this file quoted the operator
+  by name, typos and all, and comments narrated their own redesigns: it was called that for a day, it
+  used to be six lines, it was the row under the cursor for a while. None of that is for the next
+  reader, and most of the rest was the code said twice in prose.
+  A comment earns its place by saying something the code cannot: a constraint from outside, a trap, or
+  why the obvious way fails. `Argv is the command and its arguments` is not one of those. What is kept
+  says the rule rather than the route to it: the wordmark is one line because six lines cost six rows,
+  a key while the wizard is working is not an answer because nothing is being asked.
+  A first pass over the densest files. The largest three are still to do.
+
+## 8 August 2026
+
+- **A skill reaches a session.** A skill is a directory with `skill.yaml`, a `SKILL.md` the model
+  reads, and whatever else it needs. Put one in the crew's skills directory and every session gets it:
+  the brief lands in the memory file it already reads, the directory is mounted read only beside the
+  working directory, and the secrets the skill names are carried in.
+  It refuses rather than half working. A skill naming a secret the workspace has not set is refused
+  before a container is made, saying which secret and how to set it. A skill naming a binary the image
+  does not carry is refused once the container can be asked, naming the binary and the image to add it
+  to. A capability that silently does nothing is worse than one that is absent, because the model
+  improvises around it and the improvisation reads as the answer.
+  Read only, because a session that can rewrite its own instructions can give itself a capability
+  nobody approved. `bin/setup` runs once per container rather than once per turn. A brief is marked in
+  the memory file like every other section, so it is never read back into the crew's context and
+  rendered beside itself from then on.
+  First of the pull requests in issue #143's skills plan. Attaching a skill at a level rather than to
+  the whole crew, and pinning a session to the version it started with, are the next one.
+
+## 8 August 2026
 
 - **A session can commit as you.** `git` has been in the sandbox image the whole time and unusable,
   because a container has no identity and the tool refuses to commit rather than guessing. That
@@ -291,8 +324,7 @@ read, or run with `make features`.
 
 - **The header is the wordmark, which build this is, and how to reach everything else.** It carried the
   crew's description and this view's keys, which at half the window left no room for the wordmark and
-  pushed it off the screen. Julian: "the quay logo dissapears because there is too much text, lets
-  leave only: the logo + version, and help", then "it occupies too much space". One row now: the
+  pushed it off the screen. One row now: the
   wordmark is one line rather than six of block letters, and it survives a conversation beside the
   console at every width worth drawing a console in.
 - **The help panel carries everything the header dropped**, on top of what it already had: where the
@@ -303,9 +335,8 @@ read, or run with `make features`.
 
 - **`quay` is the panel. There is no `quay panel`.** Running `quay` opens the crew: the header across
   the whole width, the console under it on the left, and a conversation on the right. `p` shows or
-  hides the conversation. Julian: "I dont understand why I need quay panel, is confusing, I need one
-  command only, the panel should appear when I press quay and toggled with the key p", and "the header
-  should be the whole width".
+  hides the conversation. One command opens everything, rather than a second command for the thing the
+  first command is for, and the header reaches the whole width.
   The header is the console's own, drawn in a pane of its own so it can reach across both halves, and
   held at exactly its own rows when the terminal is resized. With no conversation to open yet, `quay`
   opens the console on its own rather than refusing.
@@ -317,14 +348,13 @@ read, or run with `make features`.
   you wanted a conversation next to it.
 - **The console keeps its own header, always.** It was replaced in the panel by a status line tmux
   drew, and what came back had lost the wordmark and the engines and sat on top of the console's own
-  rows. Julian: "where is the header? this is a mess", then "I want this header always present". The
-  status line is gone: the header is the console's, full width on its own and squeezed to half when a
+  rows. The status line is gone: the header is the console's, full width on its own and squeezed to half when a
   conversation is beside it. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **The panel's header is tmux's own status line, and the panel is two panes again.** It was a third
   pane, which meant a process to draw it, and that process could not see which view the console was on,
   so the console had to publish it. tmux draws a status line itself, across the full width, at a height
-  it owns and with no scrollback to scroll into. Julian: "why does header need a process?" It does not.
+  it owns and with no scrollback to scroll into, so the header needs no process of its own.
   Gone with it: the `quay header` command, the alternate screen handling, the view publishing and the
   resize hook that held the pane at a height.
 - **The header is the bare essentials and the wordmark.** Which build, which crew, and where you are
@@ -388,8 +418,7 @@ read, or run with `make features`.
 - **The wizard closes when it has made what it was asked for.** It made everything correctly and then
   stayed drawn over the list it had already refreshed, so nothing looked like it had happened, and the
   next enter was taken as an answer to the step that was already working, whose prompt is the words
-  `making it`. Julian, driving it: "it fails to create anything", then "it says making it: this one is
-  needed". A key other than escape now does nothing while the crew is making it, because the wizard is
+  `making it`, so the wizard read as making nothing at all. A key other than escape now does nothing while the crew is making it, because the wizard is
   asking nothing at that point. ([#140](https://github.com/atlantic-blue/quay-crew/issues/140))
 - **A wizard that makes things.** `n` in the console asks for a workspace, a project, the subscription
   token, the project's context and a first message, in the order they depend on each other, and makes

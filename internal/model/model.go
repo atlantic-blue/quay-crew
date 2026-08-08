@@ -1,9 +1,6 @@
-// Package model is the adapter between the control plane and whatever runs the model.
-//
-// The default implementation drives the local Claude Code CLI as a subprocess, so threads run under
-// your existing subscription with no API cost. An API backed implementation, or a local model, can
-// sit behind the same Runner interface and be selected by configuration. A turn runs inside the
-// session's sandbox, which the control plane hands to Run.
+// Package model is the adapter between the control plane and whatever runs the model. The default
+// implementation drives the Claude Code command line tool inside the session's sandbox, so turns run
+// on the operator's subscription; anything else sits behind the same Runner interface.
 package model
 
 import (
@@ -14,30 +11,24 @@ import (
 
 // Request is one turn to run against the model.
 type Request struct {
-	// Text is the user input for this turn.
 	Text string
-	// ModelSessionID resumes an existing model thread when set; empty starts a new thread.
+	// ModelSessionID resumes an existing conversation; empty starts one.
 	ModelSessionID string
-	// PermissionMode controls autonomy: "plan", "acceptEdits", or "bypassPermissions".
+	// PermissionMode is "plan", "acceptEdits" or "bypassPermissions".
 	PermissionMode string
-	// Workdir is the directory the turn runs in; empty uses the runner's default.
-	Workdir string
-	// Env is extra environment for the turn, for example the subscription token the Claude Code
-	// backend authenticates with. The control plane fills this from the workspace's secrets, so a
-	// secret value reaches the sandbox but is never part of the request text or the event log.
+	Workdir        string
+	// Env is filled from the workspace's secrets, so a value reaches the sandbox without ever being
+	// part of the request text or the event log.
 	Env map[string]string
 }
 
 // Response is the result of a turn.
 type Response struct {
-	// Reply is the model's final text for the turn.
-	Reply string
-	// ModelSessionID is the model thread id, used to resume the thread on the next turn.
+	Reply          string
 	ModelSessionID string
 }
 
-// Runner runs a single turn against a model inside the session's sandbox, returning the reply and
-// the thread id to resume.
+// Runner runs one turn inside the session's sandbox.
 type Runner interface {
 	Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error)
 }

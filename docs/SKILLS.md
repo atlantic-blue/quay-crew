@@ -91,21 +91,31 @@ sandbox user, which is the boundary that was already there.
 
 ## How a skill reaches a session
 
-A skill is attached to a workspace, and every session in it holds it. The workspace is where a
-credential belongs, so it is where a capability that needs one belongs too. Context has four levels and
-a skill could follow them later; nothing has wanted the other three yet, and a level that reaches
-everything is the one that gets filled until it hurts.
+A skill reaches a session two ways, and they are the outer two of the four levels context already has.
+
+The crew's own skills directory reaches every session: that is the crew level, and it is the right home
+for a capability with nothing to authenticate. A skill imported into the store and attached to a
+workspace reaches that workspace's sessions: that is the workspace level, and it is where a credential
+belongs, because a token for one capability should not be handed to every session the crew has.
+
+Both are mounted read only at the same path inside the sandbox, so whoever reads the index does not need
+to know which it came from. Where a name is held by both, the workspace's own wins: two mounts on one
+target is a container that will not start, and the narrower statement of what a workspace should hold is
+the more deliberate one.
+
+A project and a session could follow later. Nothing has wanted them yet.
 
 At sandbox creation the control plane resolves the skills that reach this session, and then:
 
 1. Refuses early, with a sentence naming what is wrong, if a binary the skill declares is not in the
    image or a secret it names is not set. A capability that cannot work should say so before a turn
    runs, not through the model discovering `gh: command not found`.
-2. Writes each skill's directory into the workspace's own directory, which is already mounted into every
-   session in it. A session can therefore write into a skill, and nothing it writes survives: unlike
-   context, a skill is never read back, so the next render puts the crew's version back. Context is read
-   back because an agent writing into its own memory has learned something; a skill is a capability
-   somebody granted, so an edit from inside is not an edit of it.
+2. Mounts each skill's directory read only, so a session can read its scripts and cannot edit them. A
+   skill imported into the store is written onto the host first, under the workspace it belongs to,
+   because it has to be somewhere before it can be mounted from anywhere. Nothing about a skill is ever
+   read back: context is, because an agent writing into its own memory has learned something, while a
+   skill is a capability somebody granted, so an edit is not an edit of it and the next render replaces
+   it.
 3. Injects only the secrets the attached skills name. A session in a workspace with no github skill
    never sees `GH_TOKEN`.
 4. Runs each `bin/setup` inside the sandbox, once, before the first turn.
@@ -116,11 +126,8 @@ At sandbox creation the control plane resolves the skills that reach this sessio
    brief is a page and a page per skill is what [What it costs](#what-it-costs) exists to avoid, so the
    line is what every conversation pays for and the brief is opened when that kind of work comes up.
 
-Steps 2, 3 and 5 are built. Refusing early on a missing binary or an unset secret, and running
-`bin/setup`, are not: the first two are what a skill needs before it can be used, and both need to exec
-inside the sandbox, which is its own slice. Until then a skill naming `gh` can be attached to a workspace
-whose image does not carry it, and the model will find that out for itself, which is exactly what step 1
-exists to prevent.
+All five are built, and steps 1 and 4 cover both sources: a workspace's own skill is refused for a
+missing secret or a missing binary exactly as one from the crew's directory is.
 
 ## Credentials
 
@@ -242,16 +249,15 @@ if the rest waits:
 
 1. A workspace's secrets reach a sandbox by name rather than one hardcoded key.
 2. A git identity in a sandbox, from the workspace, so a commit has an author.
-3. `skill.yaml` and the loader: import, pin, attach, render, inject. Done, with `quay skill` on the
-   command line, in [#179](https://github.com/atlantic-blue/quay-crew/issues/179). Attaching is at the
-   workspace, not at any of the four levels: that is where a credential belongs, and the other three can
-   follow when something wants them.
-4. Refuse early, and run `bin/setup`. Both need to exec inside the sandbox, which is why they are not in
-   slice 3.
+3. A skill reaches a session from the crew's directory: read, mounted read only, refused early, set up.
+   Done.
+4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
+   Done, in [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
 5. A repository reaches a sandbox: a project names a remote and a session clones it. A git skill with no
    repository to work in does nothing, so this comes before the skills themselves.
 6. The git skill, and then `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does
    things that cannot be undone, so they are attached separately.
 7. A skills view in the console.
-8. Propose and approve, so an agent can offer a skill and nothing it offers applies itself.
+8. Signing forwarded into the sandbox, per workspace, off by default.
+9. Propose and approve, so an agent can offer a skill and nothing it offers applies itself.
