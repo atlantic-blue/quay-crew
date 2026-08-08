@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/google/uuid"
 )
 
 // The default and the ceiling on how much of a session's history comes back at once. A conversation
@@ -157,4 +158,15 @@ func NewID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// NewConversationID returns an identifier for a conversation with the model.
+//
+// It is a version 4 identifier rather than one of ours, because the model's command line tool is
+// given it with `--session-id` and rejects anything that is not one. The crew chooses it rather than
+// reading it back afterwards: a conversation started interactively never tells anybody what it picked,
+// so every conversation opened from the panel was one the crew could not name, could not show a
+// history for, and could not count the tokens of.
+func NewConversationID() string {
+	return uuid.NewString()
 }

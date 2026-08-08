@@ -8,6 +8,21 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **The crew names a conversation instead of learning what it was called.** A conversation started
+  inside a sandbox picked its own identifier and told nobody, so every conversation opened from the
+  panel was one the crew could not name: no history to read back, nothing to attribute a cost to, and
+  no way to tell one transcript in a workspace from another. One machine held eleven transcripts for
+  two threads it knew about. The control plane now chooses the identifier when a conversation is
+  opened, records it on the thread, and hands it down, so what the crew holds and what the model
+  writes are the same name.
+  The sandbox decides how to open it, because it is the only place that can see whether the transcript
+  is there: it resumes one that exists and starts one under the given name when it does not. That
+  replaces a refusal. A thread whose conversation had been lost with its container used to be turned
+  away, and could not be told apart from a conversation the crew had just named and nobody had spoken
+  in yet. Both now open, which is what the operator wanted in either case.
+
+## 8 August 2026
+
 - **A shell says which sandbox it is in.** Every session has a container of its own with its own empty
   working directory over the same image, so shelling into two of them gave two screens that were
   identical in every visible respect: same prompt, same empty listing. It read as `s` opening the same

@@ -776,6 +776,20 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 			"thread %s has no conversation yet: send it a message with quay dispatch first",
 			display.ShortID(session.GetThreadId()))
 	}
+	// The crew names the conversation rather than learning what it was called afterwards. A
+	// conversation started interactively picks its own identifier and tells nobody, so before this
+	// every conversation opened from the panel was one the crew could not name: no history to read
+	// back, no tokens to count, and no way to tell one transcript in the workspace from another.
+	//
+	// Assigned here rather than when the session is made, because this is the moment a conversation
+	// starts to exist, and a thread that is only ever dispatched to gets its identifier from the turn.
+	if session.GetModelSessionId() == "" {
+		named := store.NewConversationID()
+		if err := s.store.RecordTurn(ctx, session.GetId(), named, session.GetStatus()); err != nil {
+			return nil, storeError(err, "name the conversation")
+		}
+		session.ModelSessionId = named
+	}
 	if session.GetStatus() == "stopped" {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"thread %s is stopped: restart it first", display.ShortID(session.GetThreadId()))
@@ -786,20 +800,14 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	}
 	// A handle can outlive what it points at: every conversation from a sandbox created before the
 	// conversations were kept on the host died with that container, while the row kept the handle.
-	// Resuming one of those prints "No conversation found" and exits, which from the console looks
-	// like nothing happening at all, so say it here instead of starting a container to fail inside.
+	// This used to be refused here, because resuming one printed "No conversation found" and exited,
+	// which from the console looks like nothing happening at all.
 	//
-	// In the operator's words, not ours. "Its conversation predates state on the host" is a sentence
-	// only somebody who worked on this understands, and it named an identifier twenty four characters
-	// long that appears nowhere on their screen.
-	if session.GetModelSessionId() != "" &&
-		!s.storage.HasConversation(session.GetWorkspace(), session.GetModelSessionId()) {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s has no conversation left: it was saved inside a sandbox that has since been "+
-				"removed, from before conversations were kept on this machine. Send this thread a "+
-				"message with quay dispatch to start a new one",
-			display.ShortID(session.GetThreadId()))
-	}
+	// It is not refused any more, and it cannot be: a conversation the crew has just named has no
+	// transcript either, and that is the normal first open rather than a loss. The sandbox decides,
+	// because it is the only place that can see whether the transcript is there: it resumes one that
+	// exists and starts one under the same name when it does not. Either way the operator lands in a
+	// conversation instead of in an error.
 	// Make sure there is something to attach to. The live sandboxes are a map in this process, so a
 	// restart empties it while the row still says idle, and answering from the row alone hands the
 	// operator a container name the daemon has never heard of. The conversation is on the host, so a

@@ -18,13 +18,22 @@ stty -ixon 2>/dev/null || true
 conversation="$1"
 mode="$2"
 
+# Where the model keeps this conversation. The working directory is the same in every sandbox, so the
+# transcript's name is the conversation's name, and its presence is how this script tells resuming
+# from starting.
+transcript="$HOME/.claude/projects/-home-agent-workspace/$conversation.jsonl"
+
 while true; do
-    # No conversation yet means this is the first time it has been opened, so one is started rather
-    # than resumed. The driver is made the moment somebody opens the crew and has never spoken.
-    if [ -n "$conversation" ]; then
+    # The crew names the conversation and hands the name down, so a conversation opened here is one
+    # the crew can find afterwards: its history, and what it cost. A name with no transcript behind it
+    # is the first open rather than a loss, and starting it under that name is what makes the name
+    # true. Resuming a name that is not there would print "No conversation found" and exit.
+    if [ -z "$conversation" ]; then
+        claude --permission-mode "$mode" || true
+    elif [ -f "$transcript" ]; then
         claude --resume "$conversation" --permission-mode "$mode" || true
     else
-        claude --permission-mode "$mode" || true
+        claude --session-id "$conversation" --permission-mode "$mode" || true
     fi
 
     printf '\n  This conversation is closed. Nothing was lost: it is on disk and can be opened again.\n'

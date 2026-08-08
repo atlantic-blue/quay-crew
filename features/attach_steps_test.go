@@ -17,6 +17,9 @@ import (
 type attachWorld struct {
 	spec *quaycrewv1.AttachSessionResponse
 	err  error
+	// named is the conversation each attach was told to open, in order, so a scenario can say that
+	// opening twice lands in one conversation rather than orphaning the first.
+	named []string
 }
 
 type attachKey struct{}
@@ -39,6 +42,73 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: current.sessionID})
+		return nil
+	})
+
+	sc.Step(`^the operator asks how to attach to the driver$`, func(ctx context.Context) error {
+		w, a := worldFrom(ctx), attachFrom(ctx)
+		if len(w.drivers) == 0 {
+			return fmt.Errorf("no driver was opened")
+		}
+		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: w.drivers[0].GetId()})
+		a.named = append(a.named, conversationIn(a.spec))
+		return a.err
+	})
+
+	// The crew's name for the conversation, read from the row rather than from the command, so this
+	// says the crew knows it rather than only that it passed something down.
+	sc.Step(`^the driver has a conversation the crew can name$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: w.drivers[0].GetId()})
+		if err != nil {
+			return err
+		}
+		if resp.GetSession().GetModelSessionId() == "" {
+			return fmt.Errorf("the driver's conversation has no name, so nothing can be attributed to it")
+		}
+		return nil
+	})
+
+	// The name the crew holds is the name the sandbox is told, or the crew is naming something nobody
+	// uses and the transcript on disk still belongs to nobody.
+	sc.Step(`^the command opens the conversation the crew holds$`, func(ctx context.Context) error {
+		w, a := worldFrom(ctx), attachFrom(ctx)
+		id := ""
+		if len(w.drivers) > 0 {
+			id = w.drivers[0].GetId()
+		} else {
+			current, err := w.lastTurn()
+			if err != nil {
+				return err
+			}
+			id = current.sessionID
+		}
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: id})
+		if err != nil {
+			return err
+		}
+		held := resp.GetSession().GetModelSessionId()
+		if held == "" {
+			return fmt.Errorf("the crew holds no conversation for this thread")
+		}
+		if got := conversationIn(a.spec); got != held {
+			return fmt.Errorf("the sandbox is told to open %q and the crew holds %q", got, held)
+		}
+		return nil
+	})
+
+	sc.Step(`^the driver has the same conversation both times$`, func(ctx context.Context) error {
+		a := attachFrom(ctx)
+		if len(a.named) != 2 {
+			return fmt.Errorf("the driver was opened %d times, want 2", len(a.named))
+		}
+		if a.named[0] == "" {
+			return fmt.Errorf("the first open named no conversation at all")
+		}
+		if a.named[0] != a.named[1] {
+			return fmt.Errorf("opening twice gave %q then %q, so the history from the first is orphaned",
+				a.named[0], a.named[1])
+		}
 		return nil
 	})
 
@@ -262,4 +332,16 @@ func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// conversationIn is the conversation the sandbox is told to open, which is the argument after the
+// command that opens one.
+func conversationIn(spec *quaycrewv1.AttachSessionResponse) string {
+	argv := spec.GetArgv()
+	for index, arg := range argv {
+		if arg == sandbox.OpenConversation && index+1 < len(argv) {
+			return argv[index+1]
+		}
+	}
+	return ""
 }
