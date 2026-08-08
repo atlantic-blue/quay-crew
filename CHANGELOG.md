@@ -8,12 +8,64 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+<<<<<<< HEAD
 - **The rest of the commentary, trimmed to the same rule.** The control plane, the console's model,
   its resource registry and the command line tool, on top of the files in the pass before. A comment
   earns its place by saying something the code cannot: a constraint from outside, a trap, or why the
   obvious way fails. Everything else is gone rather than reworded.
 
 ## 8 August 2026
+=======
+- **A project names the repository its sessions work in, and the first turn clones it.** A session's
+  working directory started empty, so the skills work had built the way to describe git and there was
+  nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
+  project that already exists. The remote sits on the project rather than the workspace, because a body of
+  work is one repository.
+  It clones into a directory under the working directory, not into it, because the memory file the model
+  reads is written there before the container exists and git refuses to clone into somewhere that is not
+  empty.
+  Three things about the command, and each is the reason it is built rather than formatted. It clones only
+  when there is no checkout yet, because a sandbox is adopted across turns and a second clone either fails
+  or throws away what the first turn did. The remote is a positional argument and never part of the
+  script, because it comes from a person and a remote inside a command can end that command and start
+  another. The credential is read from `GH_TOKEN` in the environment by a helper at the moment git asks, so
+  no token is ever in an argument list, which anything that can inspect the container could read.
+  A remote is refused when it is set rather than when a clone runs, because the person who typed it is
+  there to read the refusal, and one carrying a credential is refused outright: it would otherwise be a
+  password in the database and in every listing that prints a project.
+  Proved by cloning for real inside a container, twice, from a bare repository made in the container so
+  it needs no network: the checkout arrives, the memory file beside it survives, and the second run leaves
+  the session's own work alone. That real run is also what caught the helper being handed to git with no
+  configuration key, which every unit test had passed straight over.
+  The continuous integration run now builds the sandbox image, so this test and the commit test from
+  earlier today actually execute there. Both had been skipping: they need a container with git in it, and
+  nothing in the pipeline was setting one, so the two things only a real container can prove were running
+  on one laptop and nowhere else, while the check reported a pass.
+  Not covered by a test: a private clone over https, which needs a real token against a real host.
+  Fifth slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
+  [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+
+- **A workspace can be given a skill of its own, imported and pinned.** The crew's skills directory
+  reaches every session, which is the crew level. This is the other one: `quay skill import` reads a
+  skill's directory and sends its files, and `quay skill attach` gives it to a workspace, so a token for
+  one capability is not handed to every session the crew has. The files travel rather than the path,
+  because the control plane runs in a container where a directory on your machine means nothing, and a
+  crew on a pod has no host directory to go back to for whatever it did not copy.
+  A workspace pins the version it attached. Importing a newer revision does not move it, and importing a
+  different skill under a version already held is refused rather than overwriting what a running session
+  is using.
+  What reaches a session is now one line per skill rather than each brief. The line says the skill exists
+  and where to read it; the brief is a file beside it, opened when that kind of work comes up. This is a
+  change to what shipped earlier today, and the reason is measured rather than guessed: this crew's four
+  levels of context reached 51,727 bytes at the workspace, paid by every session before a word was typed.
+  Both sources are mounted read only at the same path, so nothing in a sandbox can rewrite what it was
+  granted, and where a name is held by both the workspace's own wins.
+  Proved by importing a real directory through the real command line tool into a real Postgres, then
+  reading the brief and the environment from inside the container the session runs in. Six mutations
+  checked red, two of which found assertions that were passing for the wrong reason.
+  Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
+  [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+>>>>>>> origin/main
 
 - **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
   against 24,132, and some files were over half comment. Five entries in this file quoted the operator

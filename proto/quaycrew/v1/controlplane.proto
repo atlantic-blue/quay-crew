@@ -25,6 +25,9 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
+  // remote is the repository this project's sessions work in, cloned into each session's working
+  // directory on its first turn. Empty is a project with no code in it, which is most of them.
+  string remote = 5;
 }
 
 // A session is one model thread inside a project. It carries its workspace too, denormalised from
@@ -112,6 +115,16 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
+// SetProjectRemoteRequest names the repository a project's sessions work in. An empty remote takes it
+// away, and leaves the checkouts that already exist alone.
+message SetProjectRemoteRequest {
+  string project = 1;
+  string remote = 2;
+}
+message SetProjectRemoteResponse {
+  Project project = 1;
+}
+
 message DeleteProjectRequest {
   string id = 1;
 }
@@ -264,6 +277,80 @@ message ListSecretsResponse {
   repeated SecretRef secrets = 1;
 }
 
+// A skill is a capability a session can be given: a brief the model reads, the binaries it needs and
+// the secrets it names. It is authored as a directory in a git repository and imported here, pinned to
+// a version, so a skill edited in its repository cannot change a session that is already using it.
+//
+// It carries no secret value and no brief. The brief is a file, and a listing of what a crew can do
+// should not be a page per entry.
+message Skill {
+  string name = 1;
+  int32 version = 2;
+  // summary says when to reach for this skill, in a sentence. It is the line a session is told.
+  string summary = 3;
+  // binaries are the commands the skill needs in the sandbox image. A session missing one is refused
+  // before a turn runs.
+  repeated string binaries = 4;
+  repeated SkillSecret secrets = 5;
+  google.protobuf.Timestamp imported_at = 6;
+}
+
+// SkillSecret names a secret a skill needs and says what it is for. Never a value: a value written into
+// a skill file is a value in a git repository.
+message SkillSecret {
+  string name = 1;
+  // purpose says which credential to go and get, and how to set it, for whoever reads a refusal.
+  string purpose = 2;
+}
+
+// SkillFile is one file of a skill's directory, on its way into the crew.
+message SkillFile {
+  // path is relative to the skill's directory, with forward slashes.
+  string path = 1;
+  bytes body = 2;
+  // executable says the file has to be runnable, which a setup script is and nothing else is assumed
+  // to be.
+  bool executable = 3;
+}
+
+// ImportSkillRequest carries a skill's whole directory.
+//
+// The files travel rather than the path, because the control plane runs in a container and a directory
+// on the operator's machine means nothing to it. The client reads and sends; this side parses,
+// validates and refuses, so there is one validator rather than one per client.
+message ImportSkillRequest {
+  repeated SkillFile files = 1;
+}
+message ImportSkillResponse {
+  Skill skill = 1;
+}
+
+// ListSkillsRequest lists what the crew has imported, or what one workspace holds when workspace is
+// set.
+message ListSkillsRequest {
+  string workspace = 1;
+}
+message ListSkillsResponse {
+  repeated Skill skills = 1;
+}
+
+// AttachSkillRequest gives a workspace a skill, at the version the crew holds now. Every session in the
+// workspace then holds it.
+message AttachSkillRequest {
+  string workspace = 1;
+  string name = 2;
+}
+message AttachSkillResponse {
+  Skill skill = 1;
+}
+
+// DetachSkillRequest takes a skill away from a workspace. The skill stays imported.
+message DetachSkillRequest {
+  string workspace = 1;
+  string name = 2;
+}
+message DetachSkillResponse {}
+
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
   string project = 1;
@@ -375,6 +462,7 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc SetProjectRemote(SetProjectRemoteRequest) returns (SetProjectRemoteResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);
@@ -392,6 +480,11 @@ service ControlPlaneService {
   rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
+
+  rpc ImportSkill(ImportSkillRequest) returns (ImportSkillResponse);
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
+  rpc AttachSkill(AttachSkillRequest) returns (AttachSkillResponse);
+  rpc DetachSkill(DetachSkillRequest) returns (DetachSkillResponse);
 
   rpc ListTurns(ListTurnsRequest) returns (ListTurnsResponse);
 

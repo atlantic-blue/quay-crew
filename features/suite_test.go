@@ -172,6 +172,7 @@ type world struct {
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
 	lastSecrets        *quaycrewv1.ListSecretsResponse
+	lastSkills         *quaycrewv1.ListSkillsResponse
 }
 
 type worldKey struct{}
@@ -363,6 +364,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
 	initializeProjectSteps(sc)
+	initializeCloneSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
@@ -378,6 +380,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDriverContextSteps(sc)
 	initializeUsageSteps(sc)
 	initializeSkillSteps(sc)
+	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
