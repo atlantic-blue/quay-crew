@@ -403,14 +403,11 @@ func (m Model) selectedRowValue() (Row, bool) {
 	return visible[m.selected], true
 }
 
-// bodyHeight is how many rows fit: the window less the header block, the panel's own frame and
-// column header, and the footer line.
+// bodyHeight is the window less the header block, the frame, the column header and the footer.
 //
-// It measures the header block rather than the status block inside it. The key hints sit beside the
-// status, and either can be the taller of the two, so sizing the body off the status alone draws a
-// view taller than the window. The terminal then scrolls, and what scrolls away is the top: the
-// status block and the hints. Seen against a control plane too old to say what it was running, where
-// the status was one line and the hints were three.
+// The whole block, not the status inside it: the key hints sit beside the status and either can be
+// the taller, so measuring the status alone draws a view taller than the window and the top scrolls
+// away.
 func (m Model) bodyHeight() int {
 	body := m.height - len(m.headerLines()) - 4
 	if m.err != nil {
@@ -436,15 +433,9 @@ func listCmd(resource Resource, parent string) tea.Cmd {
 	}
 }
 
-// infoCmd asks the crew what it is running.
-//
-// A control plane that does not have the call at all is a different thing from one that failed to
-// answer, and it is the common case after an upgrade: the tool moves ahead of the stack, because
-// installing the tool does not rebuild the stack. That gets reported rather than swallowed, because
-// silently showing four fewer lines reads as the console being broken.
-//
-// Any other failure is still swallowed. The operator came here to look at threads, and a status block
-// that could not be filled in is not a reason to show them an error instead.
+// infoCmd asks the crew what it is running. A control plane without the call at all is reported,
+// because that is the common case after an upgrade and showing four fewer lines reads as the console
+// being broken. Any other failure is swallowed: a status block is not worth an error screen.
 func infoCmd(source InfoSource) tea.Cmd {
 	if source == nil {
 		return nil

@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+<<<<<<< HEAD
+- **The rest of the commentary, trimmed to the same rule.** The control plane, the console's model,
+  its resource registry and the command line tool, on top of the files in the pass before. A comment
+  earns its place by saying something the code cannot: a constraint from outside, a trap, or why the
+  obvious way fails. Everything else is gone rather than reworded.
+
+## 8 August 2026
+=======
 - **A project names the repository its sessions work in, and the first turn clones it.** A session's
   working directory started empty, so the skills work had built the way to describe git and there was
   nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
@@ -57,6 +65,7 @@ read, or run with `make features`.
   checked red, two of which found assertions that were passing for the wrong reason.
   Third slice of [`docs/SKILLS.md`](docs/SKILLS.md), for
   [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+>>>>>>> origin/main
 
 - **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
   against 24,132, and some files were over half comment. Five entries in this file quoted the operator
