@@ -32,6 +32,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
@@ -145,6 +146,9 @@ type world struct {
 	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor controlplane.Identity
+	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
+	skillsDir string
+	skills    []skill.Skill
 	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
 	drivers []*quaycrewv1.Session
 	secrets secrets.Store
@@ -185,6 +189,7 @@ func (w *world) start() error {
 		return fmt.Errorf("conversation store for the scenario: %w", err)
 	}
 	w.storage = sandbox.Storage{Dir: dir, Host: dir}
+	w.skillsDir = filepath.Join(dir, "skills")
 	w.provider = &sandbox.FakeProvider{}
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
@@ -223,6 +228,7 @@ func (w *world) serve() error {
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor,
+		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -371,6 +377,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDriverSteps(sc)
 	initializeDriverContextSteps(sc)
 	initializeUsageSteps(sc)
+	initializeSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns

@@ -142,7 +142,11 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 	for _, entry := range cfg.Env {
 		args = append(args, "--env", entry)
 	}
-	for _, mount := range kept {
+	for _, mount := range append(kept, cfg.Mounts...) {
+		if mount.ReadOnly {
+			args = append(args, "-v", mount.Source+":"+mount.Target+":ro")
+			continue
+		}
 		args = append(args, "-v", mount.Source+":"+mount.Target)
 	}
 	for _, mount := range d.Mounts {

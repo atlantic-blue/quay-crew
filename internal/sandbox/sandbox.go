@@ -57,6 +57,9 @@ type Config struct {
 	// readable for the life of the container, for example through docker inspect, so pass only what
 	// the session needs.
 	Env []string
+	// Mounts are directories this session gets on top of the state the crew keeps for it, for
+	// example the skills it has been given.
+	Mounts []Mount
 	// Driver says this sandbox belongs to the session that drives the crew. It joins the control
 	// plane's network and gets the host paths the operator handed the driver; an ordinary session
 	// gets neither, and can reach nothing of ours.
@@ -75,6 +78,10 @@ type Mount struct {
 	Source string
 	// Target is where it appears inside the sandbox.
 	Target string
+	// ReadOnly keeps the session from writing to it. A skill is code the operator wrote and the
+	// session is given, not something it edits: a session that can rewrite its own instructions can
+	// give itself a capability nobody approved.
+	ReadOnly bool
 }
 
 // These are properties of the sandbox image, so they move with deploy/sandbox/claude.Dockerfile.
@@ -86,6 +93,10 @@ const (
 	// WorkingPath is the directory a turn runs in: the project's files, and the project memory the
 	// model reads as CLAUDE.md.
 	WorkingPath = "/home/agent/workspace"
+	// SkillsPath is where a session's skills appear inside its sandbox, one directory per skill. Read
+	// only: the brief is in the memory file already, and everything beside it is there to be opened
+	// when the model needs it rather than edited.
+	SkillsPath = "/home/agent/skills"
 	// AttachedSessionName is what the operator's open conversation is called inside the sandbox. It
 	// is one per sandbox, and a sandbox holds one thread, so opening a thread twice lands in the one
 	// that is already running rather than starting a second beside it.

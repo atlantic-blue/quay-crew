@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -10,6 +11,9 @@ import (
 // FakeProvider hands out a FakeSandbox and records what it was asked to create. For tests.
 type FakeProvider struct {
 	Output string
+	// Missing are the binaries the image behind this provider does not carry, so a scenario can be a
+	// crew whose skill needs something the sandbox cannot run.
+	Missing []string
 	// Stderr and ExitErr are handed to every sandbox this makes, so a scenario can say the command
 	// inside failed and what it said about it.
 	Stderr  string
@@ -44,6 +48,7 @@ func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	}
 	f.Created = append(f.Created, cfg)
 	box := &FakeSandbox{Output: f.Output, Stderr: f.Stderr, ExitErr: f.ExitErr}
+	box.Without(f.Missing...)
 	if f.live == nil {
 		f.live = make(map[string]*FakeSandbox)
 	}
@@ -63,7 +68,23 @@ type FakeSandbox struct {
 	Stderr   string
 	ExitErr  error
 	LastSpec Spec
-	Closed   bool
+	// Ran is every command this sandbox was asked to run, so a scenario can say a skill's setup was
+	// run, or was not run twice.
+	Ran    []Spec
+	Closed bool
+	// without are the binaries this sandbox does not have, so a scenario can be a session whose image
+	// is missing what a skill needs.
+	without map[string]bool
+}
+
+// Without makes this sandbox one whose image does not carry these commands.
+func (f *FakeSandbox) Without(binaries ...string) {
+	if f.without == nil {
+		f.without = map[string]bool{}
+	}
+	for _, binary := range binaries {
+		f.without[binary] = true
+	}
 }
 
 var _ Sandbox = (*FakeSandbox)(nil)
@@ -81,10 +102,37 @@ func (p readerProcess) Stderr() string    { return p.stderr }
 // Exec records the spec and returns a process streaming the canned Output.
 func (f *FakeSandbox) Exec(_ context.Context, spec Spec) (Process, error) {
 	f.LastSpec = spec
+	f.Ran = append(f.Ran, spec)
 	if f.Err != nil {
 		return nil, f.Err
 	}
+	// Looking for a command answers like the real thing, because a double that says yes to every
+	// binary makes a crew look ready for a skill the image cannot run. The real shell exits non zero
+	// when `command -v` finds nothing.
+	if binary, asking := wantedBinary(spec); asking {
+		if f.without[binary] {
+			return readerProcess{r: strings.NewReader(""), err: errNotFound}, nil
+		}
+		return readerProcess{r: strings.NewReader("/usr/bin/" + binary)}, nil
+	}
 	return readerProcess{r: strings.NewReader(f.Output), stderr: f.Stderr, err: f.ExitErr}, nil
+}
+
+// errNotFound is what a shell does when `command -v` finds nothing: it says nothing and exits non
+// zero.
+var errNotFound = errors.New("exit status 1")
+
+// wantedBinary reads a `command -v <name>` out of a spec, which is how the crew asks a sandbox what
+// it has.
+func wantedBinary(spec Spec) (string, bool) {
+	if len(spec.Argv) != 3 || spec.Argv[0] != "sh" || spec.Argv[1] != "-c" {
+		return "", false
+	}
+	after, found := strings.CutPrefix(spec.Argv[2], "command -v ")
+	if !found {
+		return "", false
+	}
+	return strings.TrimSpace(after), true
 }
 
 // Close marks the sandbox closed.
