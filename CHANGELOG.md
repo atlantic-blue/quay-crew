@@ -8,15 +8,16 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
-- **The commentary says the constraint, not who said it or how the code got here.** Five entries in
-  this file quoted the operator by name, typos and all, and ten comments narrated their own redesigns:
-  it was called that for a day, it used to be six lines, it was the row under the cursor for a while.
-  None of that is for the next reader. It is a changelog and a git history written twice, in the one
-  place somebody is looking for the rule.
-  What replaced each of them is the thing the reader needed: the wordmark is one line because six
-  costs six rows, a key while the wizard is working is not an answer because nothing is being asked,
-  the conversation beside the console is the driver because following the cursor would end whichever
-  session you had scrolled to. Same information, none of the receipts.
+- **Less commentary, and what is left says the constraint.** The repository was 3,429 comment lines
+  against 24,132, and some files were over half comment. Five entries in this file quoted the operator
+  by name, typos and all, and comments narrated their own redesigns: it was called that for a day, it
+  used to be six lines, it was the row under the cursor for a while. None of that is for the next
+  reader, and most of the rest was the code said twice in prose.
+  A comment earns its place by saying something the code cannot: a constraint from outside, a trap, or
+  why the obvious way fails. `Argv is the command and its arguments` is not one of those. What is kept
+  says the rule rather than the route to it: the wordmark is one line because six lines cost six rows,
+  a key while the wizard is working is not an answer because nothing is being asked.
+  A first pass over the densest files. The largest three are still to do.
 
 ## 8 August 2026
 
