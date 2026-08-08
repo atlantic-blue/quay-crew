@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -204,6 +207,66 @@ func TestEndingAConversationSaysWhenItCouldNotEndIt(t *testing.T) {
 			err := endConversation("quaycrew-c9964dc2", tc.run)
 			if said := err != nil; said != tc.says {
 				t.Fatalf("ending it reported %v, want a report: %v, because %s", err, tc.says, tc.because)
+			}
+		})
+	}
+}
+
+// TestASessionSaysWhenItWasNotToldWhereTheCrewIs.
+//
+// A session that was never told where the crew is falls back to localhost, and localhost inside a
+// container is the container. The dial error names an address nobody chose and nothing can be at,
+// which reads as the crew being down: "dial tcp [::1]:50051: connect: connection refused" from inside
+// a sandbox, while the control plane was up the whole time.
+func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
+	refused := status.Error(codes.Unavailable, `connection error: desc = "transport: Error while `+
+		`dialing: dial tcp [::1]:50051: connect: connection refused"`)
+
+	for _, tc := range []struct {
+		name      string
+		err       error
+		told      string
+		sandboxed bool
+		explains  bool
+		because   string
+	}{
+		{
+			name: "refused inside a sandbox that was told nothing", err: refused, sandboxed: true,
+			explains: true,
+			because:  "nothing can ever answer on localhost in here, and only the operator can fix it",
+		},
+		{
+			name: "refused inside a sandbox that was given an address", err: refused, sandboxed: true,
+			told:    "controlplane:50051",
+			because: "the crew was named, so this is the crew being unreachable and the address is worth reading",
+		},
+		{
+			name: "refused on the operator's own machine", err: refused,
+			because: "localhost is where their stack runs, so the dial error is the right answer",
+		},
+		{
+			name: "a refusal that is not about reaching anything", sandboxed: true,
+			err:     status.Error(codes.NotFound, "session not found"),
+			because: "the crew answered, so where it lives is not the problem",
+		},
+		{
+			name: "nothing went wrong", sandboxed: true, because: "there is nothing to explain",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := unreachable(tc.err, tc.told, tc.sandboxed)
+			if tc.err == nil {
+				if got != nil {
+					t.Fatalf("a nil error came back as %v", got)
+				}
+				return
+			}
+			said := strings.Contains(fmt.Sprint(got), "QC_SANDBOX_CONTROL_PLANE")
+			if said != tc.explains {
+				t.Fatalf("it explained the setup: %v, want %v, because %s\n%v", said, tc.explains, tc.because, got)
+			}
+			if !errors.Is(got, tc.err) {
+				t.Fatal("the original failure was thrown away rather than wrapped")
 			}
 		})
 	}
