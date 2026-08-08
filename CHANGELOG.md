@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A workspace's secrets reach a sandbox by name.** One line decided what a session could ever be
+  given: the model's own token, hardcoded, and nothing else. A workspace could hold a credential for
+  anything at all and no session could use it, which is why `git` sits in the image with no way to
+  push and why there is no `gh` worth adding yet.
+  Named rather than all of them. A sandbox holds a value for the life of its container and the model
+  can read it, which is the point of giving it one, so the crew hands over what a session needs and
+  not everything the workspace happens to hold. `QC_SANDBOX_SECRETS` is the list; the model's token is
+  always carried and needs no naming; a name with nothing set against it is skipped rather than
+  refused, because a crew configured for a skill nobody has set up yet should still run its turns.
+  First slice of [`docs/SKILLS.md`](docs/SKILLS.md). When skills exist they contribute the names, and
+  this is the path they will use.
+
+## 8 August 2026
+
 - **What the crew has cost is in the header.** Beside the build, so it is in front of you while you
   work rather than only when you go and look at a listing: what came back, what was sent, what was
   read from the cache. Its own call rather than part of `GetInfo`, because that one answers what a

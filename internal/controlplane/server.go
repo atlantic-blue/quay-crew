@@ -64,6 +64,13 @@ type Config struct {
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
+	// SandboxSecrets are the workspace secrets a session's sandbox is given, by name. The model's own
+	// token is always carried and does not need naming here.
+	//
+	// Named rather than all of them, because a sandbox holds a value for the life of its container
+	// and the model can read it. This is where a skill's declared secrets will come from once skills
+	// exist; until then it is the operator saying what a session may reach. See docs/SKILLS.md.
+	SandboxSecrets []string
 	// Reachable is the address a session should dial to reach this control plane, put into every
 	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the crew without being told where it is.
 	//
@@ -82,8 +89,10 @@ type Server struct {
 	storage  sandbox.Storage
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
-	events    messaging.EventLog
-	info      Info
+	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
+	sandboxSecrets []string
+	events         messaging.EventLog
+	info           Info
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
@@ -93,15 +102,16 @@ type Server struct {
 // default), a sandbox provider (one sandbox per session) and a secrets store.
 func NewServer(cfg Config) *Server {
 	return &Server{
-		store:     cfg.Store,
-		secrets:   cfg.Secrets,
-		runner:    cfg.Runner,
-		provider:  cfg.Provider,
-		storage:   cfg.Storage,
-		events:    eventsOr(cfg.Events),
-		info:      cfg.Info,
-		reachable: cfg.Reachable,
-		sandboxes: make(map[string]sandbox.Sandbox),
+		store:          cfg.Store,
+		secrets:        cfg.Secrets,
+		runner:         cfg.Runner,
+		provider:       cfg.Provider,
+		storage:        cfg.Storage,
+		events:         eventsOr(cfg.Events),
+		info:           cfg.Info,
+		reachable:      cfg.Reachable,
+		sandboxSecrets: cfg.SandboxSecrets,
+		sandboxes:      make(map[string]sandbox.Sandbox),
 	}
 }
 
@@ -759,8 +769,24 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 	}
-	if token, err := s.secrets.Get(ctx, session.GetWorkspace(), model.ClaudeCodeOAuthTokenEnv); err == nil && token != "" {
-		env[model.ClaudeCodeOAuthTokenEnv] = token
+	// The workspace's secrets, by name. The model's own token is always one of them, because a
+	// sandbox without it cannot run a turn at all; the rest are the ones the crew has been told to
+	// carry.
+	//
+	// By name rather than all of them. A sandbox holds a value for the life of its container and the
+	// model can read it, which is the point of giving it one, so the crew hands over what a session
+	// needs and not everything the workspace happens to hold. A name with nothing set against it is
+	// skipped rather than refused: a crew configured for a skill nobody has set up yet should still
+	// run its turns.
+	for _, name := range append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...) {
+		if _, already := env[name]; already {
+			continue
+		}
+		value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
+		if err != nil || value == "" {
+			continue
+		}
+		env[name] = value
 	}
 	if len(env) == 0 {
 		return nil

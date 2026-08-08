@@ -141,6 +141,8 @@ type world struct {
 	realRunner model.Runner
 	// reachable is the address a session is told to dial for the crew, empty when it cannot reach it.
 	reachable string
+	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
+	sandboxSecrets []string
 	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
 	drivers []*quaycrewv1.Session
 	secrets secrets.Store
@@ -218,6 +220,7 @@ func (w *world) serve() error {
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
+		SandboxSecrets: w.sandboxSecrets,
 	}))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 

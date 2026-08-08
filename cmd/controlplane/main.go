@@ -100,6 +100,9 @@ func main() {
 		Events:   events,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
+		// Which of a workspace's secrets a sandbox is given, by name. The model's own token is
+		// always carried and does not need naming.
+		SandboxSecrets: splitAndTrim(os.Getenv("QC_SANDBOX_SECRETS")),
 		Info: controlplane.Info{
 			Model:   modelKind,
 			Sandbox: sandboxKind,
