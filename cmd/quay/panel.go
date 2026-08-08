@@ -159,12 +159,10 @@ func terminalSize() (int, int) {
 }
 
 // conversationBeside is what the console runs when it is asked to put a conversation next to itself.
-// The row under the cursor wins, because that is the conversation being looked at; with nothing
-// selected it falls back to the one last spoken to, the same rule `quay panel` uses.
-// The conversation beside the console is always the driver, whatever the cursor is on. It was the row
-// under the cursor for a while, which reads well until you press the key for a fresh conversation:
-// that ended whichever session the cursor happened to be over while the pane beside you carried on
-// showing the driver.
+//
+// Always the driver, whatever the cursor is on. Following the cursor reads well until the key for a
+// fresh conversation is pressed: that would end whichever session the cursor happened to be over,
+// while the pane beside the console carried on showing the driver.
 func conversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) ([]string, error) {
 	return func(string) ([]string, error) {
 		self, err := os.Executable()

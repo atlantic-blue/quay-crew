@@ -7,11 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// View draws the console: a status block saying which crew this is and what the keys do, a framed
-// panel of rows titled with its scope and count, and a breadcrumb saying where escape goes back to.
-//
-// The order answers the two questions in the order they are asked: which crew am I about to act on,
-// and what can I press.
+// View draws the console: the status block, a framed panel of rows, and a breadcrumb.
 func (m Model) View() string {
 	if m.quitting {
 		return ""
@@ -221,12 +217,8 @@ func sandboxImagePhrase(info Info) string {
 	return info.SandboxBuild
 }
 
-// spentBeside is what the crew has cost, drawn on the same line as the build when there is room for
-// it and the wordmark both.
-//
-// It gives way before the wordmark does, deliberately. The header is one row and the wordmark is what
-// makes the panel look like something rather than a terminal with tables in it; a number the operator
-// can get from the listing is the cheaper thing to lose.
+// spent is what the crew has cost, drawn beside the build when there is room for it and the wordmark
+// both. It gives way first: the number is in the listing too.
 func (m Model) spent() string {
 	if m.info.Spent.Empty() {
 		return ""
@@ -276,12 +268,8 @@ func (m Model) trail() []string {
 	return names
 }
 
-// hintLines is what the keys do here, in aligned columns beside the status block: one hint per line,
-// filling a column top to bottom before starting the next, the way k9s lays them out. Reading down a
-// column is how you find a key; reading along a wrapped row is not.
-//
-// The view's own actions come first, because they are the reason the operator is looking at this
-// view rather than another one.
+// hintLines fills each column top to bottom before starting the next, the way k9s does, because
+// reading down a column is how you find a key. The view's own actions come first.
 func (m Model) hintLines() []string {
 	hints := m.hintParts()
 	if len(hints) == 0 {
@@ -385,12 +373,9 @@ func (m Model) panelBottom() string {
 	return frame.Render("╰" + strings.Repeat("─", width) + "╯")
 }
 
-// helpBody is the key list, padded to the same height the rows would have taken, so opening it does
-// not resize the window's contents underneath.
-//
-// It goes into as many columns as it takes rather than being cut off, because a list of keys with the
-// last few missing is exactly as useful as no list at all, and worse than that: it is a list that
-// looks complete. Adding one binding used to push the last one off the bottom with nothing to say so.
+// helpBody is padded to the height the rows would have taken, so opening it does not resize what is
+// underneath, and it takes as many columns as it needs: a key list missing its last few entries looks
+// complete and is not.
 func (m Model) helpBody() []string {
 	height := m.bodyHeight() + 1
 
@@ -432,12 +417,8 @@ func (m Model) helpBody() []string {
 	return lines
 }
 
-// intoColumns folds a list into however many columns fit in height lines, reading down each column
-// before starting the next. A list that already fits is left alone.
-//
-// The columns are as wide as the widest entry rather than an even share of the room, because an even
-// share cuts whatever is longer than it and a key list with its last few characters missing is a key
-// list that lies. Fewer columns and everything readable beats more columns and an ellipsis.
+// intoColumns folds a list into however many columns fit, reading down each one. Columns are as wide
+// as their widest entry rather than an even share, because an even share truncates.
 func intoColumns(entries []string, height, width int) []string {
 	if height < 1 || len(entries) <= height {
 		return entries
@@ -680,12 +661,9 @@ func (m Model) offered() string {
 	return faint.Render("   " + strings.Join(names, "  "))
 }
 
-// wizardPrompt asks the step's question and shows what has been typed, which for a secret is asterisks
-// and nothing else.
-//
-// A step that chooses from what the crew already has shows what there is, narrowed by what has been
-// typed, the same way the command bar does. Asking somebody to name a workspace they cannot see is how
-// the wizard ended up only able to make new ones.
+// wizardPrompt shows what has been typed, asterisks for a secret. A step that chooses from what the
+// crew already has lists it: asking somebody to name a workspace they cannot see leaves them able
+// only to make new ones.
 func (m Model) wizardPrompt() string {
 	if m.making.step() == stepWorking {
 		return prompt.Render(" making ") + faint.Render(m.making.summary())

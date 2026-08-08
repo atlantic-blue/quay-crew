@@ -8,16 +8,11 @@ import (
 	"strings"
 )
 
-// Storage keeps a sandbox's state on the host rather than in the container layer.
+// Storage keeps a sandbox's state on the host, so removing a container does not destroy the
+// conversation the database holds a handle to. The same directories carry the context the model
+// reads, because it already looks for CLAUDE.md in its home and working directories.
 //
-// Without it a session's conversation lives only inside its container, so removing that container
-// destroys the conversation the database still holds a handle to. With it, the same directory is
-// also where a workspace and a project keep the context the model reads, because the model's command
-// line tool already looks for CLAUDE.md in its home directory and in its working directory. One
-// mechanism, both problems.
-//
-// The directories are bind mounted rather than kept in a named volume so the operator can drop a
-// file into a project with an editor instead of a throwaway container.
+// Bind mounted rather than a named volume, so the operator can edit a project's files directly.
 type Storage struct {
 	// Dir is the data directory as this process sees it. Empty keeps nothing, which is the old
 	// behaviour: state lives in the container and dies with it.
@@ -125,16 +120,11 @@ func (s Storage) Contexts(cfg Config) []Context {
 // directory.
 const ConversationFile = ".jsonl"
 
-// HasConversation says whether a workspace's conversation store still holds a conversation.
+// HasConversation says whether a workspace's store still holds one. A handle is a pointer into a
+// store this process does not own, so it can outlive what it points at.
 //
-// A session's handle is a pointer into a store this process does not own, so a handle can outlive
-// what it points at: every conversation from a sandbox created before state was kept on the host died
-// with that container, while the row kept the handle. Resuming one of those prints "No conversation
-// found" and exits, which from the console looks like nothing happening at all.
-//
-// It answers true whenever it cannot tell. An unconfigured store keeps nothing on the host, and
-// refusing every attach because there is nowhere to look would be worse than the failure this exists
-// to explain.
+// True whenever it cannot tell: refusing every attach because there is nowhere to look would be worse
+// than the failure this exists to explain.
 func (s Storage) HasConversation(workspace, conversation string) bool {
 	if s.Dir == "" || workspace == "" || conversation == "" {
 		return true

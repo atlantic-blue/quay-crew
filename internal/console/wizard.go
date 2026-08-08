@@ -367,8 +367,8 @@ func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 	if m.making.step() == stepWorking {
 		// The crew is making it and the wizard is asking nothing, so a key is not an answer to
-		// anything. Enter used to be taken as an empty answer to this step and refused as "making it:
-		// this one is needed", naming no question anybody was asked.
+		// anything. Taken as an empty answer to this step, enter is refused as "making it: this one is
+		// needed", naming no question anybody was asked.
 		return m, nil
 	}
 
