@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.10.1
 	github.com/charmbracelet/x/term v0.2.1
 	github.com/cucumber/godog v0.16.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/mattn/go-isatty v0.0.24
 	github.com/testcontainers/testcontainers-go v0.43.0
@@ -52,7 +53,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.5 // indirect

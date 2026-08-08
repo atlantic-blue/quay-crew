@@ -207,14 +207,33 @@ Feature: Sessions run in isolated sandboxes
     And the control plane asked for that session's sandbox
 
   # A handle can outlive what it points at. Every conversation from a sandbox built before state was
-  # kept on the host died with that container while the row kept the handle, and resuming one of those
-  # prints "No conversation found" and exits, which from the console looks like nothing happening.
-  Scenario: A thread whose conversation is gone says so rather than opening nothing
+  # kept on the host died with that container while the row kept the handle. This was refused, because
+  # resuming one printed "No conversation found" and exited, which from the console looks like nothing
+  # happening. It cannot be refused any more: a conversation the crew has just named has no transcript
+  # either, and that is a first open rather than a loss. The sandbox is the only place that can tell
+  # them apart, so it resumes what is there and starts what is not, under the name it was given.
+  Scenario: A thread whose conversation is gone opens under the name the crew holds
     Given a session started by dispatching "remember this"
     When the conversation the model kept is lost
     And the operator asks how to attach to the session
-    Then the control plane refuses it as not yet ready
-    And the refusal says the conversation is gone, in the operator's words
+    Then the control plane names the session's sandbox
+    And the command opens the conversation the crew holds
+
+  # A conversation started inside a sandbox picks its own identifier and tells nobody, so every
+  # conversation opened from the panel was one the crew could not name: no history to read back, no
+  # tokens to count, and no way to tell one transcript in a workspace from another. The crew names it
+  # instead.
+  Scenario: The crew names a conversation when it opens one
+    When the operator opens the driver
+    And the operator asks how to attach to the driver
+    Then the driver has a conversation the crew can name
+    And the command opens the conversation the crew holds
+
+  Scenario: Opening a conversation twice keeps the name it was given
+    When the operator opens the driver
+    And the operator asks how to attach to the driver
+    And the operator asks how to attach to the driver
+    Then the driver has the same conversation both times
 
   # The control plane kept a handle to every sandbox it had made and trusted it forever. Anything that
   # removed a container behind its back left that handle pointing at nothing, and the operator got a
