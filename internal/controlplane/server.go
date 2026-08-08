@@ -390,17 +390,11 @@ func (s *Server) imageName() string {
 
 // syncContext makes the files the model reads agree with the store, in both directions.
 //
-// The store is where context lives, because a pod has no host directory to mount and an API cannot
-// edit a file on somebody's laptop. The file in the sandbox is a rendering of it, written here.
+// The store holds context because a pod has no host directory to mount. The file is a rendering of
+// it, and it is read back first: an agent that wrote into its own CLAUDE.md has learned something,
+// and overwriting that would make the crew's memory worse than a text file.
 //
-// It reads back first. An agent that has written something into its own CLAUDE.md has learned
-// something, and overwriting that on the next turn would make the crew's memory strictly worse than
-// a text file. So a file that differs from the store wins and is taken into the store; then the store
-// is rendered back out, which is a no op when they already agreed.
-//
-// A failure here never fails a turn. Context is what the model would like to know, not what it needs
-// to run, and a turn refused because a file could not be written is worse than a turn that runs
-// without yesterday's notes.
+// A failure here never fails a turn.
 func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 	s.syncContextExcept(ctx, session, contextLevel{})
 }
@@ -1094,33 +1088,17 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"thread %s is archived: restore it first", display.ShortID(session.GetThreadId()))
 	}
-	// A handle can outlive what it points at: every conversation from a sandbox created before the
-	// conversations were kept on the host died with that container, while the row kept the handle.
-	// This used to be refused here, because resuming one printed "No conversation found" and exited,
-	// which from the console looks like nothing happening at all.
-	//
-	// It is not refused any more, and it cannot be: a conversation the crew has just named has no
-	// transcript either, and that is the normal first open rather than a loss. The sandbox decides,
-	// because it is the only place that can see whether the transcript is there: it resumes one that
-	// exists and starts one under the same name when it does not. Either way the operator lands in a
-	// conversation instead of in an error.
-	// Make sure there is something to attach to. The live sandboxes are a map in this process, so a
-	// restart empties it while the row still says idle, and answering from the row alone hands the
-	// operator a container name the daemon has never heard of. The conversation is on the host, so a
-	// fresh container over the same mounts is the same conversation.
+	// A handle can outlive what it points at, and a conversation the crew has just named has no
+	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a
+	// transcript that exists and starts one under the same name when it does not.
+	// The live sandboxes are a map in this process, so a restart empties it while the row still says
+	// idle. State is on the host, so a fresh container over the same mounts is the same conversation.
 	if _, err := s.sandboxFor(ctx, session); err != nil {
 		return nil, sandboxError(err, "start sandbox")
 	}
-	// Inside tmux, so the operator can leave without ending what they opened. Detaching returns them
-	// to the console with the model still running; the only way back before this was to kill the
-	// conversation they had just opened.
-	//
-	// -A attaches to the session if it is already there and creates it otherwise, so opening a thread
-	// a second time lands in the same live conversation rather than starting a second one beside it.
-	//
-	// The permission mode is the same one the thread's turns run in. Without it an attached session
-	// runs as whatever the model defaults to, so a thread armed to skip permissions stops and asks the
-	// moment it is opened, which reads as the toggle not working.
+	// Inside tmux, so detaching leaves the model running. -A attaches to the session already there
+	// rather than starting a second beside it, and the permission mode is the thread's own, or a
+	// thread armed to skip permissions asks anyway the moment it is opened.
 	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
