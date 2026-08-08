@@ -9,9 +9,12 @@ Feature: A workspace works in repositories, and every session gets a checkout
   workspace routinely spans more than one: a service and its infrastructure, or a frontend and the api
   behind it.
 
-  Each lands in a directory of its own under the working directory, beside the memory file that is
-  already there. That the clone is real, and that asking again leaves the session's own work alone, is
-  proved against Docker in the sandbox package.
+  A repository is cloned once into the workspace's own volume, which every session in it shares, so a
+  second conversation costs no second copy of the history. Each session then gets its own working tree of
+  it, on its own branch, because git allows one working tree per branch and two conversations in one
+  directory would share an index. That the clone and the working trees are real, that two sessions do not
+  disturb each other, and that asking again leaves a session's own work alone, are proved against Docker
+  in the sandbox package.
 
   Background:
     Given a running control plane
@@ -26,7 +29,8 @@ Feature: A workspace works in repositories, and every session gets a checkout
     Given the workspace works in "https://github.com/atlantic-blue/quay-crew.git"
     When the operator dispatches "hello" to the project
     Then the session cloned "https://github.com/atlantic-blue/quay-crew.git"
-    And it cloned into a directory of its own under the working directory
+    And it cloned into the workspace's volume
+    And the session was given its own working tree of "quay-crew"
     And the clone never carried the credential in its arguments
 
   Scenario: Every repository the workspace works in is cloned
@@ -48,6 +52,17 @@ Feature: A workspace works in repositories, and every session gets a checkout
     And a session started by dispatching "hello"
     When the operator dispatches "and again" to the same thread
     Then every clone it asked for was conditional on there being no checkout
+
+  # The reason a session gets a working tree of its own rather than the shared checkout: git allows one
+  # working tree per branch, and two conversations in one directory share an index, so the first checkout
+  # moves the ground under the other.
+  Scenario: Two sessions in one workspace clone once and get a working tree each
+    Given the workspace works in "https://github.com/atlantic-blue/quay-crew.git"
+    And a session started by dispatching "hello"
+    And a second project named "gardening"
+    When the operator dispatches "hello" to the second project
+    Then both sessions were pointed at the same clone in the volume
+    And the two sessions were given different working trees on different branches
 
   Scenario: A remote that is not a repository address is refused when it is added
     When the operator adds the repository "not-a-remote"

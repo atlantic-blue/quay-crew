@@ -304,52 +304,73 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	return box, nil
 }
 
-// cloneRepositories puts the workspace's repositories in front of the session, once each.
+// cloneRepositories puts the workspace's repositories in front of the session.
 //
 // A session's working directory starts empty, so a git skill had nothing to work in: the crew could
-// describe how to commit and there was nowhere to commit. This is where the code comes from.
+// describe how to commit and there was nowhere to commit. This is where the code comes from, and the
+// clone happens inside the container, so a repository the operator has never had on their own machine
+// works exactly the same as one they have.
+//
+// Two steps, and the split is the whole design. The repository is cloned once into the workspace's
+// volume, which every session in the workspace shares, so a second conversation costs no second copy of
+// the history. Then each session gets its own working tree of it, on its own branch, because git allows
+// one working tree per branch and two conversations in one directory would share an index.
 //
 // On the workspace rather than the project, and several rather than one. A workspace is already where a
 // credential lives and where a skill attaches, which are the two things a repository needs, and a
-// workspace routinely spans more than one repository: a service and its infrastructure, or a frontend and
-// the api behind it.
+// workspace routinely spans more than one: a service and its infrastructure, or a frontend and the api
+// behind it.
 //
-// Once each, and the command is what makes that true: it clones only when the checkout is not already
-// there. A sandbox is adopted across turns, so a command that cloned every time would either fail on the
-// second turn or throw away whatever the first one did. The check is inside the container because that is
-// the only place that knows what this container has, which is why a skill's setup checks its own marker
-// there too.
-//
-// Each lands in a directory of its own under the working directory. The memory file the model reads is
-// written there before the sandbox exists, and git refuses to clone into somewhere that is not empty.
-//
-// A failure fails the turn, unlike context. Being asked to work in a repository that is not there is
-// worse than being told the clone did not work: the model improvises, and an improvised repository looks
-// like an answer.
+// The working tree lands in a directory of its own under the working directory. The memory file the model
+// reads is written there before the sandbox exists, and git will not check out into a directory that is
+// not empty.
 func (s *Server) cloneRepositories(ctx context.Context, session *quaycrewv1.Session, box sandbox.Sandbox) error {
 	repositories, err := s.store.WorkspaceRepositories(ctx, session.GetWorkspace())
 	if err != nil {
 		return nil
 	}
 	for _, repository := range repositories {
-		spec, err := sandbox.CloneSpec(repository.GetRemote(), sandbox.WorkingPath)
+		clone, err := sandbox.CloneSpec(repository.GetRemote(), sandbox.SharedPath)
 		if err != nil {
 			return status.Errorf(codes.FailedPrecondition, "%v", err)
 		}
-		proc, err := box.Exec(ctx, spec)
-		if err != nil {
-			return status.Errorf(codes.Internal, "clone %s: %v", repository.GetRemote(), err)
+		if err := s.mustRun(ctx, box, clone, "clone "+repository.GetRemote(), session); err != nil {
+			return err
 		}
-		_, _ = io.Copy(io.Discard, proc.Stdout())
-		if err := proc.Wait(); err != nil {
-			// The remote and what git said, and never the credential: it is not in the command, and what
-			// comes back on the error stream is git's own words.
-			return status.Errorf(codes.FailedPrecondition,
-				"could not clone %s into this session: %v: %s. The crew reads the credential from the "+
-					"workspace secret %s, so check that is set with quay secret set %s %s <value>",
-				repository.GetRemote(), err, proc.Stderr(), sandbox.CredentialEnv,
-				session.GetWorkspace(), sandbox.CredentialEnv)
+
+		// The clone is shared and the working tree is this session's own. Both are needed: one is where
+		// the history lives, the other is where this conversation works without moving the ground under
+		// any other conversation in the workspace.
+		at := path.Join(sandbox.SharedPath, sandbox.RepositoriesDir, repository.GetName())
+		worktree := sandbox.WorktreeSpec(at,
+			sandbox.WorktreePath(session.GetId(), repository.GetName()),
+			path.Join(sandbox.WorkingPath, repository.GetName()),
+			sandbox.SessionBranch(session.GetId()))
+		if err := s.mustRun(ctx, box, worktree, "make a working tree of "+repository.GetName(), session); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// mustRun runs one command inside the sandbox and turns a failure into something the operator can act on.
+//
+// A failure fails the turn, unlike context. Being asked to work in a repository that is not there is worse
+// than being told it could not be fetched: the model improvises, and an improvised repository looks like
+// an answer.
+func (s *Server) mustRun(ctx context.Context, box sandbox.Sandbox, spec sandbox.Spec, what string, session *quaycrewv1.Session) error {
+	proc, err := box.Exec(ctx, spec)
+	if err != nil {
+		return status.Errorf(codes.Internal, "%s: %v", what, err)
+	}
+	_, _ = io.Copy(io.Discard, proc.Stdout())
+	if err := proc.Wait(); err != nil {
+		// What git said, and never the credential: it is not in the command, and what comes back on the
+		// error stream is git's own words.
+		return status.Errorf(codes.FailedPrecondition,
+			"could not %s for this session: %v: %s. The crew reads the credential from the workspace "+
+				"secret %s, so check that is set with quay secret set %s %s <value>",
+			what, err, proc.Stderr(), sandbox.CredentialEnv, session.GetWorkspace(), sandbox.CredentialEnv)
 	}
 	return nil
 }
