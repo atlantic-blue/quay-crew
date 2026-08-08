@@ -1,0 +1,202 @@
+# Skills
+
+A session opens knowing nothing about how you work. It has a model, a sandbox, and whatever context
+the crew has written into it. Ask it to open a pull request and it will find `git` in the image, no
+identity, no credential, and no `gh`, and it will tell you the control plane is refusing connections.
+
+A skill is the missing piece: a capability a session can be given, written down as code, shared the
+way code is shared. This document describes what one is, where it lives, how it reaches a sandbox,
+and what it deliberately does not do.
+
+## What a skill is, and is not
+
+A skill is four things and nothing else:
+
+- **A brief.** How this kind of work is done here. Prose the model reads, not prompt engineering.
+- **The binaries it needs.** `gh` for GitHub, `terraform` for infrastructure. Declared, so a session
+  missing one is refused with a sentence rather than discovering it halfway through.
+- **The secrets it names.** By name, never by value. The crew binds them from its own sealed store.
+- **Its own setup.** A script that runs inside the sandbox to make the capability real, for example
+  configuring a git identity and a credential helper.
+
+A skill has no control flow. It never decides what happens next, it does not run on a schedule, and
+it holds no state between turns. Everything with control flow in it is a workflow, which is a
+different entity with its own design in [`ARCHITECTURE.md`](ARCHITECTURE.md). See
+[Skills and workflows](#skills-and-workflows) below.
+
+## Where a skill lives
+
+Authored as files, imported into the crew, rendered back into the sandbox. Each of those three is
+answering a different question, and this repository has already answered two of them in opposite
+directions for good reasons.
+
+Context lives in the store and is rendered to files, because a pod has no host directory to mount and
+an interface cannot edit a file on somebody's laptop. Automation graphs are files pinned by version,
+because editing a file must not change an automation that is halfway through.
+
+A skill needs both properties, so it gets both layers.
+
+```mermaid
+flowchart LR
+    A["a repository of skills<br/>files, reviewed, versioned"] -->|"quay skill import"| B["the crew's store<br/>pinned to a version"]
+    B -->|"quay skill attach"| C["a level: crew, workspace,<br/>project or session"]
+    C --> D["the sandbox<br/>files mounted, secrets injected"]
+    E["the sealed secrets store"] -->|"only what the skill names"| D
+```
+
+**Files are the authoring and sharing format.** A skill is a directory in a git repository, which
+makes it reviewable, diffable, versioned, and testable in continuous integration. "Shared across
+users" then needs no invention: it is a repository somebody clones, or a directory in a repository
+several crews already read.
+
+**The store is the runtime.** Importing copies the skill in and pins it to a version, so a crew on a
+pod with no host directory still has its skills, a listing can answer which skills a session holds,
+and a skill cannot change under a session that is using it.
+
+**The sandbox gets files again**, because the model reads files natively and always has. The brief
+lands beside the memory files the four levels of context already write, and the skill's own directory
+is mounted where its scripts can run.
+
+## The shape of a skill
+
+```
+skills/github/
+  skill.yaml        what it is, what it needs
+  SKILL.md          the brief the model reads
+  bin/setup         run inside the sandbox, once, at creation
+  test/             proves the setup does what it says
+```
+
+```yaml
+name: github
+version: 3
+summary: Open pull requests and issues, and push branches.
+binaries: [git, gh]
+secrets:
+  GITHUB_TOKEN: a token with repo scope, set with `quay secret set <workspace> GITHUB_TOKEN`
+identity:
+  GIT_AUTHOR_NAME: from the workspace
+  GIT_AUTHOR_EMAIL: from the workspace
+```
+
+The manifest is a description, never a program. No expression language, no conditionals, no hooks
+that run on the host. The only executable part is `bin/setup`, and it runs inside the sandbox as the
+sandbox user, which is the boundary that was already there.
+
+## How a skill reaches a session
+
+A skill is attached at one of the four levels the crew already has: crew, workspace, project or
+session. The same vocabulary as context, for the same reason, and the same nesting: a skill on the
+workspace reaches every session in it.
+
+At sandbox creation the control plane resolves the skills that reach this session, and then:
+
+1. Refuses early, with a sentence naming what is wrong, if a binary the skill declares is not in the
+   image or a secret it names is not set. A capability that cannot work should say so before a turn
+   runs, not through the model discovering `gh: command not found`.
+2. Mounts each skill's directory read only, so a session can read its scripts and cannot edit them.
+3. Injects only the secrets the attached skills name. A session with no github skill never sees
+   `GITHUB_TOKEN`.
+4. Runs each `bin/setup` inside the sandbox, once, before the first turn.
+5. Writes each brief into the context the session reads, marked by skill the way each level of
+   context is marked by scope.
+
+Step three replaces what is there today, which is a single hardcoded key: `turnEnv` injects
+`CLAUDE_CODE_OAUTH_TOKEN` and nothing else, so a workspace can hold any secret it likes and only that
+one ever reaches a session.
+
+## Credentials
+
+A skill names its secrets and never carries them. The values stay in the sealed store where the
+subscription token already lives, and the crew binds them at sandbox creation.
+
+The cost is the same one [`ARCHITECTURE.md`](ARCHITECTURE.md) states for the model token, and it is
+worth restating because a GitHub token is a different kind of loss. Values set on a sandbox are
+readable for the life of the container, for example through `docker inspect`, and they are readable
+by the model, which is the point of giving them to it. A token that can push to your repositories is
+in the hands of something that decides what to do next on its own. Scope it to what the skill needs,
+set it per workspace rather than per crew, and treat attaching a credential bearing skill as the same
+kind of decision as turning on the driver's network access.
+
+## Binaries
+
+A skill cannot conjure a binary. `gh` is not in the sandbox image, and no amount of markdown will put
+it there.
+
+The first version does the honest thing rather than the clever one: the image carries the binaries the
+skills in use need, a skill declares what it requires, and the crew checks before the sandbox runs and
+refuses with a message naming the missing binary and the image that has to carry it. A skill that
+installs software at turn time would need network access, a package manager and a trust story, and
+would make every turn slower and less reproducible.
+
+An image per set of skills is the natural next step and is not in this design.
+
+## Skills and workflows
+
+They are separate entities and the separation is the useful part.
+
+A skill is a capability: what a session **can** do, and what it needs in order to do it. It is
+passive. Nothing happens because a skill exists.
+
+A workflow is a plan: what **should** happen, in what order, on what trigger. It has control flow,
+state, and a run that survives a restart. Automation graphs in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) are that design.
+
+They compose, and the composition is the reason to keep them apart. "Open a ticket when a session
+fails" is a workflow whose step runs in a session holding the github skill. Fold them together and
+either a skill grows control flow, which is an agent framework in a trench coat, or a workflow starts
+carrying credentials, which puts a token in something that branches.
+
+What they share is real and worth building once: both are authored as files, both are pinned by
+version, both are attached at a level of the crew, and both are reviewed before they apply.
+
+## Not tied to one model
+
+The brief lives in a file and the capability lives in scripts and binaries, so neither is expressed in
+any model's vocabulary. What differs per engine is where the brief has to be written and what the
+sandbox has to hold, which is exactly the seam `model.Runner` already draws for a turn.
+
+The Claude adapter maps a skill onto the shape that command line tool already reads. Another engine's
+adapter maps it onto its own. A skill is not rewritten for either.
+
+## Constraints that hold the design together
+
+- **Nothing self applies.** Design principle 5 in [`ARCHITECTURE.md`](ARCHITECTURE.md): an agent can
+  propose a skill, and adding one is the operator's decision. A session that could attach its own
+  skills could grant itself credentials.
+- **Pin the version on the session.** A skill edited in its repository must not change a session that
+  is running, for the same reason a graph is pinned to a run.
+- **The manifest is data.** No expression language and no host side hooks. Accepting arbitrary
+  expressions means owning a language and a sandbox for it.
+- **Setup runs inside the sandbox, never on the host.** A skill is code somebody else wrote. The
+  container is the boundary and there is no second one.
+- **Secrets are named, never carried.** A value in a skill file is a value in a git repository.
+- **Refuse early and say what is missing.** A capability that silently does not work is worse than
+  one that is absent, because the model will improvise around it.
+- **No fetching at turn time.** A skill is imported deliberately, not resolved from the network while
+  a turn is waiting.
+
+## What exists today
+
+Verified against the repository and a running stack, rather than assumed:
+
+- `git` version 2.39.5, `rg` and `tmux` are in the sandbox image. There is no `user.name`, no
+  `user.email`, no credential helper, and no `gh`, so a session can read a repository and cannot
+  commit or push.
+- `turnEnv` injects exactly one secret, `CLAUDE_CODE_OAUTH_TOKEN`, hardcoded. Nothing else a
+  workspace holds can reach a sandbox.
+- Context already has the four levels, the store, the rendering into files and the reading back, and
+  a skill's brief follows that path rather than inventing a second one.
+- Automation graphs are designed and not built.
+
+## Delivery
+
+Each of these is a slice with its own tests, in this order, and the first two are worth having even
+if the rest waits:
+
+1. A workspace's secrets reach a sandbox by name rather than one hardcoded key.
+2. A git identity in a sandbox, from the workspace, so a commit has an author.
+3. `skill.yaml` and the loader: import, pin, attach at a level, mount, inject, refuse early.
+4. The github skill as the first real one, with `gh` in the image, proving a session can open a pull
+   request end to end.
+5. A skills view in the console, and `quay skill` on the command line.

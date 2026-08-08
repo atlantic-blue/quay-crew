@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A design for skills, in [`docs/SKILLS.md`](docs/SKILLS.md).** A session opens knowing nothing
+  about how you work, and `git` in the image with no identity and no credential is the shape of that
+  gap. A skill is a capability written down as code: a brief, the binaries it needs, the secrets it
+  names, and its own setup. Authored as files so it is reviewable and shareable, imported and pinned
+  so a crew on a pod still has it and it cannot change under a running session, rendered back into the
+  sandbox because the model reads files. Skills and workflows stay separate entities: a skill is what
+  a session can do, a workflow is what should happen, and the second one composes the first.
+  Nothing is built yet. The document ends with the slices, and the first of them is that a workspace's
+  secrets should reach a sandbox by name rather than through one hardcoded key.
+
+## 8 August 2026
+
 - **`make upgrade` names the configuration your `deploy/.env` does not have.** An upgrade adds
   configuration and nobody's copy grows with it. Compose fills a key that is not there with an empty
   string, so whatever it turns on is off and nothing says why, which is exactly how a driver came to
