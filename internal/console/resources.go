@@ -111,12 +111,8 @@ func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	return names
 }
 
-// Contexts lists the directories the model reads: one per workspace, one per project. They are files
-// on the operator's machine, mounted into every sandbox, so this view exists to answer where they are
-// and whether anything is in them.
-//
-// An empty directory is the normal state and says nothing, which is why the memory file's presence is
-// a column of its own rather than left to be inferred from a listing that shows nothing.
+// Contexts lists the directories the model reads. An empty one is the normal state, so whether the
+// memory file exists is a column rather than something to infer from a listing that shows nothing.
 func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "context",
@@ -343,15 +339,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Turns is one session's history: what it was asked, what came back, and when.
-//
-// It reads the projection of the event log rather than the model's own conversation store, so it
-// answers without starting a container and keeps answering for a session whose sandbox is long gone.
-// What it does not have is the working inside a turn, the tool calls and the thinking. Opening the
-// conversation is what that is for, which is why this is a second key rather than a replacement.
-//
-// A reply is one line here. A history is for finding the turn you want; reading it is what enter on
-// the sessions view does.
+// Turns is one session's history, read from the projection rather than the model's own store, so it
+// answers without starting a container and keeps answering once the sandbox is gone. It has no tool
+// calls and no thinking: opening the conversation is for that.
 func Turns(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "turns",
@@ -410,12 +400,9 @@ func oneLine(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
-// Archived lists the threads that have been put away. Nothing was deleted to get here, so the only
-// action is bringing one back.
-//
-// It is its own view rather than a filter on the threads view, because an archived thread is one the
-// operator deliberately hid, and a listing that quietly grows them back is worse than no archive at
-// all.
+// Archived is its own view rather than a filter, because a listing that quietly grows back the
+// threads somebody hid is worse than no archive at all. Nothing was deleted, so the only action is
+// bringing one back.
 func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "archived",
@@ -549,12 +536,9 @@ func trimZero(value float64) string {
 	return strings.TrimSuffix(rendered, ".0")
 }
 
-// permissionLabel is what a thread's mode reads as in a listing. A thread from before the mode was
-// written down has none, and every one of those has been running acceptEdits, so it is named rather
-// than left blank: an empty cell in this column would read as "asks first", which is the opposite.
-//
-// bypassPermissions becomes "dangerous", which is the word the operator already uses for it and the
-// only one of the three worth spotting from across a list.
+// permissionLabel never leaves the cell blank: a thread from before the mode existed runs acceptEdits,
+// and an empty cell would read as "asks first", the opposite. bypassPermissions becomes "dangerous",
+// the only one of the three worth spotting from across a list.
 func permissionLabel(mode string) string {
 	switch mode {
 	case model.PermissionBypass:
