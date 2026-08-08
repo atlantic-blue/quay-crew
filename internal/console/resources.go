@@ -313,9 +313,9 @@ func Features() Resource {
 // Sessions lists conversations, scoped to a project when drilled into from one. The operator can stop
 // one and shell into its container.
 //
-// It was called threads for a day. The database calls these sessions and so does the API, and one name
-// across the whole system beats a console that translates. The old name stays as an alias, because the
-// command bar should not punish muscle memory either way.
+// The database calls these sessions and so does the API, and one name across the whole system beats a
+// console that translates. Thread stays as an alias, because the command bar should not punish muscle
+// memory either way.
 func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "sessions",
@@ -771,9 +771,9 @@ func compactDuration(elapsed time.Duration) string {
 // Stats is what the crew is running underneath: which model backend, which sandbox and store engines,
 // where secrets and state are kept, whether anything is reading the event log.
 //
-// It used to be six lines of the header, which made the header ten lines tall. A header that tall in a
-// pane of its own has to scroll, and what scrolls away is the top of it. This is a question, and a
-// question gets a view: the header keeps what anybody needs at a glance.
+// A view rather than more header. Six lines of this in the header makes it ten lines tall, and a
+// header that tall in a pane of its own scrolls, which loses its own top line. The header keeps what
+// anybody needs at a glance; the rest is a question, and a question gets a view.
 func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "stats",

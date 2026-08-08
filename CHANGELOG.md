@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **The commentary says the constraint, not who said it or how the code got here.** Five entries in
+  this file quoted the operator by name, typos and all, and ten comments narrated their own redesigns:
+  it was called that for a day, it used to be six lines, it was the row under the cursor for a while.
+  None of that is for the next reader. It is a changelog and a git history written twice, in the one
+  place somebody is looking for the rule.
+  What replaced each of them is the thing the reader needed: the wordmark is one line because six
+  costs six rows, a key while the wizard is working is not an answer because nothing is being asked,
+  the conversation beside the console is the driver because following the cursor would end whichever
+  session you had scrolled to. Same information, none of the receipts.
+
+## 8 August 2026
+
 - **A skill reaches a session.** A skill is a directory with `skill.yaml`, a `SKILL.md` the model
   reads, and whatever else it needs. Put one in the crew's skills directory and every session gets it:
   the brief lands in the memory file it already reads, the directory is mounted read only beside the
@@ -290,8 +302,7 @@ read, or run with `make features`.
 
 - **The header is the wordmark, which build this is, and how to reach everything else.** It carried the
   crew's description and this view's keys, which at half the window left no room for the wordmark and
-  pushed it off the screen. Julian: "the quay logo dissapears because there is too much text, lets
-  leave only: the logo + version, and help", then "it occupies too much space". One row now: the
+  pushed it off the screen. One row now: the
   wordmark is one line rather than six of block letters, and it survives a conversation beside the
   console at every width worth drawing a console in.
 - **The help panel carries everything the header dropped**, on top of what it already had: where the
@@ -302,9 +313,8 @@ read, or run with `make features`.
 
 - **`quay` is the panel. There is no `quay panel`.** Running `quay` opens the crew: the header across
   the whole width, the console under it on the left, and a conversation on the right. `p` shows or
-  hides the conversation. Julian: "I dont understand why I need quay panel, is confusing, I need one
-  command only, the panel should appear when I press quay and toggled with the key p", and "the header
-  should be the whole width".
+  hides the conversation. One command opens everything, rather than a second command for the thing the
+  first command is for, and the header reaches the whole width.
   The header is the console's own, drawn in a pane of its own so it can reach across both halves, and
   held at exactly its own rows when the terminal is resized. With no conversation to open yet, `quay`
   opens the console on its own rather than refusing.
@@ -316,14 +326,13 @@ read, or run with `make features`.
   you wanted a conversation next to it.
 - **The console keeps its own header, always.** It was replaced in the panel by a status line tmux
   drew, and what came back had lost the wordmark and the engines and sat on top of the console's own
-  rows. Julian: "where is the header? this is a mess", then "I want this header always present". The
-  status line is gone: the header is the console's, full width on its own and squeezed to half when a
+  rows. The status line is gone: the header is the console's, full width on its own and squeezed to half when a
   conversation is beside it. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **The panel's header is tmux's own status line, and the panel is two panes again.** It was a third
   pane, which meant a process to draw it, and that process could not see which view the console was on,
   so the console had to publish it. tmux draws a status line itself, across the full width, at a height
-  it owns and with no scrollback to scroll into. Julian: "why does header need a process?" It does not.
+  it owns and with no scrollback to scroll into, so the header needs no process of its own.
   Gone with it: the `quay header` command, the alternate screen handling, the view publishing and the
   resize hook that held the pane at a height.
 - **The header is the bare essentials and the wordmark.** Which build, which crew, and where you are
@@ -387,8 +396,7 @@ read, or run with `make features`.
 - **The wizard closes when it has made what it was asked for.** It made everything correctly and then
   stayed drawn over the list it had already refreshed, so nothing looked like it had happened, and the
   next enter was taken as an answer to the step that was already working, whose prompt is the words
-  `making it`. Julian, driving it: "it fails to create anything", then "it says making it: this one is
-  needed". A key other than escape now does nothing while the crew is making it, because the wizard is
+  `making it`, so the wizard read as making nothing at all. A key other than escape now does nothing while the crew is making it, because the wizard is
   asking nothing at that point. ([#140](https://github.com/atlantic-blue/quay-crew/issues/140))
 - **A wizard that makes things.** `n` in the console asks for a workspace, a project, the subscription
   token, the project's context and a first message, in the order they depend on each other, and makes

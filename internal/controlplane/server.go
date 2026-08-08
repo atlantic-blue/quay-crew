@@ -1096,7 +1096,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	}
 	// A handle can outlive what it points at: every conversation from a sandbox created before the
 	// conversations were kept on the host died with that container, while the row kept the handle.
-	// This used to be refused here, because resuming one printed "No conversation found" and exited,
+	// Refusing it here is wrong, although resuming one does print "No conversation found" and exit,
 	// which from the console looks like nothing happening at all.
 	//
 	// It is not refused any more, and it cannot be: a conversation the crew has just named has no
