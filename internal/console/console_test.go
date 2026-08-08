@@ -517,7 +517,9 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shell action: %v", err)
 	}
-	want := []string{"docker", "exec", "-it", "quaycrew-s1", "sh"}
+	// The prompt names the session, so a shell says which sandbox it is in rather than looking like
+	// every other one. See TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs.
+	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "quaycrew-s1", "sh"}
 	if strings.Join(command.Args, " ") != strings.Join(want, " ") {
 		t.Fatalf("command = %v, want %v", command.Args, want)
 	}
