@@ -534,6 +534,20 @@ func lastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
 	return session.GetUpdatedAt()
 }
 
+// projectColumn is where a thread's project sits in its row, which the shell prompt names so the
+// operator can see where they are rather than which twenty four characters they typed.
+const projectColumn = 2
+
+// shellPrompt is what a shell in a sandbox says on every line: the thread, shortened the way every
+// listing shortens it, and the project it belongs to.
+func shellPrompt(row Row) string {
+	where := display.ShortID(row.ID)
+	if len(row.Cells) > projectColumn && row.Cells[projectColumn] != "" {
+		where += " " + row.Cells[projectColumn]
+	}
+	return where + " $ "
+}
+
 // permissionColumn is where the mode sits in a thread row, which is what the toggle reads to know
 // which way it is going.
 const permissionColumn = 5
@@ -580,7 +594,12 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return nil, fmt.Errorf("no session selected")
 				}
-				return exec.Command("docker", "exec", "-it", sandbox.ContainerName(row.ID), "sh"), nil
+				// The prompt says which sandbox this is. Every session gets a container of its own
+				// with its own empty working directory over the same image, so two shells are
+				// identical on the screen and telling them apart meant remembering which one you
+				// asked for. It reads as the key opening the same shell every time.
+				return exec.Command("docker", "exec", "-it",
+					"-e", "PS1="+shellPrompt(row), sandbox.ContainerName(row.ID), "sh"), nil
 			},
 		},
 		{

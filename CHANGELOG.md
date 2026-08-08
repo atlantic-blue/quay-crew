@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 8 August 2026
 
+- **A shell says which sandbox it is in.** Every session has a container of its own with its own empty
+  working directory over the same image, so shelling into two of them gave two screens that were
+  identical in every visible respect: same prompt, same empty listing. It read as `s` opening the same
+  shell whichever session you chose. It was always the right container, and nothing on the screen said
+  so. The prompt now carries the thread and its project, on every line.
+
+## 8 August 2026
+
 - **Cycling panes skips the header, and the pane with the keyboard is lit.** The header is one row of
   text with nothing to type into, so the pane keys landed on it and cost a press to arrive and another
   to leave, which put the two halves you actually use three presses apart. A hook scoped to the

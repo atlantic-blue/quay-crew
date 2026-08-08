@@ -517,7 +517,9 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shell action: %v", err)
 	}
-	want := []string{"docker", "exec", "-it", "quaycrew-s1", "sh"}
+	// The prompt names the session, so a shell says which sandbox it is in rather than looking like
+	// every other one. See TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs.
+	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "quaycrew-s1", "sh"}
 	if strings.Join(command.Args, " ") != strings.Join(want, " ") {
 		t.Fatalf("command = %v, want %v", command.Args, want)
 	}
@@ -2530,5 +2532,50 @@ func TestTheHelpPanelNamesTheBuildTheSandboxesRun(t *testing.T) {
 	model.info = Info{Version: "37b070b", SandboxBuild: "5d8b08f"}
 	if !strings.Contains(model.View(), "5d8b08f") {
 		t.Fatalf("the help panel does not name the build the sandboxes run:\n%s", model.View())
+	}
+}
+
+// TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs.
+//
+// Every session has a container of its own with its own empty working directory over the same image,
+// so two shells look identical: same prompt, same empty listing. Telling them apart meant remembering
+// which row you were on, and it read as the key opening the same shell whichever session you chose.
+func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T) {
+	shell := Action{}
+	for _, action := range sessionActions(&fakeClient{}) {
+		if action.Key == "s" {
+			shell = action
+		}
+	}
+	if shell.Shell == nil {
+		t.Fatal("there is no key that shells into a session")
+	}
+
+	first, err := shell.Shell(Row{ID: "c9964dc287c1c7048c82ecd3",
+		Cells: []string{"c9964dc2", "juliantellez", "juliantellez-com", "c50c04ea", "idle", "dangerous", "2h"}})
+	if err != nil {
+		t.Fatalf("shelling into the first session: %v", err)
+	}
+	second, err := shell.Shell(Row{ID: "4b7de0579f5556cb7e290f97",
+		Cells: []string{"4b7de057", "juliantellez", "juliantellez-com", "11439ed4", "idle", "edits", "1h"}})
+	if err != nil {
+		t.Fatalf("shelling into the second session: %v", err)
+	}
+
+	// Two sessions, two containers. The row under the cursor is what is opened.
+	firstArgs, secondArgs := strings.Join(first.Args, " "), strings.Join(second.Args, " ")
+	if firstArgs == secondArgs {
+		t.Fatalf("both sessions open the same shell:\n%s", firstArgs)
+	}
+	if !strings.Contains(firstArgs, "quaycrew-c9964dc287c1c7048c82ecd3") {
+		t.Fatalf("the shell does not open the selected session's container:\n%s", firstArgs)
+	}
+
+	// And the shell says which one it is, on every line, without being asked.
+	if !strings.Contains(firstArgs, "PS1=c9964dc2 juliantellez-com") {
+		t.Fatalf("the prompt does not name the thread and its project:\n%s", firstArgs)
+	}
+	if !strings.Contains(secondArgs, "PS1=4b7de057 juliantellez-com") {
+		t.Fatalf("the prompt does not name the thread and its project:\n%s", secondArgs)
 	}
 }
