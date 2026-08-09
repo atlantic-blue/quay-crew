@@ -52,6 +52,19 @@ RUN arch="$(dpkg --print-architecture)" \
     && rm /tmp/terraform.zip \
     && apt-get remove -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
+# The AWS command line, for the aws skill. Pinned like gh and terraform; the machine architecture
+# is asked of uname because Amazon names its bundles x86_64 and aarch64 rather than amd64 and
+# arm64. The stated cost is about a hundred and thirty megabytes, the heaviest thing a skill has
+# asked of this image; one image for now, revisited when sandbox tiers give skills their own.
+ARG AWS_CLI_VERSION=2.22.0
+RUN arch="$(uname -m)" \
+    && apt-get update && apt-get install -y --no-install-recommends unzip \
+    && curl -fsSL -o /tmp/awscli.zip "https://awscli.amazonaws.com/awscli-exe-linux-${arch}-${AWS_CLI_VERSION}.zip" \
+    && unzip -q /tmp/awscli.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/awscli.zip /tmp/aws \
+    && apt-get remove -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 RUN npm install -g @anthropic-ai/claude-code
 
 # Reaching the control plane is a separate decision, made once in configuration: without a network

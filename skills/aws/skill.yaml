@@ -1,0 +1,7 @@
+name: aws
+version: 1
+summary: Read cloud state with the AWS command line; anything that mutates ships through a pull request.
+binaries: [aws]
+secrets:
+  AWS_ACCESS_KEY_ID: the key id of a read scoped user or role, set with `quay secret set <workspace> AWS_ACCESS_KEY_ID`
+  AWS_SECRET_ACCESS_KEY: the secret belonging to that key id, set with `quay secret set <workspace> AWS_SECRET_ACCESS_KEY`
