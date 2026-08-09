@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -31,11 +32,12 @@ const (
 	kindSecret
 	kindContext
 	kindSession
+	kindSkill
 )
 
 // kinds is every kind in the order they are offered, which is the order they depend on each other:
 // nothing later can be made without something earlier.
-var kinds = []wizardKind{kindWorkspace, kindProject, kindSecret, kindContext, kindSession}
+var kinds = []wizardKind{kindWorkspace, kindProject, kindSecret, kindContext, kindSession, kindSkill}
 
 func (k wizardKind) String() string {
 	switch k {
@@ -49,6 +51,8 @@ func (k wizardKind) String() string {
 		return "context"
 	case kindSession:
 		return "session"
+	case kindSkill:
+		return "skill"
 	default:
 		return ""
 	}
@@ -73,6 +77,8 @@ const (
 	stepContext
 	// stepMessage takes a first message, which is the only way a session comes into existence.
 	stepMessage
+	// stepPickSkill chooses a skill the crew holds in its store, to attach to the workspace.
+	stepPickSkill
 	// stepWorking is the crew being asked to make it.
 	stepWorking
 )
@@ -90,6 +96,8 @@ func (k wizardKind) steps() []wizardStep {
 		return []wizardStep{stepPickWorkspace, stepPickProject, stepContext}
 	case kindSession:
 		return []wizardStep{stepPickWorkspace, stepPickProject, stepMessage}
+	case kindSkill:
+		return []wizardStep{stepPickWorkspace, stepPickSkill}
 	default:
 		return nil
 	}
@@ -118,11 +126,53 @@ type wizard struct {
 	secret  string
 	context string
 	message string
+	skill   wizardChoice
 
 	// choices is what the current step can offer, and loaded says the crew has answered. The two are
 	// separate because no workspaces at all is a real answer and needs its own sentence.
 	choices []wizardChoice
 	loaded  bool
+
+	// guided is the first run flow: the stages run as a chain in the order a crew needs them, an
+	// empty answer skips a stage, and escape leaves the setup rather than cancelling, because the
+	// stages behind it are already made.
+	guided bool
+	// chain is the stages still to run after this one.
+	chain []wizardKind
+}
+
+// guidedSetup is the wizard as the first run opens it: every stage a crew needs, in dependency
+// order. Skills come after the token and the context because attaching one is the only stage that
+// can be impossible (a crew holding none), and a stage that skips itself should not sit in the
+// middle of the questions that cannot.
+func guidedSetup() wizard {
+	return wizard{kind: kindWorkspace, guided: true,
+		chain: []wizardKind{kindProject, kindSecret, kindContext, kindSkill, kindSession}}
+}
+
+// skipAnsweredPicks moves past pick steps whose answer the chain already carries, so a stage never
+// asks for a workspace the operator named one question ago.
+func (w *wizard) skipAnsweredPicks() {
+	for {
+		switch w.step() {
+		case stepPickWorkspace:
+			if w.workspace.id == "" {
+				return
+			}
+		case stepPickProject:
+			if w.project.id == "" {
+				return
+			}
+		default:
+			return
+		}
+		w.at++
+	}
+}
+
+// needsProject says this stage has nowhere to go without one, so a skipped project takes it too.
+func (k wizardKind) needsProject() bool {
+	return k == kindContext || k == kindSession
 }
 
 // step is the question being asked right now.
@@ -139,7 +189,8 @@ func (w wizard) step() wizardStep {
 
 // picking says this step chooses from what exists rather than taking free text.
 func (w wizard) picking() bool {
-	return w.step() == stepPickWorkspace || w.step() == stepPickProject
+	step := w.step()
+	return step == stepPickWorkspace || step == stepPickProject || step == stepPickSkill
 }
 
 // prompt is what the step asks, and what pressing enter accepts.
@@ -155,6 +206,9 @@ func (w wizard) prompt() string {
 		if w.kind == kindProject {
 			return "new project in " + w.workspace.name
 		}
+		if w.guided {
+			return "no workspaces yet. new workspace, lowercase and hyphens"
+		}
 		return "new workspace, lowercase and hyphens"
 	case stepSecret:
 		return "subscription token for " + w.workspace.name
@@ -162,6 +216,10 @@ func (w wizard) prompt() string {
 		return "what the model should know about " + w.where()
 	case stepMessage:
 		return "first message to " + w.where()
+	case stepPickSkill:
+		// The reminder rides on the question: a skill's named secrets travel only when the operator
+		// also hands them out, and the moment of attaching is when somebody can still act on that.
+		return "which skill for " + w.workspace.name + " (secrets it names go in QC_SANDBOX_SECRETS too)"
 	default:
 		return "making it"
 	}
@@ -233,6 +291,12 @@ func (w wizard) accept() (wizard, error) {
 			return w, err
 		}
 		w.project = chosen
+	case stepPickSkill:
+		chosen, err := w.pick(answer, "skill", "")
+		if err != nil {
+			return w, err
+		}
+		w.skill = chosen
 	case stepName:
 		if answer == "" {
 			return w, fmt.Errorf("%s: this one is needed", w.prompt())
@@ -351,6 +415,8 @@ func (w wizard) summary() string {
 		return "the context for " + w.where()
 	case kindSession:
 		return "a session in " + w.where()
+	case kindSkill:
+		return "the " + w.skill.name + " skill on " + w.workspace.name
 	default:
 		return ""
 	}
@@ -374,6 +440,15 @@ func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "enter":
+		// In the guided setup an empty answer skips the stage: every question there is an offer.
+		// Skipping the workspace leaves the setup, because nothing later can exist without one.
+		if m.making.guided && strings.TrimSpace(m.making.typed) == "" {
+			if m.making.kind == kindWorkspace {
+				m.mode, m.making = modeBrowse, wizard{}
+				return m, nil
+			}
+			return m.advanceGuided()
+		}
 		next, err := m.making.accept()
 		if err != nil {
 			m.err = err
@@ -390,6 +465,28 @@ func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 	m.making.typed += typedText(msg)
 	return m, nil
+}
+
+// advanceGuided moves the setup to its next stage, carrying what earlier stages made and dropping
+// stages whose parent was skipped. When nothing is left it closes, and the refreshed listing is the
+// answer to what the setup built.
+func (m Model) advanceGuided() (Model, tea.Cmd) {
+	prior := m.making
+	chain := prior.chain
+	for len(chain) > 0 {
+		next := chain[0]
+		chain = chain[1:]
+		if next.needsProject() && prior.project.id == "" {
+			continue
+		}
+		making := wizard{kind: next, guided: true, chain: chain,
+			workspace: prior.workspace, project: prior.project}
+		making.skipAnsweredPicks()
+		m.making, m.err = making, nil
+		return m, m.wizardChoicesCmd()
+	}
+	m.mode, m.making = modeBrowse, wizard{}
+	return m, listCmd(m.active, m.parent)
 }
 
 // wizardChoicesCmd asks the crew what the step it has just arrived at can offer, and nothing at all
@@ -422,6 +519,16 @@ func (m Model) wizardChoicesCmd() tea.Cmd {
 			for _, project := range listed.GetProjects() {
 				choices = append(choices, wizardChoice{id: project.GetId(), name: project.GetName()})
 			}
+		case stepPickSkill:
+			// The store's skills, because attaching is what this stage does and only imported
+			// skills attach. The crew's own directory reaches every session without being asked.
+			listed, err := client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{})
+			if err != nil {
+				return wizardChoicesMsg{step: step, err: fmt.Errorf("the skills: %w", err)}
+			}
+			for _, one := range listed.GetSkills() {
+				choices = append(choices, wizardChoice{id: one.GetName(), name: one.GetName()})
+			}
 		}
 		return wizardChoicesMsg{step: step, choices: choices}
 	}
@@ -450,17 +557,23 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 
 		switch plan.kind {
 		case kindWorkspace:
-			if _, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{
+			made, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{
 				Name: plan.name,
-			}); err != nil {
-				return actionDoneMsg{err: fmt.Errorf("workspace %s: %w", plan.name, err)}
+			})
+			if err != nil {
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("workspace %s: %w", plan.name, err)}
 			}
+			return actionDoneMsg{kind: plan.kind, made: wizardChoice{
+				id: made.GetWorkspace().GetId(), name: made.GetWorkspace().GetName()}}
 		case kindProject:
-			if _, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+			made, err := client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
 				Workspace: plan.workspace.id, Name: plan.name,
-			}); err != nil {
-				return actionDoneMsg{err: fmt.Errorf("project %s: %w", plan.name, err)}
+			})
+			if err != nil {
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("project %s: %w", plan.name, err)}
 			}
+			return actionDoneMsg{kind: plan.kind, made: wizardChoice{
+				id: made.GetProject().GetId(), name: made.GetProject().GetName()}}
 		case kindSecret:
 			if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
 				Workspace: plan.workspace.id,
@@ -468,23 +581,52 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 				Value:     plan.secret,
 			}); err != nil {
 				// Never the value, not even in an error: an error is a thing people paste.
-				return actionDoneMsg{err: fmt.Errorf("the subscription token for %s: %w", plan.workspace.name, err)}
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the subscription token for %s: %w", plan.workspace.name, err)}
 			}
 		case kindContext:
+			body, err := contextBody(plan.context)
+			if err != nil {
+				return actionDoneMsg{kind: plan.kind, err: err}
+			}
 			if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
-				Scope: "project", Owner: plan.project.id, Body: plan.context,
+				Scope: "project", Owner: plan.project.id, Body: body,
 			}); err != nil {
-				return actionDoneMsg{err: fmt.Errorf("the context for %s: %w", plan.where(), err)}
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the context for %s: %w", plan.where(), err)}
 			}
 		case kindSession:
 			if _, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 				Project: plan.project.id, Text: plan.message,
 			}); err != nil {
-				return actionDoneMsg{err: fmt.Errorf("a session in %s: %w", plan.where(), err)}
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("a session in %s: %w", plan.where(), err)}
+			}
+		case kindSkill:
+			if _, err := client.AttachSkill(ctx, &quaycrewv1.AttachSkillRequest{
+				Workspace: plan.workspace.id, Name: plan.skill.name,
+			}); err != nil {
+				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the %s skill on %s: %w", plan.skill.name, plan.workspace.name, err)}
 			}
 		default:
 			return actionDoneMsg{err: fmt.Errorf("the wizard was asked to make nothing in particular")}
 		}
-		return actionDoneMsg{}
+		return actionDoneMsg{kind: plan.kind}
 	}
+}
+
+// contextBody is what the context step answers with: the text itself, or the contents of a file when
+// the answer names one. Typed answers cannot hold a newline, so a path is any single line an existing
+// regular file answers to, and everything else is taken as the context it already is.
+func contextBody(typed string) (string, error) {
+	path := strings.TrimSpace(typed)
+	if path == "" || strings.ContainsAny(path, "\n") {
+		return typed, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return typed, nil
+	}
+	read, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	return string(read), nil
 }
