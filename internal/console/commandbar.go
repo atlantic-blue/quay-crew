@@ -23,14 +23,24 @@ import (
 // more than the fact that it failed.
 type CommandRunner func(ctx context.Context, args []string) (string, error)
 
-// needTerminal are the commands that take over the screen. Capturing one would leave the console
-// waiting forever for output that is never coming, so they are refused before anything is started.
+// needTerminal are the commands that take over the screen rather than printing and exiting.
+//
+// Capturing one would leave the console waiting forever for output that is never coming, so instead
+// the console suspends and hands over the real terminal, which is exactly what pressing enter on a
+// row already does. That is what makes the bar the one way in rather than a reading tool.
 var needTerminal = map[string]bool{
-	"attach":  true,
-	"panel":   true,
-	"console": true,
-	"header":  true,
-	"shell":   true,
+	"attach": true,
+	"panel":  true,
+	"header": true,
+	"shell":  true,
+}
+
+// alreadyHere are the commands that would open a second copy of what you are already looking at.
+// Refused rather than run, because two consoles is recursion rather than a feature and nobody can
+// tell which one they are typing into.
+var alreadyHere = map[string]string{
+	"console": "you are already in the console",
+	"quay":    "you are already in the crew",
 }
 
 // commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
@@ -75,8 +85,16 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 
 	args := strings.Fields(typed)
 	if needTerminal[args[0]] {
-		m.err = fmt.Errorf("%s needs a terminal of its own, so it cannot run in here; leave the console and run it, or press enter on a row to attach", args[0])
-		return m, nil
+		command, err := m.handoverFor(args)
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+		// The console suspends, the command gets the real terminal, and the console comes back when
+		// it is done: the same handover enter on a row makes.
+		return m, tea.ExecProcess(command, func(err error) tea.Msg {
+			return actionDoneMsg{err: err}
+		})
 	}
 	if m.runCommand == nil {
 		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the crew with quay", typed)
@@ -154,6 +172,24 @@ func (m Model) commandBody() []string {
 		end = len(lines)
 	}
 	return lines[top:end]
+}
+
+// handoverFor builds the command the console suspends itself for.
+//
+// The words as they were typed, passed to this same binary: the bar runs the tool rather than
+// reinterpreting what was asked for, so a command that grows an option tomorrow takes it here too.
+func (m Model) handoverFor(args []string) (*exec.Cmd, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("nothing to run")
+	}
+	if because, refused := alreadyHere[args[0]]; refused {
+		return nil, fmt.Errorf("%s, so there is nothing to open: press escape to get back to the rows", because)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		self = "quay"
+	}
+	return exec.Command(self, args...), nil
 }
 
 // TheToolItself runs a quay command by running this same binary again.

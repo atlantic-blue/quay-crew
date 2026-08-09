@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The command bar is the one way in.** The commands that take over the screen used to be refused
+  there, which left it a reading tool: `:attach <thread>` now suspends the console, hands over the
+  real terminal, and comes back when you leave the conversation, the same handover pressing enter on
+  a row already made. Everything that only prints is still captured into the output panel. The one
+  thing refused is opening a console inside the console, because that is recursion rather than a
+  feature and the refusal says so. ([#234](https://github.com/atlantic-blue/quay-crew/issues/234))
 - **The command bar runs quay commands, not just view names.** Typing `:` in the console has always
   opened a bar at the bottom, vim style, and it switched views. It now runs anything the tool can
   do: `:workspace list`, `:flow list`, `:skill list <workspace>`. Output opens in a panel over the
