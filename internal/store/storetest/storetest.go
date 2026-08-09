@@ -1083,6 +1083,64 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a schedule comes due, moves on, and can be taken away", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+
+		// Due an hour ago, which is the arrangement the poller reads.
+		overdue := time.Now().UTC().Add(-time.Hour)
+		if err := s.ScheduleFlow(ctx, "nightly", project.GetId(), 24*time.Hour, overdue); err != nil {
+			t.Fatalf("ScheduleFlow: %v", err)
+		}
+		due, err := s.DueFlowSchedules(ctx, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("DueFlowSchedules: %v", err)
+		}
+		if len(due) != 1 || due[0].GraphName != "nightly" || due[0].Every != 24*time.Hour {
+			t.Fatalf("%d schedules are due (%+v), want the one", len(due), due)
+		}
+		// The workspace travels with it, because starting a run needs both.
+		if due[0].Workspace != workspace.GetId() {
+			t.Fatalf("the due schedule names workspace %q, want %q", due[0].Workspace, workspace.GetId())
+		}
+
+		// Moved on, it is no longer due, which is what keeps one broken graph from firing on every
+		// tick for as long as it stays broken.
+		if err := s.MarkFlowScheduled(ctx, "nightly", project.GetId(), time.Now().UTC().Add(24*time.Hour)); err != nil {
+			t.Fatalf("MarkFlowScheduled: %v", err)
+		}
+		if again, err := s.DueFlowSchedules(ctx, time.Now().UTC()); err != nil || len(again) != 0 {
+			t.Fatalf("%d schedules are due after moving on (%v), want none", len(again), err)
+		}
+
+		// Scheduling the same pair again moves it rather than making a second one, so importing a
+		// graph twice does not double the rate it runs at.
+		if err := s.ScheduleFlow(ctx, "nightly", project.GetId(), 24*time.Hour, overdue); err != nil {
+			t.Fatalf("ScheduleFlow again: %v", err)
+		}
+		if again, err := s.DueFlowSchedules(ctx, time.Now().UTC()); err != nil || len(again) != 1 {
+			t.Fatalf("%d schedules are due after rescheduling (%v), want exactly one", len(again), err)
+		}
+
+		if err := s.UnscheduleFlow(ctx, "nightly", project.GetId()); err != nil {
+			t.Fatalf("UnscheduleFlow: %v", err)
+		}
+		if gone, err := s.DueFlowSchedules(ctx, time.Now().UTC()); err != nil || len(gone) != 0 {
+			t.Fatalf("%d schedules are due after unscheduling (%v), want none", len(gone), err)
+		}
+		if err := s.UnscheduleFlow(ctx, "nightly", project.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("unscheduling what is not scheduled answered %v, want not found", err)
+		}
+	})
+
 	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

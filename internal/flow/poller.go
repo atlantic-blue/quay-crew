@@ -59,6 +59,39 @@ func (p *Poller) Run(ctx context.Context) {
 // Tick resumes every run that is due right now. Exported so a test can drive one tick rather than
 // waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (p *Poller) Tick(ctx context.Context) {
+	p.startScheduled(ctx)
+	p.resumeWaiting(ctx)
+}
+
+// startScheduled begins a run of every graph whose schedule has come due.
+//
+// The schedule is moved on before the run is started, so a start that fails leaves the schedule
+// pointing at its next time rather than firing again on every tick for as long as the failure
+// lasts, which is the shape that turns one broken graph into a spend loop.
+func (p *Poller) startScheduled(ctx context.Context) {
+	now := p.engine.now()
+	due, err := p.engine.store.DueFlowSchedules(ctx, now)
+	if err != nil {
+		p.logger.Warn("could not read which flow schedules are due", "error", err)
+		return
+	}
+	for _, schedule := range due {
+		if err := p.engine.store.MarkFlowScheduled(ctx, schedule.GraphName, schedule.Project, now.Add(schedule.Every)); err != nil {
+			p.logger.Warn("could not move a flow schedule on, so it is left alone this tick",
+				"graph", schedule.GraphName, "project", schedule.Project, "error", err)
+			continue
+		}
+		if _, err := p.engine.Begin(ctx, schedule.GraphName, schedule.Workspace, schedule.Project, nil); err != nil {
+			// One graph that cannot start must not stop the others, and its schedule has already
+			// moved on, so this is reported rather than retried in a tight loop.
+			p.logger.Warn("a scheduled flow could not be started",
+				"graph", schedule.GraphName, "project", schedule.Project, "error", err)
+		}
+	}
+}
+
+// resumeWaiting carries on every run whose wait has come due.
+func (p *Poller) resumeWaiting(ctx context.Context) {
 	due, err := p.engine.store.DueFlowRuns(ctx, p.engine.now())
 	if err != nil {
 		p.logger.Warn("could not read which flow runs are due", "error", err)

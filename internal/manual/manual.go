@@ -41,6 +41,8 @@ commands:
   project list [<workspace>]              list projects
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
+  flow schedule [<address>] <graph>       let it run on its own, as often as it says
+  flow unschedule [<address>] <graph>     stop it running on its own
   flow list [<address>]                   what has run, newest first
   flow show <run>                         where one run got to, what it cost, why it stopped
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
