@@ -27,6 +27,10 @@ const (
 	ControlPlaneService_GetProject_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetProject"
 	ControlPlaneService_ListProjects_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListProjects"
 	ControlPlaneService_DeleteProject_FullMethodName           = "/quaycrew.v1.ControlPlaneService/DeleteProject"
+	ControlPlaneService_ImportFlow_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportFlow"
+	ControlPlaneService_StartFlow_FullMethodName               = "/quaycrew.v1.ControlPlaneService/StartFlow"
+	ControlPlaneService_GetFlowRun_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetFlowRun"
+	ControlPlaneService_ListFlowRuns_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListFlowRuns"
 	ControlPlaneService_AttachChannel_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -65,6 +69,10 @@ type ControlPlaneServiceClient interface {
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
+	ImportFlow(ctx context.Context, in *ImportFlowRequest, opts ...grpc.CallOption) (*ImportFlowResponse, error)
+	StartFlow(ctx context.Context, in *StartFlowRequest, opts ...grpc.CallOption) (*StartFlowResponse, error)
+	GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error)
+	ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -173,6 +181,46 @@ func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *Delet
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteProjectResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ImportFlow(ctx context.Context, in *ImportFlowRequest, opts ...grpc.CallOption) (*ImportFlowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportFlowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ImportFlow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) StartFlow(ctx context.Context, in *StartFlowRequest, opts ...grpc.CallOption) (*StartFlowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartFlowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StartFlow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFlowRunResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetFlowRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFlowRunsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListFlowRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -413,6 +461,10 @@ type ControlPlaneServiceServer interface {
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
+	ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error)
+	StartFlow(context.Context, *StartFlowRequest) (*StartFlowResponse, error)
+	GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error)
+	ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -470,6 +522,18 @@ func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportFlow not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) StartFlow(context.Context, *StartFlowRequest) (*StartFlowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartFlow not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFlowRun not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFlowRuns not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -698,6 +762,78 @@ func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ImportFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportFlowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ImportFlow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ImportFlow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ImportFlow(ctx, req.(*ImportFlowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_StartFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartFlowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).StartFlow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_StartFlow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).StartFlow(ctx, req.(*StartFlowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetFlowRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFlowRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetFlowRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetFlowRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetFlowRun(ctx, req.(*GetFlowRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListFlowRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFlowRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListFlowRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListFlowRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListFlowRuns(ctx, req.(*ListFlowRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1136,6 +1272,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteProject",
 			Handler:    _ControlPlaneService_DeleteProject_Handler,
+		},
+		{
+			MethodName: "ImportFlow",
+			Handler:    _ControlPlaneService_ImportFlow_Handler,
+		},
+		{
+			MethodName: "StartFlow",
+			Handler:    _ControlPlaneService_StartFlow_Handler,
+		},
+		{
+			MethodName: "GetFlowRun",
+			Handler:    _ControlPlaneService_GetFlowRun_Handler,
+		},
+		{
+			MethodName: "ListFlowRuns",
+			Handler:    _ControlPlaneService_ListFlowRuns_Handler,
 		},
 		{
 			MethodName: "AttachChannel",

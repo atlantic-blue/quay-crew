@@ -141,6 +141,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSecret(ctx, client, args[1:], out)
 	case "skill":
 		return runSkill(ctx, client, args[1:], out)
+	case "flow":
+		return runFlow(ctx, client, args[1:], out)
 	case "repository":
 		// The way off the commands that used to be here. Refused by name rather than treated as an
 		// unknown word, because they are still in somebody's fingers, their scripts and their notes.

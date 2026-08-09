@@ -251,7 +251,7 @@ Verified against the repository and a running stack, rather than assumed:
   `QC_` or `CLAUDE_` is refused at validation, because those names are the crew's own.
 - Context already has the four levels, the store, the rendering into files and the reading back, and
   a skill's brief follows that path rather than inventing a second one.
-- Automation graphs are designed and not built.
+- Automation graphs run: `internal/flow` over Postgres, with `quay flow` in front of it. The `wait` and `ask` nodes, ceilings and stopping a run are not built yet.
 
 ## Delivery
 

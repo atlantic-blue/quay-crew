@@ -153,6 +153,7 @@ type Store interface {
 	CreateFlowRun(ctx context.Context, run *flow.Run) error
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
 	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
+	ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error)
 	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
 	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.

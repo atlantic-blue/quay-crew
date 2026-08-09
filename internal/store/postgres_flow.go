@@ -133,6 +133,37 @@ func (p *Postgres) GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	return &run, nil
 }
 
+// ListFlowRuns lists runs, newest first, narrowed to one project when project is set.
+func (p *Postgres) ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, workspace, project, graph_name, graph_version, node, status, state, attempts
+		from flow_runs where ($1 = '' or project = $1) order by created_at desc, id desc`, project)
+	if err != nil {
+		return nil, fmt.Errorf("list flow runs: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*flow.Run, 0)
+	for rows.Next() {
+		var run flow.Run
+		var state, attempts []byte
+		if err := rows.Scan(&run.ID, &run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
+			&run.Node, &run.Status, &state, &attempts); err != nil {
+			return nil, fmt.Errorf("scan flow run: %w", err)
+		}
+		if err := json.Unmarshal(state, &run.State); err != nil {
+			return nil, fmt.Errorf("read flow run state: %w", err)
+		}
+		if err := json.Unmarshal(attempts, &run.Attempts); err != nil {
+			return nil, fmt.Errorf("read flow run attempts: %w", err)
+		}
+		out = append(out, &run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list flow runs: %w", err)
+	}
+	return out, nil
+}
+
 // ListFlowTransitions reads a run's movements back, in the order they happened.
 func (p *Postgres) ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error) {
 	rows, err := p.pool.Query(ctx, `

@@ -122,6 +122,62 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
+// A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
+// time. Its thread is named after the graph and the run, so a listing reads as what the run is
+// doing.
+message FlowRun {
+  string id = 1;
+  string workspace = 2;
+  string project = 3;
+  string graph_name = 4;
+  int32 graph_version = 5;
+  // node is where the run sits, and status is running, done or failed.
+  string node = 6;
+  string status = 7;
+  // state is the run's own small memory: what the trigger carried, and what the last turn replied.
+  map<string, string> state = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// ImportFlowRequest carries a graph as authored. The version inside it is the pin a run takes, so
+// the same name and version twice is refused rather than replaced.
+message ImportFlowRequest {
+  string definition = 1;
+}
+message ImportFlowResponse {
+  string name = 1;
+  int32 version = 2;
+}
+
+// StartFlowRequest begins a run of the newest version of a graph, in one project. It answers with
+// the run rather than waiting for it: a run dispatches turns, and those take as long as the model
+// takes.
+message StartFlowRequest {
+  string graph = 1;
+  string project = 2;
+  // state seeds the run's memory, which is what a prompt template reads.
+  map<string, string> state = 3;
+}
+message StartFlowResponse {
+  FlowRun run = 1;
+}
+
+message GetFlowRunRequest {
+  string id = 1;
+}
+message GetFlowRunResponse {
+  FlowRun run = 1;
+}
+
+// ListFlowRunsRequest lists runs, narrowed to one project when project is set.
+message ListFlowRunsRequest {
+  string project = 1;
+}
+message ListFlowRunsResponse {
+  repeated FlowRun runs = 1;
+}
+
 message DeleteProjectRequest {
   string id = 1;
 }
@@ -462,6 +518,11 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+
+  rpc ImportFlow(ImportFlowRequest) returns (ImportFlowResponse);
+  rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
+  rpc GetFlowRun(GetFlowRunRequest) returns (GetFlowRunResponse);
+  rpc ListFlowRuns(ListFlowRunsRequest) returns (ListFlowRunsResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

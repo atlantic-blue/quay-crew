@@ -1,0 +1,182 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"sort"
+	"strings"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
+)
+
+// runFlow drives the automations a crew can run on its own.
+//
+// A graph is a file: the operator writes it, imports it, and starts runs of it. The file is read
+// here and sent as text, because the control plane may be in a container where a path on the
+// operator's machine means nothing.
+func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: quay flow <import|start|list|show>")
+	}
+	switch args[0] {
+	case "import":
+		return runFlowImport(ctx, client, args[1:], out)
+	case "start":
+		return runFlowStart(ctx, client, args[1:], out)
+	case "list":
+		return runFlowList(ctx, client, args[1:], out)
+	case "show":
+		return runFlowShow(ctx, client, args[1:], out)
+	default:
+		return fmt.Errorf("usage: quay flow <import|start|list|show>")
+	}
+}
+
+// runFlowImport reads a graph file and stores it at the version written in it.
+func runFlowImport(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: quay flow import <file>")
+	}
+	definition, err := os.ReadFile(args[0])
+	if err != nil {
+		return fmt.Errorf("read the graph: %w", err)
+	}
+	// Parsed here as well as on the other side, so a graph that could not run is refused before it
+	// is sent anywhere. The control plane refuses it too, and that is the check that counts.
+	if _, err := flow.Parse(definition); err != nil {
+		return err
+	}
+	resp, err := client.ImportFlow(ctx, &quaycrewv1.ImportFlowRequest{Definition: string(definition)})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "imported flow %s version %d\n", resp.GetName(), resp.GetVersion())
+	fmt.Fprintf(out, "start a run with quay flow start %s\n", resp.GetName())
+	return nil
+}
+
+// runFlowStart begins a run in a project, and says where to watch it rather than waiting for it.
+func runFlowStart(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	typed, graph, err := addressAndValue(args, "start", "<graph>")
+	if err != nil {
+		return err
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if located.ProjectID == "" {
+		return fmt.Errorf("a flow runs in a project: quay flow start <workspace>/<project> %s", graph)
+	}
+	resp, err := client.StartFlow(ctx, &quaycrewv1.StartFlowRequest{
+		Graph: graph, Project: located.ProjectID,
+	})
+	if err != nil {
+		return err
+	}
+	run := resp.GetRun()
+	fmt.Fprintf(out, "started %s version %d as run %s\n", run.GetGraphName(), run.GetGraphVersion(), display.ShortID(run.GetId()))
+	fmt.Fprintf(out, "it dispatches turns of its own; watch it with quay flow show %s\n", display.ShortID(run.GetId()))
+	return nil
+}
+
+// addressAndValue reads the two shapes a command takes: a value on its own, acting where the
+// operator already is, or an address and a value.
+func addressAndValue(args []string, verb, what string) (typed, value string, err error) {
+	switch len(args) {
+	case 1:
+		return "", args[0], nil
+	case 2:
+		return args[0], args[1], nil
+	default:
+		return "", "", fmt.Errorf("usage: quay flow %s [<workspace>/<project>] %s", verb, what)
+	}
+}
+
+// runFlowList says what has run, newest first.
+func runFlowList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay flow list [<workspace>/<project>]")
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	resp, err := client.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{Project: located.ProjectID})
+	if err != nil {
+		return err
+	}
+	if len(resp.GetRuns()) == 0 {
+		fmt.Fprintf(out, "nothing has run here yet; start one with quay flow start <graph>\n")
+		return nil
+	}
+	for _, run := range resp.GetRuns() {
+		fmt.Fprintf(out, "%-10s %-24s %-10s %s\n",
+			display.ShortID(run.GetId()), run.GetGraphName(), run.GetStatus(), run.GetNode())
+	}
+	return nil
+}
+
+// runFlowShow reads one run back: where it got to, and what it knows.
+func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: quay flow show <run>")
+	}
+	run, err := findFlowRun(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s  %s version %d\n", display.ShortID(run.GetId()), run.GetGraphName(), run.GetGraphVersion())
+	fmt.Fprintf(out, "%s at node %s\n", run.GetStatus(), run.GetNode())
+	keys := make([]string, 0, len(run.GetState()))
+	for key := range run.GetState() {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(out, "  %-16s %s\n", key, truncateLine(run.GetState()[key]))
+	}
+	return nil
+}
+
+// findFlowRun resolves a run by its full identifier or by the short one a listing shows.
+func findFlowRun(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (*quaycrewv1.FlowRun, error) {
+	if resp, err := client.GetFlowRun(ctx, &quaycrewv1.GetFlowRunRequest{Id: typed}); err == nil {
+		return resp.GetRun(), nil
+	}
+	listed, err := client.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	var matched []*quaycrewv1.FlowRun
+	for _, run := range listed.GetRuns() {
+		if strings.HasPrefix(run.GetId(), typed) {
+			matched = append(matched, run)
+		}
+	}
+	switch len(matched) {
+	case 1:
+		return matched[0], nil
+	case 0:
+		return nil, fmt.Errorf("there is no run %s; quay flow list says what has run", typed)
+	default:
+		return nil, fmt.Errorf("%s could be %d runs: give more of the identifier", typed, len(matched))
+	}
+}
+
+// truncateLine keeps a reply that ran to a page from taking the listing with it.
+func truncateLine(value string) string {
+	value = strings.ReplaceAll(value, "\n", " ")
+	if len(value) <= 72 {
+		return value
+	}
+	return value[:71] + "…"
+}

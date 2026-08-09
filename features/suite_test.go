@@ -157,6 +157,10 @@ type world struct {
 	gitAuthor controlplane.Identity
 	// flowRun is the run the last flow step started.
 	flowRun flow.Run
+	// flowRunID is the run the operator surface steps started, and driverErr what the driver was
+	// told when it tried something.
+	flowRunID string
+	driverErr error
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
@@ -381,6 +385,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
 	initializeFlowSteps(sc)
+	initializeFlowSurfaceSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeProjectSteps(sc)
 	initializeAddressSteps(sc)
