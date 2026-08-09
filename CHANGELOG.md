@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A flow can start itself.** A graph declares `on: { every: 24h }`, and
+  `quay flow schedule <workspace>/<project> <graph>` says where it runs. Until now an automation
+  was a script somebody still had to remember to run. The interval lives in the graph, versioned
+  and reviewable alongside what it does; the placement is the operator's, because a run needs a
+  project to dispatch into. The schedule is a row with a next time, read by the same poller the
+  waits use, so a restart loses none of them. Scheduling is deliberately not starting: the first
+  run is one interval away, or an operator could not arrange something for tonight without also
+  running it now. Nothing shorter than fifteen minutes is accepted, because a graph started faster
+  than it finishes spends money as fast as the model can take it.
+  ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **A flow can ask, and only a person answers.** The last of the five node types. An `ask` node
   puts its question to the operator, rendered from the run's state, and the run waits: no timer and
   no poller moves it, and the poller's own query passes over asking runs on their status, so an

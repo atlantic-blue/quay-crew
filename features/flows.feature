@@ -192,6 +192,73 @@ Feature: A flow runs a graph across sessions
     Then the flow run is asking "push?"
     And the run's thread was asked 1 turn
 
+  # The crew acting on its own, which is the point of the whole thing: without a trigger, an
+  # automation is a script somebody still has to remember to run.
+  Scenario: A graph runs on its own when its schedule comes due
+    Given the crew holds this flow graph:
+      """
+      name: nightly
+      version: 1
+      on:
+        every: 24h
+      nodes:
+        sweep: { type: dispatch, prompt: "check the overnight builds" }
+      edges:
+        - [sweep, done]
+      """
+    When the operator schedules "nightly" in the project
+    Then no run of "nightly" has started
+    When a day passes and the crew looks for waits that are due
+    Then a run of "nightly" has started and finished
+
+  # Scheduling and starting must not be the same act, or an operator cannot arrange an automation
+  # for tonight without also running it now.
+  Scenario: Scheduling a graph does not start it
+    Given the crew holds this flow graph:
+      """
+      name: nightly
+      version: 1
+      on:
+        every: 24h
+      nodes:
+        sweep: { type: dispatch, prompt: "check the overnight builds" }
+      edges:
+        - [sweep, done]
+      """
+    When the operator schedules "nightly" in the project
+    And the crew looks for waits that are due
+    Then no run of "nightly" has started
+
+  Scenario: A graph that says nothing about when it runs cannot be scheduled
+    Given the crew holds this flow graph:
+      """
+      name: manual
+      version: 1
+      nodes:
+        go: { type: dispatch, prompt: "go" }
+      edges:
+        - [go, done]
+      """
+    When the operator schedules "manual" in the project
+    Then the control plane refuses it as the wrong state
+
+  Scenario: An unscheduled graph stops running on its own
+    Given the crew holds this flow graph:
+      """
+      name: nightly
+      version: 1
+      on:
+        every: 24h
+      nodes:
+        sweep: { type: dispatch, prompt: "check the overnight builds" }
+      edges:
+        - [sweep, done]
+      """
+    When the operator schedules "nightly" in the project
+    And the operator unschedules "nightly" in the project
+    And a day passes and the crew looks for waits that are due
+    Then no run of "nightly" has started
+
   Scenario: A run is pinned to the version it started with
     Given the crew holds this flow graph:
       """

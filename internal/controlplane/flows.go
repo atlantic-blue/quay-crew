@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
@@ -149,6 +150,55 @@ func (s *Server) AnswerFlowRun(ctx context.Context, req *quaycrewv1.AnswerFlowRu
 		return nil, status.Errorf(codes.Internal, "answer run %s: %v", run.ID, err)
 	}
 	return &quaycrewv1.AnswerFlowRunResponse{Run: asFlowRun(&answered)}, nil
+}
+
+// ScheduleFlow starts a graph running on its own in one project, at the interval the graph declares.
+//
+// The interval is read from the graph rather than taken as an argument, so how often an automation
+// runs is versioned and reviewable alongside what it does. Where it runs is the operator's to say,
+// because a run needs a project to dispatch into.
+func (s *Server) ScheduleFlow(ctx context.Context, req *quaycrewv1.ScheduleFlowRequest) (*quaycrewv1.ScheduleFlowResponse, error) {
+	project, err := s.store.GetProject(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	_, definition, err := s.store.LatestFlowGraph(ctx, req.GetGraph())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, status.Errorf(codes.NotFound,
+				"no flow named %s has been imported", req.GetGraph())
+		}
+		return nil, storeError(err, "flow")
+	}
+	graph, err := flow.Parse([]byte(definition))
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if graph.Every <= 0 {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"graph %s does not say how often it runs, so there is nothing to schedule; add `on: { every: 24h }` to it and import the next version",
+			graph.Name)
+	}
+	// The first run is one interval away rather than now: scheduling a graph should not be
+	// indistinguishable from starting one, or the operator cannot arrange an automation without
+	// also running it.
+	next := time.Now().UTC().Add(graph.Every)
+	if err := s.store.ScheduleFlow(ctx, graph.Name, project.GetId(), graph.Every, next); err != nil {
+		return nil, storeError(err, "schedule flow")
+	}
+	return &quaycrewv1.ScheduleFlowResponse{EverySeconds: int64(graph.Every.Seconds())}, nil
+}
+
+// UnscheduleFlow stops a graph running on its own in a project.
+func (s *Server) UnscheduleFlow(ctx context.Context, req *quaycrewv1.UnscheduleFlowRequest) (*quaycrewv1.UnscheduleFlowResponse, error) {
+	if err := s.store.UnscheduleFlow(ctx, req.GetGraph(), req.GetProject()); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, status.Errorf(codes.NotFound,
+				"%s is not scheduled to run on its own here", req.GetGraph())
+		}
+		return nil, storeError(err, "unschedule flow")
+	}
+	return &quaycrewv1.UnscheduleFlowResponse{}, nil
 }
 
 // RunFlowPoller resumes waiting runs until ctx is done. It blocks, so the caller runs it in a

@@ -284,3 +284,71 @@ func isUniqueViolation(err error) bool {
 	var pgError *pgconn.PgError
 	return errors.As(err, &pgError) && pgError.Code == "23505"
 }
+
+// ScheduleFlow records that a graph runs in a project every so often. Re-recording the same pair
+// moves its schedule rather than making a second one, so importing a graph twice does not double
+// the rate it runs at.
+func (p *Postgres) ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into flow_schedules (graph_name, project, every_ms, next_at) values ($1, $2, $3, $4)
+		on conflict (graph_name, project) do update set every_ms = excluded.every_ms, next_at = excluded.next_at`,
+		graph, project, every.Milliseconds(), next)
+	if err != nil {
+		return fmt.Errorf("schedule flow: %w", err)
+	}
+	return nil
+}
+
+// UnscheduleFlow stops a graph running on its own in a project.
+func (p *Postgres) UnscheduleFlow(ctx context.Context, graph, project string) error {
+	tag, err := p.pool.Exec(ctx,
+		`delete from flow_schedules where graph_name = $1 and project = $2`, graph, project)
+	if err != nil {
+		return fmt.Errorf("unschedule flow: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DueFlowSchedules are the schedules whose time has come, each carrying the workspace its project
+// belongs to, because a run needs both.
+func (p *Postgres) DueFlowSchedules(ctx context.Context, now time.Time) ([]flow.Schedule, error) {
+	rows, err := p.pool.Query(ctx, `
+		select s.graph_name, s.project, pr.workspace, s.every_ms
+		from flow_schedules s join projects pr on pr.id = s.project
+		where s.next_at <= $1 and pr.deleted_at is null
+		order by s.next_at`, now)
+	if err != nil {
+		return nil, fmt.Errorf("due flow schedules: %w", err)
+	}
+	defer rows.Close()
+	out := make([]flow.Schedule, 0)
+	for rows.Next() {
+		var one flow.Schedule
+		var everyMS int64
+		if err := rows.Scan(&one.GraphName, &one.Project, &one.Workspace, &everyMS); err != nil {
+			return nil, fmt.Errorf("scan flow schedule: %w", err)
+		}
+		one.Every = time.Duration(everyMS) * time.Millisecond
+		out = append(out, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("due flow schedules: %w", err)
+	}
+	return out, nil
+}
+
+// MarkFlowScheduled moves a schedule on to its next due time.
+func (p *Postgres) MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error {
+	tag, err := p.pool.Exec(ctx,
+		`update flow_schedules set next_at = $3 where graph_name = $1 and project = $2`, graph, project, next)
+	if err != nil {
+		return fmt.Errorf("mark flow scheduled: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

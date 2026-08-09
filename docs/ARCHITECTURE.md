@@ -445,11 +445,21 @@ Delivered through the command line, `quay flow answer <run> <answer>`, rather th
 channel. That is deliberate: it exercises the whole shape end to end without a bot token, and a
 chat channel later becomes a second delivery of the same thing rather than the first.
 
-**All five node types are built.** `dispatch`, `choice`, `wait`, `ask` and `done`. What remains for
-flows is triggers: something other than a person typing `quay flow start`. Signed and allowlisted
-webhooks are the next slice of
-[#182](https://github.com/atlantic-blue/quay-crew/issues/182), and a chat channel delivery of `ask`
-follows #10.
+**A graph can start itself.** A graph declares `on: { every: 24h }` and the operator says where with
+`quay flow schedule <workspace>/<project> <graph>`. The interval lives in the graph, versioned and
+reviewable alongside what the automation does; the placement is the operator's, because a run needs
+a project to dispatch into. The schedule is a row with a next time, read by the same poller the
+waits use, so it survives a restart for the same reason. Scheduling is not starting: the first run
+is one interval away, or an operator could not arrange an automation for tonight without also
+running it now. Nothing shorter than fifteen minutes is accepted, because a graph started faster
+than it finishes spends money as fast as the model can take it.
+
+**All five node types are built.** `dispatch`, `choice`, `wait`, `ask` and `done`.
+
+**What is not built.** Webhook triggers, which need the gateway to be more than a skeleton and need
+signing and an allowlist of which graphs a given trigger may start, since a webhook is an external
+party spending the operator's money. And a chat channel delivery of `ask`, which follows #10. Both
+are noted on [#182](https://github.com/atlantic-blue/quay-crew/issues/182).
 
 ```mermaid
 sequenceDiagram

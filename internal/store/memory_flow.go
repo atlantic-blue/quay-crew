@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
@@ -195,4 +196,72 @@ func cloneRun(run flow.Run) flow.Run {
 	}
 	run.State, run.Attempts = state, attempts
 	return run
+}
+
+// schedule is one graph the crew starts on its own, as the memory store keeps it.
+type schedule struct {
+	every  time.Duration
+	nextAt time.Time
+}
+
+// scheduleKey names one graph in one project.
+func scheduleKey(graph, project string) string { return graph + "|" + project }
+
+// ScheduleFlow records that a graph runs in a project every so often.
+func (m *Memory) ScheduleFlow(_ context.Context, graph, project string, every time.Duration, next time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, held := m.projects[project]; !held {
+		return ErrNotFound
+	}
+	if m.flowSchedules == nil {
+		m.flowSchedules = map[string]*schedule{}
+	}
+	m.flowSchedules[scheduleKey(graph, project)] = &schedule{every: every, nextAt: next}
+	return nil
+}
+
+// UnscheduleFlow stops a graph running on its own in a project.
+func (m *Memory) UnscheduleFlow(_ context.Context, graph, project string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, held := m.flowSchedules[scheduleKey(graph, project)]; !held {
+		return ErrNotFound
+	}
+	delete(m.flowSchedules, scheduleKey(graph, project))
+	return nil
+}
+
+// DueFlowSchedules are the schedules whose time has come.
+func (m *Memory) DueFlowSchedules(_ context.Context, now time.Time) ([]flow.Schedule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]flow.Schedule, 0)
+	for key, held := range m.flowSchedules {
+		if held.nextAt.After(now) {
+			continue
+		}
+		graph, project, found := strings.Cut(key, "|")
+		if !found {
+			continue
+		}
+		out = append(out, flow.Schedule{
+			GraphName: graph, Project: project,
+			Workspace: m.projects[project].GetWorkspace(), Every: held.every,
+		})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].GraphName < out[b].GraphName })
+	return out, nil
+}
+
+// MarkFlowScheduled moves a schedule on to its next due time.
+func (m *Memory) MarkFlowScheduled(_ context.Context, graph, project string, next time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, found := m.flowSchedules[scheduleKey(graph, project)]
+	if !found {
+		return ErrNotFound
+	}
+	held.nextAt = next
+	return nil
 }

@@ -192,6 +192,24 @@ message AnswerFlowRunResponse {
   FlowRun run = 1;
 }
 
+// ScheduleFlowRequest starts a graph running on its own in one project, at the interval the graph
+// itself declares. The interval lives in the graph, where it is versioned and reviewable; where it
+// runs is the operator's to say, because a run needs a project to dispatch into.
+message ScheduleFlowRequest {
+  string graph = 1;
+  string project = 2;
+}
+message ScheduleFlowResponse {
+  // every_seconds is the interval the graph declared, echoed so the operator sees what they got.
+  int64 every_seconds = 1;
+}
+
+message UnscheduleFlowRequest {
+  string graph = 1;
+  string project = 2;
+}
+message UnscheduleFlowResponse {}
+
 message StopFlowRunRequest {
   string id = 1;
   string reason = 2;
@@ -554,6 +572,8 @@ service ControlPlaneService {
   rpc ListFlowRuns(ListFlowRunsRequest) returns (ListFlowRunsResponse);
   rpc StopFlowRun(StopFlowRunRequest) returns (StopFlowRunResponse);
   rpc AnswerFlowRun(AnswerFlowRunRequest) returns (AnswerFlowRunResponse);
+  rpc ScheduleFlow(ScheduleFlowRequest) returns (ScheduleFlowResponse);
+  rpc UnscheduleFlow(UnscheduleFlowRequest) returns (UnscheduleFlowResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

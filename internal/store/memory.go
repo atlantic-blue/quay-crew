@@ -41,6 +41,7 @@ type Memory struct {
 	flowRuns        map[string]*flow.Run
 	flowTransitions map[string][]flow.RecordedTransition
 	flowDispatches  map[string]bool
+	flowSchedules   map[string]*schedule
 	// turns is a session's history, oldest first, and turnSeen is what makes writing the
 	// same record twice harmless.
 	turns    []*quaycrewv1.Turn

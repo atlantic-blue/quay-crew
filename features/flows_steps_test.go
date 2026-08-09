@@ -125,6 +125,61 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
+	sc.Step(`^the operator schedules "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.ScheduleFlow(ctx, &quaycrewv1.ScheduleFlowRequest{
+			Graph: graph, Project: w.projectID,
+		})
+		return nil
+	})
+
+	sc.Step(`^the operator unschedules "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.UnscheduleFlow(ctx, &quaycrewv1.UnscheduleFlowRequest{
+			Graph: graph, Project: w.projectID,
+		})
+		return w.lastErr
+	})
+
+	sc.Step(`^a day passes and the crew looks for waits that are due$`, func(ctx context.Context) error {
+		return tickFlowPoller(ctx, 25*time.Hour)
+	})
+
+	sc.Step(`^no run of "([^"]*)" has started$`, func(ctx context.Context, graph string) error {
+		runs, err := flowRunsOf(ctx, graph)
+		if err != nil {
+			return err
+		}
+		if len(runs) != 0 {
+			return fmt.Errorf("%d runs of %s exist, want none", len(runs), graph)
+		}
+		return nil
+	})
+
+	// The schedule starts the run and the run advances behind that, the same way a person starting
+	// one gets its identifier immediately, so this waits for it rather than reading a race.
+	sc.Step(`^a run of "([^"]*)" has started and finished$`, func(ctx context.Context, graph string) error {
+		deadline := time.Now().Add(10 * time.Second)
+		var last string
+		for time.Now().Before(deadline) {
+			runs, err := flowRunsOf(ctx, graph)
+			if err != nil {
+				return err
+			}
+			if len(runs) > 1 {
+				return fmt.Errorf("%d runs of %s exist, want the one the schedule started", len(runs), graph)
+			}
+			if len(runs) == 1 {
+				last = runs[0].GetStatus()
+				if last == flow.StatusDone {
+					return nil
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		return fmt.Errorf("the scheduled run of %s is %q after ten seconds, want done", graph, last)
+	})
+
 	sc.Step(`^the flow run is done$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr != nil {
@@ -237,6 +292,21 @@ func tickFlowPoller(ctx context.Context, forward time.Duration) error {
 		WithClock(func() time.Time { return at })
 	flow.NewPoller(engine, 0, slog.New(slog.NewTextHandler(io.Discard, nil))).Tick(ctx)
 	return nil
+}
+
+// flowRunsOf is every run of one graph, whoever or whatever started it.
+func flowRunsOf(ctx context.Context, graph string) ([]*quaycrewv1.FlowRun, error) {
+	listed, err := worldFrom(ctx).client.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*quaycrewv1.FlowRun, 0)
+	for _, run := range listed.GetRuns() {
+		if run.GetGraphName() == graph {
+			out = append(out, run)
+		}
+	}
+	return out, nil
 }
 
 // flowRunThread finds the run's own thread by its handle, among the live or the archived.

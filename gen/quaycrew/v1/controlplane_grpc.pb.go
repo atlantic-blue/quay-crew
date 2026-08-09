@@ -33,6 +33,8 @@ const (
 	ControlPlaneService_ListFlowRuns_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListFlowRuns"
 	ControlPlaneService_StopFlowRun_FullMethodName             = "/quaycrew.v1.ControlPlaneService/StopFlowRun"
 	ControlPlaneService_AnswerFlowRun_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AnswerFlowRun"
+	ControlPlaneService_ScheduleFlow_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ScheduleFlow"
+	ControlPlaneService_UnscheduleFlow_FullMethodName          = "/quaycrew.v1.ControlPlaneService/UnscheduleFlow"
 	ControlPlaneService_AttachChannel_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -77,6 +79,8 @@ type ControlPlaneServiceClient interface {
 	ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error)
 	StopFlowRun(ctx context.Context, in *StopFlowRunRequest, opts ...grpc.CallOption) (*StopFlowRunResponse, error)
 	AnswerFlowRun(ctx context.Context, in *AnswerFlowRunRequest, opts ...grpc.CallOption) (*AnswerFlowRunResponse, error)
+	ScheduleFlow(ctx context.Context, in *ScheduleFlowRequest, opts ...grpc.CallOption) (*ScheduleFlowResponse, error)
+	UnscheduleFlow(ctx context.Context, in *UnscheduleFlowRequest, opts ...grpc.CallOption) (*UnscheduleFlowResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -245,6 +249,26 @@ func (c *controlPlaneServiceClient) AnswerFlowRun(ctx context.Context, in *Answe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AnswerFlowRunResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_AnswerFlowRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ScheduleFlow(ctx context.Context, in *ScheduleFlowRequest, opts ...grpc.CallOption) (*ScheduleFlowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduleFlowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ScheduleFlow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) UnscheduleFlow(ctx context.Context, in *UnscheduleFlowRequest, opts ...grpc.CallOption) (*UnscheduleFlowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnscheduleFlowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_UnscheduleFlow_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -491,6 +515,8 @@ type ControlPlaneServiceServer interface {
 	ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error)
 	StopFlowRun(context.Context, *StopFlowRunRequest) (*StopFlowRunResponse, error)
 	AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error)
+	ScheduleFlow(context.Context, *ScheduleFlowRequest) (*ScheduleFlowResponse, error)
+	UnscheduleFlow(context.Context, *UnscheduleFlowRequest) (*UnscheduleFlowResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -566,6 +592,12 @@ func (UnimplementedControlPlaneServiceServer) StopFlowRun(context.Context, *Stop
 }
 func (UnimplementedControlPlaneServiceServer) AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AnswerFlowRun not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ScheduleFlow(context.Context, *ScheduleFlowRequest) (*ScheduleFlowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ScheduleFlow not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) UnscheduleFlow(context.Context, *UnscheduleFlowRequest) (*UnscheduleFlowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnscheduleFlow not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -902,6 +934,42 @@ func _ControlPlaneService_AnswerFlowRun_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).AnswerFlowRun(ctx, req.(*AnswerFlowRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ScheduleFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScheduleFlowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ScheduleFlow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ScheduleFlow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ScheduleFlow(ctx, req.(*ScheduleFlowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_UnscheduleFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnscheduleFlowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).UnscheduleFlow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_UnscheduleFlow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).UnscheduleFlow(ctx, req.(*UnscheduleFlowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1364,6 +1432,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AnswerFlowRun",
 			Handler:    _ControlPlaneService_AnswerFlowRun_Handler,
+		},
+		{
+			MethodName: "ScheduleFlow",
+			Handler:    _ControlPlaneService_ScheduleFlow_Handler,
+		},
+		{
+			MethodName: "UnscheduleFlow",
+			Handler:    _ControlPlaneService_UnscheduleFlow_Handler,
 		},
 		{
 			MethodName: "AttachChannel",

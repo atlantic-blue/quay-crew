@@ -29,6 +29,16 @@ type Store interface {
 	// GetFlowRun reads a run back, which the engine needs to answer with the stopped run rather
 	// than with what it held before the stop landed.
 	GetFlowRun(ctx context.Context, id string) (*Run, error)
+	// ScheduleFlow records that a graph runs in a project every so often, from now. Re-recording
+	// the same pair moves its schedule rather than making a second one.
+	ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error
+	// UnscheduleFlow stops a graph running on its own in a project.
+	UnscheduleFlow(ctx context.Context, graph, project string) error
+	// DueFlowSchedules are the schedules whose time has come, each with the moment to set next.
+	DueFlowSchedules(ctx context.Context, now time.Time) ([]Schedule, error)
+	// MarkFlowScheduled moves a schedule on to its next due time, which the poller does before
+	// starting the run, so a start that fails does not leave the schedule firing every tick.
+	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
 	// DueFlowRuns are the waiting runs whose time has come. The poller asks for these and nothing
 	// else, so a crew with a thousand finished runs and one waiting does one row's work per tick.
 	DueFlowRuns(ctx context.Context, now time.Time) ([]*Run, error)
@@ -48,6 +58,14 @@ type Store interface {
 // ErrRunHalted is what AdvanceFlowRun answers when the run it was asked to move is no longer
 // running: somebody stopped it while the engine was waiting on a turn.
 var ErrRunHalted = errors.New("flow: the run is no longer running")
+
+// Schedule is a graph the crew starts on its own, in one project, every so often.
+type Schedule struct {
+	GraphName string
+	Project   string
+	Workspace string
+	Every     time.Duration
+}
 
 // DueAt is when a waiting run should be looked at again, or nil for a run that is not waiting. It
 // travels with the transition because the due time and the position it belongs to have to land in

@@ -41,6 +41,13 @@ const (
 // small enough that a runaway is a bill somebody shrugs at rather than one that ruins the week.
 const DefaultTransitions = 100
 
+// MinimumEvery is the shortest schedule a graph may declare.
+//
+// A number rather than a warning, because a schedule fast enough to overlap its own runs spends
+// money as fast as the model can take it. Fifteen minutes is far below anything a real automation
+// wants and far above the range where a graph is racing itself.
+const MinimumEvery = 15 * time.Minute
+
 // Limits are what a run may spend before it is stopped.
 type Limits struct {
 	// Transitions is how many movements a run may take. Always set: a graph that declares none
@@ -57,9 +64,12 @@ type Limits struct {
 type Graph struct {
 	Name    string
 	Version int
-	Limits  Limits
-	Nodes   map[string]Node
-	Edges   []Edge
+	// Every is how often the crew starts a run of this graph on its own. Zero means never: the
+	// graph runs when a person asks for it, which is every graph until one says otherwise.
+	Every  time.Duration
+	Limits Limits
+	Nodes  map[string]Node
+	Edges  []Edge
 	// Start is the one node no edge points into, derived rather than declared so the file cannot
 	// say one thing and the shape another.
 	Start string
@@ -97,6 +107,9 @@ type graphFile struct {
 		Transitions *int  `yaml:"transitions"`
 		Tokens      int64 `yaml:"tokens"`
 	} `yaml:"limits"`
+	On struct {
+		Every string `yaml:"every"`
+	} `yaml:"on"`
 	Nodes map[string]struct {
 		Type   string            `yaml:"type"`
 		Prompt string            `yaml:"prompt"`
@@ -135,7 +148,19 @@ func Parse(source []byte) (Graph, error) {
 		return Graph{}, fmt.Errorf("flow: graph %s allows %d tokens; leave it out for no ceiling", file.Name, limits.Tokens)
 	}
 
-	graph := Graph{Name: file.Name, Version: file.Version, Limits: limits, Nodes: map[string]Node{}}
+	var every time.Duration
+	if declared := strings.TrimSpace(file.On.Every); declared != "" {
+		parsed, err := time.ParseDuration(declared)
+		if err != nil {
+			return Graph{}, fmt.Errorf("flow: graph %s runs every %q, which is not a length of time; say 30m or 6h or 24h", file.Name, declared)
+		}
+		if parsed < MinimumEvery {
+			return Graph{}, fmt.Errorf("flow: graph %s runs every %s, and the shortest schedule allowed is %s: an automation started faster than it finishes spends money as fast as the model can take it", file.Name, parsed, MinimumEvery)
+		}
+		every = parsed
+	}
+
+	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
 		var waitFor time.Duration
 		if name == DoneNode {

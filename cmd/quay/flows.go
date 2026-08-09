@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
@@ -20,7 +21,7 @@ import (
 // operator's machine means nothing.
 func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay flow <import|start|list|show|stop|answer>")
+		return fmt.Errorf("usage: quay flow <import|start|schedule|unschedule|list|show|stop|answer>")
 	}
 	switch args[0] {
 	case "import":
@@ -35,8 +36,12 @@ func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 		return runFlowStop(ctx, client, args[1:], out)
 	case "answer":
 		return runFlowAnswer(ctx, client, args[1:], out)
+	case "schedule":
+		return runFlowSchedule(ctx, client, args[1:], out)
+	case "unschedule":
+		return runFlowUnschedule(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("usage: quay flow <import|start|list|show|stop|answer>")
+		return fmt.Errorf("usage: quay flow <import|start|schedule|unschedule|list|show|stop|answer>")
 	}
 }
 
@@ -209,6 +214,50 @@ func runFlowAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	answered := resp.GetRun()
 	fmt.Fprintf(out, "answered %s with %q\n", display.ShortID(answered.GetId()), args[1])
 	fmt.Fprintf(out, "%s at node %s\n", answered.GetStatus(), answered.GetNode())
+	return nil
+}
+
+// runFlowSchedule sets a graph running on its own in a project, as often as the graph itself says.
+func runFlowSchedule(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	typed, graph, err := addressAndValue(args, "schedule", "<graph>")
+	if err != nil {
+		return err
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if located.ProjectID == "" {
+		return fmt.Errorf("a flow runs in a project: quay flow schedule <workspace>/<project> %s", graph)
+	}
+	resp, err := client.ScheduleFlow(ctx, &quaycrewv1.ScheduleFlowRequest{
+		Graph: graph, Project: located.ProjectID,
+	})
+	if err != nil {
+		return err
+	}
+	every := time.Duration(resp.GetEverySeconds()) * time.Second
+	fmt.Fprintf(out, "%s now runs in %s every %s\n", graph, located.Path, every)
+	fmt.Fprintf(out, "the first run is one interval away; stop it with quay flow unschedule %s\n", graph)
+	return nil
+}
+
+// runFlowUnschedule stops a graph running on its own.
+func runFlowUnschedule(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	typed, graph, err := addressAndValue(args, "unschedule", "<graph>")
+	if err != nil {
+		return err
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if _, err := client.UnscheduleFlow(ctx, &quaycrewv1.UnscheduleFlowRequest{
+		Graph: graph, Project: located.ProjectID,
+	}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s no longer runs on its own in %s; runs already under way are untouched\n", graph, located.Path)
 	return nil
 }
 
