@@ -206,6 +206,19 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the refusal names "([^"]*)" and the secret to add to it$`, func(ctx context.Context, allowlist string) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("the turn was allowed to run")
+		}
+		for _, want := range []string{allowlist, "GH_TOKEN"} {
+			if !strings.Contains(w.lastErr.Error(), want) {
+				return fmt.Errorf("the refusal is %q, want it to say %q", w.lastErr, want)
+			}
+		}
+		return nil
+	})
+
 	// Which image to go and fix is most of the message: without it the operator knows only that
 	// something somewhere is missing a command.
 	sc.Step(`^the refusal names the binary and the image to add it to$`, func(ctx context.Context) error {
@@ -441,6 +454,14 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 			{Path: skill.BriefFile, Body: []byte(importedBrief)},
 		})
 	})
+	sc.Step(`^the operator imports a skill whose manifest names the secret "([^"]*)"$`,
+		func(ctx context.Context, name string) error {
+			manifest := fmt.Sprintf("name: github\nversion: 1\nsummary: Reaches for the crew's own names.\nsecrets:\n  %s: a name a skill may not ask for\n", name)
+			return importSkill(ctx, []*quaycrewv1.SkillFile{
+				{Path: skill.ManifestFile, Body: []byte(manifest)},
+				{Path: skill.BriefFile, Body: []byte(importedBrief)},
+			})
+		})
 	sc.Step(`^the operator imports a skill whose brief is longer than a page$`, func(ctx context.Context) error {
 		return importSkill(ctx, importedFiles("github", 1, strings.Repeat("a", skill.BriefLimit+1)))
 	})

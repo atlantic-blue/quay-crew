@@ -347,6 +347,10 @@ func (s Skill) check(directory string) error {
 			return fmt.Errorf("skill: %s names a secret %q, which is not an environment variable name",
 				directory, name)
 		}
+		if CrewOwnName(name) {
+			return fmt.Errorf("skill: %s names the secret %s, and names starting QC_ or CLAUDE_ are the crew's own: a skill cannot ask for the crew's configuration or the model's token",
+				directory, name)
+		}
 		if strings.TrimSpace(s.Secrets[name]) == "" {
 			return fmt.Errorf("skill: %s names secret %s with nothing saying what it is; whoever reads a refusal has to know which credential to go and get, and how to set it",
 				directory, name)
@@ -417,6 +421,14 @@ func plain(value string) bool {
 		}
 	}
 	return true
+}
+
+// CrewOwnName says whether a secret name belongs to the crew rather than to any skill: the crew's
+// own configuration (QC_) and the model's own token and settings (CLAUDE_). A skill declaring one
+// is refused at validation, and one stored by a build from before that refusal is filtered at the
+// sandbox boundary, so neither road hands a session the crew's own names.
+func CrewOwnName(name string) bool {
+	return strings.HasPrefix(name, "QC_") || strings.HasPrefix(name, "CLAUDE_")
 }
 
 // environmentName says whether this is something that can be an environment variable.

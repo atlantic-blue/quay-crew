@@ -463,13 +463,21 @@ func (s *Server) skillsAreUsable(ctx context.Context, session *quaycrewv1.Thread
 	for _, given := range s.heldSkills(ctx, session) {
 		for _, name := range given.SecretNames() {
 			value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
-			if err == nil && value != "" {
-				continue
+			if err != nil || value == "" {
+				return status.Errorf(codes.FailedPrecondition,
+					"the %s skill needs the secret %s, which this workspace has not set: %s. "+
+						"Set it with quay secret set %s %s <value>",
+					given.Name, name, given.Secrets[name], session.GetWorkspace(), name)
 			}
-			return status.Errorf(codes.FailedPrecondition,
-				"the %s skill needs the secret %s, which this workspace has not set: %s. "+
-					"Set it with quay secret set %s %s <value>",
-				given.Name, name, given.Secrets[name], session.GetWorkspace(), name)
+			// The operator hands a secret out by naming it, so a manifest alone can never select
+			// one. Without this a skill is an arbitrary secret selector over whatever the
+			// workspace holds.
+			if !slices.Contains(s.sandboxSecrets, name) {
+				return status.Errorf(codes.FailedPrecondition,
+					"the %s skill needs the secret %s, which is set but not handed to sandboxes: "+
+						"add %s to QC_SANDBOX_SECRETS (deploy/.env on a compose stack) and restart the crew",
+					given.Name, name, name)
+			}
 		}
 	}
 	return nil
@@ -1336,7 +1344,15 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread) map[st
 	// hold a token for one capability without every session in the crew being handed it.
 	named := append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...)
 	for _, given := range s.heldSkills(ctx, session) {
-		named = append(named, given.SecretNames()...)
+		for _, name := range given.SecretNames() {
+			// A skill declaring a crew owned name is refused at validation; this filter is for one
+			// stored by a build from before that refusal, so an old import cannot do what a new
+			// one cannot.
+			if skill.CrewOwnName(name) {
+				continue
+			}
+			named = append(named, name)
+		}
 	}
 	for _, name := range named {
 		if _, already := env[name]; already {
