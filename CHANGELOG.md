@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The terraform skill, plans but never applies.** `skills/terraform/` carries the standing rule
+  in its brief: validate, fmt and plan are always fine, and infrastructure mutates only through a
+  pull request that continuous integration applies on merge, in every environment, however safe a
+  change looks. The binary is pinned into the sandbox image the way gh is, proven by the class
+  guard inside a real container. The stated cost: about ninety megabytes on the image, one image
+  for now, revisited when sandbox tiers give skills their own.
+  ([#217](https://github.com/atlantic-blue/quay-crew/issues/217))
 - **The jira skill.** The linear skill's sibling in `skills/jira/`: a brief over Jira Cloud's REST
   API, authenticating as the JIRA_EMAIL and JIRA_API_TOKEN pair, both by name. Where the instance
   lives is workspace context rather than skill content, and the brief says to ask rather than
