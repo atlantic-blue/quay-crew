@@ -15,7 +15,7 @@ read, or run with `make features`.
   habit, ran it as an argument to itself and answered `unknown command "quay"`, which reads as the
   bar being broken rather than as a typo; the prefix is dropped now, and the name on its own says
   you are already looking at the crew.
-  ([#236](https://github.com/atlantic-blue/quay-crew/issues/236))
+  ([#236](https://github.com/atlantic-blue/quay-crew/pull/236))
 - **The command bar is the one way in.** The commands that take over the screen used to be refused
   there, which left it a reading tool: `:attach <thread>` now suspends the console, hands over the
   real terminal, and comes back when you leave the conversation, the same handover pressing enter on
