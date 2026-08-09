@@ -26,10 +26,20 @@ FROM node:22-slim
 ARG QC_VERSION=unknown
 LABEL com.quaycrew.build=$QC_VERSION
 
-# git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network.
+# git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network;
+# curl because the api skills speak plain https and the gh install below needs it anyway.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git ripgrep tmux \
+    && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep tmux \
     && rm -rf /var/lib/apt/lists/*
+
+# gh, for the github skill. A pinned release rather than an apt repository, so the image builds the
+# same binary everywhere and needs no keyring; the architecture is asked of dpkg because this image
+# is built on both arm and amd machines.
+ARG GH_VERSION=2.63.2
+RUN arch="$(dpkg --print-architecture)" \
+    && curl -fsSL -o /tmp/gh.deb "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.deb" \
+    && dpkg -i /tmp/gh.deb \
+    && rm /tmp/gh.deb
 
 RUN npm install -g @anthropic-ai/claude-code
 
