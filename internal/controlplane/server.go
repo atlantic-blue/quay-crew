@@ -175,7 +175,8 @@ func eventsOr(log messaging.EventLog) messaging.EventLog {
 	return log
 }
 
-// ListTurns returns a session's history, oldest first, from the read model the projection writes.
+// ListTurns returns a session's history, oldest first, from the turns the dispatch path writes in
+// the same breath as each turn.
 //
 // It reads the store rather than the log: the log is the write side and replaying it on every
 // request would make a listing cost more the longer a crew has been running.
@@ -830,7 +831,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
-		s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
 			Prompt: req.GetText(), Status: "failed", Failure: "the session's sandbox could not be created",
 		})
 		return nil, sandboxError(err, "create sandbox")
@@ -844,13 +845,13 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
-		s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
 			Prompt: req.GetText(), Status: "failed", Failure: "the model did not complete the turn",
 		})
 		return nil, status.Errorf(codes.Internal, "run turn: %v", err)
 	}
 	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, "idle")
-	s.publishTurn(ctx, session, &quaycrewv1.TurnEvent{
+	s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
 		Prompt: req.GetText(), Reply: resp.Reply, Status: "idle",
 	})
 

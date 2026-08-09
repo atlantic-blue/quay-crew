@@ -47,7 +47,7 @@ wherever you are:
   independent and replaceable.
 - A **control plane** routes work and manages workspaces.
 - **Agent sessions** run the model and execute tools inside sandboxes.
-- A **projection** builds a read model from the event log that an **admin dashboard** reads.
+- Turn history is written to the store in the same breath as each turn; the event log is an optional audit **export** for a second consumer, such as an **admin dashboard**.
 
 It ships with no data of any kind. You create **workspaces** at runtime through the dashboard or the
 control plane API, and each workspace is isolated from the others.
@@ -136,7 +136,7 @@ Built spine first, so a usable thing exists early and the rest widens it. Full d
 - **First remote channel:** a chat channel, inbound and gated outbound.
 - **Controllers, sessions, sandbox:** the rest of the controllers, parallel sessions, a durable
   session store, and sandbox tiers with permission tiers.
-- **Dashboard and projection:** the read model and the admin dashboard.
+- **Dashboard:** the admin dashboard, reading the export.
 - **Cloud parity:** managed backends behind the same interfaces, deployed through CI.
 - **Differentiators (optional):** a reviewed learning loop, a scheduler, and voice input.
 

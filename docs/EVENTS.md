@@ -1,15 +1,22 @@
 # The event log
 
-Quay Crew runs a Kafka compatible event log, served locally by Redpanda in the same compose stack as
-everything else.
+Quay Crew can run a Kafka compatible event log, served locally by Redpanda behind the compose
+stack's `export` profile. It is an audit export, not the road anything travels by: history lives in
+Postgres, written in the same breath as each turn, and a crew with no broker loses nothing but the
+export.
 
 Read the next section before you go looking for messages in it.
 
 ## What state it is in today
 
-**The control plane publishes a turn to the log every time one runs**, on `<workspace>.turns`, keyed
-by session so one session's events stay in order on one partition. A turn that failed is published
-too, because that is the one somebody comes looking for.
+**Every turn is written to the store synchronously.** The dispatch path writes the redacted turn
+into the `turns` table in the same breath as the turn itself, on a context detached from the
+request's, so a client hanging up cannot lose the record and a broker being down cannot either.
+`quay turns <session>` and `l` on a session in the console read that table.
+
+**When an export is configured, the control plane also publishes each turn to the log**, on
+`<workspace>.turns`, keyed by session so one session's events stay in order on one partition. A
+turn that failed is exported too, because that is the one somebody comes looking for.
 
 **The payload is redacted before it is written anywhere.** The record carries the prompt, the reply
 and the failure, and what an operator pastes into a conversation can be a credential, so all three
@@ -20,26 +27,21 @@ crew could not know about, a password typed in that was never sealed as a secret
 typed: the log and the `turns` table hold what was said minus what the crew can recognise, not a
 guarantee that nothing sensitive was ever said.
 
-**A projection consumes it.** It subscribes to `^.+\.turns$`, so a workspace created while the crew
-is running is read too, and writes each record into the `turns` table. `quay turns <session>` lists a
-session's history from there, and `l` on a session in the console opens the same thing as a view. The projection runs inside the control plane process for now, because
-it materialises into the store that process already owns.
-
-Delivery from a log is at least once, so the same record arrives more than once: each event carries
-an id and the insert collides on it, which is what makes a replay harmless. Drop the table and the
-projection rebuilds it from the beginning of the log, which is the point of the log being the write
-side.
+**Nothing consumes it.** There is no projection any more: history does not travel through the log,
+so nothing has to read it back. The log exists for a second consumer that is not built yet, a
+dashboard, a data pipeline, another machine, and until one lands an empty consumer group list is
+the expected state, not a fault.
 
 **No chat channel publishes either.** The gateway (`cmd/gateway/main.go`) is still a service skeleton
 that boots telemetry and waits, so the inbound stream a channel would write to does not exist. That
 work is #9 and #10, and it is blocked on a bot token rather than on code.
 
-Publishing never fails a turn. The turn already happened by the time the record is written, so a
-broker that is unreachable is logged and the record is dropped: the log is the audit record, and the
-store is the source of truth. That makes the log lossy by design.
+Exporting never fails a turn. The turn already happened and the store already holds it, so a broker
+that is unreachable is logged and the export record is dropped: the log is the audit copy, and the
+store is the source of truth.
 
-If `QC_KAFKA_SEEDS` is not set, turns run and nothing records that they did, and the status block
-says `none, nothing reads or writes the log yet` rather than leaving an empty column to read as fine.
+If `QC_KAFKA_SEEDS` is not set, history is kept in the store and nothing is exported, and the
+status block says so rather than leaving an empty column to read as fine.
 
 ## Why an event log at all
 
@@ -52,13 +54,15 @@ The log earns its place at the point where the system stops being one operator a
 - **Channels.** A message arriving from a chat channel is not a request waiting on a response. It
   arrives, it is durable, and something picks it up. If the control plane is restarting when your
   message lands, the message waits rather than vanishing.
-- **Replay.** The log is the write side and the read model is a consumer of it, so a projection that
-  was wrong can be rebuilt by reading the log again from the beginning.
 - **Decoupling.** Each service publishes and subscribes on its own, which is what makes a second
   channel additive rather than a change to the first one.
-- **Automation graphs.** The design in `docs/ARCHITECTURE.md` is a pure reducer over the event log:
-  events in, decisions out, no side effects in the middle, which is only testable if the events are
-  a real stream.
+- **A second consumer.** A dashboard, a data pipeline or another machine reads the export without
+  touching the crew's database. That consumer does not exist yet, which is exactly why the export
+  is optional.
+
+Automation graphs are deliberately not on this list: flows are a Postgres state machine, with their
+transitions appended in the same transaction as the state they describe, and the log only ever gets
+a copy. The decision and its reasons are in `docs/ARCHITECTURE.md`.
 
 The intended shape, none of which is wired yet:
 
@@ -67,22 +71,24 @@ flowchart LR
     channel["chat channel"] --> gateway
     gateway -->|"publish workspace.inbound"| log[("event log")]
     log -->|consume| controlplane["control plane"]
-    controlplane -->|"publish workspace.turns"| log
-    log -->|consume| projection["read model projection"]
-    projection --> console["console and dashboard"]
+    controlplane -->|"write turns"| store[("Postgres")]
+    controlplane -->|"export workspace.turns"| log
+    store --> console["console"]
+    log -->|consume| second["a second consumer, when one exists"]
 ```
 
 ## How it runs
 
-`make up` starts it. From `deploy/docker-compose.yml`:
+`docker compose --profile export up` starts it; a plain `make up` does not, because a crew with no
+second consumer needs no broker. From `deploy/docker-compose.yml`:
 
 - image `redpandadata/redpanda:v24.2.7`, started in `dev-container` mode with a single core
 - two listeners: `redpanda:9092` inside the compose network, and `localhost:19092` published to your
   machine, so a tool on the host can reach the same broker
-- a healthcheck that waits for the cluster to report healthy, which the gateway depends on
+- a healthcheck that waits for the cluster to report healthy
 - data in the named volume `redpanda-data`
 
-The gateway is given `QC_KAFKA_SEEDS=redpanda:9092`. It does not read it yet.
+The control plane exports only when `QC_KAFKA_SEEDS` is set (`redpanda:9092` inside the network).
 
 ## Inspect it
 
@@ -154,14 +160,14 @@ In rough order, each an open issue:
   `workspace.inbound`. Blocked on a bot token rather than on code.
 - **Gated outbound delivery (#10)** and **a second channel (#11).** Replies going back out, and the
   proof that a second channel is additive.
-- **Projection: materialise the read model (#17).** Turns are projected. Sandboxes, streams and
-  metrics are not, and neither is anything a channel would produce.
 - **Read surface for the console (#45).** Turns, sandboxes, streams and metrics, which is what the
   console needs before it can show more than the store.
-- **Automation graphs (#42).** The pure reducer over the log.
+- **A second consumer.** The first real reader of the export, whichever lands first: a dashboard, a
+  pipeline, another machine.
 
-Until a consumer lands, the log accumulates turns that nothing reads. That is the right order to
-build it in, and it is written down here so an empty consumer group list does not read as a fault.
+Until a consumer lands, the export accumulates turns that nothing reads when it is on at all. That
+is the right order to build it in, and it is written down here so an empty consumer group list does
+not read as a fault.
 
 ---
 

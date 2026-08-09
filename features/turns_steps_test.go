@@ -2,27 +2,14 @@ package features_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/projection"
 	"github.com/cucumber/godog"
 )
 
 // initializeTurnsSteps registers the steps for reading a session's history back.
-//
-// The projection is driven directly rather than left running in a goroutine: a scenario that slept
-// until a consumer caught up would be slow when it passed and flaky when it did not.
 func initializeTurnsSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the projection has caught up$`, func(ctx context.Context) error {
-		return worldFrom(ctx).runProjection(ctx)
-	})
-
-	sc.Step(`^every record on the log is delivered again$`, func(ctx context.Context) error {
-		// At least once delivery, made to happen on purpose rather than waited for.
-		return worldFrom(ctx).runProjection(ctx)
-	})
 
 	sc.Step(`^the session has (\d+) turns?$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
@@ -99,27 +86,30 @@ func initializeTurnsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the first turn of the session says "([^"]*)" was asked and "([^"]*)" came back$`, func(ctx context.Context, prompt, reply string) error {
+		w := worldFrom(ctx)
+		if len(w.turns) == 0 {
+			return fmt.Errorf("no turn has been dispatched")
+		}
+		turns, err := listTurns(ctx, w, w.turns[0].sessionID)
+		if err != nil {
+			return err
+		}
+		if len(turns) == 0 {
+			return fmt.Errorf("the session has no history")
+		}
+		if turns[0].GetPrompt() != prompt || turns[0].GetReply() != reply {
+			return fmt.Errorf("the first turn says %q and %q, want %q and %q",
+				turns[0].GetPrompt(), turns[0].GetReply(), prompt, reply)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator asks for the history of a session that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: "no-such-session"})
 		return nil
 	})
-}
-
-// runProjection consumes everything on the log into the store, then returns, rather than blocking
-// the way it does in the running crew.
-//
-// The in memory log is set to stop once it has handed over everything it holds, so this returns when
-// the projection has caught up rather than when a timer says it probably has.
-func (w *world) runProjection(ctx context.Context) error {
-	if w.events == nil {
-		return fmt.Errorf("this scenario has no event log, so there is nothing to project")
-	}
-	err := projection.New(w.events, w.store, nil).Run(ctx)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		return err
-	}
-	return nil
 }
 
 func listTurns(ctx context.Context, w *world, session string) ([]*quaycrewv1.Turn, error) {

@@ -468,7 +468,7 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 // with at least once delivery safe to replay.
 func (p *Postgres) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error {
 	if turn.GetId() == "" {
-		return errors.New("store: a turn needs an id, because the projection sees the same one twice")
+		return errors.New("store: a turn needs an id, so writing the same one twice leaves one turn")
 	}
 	_, err := p.pool.Exec(ctx, `
 		insert into turns (id, session, workspace, project, thread_id, prompt, reply, status, failure, occurred_at)

@@ -16,27 +16,22 @@ import (
 // turnsStream is the logical stream turn events are published on, within a workspace's namespace.
 const turnsStream = "turns"
 
-// publishTurn writes a turn to the event log, and never fails a turn because it could not.
+// recordHistory writes a turn into the store, in the same breath as the turn itself, and then
+// offers it to the export. The store is the truth: history is complete whether or not any broker is
+// configured, reachable, or behind. It never fails the turn, because the turn already happened, and
+// a history write that could not land is a warning about the store, which the whole crew depends on
+// anyway.
 //
-// The turn already happened by the time this runs. Telling the operator their turn failed because a
-// broker was unreachable would be a lie about the thing they care about, so a publish that does not
-// work is logged and dropped. That makes the log lossy on purpose: it is the audit record, not the
-// source of truth, which is the store.
-//
-// The record is keyed by session id, so every event for one session lands on one partition and stays
-// in the order it happened. A consumer rebuilding a conversation depends on that.
-func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Thread, event *quaycrewv1.TurnEvent) {
-	topic, err := s.turnsTopic(ctx, session.GetWorkspace())
-	if err != nil {
-		slog.Warn("no topic for this turn, so it is not on the log", "session", session.GetId(), "error", err)
-		return
-	}
+// The context is detached first: a client hanging up after a long turn used to cancel the write and
+// silently lose the record of the very turn they were waiting on.
+func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Thread, event *quaycrewv1.TurnEvent) {
+	ctx = context.WithoutCancel(ctx)
 
-	// What an operator pastes into a conversation can be a credential, and everything published
-	// here is persisted twice: the log keeps the record and the projection writes it to the store.
-	// So the payload goes through the same redaction a failure message does, before it is written
-	// anywhere. A value the crew could not know about cannot be protected; what it can know is
-	// every value the workspace keeps sealed, the driver's token, and the published token shape.
+	// What an operator pastes into a conversation can be a credential, and everything recorded here
+	// is persisted. So the payload goes through the same redaction a failure message does, before it
+	// is written anywhere. A value the crew could not know about cannot be protected; what it can
+	// know is every value the workspace keeps sealed, the driver's token, and the published token
+	// shape.
 	sealed := s.sealedValues(ctx, session)
 	event.Prompt = model.Redact(event.Prompt, sealed)
 	event.Reply = model.Redact(event.Reply, sealed)
@@ -51,13 +46,42 @@ func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Thread, ev
 	event.Handle = session.GetHandle()
 	event.OccurredAt = timestamppb.Now()
 
+	turn := &quaycrewv1.Turn{
+		Id:         event.GetId(),
+		Thread:     event.GetThread(),
+		Prompt:     event.GetPrompt(),
+		Reply:      event.GetReply(),
+		Status:     event.GetStatus(),
+		Failure:    event.GetFailure(),
+		OccurredAt: event.GetOccurredAt(),
+	}
+	if err := s.store.AppendTurn(ctx, turn, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
+		slog.Warn("a turn could not be written to history", "session", session.GetId(), "error", err)
+	}
+
+	s.exportTurn(ctx, session, event)
+}
+
+// exportTurn offers one already redacted turn to the event log. The log is an audit export for
+// whatever second consumer eventually wants it, so a crew with no broker configured loses nothing
+// but the export, and an export that could not land is logged and dropped rather than failing
+// anything.
+//
+// The record is keyed by session id, so every event for one session lands on one partition and stays
+// in the order it happened. A consumer rebuilding a conversation depends on that.
+func (s *Server) exportTurn(ctx context.Context, session *quaycrewv1.Thread, event *quaycrewv1.TurnEvent) {
+	topic, err := s.turnsTopic(ctx, session.GetWorkspace())
+	if err != nil {
+		slog.Warn("no topic for this turn, so it is not exported", "session", session.GetId(), "error", err)
+		return
+	}
 	value, err := proto.Marshal(event)
 	if err != nil {
-		slog.Warn("a turn could not be encoded, so it is not on the log", "session", session.GetId(), "error", err)
+		slog.Warn("a turn could not be encoded, so it is not exported", "session", session.GetId(), "error", err)
 		return
 	}
 	if err := s.events.Publish(ctx, topic, []byte(session.GetId()), value); err != nil {
-		slog.Warn("a turn could not be published, so it is not on the log", "session", session.GetId(), "topic", topic, "error", err)
+		slog.Warn("a turn could not be exported", "session", session.GetId(), "topic", topic, "error", err)
 	}
 }
 

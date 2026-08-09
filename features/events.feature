@@ -1,15 +1,15 @@
-Feature: Every turn is written to the event log
+Feature: Every turn is exported to the event log, when there is one
 
-  The store holds what a session is now. The log holds what happened to it, in order, so a
-  conversation can be read back later, a projection can be rebuilt from scratch, and an operator can
-  answer what the crew did on Tuesday.
+  The store holds the truth: a turn is written to it in the same breath as the turn itself, and
+  history is served from it. The log is an audit export beside that, in order, keyed by session, for
+  whatever second consumer eventually wants it: a dashboard, a data pipeline, another machine.
 
-  A turn is published whether it worked or not, because a turn that failed is exactly the one
-  somebody comes looking for. The record is keyed by session, so one session's events stay in the
-  order they happened.
+  A turn is exported whether it worked or not, because a turn that failed is exactly the one
+  somebody comes looking for.
 
-  Publishing never fails a turn. The turn already ran by the time the record is written, and a broker
-  that is unreachable is not a reason to tell the operator their work did not happen.
+  Exporting never fails a turn, and a crew with no broker configured loses nothing but the export.
+  The turn already ran and the store already holds it; an unreachable broker is not a reason to tell
+  the operator their work did not happen.
 
   Background:
     Given a running control plane
@@ -65,10 +65,9 @@ Feature: Every turn is written to the event log
   Scenario: The history reads back redacted too
     Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-a-credential-somebody-pasted"
     When the operator dispatches "clone with ghp-a-credential-somebody-pasted please" to the project
-    And the projection has caught up
     Then the session's history carries no "ghp-a-credential-somebody-pasted"
 
-  Scenario: A stack with no broker runs turns and records nothing
+  Scenario: A stack with no broker runs turns and says there is no export
     Given the crew has no event log configured
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"

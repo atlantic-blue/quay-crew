@@ -339,7 +339,7 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Turns is one session's history, read from the projection rather than the model's own store, so it
+// Turns is one session's history, read from the turns the dispatch path writes, so it
 // answers without starting a container and keeps answering once the sandbox is gone. It has no tool
 // calls and no thinking: opening the conversation is for that.
 func Turns(client quaycrewv1.ControlPlaneServiceClient) Resource {
