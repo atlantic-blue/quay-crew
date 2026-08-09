@@ -138,6 +138,13 @@ message FlowRun {
   map<string, string> state = 8;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
+  // transitions is how many movements the run has taken, against the cap its graph declares, and
+  // spent is what its conversation has cost in tokens.
+  int32 transitions = 11;
+  int64 spent = 12;
+  // reason says why a stopped run stopped. Empty on one that is running or that finished: a run
+  // that went quiet and a run that was halted must never read the same.
+  string reason = 13;
 }
 
 // ImportFlowRequest carries a graph as authored. The version inside it is the pin a run takes, so

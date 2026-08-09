@@ -98,8 +98,22 @@ func asFlowRun(run *flow.Run) *quaycrewv1.FlowRun {
 		Node:         run.Node,
 		Status:       run.Status,
 		State:        run.State,
+		Transitions:  int32(run.Transitions),
+		Spent:        run.Spent,
+		Reason:       run.Reason,
 		UpdatedAt:    timestamppb.Now(),
 	}
+}
+
+// ThreadTokens is what one thread's conversation has cost, which is what a run's ceiling is checked
+// against. Zero for a thread that is gone, has no conversation yet, or whose transcript cannot be
+// read: a cost that cannot be read is not a reason to stop work that is already under way.
+func (s *Server) ThreadTokens(ctx context.Context, thread string) int64 {
+	session, err := s.store.GetSession(ctx, thread)
+	if err != nil {
+		return 0
+	}
+	return s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId()).Total()
 }
 
 // flowRunner is what the server needs to begin a run. The engine implements it; the indirection is

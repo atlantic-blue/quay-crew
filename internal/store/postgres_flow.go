@@ -50,10 +50,10 @@ func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run) error {
 		return err
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts, transitions, spent, reason)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		run.ID, run.Workspace, run.Project, run.GraphName, run.GraphVersion,
-		run.Node, run.Status, state, attempts); err != nil {
+		run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason); err != nil {
 		return fmt.Errorf("create flow run: %w", err)
 	}
 	return nil
@@ -75,9 +75,10 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		update flow_runs set node = $2, status = $3, state = $4, attempts = $5, updated_at = now()
+		update flow_runs set node = $2, status = $3, state = $4, attempts = $5,
+		    transitions = $6, spent = $7, reason = $8, updated_at = now()
 		where id = $1`,
-		run.ID, run.Node, run.Status, state, attempts)
+		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason)
 	if err != nil {
 		return fmt.Errorf("advance flow run: %w", err)
 	}
@@ -114,10 +115,12 @@ func (p *Postgres) GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	run := flow.Run{ID: id}
 	var state, attempts []byte
 	err := p.pool.QueryRow(ctx, `
-		select workspace, project, graph_name, graph_version, node, status, state, attempts
+		select workspace, project, graph_name, graph_version, node, status, state, attempts,
+		       transitions, spent, reason
 		from flow_runs where id = $1`, id).Scan(
 		&run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
-		&run.Node, &run.Status, &state, &attempts)
+		&run.Node, &run.Status, &state, &attempts,
+		&run.Transitions, &run.Spent, &run.Reason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -136,7 +139,8 @@ func (p *Postgres) GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 // ListFlowRuns lists runs, newest first, narrowed to one project when project is set.
 func (p *Postgres) ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, graph_name, graph_version, node, status, state, attempts
+		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
+		       transitions, spent, reason
 		from flow_runs where ($1 = '' or project = $1) order by created_at desc, id desc`, project)
 	if err != nil {
 		return nil, fmt.Errorf("list flow runs: %w", err)
@@ -147,7 +151,8 @@ func (p *Postgres) ListFlowRuns(ctx context.Context, project string) ([]*flow.Ru
 		var run flow.Run
 		var state, attempts []byte
 		if err := rows.Scan(&run.ID, &run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
-			&run.Node, &run.Status, &state, &attempts); err != nil {
+			&run.Node, &run.Status, &state, &attempts,
+			&run.Transitions, &run.Spent, &run.Reason); err != nil {
 			return nil, fmt.Errorf("scan flow run: %w", err)
 		}
 		if err := json.Unmarshal(state, &run.State); err != nil {

@@ -73,6 +73,53 @@ func TestQuayFlowImportsStartsAndShows(t *testing.T) {
 	}
 }
 
+// A run that was halted and a run that went quiet must not read the same, so showing a stopped run
+// says why on its own line.
+func TestQuayFlowShowSaysWhyARunStopped(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	mustRun(t, client, "flow", "import", graphFile(t, `
+name: loop
+version: 1
+limits:
+  transitions: 3
+nodes:
+  begin: { type: dispatch, prompt: "begin" }
+  more:  { type: choice, on: { result.failed: "false" } }
+  again: { type: dispatch, prompt: "again" }
+edges:
+  - [begin, more]
+  - [more, again, "true"]
+  - [more, done, "false"]
+  - [again, more]
+`))
+	mustRun(t, client, "flow", "start", "loop")
+
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		listed := mustRun(t, client, "flow", "list")
+		fields := strings.Fields(listed)
+		if len(fields) > 0 {
+			shown = mustRun(t, client, "flow", "show", fields[0])
+			if strings.Contains(shown, "stopped") {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the run never stopped at its cap: %q", shown)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// On the guidance the reason carries, not on the word "transitions": the status line prints a
+	// transition count too, so matching that would stay green with the reason gone entirely.
+	if !strings.Contains(shown, "raise limits.transitions") {
+		t.Fatalf("showing the stopped run said %q, want the reason it stopped and what to do about it", shown)
+	}
+}
+
 // A graph that could not run is refused before it is sent anywhere, so the operator reads the
 // reason at the moment they wrote the file.
 func TestQuayFlowRefusesAGraphARunCouldFallOff(t *testing.T) {

@@ -62,7 +62,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator starts the flow "([^"]*)" in the project$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		engine := flow.NewEngine(w.store, planeClient{client: w.client})
+		engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil)
 		run, err := engine.Start(ctx, name, w.workspaceID, w.projectID, nil)
 		w.flowRun, w.lastErr = run, err
 		return nil

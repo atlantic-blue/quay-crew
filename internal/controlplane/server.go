@@ -171,7 +171,7 @@ func NewServer(cfg Config) *Server {
 	// The engine dispatches through this same server rather than dialing it: it is already inside
 	// the process, and a run is started by a caller the interceptor has already authenticated. It
 	// reaches nothing the caller could not, because these are the same two methods.
-	server.flows = flow.NewEngine(cfg.Store, server)
+	server.flows = flow.NewEngine(cfg.Store, server, server)
 	return server
 }
 

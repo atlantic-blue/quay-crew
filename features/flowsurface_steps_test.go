@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -65,6 +66,86 @@ edges:
 
 	sc.Step(`^the operator starts a run of "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
 		return startFlowRun(ctx, graph)
+	})
+
+	sc.Step(`^the operator imports a flow graph that cycles, capped at (\d+) transitions$`, func(ctx context.Context, cap int) error {
+		return importGraph(ctx, fmt.Sprintf(`
+name: loop
+version: 1
+limits:
+  transitions: %d
+nodes:
+  begin: { type: dispatch, prompt: "begin" }
+  more:  { type: choice, on: { result.failed: "false" } }
+  again: { type: dispatch, prompt: "again" }
+edges:
+  - [begin, more]
+  - [more, again, "true"]
+  - [more, done, "false"]
+  - [again, more]
+`, cap))
+	})
+
+	sc.Step(`^the operator imports a flow graph capped at 0 transitions$`, func(ctx context.Context) error {
+		return importGraph(ctx, `
+name: never
+version: 1
+limits:
+  transitions: 0
+nodes:
+  say: { type: dispatch, prompt: "hello" }
+edges:
+  - [say, done]
+`)
+	})
+
+	sc.Step(`^the run stops$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("starting the run was refused: %v", w.lastErr)
+		}
+		return waitForFlowRun(ctx, w, flow.StatusStopped)
+	})
+
+	sc.Step(`^reading the run back says it was stopped for hitting its cap$`, func(ctx context.Context) error {
+		run, err := readFlowRun(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if run.GetReason() == "" {
+			return fmt.Errorf("the run stopped with no reason, so it reads the same as one that went quiet")
+		}
+		if !strings.Contains(run.GetReason(), "transitions") {
+			return fmt.Errorf("the run stopped saying %q, want it to name the cap", run.GetReason())
+		}
+		return nil
+	})
+
+	sc.Step(`^the run's thread was asked no more than (\d+) turns$`, func(ctx context.Context, most int) error {
+		w := worldFrom(ctx)
+		run, err := readFlowRun(ctx, w)
+		if err != nil {
+			return err
+		}
+		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		if err != nil {
+			return err
+		}
+		for _, thread := range listed.GetThreads() {
+			if !strings.HasPrefix(thread.GetHandle(), run.GetGraphName()+"-") {
+				continue
+			}
+			turns, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: thread.GetId()})
+			if err != nil {
+				return err
+			}
+			if len(turns.GetTurns()) > most {
+				return fmt.Errorf("the run dispatched %d turns, want no more than %d: the cap did not hold",
+					len(turns.GetTurns()), most)
+			}
+			return nil
+		}
+		return fmt.Errorf("no thread carries the run's handle")
 	})
 
 	sc.Step(`^the run finishes$`, func(ctx context.Context) error {

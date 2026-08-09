@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A flow run cannot spend without bound.** An automation dispatches turns with nobody watching, so
+  a graph with a cycle was bounded only by its own shape. Every graph now has a transition cap,
+  declared as `limits.transitions` or defaulted to 100, and may declare `limits.tokens` as a ceiling
+  on what its own conversation costs. Both are checked before a movement rather than after it, so
+  the dispatch that would cross a line is never made and never paid for. A run that hits either
+  stops and carries the reason it stopped, which `quay flow show` prints on its own line: a run that
+  was halted and a run that went quiet must never read the same. The token ceiling is opt in,
+  because what is reasonable differs per automation; the transition cap is not.
+  ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **`quay flow`: the operator can actually run one.** The engine shipped with nothing able to reach
   it, which delivers nothing. Four calls now sit in front of it, and `quay flow import <file>`,
   `start [<address>] <graph>`, `list` and `show <run>` in front of those. Importing parses the

@@ -36,6 +36,13 @@ func (u Usage) Add(other Usage) Usage {
 	}
 }
 
+// Total is everything the model was charged for, as one number, which is what a ceiling compares
+// against. Cache reads are in it: they are the largest of the four by far, so leaving them out
+// would be a ceiling that never stops anything.
+func (u Usage) Total() int64 {
+	return u.Input + u.Output + u.CacheRead + u.CacheWritten
+}
+
 // Empty says nothing has been spent, which is a conversation nobody has had rather than one that cost
 // nothing.
 func (u Usage) Empty() bool {
