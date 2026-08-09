@@ -99,6 +99,51 @@ func TestTheShippedGitHubSkillLoads(t *testing.T) {
 	}
 }
 
+// The linear skill is a brief over an API: no binary of its own beyond curl, a key by name, and the
+// knowledge of which queries matter. What holds for the heavier skills holds here too: it loads by
+// the same rules as an import, or it is the example everybody copies wrongly.
+func TestTheShippedLinearSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var linear *Skill
+	for i := range skills {
+		if skills[i].Name == "linear" {
+			linear = &skills[i]
+		}
+	}
+	if linear == nil {
+		t.Fatal("skills/ does not hold the linear skill")
+	}
+
+	found := false
+	for _, declared := range linear.Binaries {
+		if declared == "curl" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the linear skill does not declare curl, which is the only tool its brief uses")
+	}
+
+	what, declared := linear.Secrets["LINEAR_API_KEY"]
+	if !declared {
+		t.Error("the linear skill does not name LINEAR_API_KEY, so the brief has nothing to authenticate with")
+	}
+	if strings.TrimSpace(what) == "" {
+		t.Error("LINEAR_API_KEY carries no line saying what it is")
+	}
+
+	brief := strings.ToLower(linear.Brief)
+	for _, said := range []string{"graphql", "issue", "comment"} {
+		if !strings.Contains(brief, said) {
+			t.Errorf("the brief never says %q, and reading and updating issues is the whole of what this skill is", said)
+		}
+	}
+}
+
 // The jira skill is an api skill like linear: same shape, different API. It authenticates as an
 // email and token pair, and where the instance lives is workspace context rather than skill
 // content, so the brief has to say where to find it instead of carrying an address.
