@@ -98,3 +98,43 @@ func TestTheShippedGitHubSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The terraform skill carries the standing rule in its brief: plans are free, applies never happen
+// from a session. The binary is the heaviest thing a skill has asked of the image so far, which is
+// why its cost is stated where the skill is declared.
+func TestTheShippedTerraformSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var terraform *Skill
+	for i := range skills {
+		if skills[i].Name == "terraform" {
+			terraform = &skills[i]
+		}
+	}
+	if terraform == nil {
+		t.Fatal("skills/ does not hold the terraform skill")
+	}
+
+	found := false
+	for _, declared := range terraform.Binaries {
+		if declared == "terraform" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the terraform skill does not declare the terraform binary")
+	}
+
+	brief := strings.ToLower(terraform.Brief)
+	for _, said := range []string{"plan", "never", "pull request"} {
+		if !strings.Contains(brief, said) {
+			t.Errorf("the brief never says %q, and plan but never apply is the whole of what this skill is", said)
+		}
+	}
+	if !strings.Contains(brief, "apply") {
+		t.Error("the brief never mentions apply, so the one thing a session must not do goes unsaid")
+	}
+}
