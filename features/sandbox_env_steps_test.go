@@ -120,15 +120,18 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the sandbox carries the crew's token, so what it dispatches is not refused$`,
+	sc.Step(`^the sandbox carries the driver's own token, not the operator's$`,
 		func(ctx context.Context) error {
 			w := worldFrom(ctx)
 			env, err := onlySandboxEnv(w)
 			if err != nil {
 				return err
 			}
-			if got := env["QC_TOKEN"]; got != w.token {
-				return fmt.Errorf("the sandbox carries the token %q, want the crew's", got)
+			if got := env["QC_TOKEN"]; got != w.driverToken {
+				return fmt.Errorf("the sandbox carries the token %q, want the driver's", got)
+			}
+			if env["QC_TOKEN"] == w.token {
+				return fmt.Errorf("the sandbox carries the operator's token, and a driver must hold strictly less")
 			}
 			return nil
 		})

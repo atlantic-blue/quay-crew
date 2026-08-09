@@ -344,7 +344,7 @@ Feature: Sessions run in isolated sandboxes
     When the operator opens the driver
     And the driver is sent "hello"
     Then the sandbox carries the address of the crew
-    And the sandbox carries the crew's token, so what it dispatches is not refused
+    And the sandbox carries the driver's own token, not the operator's
     And the sandbox carries no address it was not given
 
   Scenario: An ordinary session is told nothing, even when the crew can be reached

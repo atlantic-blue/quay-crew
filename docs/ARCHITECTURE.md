@@ -483,14 +483,16 @@ How it works today, in `internal/auth`:
   the port on the host's loopback only. The token is what recognises a caller, not what hides the
   conversation: publishing the port beyond the machine needs transport the operator owns in front
   of it.
-- `quay` reads QC_TOKEN first, then the token file under the crew's data directory. The driver
-  session is handed the token beside the crew's address, at sandbox birth, the way everything else
-  it holds is.
+- `quay` reads QC_TOKEN first, then the token file under the crew's data directory.
 
-A driver session is a client like any other and gets less, not more: the calls that grant
-capability (skills, secrets, context at the crew level) are refused to it, so a session that can
-drive the crew still cannot grant itself anything. The deny list is the next slice of this
-decision and is not built yet.
+A driver session is a client like any other and gets less, not more. It is handed its own token at
+sandbox birth, minted into `driver.token` beside the crew's, so the control plane can tell its
+calls apart and a token that leaks out of a driver sandbox grants strictly less than the operator
+holds. The calls that grant capability are refused to it, in `DeniedToDriver`: setting or listing
+secrets, importing, attaching or detaching skills, a session's permission mode, and context at the
+crew scope, which is injected into every session including the driver itself. Everything the
+driver exists to do stays open: workspaces, projects, threads, dispatch, and context at the
+workspace and project scopes.
 
 ## Observability and audit
 
