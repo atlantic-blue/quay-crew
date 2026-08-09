@@ -535,17 +535,18 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		// Read back first. Something inside the sandbox writing into its own memory has learned
 		// something, and overwriting that on the next turn would make the crew's memory strictly
 		// worse than a text file.
+		// The skills index is a section in the same file and is not a level: it is rendered from what the
+		// session holds rather than written by anybody. It is named in every file so the read back
+		// recognises its mark and drops what sits under it, because text under a mark this build does not
+		// know is swept into the innermost level, which stores the index as though the operator had typed
+		// it and renders it again underneath itself on the next turn. The index belongs only to the outer
+		// file, but a build that wrote it into the session's own file has been and gone, so the inner
+		// file's read back has to know the mark too. It goes first, never last: the last scope is where
+		// unmarked text belongs, and a note an agent appends is a note, not an index.
 		scopes := make([]string, 0, len(levels)+1)
+		scopes = append(scopes, sandbox.SkillsScope)
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
-		}
-		// The skills index is a section in the same file and is not a level: it is rendered from what the
-		// session holds rather than written by anybody. It is named so the read back recognises its mark
-		// and leaves it where it is, because text under a mark this build does not know is swept into the
-		// innermost level, which would store the index as though the operator had typed it and then render
-		// it again underneath itself on the next turn.
-		if at == 0 {
-			scopes = append(scopes, sandbox.SkillsScope)
 		}
 		if onDisk, found := sandbox.ReadMemory(dirs[at]); found {
 			written := sandbox.Decompose(onDisk, scopes)
@@ -609,6 +610,13 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
 			if err != nil {
 				continue
+			}
+			// A level can carry a swept skills index, from a build whose read back did not know the mark
+			// in the session's own file. An index is rendered state, never context, so the store is put
+			// right here, once, rather than rendering the stale index on every turn from now on.
+			if cleaned, swept := sandbox.WithoutSection(body, sandbox.SkillsScope); swept {
+				body = cleaned
+				_ = s.store.SetContext(ctx, level.scope, level.owner, body)
 			}
 			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}

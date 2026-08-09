@@ -189,3 +189,33 @@ Feature: A session is given the skills the crew has
     And the operator dispatches "hello" to the project
     Then the sandbox mounts the workspace's github skill read only
     And the memory file names the "github" skill exactly once
+
+  # A build before the index moved wrote it into the session's own memory file. Read back by a build
+  # that only knew the mark in the outer file, the whole index was swept into session context, stored
+  # as though the operator had typed it, and rendered again on every turn from then on. The mark is
+  # recognised in every file now, and what sits under it is dropped rather than swept.
+  Scenario: A skills index left in the session's own memory file by an earlier build is dropped
+    Given the crew has a skill "git" that says "Branch first."
+    When the operator dispatches "hello" to the project
+    And an earlier build left a skills index in the session's own memory file
+    And the operator dispatches "and again" to the same thread
+    Then the session's context does not mention the git skill
+    And the session's own memory file does not carry a skills index
+
+  # Where the sweep already happened, the stored context is the index and nothing else, so the read
+  # back has nothing to save and the store has to be put right where it renders.
+  Scenario: A skills index already swept into session context is cleaned on the next turn
+    Given the crew has a skill "git" that says "Branch first."
+    When the operator dispatches "hello" to the project
+    And the session's stored context is only a swept skills index
+    And the operator dispatches "and again" to the same thread
+    Then the session's context does not mention the git skill
+
+  # The mark is recognised without becoming the default. The last scope in the read back is where
+  # unmarked text belongs, so putting the skills mark there would file an agent's appended note as
+  # index and drop it, which is how the workspace file quietly lost notes.
+  Scenario: A note appended to the workspace memory file is kept as workspace context
+    When the operator dispatches "hello" to the project
+    And something appends "the vendor prefers invoices on Fridays" to the workspace memory file
+    And the operator dispatches "and again" to the same thread
+    Then the workspace context carries "the vendor prefers invoices on Fridays"

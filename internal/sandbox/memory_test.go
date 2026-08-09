@@ -68,3 +68,56 @@ func TestATotallyRewrittenFileIsNotThrownAway(t *testing.T) {
 		t.Fatalf("a file with no marks came back as %q", got)
 	}
 }
+
+// TestWithoutSectionDropsOneMarkAndItsBody: a swept skills index is the mark line and everything
+// under it up to the next mark, and nothing else moves.
+func TestWithoutSectionDropsOneMarkAndItsBody(t *testing.T) {
+	cases := []struct {
+		name  string
+		body  string
+		want  string
+		found bool
+	}{
+		{
+			name:  "no section leaves the body exactly as it was",
+			body:  "remember the invoice\nno trailing newline",
+			want:  "remember the invoice\nno trailing newline",
+			found: false,
+		},
+		{
+			name:  "a section at the end is dropped",
+			body:  "remember the invoice\n\n<!-- quay:skills -->\n- git: Branch first.\n  /home/agent/skills/git/SKILL.md",
+			want:  "remember the invoice",
+			found: true,
+		},
+		{
+			name:  "a section mid body ends at the next mark",
+			body:  "<!-- quay:skills -->\n- git: Branch first.\n<!-- quay:session -->\nthe account number is 4471",
+			want:  "<!-- quay:session -->\nthe account number is 4471",
+			found: true,
+		},
+		{
+			name:  "a body that is only the section comes back empty",
+			body:  "<!-- quay:skills -->\n- git: Branch first.",
+			want:  "",
+			found: true,
+		},
+		{
+			name:  "another scope's mark is not touched",
+			body:  "<!-- quay:session -->\nthe account number is 4471",
+			want:  "<!-- quay:session -->\nthe account number is 4471",
+			found: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, found := sandbox.WithoutSection(tc.body, sandbox.SkillsScope)
+			if got != tc.want {
+				t.Fatalf("the body came back as %q, want %q", got, tc.want)
+			}
+			if found != tc.found {
+				t.Fatalf("found is %v, want %v", found, tc.found)
+			}
+		})
+	}
+}

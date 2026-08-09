@@ -57,6 +57,38 @@ func Marked(body string) bool {
 	return strings.Contains(body, sectionOpen)
 }
 
+// WithoutSection returns a body with one marked section removed: the mark line and everything under
+// it, up to the next mark or the end. The second return says whether the section was there.
+//
+// Context should never hold a marked section, but a build that wrote the skills index into the
+// session's own memory file left one to be swept into stored context by the read back of a later
+// build. What was swept is rendered state, not something somebody typed, so where it is found it is
+// dropped rather than kept.
+func WithoutSection(body, scope string) (string, bool) {
+	mark := sectionOpen + scope + sectionClose
+	var out strings.Builder
+	dropping, found := false, false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, sectionOpen) && strings.HasSuffix(trimmed, sectionClose) {
+			dropping = trimmed == mark
+			if dropping {
+				found = true
+				continue
+			}
+		}
+		if dropping {
+			continue
+		}
+		out.WriteString(line)
+		out.WriteString("\n")
+	}
+	if !found {
+		return body, false
+	}
+	return strings.TrimSpace(out.String()), true
+}
+
 // Decompose reads a memory file back into what each level says.
 //
 // Anything before the first mark, or under a mark this build does not know, belongs to the last scope

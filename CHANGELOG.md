@@ -6,6 +6,18 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 9 August 2026
+
+- **A skills index left behind by an earlier build stops becoming session context.** A build before
+  the index moved wrote it into the session's own memory file. Read back by a later build that only
+  knew the mark in the outer file, the whole index was swept into session context, stored as though
+  the operator had typed it, and rendered again on every turn from then on. The mark is recognised
+  in every file now, what sits under it is dropped rather than swept, and a level whose stored
+  context already carries a swept index is cleaned the next time it renders. The read back also
+  stops filing a note appended to the workspace memory file under the index's own mark, which was
+  quietly dropping it; a note an agent appends is kept as workspace context.
+  ([#190](https://github.com/atlantic-blue/quay-crew/issues/190))
+
 ## 8 August 2026
 
 - **A workspace has a volume, and its repositories are cloned into it once.** The volume is a directory
