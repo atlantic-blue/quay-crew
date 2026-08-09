@@ -265,11 +265,16 @@ if the rest waits:
 4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
    Done. This is one slice of [#179](https://github.com/atlantic-blue/quay-crew/issues/179), whose
    remaining slices are 6 to 9 below plus a `quay skill show`, all still open.
-5. A repository reaches a sandbox: a workspace names the repositories it works in, they are cloned once
-   into the workspace's volume, and each session gets its own working tree. Done. A git skill with no repository to work in does nothing, which is why it came before
-   the skills themselves. The workspace is the level, for the same reason a skill and a credential are:
-   they are the things a repository needs.
-6. The git skill, and then `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
+5. A repository reaches a sandbox. Built as a workspace level API (records, a clone at sandbox birth
+   into the workspace's volume, a working tree per session) and then reworked back out in
+   [#210](https://github.com/atlantic-blue/quay-crew/issues/210): a skill is a text file the session
+   follows, and that machinery was hard to explain, which is the sign it was the wrong shape. A
+   session clones in conversation now, following the git skill. What stayed is the invisible plumbing
+   a brief can rely on: the git identity environment, and a credential helper in the sandbox image
+   reading `GH_TOKEN` at the moment git asks. The stated cost: each session clones its own copy, so
+   first turns on big repositories are slower and disk is spent per session.
+6. The git skill, in `skills/git/` at the root of this repository. Done, with slice 5's rework. Then
+   `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does
    things that cannot be undone, so they are attached separately.
 7. A skills view in the console.

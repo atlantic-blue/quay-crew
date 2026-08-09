@@ -72,8 +72,8 @@ var removedFlags = map[string]string{
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--thread": "an address names the thread: quay dispatch <workspace>/<project>/<thread> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
-	"--remote": "a repository belongs to the workspace now, so every project in it works in the same " +
-		"code: quay repository add <url>",
+	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
+		"with quay skill attach <workspace> git and ask the session to clone what it works on",
 }
 
 // refuseFlags returns an error when an invocation uses a flag. This tool has none: everything it used
@@ -142,7 +142,12 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "skill":
 		return runSkill(ctx, client, args[1:], out)
 	case "repository":
-		return runRepository(ctx, client, args[1:], out)
+		// The way off the commands that used to be here. Refused by name rather than treated as an
+		// unknown word, because they are still in somebody's fingers, their scripts and their notes.
+		return fmt.Errorf(
+			"there are no repository commands: a repository is cloned in conversation now, following " +
+				"the git skill. Import it once with quay skill import skills/git, attach it with " +
+				"quay skill attach <workspace> git, and ask the session to clone what it works on")
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}
@@ -334,8 +339,9 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		// The way off the command that used to be here. Refused by name rather than treated as an
 		// unknown word, because it is still in somebody's fingers and in their notes.
 		return fmt.Errorf(
-			"there is no project remote command: a repository belongs to the workspace now, so every " +
-				"project in it works in the same code. Use quay repository <add|list|remove>")
+			"there is no project remote command: a repository is cloned in conversation now, " +
+				"following the git skill. Attach it with quay skill attach <workspace> git and ask " +
+				"the session to clone what it works on")
 
 	case "list":
 		scope := ""

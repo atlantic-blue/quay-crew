@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A repository is cloned in conversation, following the git skill, and the machinery that did it
+  for you is gone.** A skill is a text file the session follows, and the git capability had grown an
+  API instead: repository records on the workspace, a clone at sandbox birth into the workspace's
+  volume, a git worktree per session. All of it is removed: the RPCs, the `quay repository`
+  commands, the table (dropped forward, migration 0013), the clone and the worktrees. `quay
+  repository <anything>` now refuses loudly and names the new way. What stays is the invisible
+  plumbing a brief can rely on: the git identity environment, and a credential helper baked into the
+  sandbox image that answers git from GH_TOKEN at the moment it asks, proven against a real
+  container. The git skill itself ships in `skills/git/`, the first real one: clone it yourself,
+  branch first, stage named files, commit as the operator. The stated cost: each session clones its
+  own copy, so first turns on big repositories are slower and disk is spent per session.
+  ([#210](https://github.com/atlantic-blue/quay-crew/issues/210))
 - **A thread whose sandbox predates the workspace's skills says so, instead of being lied to.** A
   sandbox is born with its capabilities and never drifts: the mount, the secrets and the setup only
   happen at container creation. What each live sandbox was born holding is now recorded, and a

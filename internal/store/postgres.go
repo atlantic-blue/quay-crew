@@ -209,66 +209,6 @@ func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quayc
 	return out, nil
 }
 
-// AddRepository gives a workspace a repository to work in.
-func (p *Postgres) AddRepository(ctx context.Context, workspace, name, remote string) (*quaycrewv1.Repository, error) {
-	if _, err := p.GetWorkspace(ctx, workspace); err != nil {
-		return nil, err
-	}
-	var addedAt time.Time
-	err := p.pool.QueryRow(ctx, `
-		insert into workspace_repositories (workspace, name, remote) values ($1, $2, $3)
-		on conflict (workspace, name) do update set remote = excluded.remote
-		returning added_at`, workspace, name, remote).Scan(&addedAt)
-	if err != nil {
-		return nil, fmt.Errorf("add repository: %w", err)
-	}
-	return &quaycrewv1.Repository{
-		Workspace: workspace, Name: name, Remote: remote, AddedAt: timestamppb.New(addedAt),
-	}, nil
-}
-
-// RemoveRepository takes one away by name.
-func (p *Postgres) RemoveRepository(ctx context.Context, workspace, name string) error {
-	tag, err := p.pool.Exec(ctx,
-		`delete from workspace_repositories where workspace = $1 and name = $2`, workspace, name)
-	if err != nil {
-		return fmt.Errorf("remove repository: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// WorkspaceRepositories are the repositories a workspace works in, oldest first.
-func (p *Postgres) WorkspaceRepositories(ctx context.Context, workspace string) ([]*quaycrewv1.Repository, error) {
-	rows, err := p.pool.Query(ctx, `
-		select name, remote, added_at from workspace_repositories
-		where workspace = $1 order by added_at, name`, workspace)
-	if err != nil {
-		return nil, fmt.Errorf("list repositories: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]*quaycrewv1.Repository, 0)
-	for rows.Next() {
-		var (
-			name, remote string
-			addedAt      time.Time
-		)
-		if err := rows.Scan(&name, &remote, &addedAt); err != nil {
-			return nil, fmt.Errorf("scan repository: %w", err)
-		}
-		out = append(out, &quaycrewv1.Repository{
-			Workspace: workspace, Name: name, Remote: remote, AddedAt: timestamppb.New(addedAt),
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list repositories: %w", err)
-	}
-	return out, nil
-}
-
 // DeleteProject soft deletes a project, leaving its sessions intact.
 func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
 	if _, err := p.GetProject(ctx, id); err != nil {

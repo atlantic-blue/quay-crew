@@ -68,9 +68,9 @@ jobs:
         with:
           go-version: "1.25"
       # The sandbox image, so the tests that need a container with git in it actually run. Without it
-      # they skip, and a skipped test reads as a passing one: cloning a repository and making a commit
-      # are the two things in here that only a real container can prove, and both were running on one
-      # laptop and nowhere else.
+      # they skip, and a skipped test reads as a passing one: making a commit as the operator and git
+      # finding its credential are the two things in here that only a real container can prove, and
+      # both were running on one laptop and nowhere else.
       - name: Build the sandbox image
         run: make sandbox-image
 

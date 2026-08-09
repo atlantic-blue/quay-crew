@@ -18,33 +18,36 @@ func runQuay(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...
 	return out.String(), err
 }
 
-func TestAWorkspaceWorksInRepositories(t *testing.T) {
+// The way off the repository commands. They are still in somebody's fingers, their scripts and their
+// notes, so every shape they were typed in has to fail loudly and name the new way: a repository is
+// cloned in conversation now, following the git skill.
+func TestQuayRepositoryIsGoneAndNamesTheGitSkill(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "acme")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	if said := mustRun(t, client, "repository", "list"); !strings.Contains(said, "no repositories") {
-		t.Errorf("a new workspace says %q, want it to say it works in none", said)
-	}
-
-	added := mustRun(t, client, "repository", "add", "https://github.com/atlantic-blue/quay-crew.git")
-	if !strings.Contains(added, "quay-crew") {
-		t.Errorf("adding said %q, want the directory the checkout lands in", added)
-	}
-
-	listed := mustRun(t, client, "repository", "list")
-	if !strings.Contains(listed, "https://github.com/atlantic-blue/quay-crew.git") {
-		t.Errorf("the listing says %q", listed)
-	}
-
-	mustRun(t, client, "repository", "remove", "quay-crew")
-	if said := mustRun(t, client, "repository", "list"); !strings.Contains(said, "no repositories") {
-		t.Errorf("after removing it says %q", said)
+	for _, args := range [][]string{
+		{"repository"},
+		{"repository", "add", "https://github.com/atlantic-blue/quay-crew.git"},
+		{"repository", "list"},
+		{"repository", "remove", "quay-crew"},
+		{"repository", "add", "acme", "https://github.com/atlantic-blue/quay-crew.git"},
+	} {
+		said, err := runQuay(t, client, args...)
+		if err == nil {
+			t.Errorf("quay %s was accepted, and said %q", strings.Join(args, " "), said)
+			continue
+		}
+		for _, wants := range []string{"cloned in conversation", "git skill"} {
+			if !strings.Contains(err.Error(), wants) {
+				t.Errorf("quay %s is refused with %q, want it to say %q", strings.Join(args, " "), err, wants)
+			}
+		}
 	}
 }
 
-// The way off the commands this replaced. Every test for the new form passes while the old form does
-// something quietly wrong, and that is the shape most "how did this regress" moments actually have.
+// The commands the repository machinery itself replaced must not point at it now that it is gone: a
+// refusal naming another removed command is a corridor of locked doors.
 func TestTheCommandsThisReplacedSayWhereItWent(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "acme")
@@ -54,10 +57,10 @@ func TestTheCommandsThisReplacedSayWhereItWent(t *testing.T) {
 		args []string
 		says string
 	}{
-		{[]string{"project", "remote", "set", "https://github.com/a/b.git"}, "quay repository"},
-		{[]string{"project", "remote"}, "quay repository"},
+		{[]string{"project", "remote", "set", "https://github.com/a/b.git"}, "git skill"},
+		{[]string{"project", "remote"}, "git skill"},
 		// Absorbed silently, this would have made "--remote" the project's name.
-		{[]string{"project", "create", "thing", "--remote", "https://github.com/a/b.git"}, "quay repository add"},
+		{[]string{"project", "create", "thing", "--remote", "https://github.com/a/b.git"}, "git skill"},
 	} {
 		said, err := runQuay(t, client, one.args...)
 		if err == nil {
@@ -66,6 +69,9 @@ func TestTheCommandsThisReplacedSayWhereItWent(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), one.says) {
 			t.Errorf("quay %s is refused with %q, want it to say %q", strings.Join(one.args, " "), err, one.says)
+		}
+		if strings.Contains(err.Error(), "quay repository") {
+			t.Errorf("quay %s is refused with %q, which points at a command that is also gone", strings.Join(one.args, " "), err)
 		}
 	}
 

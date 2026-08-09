@@ -27,16 +27,6 @@ message Project {
   google.protobuf.Timestamp created_at = 4;
 }
 
-// A repository a workspace works in. Every session in the workspace gets a checkout of it, cloned into
-// its working directory on the first turn.
-message Repository {
-  string workspace = 1;
-  // name is the directory the checkout lands in, derived from the remote, and what it is removed by.
-  string name = 2;
-  string remote = 3;
-  google.protobuf.Timestamp added_at = 4;
-}
-
 // A thread is one conversation inside a project: the operator's word for what the control plane
 // runs as a session in a sandbox. It carries its workspace too, denormalised from the project so a
 // listing does not need a join; a project never moves workspace.
@@ -132,31 +122,6 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
-// AddRepositoryRequest gives a workspace a repository to work in.
-message AddRepositoryRequest {
-  string workspace = 1;
-  string remote = 2;
-}
-message AddRepositoryResponse {
-  Repository repository = 1;
-}
-
-// RemoveRepositoryRequest takes one away, by the name the listing shows. The checkouts already made are
-// left where they are: this says where new work comes from, not that a conversation should lose what it
-// is in the middle of.
-message RemoveRepositoryRequest {
-  string workspace = 1;
-  string name = 2;
-}
-message RemoveRepositoryResponse {}
-
-message ListRepositoriesRequest {
-  string workspace = 1;
-}
-message ListRepositoriesResponse {
-  repeated Repository repositories = 1;
-}
-
 message DeleteProjectRequest {
   string id = 1;
 }
@@ -497,9 +462,6 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
-  rpc AddRepository(AddRepositoryRequest) returns (AddRepositoryResponse);
-  rpc RemoveRepository(RemoveRepositoryRequest) returns (RemoveRepositoryResponse);
-  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

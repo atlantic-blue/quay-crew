@@ -37,6 +37,14 @@ RUN npm install -g @anthropic-ai/claude-code
 # that can reach it and an address to dial, this is a command that says it cannot connect.
 COPY --from=tool /out/quay /usr/local/bin/quay
 
+# A session clones in conversation, so git has to find its credential itself. The helper reads
+# GH_TOKEN from the environment at the moment git asks, which keeps the token out of every argument
+# list and every transcript. A file in the repository rather than a printf here, so a test can read
+# the same thing the image ships. Registered as system configuration while this stage still runs as
+# root; the sandbox user cannot write it.
+COPY --chmod=0755 deploy/sandbox/git-credential-env /usr/local/bin/git-credential-env
+RUN git config --system credential.helper /usr/local/bin/git-credential-env
+
 # Run as a non-root user. The session's work lives under this user's home, which is thrown away with
 # the container.
 RUN useradd --create-home --shell /bin/bash agent

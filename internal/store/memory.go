@@ -32,7 +32,6 @@ type Memory struct {
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
 	// repositories are the repositories each workspace works in, in the order they were added.
-	repositories map[string][]*quaycrewv1.Repository
 	// skills is every revision the crew holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
 	skills   map[string]Imported
@@ -165,57 +164,6 @@ func (m *Memory) ListProjects(_ context.Context, workspace string) ([]*quaycrewv
 		if workspace == "" || project.GetWorkspace() == workspace {
 			out = append(out, clone(project))
 		}
-	}
-	return out, nil
-}
-
-// AddRepository gives a workspace a repository to work in.
-func (m *Memory) AddRepository(_ context.Context, workspace, name, remote string) (*quaycrewv1.Repository, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, found := m.workspaces[workspace]; !found || m.deleted[workspace] {
-		return nil, ErrNotFound
-	}
-	if m.repositories == nil {
-		m.repositories = make(map[string][]*quaycrewv1.Repository)
-	}
-	for _, held := range m.repositories[workspace] {
-		if held.GetName() == name {
-			held.Remote = remote
-			return clone(held), nil
-		}
-	}
-	// Stamped here because Postgres stamps it in the table's default, and a store that leaves it empty
-	// is a double that accepts what the real one would not.
-	added := &quaycrewv1.Repository{
-		Workspace: workspace, Name: name, Remote: remote,
-		AddedAt: timestamppb.New(time.Now().UTC()),
-	}
-	m.repositories[workspace] = append(m.repositories[workspace], added)
-	return clone(added), nil
-}
-
-// RemoveRepository takes one away by name.
-func (m *Memory) RemoveRepository(_ context.Context, workspace, name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	held := m.repositories[workspace]
-	for at, one := range held {
-		if one.GetName() == name {
-			m.repositories[workspace] = append(held[:at], held[at+1:]...)
-			return nil
-		}
-	}
-	return ErrNotFound
-}
-
-// WorkspaceRepositories are the repositories a workspace works in, oldest first.
-func (m *Memory) WorkspaceRepositories(_ context.Context, workspace string) ([]*quaycrewv1.Repository, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	out := make([]*quaycrewv1.Repository, 0, len(m.repositories[workspace]))
-	for _, one := range m.repositories[workspace] {
-		out = append(out, clone(one))
 	}
 	return out, nil
 }

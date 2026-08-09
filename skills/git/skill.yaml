@@ -1,0 +1,6 @@
+name: git
+version: 1
+summary: How work is done in a repository here; clone it yourself, branch first, commit as the operator.
+binaries: [git]
+secrets:
+  GH_TOKEN: a token that can read the repositories this workspace works in, set with `quay secret set <workspace> GH_TOKEN`

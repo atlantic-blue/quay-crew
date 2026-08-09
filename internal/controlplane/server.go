@@ -313,82 +313,11 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 }
 
 // provision is everything a fresh sandbox needs before its first turn.
+//
+// A session's working directory starts empty on purpose: a repository is cloned in conversation,
+// following the git skill, so the only provisioning a sandbox needs is its skills.
 func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
-	if err := s.readySkills(ctx, session, held, box); err != nil {
-		return err
-	}
-	return s.cloneRepositories(ctx, session, box)
-}
-
-// cloneRepositories puts the workspace's repositories in front of the session.
-//
-// A session's working directory starts empty, so a git skill had nothing to work in: the crew could
-// describe how to commit and there was nowhere to commit. This is where the code comes from, and the
-// clone happens inside the container, so a repository the operator has never had on their own machine
-// works exactly the same as one they have.
-//
-// Two steps, and the split is the whole design. The repository is cloned once into the workspace's
-// volume, which every session in the workspace shares, so a second conversation costs no second copy of
-// the history. Then each session gets its own working tree of it, on its own branch, because git allows
-// one working tree per branch and two conversations in one directory would share an index.
-//
-// On the workspace rather than the project, and several rather than one. A workspace is already where a
-// credential lives and where a skill attaches, which are the two things a repository needs, and a
-// workspace routinely spans more than one: a service and its infrastructure, or a frontend and the api
-// behind it.
-//
-// The working tree lands in a directory of its own under the working directory. The memory file the model
-// reads is written there before the sandbox exists, and git will not check out into a directory that is
-// not empty.
-func (s *Server) cloneRepositories(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
-	repositories, err := s.store.WorkspaceRepositories(ctx, session.GetWorkspace())
-	if err != nil {
-		return nil
-	}
-	for _, repository := range repositories {
-		clone, err := sandbox.CloneSpec(repository.GetRemote(), sandbox.SharedPath)
-		if err != nil {
-			return status.Errorf(codes.FailedPrecondition, "%v", err)
-		}
-		if err := s.mustRun(ctx, box, clone, "clone "+repository.GetRemote(), session); err != nil {
-			return err
-		}
-
-		// The clone is shared and the working tree is this session's own. Both are needed: one is where
-		// the history lives, the other is where this conversation works without moving the ground under
-		// any other conversation in the workspace.
-		at := path.Join(sandbox.SharedPath, sandbox.RepositoriesDir, repository.GetName())
-		worktree := sandbox.WorktreeSpec(at,
-			sandbox.WorktreePath(session.GetId(), repository.GetName()),
-			path.Join(sandbox.WorkingPath, repository.GetName()),
-			sandbox.SessionBranch(session.GetId()))
-		if err := s.mustRun(ctx, box, worktree, "make a working tree of "+repository.GetName(), session); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// mustRun runs one command inside the sandbox and turns a failure into something the operator can act on.
-//
-// A failure fails the turn, unlike context. Being asked to work in a repository that is not there is worse
-// than being told it could not be fetched: the model improvises, and an improvised repository looks like
-// an answer.
-func (s *Server) mustRun(ctx context.Context, box sandbox.Sandbox, spec sandbox.Spec, what string, session *quaycrewv1.Thread) error {
-	proc, err := box.Exec(ctx, spec)
-	if err != nil {
-		return status.Errorf(codes.Internal, "%s: %v", what, err)
-	}
-	_, _ = io.Copy(io.Discard, proc.Stdout())
-	if err := proc.Wait(); err != nil {
-		// What git said, and never the credential: it is not in the command, and what comes back on the
-		// error stream is git's own words.
-		return status.Errorf(codes.FailedPrecondition,
-			"could not %s for this session: %v: %s. The crew reads the credential from the workspace "+
-				"secret %s, so check that is set with quay secret set %s %s <value>",
-			what, err, proc.Stderr(), sandbox.CredentialEnv, session.GetWorkspace(), sandbox.CredentialEnv)
-	}
-	return nil
+	return s.readySkills(ctx, session, held, box)
 }
 
 // skillsAreUsable refuses when a skill names a secret the workspace has not set.
@@ -878,62 +807,6 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 		return nil, storeError(err, "project")
 	}
 	return &quaycrewv1.DeleteProjectResponse{}, nil
-}
-
-// AddRepository gives a workspace a repository to work in.
-//
-// The remote is checked here rather than when a clone runs. A refusal at the moment somebody adds it is
-// read by the person who typed it; the same refusal on a first turn arrives at whoever was trying to get
-// work done, hours later, with nothing pointing back at where it came from.
-//
-// Sessions already running keep the checkouts they have and get the new one on their next turn, because
-// the clone runs whenever a sandbox is asked for and does nothing where a checkout is already there.
-func (s *Server) AddRepository(ctx context.Context, req *quaycrewv1.AddRepositoryRequest) (*quaycrewv1.AddRepositoryResponse, error) {
-	if err := sandbox.UsableRemote(req.GetRemote()); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	name, err := sandbox.RepositoryName(req.GetRemote())
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	// Two remotes whose last path segment is the same would want one directory, and the second would
-	// quietly never be cloned. Said now, by name, rather than discovered as a missing checkout.
-	held, err := s.store.WorkspaceRepositories(ctx, req.GetWorkspace())
-	if err != nil {
-		return nil, storeError(err, "workspace")
-	}
-	for _, one := range held {
-		if one.GetName() == name && one.GetRemote() != req.GetRemote() {
-			return nil, status.Errorf(codes.FailedPrecondition,
-				"this workspace already works in %s, which also lands in a directory called %s. "+
-					"Remove that one first with quay repository remove %s",
-				one.GetRemote(), name, name)
-		}
-	}
-
-	added, err := s.store.AddRepository(ctx, req.GetWorkspace(), name, req.GetRemote())
-	if err != nil {
-		return nil, storeError(err, "workspace")
-	}
-	return &quaycrewv1.AddRepositoryResponse{Repository: added}, nil
-}
-
-// RemoveRepository takes one away. The checkouts already made are left where they are: this says where
-// new work comes from, not that a conversation should lose what it is in the middle of.
-func (s *Server) RemoveRepository(ctx context.Context, req *quaycrewv1.RemoveRepositoryRequest) (*quaycrewv1.RemoveRepositoryResponse, error) {
-	if err := s.store.RemoveRepository(ctx, req.GetWorkspace(), req.GetName()); err != nil {
-		return nil, storeError(err, "repository")
-	}
-	return &quaycrewv1.RemoveRepositoryResponse{}, nil
-}
-
-// ListRepositories says what a workspace works in.
-func (s *Server) ListRepositories(ctx context.Context, req *quaycrewv1.ListRepositoriesRequest) (*quaycrewv1.ListRepositoriesResponse, error) {
-	held, err := s.store.WorkspaceRepositories(ctx, req.GetWorkspace())
-	if err != nil {
-		return nil, storeError(err, "workspace")
-	}
-	return &quaycrewv1.ListRepositoriesResponse{Repositories: held}, nil
 }
 
 // Dispatch starts or continues a thread, running one turn through the model runner.
