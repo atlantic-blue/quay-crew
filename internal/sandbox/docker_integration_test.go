@@ -269,6 +269,51 @@ func TestASessionCanActuallyCommit(t *testing.T) {
 	}
 }
 
+// A session clones in conversation, so the image has to answer git's credential query itself: the
+// helper registered in the system configuration reads GH_TOKEN at the moment git asks. Asked of git
+// inside a real container rather than of the files, because a helper that is shipped but never
+// registered, or registered under a path nothing ships, passes every read of the Dockerfile.
+func TestGitFindsItsCredentialWithoutArguments(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to an image with git in it")
+	}
+
+	provider := sandbox.DockerProvider{Image: image}
+	box, err := provider.Create(ctx, sandbox.Config{
+		ID:  "gitcredential" + strings.Repeat("0", 11),
+		Env: []string{"GH_TOKEN=a-token-for-this-test"},
+	})
+	if err != nil {
+		t.Fatalf("create the sandbox: %v", err)
+	}
+	defer func() { _ = box.Close(ctx) }()
+
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
+		"printf 'protocol=https\nhost=github.com\n\n' | git credential fill"}})
+	if err != nil {
+		t.Fatalf("ask git for a credential: %v", err)
+	}
+	said, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read what git said: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("git could not fill the credential: %v: %s", err, proc.Stderr())
+	}
+
+	answer := string(said)
+	if !strings.Contains(answer, "username=x-access-token") {
+		t.Errorf("git answered %q, want the helper's username", answer)
+	}
+	if !strings.Contains(answer, "password=a-token-for-this-test") {
+		t.Errorf("git answered without the token from GH_TOKEN, so a private clone in conversation has nothing to authenticate with")
+	}
+}
+
 // TestDockerProviderRemovesByName: stopping a thread has to work from a process that never made the
 // container, so removal goes by name rather than through a held handle. A container that is not
 // there is a remove that already happened, and the exact name shape keeps the compose stack's own

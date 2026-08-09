@@ -323,12 +323,12 @@ func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
 	}
 }
 
-// TestTheRemoteMovesFromTheProjectToTheWorkspace proves the migration carries what a crew already had.
-//
-// A remote sat on the project for one commit, and somebody who upgraded in that window has one set. A
-// migration that silently dropped it would leave a crew whose sessions stop cloning, with nothing saying
-// why, and the row it came from already gone.
-func TestTheRemoteMovesFromTheProjectToTheWorkspace(t *testing.T) {
+// A database that lived through the repository machinery still migrates clean. The remote column
+// (0010) and the workspace_repositories table (0011) both carried operator data at some point, and
+// 0013 removes the machinery: what has to hold is that the journey runs end to end over that data,
+// and that nothing of it is left in the schema afterwards, because a table nothing writes is a
+// question every later migration has to answer.
+func TestTheRepositoryMachineryIsGoneFromTheSchema(t *testing.T) {
 	ctx := context.Background()
 	dropEverything(t)
 
@@ -338,7 +338,8 @@ func TestTheRemoteMovesFromTheProjectToTheWorkspace(t *testing.T) {
 	}
 	defer pool.Close()
 
-	// Bring the schema up to the commit before this one, so the old column is really there.
+	// Bring the schema up to the old shape, so the migrations that remove it really have data under
+	// them rather than empty tables.
 	applyThrough(t, ctx, pool, "0010_project_remote")
 
 	if _, err := pool.Exec(ctx, `
@@ -351,43 +352,36 @@ func TestTheRemoteMovesFromTheProjectToTheWorkspace(t *testing.T) {
 	}
 
 	if err := store.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
+		t.Fatalf("migrate over the old shape: %v", err)
 	}
 
-	rows, err := pool.Query(ctx,
-		`select name, remote from workspace_repositories where workspace = 'w1' order by name`)
-	if err != nil {
-		t.Fatalf("read the repositories: %v", err)
+	var tableThere bool
+	if err := pool.QueryRow(ctx, `
+		select exists (select 1 from information_schema.tables
+		               where table_name = 'workspace_repositories')`).Scan(&tableThere); err != nil {
+		t.Fatalf("check the old table: %v", err)
 	}
-	defer rows.Close()
-	var got []string
-	for rows.Next() {
-		var name, remote string
-		if err := rows.Scan(&name, &remote); err != nil {
-			t.Fatalf("scan: %v", err)
-		}
-		got = append(got, name+" "+remote)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("read the repositories: %v", err)
+	if tableThere {
+		t.Error("workspace_repositories still exists, so the machinery was removed from the code and left in the schema")
 	}
 
-	// One row, not two: both projects named the same repository, and a workspace works in it once. The
-	// project with nothing set brings nothing.
-	want := "quay-crew https://github.com/atlantic-blue/quay-crew.git"
-	if len(got) != 1 || got[0] != want {
-		t.Fatalf("the workspace works in %v, want exactly [%q]", got, want)
-	}
-
-	// And the column it came from is gone, so there is one place a repository lives.
-	var stillThere bool
+	var columnThere bool
 	if err := pool.QueryRow(ctx, `
 		select exists (select 1 from information_schema.columns
-		               where table_name = 'projects' and column_name = 'remote')`).Scan(&stillThere); err != nil {
+		               where table_name = 'projects' and column_name = 'remote')`).Scan(&columnThere); err != nil {
 		t.Fatalf("check the old column: %v", err)
 	}
-	if stillThere {
-		t.Error("projects still has a remote column, so a repository has two homes")
+	if columnThere {
+		t.Error("projects still has a remote column")
+	}
+
+	// The projects themselves survive the journey: only the machinery goes.
+	var projects int
+	if err := pool.QueryRow(ctx, `select count(*) from projects`).Scan(&projects); err != nil {
+		t.Fatalf("count the projects: %v", err)
+	}
+	if projects != 3 {
+		t.Errorf("%d projects survived the migrations, want 3", projects)
 	}
 }
 

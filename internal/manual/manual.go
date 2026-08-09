@@ -39,9 +39,6 @@ commands:
   workspace list                          list workspaces
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
-  repository add [<workspace>] <url>      work in a repository: every session clones it
-  repository list [<workspace>]           the repositories a workspace works in
-  repository remove [<workspace>] <name>  stop working in one, keeping the checkouts made
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   turns <session id>                      what a session was asked, and what came back
