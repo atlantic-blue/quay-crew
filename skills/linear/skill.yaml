@@ -1,0 +1,6 @@
+name: linear
+version: 1
+summary: Read, comment on and move Linear issues through its GraphQL API; write only when asked.
+binaries: [curl]
+secrets:
+  LINEAR_API_KEY: a personal API key from Linear's security settings, set with `quay secret set <workspace> LINEAR_API_KEY`
