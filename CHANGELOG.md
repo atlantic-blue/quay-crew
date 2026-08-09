@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The aws skill, reads but never mutates.** `skills/aws/` closes the set Julian named: describe,
+  list, get and logs are always fine, starting with `aws sts get-caller-identity` so every answer
+  says which account it read; anything that mutates infrastructure or data ships as Terraform
+  through a pull request. The credential pair travels by name to sessions holding the skill, and
+  which account and region a workspace points at is workspace context. The command line is pinned
+  into the image; the stated cost is about a hundred and thirty megabytes, the heaviest thing a
+  skill has asked of it. ([#218](https://github.com/atlantic-blue/quay-crew/issues/218))
 - **The terraform skill, plans but never applies.** `skills/terraform/` carries the standing rule
   in its brief: validate, fmt and plan are always fine, and infrastructure mutates only through a
   pull request that continuous integration applies on merge, in every environment, however safe a
