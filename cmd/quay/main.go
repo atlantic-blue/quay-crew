@@ -7,6 +7,7 @@ import (
 	"os"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"github.com/mattn/go-isatty"
@@ -28,7 +29,11 @@ func main() {
 		addr = "localhost:50051"
 	}
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	options := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	if token := crewToken(os.Getenv, os.ReadFile); token != "" {
+		options = append(options, grpc.WithPerRPCCredentials(auth.Credentials(token)))
+	}
+	conn, err := grpc.NewClient(addr, options...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "quay: connect to %s: %v\n", addr, err)
 		os.Exit(1)

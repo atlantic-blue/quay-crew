@@ -466,16 +466,31 @@ Secrets are never stored in the repository, and the code has no built in knowled
 
 ## Authentication
 
-There is none today, and saying so plainly is the point of this section: every request on the gRPC
-port is fully authorised, and the compose file publishes that port to the host. Until that changes,
-the port should be reachable only from machines you trust.
+**Decided 9 August 2026: a bearer token per crew.** One token, minted by the control plane the
+first time it starts, and refused to nobody who holds it: per client identities can follow when
+more than one operator exists, and the token is the smallest thing that makes the boundary real.
 
-**Decided 9 August 2026: a bearer token per crew.** The control plane mints and seals it the way it
-already seals secrets, every client presents it, and the listener binds to loopback unless the
-operator says otherwise. A driver session is a client like any other and gets less, not more: the
-calls that grant capability (skills, secrets, context at the crew level) are refused to it, so a
-session that can drive the crew still cannot grant itself anything. Per client identities can follow
-when more than one operator exists; the token is the smallest thing that makes the boundary real.
+How it works today, in `internal/auth`:
+
+- The token lives at `<data directory>/crew.token`, beside the key that seals secrets and kept the
+  same way: made rather than asked for, readable only by its owner. It sits there rather than
+  sealed in the store because a sealed value can never be read back out through the API, by
+  construction, and the operator's own tool has to present this one.
+- Every call carries `authorization: Bearer <token>`, or is refused before it reaches anything,
+  with the refusal naming what to present and where quay reads it from. A control plane with
+  nowhere to keep a token refuses every caller rather than serving them all.
+- The listener binds to loopback unless the operator says otherwise, and the compose file publishes
+  the port on the host's loopback only. The token is what recognises a caller, not what hides the
+  conversation: publishing the port beyond the machine needs transport the operator owns in front
+  of it.
+- `quay` reads QC_TOKEN first, then the token file under the crew's data directory. The driver
+  session is handed the token beside the crew's address, at sandbox birth, the way everything else
+  it holds is.
+
+A driver session is a client like any other and gets less, not more: the calls that grant
+capability (skills, secrets, context at the crew level) are refused to it, so a session that can
+drive the crew still cannot grant itself anything. The deny list is the next slice of this
+decision and is not built yet.
 
 ## Observability and audit
 

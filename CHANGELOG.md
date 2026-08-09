@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The crew refuses a caller it cannot recognise.** The control plane mints a token the first time
+  it starts, kept at `crew.token` beside the key that seals secrets, and every call has to carry it
+  or is refused with a message naming what to present. The listener binds to loopback by default and
+  the compose file publishes the port on the host's loopback only. `quay` presents the token from
+  QC_TOKEN or from the crew's data directory, so the operator's own machine works with nothing to
+  configure, and the driver session is handed it at sandbox birth beside the crew's address. Before
+  this, anyone who could dial the port held the whole crew: every secret name, every session, the
+  context injected into every sandbox.
+  ([#196](https://github.com/atlantic-blue/quay-crew/issues/196))
 - **The documents say what the code does, and carry the day's decisions.** The architecture document
   stopped calling the log the source of truth, which the code decided against long ago; the store is
   the truth and the log is the export. It also now records four decisions from the 9 August

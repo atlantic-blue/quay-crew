@@ -122,6 +122,22 @@ jobs:
         with:
           go-version: "1.25"
 
+      # The crew refuses a caller without its token. The control plane minted one on first start
+      # into the data directory, owned by root because that container runs as root, so read it with
+      # sudo and hand it to every later step through the job environment.
+      - name: Read the crew's token
+        run: |
+          set -euo pipefail
+          token_file="$HOME/.quaycrew/data/crew.token"
+          for i in $(seq 1 15); do
+            sudo test -s "$token_file" && break
+            sleep 2
+          done
+          sudo test -s "$token_file"
+          token=$(sudo cat "$token_file")
+          echo "::add-mask::$token"
+          echo "QC_TOKEN=$token" >> "$GITHUB_ENV"
+
       # Pull it here rather than implicitly on the first `docker run`, so a registry hiccup reads as
       # a pull failure instead of a dispatch failure.
       - name: Pre-pull the sandbox image

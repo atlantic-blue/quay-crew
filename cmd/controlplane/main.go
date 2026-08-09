@@ -16,6 +16,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -33,7 +34,10 @@ func main() {
 
 	serviceName := envOr("QC_SERVICE_NAME", "controlplane")
 	otelEndpoint := envOr("QC_OTEL_ENDPOINT", "localhost:4317")
-	grpcAddr := envOr("QC_GRPC_ADDR", ":50051")
+	// Loopback unless the operator says otherwise: the port is the whole crew, so it is not
+	// published to the network by default. The compose stack overrides this, because in a container
+	// loopback is the container, and binds the host side to loopback instead.
+	grpcAddr := envOr("QC_GRPC_ADDR", "127.0.0.1:50051")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -101,6 +105,8 @@ func main() {
 
 	credentials, secretsKind := openSecrets(durable, storage, logger)
 
+	token := crewToken(storage, logger)
+
 	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
 	defer events.Close()
 
@@ -113,6 +119,8 @@ func main() {
 		Events:   events,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
+		// The crew's token, which the driver is handed beside the address above.
+		Token: token,
 		// Which of a workspace's secrets a sandbox is given, by name. The model's own token is
 		// always carried and does not need naming.
 		SandboxSecrets: splitAndTrim(os.Getenv("QC_SANDBOX_SECRETS")),
@@ -153,7 +161,7 @@ func main() {
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(auth.ServerOptions(token)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
 	listener, err := net.Listen("tcp", grpcAddr)
@@ -199,6 +207,23 @@ func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string
 	}
 	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)
 	return client, "kafka"
+}
+
+// crewToken is the token every caller has to present, minted the first time and kept beside the
+// key that seals secrets. With nowhere to keep one the crew refuses every caller rather than
+// serving them all: the guard failing open is the one thing it must never do. A token file that
+// exists but cannot be read is a misconfiguration worth stopping for, not working around.
+func crewToken(storage sandbox.Storage, logger *slog.Logger) string {
+	if storage.Dir == "" {
+		logger.Warn("the crew has nowhere to keep a token and will refuse every caller: set QC_DATA_DIR")
+		return ""
+	}
+	token, err := auth.TokenAt(filepath.Join(storage.Dir, auth.TokenFile))
+	if err != nil {
+		logger.Error("crew token", "error", err)
+		os.Exit(1)
+	}
+	return token
 }
 
 // openSecrets returns where a workspace's credentials are kept.
