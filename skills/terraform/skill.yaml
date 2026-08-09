@@ -1,0 +1,4 @@
+name: terraform
+version: 1
+summary: Plan and validate infrastructure changes; never apply, changes ship through a pull request.
+binaries: [terraform]

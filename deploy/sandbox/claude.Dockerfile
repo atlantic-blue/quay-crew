@@ -41,6 +41,17 @@ RUN arch="$(dpkg --print-architecture)" \
     && dpkg -i /tmp/gh.deb \
     && rm /tmp/gh.deb
 
+# terraform, for the terraform skill. Pinned the same way gh is, and unzip only lives long enough
+# to unpack it. The stated cost is about ninety megabytes, the price of the skill existing at all;
+# one image for now, revisited when sandbox tiers give skills their own.
+ARG TF_VERSION=1.10.5
+RUN arch="$(dpkg --print-architecture)" \
+    && apt-get update && apt-get install -y --no-install-recommends unzip \
+    && curl -fsSL -o /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${arch}.zip" \
+    && unzip -q /tmp/terraform.zip -d /usr/local/bin \
+    && rm /tmp/terraform.zip \
+    && apt-get remove -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # The AWS command line, for the aws skill. Pinned like gh and terraform; the machine architecture
 # is asked of uname because Amazon names its bundles x86_64 and aarch64 rather than amd64 and
 # arm64. The stated cost is about a hundred and thirty megabytes, the heaviest thing a skill has
