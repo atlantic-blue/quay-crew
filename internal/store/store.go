@@ -93,14 +93,14 @@ type Store interface {
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
 	// lands in the same session.
-	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error)
+	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Thread, error)
 	// FindOrCreateDriver returns the project's driver, one per project, creating it on first open.
-	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error)
+	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Thread, error)
 	// RecordTurn leaves the stored handle alone when modelSessionID is empty, so a failed turn cannot
 	// erase it.
 	RecordTurn(ctx context.Context, id, modelSessionID, status string) error
-	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
-	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
+	GetSession(ctx context.Context, id string) (*quaycrewv1.Thread, error)
+	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error)
 	StopSession(ctx context.Context, id string) error
 	// ArchiveSession only hides a thread from the default listing. The row, the conversation handle
 	// and the files on the host all stay.

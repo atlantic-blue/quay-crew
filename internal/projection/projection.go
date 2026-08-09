@@ -70,21 +70,21 @@ func (p *Projection) handle(ctx context.Context, record messaging.Record) error 
 			"topic", record.Topic, "error", err)
 		return nil
 	}
-	if event.GetId() == "" || event.GetSession() == "" {
+	if event.GetId() == "" || event.GetThread() == "" {
 		p.logger.Warn("a turn event names no id or no session, so it is skipped", "topic", record.Topic)
 		return nil
 	}
 
 	turn := &quaycrewv1.Turn{
 		Id:         event.GetId(),
-		Session:    event.GetSession(),
+		Thread:     event.GetThread(),
 		Prompt:     event.GetPrompt(),
 		Reply:      event.GetReply(),
 		Status:     event.GetStatus(),
 		Failure:    event.GetFailure(),
 		OccurredAt: event.GetOccurredAt(),
 	}
-	if err := p.store.AppendTurn(ctx, turn, event.GetWorkspace(), event.GetProject(), event.GetThreadId()); err != nil {
+	if err := p.store.AppendTurn(ctx, turn, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
 		return fmt.Errorf("projection: append turn %s: %w", event.GetId(), err)
 	}
 	return nil

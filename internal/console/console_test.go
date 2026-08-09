@@ -28,7 +28,7 @@ type fakeClient struct {
 
 	workspaces []*quaycrewv1.Workspace
 	projects   []*quaycrewv1.Project
-	sessions   []*quaycrewv1.Session
+	sessions   []*quaycrewv1.Thread
 
 	attachErr        error
 	restartErr       error
@@ -60,11 +60,11 @@ func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesR
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
 }
 
-func (f *fakeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionRequest, ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
+func (f *fakeClient) AttachThread(context.Context, *quaycrewv1.AttachThreadRequest, ...grpc.CallOption) (*quaycrewv1.AttachThreadResponse, error) {
 	if f.attachErr != nil {
 		return nil, f.attachErr
 	}
-	return &quaycrewv1.AttachSessionResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
+	return &quaycrewv1.AttachThreadResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
 }
 
 func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProjectsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
@@ -83,13 +83,13 @@ func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProject
 	return &quaycrewv1.ListProjectsResponse{Projects: matched}, nil
 }
 
-func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
+func (f *fakeClient) ListThreads(_ context.Context, req *quaycrewv1.ListThreadsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListThreadsResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
 	f.listSessionsFor, f.listArchivedOnly = req.GetProject(), req.GetArchived()
 
-	matched := make([]*quaycrewv1.Session, 0, len(f.sessions))
+	matched := make([]*quaycrewv1.Thread, 0, len(f.sessions))
 	for _, session := range f.sessions {
 		if (session.GetArchivedAt() != nil) != req.GetArchived() {
 			continue
@@ -99,12 +99,12 @@ func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 		}
 		matched = append(matched, session)
 	}
-	return &quaycrewv1.ListSessionsResponse{Sessions: matched}, nil
+	return &quaycrewv1.ListThreadsResponse{Threads: matched}, nil
 }
 
-func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
+func (f *fakeClient) ArchiveThread(_ context.Context, req *quaycrewv1.ArchiveThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveThreadResponse, error) {
 	f.archived = append(f.archived, req.GetId())
-	return &quaycrewv1.ArchiveSessionResponse{}, nil
+	return &quaycrewv1.ArchiveThreadResponse{}, nil
 }
 
 func (f *fakeClient) ListSecrets(_ context.Context, _ *quaycrewv1.ListSecretsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSecretsResponse, error) {
@@ -121,27 +121,27 @@ func (f *fakeClient) ListContexts(_ context.Context, _ *quaycrewv1.ListContextsR
 	return &quaycrewv1.ListContextsResponse{Dirs: f.contexts}, nil
 }
 
-func (f *fakeClient) SetSessionPermissionMode(_ context.Context, req *quaycrewv1.SetSessionPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
+func (f *fakeClient) SetThreadPermissionMode(_ context.Context, req *quaycrewv1.SetThreadPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetThreadPermissionModeResponse, error) {
 	f.modesSet = append(f.modesSet, req.GetMode())
-	return &quaycrewv1.SetSessionPermissionModeResponse{}, nil
+	return &quaycrewv1.SetThreadPermissionModeResponse{}, nil
 }
 
-func (f *fakeClient) RestoreSession(_ context.Context, req *quaycrewv1.RestoreSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreSessionResponse, error) {
+func (f *fakeClient) RestoreThread(_ context.Context, req *quaycrewv1.RestoreThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreThreadResponse, error) {
 	f.restored = append(f.restored, req.GetId())
-	return &quaycrewv1.RestoreSessionResponse{}, nil
+	return &quaycrewv1.RestoreThreadResponse{}, nil
 }
 
-func (f *fakeClient) StopSession(_ context.Context, req *quaycrewv1.StopSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.StopSessionResponse, error) {
+func (f *fakeClient) StopThread(_ context.Context, req *quaycrewv1.StopThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.StopThreadResponse, error) {
 	f.stopped = append(f.stopped, req.GetId())
-	return &quaycrewv1.StopSessionResponse{}, nil
+	return &quaycrewv1.StopThreadResponse{}, nil
 }
 
-func (f *fakeClient) RestartSession(_ context.Context, req *quaycrewv1.RestartSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestartSessionResponse, error) {
+func (f *fakeClient) RestartThread(_ context.Context, req *quaycrewv1.RestartThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.RestartThreadResponse, error) {
 	if f.restartErr != nil {
 		return nil, f.restartErr
 	}
 	f.restarted = append(f.restarted, req.GetId())
-	return &quaycrewv1.RestartSessionResponse{}, nil
+	return &quaycrewv1.RestartThreadResponse{}, nil
 }
 
 // ---------- helpers ----------
@@ -407,7 +407,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 			{Id: "p1", Workspace: "acme", Name: "house bills"},
 			{Id: "p2", Workspace: "other", Name: "gardening"},
 		},
-		sessions: []*quaycrewv1.Session{
+		sessions: []*quaycrewv1.Thread{
 			{Id: "s1", Workspace: "acme", Project: "p1", Status: "idle"},
 			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
@@ -483,7 +483,7 @@ func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 // ---------- actions ----------
 
 func TestStopActionStopsTheSelectedSession(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
@@ -847,9 +847,9 @@ func TestArchiveAsksBeforePuttingAThreadAway(t *testing.T) {
 // TestTheTwoListingsNeverMix is what makes archiving worth having: a thread the operator put away
 // must not come back into the view they put it away from.
 func TestTheTwoListingsNeverMix(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{
-		{Id: "live", Workspace: "acme", ThreadId: "t1", Status: "idle"},
-		{Id: "away", Workspace: "acme", ThreadId: "t2", Status: "stopped", ArchivedAt: timestamppb.Now()},
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{
+		{Id: "live", Workspace: "acme", Handle: "t1", Status: "idle"},
+		{Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped", ArchivedAt: timestamppb.Now()},
 	}}
 
 	threads, err := Sessions(client).List(context.Background(), "")
@@ -897,8 +897,8 @@ func TestRestoreBringsAThreadBack(t *testing.T) {
 // TestTheArchivedViewSaysWhenAThreadWasPutAway: its last column is the stamp, not the last touch,
 // because "two hours ago" about a thread nobody has touched since is the useful number.
 func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{
-		Id: "away", Workspace: "acme", ThreadId: "t2", Status: "stopped",
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+		Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped",
 		UpdatedAt:  timestamppb.New(time.Now().Add(-72 * time.Hour)),
 		ArchivedAt: timestamppb.New(time.Now().Add(-2 * time.Hour)),
 	}}}
@@ -971,8 +971,8 @@ func TestTheModeIsInTheListing(t *testing.T) {
 	}
 	for mode, want := range tests {
 		t.Run(mode, func(t *testing.T) {
-			client := &fakeClient{sessions: []*quaycrewv1.Session{
-				{Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle", PermissionMode: mode},
+			client := &fakeClient{sessions: []*quaycrewv1.Thread{
+				{Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle", PermissionMode: mode},
 			}}
 			rows, err := Sessions(client).List(context.Background(), "")
 			if err != nil {
@@ -1295,7 +1295,7 @@ func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
 }
 
 func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 
 	var out strings.Builder
 	if err := Plain(context.Background(), client, &out); err != nil {
@@ -1650,7 +1650,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	client := &fakeClient{
 		workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "me"}},
 		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
-		sessions:   []*quaycrewv1.Session{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
+		sessions:   []*quaycrewv1.Thread{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
 	}
 	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
@@ -2587,8 +2587,8 @@ func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T
 // TestAThreadsCostIsInTheListing, in the three numbers that matter, formatted for a column seven
 // characters wide.
 func TestAThreadsCostIsInTheListing(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{
-		Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle",
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+		Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 		Usage: &quaycrewv1.Usage{
 			Input: 52, Output: 6917, CacheRead: 1723404, CacheWritten: 87875,
@@ -2610,8 +2610,8 @@ func TestAThreadsCostIsInTheListing(t *testing.T) {
 // TestAThreadThatHasSpentNothingSaysNothing. A conversation nobody has had has not cost zero, it has
 // no cost, and a column of zeroes reads as a crew that is free.
 func TestAThreadThatHasSpentNothingSaysNothing(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{
-		Id: "s1", Workspace: "acme", ThreadId: "t1", Status: "idle",
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+		Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 	}}}
 
@@ -2697,8 +2697,8 @@ func TestTheCacheColumnGivesWayFirstOnANarrowWindow(t *testing.T) {
 // the seventh cell into it puts a thread's age under a heading that says something else, which is
 // worse than not drawing the column at all.
 func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{
-		Id: "s1", Workspace: "acme", Project: "p1", ThreadId: "t1", Status: "idle",
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+		Id: "s1", Workspace: "acme", Project: "p1", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 		Usage:     &quaycrewv1.Usage{Input: 52, Output: 6917, CacheRead: 1723404},
 	}}}

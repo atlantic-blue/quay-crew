@@ -14,8 +14,8 @@ message InboundMessage {
   string sender = 3;
   // text is the message body.
   string text = 4;
-  // thread_id continues an existing thread when set; empty starts a new one.
-  string thread_id = 5;
+  // handle continues an existing thread when set; empty starts a new one.
+  string handle = 5;
   // correlation_id is unique per inbound message and is also used as the trace id.
   string correlation_id = 6;
   // received_at is when the channel received the input, in RFC 3339.
@@ -26,8 +26,8 @@ message InboundMessage {
 message OutboundMessage {
   // workspace is the isolation unit this reply belongs to.
   string workspace = 1;
-  // thread_id is the thread the reply belongs to.
-  string thread_id = 2;
+  // handle is the thread the reply belongs to.
+  string handle = 2;
   // text is the reply body.
   string text = 3;
   // correlation_id ties the reply back to the originating inbound message.

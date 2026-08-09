@@ -24,7 +24,7 @@ func runAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	if err != nil {
 		return err
 	}
-	spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
+	spec, err := client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessionID})
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func runAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // It carries no credential. The session's sandbox already holds the workspace's environment, set when
 // the sandbox was created, so everything started inside it is authenticated without this tool ever
 // handling a token.
-func attachCommand(spec *quaycrewv1.AttachSessionResponse) (*exec.Cmd, error) {
+func attachCommand(spec *quaycrewv1.AttachThreadResponse) (*exec.Cmd, error) {
 	if spec.GetSandbox() == "" || len(spec.GetArgv()) == 0 {
 		return nil, fmt.Errorf("the control plane did not say how to attach")
 	}
@@ -59,13 +59,13 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if strings.TrimSpace(reference) == "" {
 		return "", fmt.Errorf("a session id is required")
 	}
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+	resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
 	if err != nil {
 		return "", err
 	}
 
 	matches := make([]string, 0, 1)
-	for _, session := range resp.GetSessions() {
+	for _, session := range resp.GetThreads() {
 		if session.GetId() == reference {
 			return reference, nil
 		}

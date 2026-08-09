@@ -204,11 +204,15 @@ with a model substitute that still execs inside the sandbox.
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
-**Decided 9 August 2026: the operator facing word is thread, everywhere.** The code and the wire
-still say session in places (`ListSessions`, `session_id`, the store), the surfaces say thread, and
-one row answers to both plus a third name for its conversation handle. That split is settled in the
-thread direction and the protocol definitions align with it before the repository goes public,
-because after publication the same rename is a breaking change instead of a tidy up.
+**Decided 9 August 2026: the operator facing word is thread, everywhere. Aligned into the protocol
+the same day.** The wire now says `Thread`: the thread RPCs (`ListThreads`, `GetThread`,
+`AttachThread` and the rest), a `Turn` and a `TurnEvent` that say which thread they belong to, and
+a dispatch that returns the thread's `id` beside its `handle`. A thread carries three identifiers,
+each with one job: `id` is the crew's own row and names the sandbox container, `handle` is the name
+a channel dispatches to (dispatch to the same handle and the conversation continues), and
+`model_session_id` is the model's own word for the conversation it keeps, used to resume it.
+Session survives only where it is the internal runtime word: the store's tables and the control
+plane's internals, which no operator reads.
 
 ```
 workspace  "me"                      who you are; secrets and channels attach here

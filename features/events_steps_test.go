@@ -167,11 +167,11 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		if len(w.turns) != 1 {
 			return fmt.Errorf("%d turns ran, want exactly one", len(w.turns))
 		}
-		if event.GetThreadId() != w.turns[0].threadID {
-			return fmt.Errorf("the record names thread %q, want %q", event.GetThreadId(), w.turns[0].threadID)
+		if event.GetHandle() != w.turns[0].threadID {
+			return fmt.Errorf("the record names thread %q, want %q", event.GetHandle(), w.turns[0].threadID)
 		}
-		if event.GetSession() != w.turns[0].sessionID {
-			return fmt.Errorf("the record names session %q, want %q", event.GetSession(), w.turns[0].sessionID)
+		if event.GetThread() != w.turns[0].sessionID {
+			return fmt.Errorf("the record names session %q, want %q", event.GetThread(), w.turns[0].sessionID)
 		}
 		if event.GetOccurredAt() == nil {
 			return fmt.Errorf("the record does not say when the turn happened")
@@ -251,8 +251,8 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("%d turns are on the log and %d turns ran", len(events), len(w.turns))
 		}
 		for i, event := range events {
-			if event.GetSession() != w.turns[i].sessionID {
-				return fmt.Errorf("record %d names session %q, want %q", i, event.GetSession(), w.turns[i].sessionID)
+			if event.GetThread() != w.turns[i].sessionID {
+				return fmt.Errorf("record %d names session %q, want %q", i, event.GetThread(), w.turns[i].sessionID)
 			}
 			if event.GetReply() != w.turns[i].reply {
 				return fmt.Errorf("record %d carries reply %q, want %q", i, event.GetReply(), w.turns[i].reply)

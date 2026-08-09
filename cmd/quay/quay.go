@@ -420,13 +420,13 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 
 	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: located.ProjectID, ThreadId: located.ThreadID, Text: text,
+		Project: located.ProjectID, Handle: located.ThreadID, Text: text,
 	})
 	if err != nil {
 		return err
 	}
 	fmt.Fprintln(out, resp.GetReply())
-	fmt.Fprintf(out, "(session %s, thread %s)\n", resp.GetSessionId(), resp.GetThreadId())
+	fmt.Fprintf(out, "(thread %s, handle %s)\n", resp.GetId(), resp.GetHandle())
 	return nil
 }
 
@@ -655,7 +655,7 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		typed = args[0]
 	}
 
-	request := &quaycrewv1.ListSessionsRequest{}
+	request := &quaycrewv1.ListThreadsRequest{}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
 	// nowhere lists everything, because then the question was about the crew rather than a place.
 	path, err := addressFrom(typed)
@@ -670,22 +670,22 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
 	}
 
-	resp, err := client.ListSessions(ctx, request)
+	resp, err := client.ListThreads(ctx, request)
 	if err != nil {
 		return err
 	}
-	if len(resp.GetSessions()) == 0 {
-		fmt.Fprintln(out, "no sessions")
+	if len(resp.GetThreads()) == 0 {
+		fmt.Fprintln(out, "no threads")
 		return nil
 	}
 	// Names, not identifiers: a listing of hex says nothing about what any of it is.
 	workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
-	for _, s := range resp.GetSessions() {
-		fmt.Fprintf(out, "%s  %s/%s  thread %s  %s\n",
+	for _, s := range resp.GetThreads() {
+		fmt.Fprintf(out, "%s  %s/%s  handle %s  %s\n",
 			display.ShortID(s.GetId()),
 			display.Name(workspaces[s.GetWorkspace()], s.GetWorkspace()),
 			display.Name(projects[s.GetProject()], s.GetProject()),
-			display.ShortID(s.GetThreadId()),
+			display.ShortID(s.GetHandle()),
 			s.GetStatus())
 	}
 	return nil

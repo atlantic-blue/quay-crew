@@ -358,7 +358,7 @@ func Turns(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if session == "" {
 				return nil, fmt.Errorf("open a session's history from the sessions view: there is no history without one")
 			}
-			resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: session})
+			resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: session})
 			if err != nil {
 				return nil, err
 			}
@@ -381,7 +381,7 @@ func turnRow(turn *quaycrewv1.Turn) Row {
 	}
 	return Row{
 		ID:     turn.GetId(),
-		Parent: turn.GetSession(),
+		Parent: turn.GetThread(),
 		State:  state,
 		Label:  display.ShortID(turn.GetId()),
 		Cells: []string{
@@ -431,7 +431,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					if row.ID == "" {
 						return fmt.Errorf("no session selected")
 					}
-					_, err := client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: row.ID})
+					_, err := client.RestoreThread(ctx, &quaycrewv1.RestoreThreadRequest{Id: row.ID})
 					return err
 				},
 			},
@@ -451,7 +451,7 @@ const (
 func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) Lister {
 	// parent is a project id when drilled into from one, and empty at the top level.
 	return func(ctx context.Context, parent string) ([]Row, error) {
-		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+		resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{
 			Project:  parent,
 			Archived: bool(from),
 		})
@@ -464,8 +464,8 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) List
 		// names could not be looked up is worse than one that shows ids.
 		workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
 
-		rows := make([]Row, 0, len(resp.GetSessions()))
-		for _, session := range resp.GetSessions() {
+		rows := make([]Row, 0, len(resp.GetThreads()))
+		for _, session := range resp.GetThreads() {
 			rows = append(rows, sessionRow(session, workspaces[session.GetWorkspace()], projects[session.GetProject()]))
 		}
 		return rows, nil
@@ -485,17 +485,17 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return names
 }
 
-func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) Row {
+func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) Row {
 	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
-		Label:  display.ShortID(session.GetThreadId()),
+		Label:  display.ShortID(session.GetHandle()),
 		Cells: []string{
 			display.ShortID(session.GetId()),
 			display.Name(workspaceName, session.GetWorkspace()),
 			display.Name(projectName, session.GetProject()),
-			display.ShortID(session.GetThreadId()),
+			display.ShortID(session.GetHandle()),
 			session.GetStatus(),
 			permissionLabel(session.GetPermissionMode()),
 			tokens(session.GetUsage().GetInput()),
@@ -552,7 +552,7 @@ func permissionLabel(mode string) string {
 
 // lastMoved is when the thread last went anywhere: when it was put away if it was, and when it was
 // last touched otherwise.
-func lastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
+func lastMoved(session *quaycrewv1.Thread) *timestamppb.Timestamp {
 	if session.GetArchivedAt() != nil {
 		return session.GetArchivedAt()
 	}
@@ -639,7 +639,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: row.ID})
+				_, err := client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: row.ID})
 				return err
 			},
 		},
@@ -654,7 +654,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{
+				_, err := client.SetThreadPermissionMode(ctx, &quaycrewv1.SetThreadPermissionModeRequest{
 					Id: row.ID, Mode: nextPermissionMode(row),
 				})
 				return err
@@ -671,7 +671,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: row.ID})
+				_, err := client.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: row.ID})
 				return err
 			},
 		},
@@ -685,7 +685,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: row.ID})
+				_, err := client.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: row.ID})
 				return err
 			},
 		},
@@ -701,7 +701,7 @@ func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
+	spec, err := client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessionID})
 	if err != nil {
 		return nil, fmt.Errorf("attach: %w", err)
 	}

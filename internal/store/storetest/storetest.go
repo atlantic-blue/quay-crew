@@ -379,7 +379,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		for i, text := range []string{"first", "second", "third"} {
 			turn := &quaycrewv1.Turn{
 				Id:         fmt.Sprintf("turn-%d", i),
-				Session:    session.GetId(),
+				Thread:     session.GetId(),
 				Prompt:     text,
 				Reply:      "you said: " + text,
 				Status:     "idle",
@@ -415,7 +415,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		// Delivery from the event log is at least once, so this is not a hypothetical.
 		turn := &quaycrewv1.Turn{
-			Id: "turn-once", Session: session.GetId(), Prompt: "hello",
+			Id: "turn-once", Thread: session.GetId(), Prompt: "hello",
 			Status: "idle", OccurredAt: timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)),
 		}
 		for range 3 {
@@ -439,7 +439,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		project := newProject(t, s, "acme", "house bills")
 		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
 
-		err := s.AppendTurn(ctx, &quaycrewv1.Turn{Session: session.GetId(), Prompt: "hello"},
+		err := s.AppendTurn(ctx, &quaycrewv1.Turn{Thread: session.GetId(), Prompt: "hello"},
 			project.GetWorkspace(), project.GetId(), "thread-a")
 		if err == nil {
 			t.Fatal("a turn with no id was accepted, so nothing can recognise it on a replay")
@@ -455,7 +455,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
 		for i := range 5 {
 			turn := &quaycrewv1.Turn{
-				Id: fmt.Sprintf("turn-%d", i), Session: session.GetId(),
+				Id: fmt.Sprintf("turn-%d", i), Thread: session.GetId(),
 				Prompt: fmt.Sprintf("message %d", i), Status: "idle",
 				OccurredAt: timestamppb.New(start.Add(time.Duration(i) * time.Minute)),
 			}
@@ -484,11 +484,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		second, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b")
 
 		now := timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC))
-		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "a", Session: first.GetId(), Prompt: "mine", OccurredAt: now},
+		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "a", Thread: first.GetId(), Prompt: "mine", OccurredAt: now},
 			project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
 			t.Fatalf("AppendTurn: %v", err)
 		}
-		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "b", Session: second.GetId(), Prompt: "theirs", OccurredAt: now},
+		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "b", Thread: second.GetId(), Prompt: "theirs", OccurredAt: now},
 			project.GetWorkspace(), project.GetId(), "thread-b"); err != nil {
 			t.Fatalf("AppendTurn: %v", err)
 		}
@@ -1048,7 +1048,7 @@ func newProject(t *testing.T, s store.Store, workspaceName, projectName string) 
 
 // ids names the sessions in a listing, so a failure says which threads came back rather than how
 // many.
-func ids(sessions []*quaycrewv1.Session) []string {
+func ids(sessions []*quaycrewv1.Thread) []string {
 	out := make([]string, 0, len(sessions))
 	for _, session := range sessions {
 		out = append(out, session.GetId())

@@ -94,8 +94,8 @@ func TestCreateMovesYouAndDispatchFollows(t *testing.T) {
 	if !strings.Contains(replied, "ok") {
 		t.Fatalf("dispatch with no address did not run: %q", replied)
 	}
-	if !strings.Contains(replied, "session ") || !strings.Contains(replied, "thread ") {
-		t.Fatalf("dispatch did not show session and thread: %q", replied)
+	if !strings.Contains(replied, "thread ") || !strings.Contains(replied, "handle ") {
+		t.Fatalf("dispatch did not show the thread and its handle: %q", replied)
 	}
 
 	// And the listing names things rather than printing identifiers.
@@ -144,12 +144,13 @@ func TestUseAThreadContinuesThatConversation(t *testing.T) {
 	}
 }
 
-// threadFrom digs the thread id out of what a dispatch printed.
+// threadFrom digs the thread's handle out of what a dispatch printed, because the handle is what
+// an address carries.
 func threadFrom(t *testing.T, output string) string {
 	t.Helper()
-	_, after, found := strings.Cut(output, "thread ")
+	_, after, found := strings.Cut(output, "handle ")
 	if !found {
-		t.Fatalf("no thread in %q", output)
+		t.Fatalf("no handle in %q", output)
 	}
 	return strings.TrimSuffix(strings.TrimSpace(after), ")")
 }

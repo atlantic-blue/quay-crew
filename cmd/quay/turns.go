@@ -25,7 +25,7 @@ func runTurns(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	if err != nil {
 		return err
 	}
-	resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: sessionID})
+	resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: sessionID})
 	if err != nil {
 		return err
 	}

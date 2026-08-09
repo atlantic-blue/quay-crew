@@ -8,7 +8,7 @@ import (
 )
 
 func TestAttachCommandOpensTheConversationInTheSandbox(t *testing.T) {
-	spec := &quaycrewv1.AttachSessionResponse{
+	spec := &quaycrewv1.AttachThreadResponse{
 		Sandbox: "quaycrew-abc123",
 		Argv:    []string{"claude", "--resume", "conversation-1"},
 	}
@@ -31,7 +31,7 @@ func TestAttachCommandOpensTheConversationInTheSandbox(t *testing.T) {
 }
 
 func TestAttachRefusesAnEmptySpecification(t *testing.T) {
-	if _, err := attachCommand(&quaycrewv1.AttachSessionResponse{}); err == nil {
+	if _, err := attachCommand(&quaycrewv1.AttachThreadResponse{}); err == nil {
 		t.Fatal("attaching with no sandbox or command succeeded")
 	}
 }

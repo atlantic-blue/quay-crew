@@ -35,8 +35,8 @@ type InboundMessage struct {
 	Sender string `protobuf:"bytes,3,opt,name=sender,proto3" json:"sender,omitempty"`
 	// text is the message body.
 	Text string `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
-	// thread_id continues an existing thread when set; empty starts a new one.
-	ThreadId string `protobuf:"bytes,5,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	// handle continues an existing thread when set; empty starts a new one.
+	Handle string `protobuf:"bytes,5,opt,name=handle,proto3" json:"handle,omitempty"`
 	// correlation_id is unique per inbound message and is also used as the trace id.
 	CorrelationId string `protobuf:"bytes,6,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	// received_at is when the channel received the input, in RFC 3339.
@@ -103,9 +103,9 @@ func (x *InboundMessage) GetText() string {
 	return ""
 }
 
-func (x *InboundMessage) GetThreadId() string {
+func (x *InboundMessage) GetHandle() string {
 	if x != nil {
-		return x.ThreadId
+		return x.Handle
 	}
 	return ""
 }
@@ -129,8 +129,8 @@ type OutboundMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// workspace is the isolation unit this reply belongs to.
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	// thread_id is the thread the reply belongs to.
-	ThreadId string `protobuf:"bytes,2,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	// handle is the thread the reply belongs to.
+	Handle string `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
 	// text is the reply body.
 	Text string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	// correlation_id ties the reply back to the originating inbound message.
@@ -176,9 +176,9 @@ func (x *OutboundMessage) GetWorkspace() string {
 	return ""
 }
 
-func (x *OutboundMessage) GetThreadId() string {
+func (x *OutboundMessage) GetHandle() string {
 	if x != nil {
-		return x.ThreadId
+		return x.Handle
 	}
 	return ""
 }
@@ -201,19 +201,19 @@ var File_quaycrew_v1_channel_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_channel_proto_rawDesc = "" +
 	"\n" +
-	"\x19quaycrew/v1/channel.proto\x12\vquaycrew.v1\"\xd9\x01\n" +
+	"\x19quaycrew/v1/channel.proto\x12\vquaycrew.v1\"\xd4\x01\n" +
 	"\x0eInboundMessage\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
 	"\achannel\x18\x02 \x01(\tR\achannel\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x12\n" +
-	"\x04text\x18\x04 \x01(\tR\x04text\x12\x1b\n" +
-	"\tthread_id\x18\x05 \x01(\tR\bthreadId\x12%\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\x12\x16\n" +
+	"\x06handle\x18\x05 \x01(\tR\x06handle\x12%\n" +
 	"\x0ecorrelation_id\x18\x06 \x01(\tR\rcorrelationId\x12\x1f\n" +
 	"\vreceived_at\x18\a \x01(\tR\n" +
-	"receivedAt\"\x87\x01\n" +
+	"receivedAt\"\x82\x01\n" +
 	"\x0fOutboundMessage\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
-	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x12\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12%\n" +
 	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationIdB\xab\x01\n" +
 	"\x0fcom.quaycrew.v1B\fChannelProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"

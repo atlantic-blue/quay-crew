@@ -23,7 +23,7 @@ func at(minutes int) *timestamppb.Timestamp {
 // TestThePanelOpensTheConversationYouWereLastIn. With nothing named, the right half is the thread the
 // operator was last talking to, which is the one they meant.
 func TestThePanelOpensTheConversationYouWereLastIn(t *testing.T) {
-	got, found := newestSession([]*quaycrewv1.Session{
+	got, found := newestSession([]*quaycrewv1.Thread{
 		{Id: "older", ModelSessionId: "c1", UpdatedAt: at(10)},
 		{Id: "newest", ModelSessionId: "c2", UpdatedAt: at(40)},
 		{Id: "middle", ModelSessionId: "c3", UpdatedAt: at(25)},
@@ -39,7 +39,7 @@ func TestThePanelOpensTheConversationYouWereLastIn(t *testing.T) {
 // TestThePanelSkipsWhatCannotBeOpened. A session with no conversation behind it refuses to attach, so
 // choosing one would build a panel whose right half dies the moment it opens.
 func TestThePanelSkipsWhatCannotBeOpened(t *testing.T) {
-	got, found := newestSession([]*quaycrewv1.Session{
+	got, found := newestSession([]*quaycrewv1.Thread{
 		{Id: "has-a-conversation", ModelSessionId: "c1", UpdatedAt: at(10)},
 		{Id: "never-had-a-turn", UpdatedAt: at(40)},
 		{Id: "put-away", ModelSessionId: "c2", UpdatedAt: at(50), ArchivedAt: at(50)},
@@ -58,7 +58,7 @@ func TestThePanelRefusesRatherThanOpeningHalfOfOne(t *testing.T) {
 	if _, found := newestSession(nil); found {
 		t.Fatal("a conversation was chosen from an empty crew")
 	}
-	if _, found := newestSession([]*quaycrewv1.Session{{Id: "never-had-a-turn", UpdatedAt: at(10)}}); found {
+	if _, found := newestSession([]*quaycrewv1.Thread{{Id: "never-had-a-turn", UpdatedAt: at(10)}}); found {
 		t.Fatal("a session that has never had a turn was offered as something to open")
 	}
 }

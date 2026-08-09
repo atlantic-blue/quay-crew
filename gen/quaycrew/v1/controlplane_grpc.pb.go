@@ -19,39 +19,39 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlaneService_CreateWorkspace_FullMethodName          = "/quaycrew.v1.ControlPlaneService/CreateWorkspace"
-	ControlPlaneService_GetWorkspace_FullMethodName             = "/quaycrew.v1.ControlPlaneService/GetWorkspace"
-	ControlPlaneService_ListWorkspaces_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ListWorkspaces"
-	ControlPlaneService_DeleteWorkspace_FullMethodName          = "/quaycrew.v1.ControlPlaneService/DeleteWorkspace"
-	ControlPlaneService_CreateProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/CreateProject"
-	ControlPlaneService_GetProject_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetProject"
-	ControlPlaneService_ListProjects_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListProjects"
-	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
-	ControlPlaneService_AddRepository_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AddRepository"
-	ControlPlaneService_RemoveRepository_FullMethodName         = "/quaycrew.v1.ControlPlaneService/RemoveRepository"
-	ControlPlaneService_ListRepositories_FullMethodName         = "/quaycrew.v1.ControlPlaneService/ListRepositories"
-	ControlPlaneService_AttachChannel_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachChannel"
-	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
-	ControlPlaneService_ListSecrets_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSecrets"
-	ControlPlaneService_Dispatch_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/Dispatch"
-	ControlPlaneService_OpenDriver_FullMethodName               = "/quaycrew.v1.ControlPlaneService/OpenDriver"
-	ControlPlaneService_ListSessions_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSessions"
-	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
-	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
-	ControlPlaneService_StopSession_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopSession"
-	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
-	ControlPlaneService_ArchiveSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
-	ControlPlaneService_RestoreSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreSession"
-	ControlPlaneService_SetSessionPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetSessionPermissionMode"
-	ControlPlaneService_ListContexts_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListContexts"
-	ControlPlaneService_SetContext_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetContext"
-	ControlPlaneService_ImportSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportSkill"
-	ControlPlaneService_ListSkills_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSkills"
-	ControlPlaneService_AttachSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/AttachSkill"
-	ControlPlaneService_DetachSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/DetachSkill"
-	ControlPlaneService_ListTurns_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTurns"
-	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
-	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
+	ControlPlaneService_CreateWorkspace_FullMethodName         = "/quaycrew.v1.ControlPlaneService/CreateWorkspace"
+	ControlPlaneService_GetWorkspace_FullMethodName            = "/quaycrew.v1.ControlPlaneService/GetWorkspace"
+	ControlPlaneService_ListWorkspaces_FullMethodName          = "/quaycrew.v1.ControlPlaneService/ListWorkspaces"
+	ControlPlaneService_DeleteWorkspace_FullMethodName         = "/quaycrew.v1.ControlPlaneService/DeleteWorkspace"
+	ControlPlaneService_CreateProject_FullMethodName           = "/quaycrew.v1.ControlPlaneService/CreateProject"
+	ControlPlaneService_GetProject_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetProject"
+	ControlPlaneService_ListProjects_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListProjects"
+	ControlPlaneService_DeleteProject_FullMethodName           = "/quaycrew.v1.ControlPlaneService/DeleteProject"
+	ControlPlaneService_AddRepository_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AddRepository"
+	ControlPlaneService_RemoveRepository_FullMethodName        = "/quaycrew.v1.ControlPlaneService/RemoveRepository"
+	ControlPlaneService_ListRepositories_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListRepositories"
+	ControlPlaneService_AttachChannel_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AttachChannel"
+	ControlPlaneService_SetSecret_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetSecret"
+	ControlPlaneService_ListSecrets_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSecrets"
+	ControlPlaneService_Dispatch_FullMethodName                = "/quaycrew.v1.ControlPlaneService/Dispatch"
+	ControlPlaneService_OpenDriver_FullMethodName              = "/quaycrew.v1.ControlPlaneService/OpenDriver"
+	ControlPlaneService_ListThreads_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListThreads"
+	ControlPlaneService_GetThread_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetThread"
+	ControlPlaneService_AttachThread_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachThread"
+	ControlPlaneService_StopThread_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopThread"
+	ControlPlaneService_RestartThread_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartThread"
+	ControlPlaneService_ArchiveThread_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveThread"
+	ControlPlaneService_RestoreThread_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreThread"
+	ControlPlaneService_SetThreadPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetThreadPermissionMode"
+	ControlPlaneService_ListContexts_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListContexts"
+	ControlPlaneService_SetContext_FullMethodName              = "/quaycrew.v1.ControlPlaneService/SetContext"
+	ControlPlaneService_ImportSkill_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ImportSkill"
+	ControlPlaneService_ListSkills_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSkills"
+	ControlPlaneService_AttachSkill_FullMethodName             = "/quaycrew.v1.ControlPlaneService/AttachSkill"
+	ControlPlaneService_DetachSkill_FullMethodName             = "/quaycrew.v1.ControlPlaneService/DetachSkill"
+	ControlPlaneService_ListTurns_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListTurns"
+	ControlPlaneService_GetInfo_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetInfo"
+	ControlPlaneService_GetUsage_FullMethodName                = "/quaycrew.v1.ControlPlaneService/GetUsage"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -76,14 +76,14 @@ type ControlPlaneServiceClient interface {
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
 	Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error)
 	OpenDriver(ctx context.Context, in *OpenDriverRequest, opts ...grpc.CallOption) (*OpenDriverResponse, error)
-	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
-	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
-	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
-	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
-	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
-	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
-	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
-	SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error)
+	ListThreads(ctx context.Context, in *ListThreadsRequest, opts ...grpc.CallOption) (*ListThreadsResponse, error)
+	GetThread(ctx context.Context, in *GetThreadRequest, opts ...grpc.CallOption) (*GetThreadResponse, error)
+	AttachThread(ctx context.Context, in *AttachThreadRequest, opts ...grpc.CallOption) (*AttachThreadResponse, error)
+	StopThread(ctx context.Context, in *StopThreadRequest, opts ...grpc.CallOption) (*StopThreadResponse, error)
+	RestartThread(ctx context.Context, in *RestartThreadRequest, opts ...grpc.CallOption) (*RestartThreadResponse, error)
+	ArchiveThread(ctx context.Context, in *ArchiveThreadRequest, opts ...grpc.CallOption) (*ArchiveThreadResponse, error)
+	RestoreThread(ctx context.Context, in *RestoreThreadRequest, opts ...grpc.CallOption) (*RestoreThreadResponse, error)
+	SetThreadPermissionMode(ctx context.Context, in *SetThreadPermissionModeRequest, opts ...grpc.CallOption) (*SetThreadPermissionModeResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
 	ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error)
@@ -265,80 +265,80 @@ func (c *controlPlaneServiceClient) OpenDriver(ctx context.Context, in *OpenDriv
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error) {
+func (c *controlPlaneServiceClient) ListThreads(ctx context.Context, in *ListThreadsRequest, opts ...grpc.CallOption) (*ListThreadsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSessionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListSessions_FullMethodName, in, out, cOpts...)
+	out := new(ListThreadsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListThreads_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error) {
+func (c *controlPlaneServiceClient) GetThread(ctx context.Context, in *GetThreadRequest, opts ...grpc.CallOption) (*GetThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetSession_FullMethodName, in, out, cOpts...)
+	out := new(GetThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error) {
+func (c *controlPlaneServiceClient) AttachThread(ctx context.Context, in *AttachThreadRequest, opts ...grpc.CallOption) (*AttachThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AttachSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AttachSession_FullMethodName, in, out, cOpts...)
+	out := new(AttachThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AttachThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error) {
+func (c *controlPlaneServiceClient) StopThread(ctx context.Context, in *StopThreadRequest, opts ...grpc.CallOption) (*StopThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StopSession_FullMethodName, in, out, cOpts...)
+	out := new(StopThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StopThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error) {
+func (c *controlPlaneServiceClient) RestartThread(ctx context.Context, in *RestartThreadRequest, opts ...grpc.CallOption) (*RestartThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RestartSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RestartSession_FullMethodName, in, out, cOpts...)
+	out := new(RestartThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RestartThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error) {
+func (c *controlPlaneServiceClient) ArchiveThread(ctx context.Context, in *ArchiveThreadRequest, opts ...grpc.CallOption) (*ArchiveThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ArchiveSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ArchiveSession_FullMethodName, in, out, cOpts...)
+	out := new(ArchiveThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ArchiveThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error) {
+func (c *controlPlaneServiceClient) RestoreThread(ctx context.Context, in *RestoreThreadRequest, opts ...grpc.CallOption) (*RestoreThreadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RestoreSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RestoreSession_FullMethodName, in, out, cOpts...)
+	out := new(RestoreThreadResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RestoreThread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error) {
+func (c *controlPlaneServiceClient) SetThreadPermissionMode(ctx context.Context, in *SetThreadPermissionModeRequest, opts ...grpc.CallOption) (*SetThreadPermissionModeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetSessionPermissionModeResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SetSessionPermissionMode_FullMethodName, in, out, cOpts...)
+	out := new(SetThreadPermissionModeResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetThreadPermissionMode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -457,14 +457,14 @@ type ControlPlaneServiceServer interface {
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
 	Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error)
 	OpenDriver(context.Context, *OpenDriverRequest) (*OpenDriverResponse, error)
-	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
-	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
-	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
-	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
-	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
-	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
-	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
-	SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error)
+	ListThreads(context.Context, *ListThreadsRequest) (*ListThreadsResponse, error)
+	GetThread(context.Context, *GetThreadRequest) (*GetThreadResponse, error)
+	AttachThread(context.Context, *AttachThreadRequest) (*AttachThreadResponse, error)
+	StopThread(context.Context, *StopThreadRequest) (*StopThreadResponse, error)
+	RestartThread(context.Context, *RestartThreadRequest) (*RestartThreadResponse, error)
+	ArchiveThread(context.Context, *ArchiveThreadRequest) (*ArchiveThreadResponse, error)
+	RestoreThread(context.Context, *RestoreThreadRequest) (*RestoreThreadResponse, error)
+	SetThreadPermissionMode(context.Context, *SetThreadPermissionModeRequest) (*SetThreadPermissionModeResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
 	ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error)
@@ -534,29 +534,29 @@ func (UnimplementedControlPlaneServiceServer) Dispatch(context.Context, *Dispatc
 func (UnimplementedControlPlaneServiceServer) OpenDriver(context.Context, *OpenDriverRequest) (*OpenDriverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method OpenDriver not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
+func (UnimplementedControlPlaneServiceServer) ListThreads(context.Context, *ListThreadsRequest) (*ListThreadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListThreads not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSession not implemented")
+func (UnimplementedControlPlaneServiceServer) GetThread(context.Context, *GetThreadRequest) (*GetThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AttachSession not implemented")
+func (UnimplementedControlPlaneServiceServer) AttachThread(context.Context, *AttachThreadRequest) (*AttachThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopSession not implemented")
+func (UnimplementedControlPlaneServiceServer) StopThread(context.Context, *StopThreadRequest) (*StopThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RestartSession not implemented")
+func (UnimplementedControlPlaneServiceServer) RestartThread(context.Context, *RestartThreadRequest) (*RestartThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestartThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ArchiveSession not implemented")
+func (UnimplementedControlPlaneServiceServer) ArchiveThread(context.Context, *ArchiveThreadRequest) (*ArchiveThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RestoreSession not implemented")
+func (UnimplementedControlPlaneServiceServer) RestoreThread(context.Context, *RestoreThreadRequest) (*RestoreThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreThread not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetSessionPermissionMode not implemented")
+func (UnimplementedControlPlaneServiceServer) SetThreadPermissionMode(context.Context, *SetThreadPermissionModeRequest) (*SetThreadPermissionModeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetThreadPermissionMode not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListContexts not implemented")
@@ -894,146 +894,146 @@ func _ControlPlaneService_OpenDriver_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListSessionsRequest)
+func _ControlPlaneService_ListThreads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListThreadsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListSessions(ctx, in)
+		return srv.(ControlPlaneServiceServer).ListThreads(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListSessions_FullMethodName,
+		FullMethod: ControlPlaneService_ListThreads_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListSessions(ctx, req.(*ListSessionsRequest))
+		return srv.(ControlPlaneServiceServer).ListThreads(ctx, req.(*ListThreadsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetSessionRequest)
+func _ControlPlaneService_GetThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).GetThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetSession_FullMethodName,
+		FullMethod: ControlPlaneService_GetThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetSession(ctx, req.(*GetSessionRequest))
+		return srv.(ControlPlaneServiceServer).GetThread(ctx, req.(*GetThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_AttachSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AttachSessionRequest)
+func _ControlPlaneService_AttachThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AttachSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).AttachThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_AttachSession_FullMethodName,
+		FullMethod: ControlPlaneService_AttachThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AttachSession(ctx, req.(*AttachSessionRequest))
+		return srv.(ControlPlaneServiceServer).AttachThread(ctx, req.(*AttachThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_StopSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopSessionRequest)
+func _ControlPlaneService_StopThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StopSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).StopThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_StopSession_FullMethodName,
+		FullMethod: ControlPlaneService_StopThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StopSession(ctx, req.(*StopSessionRequest))
+		return srv.(ControlPlaneServiceServer).StopThread(ctx, req.(*StopThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RestartSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RestartSessionRequest)
+func _ControlPlaneService_RestartThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestartThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RestartSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).RestartThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RestartSession_FullMethodName,
+		FullMethod: ControlPlaneService_RestartThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RestartSession(ctx, req.(*RestartSessionRequest))
+		return srv.(ControlPlaneServiceServer).RestartThread(ctx, req.(*RestartThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ArchiveSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ArchiveSessionRequest)
+func _ControlPlaneService_ArchiveThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ArchiveSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).ArchiveThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ArchiveSession_FullMethodName,
+		FullMethod: ControlPlaneService_ArchiveThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ArchiveSession(ctx, req.(*ArchiveSessionRequest))
+		return srv.(ControlPlaneServiceServer).ArchiveThread(ctx, req.(*ArchiveThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RestoreSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RestoreSessionRequest)
+func _ControlPlaneService_RestoreThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreThreadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RestoreSession(ctx, in)
+		return srv.(ControlPlaneServiceServer).RestoreThread(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RestoreSession_FullMethodName,
+		FullMethod: ControlPlaneService_RestoreThread_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RestoreSession(ctx, req.(*RestoreSessionRequest))
+		return srv.(ControlPlaneServiceServer).RestoreThread(ctx, req.(*RestoreThreadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_SetSessionPermissionMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetSessionPermissionModeRequest)
+func _ControlPlaneService_SetThreadPermissionMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetThreadPermissionModeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SetSessionPermissionMode(ctx, in)
+		return srv.(ControlPlaneServiceServer).SetThreadPermissionMode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_SetSessionPermissionMode_FullMethodName,
+		FullMethod: ControlPlaneService_SetThreadPermissionMode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SetSessionPermissionMode(ctx, req.(*SetSessionPermissionModeRequest))
+		return srv.(ControlPlaneServiceServer).SetThreadPermissionMode(ctx, req.(*SetThreadPermissionModeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1272,36 +1272,36 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_OpenDriver_Handler,
 		},
 		{
-			MethodName: "ListSessions",
-			Handler:    _ControlPlaneService_ListSessions_Handler,
+			MethodName: "ListThreads",
+			Handler:    _ControlPlaneService_ListThreads_Handler,
 		},
 		{
-			MethodName: "GetSession",
-			Handler:    _ControlPlaneService_GetSession_Handler,
+			MethodName: "GetThread",
+			Handler:    _ControlPlaneService_GetThread_Handler,
 		},
 		{
-			MethodName: "AttachSession",
-			Handler:    _ControlPlaneService_AttachSession_Handler,
+			MethodName: "AttachThread",
+			Handler:    _ControlPlaneService_AttachThread_Handler,
 		},
 		{
-			MethodName: "StopSession",
-			Handler:    _ControlPlaneService_StopSession_Handler,
+			MethodName: "StopThread",
+			Handler:    _ControlPlaneService_StopThread_Handler,
 		},
 		{
-			MethodName: "RestartSession",
-			Handler:    _ControlPlaneService_RestartSession_Handler,
+			MethodName: "RestartThread",
+			Handler:    _ControlPlaneService_RestartThread_Handler,
 		},
 		{
-			MethodName: "ArchiveSession",
-			Handler:    _ControlPlaneService_ArchiveSession_Handler,
+			MethodName: "ArchiveThread",
+			Handler:    _ControlPlaneService_ArchiveThread_Handler,
 		},
 		{
-			MethodName: "RestoreSession",
-			Handler:    _ControlPlaneService_RestoreSession_Handler,
+			MethodName: "RestoreThread",
+			Handler:    _ControlPlaneService_RestoreThread_Handler,
 		},
 		{
-			MethodName: "SetSessionPermissionMode",
-			Handler:    _ControlPlaneService_SetSessionPermissionMode_Handler,
+			MethodName: "SetThreadPermissionMode",
+			Handler:    _ControlPlaneService_SetThreadPermissionMode_Handler,
 		},
 		{
 			MethodName: "ListContexts",
