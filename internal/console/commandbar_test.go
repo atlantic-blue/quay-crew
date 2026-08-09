@@ -118,27 +118,19 @@ func TestAFailedCommandShowsWhatItSaid(t *testing.T) {
 	}
 }
 
-// Capturing a command that wants a terminal of its own would hang the console waiting for output
-// that never comes, so those are refused by name before anything is started.
-func TestACommandThatNeedsATerminalIsRefused(t *testing.T) {
-	for _, typed := range []string{"attach abc123", "panel", "console", "header"} {
-		ran := &ranCommand{output: "should not run"}
+// A command that takes over the screen must never reach the capturing runner: capturing one waits
+// forever for output that is never coming, which is the console frozen. It is handed the terminal
+// instead, so what this pins is that it does not go down the other road.
+func TestAnInteractiveCommandIsNeverCaptured(t *testing.T) {
+	for _, typed := range []string{"attach abc123", "panel", "header"} {
+		ran := &ranCommand{output: "should not be captured"}
 		model := typeInto(t, openBar(t, barModel(t, ran)), typed)
 
 		if ran.args != nil {
-			t.Errorf("%q was run, and capturing it would hang the console", typed)
+			t.Errorf("%q was captured, and capturing it would freeze the console", typed)
 		}
-		if model.err == nil {
-			t.Errorf("%q was accepted with no refusal", typed)
-			continue
-		}
-		if !strings.Contains(model.err.Error(), "terminal of its own") {
-			t.Errorf("%q is refused with %q, want it to say why", typed, model.err)
-		}
-		// And it names the command, so a refusal in a list of four reads as being about the one
-		// that was typed.
-		if !strings.Contains(model.err.Error(), strings.Fields(typed)[0]) {
-			t.Errorf("%q is refused with %q, which does not name it", typed, model.err)
+		if model.mode == modeOutput {
+			t.Errorf("%q opened the output panel, so it was read rather than handed the terminal", typed)
 		}
 	}
 }
@@ -179,5 +171,56 @@ func TestTheBarSaysWhatEnterWillDo(t *testing.T) {
 	viewName := typeAll(t, openBar(t, barModel(t, ran)), "workspaces")
 	if view := viewName.View(); strings.Contains(view, "runs this as a quay command") {
 		t.Fatalf("the bar offers to run a view name as a command:\n%s", view)
+	}
+}
+
+// The one way in: a command that takes over the screen is handed the terminal rather than refused,
+// which is exactly what pressing enter on a row already does.
+func TestTheBarHandsTheTerminalOverForAnInteractiveCommand(t *testing.T) {
+	model := barModel(t, &ranCommand{})
+
+	for _, typed := range []string{"attach abc123", "panel", "header"} {
+		command, err := model.handoverFor(strings.Fields(typed))
+		if err != nil {
+			t.Errorf("%q was refused: %v", typed, err)
+			continue
+		}
+		if command == nil {
+			t.Errorf("%q built no command to hand the terminal to", typed)
+			continue
+		}
+		// The words typed, passed through as they were: the bar is running the tool, not
+		// reinterpreting what was asked for.
+		if got := strings.Join(command.Args[1:], " "); got != typed {
+			t.Errorf("%q built the arguments %q", typed, got)
+		}
+	}
+}
+
+// A console inside the console is recursion rather than a feature, and the refusal says so instead
+// of leaving somebody in two consoles wondering which one they are typing into.
+func TestOpeningAConsoleInsideTheConsoleIsRefused(t *testing.T) {
+	model := barModel(t, &ranCommand{})
+
+	_, err := model.handoverFor([]string{"console"})
+	if err == nil {
+		t.Fatal("a console opened inside the console")
+	}
+	if !strings.Contains(err.Error(), "already") {
+		t.Errorf("the refusal says %q, want it to say you are already here", err)
+	}
+}
+
+// A command that only prints is still captured, so making the bar the way in did not turn every
+// listing into a screen takeover.
+func TestAPrintingCommandIsStillCaptured(t *testing.T) {
+	ran := &ranCommand{output: "acme"}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
+
+	if ran.args == nil {
+		t.Fatal("a printing command was not captured")
+	}
+	if model.mode != modeOutput {
+		t.Fatalf("the console is in mode %v, want the output panel", model.mode)
 	}
 }

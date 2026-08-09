@@ -104,7 +104,7 @@ var everywhereKeys = [][2]string{
 	{"pgup pgdn", "Page"},
 	{"enter", "Drill in"},
 	{"esc", "Back, or clear the filter"},
-	{":", "Switch view, or run a quay command"},
+	{":", "Switch view, or run any quay command"},
 	{"/", "Filter these rows"},
 	{"r g", "Refresh now"},
 	{"n", "Make one thing"},
