@@ -249,7 +249,7 @@ func TestRedactionLeavesTheExplanationReadable(t *testing.T) {
 		"QC_MODEL":              "claude-code",
 		"HOME":                  "/home/agent",
 	}
-	got := redact("claude-code failed in /home/agent with sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP", env)
+	got := Redact("claude-code failed in /home/agent with sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP", env)
 
 	if !strings.Contains(got, "claude-code failed in /home/agent") {
 		t.Fatalf("redaction ate the explanation: %q", got)
@@ -262,7 +262,7 @@ func TestRedactionLeavesTheExplanationReadable(t *testing.T) {
 // TestATokenFromSomewhereElseIsStillRedacted: the model's own tooling can print a token this process
 // never passed in, so the published shape is matched as well as the values we know about.
 func TestATokenFromSomewhereElseIsStillRedacted(t *testing.T) {
-	got := redact("config has sk-ant-oat01-neverPassedThroughHere1234 in it", nil)
+	got := Redact("config has sk-ant-oat01-neverPassedThroughHere1234 in it", nil)
 	if strings.Contains(got, "neverPassedThroughHere") {
 		t.Fatalf("a token this process never held survived: %q", got)
 	}

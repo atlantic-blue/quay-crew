@@ -11,6 +11,15 @@ Read the next section before you go looking for messages in it.
 by session so one session's events stay in order on one partition. A turn that failed is published
 too, because that is the one somebody comes looking for.
 
+**The payload is redacted before it is written anywhere.** The record carries the prompt, the reply
+and the failure, and what an operator pastes into a conversation can be a credential, so all three
+go through the crew's redactor first: every value the workspace keeps sealed is matched exactly and
+replaced with the secret's name, the driver's token is matched for a driver session, and anything
+shaped like a subscription token is caught even when the crew never held the value. A value the
+crew could not know about, a password typed in that was never sealed as a secret, is stored as
+typed: the log and the `turns` table hold what was said minus what the crew can recognise, not a
+guarantee that nothing sensitive was ever said.
+
 **A projection consumes it.** It subscribes to `^.+\.turns$`, so a workspace created while the crew
 is running is read too, and writes each record into the `turns` table. `quay turns <session>` lists a
 session's history from there, and `l` on a session in the console opens the same thing as a view. The projection runs inside the control plane process for now, because

@@ -106,10 +106,10 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 // environment, and an error is a thing people paste.
 func why(refused, stderr, unparsed string, exit error, env map[string]string) string {
 	if refused != "" {
-		return redact(refused, env)
+		return Redact(refused, env)
 	}
 	if said := firstOf(stderr, unparsed); said != "" {
-		return fmt.Sprintf("run exited: %v, saying: %s", exit, redact(said, env))
+		return fmt.Sprintf("run exited: %v, saying: %s", exit, Redact(said, env))
 	}
 	return fmt.Sprintf("run exited: %v, and it said nothing about why", exit)
 }

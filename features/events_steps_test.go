@@ -3,10 +3,12 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/cucumber/godog"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -190,6 +192,51 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		}
 		if event.GetReply() != "" {
 			return fmt.Errorf("the record carries a reply %q for a turn that failed", event.GetReply())
+		}
+		return nil
+	})
+
+	sc.Step(`^nothing on the published turn says "([^"]*)"$`, func(ctx context.Context, secret string) error {
+		event, err := onlyTurnOn(worldFrom(ctx), "acme")
+		if err != nil {
+			return err
+		}
+		// The whole record rather than the fields this step happens to know about, so a field added
+		// later cannot quietly start carrying the value.
+		if rendered := prototext.Format(event); strings.Contains(rendered, secret) {
+			return fmt.Errorf("the published turn carries %q: %s", secret, rendered)
+		}
+		return nil
+	})
+
+	sc.Step(`^the published turn names "([^"]*)" as redacted$`, func(ctx context.Context, name string) error {
+		event, err := onlyTurnOn(worldFrom(ctx), "acme")
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(event.GetPrompt(), "<redacted "+name+">") {
+			return fmt.Errorf("the published prompt %q does not name %s as redacted", event.GetPrompt(), name)
+		}
+		return nil
+	})
+
+	sc.Step(`^the session's history carries no "([^"]*)"$`, func(ctx context.Context, secret string) error {
+		w := worldFrom(ctx)
+		last, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		turns, err := listTurns(ctx, w, last.sessionID)
+		if err != nil {
+			return err
+		}
+		if len(turns) == 0 {
+			return fmt.Errorf("the session has no history, so this proves nothing")
+		}
+		for _, turn := range turns {
+			if rendered := prototext.Format(turn); strings.Contains(rendered, secret) {
+				return fmt.Errorf("the history carries %q: %s", secret, rendered)
+			}
 		}
 		return nil
 	})

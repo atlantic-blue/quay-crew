@@ -17,10 +17,12 @@ import (
 // example, which redactValues cannot know about because it was never passed in.
 var tokenShaped = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{8,}`)
 
-// redact removes every secret it can account for from text. Values passed in this turn's environment
+// Redact removes every secret it can account for from text. Values passed in the environment map
 // are matched exactly, which is precise and cannot mistake something innocent for a secret, and the
-// published token shape is matched as well for the ones that were never passed through here.
-func redact(text string, env map[string]string) string {
+// published token shape is matched as well for the ones that were never passed through here. It is
+// used on anything that leaves the crew or is written down: a failure an operator reads, and every
+// turn payload before it is persisted.
+func Redact(text string, env map[string]string) string {
 	if text == "" {
 		return ""
 	}

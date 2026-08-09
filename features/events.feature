@@ -45,6 +45,29 @@ Feature: Every turn is written to the event log
     Then 1 turn is on the log for "acme"
     And 1 turn is on the log for "beta"
 
+  # What an operator pastes into a conversation can be a credential, and the log keeps what is
+  # published, so the payload goes through the same redaction a failure message does before it is
+  # written anywhere. Every value the workspace keeps sealed is matched exactly; the subscription
+  # token's published shape is caught even when the crew never held the value. A value the crew
+  # could not know about is not protected, and the documents say so.
+  Scenario: A secret pasted into a conversation does not reach the log
+    Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-a-credential-somebody-pasted"
+    When the operator dispatches "clone with ghp-a-credential-somebody-pasted please" to the project
+    Then 1 turn is on the log for "acme"
+    And nothing on the published turn says "ghp-a-credential-somebody-pasted"
+    And the published turn names "GITHUB_TOKEN" as redacted
+
+  Scenario: A token shaped value is caught even when the crew never held it
+    When the operator dispatches "what is sk-ant-abcdefghijklmnop" to the project
+    Then 1 turn is on the log for "acme"
+    And nothing on the published turn says "sk-ant-abcdefghijklmnop"
+
+  Scenario: The history reads back redacted too
+    Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-a-credential-somebody-pasted"
+    When the operator dispatches "clone with ghp-a-credential-somebody-pasted please" to the project
+    And the projection has caught up
+    Then the session's history carries no "ghp-a-credential-somebody-pasted"
+
   Scenario: A stack with no broker runs turns and records nothing
     Given the crew has no event log configured
     When the operator dispatches "hello" to the project
