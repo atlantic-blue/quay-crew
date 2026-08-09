@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The documents say what the code does, and carry the day's decisions.** The architecture document
+  stopped calling the log the source of truth, which the code decided against long ago; the store is
+  the truth and the log is the export. It also now records four decisions from the 9 August
+  architectural review: automation runs live in Postgres with the log as export, what a session
+  holds is fixed when its sandbox is born, the operator facing word is thread and the protocol
+  aligns before going public, and authentication is a bearer token per crew with the listener on
+  loopback by default. The skills document stopped reading as though its whole delivery had shipped:
+  slices one to five are done, the git and github skills and everything after them are open.
+  ([#192](https://github.com/atlantic-blue/quay-crew/issues/192))
 - **Sandboxes stop leaking.** Four ways a container outlived what it belonged to, all closed.
   Deleting a workspace or a project now stops the sessions it hides and closes their sandboxes,
   where before every container kept running with the workspace's secrets in its environment.

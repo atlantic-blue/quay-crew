@@ -105,6 +105,14 @@ the more deliberate one.
 
 A project and a session could follow later. Nothing has wanted them yet.
 
+**Decided 9 August 2026: what a session holds is fixed when its sandbox is born.** The mount, the
+secrets and the setup only ever happen at container creation, so a skill attached afterwards cannot
+fully reach a session that is already running, and pretending otherwise hands the model an index
+naming a brief that is not in its container. The behaviour becomes the contract: attaching and
+detaching apply to sandboxes created from then on, a listing says when a session's sandbox predates
+the workspace's current skill set, and refreshing is cheap because the conversation lives outside
+the container. One resolver answers what a session holds, and everything else asks it.
+
 At sandbox creation the control plane resolves the skills that reach this session, and then:
 
 1. Refuses early, with a sentence naming what is wrong, if a binary the skill declares is not in the
@@ -247,12 +255,13 @@ Verified against the repository and a running stack, rather than assumed:
 Each of these is a slice with its own tests, in this order, and the first two are worth having even
 if the rest waits:
 
-1. A workspace's secrets reach a sandbox by name rather than one hardcoded key.
-2. A git identity in a sandbox, from the workspace, so a commit has an author.
+1. A workspace's secrets reach a sandbox by name rather than one hardcoded key. Done.
+2. A git identity in a sandbox, from the workspace, so a commit has an author. Done.
 3. A skill reaches a session from the crew's directory: read, mounted read only, refused early, set up.
    Done.
 4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
-   Done, in [#179](https://github.com/atlantic-blue/quay-crew/issues/179).
+   Done. This is one slice of [#179](https://github.com/atlantic-blue/quay-crew/issues/179), whose
+   remaining slices are 6 to 9 below plus a `quay skill show`, all still open.
 5. A repository reaches a sandbox: a workspace names the repositories it works in, they are cloned once
    into the workspace's volume, and each session gets its own working tree. Done. A git skill with no repository to work in does nothing, which is why it came before
    the skills themselves. The workspace is the level, for the same reason a skill and a credential are:

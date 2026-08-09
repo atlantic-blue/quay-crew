@@ -21,9 +21,10 @@ document describes the design, the stack, and the delivery plan.
 ## The shape
 
 Channels feed a durable event log. A control plane consumes it, manages workspaces, and drives parallel
-agent sessions. Each session talks to the model and runs tools in a sandbox tier. The event log is the
-write side; a projection materialises a read model that the admin dashboard reads. Synchronous
-queries (the dashboard reading the read model, the control plane managing workspaces) go over gRPC.
+agent sessions. Each session talks to the model and runs tools in a sandbox tier. The store is the
+write side; the event log carries the same records outward for anything that wants a stream, and a
+projection materialises read models from it where one is worth having. Synchronous queries (the
+dashboard reading the read model, the control plane managing workspaces) go over gRPC.
 
 ```mermaid
 flowchart LR
@@ -90,9 +91,13 @@ Each is its own Go service in its own container.
 - **Event log: Kafka.** The async backbone. Run locally with **Redpanda**, which speaks the Kafka
   protocol and is a single lightweight binary, and managed Kafka or Redpanda in the cloud. The client
   is `franz-go` (pure Go, no CGO, so the images stay small).
-- **Why an event log.** It decouples the services (each publishes and subscribes on its own), it is
-  durable and replayable, and it is the natural write side for the read model: the log is the source
-  of truth, the projection is a consumer.
+- **Why an event log, and what it is not.** It decouples the services (each publishes and subscribes
+  on its own) and it lets a consumer added later read what already happened. It is **not the source
+  of truth**: the store is, and publishing is deliberately lossy, because a broker that cannot be
+  reached must never fail a turn that already happened ([`EVENTS.md`](EVENTS.md) is the honest
+  account). Decided 9 August 2026: anything the crew cannot afford to lose is written to the store
+  in the same transaction as the thing it describes, and the log carries the same record outward as
+  an export for whatever wants a stream. Unset seeds then mean no export, never lost history.
 - **Synchronous APIs: gRPC.** Request and response calls (managing workspaces, reading the read model)
   use gRPC. The message shapes and the service methods are defined in **protobuf** under `proto/`, so
   every service agrees on one contract.
@@ -199,6 +204,12 @@ with a model substitute that still execs inside the sandbox.
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
+**Decided 9 August 2026: the operator facing word is thread, everywhere.** The code and the wire
+still say session in places (`ListSessions`, `session_id`, the store), the surfaces say thread, and
+one row answers to both plus a third name for its conversation handle. That split is settled in the
+thread direction and the protocol definitions align with it before the repository goes public,
+because after publication the same rename is a breaking change instead of a tidy up.
+
 ```
 workspace  "me"                      who you are; secrets and channels attach here
   └── project  "house-bills"         a body of work, with its own shared context
@@ -278,7 +289,18 @@ Inside a session the model decides what happens next, and that is right. It is b
 next step than any diagram would be. Across sessions the operator wants the opposite: a decision
 written down where it can be read, tested and stopped. Automation graphs are that second thing.
 
-The substrate is the one already here, a stream and a reducer:
+**Decided 9 August 2026: the substrate is Postgres, and the log is the export.** A run and its
+transitions are rows, written in one transaction, which is what makes "reconstructable" a guarantee
+rather than a sentence: there is no gap for a dropped publish to hide in. The `wait` node is a due
+time column read by a poller, and a dispatch is idempotent through a unique key on run, node and
+attempt, which is the compare and set a log does not have. The reducer below stands unchanged; what
+changes is what delivers events to it and where its state lives. Kafka stays as the outward carrier
+of the same records, and as the trigger bus where an external source already speaks to it. The
+delivery plan for this is [#182](https://github.com/atlantic-blue/quay-crew/issues/182), whose
+sections on the outbox and on consumer group ordering predate this decision and are superseded by
+it.
+
+The reducer is a pure function over that state:
 
 ```go
 // Pure. No Docker, no Postgres, no model. Testable in a table test.
@@ -364,10 +386,11 @@ thing that names them.
 
 ### Where it sits
 
-`internal/flow` is another consumer group on the log, a peer of the gateway rather than a layer under
-anything. It is in no request path, so removing it leaves every existing path working. It holds no
-privileged access: it calls the same `ControlPlaneService` the console does, and its outbound goes
-through the same gate as everything else, so it cannot reach the operator without intent.
+`internal/flow` is a state machine over its own tables, driven by a poller and by the store's own
+writes, a peer of the gateway rather than a layer under anything. It is in no request path, so
+removing it leaves every existing path working. It holds no privileged access: it calls the same
+`ControlPlaneService` the console does, and its outbound goes through the same gate as everything
+else, so it cannot reach the operator without intent.
 
 ```mermaid
 sequenceDiagram
@@ -398,8 +421,10 @@ sequenceDiagram
 
 ### Constraints that hold the design together
 
-- **One run's events must be totally ordered, so no locking.** Turn events are already keyed by
-  session, and a run owns its session, so the partitioning that exists gives this for nothing.
+- **One run has one writer, so no locking.** A run's row is advanced in a transaction, and a
+  transaction is the one writer at a time the database already gives. The trigger that starts a run
+  has no session yet, which is why a partitioned log could not have given this for every event a run
+  cares about.
 - **Pin the graph version on the run.** Otherwise editing a file changes an automation that is
   halfway through.
 - **No expression language.** Three comparison operators to start. Accepting arbitrary expressions
@@ -439,13 +464,27 @@ Secrets are never stored in the repository, and the code has no built in knowled
   nothing sits in plaintext or in the repository even locally. The cloud swaps to a managed secrets
   service behind the same interface.
 
+## Authentication
+
+There is none today, and saying so plainly is the point of this section: every request on the gRPC
+port is fully authorised, and the compose file publishes that port to the host. Until that changes,
+the port should be reachable only from machines you trust.
+
+**Decided 9 August 2026: a bearer token per crew.** The control plane mints and seals it the way it
+already seals secrets, every client presents it, and the listener binds to loopback unless the
+operator says otherwise. A driver session is a client like any other and gets less, not more: the
+calls that grant capability (skills, secrets, context at the crew level) are refused to it, so a
+session that can drive the crew still cannot grant itself anything. Per client identities can follow
+when more than one operator exists; the token is the smallest thing that makes the boundary real.
+
 ## Observability and audit
 
 Auditability and observability are first class, because the system runs a model with real permissions
 and can send messages and run shell. Two layers reinforce each other.
 
-1. **The application's own history.** The event log is the write side; the read model is a queryable
-   view of what happened. That record lives in the operator's own storage.
+1. **The application's own history.** The store holds what happened, written with the thing it
+   describes; the event log carries the same record outward. Both live in the operator's own
+   storage.
 2. **Operational telemetry.** Logs, metrics, and traces through an OpenTelemetry pipeline into Grafana,
    with Loki for logs and audit, Tempo for traces, and Prometheus for metrics.
 
