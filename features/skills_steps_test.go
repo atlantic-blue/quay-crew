@@ -256,7 +256,83 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+
+	sc.Step(`^an earlier build left a skills index in the session's own memory file$`,
+		func(ctx context.Context) error {
+			dir, err := sessionWorkingDir(ctx)
+			if err != nil {
+				return err
+			}
+			body, _ := sandbox.ReadMemory(dir)
+			return sandbox.WriteMemory(dir, strings.TrimRight(body, "\n")+"\n\n"+sweptIndex)
+		})
+
+	sc.Step(`^the session's stored context is only a swept skills index$`,
+		func(ctx context.Context) error {
+			w := worldFrom(ctx)
+			current, err := w.lastTurn()
+			if err != nil {
+				return err
+			}
+			return w.store.SetContext(ctx, store.ContextSession, current.sessionID, sweptIndex)
+		})
+
+	sc.Step(`^the session's context does not mention the git skill$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		got, err := w.store.GetContext(ctx, store.ContextSession, current.sessionID)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(got, "git") || strings.Contains(got, "skills") {
+			return fmt.Errorf("the session's context still carries the swept index:\n%s", got)
+		}
+		return nil
+	})
+
+	sc.Step(`^something appends "([^"]*)" to the workspace memory file$`,
+		func(ctx context.Context, note string) error {
+			w := worldFrom(ctx)
+			dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "claude")
+			body, _ := sandbox.ReadMemory(dir)
+			return sandbox.WriteMemory(dir, strings.TrimRight(body, "\n")+"\n"+note)
+		})
+
+	sc.Step(`^the workspace context carries "([^"]*)"$`, func(ctx context.Context, note string) error {
+		w := worldFrom(ctx)
+		got, err := w.store.GetContext(ctx, store.ContextWorkspace, w.workspaceID)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(got, note) {
+			return fmt.Errorf("the workspace context reads %q, want it to carry %q", got, note)
+		}
+		return nil
+	})
+
+	sc.Step(`^the session's own memory file does not carry a skills index$`,
+		func(ctx context.Context) error {
+			dir, err := sessionWorkingDir(ctx)
+			if err != nil {
+				return err
+			}
+			body, found := sandbox.ReadMemory(dir)
+			if found && strings.Contains(body, "<!-- quay:"+sandbox.SkillsScope) {
+				return fmt.Errorf("the session's own memory file still carries a skills index:\n%s", body)
+			}
+			return nil
+		})
 }
+
+// sweptIndex is the block a build before the index moved wrote into the session's own memory file.
+// Only the mark matters to what happens on read back; the body is a plausible index of the day.
+const sweptIndex = "<!-- quay:skills -->\n" +
+	"The skills this session holds. Read a brief before that kind of work.\n\n" +
+	"- git: Branch first.\n" +
+	"  /home/agent/skills/git/SKILL.md"
 
 // giveTheCrewASkill writes one to disk and restarts the control plane over it, which is how a crew
 // picks up a skill: they are read when it starts.
