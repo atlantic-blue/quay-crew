@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **Two fixes to the command bar, from driving it.** Output lines are cut and padded to exactly the
+  panel's width: the frame puts a border either side of whatever it is handed, so a short line left
+  the right border sitting next to the text and a long one spilled past it, and the panel came out
+  ragged either way. And typing the tool's own name at the front, which is what anybody does out of
+  habit, ran it as an argument to itself and answered `unknown command "quay"`, which reads as the
+  bar being broken rather than as a typo; the prefix is dropped now, and the name on its own says
+  you are already looking at the crew.
+  ([#236](https://github.com/atlantic-blue/quay-crew/issues/236))
 - **The command bar is the one way in.** The commands that take over the screen used to be refused
   there, which left it a reading tool: `:attach <thread>` now suspends the console, hands over the
   real terminal, and comes back when you leave the conversation, the same handover pressing enter on

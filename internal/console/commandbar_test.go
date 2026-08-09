@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -222,5 +224,60 @@ func TestAPrintingCommandIsStillCaptured(t *testing.T) {
 	}
 	if model.mode != modeOutput {
 		t.Fatalf("the console is in mode %v, want the output panel", model.mode)
+	}
+}
+
+// Every line inside the panel has to be exactly the panel's width, or the right border lands
+// wherever the text happened to stop and the frame comes out ragged.
+func TestOutputLinesFillThePanelWidth(t *testing.T) {
+	ran := &ranCommand{output: "short\na line that is quite a lot longer than the one above it\n"}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
+
+	for _, line := range model.commandBody() {
+		if width := lipgloss.Width(line); width != model.innerWidth() {
+			t.Fatalf("a panel line is %d wide and the panel is %d: %q", width, model.innerWidth(), line)
+		}
+	}
+}
+
+// A line wider than the panel is cut to fit rather than spilling past the border and wrapping the
+// terminal, which is what turns one long line into a broken frame.
+func TestALongOutputLineIsCutToFit(t *testing.T) {
+	ran := &ranCommand{output: strings.Repeat("x", 400)}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
+
+	for _, line := range model.commandBody() {
+		if width := lipgloss.Width(line); width > model.innerWidth() {
+			t.Fatalf("a panel line is %d wide and the panel is %d", width, model.innerWidth())
+		}
+	}
+}
+
+// Typing the tool's own name is what anybody does out of habit, and running it as an argument to
+// itself gives `unknown command "quay"`, which reads as the bar being broken. The prefix is what
+// was meant, so it is dropped.
+func TestATypedQuayPrefixIsDropped(t *testing.T) {
+	ran := &ranCommand{output: "made it"}
+	typeInto(t, openBar(t, barModel(t, ran)), "quay workspace create acme")
+
+	if len(ran.args) == 0 || ran.args[0] == "quay" {
+		t.Fatalf("the console ran %v, want the prefix dropped", ran.args)
+	}
+	if strings.Join(ran.args, " ") != "workspace create acme" {
+		t.Fatalf("the console ran %v", ran.args)
+	}
+}
+
+// The name on its own is not a command with the prefix taken off, it is asking for the thing you
+// are already looking at.
+func TestQuayOnItsOwnSaysYouAreAlreadyHere(t *testing.T) {
+	ran := &ranCommand{}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "quay")
+
+	if ran.args != nil {
+		t.Fatalf("the console ran %v", ran.args)
+	}
+	if model.err == nil || !strings.Contains(model.err.Error(), "already") {
+		t.Fatalf("typing the tool's own name said %v, want it to say you are already here", model.err)
 	}
 }

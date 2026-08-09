@@ -40,8 +40,12 @@ var needTerminal = map[string]bool{
 // tell which one they are typing into.
 var alreadyHere = map[string]string{
 	"console": "you are already in the console",
-	"quay":    "you are already in the crew",
+	toolName:  "you are already in the crew",
 }
+
+// toolName is what the tool is called, which is also the word an operator types out of habit at the
+// front of a command they are already inside.
+const toolName = "quay"
 
 // commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
 // crew, short enough that a command which will never answer gives the console back.
@@ -84,6 +88,16 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 	}
 
 	args := strings.Fields(typed)
+	// Typing the tool's own name is what anybody does out of habit, and passing it to itself gives
+	// `unknown command "quay"`, which reads as the bar being broken rather than as a typo. The name
+	// on its own is asking for the thing already on screen, so that is answered rather than run.
+	if args[0] == toolName {
+		if len(args) == 1 {
+			m.err = fmt.Errorf("%s, so there is nothing to open: type a command after it, or press escape", alreadyHere[toolName])
+			return m, nil
+		}
+		args = args[1:]
+	}
 	if needTerminal[args[0]] {
 		command, err := m.handoverFor(args)
 		if err != nil {
@@ -159,7 +173,13 @@ func (m Model) commandBody() []string {
 	if height < 1 {
 		height = 1
 	}
-	lines := append([]string{prompt.Render(":" + m.commandTyped)}, m.commandOutput...)
+	// Cut and padded to exactly the panel's width: the frame puts a border either side of whatever
+	// it is given, so a short line leaves the right border next to the text and a long one spills
+	// past it and wraps the terminal. Either way the panel comes out ragged.
+	lines := []string{m.fit(prompt.Render(":" + m.commandTyped))}
+	for _, line := range m.commandOutput {
+		lines = append(lines, m.fit(line))
+	}
 	top := m.commandTop
 	if top > len(lines)-1 {
 		top = len(lines) - 1
