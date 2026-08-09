@@ -3,6 +3,7 @@ package flow
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Run statuses. Failed is a run the graph could not carry any further, which is different from a
@@ -12,6 +13,10 @@ const (
 	StatusRunning = "running"
 	StatusDone    = "done"
 	StatusFailed  = "failed"
+	// StatusWaiting is a run sitting on a wait node until its time comes. It is a live run that
+	// costs nothing: the due time is a column a poller reads, not a timer somebody is holding, so
+	// a crew restarted underneath a waiting run still resumes it.
+	StatusWaiting = "waiting"
 	// StatusStopped is a run brought to a halt rather than one that finished: it hit a limit, or
 	// somebody stopped it. A run that went quiet and a run that was halted must never read the
 	// same, which is why this is its own word and why it carries a reason.
@@ -23,6 +28,8 @@ const (
 const (
 	EventStarted      = "started"
 	EventTurnFinished = "turn.finished"
+	// EventDue is a wait whose time has come, delivered by the poller.
+	EventDue = "due"
 )
 
 // Command kinds. Dispatch sends a turn to the run's own thread; archive puts that thread away when
@@ -57,6 +64,12 @@ type Run struct {
 	Spent int64
 	// Reason says why a stopped run stopped. Empty on a run that is running or that finished.
 	Reason string
+	// DueAt is when a waiting run should be looked at again, as the store holds it. The poller
+	// reads it; the reducer never does, because a pure function has no clock.
+	DueAt *time.Time
+	// DueIn is how long the wait the run just reached lasts. The engine turns it into a due time
+	// on the row; the reducer stays pure and never reads a clock.
+	DueIn time.Duration
 }
 
 // Event is one thing that happened to a run.
@@ -81,7 +94,12 @@ type Command struct {
 // Advance is the whole of the flow logic: a pure function from a run and an event to the next run
 // and the commands to carry out.
 func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
-	if run.Status != StatusRunning {
+	// A waiting run is live: it moves when its time comes and on nothing else.
+	if run.Status == StatusWaiting {
+		if event.Kind != EventDue {
+			return run, nil, fmt.Errorf("flow: run %s is waiting on %s, so it moves when its time comes and not on a %s", run.ID, run.Node, event.Kind)
+		}
+	} else if run.Status != StatusRunning {
 		return run, nil, fmt.Errorf("flow: run %s is %s, and a run that ended does not move", run.ID, run.Status)
 	}
 	// The brakes are checked before the movement rather than after it, so the dispatch that would
@@ -98,6 +116,16 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 	}
 
 	switch event.Kind {
+	case EventDue:
+		if event.Node != run.Node || run.Status != StatusWaiting {
+			return run, nil, fmt.Errorf("flow: a wait came due for node %s while run %s sits %s on %s; a poller that fired twice must not move a run twice", event.Node, run.ID, run.Status, run.Node)
+		}
+		next, err := follow(graph, run.Node, "")
+		if err != nil {
+			return run, nil, err
+		}
+		run.Status, run.DueIn = StatusRunning, 0
+		return settle(graph, run, next)
 	case EventStarted:
 		if run.Node != "" {
 			return run, nil, fmt.Errorf("flow: run %s already started, at node %s", run.ID, run.Node)
@@ -169,6 +197,11 @@ func settle(graph Graph, run Run, at string) (Run, []Command, error) {
 				Attempt: run.Attempts[at],
 				Prompt:  render(node.Prompt, run.State),
 			}}, nil
+		case NodeWait:
+			// The run is put down here rather than pushed on: it says how long to leave it, asks
+			// for nothing, and the engine writes a due time the poller will read.
+			run.Status, run.DueIn = StatusWaiting, node.For
+			return run, nil, nil
 		case NodeChoice:
 			answer := "true"
 			for key, want := range node.On {

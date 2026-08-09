@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
@@ -19,11 +20,18 @@ type Store interface {
 	// because a run is pinned to the version it started with and a version that can change is not
 	// a pin.
 	ImportFlowGraph(ctx context.Context, name string, version int, definition string) error
-	// LatestFlowGraph returns the newest version of a graph and its definition.
+	// LatestFlowGraph returns the newest version of a graph and its definition. A new run takes
+	// the newest version, and pins it.
 	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
+	// FlowGraph returns one exact version. A run already under way is carried on with the version
+	// it pinned, never the newest, or editing a file would change an automation halfway through.
+	FlowGraph(ctx context.Context, name string, version int) (string, error)
 	// GetFlowRun reads a run back, which the engine needs to answer with the stopped run rather
 	// than with what it held before the stop landed.
 	GetFlowRun(ctx context.Context, id string) (*Run, error)
+	// DueFlowRuns are the waiting runs whose time has come. The poller asks for these and nothing
+	// else, so a crew with a thousand finished runs and one waiting does one row's work per tick.
+	DueFlowRuns(ctx context.Context, now time.Time) ([]*Run, error)
 	// CreateFlowRun writes a fresh run. Its transitions are the events; creation is the row itself.
 	CreateFlowRun(ctx context.Context, run *Run) error
 	// AdvanceFlowRun writes the run's next position, appends the transition that took it there,
@@ -41,6 +49,11 @@ type Store interface {
 // running: somebody stopped it while the engine was waiting on a turn.
 var ErrRunHalted = errors.New("flow: the run is no longer running")
 
+// DueAt is when a waiting run should be looked at again, or nil for a run that is not waiting. It
+// travels with the transition because the due time and the position it belongs to have to land in
+// the same write: a run recorded as waiting with no due time would wait forever.
+type DueAt = *time.Time
+
 // Transition is one movement of a run, as recorded: what arrived, where the run now sits, and what
 // the engine was told to do about it.
 type Transition struct {
@@ -49,6 +62,8 @@ type Transition struct {
 	// Dispatch is set when the transition asked for a turn, and its key of run, node and attempt
 	// is what makes sending the same turn twice impossible.
 	Dispatch *Command
+	// Due is when the run should be looked at again, set only when this movement reached a wait.
+	Due DueAt
 }
 
 // RecordedTransition is a transition as read back: the order it happened in, what arrived, and
@@ -84,6 +99,24 @@ type Engine struct {
 	store Store
 	plane ControlPlane
 	spend Spend
+	// clock is where the engine reads the time, so a test can put a wait's due time in the past
+	// rather than waiting out a real one. Nil means the wall clock.
+	clock func() time.Time
+}
+
+// now is the time, from the clock this engine was given.
+func (e *Engine) now() time.Time {
+	if e.clock == nil {
+		return time.Now().UTC()
+	}
+	return e.clock()
+}
+
+// WithClock returns an engine that reads the time from clock. For tests about waits, which would
+// otherwise have to wait.
+func (e *Engine) WithClock(clock func() time.Time) *Engine {
+	e.clock = clock
+	return e
 }
 
 // NewEngine builds one. A nil spend reader means the token ceiling has nothing to read, so a graph
@@ -178,8 +211,16 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			}
 		}
 
+		// A run that reached a wait carries its due time into the same write as its position, so it
+		// can never be recorded as waiting with nothing to wake it.
+		var due DueAt
+		if next.Status == StatusWaiting && next.DueIn > 0 {
+			at := e.now().Add(next.DueIn)
+			due = &at
+		}
+
 		if err := e.store.AdvanceFlowRun(ctx, &next, Transition{
-			Event: event.Kind, Node: next.Node, Dispatch: dispatch,
+			Event: event.Kind, Node: next.Node, Dispatch: dispatch, Due: due,
 		}); err != nil {
 			// Somebody stopped the run while this was waiting on a turn. That is not a failure:
 			// the stop is the answer, and the run keeps the reason it was stopped with.

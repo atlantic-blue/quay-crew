@@ -424,8 +424,18 @@ a movement only writes where the run is still held as running, so a stop that la
 is waiting is not written back over. A run that already ended is not stopped again, because how it
 ended is the useful part.
 
-**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound. Those are
-the next slices of [#182](https://github.com/atlantic-blue/quay-crew/issues/182).
+**A run can wait, and a restart does not lose it.** A `wait` node declares how long, as `for: 10m`,
+and reaching one puts the run down: it is recorded as waiting with a due time on its row, asks for
+nothing, and costs nothing until its time comes. A poller in the control plane reads the due rows
+every few seconds and carries those runs on, once on the way up as well, so a crew restarted onto a
+pile of overdue waits resumes them immediately. That is the whole reason a wait is a column rather
+than a timer somebody is holding: a process holding timers forgets every one of them when it
+restarts, and a run that was going to resume in ten minutes simply never would. A resumed run is
+carried on with the graph version it pinned, never the newest, so editing a file while a run waits
+cannot change what that run does when it wakes.
+
+**What is not built yet.** `ask` needs the gated outbound, which is #10. That is the next slice of
+[#182](https://github.com/atlantic-blue/quay-crew/issues/182).
 
 ```mermaid
 sequenceDiagram

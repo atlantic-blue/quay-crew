@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/jackc/pgx/v5"
@@ -43,6 +44,36 @@ func (p *Postgres) LatestFlowGraph(ctx context.Context, name string) (int, strin
 	return version, definition, nil
 }
 
+// FlowGraph returns one exact version, which is what a run already under way is carried on with.
+func (p *Postgres) FlowGraph(ctx context.Context, name string, version int) (string, error) {
+	var definition string
+	err := p.pool.QueryRow(ctx,
+		`select definition from flow_graphs where name = $1 and version = $2`, name, version).Scan(&definition)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("flow graph: %w", err)
+	}
+	return definition, nil
+}
+
+// DueFlowRuns are the waiting runs whose time has come. Only those: a crew with a thousand finished
+// runs and one waiting does one row's work per tick, which is what the partial index is for.
+func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
+		       transitions, spent, reason, due_at
+		from flow_runs
+		where status = $1 and due_at is not null and due_at <= $2
+		order by due_at`, flow.StatusWaiting, now)
+	if err != nil {
+		return nil, fmt.Errorf("due flow runs: %w", err)
+	}
+	defer rows.Close()
+	return scanFlowRuns(rows)
+}
+
 // CreateFlowRun writes a fresh run.
 func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run) error {
 	state, attempts, err := runJSON(run)
@@ -79,10 +110,10 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	// than setting the run back to running underneath them.
 	tag, err := tx.Exec(ctx, `
 		update flow_runs set node = $2, status = $3, state = $4, attempts = $5,
-		    transitions = $6, spent = $7, reason = $8, updated_at = now()
-		where id = $1 and status = $9`,
+		    transitions = $6, spent = $7, reason = $8, due_at = $9, updated_at = now()
+		where id = $1 and status in ($10, $11)`,
 		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason,
-		flow.StatusRunning)
+		transition.Due, flow.StatusRunning, flow.StatusWaiting)
 	if err != nil {
 		return fmt.Errorf("advance flow run: %w", err)
 	}
@@ -146,11 +177,11 @@ func (p *Postgres) GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	var state, attempts []byte
 	err := p.pool.QueryRow(ctx, `
 		select workspace, project, graph_name, graph_version, node, status, state, attempts,
-		       transitions, spent, reason
+		       transitions, spent, reason, due_at
 		from flow_runs where id = $1`, id).Scan(
 		&run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
 		&run.Node, &run.Status, &state, &attempts,
-		&run.Transitions, &run.Spent, &run.Reason)
+		&run.Transitions, &run.Spent, &run.Reason, &run.DueAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -170,19 +201,24 @@ func (p *Postgres) GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 func (p *Postgres) ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
-		       transitions, spent, reason
+		       transitions, spent, reason, due_at
 		from flow_runs where ($1 = '' or project = $1) order by created_at desc, id desc`, project)
 	if err != nil {
 		return nil, fmt.Errorf("list flow runs: %w", err)
 	}
 	defer rows.Close()
+	return scanFlowRuns(rows)
+}
+
+// scanFlowRuns reads a set of run rows, in the one column order every query above selects.
+func scanFlowRuns(rows pgx.Rows) ([]*flow.Run, error) {
 	out := make([]*flow.Run, 0)
 	for rows.Next() {
 		var run flow.Run
 		var state, attempts []byte
 		if err := rows.Scan(&run.ID, &run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
 			&run.Node, &run.Status, &state, &attempts,
-			&run.Transitions, &run.Spent, &run.Reason); err != nil {
+			&run.Transitions, &run.Spent, &run.Reason, &run.DueAt); err != nil {
 			return nil, fmt.Errorf("scan flow run: %w", err)
 		}
 		if err := json.Unmarshal(state, &run.State); err != nil {
@@ -194,7 +230,7 @@ func (p *Postgres) ListFlowRuns(ctx context.Context, project string) ([]*flow.Ru
 		out = append(out, &run)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list flow runs: %w", err)
+		return nil, fmt.Errorf("read flow runs: %w", err)
 	}
 	return out, nil
 }

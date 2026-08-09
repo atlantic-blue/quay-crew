@@ -128,6 +128,9 @@ type Server struct {
 	// flows begins and drives automation runs. It dispatches through this same server, so a flow
 	// can do exactly what the operator who started it could do and nothing more.
 	flows flowRunner
+	// flowPoller resumes waiting runs whose time has come. Started by whoever owns the process,
+	// because a goroutine hidden inside a constructor is a lifetime nobody can see.
+	flowPoller *flow.Poller
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
@@ -171,7 +174,9 @@ func NewServer(cfg Config) *Server {
 	// The engine dispatches through this same server rather than dialing it: it is already inside
 	// the process, and a run is started by a caller the interceptor has already authenticated. It
 	// reaches nothing the caller could not, because these are the same two methods.
-	server.flows = flow.NewEngine(cfg.Store, server, server)
+	engine := flow.NewEngine(cfg.Store, server, server)
+	server.flows = engine
+	server.flowPoller = flow.NewPoller(engine, 0, nil)
 	return server
 }
 

@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A flow can wait, and a restart does not lose it.** A `wait` node says how long, as `for: 10m`,
+  and reaching one puts the run down: recorded as waiting with a due time on its row, asking for
+  nothing, costing nothing until its time comes. A poller reads the due rows every few seconds and
+  once on the way up, so a crew restarted onto a pile of overdue waits resumes them immediately
+  rather than losing them, which is the whole reason a wait is a column rather than a timer
+  somebody is holding. A resumed run is carried on with the graph version it pinned, so editing a
+  file while a run waits cannot change what that run does when it wakes.
+  ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **A flow run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a
   run in flight. Before this the only lever over a running automation was taking the crew down,
   which takes every other conversation with it. The stop is cooperative rather than a kill: a run

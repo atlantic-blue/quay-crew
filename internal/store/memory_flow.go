@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 )
@@ -42,6 +43,33 @@ func (m *Memory) LatestFlowGraph(_ context.Context, name string) (int, string, e
 		}
 	}
 	return latest, versions[latest], nil
+}
+
+// FlowGraph returns one exact version, which is what a run already under way is carried on with.
+func (m *Memory) FlowGraph(_ context.Context, name string, version int) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	definition, held := m.flowGraphs[name][version]
+	if !held {
+		return "", ErrNotFound
+	}
+	return definition, nil
+}
+
+// DueFlowRuns are the waiting runs whose time has come.
+func (m *Memory) DueFlowRuns(_ context.Context, now time.Time) ([]*flow.Run, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]*flow.Run, 0)
+	for _, run := range m.flowRuns {
+		if run.Status != flow.StatusWaiting || run.DueAt == nil || run.DueAt.After(now) {
+			continue
+		}
+		kept := cloneRun(*run)
+		out = append(out, &kept)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].ID < out[b].ID })
+	return out, nil
 }
 
 // CreateFlowRun writes a fresh run.
@@ -85,7 +113,10 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 	if !found {
 		return ErrNotFound
 	}
-	if held.Status != flow.StatusRunning {
+	// Running and waiting are both live: a waiting run is one the poller will carry on, so it
+	// moves. Anything else has ended, and a movement written over that would undo the record of
+	// how it ended.
+	if held.Status != flow.StatusRunning && held.Status != flow.StatusWaiting {
 		return flow.ErrRunHalted
 	}
 	if transition.Dispatch != nil {
@@ -99,6 +130,9 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 		m.flowDispatches[key] = true
 	}
 	kept := cloneRun(*run)
+	// The due time lands with the position it belongs to, so a run recorded as waiting can never
+	// be left with nothing to wake it.
+	kept.DueAt = transition.Due
 	m.flowRuns[run.ID] = &kept
 	if m.flowTransitions == nil {
 		m.flowTransitions = map[string][]flow.RecordedTransition{}

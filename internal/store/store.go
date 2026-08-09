@@ -150,6 +150,8 @@ type Store interface {
 	// flow.Store; the reads beside it are for listings and tests.
 	ImportFlowGraph(ctx context.Context, name string, version int, definition string) error
 	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
+	FlowGraph(ctx context.Context, name string, version int) (string, error)
+	DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error)
 	CreateFlowRun(ctx context.Context, run *flow.Run) error
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
 	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
