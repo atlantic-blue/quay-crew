@@ -52,7 +52,11 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the ([^ ]+) skill has a file "([^"]*)" saying "([^"]*)"$`,
 		func(ctx context.Context, name, file, body string) error {
 			w := worldFrom(ctx)
-			if err := os.WriteFile(filepath.Join(w.skillsDir, name, file), []byte(body+"\n"), 0o666); err != nil {
+			at := filepath.Join(w.skillsDir, name, file)
+			if err := os.MkdirAll(filepath.Dir(at), 0o777); err != nil {
+				return err
+			}
+			if err := os.WriteFile(at, []byte(body+"\n"), 0o777); err != nil {
 				return err
 			}
 			return reloadSkills(ctx)

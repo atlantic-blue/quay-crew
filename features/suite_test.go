@@ -225,12 +225,15 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.grpcServer = grpc.NewServer()
-	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, controlplane.NewServer(controlplane.Config{
+	server := controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
-	}))
+	})
+	// The way the real main starts: what strays while the crew is down is reaped on the way up.
+	server.ReapStrays(context.Background())
+	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, server)
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
 	conn, err := grpc.NewClient(
@@ -570,6 +573,39 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.DeleteWorkspace(ctx, &quaycrewv1.DeleteWorkspaceRequest{Id: w.workspaceID})
 		return w.lastErr
+	})
+	sc.Step(`^the operator deletes the project$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.DeleteProject(ctx, &quaycrewv1.DeleteProjectRequest{Id: w.projectID})
+		return w.lastErr
+	})
+	sc.Step(`^every sandbox the crew made is closed$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Boxes) == 0 {
+			return fmt.Errorf("no sandbox was ever created, so this scenario is not testing the close")
+		}
+		for i, box := range w.provider.Boxes {
+			if !box.Closed {
+				return fmt.Errorf("sandbox %d is still open", i)
+			}
+		}
+		return nil
+	})
+	sc.Step(`^the session's row says stopped while its container still runs$`,
+		func(ctx context.Context) error {
+			w := worldFrom(ctx)
+			current, err := w.lastTurn()
+			if err != nil {
+				return err
+			}
+			// Straight into the store, past the control plane, which is what the historical leak
+			// looks like: the row and the daemon disagreeing.
+			return w.store.StopSession(ctx, current.sessionID)
+		})
+	sc.Step(`^every command run in a sandbox fails$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		w.provider.ExitErr = fmt.Errorf("exit status 1")
+		return nil
 	})
 	sc.Step(`^the operator attaches a "([^"]*)" channel called "([^"]*)" to workspace "([^"]*)"$`,
 		func(ctx context.Context, kind, id, workspace string) error {

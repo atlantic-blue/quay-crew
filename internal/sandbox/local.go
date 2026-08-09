@@ -28,6 +28,12 @@ func (LocalProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	return localSandbox{env: cfg.Env}, nil
 }
 
+// Remove has nothing to do: a local sandbox is the host, and there is no container to take down.
+func (LocalProvider) Remove(context.Context, string) error { return nil }
+
+// Stranded is empty for the same reason: nothing was created, so nothing strays.
+func (LocalProvider) Stranded(context.Context) ([]string, error) { return nil, nil }
+
 type localSandbox struct{ env []string }
 
 var _ Sandbox = localSandbox{}

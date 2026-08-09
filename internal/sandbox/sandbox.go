@@ -55,6 +55,14 @@ type Config struct {
 // Provider mints a Sandbox per session.
 type Provider interface {
 	Create(ctx context.Context, cfg Config) (Sandbox, error)
+	// Remove tears down the session's sandbox whether or not this process holds a handle to it. The
+	// handles are a process map and the containers are not, so after a restart the map is empty while
+	// every container runs on; removing by name is what makes stopping a thread mean something then.
+	// A sandbox that is not there is a remove that already happened, not an error.
+	Remove(ctx context.Context, sessionID string) error
+	// Stranded lists the sessions whose sandboxes this provider still holds, so the crew can reap the
+	// ones whose threads no longer want one.
+	Stranded(ctx context.Context) ([]string, error)
 }
 
 // Mount is a directory made available inside a sandbox.

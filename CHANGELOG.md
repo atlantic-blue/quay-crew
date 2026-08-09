@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **Sandboxes stop leaking.** Four ways a container outlived what it belonged to, all closed.
+  Deleting a workspace or a project now stops the sessions it hides and closes their sandboxes,
+  where before every container kept running with the workspace's secrets in its environment.
+  Stopping or archiving a thread now removes its container even after a control plane restart,
+  because the close asks the daemon by name rather than a process map that a restart empties. A
+  sandbox whose clone or skill setup fails is closed rather than left running and untracked, one
+  per attempt. And starting up reaps what earlier builds left behind: a container whose thread is
+  stopped, archived or gone belongs to nobody and is removed on the way up.
+  ([#191](https://github.com/atlantic-blue/quay-crew/issues/191))
 - **A skills index left behind by an earlier build stops becoming session context.** A build before
   the index moved wrote it into the session's own memory file. Read back by a later build that only
   knew the mark in the outer file, the whole index was swept into session context, stored as though

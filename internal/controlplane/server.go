@@ -279,14 +279,27 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	if err != nil {
 		return nil, err
 	}
-	if err := s.readySkills(ctx, session, box); err != nil {
-		return nil, err
-	}
-	if err := s.cloneRepositories(ctx, session, box); err != nil {
+	// A sandbox that cannot be provisioned is closed rather than left running and untracked, so the
+	// next attempt starts clean instead of adopting a half made one, and a failing clone or setup
+	// does not strand a container per attempt. Only a sandbox this process was not already
+	// accountable for: closing an adopted one that this process holds would take a live conversation
+	// down over a transient failure.
+	if err := s.provision(ctx, session, box); err != nil {
+		if _, held := s.sandboxes[session.GetId()]; !held {
+			_ = box.Close(ctx)
+		}
 		return nil, err
 	}
 	s.sandboxes[session.GetId()] = box
 	return box, nil
+}
+
+// provision is everything a fresh sandbox needs before its first turn.
+func (s *Server) provision(ctx context.Context, session *quaycrewv1.Session, box sandbox.Sandbox) error {
+	if err := s.readySkills(ctx, session, box); err != nil {
+		return err
+	}
+	return s.cloneRepositories(ctx, session, box)
 }
 
 // cloneRepositories puts the workspace's repositories in front of the session.
@@ -464,7 +477,6 @@ func (s *Server) readySkills(ctx context.Context, session *quaycrewv1.Session, b
 			if s.has(ctx, box, binary) {
 				continue
 			}
-			_ = box.Close(ctx)
 			return status.Errorf(codes.FailedPrecondition,
 				"the %s skill needs %s and the sandbox image does not have it. Add it to %s",
 				given.Name, binary, s.imageName())
@@ -721,6 +733,10 @@ func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 }
 
 // closeSandbox tears down and forgets a session's sandbox.
+//
+// The handle is closed when this process holds one, and the provider removes by name either way: the
+// map is a process map, so after a restart it is empty while every container runs on, which is how
+// stopping a thread used to mark the row and leave the container.
 func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 	s.mu.Lock()
 	box, ok := s.sandboxes[sessionID]
@@ -728,6 +744,43 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 	s.mu.Unlock()
 	if ok {
 		_ = box.Close(ctx)
+	}
+	_ = s.provider.Remove(ctx, sessionID)
+}
+
+// stopSessions stops every live session the filter matches and closes its sandbox. It is what
+// deleting has to do to the things it hides: sessions keep their history, and a container running
+// for a thread nobody can see is the leak archiving already closes.
+func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) {
+	sessions, err := s.store.ListSessions(ctx, filter)
+	if err != nil {
+		return
+	}
+	for _, session := range sessions {
+		if session.GetStatus() != "stopped" {
+			_ = s.store.StopSession(ctx, session.GetId())
+		}
+		s.closeSandbox(ctx, session.GetId())
+	}
+}
+
+// ReapStrays removes the sandboxes of threads that no longer want one: the row is gone, archived, or
+// says stopped. Anything stopped or deleted while the crew was down was marked in the store and left
+// running on the daemon, so this runs once at startup.
+func (s *Server) ReapStrays(ctx context.Context) {
+	ids, err := s.provider.Stranded(ctx)
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		session, err := s.store.GetSession(ctx, id)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			_ = s.provider.Remove(ctx, id)
+		case err != nil:
+		case session.GetArchivedAt() != nil, session.GetStatus() == "stopped":
+			_ = s.provider.Remove(ctx, id)
+		}
 	}
 }
 
@@ -761,8 +814,9 @@ func (s *Server) ListWorkspaces(ctx context.Context, _ *quaycrewv1.ListWorkspace
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
 }
 
-// DeleteWorkspace removes a workspace.
+// DeleteWorkspace removes a workspace, stopping what it hides first.
 func (s *Server) DeleteWorkspace(ctx context.Context, req *quaycrewv1.DeleteWorkspaceRequest) (*quaycrewv1.DeleteWorkspaceResponse, error) {
+	s.stopSessions(ctx, store.SessionFilter{Workspace: req.GetId()})
 	if err := s.store.DeleteWorkspace(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "workspace")
 	}
@@ -859,8 +913,9 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 	return &quaycrewv1.ListProjectsResponse{Projects: projects}, nil
 }
 
-// DeleteProject removes a project.
+// DeleteProject removes a project, stopping what it hides first.
 func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjectRequest) (*quaycrewv1.DeleteProjectResponse, error) {
+	s.stopSessions(ctx, store.SessionFilter{Project: req.GetId()})
 	if err := s.store.DeleteProject(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "project")
 	}

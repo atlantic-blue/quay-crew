@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -265,5 +266,47 @@ func TestASessionCanActuallyCommit(t *testing.T) {
 	// commits as the operator rather than on behalf of somebody else.
 	if got := strings.TrimSpace(string(said)); got != "A Name <a@example.com>|A Name <a@example.com>" {
 		t.Fatalf("the commit is by %q", got)
+	}
+}
+
+// TestDockerProviderRemovesByName: stopping a thread has to work from a process that never made the
+// container, so removal goes by name rather than through a held handle. A container that is not
+// there is a remove that already happened, and the exact name shape keeps the compose stack's own
+// services out of the stranded listing.
+func TestDockerProviderRemovesByName(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	provider := sandbox.DockerProvider{Image: "busybox:latest"}
+	id := "0123456789abcdef01234567"
+	if _, err := provider.Create(ctx, sandbox.Config{ID: id}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = provider.Remove(context.Background(), id) })
+
+	stranded, err := provider.Stranded(ctx)
+	if err != nil {
+		t.Fatalf("Stranded: %v", err)
+	}
+	if !slices.Contains(stranded, id) {
+		t.Fatalf("Stranded = %v, want it to hold %s", stranded, id)
+	}
+
+	if err := provider.Remove(ctx, id); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := exec.CommandContext(ctx, "docker", "inspect", sandbox.ContainerName(id)).Run(); err == nil {
+		t.Fatalf("the container is still there after Remove")
+	}
+	if err := provider.Remove(ctx, id); err != nil {
+		t.Fatalf("Remove of an absent container: %v, want success", err)
+	}
+
+	stranded, err = provider.Stranded(ctx)
+	if err != nil {
+		t.Fatalf("Stranded: %v", err)
+	}
+	if slices.Contains(stranded, id) {
+		t.Fatalf("Stranded still lists %s after Remove", id)
 	}
 }

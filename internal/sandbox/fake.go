@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -26,7 +27,10 @@ type FakeProvider struct {
 	Created []Config
 	// Calls records every request, adopted or not, for a test that cares how often it was asked.
 	Calls []Config
-	Boxes []*FakeSandbox
+	// Removed records every session torn down by name rather than through a handle, which is what
+	// the control plane does when its map is empty after a restart.
+	Removed []string
+	Boxes   []*FakeSandbox
 	// live is the sandbox each session currently has, so creating twice for one session adopts it.
 	live map[string]*FakeSandbox
 }
@@ -55,6 +59,34 @@ func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	f.live[cfg.ID] = box
 	f.Boxes = append(f.Boxes, box)
 	return box, nil
+}
+
+// Remove closes and forgets the session's sandbox, held or not, the way the Docker provider removes
+// a container by its deterministic name. Absent is success there, so it is success here.
+func (f *FakeProvider) Remove(_ context.Context, sessionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Removed = append(f.Removed, sessionID)
+	if box, live := f.live[sessionID]; live {
+		box.Closed = true
+		delete(f.live, sessionID)
+	}
+	return nil
+}
+
+// Stranded lists the sessions whose sandboxes are still open, the way the Docker provider lists the
+// containers the daemon holds.
+func (f *FakeProvider) Stranded(context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ids := make([]string, 0, len(f.live))
+	for id, box := range f.live {
+		if !box.Closed {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 
 // FakeSandbox is a Sandbox for tests. It records exec specs, streams a canned output, and tracks
