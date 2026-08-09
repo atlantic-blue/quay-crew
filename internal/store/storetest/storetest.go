@@ -1029,6 +1029,60 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a run waiting on a person is never due, so no timer answers a question", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "careful", 1, "the definition"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		run := &flow.Run{
+			ID: "run-ask", Workspace: workspace.GetId(), Project: project.GetId(),
+			GraphName: "careful", GraphVersion: 1, Node: "fix", Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		if err := s.CreateFlowRun(ctx, run); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		// An overdue time on an asking run, which is the arrangement that would go wrong: the
+		// poller must pass it over on the status alone, or an automation nobody answered would
+		// take silence for a yes and do the thing it was asking permission for.
+		overdue := time.Now().UTC().Add(-time.Hour)
+		run.Node, run.Status, run.Question = "permit", flow.StatusAsking, "push?"
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
+			Event: flow.EventTurnFinished, Node: "permit", Due: &overdue,
+		}); err != nil {
+			t.Fatalf("AdvanceFlowRun into the ask: %v", err)
+		}
+
+		due, err := s.DueFlowRuns(ctx, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("DueFlowRuns: %v", err)
+		}
+		for _, one := range due {
+			if one.ID == "run-ask" {
+				t.Fatal("a run waiting on a person came back as due, so a timer would answer its question")
+			}
+		}
+
+		// And the question survives the round trip, or the operator is asked nothing.
+		kept, err := s.GetFlowRun(ctx, "run-ask")
+		if err != nil {
+			t.Fatalf("GetFlowRun: %v", err)
+		}
+		if kept.Status != flow.StatusAsking || kept.Question != "push?" {
+			t.Fatalf("the asking run reads back as %q asking %q", kept.Status, kept.Question)
+		}
+	})
+
 	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

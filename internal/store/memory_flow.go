@@ -95,7 +95,9 @@ func (m *Memory) StopFlowRun(_ context.Context, id, reason string) (*flow.Run, e
 	if !held {
 		return nil, ErrNotFound
 	}
-	if run.Status != flow.StatusRunning {
+	// Running, waiting and asking are all live, so any of them can be stopped. A run that ended is
+	// not stopped again, because how it ended is the useful part.
+	if run.Status != flow.StatusRunning && run.Status != flow.StatusWaiting && run.Status != flow.StatusAsking {
 		return nil, fmt.Errorf("store: run %s is %s, and a run that already ended is not stopped again", id, run.Status)
 	}
 	run.Status, run.Reason = flow.StatusStopped, reason
@@ -116,7 +118,7 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 	// Running and waiting are both live: a waiting run is one the poller will carry on, so it
 	// moves. Anything else has ended, and a movement written over that would undo the record of
 	// how it ended.
-	if held.Status != flow.StatusRunning && held.Status != flow.StatusWaiting {
+	if held.Status != flow.StatusRunning && held.Status != flow.StatusWaiting && held.Status != flow.StatusAsking {
 		return flow.ErrRunHalted
 	}
 	if transition.Dispatch != nil {

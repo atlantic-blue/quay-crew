@@ -176,6 +176,52 @@ edges:
 	}
 }
 
+// A run waiting on a person is the one state the operator has to act on, so showing it says the
+// question and how to answer, and answering it carries the run on.
+func TestQuayFlowAnswerCarriesARunOn(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	mustRun(t, client, "flow", "import", graphFile(t, `
+name: careful
+version: 1
+nodes:
+  fix:    { type: dispatch, prompt: "fix the build" }
+  permit: { type: ask, text: "fixed it locally. push?" }
+  yes:    { type: choice, on: { answer: "yes" } }
+  push:   { type: dispatch, prompt: "push it" }
+edges:
+  - [fix, permit]
+  - [permit, yes]
+  - [yes, push, "true"]
+  - [yes, done, "false"]
+  - [push, done]
+`))
+	mustRun(t, client, "flow", "start", "careful")
+
+	fields := strings.Fields(mustRun(t, client, "flow", "list"))
+	if len(fields) == 0 {
+		t.Fatal("the listing is empty")
+	}
+	shown := mustRun(t, client, "flow", "show", fields[0])
+	if !strings.Contains(shown, "fixed it locally. push?") {
+		t.Fatalf("showing an asking run said %q, want the question it is waiting on", shown)
+	}
+	if !strings.Contains(shown, "quay flow answer") {
+		t.Fatalf("showing an asking run said %q, want how to answer it", shown)
+	}
+
+	answered := mustRun(t, client, "flow", "answer", fields[0], "yes")
+	if !strings.Contains(answered, "yes") {
+		t.Fatalf("answering said %q", answered)
+	}
+	after := mustRun(t, client, "flow", "show", fields[0])
+	if !strings.Contains(after, "done") {
+		t.Fatalf("after the answer the run reads %q, want it carried on to the end", after)
+	}
+}
+
 // A graph that could not run is refused before it is sent anywhere, so the operator reads the
 // reason at the moment they wrote the file.
 func TestQuayFlowRefusesAGraphARunCouldFallOff(t *testing.T) {
@@ -224,7 +270,7 @@ func TestQuayFlowNamesWhatItCanDo(t *testing.T) {
 		if err == nil {
 			t.Fatalf("quay %s was accepted", strings.Join(args, " "))
 		}
-		for _, verb := range []string{"import", "start", "list", "show", "stop"} {
+		for _, verb := range []string{"import", "start", "list", "show", "stop", "answer"} {
 			if !strings.Contains(err.Error(), verb) {
 				t.Errorf("quay %s says %q, want it to name %s", strings.Join(args, " "), err, verb)
 			}

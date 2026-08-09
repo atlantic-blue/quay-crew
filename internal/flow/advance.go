@@ -17,6 +17,9 @@ const (
 	// costs nothing: the due time is a column a poller reads, not a timer somebody is holding, so
 	// a crew restarted underneath a waiting run still resumes it.
 	StatusWaiting = "waiting"
+	// StatusAsking is a run waiting on a person. Nothing but an answer moves it: no timer, no
+	// poller, because an automation nobody answered must never carry on by itself.
+	StatusAsking = "asking"
 	// StatusStopped is a run brought to a halt rather than one that finished: it hit a limit, or
 	// somebody stopped it. A run that went quiet and a run that was halted must never read the
 	// same, which is why this is its own word and why it carries a reason.
@@ -30,6 +33,8 @@ const (
 	EventTurnFinished = "turn.finished"
 	// EventDue is a wait whose time has come, delivered by the poller.
 	EventDue = "due"
+	// EventAnswered is the operator answering a question the run put to them.
+	EventAnswered = "answered"
 )
 
 // Command kinds. Dispatch sends a turn to the run's own thread; archive puts that thread away when
@@ -64,6 +69,9 @@ type Run struct {
 	Spent int64
 	// Reason says why a stopped run stopped. Empty on a run that is running or that finished.
 	Reason string
+	// Question is what an asking run is waiting to be told, rendered from its state. Empty on a run
+	// that is not asking anything.
+	Question string
 	// DueAt is when a waiting run should be looked at again, as the store holds it. The poller
 	// reads it; the reducer never does, because a pure function has no clock.
 	DueAt *time.Time
@@ -80,6 +88,8 @@ type Event struct {
 	Node   string
 	Reply  string
 	Failed bool
+	// Answer is what the operator said to an ask node.
+	Answer string
 }
 
 // Command is one thing the engine must do on the run's behalf. The reducer never does it: it
@@ -99,6 +109,12 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 		if event.Kind != EventDue {
 			return run, nil, fmt.Errorf("flow: run %s is waiting on %s, so it moves when its time comes and not on a %s", run.ID, run.Node, event.Kind)
 		}
+	} else if run.Status == StatusAsking {
+		// Only a person moves this one. A timer must never answer a question, or an automation
+		// nobody replied to would carry on and do the thing it was asking permission for.
+		if event.Kind != EventAnswered {
+			return run, nil, fmt.Errorf("flow: run %s is waiting to be told %q, so only an answer moves it, not a %s", run.ID, run.Question, event.Kind)
+		}
 	} else if run.Status != StatusRunning {
 		return run, nil, fmt.Errorf("flow: run %s is %s, and a run that ended does not move", run.ID, run.Status)
 	}
@@ -116,6 +132,19 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 	}
 
 	switch event.Kind {
+	case EventAnswered:
+		if event.Node != run.Node || run.Status != StatusAsking {
+			return run, nil, fmt.Errorf("flow: an answer arrived for node %s while run %s sits %s on %s; two answers to one question must not move a run twice", event.Node, run.ID, run.Status, run.Node)
+		}
+		// Under one name, so an ordinary choice reads a person's decision and the graph needs no
+		// expression language to branch on it.
+		run.State["answer"] = event.Answer
+		next, err := follow(graph, run.Node, "")
+		if err != nil {
+			return run, nil, err
+		}
+		run.Status, run.Question = StatusRunning, ""
+		return settle(graph, run, next)
 	case EventDue:
 		if event.Node != run.Node || run.Status != StatusWaiting {
 			return run, nil, fmt.Errorf("flow: a wait came due for node %s while run %s sits %s on %s; a poller that fired twice must not move a run twice", event.Node, run.ID, run.Status, run.Node)
@@ -201,6 +230,10 @@ func settle(graph Graph, run Run, at string) (Run, []Command, error) {
 			// The run is put down here rather than pushed on: it says how long to leave it, asks
 			// for nothing, and the engine writes a due time the poller will read.
 			run.Status, run.DueIn = StatusWaiting, node.For
+			return run, nil, nil
+		case NodeAsk:
+			// Put down the way a wait is, but woken by a person rather than by the clock.
+			run.Status, run.Question = StatusAsking, render(node.Text, run.State)
 			return run, nil, nil
 		case NodeChoice:
 			answer := "true"

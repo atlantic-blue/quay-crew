@@ -101,6 +101,7 @@ func asFlowRun(run *flow.Run) *quaycrewv1.FlowRun {
 		Transitions:  int32(run.Transitions),
 		Spent:        run.Spent,
 		Reason:       run.Reason,
+		Question:     run.Question,
 		UpdatedAt:    timestamppb.Now(),
 	}
 }
@@ -129,6 +130,27 @@ func (s *Server) StopFlowRun(ctx context.Context, req *quaycrewv1.StopFlowRunReq
 	return &quaycrewv1.StopFlowRunResponse{Run: asFlowRun(run)}, nil
 }
 
+// AnswerFlowRun tells a run what the operator decided.
+//
+// The only thing that moves a run waiting on a person. There is deliberately no timeout and no
+// default: an automation nobody answered must never carry on and do the thing it was asking
+// permission for.
+func (s *Server) AnswerFlowRun(ctx context.Context, req *quaycrewv1.AnswerFlowRunRequest) (*quaycrewv1.AnswerFlowRunResponse, error) {
+	run, err := s.store.GetFlowRun(ctx, req.GetId())
+	if err != nil {
+		return nil, storeError(err, "flow run")
+	}
+	if run.Status != flow.StatusAsking {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"run %s is %s and is not asking anything, so there is nothing to answer", run.ID, run.Status)
+	}
+	answered, err := s.flows.Answer(ctx, *run, req.GetAnswer())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "answer run %s: %v", run.ID, err)
+	}
+	return &quaycrewv1.AnswerFlowRunResponse{Run: asFlowRun(&answered)}, nil
+}
+
 // RunFlowPoller resumes waiting runs until ctx is done. It blocks, so the caller runs it in a
 // goroutine and owns its lifetime.
 //
@@ -154,4 +176,5 @@ func (s *Server) ThreadTokens(ctx context.Context, thread string) int64 {
 // here so the server's own tests can watch a run start without one.
 type flowRunner interface {
 	Begin(ctx context.Context, graph, workspace, project string, state map[string]string) (flow.Run, error)
+	Answer(ctx context.Context, run flow.Run, answer string) (flow.Run, error)
 }

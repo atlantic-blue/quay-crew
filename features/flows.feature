@@ -123,6 +123,75 @@ Feature: A flow runs a graph across sessions
     Then the flow run is done
     And the run's thread was asked "start the build" and then "is it done"
 
+  # The whole difference between an automation and a shell script: a person decides whether it goes
+  # further. Delivered through the command line, so it needs no chat channel and no bot token.
+  Scenario: A run asks the operator, and carries on with what it is told
+    Given the crew holds this flow graph:
+      """
+      name: careful
+      version: 1
+      nodes:
+        fix:    { type: dispatch, prompt: "fix the build" }
+        permit: { type: ask, text: "fixed it locally. push?" }
+        yes:    { type: choice, on: { answer: "yes" } }
+        push:   { type: dispatch, prompt: "push it" }
+      edges:
+        - [fix, permit]
+        - [permit, yes]
+        - [yes, push, "true"]
+        - [yes, done, "false"]
+        - [push, done]
+      """
+    When the operator starts the flow "careful" in the project
+    Then the flow run is asking "fixed it locally. push?"
+    And the run's thread was asked 1 turn
+    When the operator answers the run with "yes"
+    Then the flow run is done
+    And the run's thread was asked "fix the build" and then "push it"
+
+  Scenario: A run told no does not do the thing it asked about
+    Given the crew holds this flow graph:
+      """
+      name: careful
+      version: 1
+      nodes:
+        fix:    { type: dispatch, prompt: "fix the build" }
+        permit: { type: ask, text: "push?" }
+        yes:    { type: choice, on: { answer: "yes" } }
+        push:   { type: dispatch, prompt: "push it" }
+      edges:
+        - [fix, permit]
+        - [permit, yes]
+        - [yes, push, "true"]
+        - [yes, done, "false"]
+        - [push, done]
+      """
+    When the operator starts the flow "careful" in the project
+    And the operator answers the run with "no"
+    Then the flow run is done
+    And the run's thread was asked 1 turn
+
+  # A question nobody answered must never answer itself, or an automation asking permission would
+  # take silence for a yes.
+  Scenario: No timer answers a question
+    Given the crew holds this flow graph:
+      """
+      name: careful
+      version: 1
+      nodes:
+        fix:    { type: dispatch, prompt: "fix the build" }
+        permit: { type: ask, text: "push?" }
+        push:   { type: dispatch, prompt: "push it" }
+      edges:
+        - [fix, permit]
+        - [permit, push]
+        - [push, done]
+      """
+    When the operator starts the flow "careful" in the project
+    And ten minutes pass and the crew looks for waits that are due
+    Then the flow run is asking "push?"
+    And the run's thread was asked 1 turn
+
   Scenario: A run is pinned to the version it started with
     Given the crew holds this flow graph:
       """

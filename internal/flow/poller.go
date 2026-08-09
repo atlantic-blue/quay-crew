@@ -73,6 +73,21 @@ func (p *Poller) Tick(ctx context.Context) {
 	}
 }
 
+// Answer carries an asking run on with what the operator decided, and drives it until it stops
+// again. Like Resume it uses the version the run pinned, so a graph edited while somebody was
+// deciding does not change what their answer does.
+func (e *Engine) Answer(ctx context.Context, run Run, answer string) (Run, error) {
+	definition, err := e.store.FlowGraph(ctx, run.GraphName, run.GraphVersion)
+	if err != nil {
+		return run, err
+	}
+	graph, err := Parse([]byte(definition))
+	if err != nil {
+		return run, err
+	}
+	return e.advance(ctx, graph, run, Event{Kind: EventAnswered, Node: run.Node, Answer: answer})
+}
+
 // Resume carries a waiting run on from the wait it was sitting on, and drives it until it stops
 // again. The due event names the node the run is on, so a poller that fired twice over the same row
 // moves it once: the second event arrives for a node the run has already left and is refused.

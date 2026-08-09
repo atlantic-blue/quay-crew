@@ -30,6 +30,7 @@ const (
 	NodeDispatch = "dispatch"
 	NodeChoice   = "choice"
 	NodeWait     = "wait"
+	NodeAsk      = "ask"
 	NodeDone     = "done"
 )
 
@@ -74,6 +75,9 @@ type Node struct {
 	// to answer true. Equality only, deliberately: accepting arbitrary expressions means owning a
 	// language and a sandbox.
 	On map[string]string
+	// Text is what an ask node puts to the operator, with {{key}} rendered from the run's state so
+	// a question can say what it is asking about.
+	Text string
 	// For is how long a wait node waits. It becomes a due time on the run, read by a poller, so a
 	// waiting run costs nothing and survives the crew being restarted underneath it.
 	For time.Duration
@@ -98,6 +102,7 @@ type graphFile struct {
 		Prompt string            `yaml:"prompt"`
 		On     map[string]string `yaml:"on"`
 		For    string            `yaml:"for"`
+		Text   string            `yaml:"text"`
 	} `yaml:"nodes"`
 	Edges [][]string `yaml:"edges"`
 }
@@ -157,10 +162,14 @@ func Parse(source []byte) (Graph, error) {
 				return Graph{}, fmt.Errorf("flow: wait node %s waits %s, which is not a wait at all", name, waits)
 			}
 			waitFor = waits
+		case NodeAsk:
+			if strings.TrimSpace(node.Text) == "" {
+				return Graph{}, fmt.Errorf("flow: ask node %s has no `text`, so the operator would be shown an empty question", name)
+			}
 		default:
-			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, DoneNode)
+			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, DoneNode)
 		}
-		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor}
+		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text}
 	}
 
 	pointedAt := map[string]bool{}
@@ -216,7 +225,7 @@ func usableEdges(graph Graph, name string, node Node) error {
 		}
 	}
 	switch node.Type {
-	case NodeDispatch, NodeWait:
+	case NodeDispatch, NodeWait, NodeAsk:
 		if len(out) != 1 || out[0].When != "" {
 			return fmt.Errorf("flow: %s node %s needs exactly one unlabeled edge out, and has %d", node.Type, name, len(out))
 		}

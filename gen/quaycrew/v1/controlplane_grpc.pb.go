@@ -32,6 +32,7 @@ const (
 	ControlPlaneService_GetFlowRun_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetFlowRun"
 	ControlPlaneService_ListFlowRuns_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListFlowRuns"
 	ControlPlaneService_StopFlowRun_FullMethodName             = "/quaycrew.v1.ControlPlaneService/StopFlowRun"
+	ControlPlaneService_AnswerFlowRun_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AnswerFlowRun"
 	ControlPlaneService_AttachChannel_FullMethodName           = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -75,6 +76,7 @@ type ControlPlaneServiceClient interface {
 	GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error)
 	ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error)
 	StopFlowRun(ctx context.Context, in *StopFlowRunRequest, opts ...grpc.CallOption) (*StopFlowRunResponse, error)
+	AnswerFlowRun(ctx context.Context, in *AnswerFlowRunRequest, opts ...grpc.CallOption) (*AnswerFlowRunResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -233,6 +235,16 @@ func (c *controlPlaneServiceClient) StopFlowRun(ctx context.Context, in *StopFlo
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StopFlowRunResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_StopFlowRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AnswerFlowRun(ctx context.Context, in *AnswerFlowRunRequest, opts ...grpc.CallOption) (*AnswerFlowRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AnswerFlowRunResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AnswerFlowRun_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +490,7 @@ type ControlPlaneServiceServer interface {
 	GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error)
 	ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error)
 	StopFlowRun(context.Context, *StopFlowRunRequest) (*StopFlowRunResponse, error)
+	AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -550,6 +563,9 @@ func (UnimplementedControlPlaneServiceServer) ListFlowRuns(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) StopFlowRun(context.Context, *StopFlowRunRequest) (*StopFlowRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopFlowRun not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AnswerFlowRun not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -868,6 +884,24 @@ func _ControlPlaneService_StopFlowRun_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).StopFlowRun(ctx, req.(*StopFlowRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AnswerFlowRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AnswerFlowRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AnswerFlowRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AnswerFlowRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AnswerFlowRun(ctx, req.(*AnswerFlowRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1326,6 +1360,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopFlowRun",
 			Handler:    _ControlPlaneService_StopFlowRun_Handler,
+		},
+		{
+			MethodName: "AnswerFlowRun",
+			Handler:    _ControlPlaneService_AnswerFlowRun_Handler,
 		},
 		{
 			MethodName: "AttachChannel",

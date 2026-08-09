@@ -20,7 +20,7 @@ import (
 // operator's machine means nothing.
 func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay flow <import|start|list|show|stop>")
+		return fmt.Errorf("usage: quay flow <import|start|list|show|stop|answer>")
 	}
 	switch args[0] {
 	case "import":
@@ -33,8 +33,10 @@ func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 		return runFlowShow(ctx, client, args[1:], out)
 	case "stop":
 		return runFlowStop(ctx, client, args[1:], out)
+	case "answer":
+		return runFlowAnswer(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("usage: quay flow <import|start|list|show|stop>")
+		return fmt.Errorf("usage: quay flow <import|start|list|show|stop|answer>")
 	}
 }
 
@@ -147,6 +149,12 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if run.GetReason() != "" {
 		fmt.Fprintf(out, "%s\n", run.GetReason())
 	}
+	// A run waiting on a person is the one state the operator has to act on, so the question and
+	// the way to answer it are said outright rather than left to be looked up.
+	if run.GetQuestion() != "" {
+		fmt.Fprintf(out, "asking: %s\n", run.GetQuestion())
+		fmt.Fprintf(out, "answer it with quay flow answer %s <answer>\n", display.ShortID(run.GetId()))
+	}
 	keys := make([]string, 0, len(run.GetState()))
 	for key := range run.GetState() {
 		keys = append(keys, key)
@@ -181,6 +189,26 @@ func runFlowStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	fmt.Fprintf(out, "%s\n", stopped.GetReason())
 	// The turn already running finishes: the model is mid sentence and abandoning it gains nothing.
 	fmt.Fprintf(out, "a turn already under way finishes; the run takes no further step\n")
+	return nil
+}
+
+// runFlowAnswer tells a run what the operator decided, which is the only thing that moves a run
+// waiting on a person.
+func runFlowAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: quay flow answer <run> <answer>")
+	}
+	run, err := findFlowRun(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	resp, err := client.AnswerFlowRun(ctx, &quaycrewv1.AnswerFlowRunRequest{Id: run.GetId(), Answer: args[1]})
+	if err != nil {
+		return err
+	}
+	answered := resp.GetRun()
+	fmt.Fprintf(out, "answered %s with %q\n", display.ShortID(answered.GetId()), args[1])
+	fmt.Fprintf(out, "%s at node %s\n", answered.GetStatus(), answered.GetNode())
 	return nil
 }
 
