@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -116,6 +117,38 @@ func (s *dockerSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 		return nil, fmt.Errorf("sandbox: docker exec: %w", err)
 	}
 	return proc, nil
+}
+
+// Remove tears down the container carrying this session's name, held or not. Absent is success.
+func (d DockerProvider) Remove(ctx context.Context, sessionID string) error {
+	out, err := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName(sessionID)).CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(out), "No such container") {
+			return nil
+		}
+		return fmt.Errorf("sandbox: remove container: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// sandboxName is exactly a sandbox container's name and nothing else's. The compose stack's own
+// services share the prefix (quaycrew-postgres-1 and friends), so anything looser than the exact
+// shape of ContainerName over a session id has, in the past, reaped the stack itself.
+var sandboxName = regexp.MustCompile("^" + ContainerPrefix + "[0-9a-f]{24}$")
+
+// Stranded lists the sessions whose containers the daemon still holds, running or not.
+func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
+	out, err := exec.CommandContext(ctx, "docker", "ps", "--all", "--format", "{{.Names}}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: list containers: %w", err)
+	}
+	var ids []string
+	for _, name := range strings.Fields(string(out)) {
+		if sandboxName.MatchString(name) {
+			ids = append(ids, strings.TrimPrefix(name, ContainerPrefix))
+		}
+	}
+	return ids, nil
 }
 
 // Close removes the session's container.

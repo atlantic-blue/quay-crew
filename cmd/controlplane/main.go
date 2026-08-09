@@ -149,6 +149,10 @@ func main() {
 		}()
 	}
 
+	// What strayed while the crew was down is reaped on the way up: a container whose thread was
+	// stopped, archived or deleted after this process last saw it is running for nobody.
+	server.ReapStrays(ctx)
+
 	grpcServer := grpc.NewServer()
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 

@@ -400,3 +400,43 @@ Feature: Sessions run in isolated sandboxes
     And the operator writes their own instructions into the driver
     And the operator opens the driver again
     Then the driver still carries their own instructions
+
+  # Archiving a thread closes its sandbox and says why in the code: a container left running for a
+  # thread nobody can see is a leak. Deleting never did the same, so a deleted workspace kept every
+  # container it was hiding, running, with the workspace's secrets in its environment.
+  Scenario: Deleting a workspace closes the sandboxes it was hiding
+    Given a session started by dispatching "hello"
+    When the operator deletes the workspace
+    Then every sandbox the crew made is closed
+
+  Scenario: Deleting a project closes the sandboxes it was hiding
+    Given a session started by dispatching "hello"
+    When the operator deletes the project
+    Then every sandbox the crew made is closed
+
+  # The crew's map of live sandboxes is a process map, so a restart empties it while the containers
+  # keep running. Stopping a thread then marked the row and left the container: the close has to ask
+  # the daemon, not the map.
+  Scenario: Stopping a session after a restart still removes its container
+    Given a session started by dispatching "hello"
+    When the control plane restarts
+    And the operator stops the session
+    Then every sandbox the crew made is closed
+
+  # The leak above already happened on real crews, so starting up reaps what it finds: a container
+  # whose row says stopped or archived, or whose row is gone, belongs to nobody.
+  Scenario: A container whose thread was stopped behind the crew's back is reaped at startup
+    Given a session started by dispatching "hello"
+    And the session's row says stopped while its container still runs
+    When the control plane restarts
+    Then every sandbox the crew made is closed
+
+  # A clone or a skill setup that fails used to leave the container it had just made running and
+  # untracked, one per attempt.
+  Scenario: A sandbox that cannot be provisioned is not left running
+    Given the crew has a skill "git" that says "Branch first."
+    And the git skill has a file "bin/setup" saying "exit 1"
+    And every command run in a sandbox fails
+    When the operator dispatches "hello" to the project
+    Then the crew refuses it saying "could not set itself up"
+    And every sandbox the crew made is closed
