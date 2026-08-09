@@ -21,6 +21,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -124,6 +125,9 @@ type Server struct {
 	runner   model.Runner
 	provider sandbox.Provider
 	storage  sandbox.Storage
+	// flows begins and drives automation runs. It dispatches through this same server, so a flow
+	// can do exactly what the operator who started it could do and nothing more.
+	flows flowRunner
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
@@ -147,7 +151,7 @@ type Server struct {
 // NewServer builds a control plane over a durable store, a model runner (the Claude Code adapter by
 // default), a sandbox provider (one sandbox per session) and a secrets store.
 func NewServer(cfg Config) *Server {
-	return &Server{
+	server := &Server{
 		store:          cfg.Store,
 		secrets:        cfg.Secrets,
 		runner:         cfg.Runner,
@@ -164,6 +168,11 @@ func NewServer(cfg Config) *Server {
 		sandboxImage:   cfg.SandboxImage,
 		sandboxes:      make(map[string]sandbox.Sandbox),
 	}
+	// The engine dispatches through this same server rather than dialing it: it is already inside
+	// the process, and a run is started by a caller the interceptor has already authenticated. It
+	// reaches nothing the caller could not, because these are the same two methods.
+	server.flows = flow.NewEngine(cfg.Store, server)
+	return server
 }
 
 // eventsOr is the log to publish on, and Discard when there is none, so nothing downstream has to

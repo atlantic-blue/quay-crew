@@ -100,6 +100,23 @@ func (m *Memory) GetFlowRun(_ context.Context, id string) (*flow.Run, error) {
 	return &kept, nil
 }
 
+// ListFlowRuns lists runs, newest first, narrowed to one project when project is set.
+func (m *Memory) ListFlowRuns(_ context.Context, project string) ([]*flow.Run, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]*flow.Run, 0, len(m.flowRuns))
+	for _, run := range m.flowRuns {
+		if project != "" && run.Project != project {
+			continue
+		}
+		kept := cloneRun(*run)
+		out = append(out, &kept)
+	}
+	// Newest first, and a map has no order, so this sorts by the identifier to be at least stable.
+	sort.Slice(out, func(a, b int) bool { return out[a].ID > out[b].ID })
+	return out, nil
+}
+
 // ListFlowTransitions reads a run's movements back, in the order they happened.
 func (m *Memory) ListFlowTransitions(_ context.Context, run string) ([]flow.RecordedTransition, error) {
 	m.mu.RLock()

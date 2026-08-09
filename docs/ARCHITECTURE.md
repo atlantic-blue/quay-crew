@@ -82,9 +82,10 @@ Each is its own Go service in its own container.
   it is disposable and can be rebuilt from the log.
 - **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list workspaces, see
   every session, tail a conversation, start or stop work.
-- **Flow reducer.** Consumes the event log in its own group and advances automation runs against a
-  graph, dispatching turns and asking the operator through the same gated outbound as everything
-  else. It is where control flow across sessions is written down. See Automation graphs below.
+- **Flow engine.** Advances automation runs against a graph, over its own Postgres tables,
+  dispatching turns into each run's own thread. It is where control flow across sessions is written
+  down. Built as of 9 August 2026: `internal/flow`, with `quay flow import|start|list|show` in
+  front of it. See Automation graphs below.
 
 ## Messaging and contracts
 
@@ -390,11 +391,27 @@ thing that names them.
 
 ### Where it sits
 
-`internal/flow` is a state machine over its own tables, driven by a poller and by the store's own
-writes, a peer of the gateway rather than a layer under anything. It is in no request path, so
-removing it leaves every existing path working. It holds no privileged access: it calls the same
-`ControlPlaneService` the console does, and its outbound goes through the same gate as everything
-else, so it cannot reach the operator without intent.
+`internal/flow` is a state machine over its own tables (migration 0014: `flow_graphs`, `flow_runs`,
+`flow_run_events`, `flow_dispatches`), a peer of the gateway rather than a layer under anything. It
+is in no request path, so removing it leaves every existing path working. It holds no privileged
+access: it dispatches through the same `ControlPlaneService` every other caller uses, and a run can
+therefore do exactly what the caller who started it could do and nothing more.
+
+**What is built, as of 9 August 2026.** The graph is authored as a file and imported at the version
+written in it, which a run pins so editing the file cannot change an automation halfway through. A
+movement of a run, the record of that movement, and the claim on its dispatch key all land in one
+transaction, so a run is reconstructable by construction and the same turn can never be dispatched,
+and paid for, twice: the key is run, node and attempt. `dispatch`, `choice` and `done` work end to
+end; `StartFlow` answers with the run and drives it behind that answer, because a turn takes as long
+as the model takes. `quay flow import|start|list|show` is the operator surface, and importing a
+graph is refused to the driver for the same reason importing a skill is, while starting a run is
+not, because a run is dispatch and the driver already has that.
+
+**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound; a run has no
+spend ceiling and no transition cap, so a graph that loops is bounded only by its own shape; and
+there is no way to stop a run in flight. Those are the next slices of
+[#182](https://github.com/atlantic-blue/quay-crew/issues/182), and until they land a graph should be
+written without cycles.
 
 ```mermaid
 sequenceDiagram

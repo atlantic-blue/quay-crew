@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
@@ -66,17 +67,46 @@ func NewEngine(store Store, plane ControlPlane) *Engine {
 	return &Engine{store: store, plane: plane}
 }
 
-// Start begins a run of the newest version of a graph and drives it until it needs something that
-// has not happened yet or it ends. The trigger's payload arrives as the run's opening state, which
-// is what prompt templates read.
+// Start begins a run of the newest version of a graph and drives it to a standstill before
+// answering. The trigger's payload arrives as the run's opening state, which is what prompt
+// templates read.
 func (e *Engine) Start(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, error) {
+	run, graph, err := e.create(ctx, graphName, workspace, project, state)
+	if err != nil {
+		return Run{}, err
+	}
+	return e.advance(ctx, graph, run, Event{Kind: EventStarted})
+}
+
+// Begin makes the run, answers with it, and drives it behind that answer.
+//
+// A run dispatches turns and a turn takes as long as the model takes, so whoever asked for the run
+// gets its identifier now and reads its position back later. The driving context is detached from
+// the caller's: a command line that has printed the run's identifier and exited must not take the
+// run down with it.
+func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, error) {
+	run, graph, err := e.create(ctx, graphName, workspace, project, state)
+	if err != nil {
+		return Run{}, err
+	}
+	driving := context.WithoutCancel(ctx)
+	go func() {
+		if _, err := e.advance(driving, graph, run, Event{Kind: EventStarted}); err != nil {
+			slog.Warn("a flow run stopped moving", "run", run.ID, "graph", graphName, "error", err)
+		}
+	}()
+	return run, nil
+}
+
+// create reads the graph, pins the run to its version, and writes the run's first row.
+func (e *Engine) create(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, Graph, error) {
 	version, definition, err := e.store.LatestFlowGraph(ctx, graphName)
 	if err != nil {
-		return Run{}, fmt.Errorf("flow: start %s: %w", graphName, err)
+		return Run{}, Graph{}, fmt.Errorf("flow: start %s: %w", graphName, err)
 	}
 	graph, err := Parse([]byte(definition))
 	if err != nil {
-		return Run{}, fmt.Errorf("flow: graph %s version %d no longer parses, which should have been refused at import: %w", graphName, version, err)
+		return Run{}, Graph{}, fmt.Errorf("flow: graph %s version %d no longer parses, which should have been refused at import: %w", graphName, version, err)
 	}
 
 	if state == nil {
@@ -93,9 +123,9 @@ func (e *Engine) Start(ctx context.Context, graphName, workspace, project string
 		Attempts:     map[string]int{},
 	}
 	if err := e.store.CreateFlowRun(ctx, &run); err != nil {
-		return Run{}, fmt.Errorf("flow: create run of %s: %w", graphName, err)
+		return Run{}, Graph{}, fmt.Errorf("flow: create run of %s: %w", graphName, err)
 	}
-	return e.advance(ctx, graph, run, Event{Kind: EventStarted})
+	return run, graph, nil
 }
 
 // advance feeds one event through the reducer, persists the transition, and carries out what came

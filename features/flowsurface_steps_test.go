@@ -1,0 +1,213 @@
+package features_test
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"time"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/cucumber/godog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+)
+
+// The operator surface for flows, driven through the same authenticated interface every other
+// caller uses, so what these prove is that the engine is reachable at all: a flow engine nothing
+// can reach delivers nothing.
+
+// namedGraph is the graph the scenarios import, small enough to read and wide enough to dispatch,
+// branch and end.
+const namedGraph = `
+name: fix-red
+version: 1
+nodes:
+  fix:  { type: dispatch, prompt: "fix the build" }
+  ok:   { type: choice, on: { result.failed: "false" } }
+  push: { type: dispatch, prompt: "push the fix" }
+edges:
+  - [fix, ok]
+  - [ok, push, "true"]
+  - [ok, done, "false"]
+  - [push, done]
+`
+
+func initializeFlowSurfaceSteps(sc *godog.ScenarioContext) {
+	importGraph := func(ctx context.Context, definition string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.ImportFlow(ctx, &quaycrewv1.ImportFlowRequest{Definition: definition})
+		return nil
+	}
+
+	sc.Step(`^the operator imports the flow graph "([^"]*)"$`, func(ctx context.Context, name string) error {
+		if err := importGraph(ctx, namedGraph); err != nil {
+			return err
+		}
+		return worldFrom(ctx).lastErr
+	})
+
+	sc.Step(`^the operator imports the flow graph "([^"]*)" again$`, func(ctx context.Context, name string) error {
+		return importGraph(ctx, namedGraph)
+	})
+
+	sc.Step(`^the operator imports a flow graph whose edge leads nowhere$`, func(ctx context.Context) error {
+		return importGraph(ctx, `
+name: broken
+version: 1
+nodes:
+  a: { type: dispatch, prompt: "a" }
+edges:
+  - [a, nowhere]
+`)
+	})
+
+	sc.Step(`^the operator starts a run of "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
+		return startFlowRun(ctx, graph)
+	})
+
+	sc.Step(`^the run finishes$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("starting the run was refused: %v", w.lastErr)
+		}
+		return waitForFlowRun(ctx, w, flow.StatusDone)
+	})
+
+	sc.Step(`^reading the run back says it ran "([^"]*)" version (\d+)$`, func(ctx context.Context, name string, version int) error {
+		run, err := readFlowRun(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if run.GetGraphName() != name || int(run.GetGraphVersion()) != version {
+			return fmt.Errorf("the run ran %s version %d, want %s version %d",
+				run.GetGraphName(), run.GetGraphVersion(), name, version)
+		}
+		return nil
+	})
+
+	sc.Step(`^reading the run back says it ended on "([^"]*)"$`, func(ctx context.Context, node string) error {
+		run, err := readFlowRun(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if run.GetNode() != node {
+			return fmt.Errorf("the run ended on %q, want %q", run.GetNode(), node)
+		}
+		return nil
+	})
+
+	sc.Step(`^reading the run back carries what the last turn replied$`, func(ctx context.Context) error {
+		run, err := readFlowRun(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if run.GetState()["result.reply"] == "" {
+			return fmt.Errorf("the run carries no reply in its state: %v", run.GetState())
+		}
+		return nil
+	})
+
+	sc.Step(`^the run is listed among the project's runs$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		listed, err := w.client.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		for _, run := range listed.GetRuns() {
+			if run.GetId() == w.flowRunID {
+				return nil
+			}
+		}
+		return fmt.Errorf("the project lists %d runs and none is %s", len(listed.GetRuns()), w.flowRunID)
+	})
+
+	sc.Step(`^the driver imports a flow graph$`, func(ctx context.Context) error {
+		return asDriverCall(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.ImportFlow(ctx, &quaycrewv1.ImportFlowRequest{Definition: namedGraph})
+			return err
+		})
+	})
+
+	sc.Step(`^the driver starts a run of "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
+		w := worldFrom(ctx)
+		return asDriverCall(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.StartFlow(ctx, &quaycrewv1.StartFlowRequest{Graph: graph, Project: w.projectID})
+			return err
+		})
+	})
+
+	sc.Step(`^the driver is served$`, func(ctx context.Context) error {
+		if err := worldFrom(ctx).driverErr; err != nil {
+			return fmt.Errorf("the driver was refused: %v", err)
+		}
+		return nil
+	})
+}
+
+// startFlowRun is the shared body of the two ways a scenario starts a run: the operator's, and the
+// one that expects a refusal.
+func startFlowRun(ctx context.Context, graph string) error {
+	w := worldFrom(ctx)
+	resp, err := w.client.StartFlow(ctx, &quaycrewv1.StartFlowRequest{Graph: graph, Project: w.projectID})
+	w.lastErr = err
+	if err == nil {
+		w.flowRunID = resp.GetRun().GetId()
+	}
+	return nil
+}
+
+// readFlowRun reads the run the scenario started.
+func readFlowRun(ctx context.Context, w *world) (*quaycrewv1.FlowRun, error) {
+	if w.flowRunID == "" {
+		return nil, fmt.Errorf("no run was started")
+	}
+	resp, err := w.client.GetFlowRun(ctx, &quaycrewv1.GetFlowRunRequest{Id: w.flowRunID})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetRun(), nil
+}
+
+// waitForFlowRun waits for the run to reach a status. A run advances behind the answer that started
+// it, so a scenario that read once would be reading a race; this polls the store's own answer
+// rather than sleeping a guess.
+func waitForFlowRun(ctx context.Context, w *world, want string) error {
+	deadline := time.Now().Add(10 * time.Second)
+	var last string
+	for time.Now().Before(deadline) {
+		run, err := readFlowRun(ctx, w)
+		if err != nil {
+			return err
+		}
+		last = run.GetStatus()
+		if last == want {
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return fmt.Errorf("the run is %q after ten seconds, want %q", last, want)
+}
+
+// asDriverCall makes one call carrying the driver's token, recording what came back, so a scenario
+// can say whether the driver was served or refused.
+func asDriverCall(ctx context.Context, call func(context.Context, quaycrewv1.ControlPlaneServiceClient) error) error {
+	w := worldFrom(ctx)
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return w.listener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("dial the control plane: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	callCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+w.driverToken)
+	w.driverErr = call(callCtx, quaycrewv1.NewControlPlaneServiceClient(conn))
+	// The authentication scenarios read their refusal from their own place, so both are filled.
+	authFrom(ctx).err = w.driverErr
+	return nil
+}

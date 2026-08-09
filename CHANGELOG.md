@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **`quay flow`: the operator can actually run one.** The engine shipped with nothing able to reach
+  it, which delivers nothing. Four calls now sit in front of it, and `quay flow import <file>`,
+  `start [<address>] <graph>`, `list` and `show <run>` in front of those. Importing parses the
+  graph on both sides, so a graph a run could fall off is refused at the moment somebody writes it
+  rather than hours later inside a run. Starting answers with the run and drives it behind that
+  answer, because a turn takes as long as the model takes; `show` says where it got to and what it
+  knows. The driver may start a run, because a run is dispatch and it already has that, and may not
+  import a graph, because writing an automation down is the operator deciding what the crew may do
+  on its own. ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **The flow engine: a graph runs across sessions, every movement a row.** `internal/flow` is the
   automation substrate the review decided on: a graph of dispatches and choices authored as a file,
   imported at a version a run is pinned to, and a pure reducer a table test can hold. A run owns
