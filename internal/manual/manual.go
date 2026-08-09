@@ -43,6 +43,7 @@ commands:
   flow start [<address>] <graph>          begin a run of it in a project
   flow list [<address>]                   what has run, newest first
   flow show <run>                         where one run got to, what it cost, why it stopped
+  flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   turns <session id>                      what a session was asked, and what came back

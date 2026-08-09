@@ -178,6 +178,16 @@ message GetFlowRunResponse {
 }
 
 // ListFlowRunsRequest lists runs, narrowed to one project when project is set.
+// StopFlowRunRequest halts a run in flight. The reason is kept on the run, because a run somebody
+// stopped and a run that went quiet must never read the same.
+message StopFlowRunRequest {
+  string id = 1;
+  string reason = 2;
+}
+message StopFlowRunResponse {
+  FlowRun run = 1;
+}
+
 message ListFlowRunsRequest {
   string project = 1;
 }
@@ -530,6 +540,7 @@ service ControlPlaneService {
   rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
   rpc GetFlowRun(GetFlowRunRequest) returns (GetFlowRunResponse);
   rpc ListFlowRuns(ListFlowRunsRequest) returns (ListFlowRunsResponse);
+  rpc StopFlowRun(StopFlowRunRequest) returns (StopFlowRunResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

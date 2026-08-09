@@ -20,7 +20,7 @@ import (
 // operator's machine means nothing.
 func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay flow <import|start|list|show>")
+		return fmt.Errorf("usage: quay flow <import|start|list|show|stop>")
 	}
 	switch args[0] {
 	case "import":
@@ -31,8 +31,10 @@ func runFlow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 		return runFlowList(ctx, client, args[1:], out)
 	case "show":
 		return runFlowShow(ctx, client, args[1:], out)
+	case "stop":
+		return runFlowStop(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("usage: quay flow <import|start|list|show>")
+		return fmt.Errorf("usage: quay flow <import|start|list|show|stop>")
 	}
 }
 
@@ -153,6 +155,32 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	for _, key := range keys {
 		fmt.Fprintf(out, "  %-16s %s\n", key, truncateLine(run.GetState()[key]))
 	}
+	return nil
+}
+
+// runFlowStop halts a run in flight. The reason is optional and worth giving: it is what somebody
+// reading the run tomorrow has to go on.
+func runFlowStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("usage: quay flow stop <run> [<reason>]")
+	}
+	run, err := findFlowRun(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	reason := ""
+	if len(args) == 2 {
+		reason = args[1]
+	}
+	resp, err := client.StopFlowRun(ctx, &quaycrewv1.StopFlowRunRequest{Id: run.GetId(), Reason: reason})
+	if err != nil {
+		return err
+	}
+	stopped := resp.GetRun()
+	fmt.Fprintf(out, "stopped run %s at node %s\n", display.ShortID(stopped.GetId()), stopped.GetNode())
+	fmt.Fprintf(out, "%s\n", stopped.GetReason())
+	// The turn already running finishes: the model is mid sentence and abandoning it gains nothing.
+	fmt.Fprintf(out, "a turn already under way finishes; the run takes no further step\n")
 	return nil
 }
 

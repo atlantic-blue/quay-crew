@@ -416,9 +416,16 @@ never read the same. The token ceiling is opt in because what is reasonable diff
 and a made up number would either stop real work or protect nothing; the transition cap is not,
 because a cycling graph with nobody watching is the failure that costs money.
 
-**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound, and there is
-no way for the operator to stop a run in flight: a run stops itself at a limit, or it finishes.
-Those are the next slices of [#182](https://github.com/atlantic-blue/quay-crew/issues/182).
+**A run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a run in
+flight. The stop is cooperative rather than a kill: a run waiting on a turn finishes that turn,
+because the model is already working and abandoning it mid sentence gains nothing, and what the run
+cannot do is take another step. That is enforced by the database rather than by the engine noticing:
+a movement only writes where the run is still held as running, so a stop that lands while the engine
+is waiting is not written back over. A run that already ended is not stopped again, because how it
+ended is the useful part.
+
+**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound. Those are
+the next slices of [#182](https://github.com/atlantic-blue/quay-crew/issues/182).
 
 ```mermaid
 sequenceDiagram

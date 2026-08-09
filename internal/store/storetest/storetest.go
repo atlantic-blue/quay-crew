@@ -900,6 +900,60 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("stopping a run halts it, and the engine's next movement is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "loop", 1, "the definition"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		run := &flow.Run{
+			ID: "run-halt", Workspace: workspace.GetId(), Project: project.GetId(),
+			GraphName: "loop", GraphVersion: 1, Node: "begin", Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		if err := s.CreateFlowRun(ctx, run); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		stopped, err := s.StopFlowRun(ctx, "run-halt", "the operator said so")
+		if err != nil {
+			t.Fatalf("StopFlowRun: %v", err)
+		}
+		if stopped.Status != flow.StatusStopped || stopped.Reason != "the operator said so" {
+			t.Fatalf("the stopped run reads %q %q", stopped.Status, stopped.Reason)
+		}
+
+		// The engine was mid turn and writes next. It must be refused rather than setting the run
+		// back to running, which is the whole of what makes a stop take effect.
+		run.Node = "again"
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTurnFinished, Node: "again"}); !errors.Is(err, flow.ErrRunHalted) {
+			t.Fatalf("moving a stopped run answered %v, want it refused as halted", err)
+		}
+		kept, err := s.GetFlowRun(ctx, "run-halt")
+		if err != nil {
+			t.Fatalf("GetFlowRun: %v", err)
+		}
+		if kept.Status != flow.StatusStopped || kept.Node != "begin" {
+			t.Fatalf("after the refused movement the run reads %q on %q, want it stopped where it was", kept.Status, kept.Node)
+		}
+
+		// And a run that already ended is not stopped a second time: how it ended is the useful part.
+		if _, err := s.StopFlowRun(ctx, "run-halt", "again"); err == nil {
+			t.Fatal("a run that already ended was stopped again")
+		}
+		if _, err := s.StopFlowRun(ctx, "no-such-run", "whatever"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("stopping a run nobody started answered %v, want not found", err)
+		}
+	})
+
 	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

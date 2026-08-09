@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -20,14 +21,25 @@ type Store interface {
 	ImportFlowGraph(ctx context.Context, name string, version int, definition string) error
 	// LatestFlowGraph returns the newest version of a graph and its definition.
 	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
+	// GetFlowRun reads a run back, which the engine needs to answer with the stopped run rather
+	// than with what it held before the stop landed.
+	GetFlowRun(ctx context.Context, id string) (*Run, error)
 	// CreateFlowRun writes a fresh run. Its transitions are the events; creation is the row itself.
 	CreateFlowRun(ctx context.Context, run *Run) error
 	// AdvanceFlowRun writes the run's next position, appends the transition that took it there,
 	// and when the transition dispatched, claims the dispatch's key. One transaction, so there is
 	// no gap for a crash to hide in: either the run moved and the claim exists, or neither.
 	// A dispatch key already claimed refuses the whole transition.
+	//
+	// It moves only a run the database still holds as running, which is what makes stopping one
+	// take effect: the operator's stop lands, and the engine's next write finds the run halted and
+	// is refused with ErrRunHalted rather than quietly setting it back to running.
 	AdvanceFlowRun(ctx context.Context, run *Run, transition Transition) error
 }
+
+// ErrRunHalted is what AdvanceFlowRun answers when the run it was asked to move is no longer
+// running: somebody stopped it while the engine was waiting on a turn.
+var ErrRunHalted = errors.New("flow: the run is no longer running")
 
 // Transition is one movement of a run, as recorded: what arrived, where the run now sits, and what
 // the engine was told to do about it.
@@ -169,6 +181,15 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 		if err := e.store.AdvanceFlowRun(ctx, &next, Transition{
 			Event: event.Kind, Node: next.Node, Dispatch: dispatch,
 		}); err != nil {
+			// Somebody stopped the run while this was waiting on a turn. That is not a failure:
+			// the stop is the answer, and the run keeps the reason it was stopped with.
+			if errors.Is(err, ErrRunHalted) {
+				slog.Info("a flow run was stopped while it was working", "run", next.ID)
+				if halted, err := e.store.GetFlowRun(ctx, next.ID); err == nil {
+					return *halted, nil
+				}
+				return next, nil
+			}
 			// The claim on run, node and attempt refused: this exact dispatch was already made, so
 			// making it again would spend money twice. The run stays where the store says it is.
 			return next, fmt.Errorf("flow: run %s did not move: %w", next.ID, err)

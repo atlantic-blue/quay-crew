@@ -6,6 +6,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
 // The graph these tests import: one dispatch and the end, so a run finishes with nothing to branch
@@ -120,6 +126,56 @@ edges:
 	}
 }
 
+// Stopping a run from the command line: it says what it stopped, why, and what happens to the turn
+// already under way, because that last part is the thing an operator will wonder about.
+func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
+	// A model that takes a moment, so the run is genuinely still working when the stop lands.
+	// With an instant one the automation reaches its cap before a second command can be typed, and
+	// this would be racing rather than testing.
+	client := testClientWith(t, controlplane.Config{
+		Store:    store.NewMemory(),
+		Runner:   &model.FakeRunner{Reply: "ok", Takes: 200 * time.Millisecond},
+		Provider: &sandbox.FakeProvider{},
+		Secrets:  secrets.NewMemory(),
+	})
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	mustRun(t, client, "flow", "import", graphFile(t, `
+name: loop
+version: 1
+limits:
+  transitions: 50
+nodes:
+  begin: { type: dispatch, prompt: "begin" }
+  more:  { type: choice, on: { result.failed: "false" } }
+  again: { type: dispatch, prompt: "again" }
+edges:
+  - [begin, more]
+  - [more, again, "true"]
+  - [more, done, "false"]
+  - [again, more]
+`))
+	mustRun(t, client, "flow", "start", "loop")
+
+	fields := strings.Fields(mustRun(t, client, "flow", "list"))
+	if len(fields) == 0 {
+		t.Fatal("the listing is empty")
+	}
+	stopped := mustRun(t, client, "flow", "stop", fields[0], "it is fixing the wrong thing")
+	if !strings.Contains(stopped, "it is fixing the wrong thing") {
+		t.Fatalf("stopping said %q, want the reason it was given", stopped)
+	}
+	if !strings.Contains(stopped, "already under way finishes") {
+		t.Fatalf("stopping said %q, want it to say what happens to the turn in flight", stopped)
+	}
+
+	shown := mustRun(t, client, "flow", "show", fields[0])
+	if !strings.Contains(shown, "stopped") || !strings.Contains(shown, "it is fixing the wrong thing") {
+		t.Fatalf("showing the run said %q, want it stopped with its reason", shown)
+	}
+}
+
 // A graph that could not run is refused before it is sent anywhere, so the operator reads the
 // reason at the moment they wrote the file.
 func TestQuayFlowRefusesAGraphARunCouldFallOff(t *testing.T) {
@@ -168,7 +224,7 @@ func TestQuayFlowNamesWhatItCanDo(t *testing.T) {
 		if err == nil {
 			t.Fatalf("quay %s was accepted", strings.Join(args, " "))
 		}
-		for _, verb := range []string{"import", "start", "list", "show"} {
+		for _, verb := range []string{"import", "start", "list", "show", "stop"} {
 			if !strings.Contains(err.Error(), verb) {
 				t.Errorf("quay %s says %q, want it to name %s", strings.Join(args, " "), err, verb)
 			}
