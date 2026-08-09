@@ -41,6 +41,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateConfirmKey(msg)
 	case modeWizard:
 		return m.updateWizardKey(msg)
+	case modeOutput:
+		return m.updateOutputKey(msg)
 	case modeHelp:
 		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
 		// nothing in here acts on anything, so there is nothing to get wrong.
@@ -280,7 +282,7 @@ func (m Model) updateCommandKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.mode, m.input = modeBrowse, ""
 		return m, nil
 	case "enter":
-		return m.openTyped()
+		return m.runTyped()
 	case "backspace":
 		m.input = trimLastRune(m.input)
 		return m, nil

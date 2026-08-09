@@ -15,6 +15,17 @@ func (m Model) View() string {
 	visible := m.visibleRows()
 
 	lines := m.headerLines()
+	if m.mode == modeOutput {
+		lines = append(lines, m.panelTop(len(m.commandOutput)))
+		for _, line := range m.commandBody() {
+			lines = append(lines, m.framed(line))
+		}
+		lines = append(lines, m.panelBottom())
+		if m.err != nil {
+			lines = append(lines, alert.Render(truncate(m.err.Error(), m.width)))
+		}
+		return strings.Join(append(lines, m.footer()), "\n")
+	}
 	if m.mode == modeHelp {
 		lines = append(lines, m.panelTop(len(visible)))
 		for _, line := range m.helpBody() {
@@ -93,7 +104,7 @@ var everywhereKeys = [][2]string{
 	{"pgup pgdn", "Page"},
 	{"enter", "Drill in"},
 	{"esc", "Back, or clear the filter"},
-	{":", "Switch resource"},
+	{":", "Switch view, or run a quay command"},
 	{"/", "Filter these rows"},
 	{"r g", "Refresh now"},
 	{"n", "Make one thing"},
@@ -633,6 +644,8 @@ func (m Model) footer() string {
 		return truncate(m.confirmPrompt(), m.width)
 	case modeWizard:
 		return truncate(m.wizardPrompt(), m.width)
+	case modeOutput:
+		return faint.Render("   any key closes, j and k scroll")
 	case modeBrowse:
 		return truncate(m.breadcrumb(), m.width)
 	default:
@@ -656,7 +669,12 @@ func (m Model) offered() string {
 	}
 	names := m.registry.Offer(m.input)
 	if len(names) == 0 {
-		return faint.Render("   nothing called that")
+		// Not a view, so enter runs it as a command. Saying "nothing called that" here would be a
+		// lie about the very next keystroke: the bar is about to do something with these words.
+		if strings.TrimSpace(m.input) == "" {
+			return ""
+		}
+		return faint.Render("   enter runs this as a quay command")
 	}
 	return faint.Render("   " + strings.Join(names, "  "))
 }

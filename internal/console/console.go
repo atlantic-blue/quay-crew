@@ -76,7 +76,8 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	}
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
-	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen)
+	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
+		WithCommandRunner(TheToolItself())
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
@@ -157,7 +158,7 @@ func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, k
 		return err
 	}
 	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
-		WithoutHeader().WithViewPublisher(publish)
+		WithCommandRunner(TheToolItself()).WithoutHeader().WithViewPublisher(publish)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
