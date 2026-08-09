@@ -191,3 +191,51 @@ func TestTheShippedJiraSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The aws skill reads and never mutates: describe, list and logs are free, and anything that
+// changes infrastructure ships through a pull request. The heaviest binary in the image, which is
+// why its cost is stated where the skill is declared.
+func TestTheShippedAwsSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var aws *Skill
+	for i := range skills {
+		if skills[i].Name == "aws" {
+			aws = &skills[i]
+		}
+	}
+	if aws == nil {
+		t.Fatal("skills/ does not hold the aws skill")
+	}
+
+	found := false
+	for _, declared := range aws.Binaries {
+		if declared == "aws" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the aws skill does not declare the aws binary")
+	}
+
+	for _, name := range []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} {
+		what, declared := aws.Secrets[name]
+		if !declared {
+			t.Errorf("the aws skill does not name %s, and the command line reads the pair from the environment", name)
+			continue
+		}
+		if strings.TrimSpace(what) == "" {
+			t.Errorf("%s carries no line saying what it is", name)
+		}
+	}
+
+	brief := strings.ToLower(aws.Brief)
+	for _, said := range []string{"describe", "never", "pull request"} {
+		if !strings.Contains(brief, said) {
+			t.Errorf("the brief never says %q, and read but never mutate is the whole of what this skill is", said)
+		}
+	}
+}
