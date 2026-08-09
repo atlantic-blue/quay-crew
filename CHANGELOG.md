@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The jira skill.** The linear skill's sibling in `skills/jira/`: a brief over Jira Cloud's REST
+  API, authenticating as the JIRA_EMAIL and JIRA_API_TOKEN pair, both by name. Where the instance
+  lives is workspace context rather than skill content, and the brief says to ask rather than
+  guess when nothing names it. Reading is always fine; commenting and transitions happen when the
+  conversation asks; creating, resolving and reassigning only on explicit instruction.
+  ([#216](https://github.com/atlantic-blue/quay-crew/issues/216))
 - **The github skill, and gh in the image.** The second shipped skill, in `skills/github/`, and
   separate from git on purpose: git needs a repository and nothing else, github needs a credential,
   the network, and it does things that cannot be undone. The brief says how pull requests are

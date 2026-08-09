@@ -98,3 +98,51 @@ func TestTheShippedGitHubSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The jira skill is an api skill like linear: same shape, different API. It authenticates as an
+// email and token pair, and where the instance lives is workspace context rather than skill
+// content, so the brief has to say where to find it instead of carrying an address.
+func TestTheShippedJiraSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var jira *Skill
+	for i := range skills {
+		if skills[i].Name == "jira" {
+			jira = &skills[i]
+		}
+	}
+	if jira == nil {
+		t.Fatal("skills/ does not hold the jira skill")
+	}
+
+	found := false
+	for _, declared := range jira.Binaries {
+		if declared == "curl" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the jira skill does not declare curl, which is the only tool its brief uses")
+	}
+
+	for _, name := range []string{"JIRA_EMAIL", "JIRA_API_TOKEN"} {
+		what, declared := jira.Secrets[name]
+		if !declared {
+			t.Errorf("the jira skill does not name %s, and Jira authenticates with the pair", name)
+			continue
+		}
+		if strings.TrimSpace(what) == "" {
+			t.Errorf("%s carries no line saying what it is", name)
+		}
+	}
+
+	brief := strings.ToLower(jira.Brief)
+	for _, said := range []string{"issue", "comment", "transition"} {
+		if !strings.Contains(brief, said) {
+			t.Errorf("the brief never says %q, and reading and moving issues is the whole of what this skill is", said)
+		}
+	}
+}
