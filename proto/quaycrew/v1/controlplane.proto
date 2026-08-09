@@ -142,6 +142,8 @@ message FlowRun {
   // spent is what its conversation has cost in tokens.
   int32 transitions = 11;
   int64 spent = 12;
+  // question is what an asking run is waiting to be told. Empty on a run that is not asking.
+  string question = 14;
   // reason says why a stopped run stopped. Empty on one that is running or that finished: a run
   // that went quiet and a run that was halted must never read the same.
   string reason = 13;
@@ -180,6 +182,16 @@ message GetFlowRunResponse {
 // ListFlowRunsRequest lists runs, narrowed to one project when project is set.
 // StopFlowRunRequest halts a run in flight. The reason is kept on the run, because a run somebody
 // stopped and a run that went quiet must never read the same.
+// AnswerFlowRunRequest tells a run what the operator decided, which is the only thing that moves a
+// run waiting on a person: no timer answers a question.
+message AnswerFlowRunRequest {
+  string id = 1;
+  string answer = 2;
+}
+message AnswerFlowRunResponse {
+  FlowRun run = 1;
+}
+
 message StopFlowRunRequest {
   string id = 1;
   string reason = 2;
@@ -541,6 +553,7 @@ service ControlPlaneService {
   rpc GetFlowRun(GetFlowRunRequest) returns (GetFlowRunResponse);
   rpc ListFlowRuns(ListFlowRunsRequest) returns (ListFlowRunsResponse);
   rpc StopFlowRun(StopFlowRunRequest) returns (StopFlowRunResponse);
+  rpc AnswerFlowRun(AnswerFlowRunRequest) returns (AnswerFlowRunResponse);
 
   rpc AttachChannel(AttachChannelRequest) returns (AttachChannelResponse);
   rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);

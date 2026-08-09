@@ -434,8 +434,22 @@ restarts, and a run that was going to resume in ten minutes simply never would. 
 carried on with the graph version it pinned, never the newest, so editing a file while a run waits
 cannot change what that run does when it wakes.
 
-**What is not built yet.** `ask` needs the gated outbound, which is #10. That is the next slice of
-[#182](https://github.com/atlantic-blue/quay-crew/issues/182).
+**A run can ask, and only a person answers.** An `ask` node declares its question as `text`,
+rendered from the run's state, and reaching one puts the run down the way a wait does. Nothing but
+an answer moves it: no timer, no poller, and the poller's own query passes over asking runs on
+their status, so an automation nobody answered can never take silence for a yes and do the thing it
+was asking permission for. The answer lands in the run's state under one name, so an ordinary
+`choice` branches on it and the graph needs no expression language to read a person's decision.
+
+Delivered through the command line, `quay flow answer <run> <answer>`, rather than through a chat
+channel. That is deliberate: it exercises the whole shape end to end without a bot token, and a
+chat channel later becomes a second delivery of the same thing rather than the first.
+
+**All five node types are built.** `dispatch`, `choice`, `wait`, `ask` and `done`. What remains for
+flows is triggers: something other than a person typing `quay flow start`. Signed and allowlisted
+webhooks are the next slice of
+[#182](https://github.com/atlantic-blue/quay-crew/issues/182), and a chat channel delivery of `ask`
+follows #10.
 
 ```mermaid
 sequenceDiagram

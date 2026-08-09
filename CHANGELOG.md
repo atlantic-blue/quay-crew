@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A flow can ask, and only a person answers.** The last of the five node types. An `ask` node
+  puts its question to the operator, rendered from the run's state, and the run waits: no timer and
+  no poller moves it, and the poller's own query passes over asking runs on their status, so an
+  automation nobody answered can never take silence for a yes. The answer lands in state under one
+  name, so an ordinary `choice` branches on it without the graph needing an expression language.
+  Answered with `quay flow answer <run> <answer>`, which is what lets the whole shape ship with no
+  chat channel and no bot token; a channel later is a second delivery of the same thing rather than
+  the first. ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **A flow can wait, and a restart does not lose it.** A `wait` node says how long, as `for: 10m`,
   and reaching one puts the run down: recorded as waiting with a due time on its row, asking for
   nothing, costing nothing until its time comes. A poller reads the due rows every few seconds and

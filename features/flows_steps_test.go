@@ -99,6 +99,32 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return tickFlowPoller(ctx, 0)
 	})
 
+	sc.Step(`^the flow run is asking "([^"]*)"$`, func(ctx context.Context, question string) error {
+		w := worldFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("the run did not start: %v", w.lastErr)
+		}
+		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+		if err != nil {
+			return err
+		}
+		if kept.Status != flow.StatusAsking {
+			return fmt.Errorf("the run reads back as %q on node %q, want it asking", kept.Status, kept.Node)
+		}
+		if kept.Question != question {
+			return fmt.Errorf("the run asks %q, want %q", kept.Question, question)
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator answers the run with "([^"]*)"$`, func(ctx context.Context, answer string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.AnswerFlowRun(ctx, &quaycrewv1.AnswerFlowRunRequest{
+			Id: w.flowRun.ID, Answer: answer,
+		})
+		return w.lastErr
+	})
+
 	sc.Step(`^the flow run is done$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr != nil {
