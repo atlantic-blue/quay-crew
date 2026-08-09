@@ -14,7 +14,7 @@ import (
 // What a conversation cost, which the crew reads from the transcript the model keeps rather than from
 // anything it recorded itself.
 type usageWorld struct {
-	listed []*quaycrewv1.Session
+	listed []*quaycrewv1.Thread
 }
 
 type usageKey struct{}
@@ -38,21 +38,21 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			session, err := world.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+			session, err := world.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
 			if err != nil {
 				return err
 			}
-			return writeTranscript(world.storage.Dir, session.GetSession().GetWorkspace(),
-				session.GetSession().GetModelSessionId(), in, out, cached)
+			return writeTranscript(world.storage.Dir, session.GetThread().GetWorkspace(),
+				session.GetThread().GetModelSessionId(), in, out, cached)
 		})
 
 	sc.Step(`^the operator lists the sessions$`, func(ctx context.Context) error {
 		world, u := worldFrom(ctx), usageFrom(ctx)
-		listed, err := world.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+		listed, err := world.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
 		if err != nil {
 			return err
 		}
-		u.listed = listed.GetSessions()
+		u.listed = listed.GetThreads()
 		return nil
 	})
 

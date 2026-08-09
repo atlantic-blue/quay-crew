@@ -25,7 +25,7 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_ImportSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_AttachSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_DetachSkill_FullMethodName,
-		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName:
+		quaycrewv1.ControlPlaneService_SetThreadPermissionMode_FullMethodName:
 		return refusedToDriver(fullMethod)
 	case quaycrewv1.ControlPlaneService_SetContext_FullMethodName:
 		if req, ok := request.(*quaycrewv1.SetContextRequest); ok && req.GetScope() == "crew" {

@@ -32,7 +32,7 @@ seam at all.
    writes `-p`, `--output-format stream-json`, `--verbose`, `--permission-mode` and `--resume`.
 2. **Result parsing.** `parseStream` in the same file reads Claude Code's event stream, including
    where the thread identifier and the cost of a turn come from.
-3. **The interactive conversation.** `AttachSession` in
+3. **The interactive conversation.** `AttachThread` in
    [`internal/controlplane/server.go`](../internal/controlplane/server.go) builds
    `tmux new-session -A -s quay open-conversation <conversation> <mode>`, and
    [`deploy/sandbox/open-conversation.sh`](../deploy/sandbox/open-conversation.sh) runs `claude` with

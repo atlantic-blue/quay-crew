@@ -158,7 +158,7 @@ type world struct {
 	skillsDir string
 	skills    []skill.Skill
 	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
-	drivers []*quaycrewv1.Session
+	drivers []*quaycrewv1.Thread
 	secrets secrets.Store
 	store   store.Store
 	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
@@ -290,24 +290,24 @@ func (w *world) lastTurn() (turn, error) {
 // dispatch runs one turn and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
 func (w *world) dispatch(ctx context.Context, project, thread, text string) error {
-	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, ThreadId: thread, Text: text})
+	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Handle: thread, Text: text})
 	w.lastErr = err
 	if err != nil {
 		return nil
 	}
-	w.turns = append(w.turns, turn{sessionID: resp.GetSessionId(), threadID: resp.GetThreadId(), reply: resp.GetReply()})
-	return w.keepConversation(ctx, resp.GetSessionId())
+	w.turns = append(w.turns, turn{sessionID: resp.GetId(), threadID: resp.GetHandle(), reply: resp.GetReply()})
+	return w.keepConversation(ctx, resp.GetId())
 }
 
 // keepConversation writes what the real model writes. The recording runner hands back a conversation
 // id with nothing behind it, and the control plane now looks in the store before it offers to resume
 // one, so the double has to keep what the thing it stands in for keeps.
 func (w *world) keepConversation(ctx context.Context, sessionID string) error {
-	resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sessionID})
+	resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: sessionID})
 	if err != nil {
 		return err
 	}
-	session := resp.GetSession()
+	session := resp.GetThread()
 	if session.GetModelSessionId() == "" {
 		return nil
 	}
@@ -498,7 +498,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: current.sessionID})
 		return w.lastErr
 	})
 	// A refusal is the point of two of these scenarios, so the error is recorded rather than returned.
@@ -508,7 +508,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: current.sessionID})
 		return nil
 	})
 	sc.Step(`^the thread is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
@@ -517,8 +517,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.SetSessionPermissionMode(ctx,
-			&quaycrewv1.SetSessionPermissionModeRequest{Id: current.sessionID, Mode: mode})
+		_, w.lastErr = w.client.SetThreadPermissionMode(ctx,
+			&quaycrewv1.SetThreadPermissionModeRequest{Id: current.sessionID, Mode: mode})
 		return nil
 	})
 	sc.Step(`^the turn ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
@@ -535,7 +535,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: current.sessionID})
 		return nil
 	})
 	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {
@@ -544,12 +544,12 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.RestoreThread(ctx, &quaycrewv1.RestoreThreadRequest{Id: current.sessionID})
 		return nil
 	})
 	sc.Step(`^the operator restarts a session that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: "ghost"})
+		_, w.lastErr = w.client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: "ghost"})
 		return nil
 	})
 	// Restarting starts the container straight away, which is the whole difference between it and
@@ -733,37 +733,37 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
 		// The handle points at a conversation the model keeps on its own disk. Lose it and that
 		// conversation still exists but can never be reached again.
-		if got := resp.GetSession().GetModelSessionId(); got != "conversation-1" {
+		if got := resp.GetThread().GetModelSessionId(); got != "conversation-1" {
 			return fmt.Errorf("the session holds conversation %q, want conversation-1", got)
 		}
 		return nil
 	})
 	sc.Step(`^the workspace has (\d+) sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: w.workspaceID})
+		resp, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Workspace: w.workspaceID})
 		if err != nil {
 			return err
 		}
-		if got := len(resp.GetSessions()); got != want {
+		if got := len(resp.GetThreads()); got != want {
 			return fmt.Errorf("the workspace has %d sessions, want %d", got, want)
 		}
 		return nil
 	})
 	sc.Step(`^the workspace has (\d+) archived sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+		resp, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{
 			Workspace: w.workspaceID, Archived: true,
 		})
 		if err != nil {
 			return err
 		}
-		if got := len(resp.GetSessions()); got != want {
+		if got := len(resp.GetThreads()); got != want {
 			return fmt.Errorf("the workspace has %d archived sessions, want %d", got, want)
 		}
 		return nil
@@ -774,11 +774,11 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
-		if got := resp.GetSession().GetStatus(); got != want {
+		if got := resp.GetThread().GetStatus(); got != want {
 			return fmt.Errorf("session status is %q, want %q", got, want)
 		}
 		return nil

@@ -120,7 +120,7 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 
 	select {
 	case record := <-received:
-		if got, want := string(record.Key), dispatched.GetSessionId(); got != want {
+		if got, want := string(record.Key), dispatched.GetId(); got != want {
 			t.Errorf("the record is keyed %q, want the session %q", got, want)
 		}
 		event := &quaycrewv1.TurnEvent{}
@@ -136,8 +136,8 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 		if event.GetStatus() != "idle" {
 			t.Errorf("the record says the session is %q, want idle", event.GetStatus())
 		}
-		if event.GetSession() != dispatched.GetSessionId() {
-			t.Errorf("the record names session %q, want %q", event.GetSession(), dispatched.GetSessionId())
+		if event.GetThread() != dispatched.GetId() {
+			t.Errorf("the record names session %q, want %q", event.GetThread(), dispatched.GetId())
 		}
 	case <-consumeCtx.Done():
 		t.Fatalf("no turn arrived on %s within the timeout, so nothing was published to the broker", topic)
@@ -190,7 +190,7 @@ func TestTheProjectionReadsTurnsBackFromARealBroker(t *testing.T) {
 		t.Fatalf("dispatch: %v", err)
 	}
 	if _, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: project.GetProject().GetId(), ThreadId: first.GetThreadId(), Text: "and again",
+		Project: project.GetProject().GetId(), Handle: first.GetHandle(), Text: "and again",
 	}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestTheProjectionReadsTurnsBackFromARealBroker(t *testing.T) {
 	// The projection is a consumer of a live broker, so this waits for it rather than assuming.
 	deadline := time.Now().Add(60 * time.Second)
 	for {
-		listed, err := server.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: first.GetSessionId()})
+		listed, err := server.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: first.GetId()})
 		if err != nil {
 			t.Fatalf("list turns: %v", err)
 		}

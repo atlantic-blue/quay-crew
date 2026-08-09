@@ -149,7 +149,7 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the driver asks to change a session's permission mode$`, func(ctx context.Context) error {
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
-			_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{
+			_, err := client.SetThreadPermissionMode(ctx, &quaycrewv1.SetThreadPermissionModeRequest{
 				Id: "any", Mode: "dangerous"})
 			return err
 		})

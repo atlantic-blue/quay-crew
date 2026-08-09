@@ -44,7 +44,7 @@ func TestMemoryAdapterRoundTrip(t *testing.T) {
 
 func TestMemoryAdapterDeliverRecords(t *testing.T) {
 	adapter := channel.NewMemoryAdapter("cli")
-	out := &quaycrewv1.OutboundMessage{Workspace: "acme", ThreadId: "t1", Text: "reply", CorrelationId: "abc"}
+	out := &quaycrewv1.OutboundMessage{Workspace: "acme", Handle: "t1", Text: "reply", CorrelationId: "abc"}
 	if err := adapter.Deliver(context.Background(), out); err != nil {
 		t.Fatalf("Deliver: %v", err)
 	}

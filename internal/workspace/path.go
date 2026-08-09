@@ -118,18 +118,18 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 // resolveThread turns a thread reference into a thread id within one project. Listings shorten
 // identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
 func resolveThread(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
+	resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: projectID})
 	if err != nil {
 		return "", fmt.Errorf("workspace: list threads: %w", err)
 	}
 
 	matches := make([]string, 0, 1)
-	for _, session := range resp.GetSessions() {
-		if session.GetThreadId() == reference {
+	for _, session := range resp.GetThreads() {
+		if session.GetHandle() == reference {
 			return reference, nil
 		}
-		if strings.HasPrefix(session.GetThreadId(), reference) {
-			matches = append(matches, session.GetThreadId())
+		if strings.HasPrefix(session.GetHandle(), reference) {
+			matches = append(matches, session.GetHandle())
 		}
 	}
 

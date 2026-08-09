@@ -76,14 +76,14 @@ func initializeTurnsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the one turn on that session is recorded as failed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		// A failed dispatch returns no session id, so the session is found through the listing.
-		sessions, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: w.workspaceID})
+		sessions, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Workspace: w.workspaceID})
 		if err != nil {
 			return err
 		}
-		if len(sessions.GetSessions()) != 1 {
-			return fmt.Errorf("%d sessions exist, want exactly one", len(sessions.GetSessions()))
+		if len(sessions.GetThreads()) != 1 {
+			return fmt.Errorf("%d sessions exist, want exactly one", len(sessions.GetThreads()))
 		}
-		turns, err := listTurns(ctx, w, sessions.GetSessions()[0].GetId())
+		turns, err := listTurns(ctx, w, sessions.GetThreads()[0].GetId())
 		if err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func initializeTurnsSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator asks for the history of a session that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: "no-such-session"})
+		_, w.lastErr = w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: "no-such-session"})
 		return nil
 	})
 }
@@ -123,7 +123,7 @@ func (w *world) runProjection(ctx context.Context) error {
 }
 
 func listTurns(ctx context.Context, w *world, session string) ([]*quaycrewv1.Turn, error) {
-	resp, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Session: session})
+	resp, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: session})
 	if err != nil {
 		return nil, err
 	}

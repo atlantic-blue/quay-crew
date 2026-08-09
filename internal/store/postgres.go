@@ -285,7 +285,7 @@ func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
 //
 // The insert races with any other caller dispatching to the same thread, so it defers to the unique
 // constraint on (workspace, thread_id) and reads the winner back rather than trusting a prior select.
-func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Session, error) {
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Thread, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
 		return nil, err
@@ -319,12 +319,12 @@ func (p *Postgres) RecordTurn(ctx context.Context, id, modelSessionID, status st
 }
 
 // GetSession returns a session by id.
-func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error) {
+func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Thread, error) {
 	return p.sessionBy(ctx, `id = $1`, id)
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
+func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver
 		from sessions
@@ -337,7 +337,7 @@ func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*q
 	}
 	defer rows.Close()
 
-	out := make([]*quaycrewv1.Session, 0)
+	out := make([]*quaycrewv1.Thread, 0)
 	for rows.Next() {
 		session, err := scanSession(rows)
 		if err != nil {
@@ -448,7 +448,7 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 }
 
 // sessionBy reads the single session matching a where clause.
-func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
+func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Thread, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver
 		from sessions where `+where, args...)
@@ -466,7 +466,7 @@ func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*q
 	return scanSession(rows)
 }
 
-func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
+func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 	var (
 		id, workspace, project, thread, status, modelSessionID string
 		createdAt, updatedAt                                   time.Time
@@ -478,11 +478,11 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		&createdAt, &updatedAt, &archivedAt, &permissionMode, &driver); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
-	session := &quaycrewv1.Session{
+	session := &quaycrewv1.Thread{
 		Id:             id,
 		Workspace:      workspace,
 		Project:        project,
-		ThreadId:       thread,
+		Handle:         thread,
 		Status:         status,
 		ModelSessionId: modelSessionID,
 		CreatedAt:      timestamppb.New(createdAt),
@@ -506,7 +506,7 @@ func (p *Postgres) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, worksp
 		insert into turns (id, session, workspace, project, thread_id, prompt, reply, status, failure, occurred_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (id) do nothing`,
-		turn.GetId(), turn.GetSession(), workspace, project, thread,
+		turn.GetId(), turn.GetThread(), workspace, project, thread,
 		turn.GetPrompt(), turn.GetReply(), turn.GetStatus(), turn.GetFailure(), turn.GetOccurredAt().AsTime())
 	if err != nil {
 		return fmt.Errorf("append turn: %w", err)
@@ -533,7 +533,7 @@ func (p *Postgres) ListTurns(ctx context.Context, session string, limit int) ([]
 	for rows.Next() {
 		var turn quaycrewv1.Turn
 		var occurredAt time.Time
-		if err := rows.Scan(&turn.Id, &turn.Session, &turn.Prompt, &turn.Reply,
+		if err := rows.Scan(&turn.Id, &turn.Thread, &turn.Prompt, &turn.Reply,
 			&turn.Status, &turn.Failure, &occurredAt); err != nil {
 			return nil, fmt.Errorf("scan turn: %w", err)
 		}
@@ -556,7 +556,7 @@ func (p *Postgres) ListTurns(ctx context.Context, session string, limit int) ([]
 //
 // One per project, held by a unique index rather than by reading first and writing after: two opened
 // at once would otherwise each make one, and the second would be reached by nobody.
-func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error) {
+func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Thread, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
 		return nil, err

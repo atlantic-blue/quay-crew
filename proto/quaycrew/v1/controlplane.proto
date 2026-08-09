@@ -37,14 +37,19 @@ message Repository {
   google.protobuf.Timestamp added_at = 4;
 }
 
-// A session is one model thread inside a project. It carries its workspace too, denormalised from
-// the project so a listing does not need a join; a project never moves workspace.
-message Session {
+// A thread is one conversation inside a project: the operator's word for what the control plane
+// runs as a session in a sandbox. It carries its workspace too, denormalised from the project so a
+// listing does not need a join; a project never moves workspace.
+message Thread {
+  // id is the crew's own identifier for this thread. It names the thread's sandbox container.
   string id = 1;
   string workspace = 2;
-  string thread_id = 3;
+  // handle is the name a channel dispatches to: dispatch to the same handle and the conversation
+  // continues. It is chosen by whoever starts the thread, or minted when nobody did.
+  string handle = 3;
   string status = 4;
-  // model_session_id is the underlying model thread id, used to resume the thread.
+  // model_session_id is the model's own identifier for the conversation, in the model's own word,
+  // used to resume it.
   string model_session_id = 5;
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
@@ -56,9 +61,9 @@ message Session {
   // "plan", "acceptEdits" or "bypassPermissions". It belongs to the thread rather than to a turn, so
   // a thread started to plan something keeps planning.
   string permission_mode = 10;
-  // driver says this session drives the crew rather than doing work inside it. It reaches the control
-  // plane's own interface, and whatever host paths the operator handed it, which an ordinary session
-  // does not.
+  // driver says this thread drives the crew rather than doing work inside it. It reaches the
+  // control plane's own interface, and whatever host paths the operator handed it, which an
+  // ordinary thread does not.
   bool driver = 11;
   // usage is what this thread's conversation has cost so far, read from the transcript the model
   // keeps. Unset for a thread nobody has spoken in.
@@ -169,28 +174,28 @@ message SetSecretRequest {
 }
 message SetSecretResponse {}
 
-// DispatchRequest starts a new thread (thread_id empty) or continues an existing one.
+// DispatchRequest starts a new thread (handle empty) or continues an existing one.
 message DispatchRequest {
   string project = 1;
-  string thread_id = 2;
+  string handle = 2;
   string text = 3;
 }
 message DispatchResponse {
-  string session_id = 1;
-  string thread_id = 2;
+  string id = 1;
+  string handle = 2;
   string reply = 3;
 }
 
-// ListSessionsRequest filters by project when set, else by workspace when set, else lists all.
+// ListThreadsRequest filters by project when set, else by workspace when set, else lists all.
 // OpenDriverRequest asks for a project's driver, the session that drives the crew.
 message OpenDriverRequest {
   string project = 1;
 }
 message OpenDriverResponse {
-  Session session = 1;
+  Thread thread = 1;
 }
 
-message ListSessionsRequest {
+message ListThreadsRequest {
   string workspace = 1;
   string project = 2;
   // archived lists the threads that have been put away instead of the live ones. The two are never
@@ -198,50 +203,50 @@ message ListSessionsRequest {
   // somebody deliberately hid.
   bool archived = 3;
 }
-message ListSessionsResponse {
-  repeated Session sessions = 1;
+message ListThreadsResponse {
+  repeated Thread threads = 1;
 }
-message GetSessionRequest {
+message GetThreadRequest {
   string id = 1;
 }
-message GetSessionResponse {
-  Session session = 1;
+message GetThreadResponse {
+  Thread thread = 1;
 }
-// AttachSessionRequest asks how to get inside a session's conversation.
-message AttachSessionRequest {
+// AttachThreadRequest asks how to get inside a session's conversation.
+message AttachThreadRequest {
   string id = 1;
 }
-// AttachSessionResponse describes the command that opens the conversation, and deliberately carries
+// AttachThreadResponse describes the command that opens the conversation, and deliberately carries
 // no credential: the operator's own environment supplies that.
-message AttachSessionResponse {
+message AttachThreadResponse {
   // sandbox is the container the session runs in.
   string sandbox = 1;
   // argv is the command to run inside it, for example ["claude", "--resume", "<conversation id>"].
   repeated string argv = 2;
 }
 
-message StopSessionRequest {
+message StopThreadRequest {
   string id = 1;
 }
-message StopSessionResponse {}
+message StopThreadResponse {}
 
-// RestartSessionRequest brings a stopped session back.
-message RestartSessionRequest {
+// RestartThreadRequest brings a stopped session back.
+message RestartThreadRequest {
   string id = 1;
 }
-// RestartSessionResponse carries the session as it now is, idle and with a sandbox running, so the
+// RestartThreadResponse carries the session as it now is, idle and with a sandbox running, so the
 // caller does not have to read it back to find out what happened.
-message RestartSessionResponse {
-  Session session = 1;
+message RestartThreadResponse {
+  Thread thread = 1;
 }
 
-// ArchiveSessionRequest puts a thread away: stops it if it is running, hides it from the default
+// ArchiveThreadRequest puts a thread away: stops it if it is running, hides it from the default
 // listing, and keeps everything.
-message ArchiveSessionRequest {
+message ArchiveThreadRequest {
   string id = 1;
 }
-message ArchiveSessionResponse {
-  Session session = 1;
+message ArchiveThreadResponse {
+  Thread thread = 1;
 }
 
 // ContextDir is a directory of files the model reads, kept on the host and mounted into every sandbox
@@ -381,23 +386,23 @@ message ListContextsResponse {
   repeated ContextDir dirs = 1;
 }
 
-// SetSessionPermissionModeRequest changes what a thread's turns may do without asking.
-message SetSessionPermissionModeRequest {
+// SetThreadPermissionModeRequest changes what a thread's turns may do without asking.
+message SetThreadPermissionModeRequest {
   string id = 1;
   // mode is "plan", "acceptEdits" or "bypassPermissions". An unknown one is refused rather than
   // passed to the model, which would take it as far as its own argument parser and no further.
   string mode = 2;
 }
-message SetSessionPermissionModeResponse {
-  Session session = 1;
+message SetThreadPermissionModeResponse {
+  Thread thread = 1;
 }
 
-// RestoreSessionRequest brings an archived thread back into the default listing.
-message RestoreSessionRequest {
+// RestoreThreadRequest brings an archived thread back into the default listing.
+message RestoreThreadRequest {
   string id = 1;
 }
-message RestoreSessionResponse {
-  Session session = 1;
+message RestoreThreadResponse {
+  Thread thread = 1;
 }
 
 // GetInfoRequest asks what this control plane is running.
@@ -450,23 +455,23 @@ message GetUsageResponse {
 // Turn is one exchange with the model, read back from the projection of the event log.
 message Turn {
   string id = 1;
-  string session = 2;
+  string thread = 2;
   // prompt is what was asked, reply is what came back, empty when the turn failed.
   string prompt = 3;
   string reply = 4;
-  // status is the session's status after the turn: "idle" when it worked, "failed" when it did not.
+  // status is the thread's status after the turn: "idle" when it worked, "failed" when it did not.
   string status = 5;
   // failure says what went wrong, empty on a turn that worked.
   string failure = 6;
   google.protobuf.Timestamp occurred_at = 7;
 }
 
-// ListTurnsRequest asks for one session's history, most recent last, so a conversation reads the way
+// ListTurnsRequest asks for one thread's history, most recent last, so a conversation reads the way
 // it happened.
 message ListTurnsRequest {
-  string session = 1;
+  string thread = 1;
   // limit caps how many come back. Zero means a sensible default rather than everything, because a
-  // long running session's history is unbounded and a terminal is not.
+  // long running thread's history is unbounded and a terminal is not.
   int32 limit = 2;
 }
 message ListTurnsResponse {
@@ -494,14 +499,14 @@ service ControlPlaneService {
 
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
   rpc OpenDriver(OpenDriverRequest) returns (OpenDriverResponse);
-  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
-  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
-  rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
-  rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
-  rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
-  rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
-  rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
-  rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
+  rpc ListThreads(ListThreadsRequest) returns (ListThreadsResponse);
+  rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
+  rpc AttachThread(AttachThreadRequest) returns (AttachThreadResponse);
+  rpc StopThread(StopThreadRequest) returns (StopThreadResponse);
+  rpc RestartThread(RestartThreadRequest) returns (RestartThreadResponse);
+  rpc ArchiveThread(ArchiveThreadRequest) returns (ArchiveThreadResponse);
+  rpc RestoreThread(RestoreThreadRequest) returns (RestoreThreadResponse);
+  rpc SetThreadPermissionMode(SetThreadPermissionModeRequest) returns (SetThreadPermissionModeResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
 

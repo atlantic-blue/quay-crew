@@ -35,15 +35,15 @@ type TurnEvent struct {
 	// record more than once and needs something to recognise it by: the projection writes it as the
 	// primary key and lets a repeat collide harmlessly.
 	Id string `protobuf:"bytes,10,opt,name=id,proto3" json:"id,omitempty"`
-	// session is the session the turn ran in, and the key the record is published under, so one
-	// session's events stay in order on one partition.
-	Session string `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	// thread is the thread the turn ran in, and the key the record is published under, so one
+	// thread's events stay in order on one partition.
+	Thread string `protobuf:"bytes,1,opt,name=thread,proto3" json:"thread,omitempty"`
 	// workspace and project are where the session sits, denormalised deliberately: a consumer must not
 	// have to query the store to know what it is reading.
 	Workspace string `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
-	// thread_id is the channel's own name for the conversation.
-	ThreadId string `protobuf:"bytes,4,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	// handle is the channel's own name for the conversation.
+	Handle string `protobuf:"bytes,4,opt,name=handle,proto3" json:"handle,omitempty"`
 	// prompt is what was asked. reply is what came back, empty when the turn failed.
 	Prompt string `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Reply  string `protobuf:"bytes,6,opt,name=reply,proto3" json:"reply,omitempty"`
@@ -95,9 +95,9 @@ func (x *TurnEvent) GetId() string {
 	return ""
 }
 
-func (x *TurnEvent) GetSession() string {
+func (x *TurnEvent) GetThread() string {
 	if x != nil {
-		return x.Session
+		return x.Thread
 	}
 	return ""
 }
@@ -116,9 +116,9 @@ func (x *TurnEvent) GetProject() string {
 	return ""
 }
 
-func (x *TurnEvent) GetThreadId() string {
+func (x *TurnEvent) GetHandle() string {
 	if x != nil {
-		return x.ThreadId
+		return x.Handle
 	}
 	return ""
 }
@@ -162,14 +162,14 @@ var File_quaycrew_v1_events_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa7\x02\n" +
+	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa0\x02\n" +
 	"\tTurnEvent\x12\x0e\n" +
 	"\x02id\x18\n" +
-	" \x01(\tR\x02id\x12\x18\n" +
-	"\asession\x18\x01 \x01(\tR\asession\x12\x1c\n" +
+	" \x01(\tR\x02id\x12\x16\n" +
+	"\x06thread\x18\x01 \x01(\tR\x06thread\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
-	"\aproject\x18\x03 \x01(\tR\aproject\x12\x1b\n" +
-	"\tthread_id\x18\x04 \x01(\tR\bthreadId\x12\x16\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\x12\x16\n" +
+	"\x06handle\x18\x04 \x01(\tR\x06handle\x12\x16\n" +
 	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x14\n" +
 	"\x05reply\x18\x06 \x01(\tR\x05reply\x12\x16\n" +
 	"\x06status\x18\a \x01(\tR\x06status\x12\x18\n" +

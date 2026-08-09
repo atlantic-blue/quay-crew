@@ -15,7 +15,7 @@ import (
 )
 
 type attachWorld struct {
-	spec *quaycrewv1.AttachSessionResponse
+	spec *quaycrewv1.AttachThreadResponse
 	err  error
 	// named is the conversation each attach was told to open, in order, so a scenario can say that
 	// opening twice lands in one conversation rather than orphaning the first.
@@ -41,7 +41,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: current.sessionID})
+		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: current.sessionID})
 		return nil
 	})
 
@@ -50,7 +50,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) == 0 {
 			return fmt.Errorf("no driver was opened")
 		}
-		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: w.drivers[0].GetId()})
+		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: w.drivers[0].GetId()})
 		a.named = append(a.named, conversationIn(a.spec))
 		return a.err
 	})
@@ -59,11 +59,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	// says the crew knows it rather than only that it passed something down.
 	sc.Step(`^the driver has a conversation the crew can name$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: w.drivers[0].GetId()})
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: w.drivers[0].GetId()})
 		if err != nil {
 			return err
 		}
-		if resp.GetSession().GetModelSessionId() == "" {
+		if resp.GetThread().GetModelSessionId() == "" {
 			return fmt.Errorf("the driver's conversation has no name, so nothing can be attributed to it")
 		}
 		return nil
@@ -83,11 +83,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			}
 			id = current.sessionID
 		}
-		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: id})
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: id})
 		if err != nil {
 			return err
 		}
-		held := resp.GetSession().GetModelSessionId()
+		held := resp.GetThread().GetModelSessionId()
 		if held == "" {
 			return fmt.Errorf("the crew holds no conversation for this thread")
 		}
@@ -118,14 +118,14 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		// conversation behind it, which is exactly the state this refusal is about.
 		w.runner.failNext = true
 		_ = w.dispatch(ctx, w.projectID, "", "this turn fails")
-		sessions, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+		sessions, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: w.projectID})
 		if err != nil {
 			return err
 		}
-		if len(sessions.GetSessions()) != 1 {
-			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetSessions()))
+		if len(sessions.GetThreads()) != 1 {
+			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetThreads()))
 		}
-		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessions.GetSessions()[0].GetId()})
+		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessions.GetThreads()[0].GetId()})
 		return nil
 	})
 
@@ -233,11 +233,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
-		session := resp.GetSession()
+		session := resp.GetThread()
 		path := filepath.Join(w.conversationDir(session.GetWorkspace()),
 			session.GetModelSessionId()+sandbox.ConversationFile)
 		if err := os.Remove(path); err != nil {
@@ -336,7 +336,7 @@ func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
 
 // conversationIn is the conversation the sandbox is told to open, which is the argument after the
 // command that opens one.
-func conversationIn(spec *quaycrewv1.AttachSessionResponse) string {
+func conversationIn(spec *quaycrewv1.AttachThreadResponse) string {
 	argv := spec.GetArgv()
 	for index, arg := range argv {
 		if arg == sandbox.OpenConversation && index+1 < len(argv) {

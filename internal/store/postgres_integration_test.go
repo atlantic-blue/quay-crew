@@ -212,7 +212,7 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		t.Fatalf("the workspace is named %q, want me", workspace.GetName())
 	}
 
-	session, err := migrated.GetSession(ctx, "sess-1")
+	session, err := migrated.GetThread(ctx, "sess-1")
 	if err != nil {
 		t.Fatalf("the session did not survive the rename: %v", err)
 	}

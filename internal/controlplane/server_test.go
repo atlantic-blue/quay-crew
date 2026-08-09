@@ -65,7 +65,7 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
-	if first.GetReply() != "done" || first.GetThreadId() == "" {
+	if first.GetReply() != "done" || first.GetHandle() == "" {
 		t.Fatalf("bad dispatch response: %+v", first)
 	}
 	if runner.LastReq.ModelSessionID != "" {
@@ -73,12 +73,12 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 	}
 
 	// Continue the same thread: the runner should be asked to resume the model session.
-	second, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, ThreadId: first.GetThreadId(), Text: "more"})
+	second, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Handle: first.GetHandle(), Text: "more"})
 	if err != nil {
 		t.Fatalf("Dispatch continue: %v", err)
 	}
-	if second.GetSessionId() != first.GetSessionId() {
-		t.Fatalf("continue should reuse session: %q vs %q", second.GetSessionId(), first.GetSessionId())
+	if second.GetId() != first.GetId() {
+		t.Fatalf("continue should reuse session: %q vs %q", second.GetId(), first.GetId())
 	}
 	if runner.LastReq.ModelSessionID != "model-1" {
 		t.Fatalf("continue should resume model-1, got %q", runner.LastReq.ModelSessionID)
@@ -159,18 +159,18 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 
 	// Two turns on the same thread must share one sandbox (created once, not per turn).
 	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "one"})
-	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, ThreadId: first.GetThreadId(), Text: "two"}); err != nil {
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Handle: first.GetHandle(), Text: "two"}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
 	}
 	if len(provider.Created) != 1 {
 		t.Fatalf("expected 1 sandbox for the session, got %d (%v)", len(provider.Created), provider.Created)
 	}
-	if provider.Created[0].ID != first.GetSessionId() {
-		t.Fatalf("sandbox created for %q, want session %q", provider.Created[0].ID, first.GetSessionId())
+	if provider.Created[0].ID != first.GetId() {
+		t.Fatalf("sandbox created for %q, want session %q", provider.Created[0].ID, first.GetId())
 	}
 
 	// Stopping the session tears its sandbox down.
-	if _, err := s.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: first.GetSessionId()}); err != nil {
+	if _, err := s.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: first.GetId()}); err != nil {
 		t.Fatalf("StopSession: %v", err)
 	}
 	if !provider.Boxes[0].Closed {

@@ -201,7 +201,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		w.drivers = append(w.drivers, opened.GetSession())
+		w.drivers = append(w.drivers, opened.GetThread())
 		return nil
 	})
 
@@ -211,7 +211,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		w.drivers = append(w.drivers, opened.GetSession())
+		w.drivers = append(w.drivers, opened.GetThread())
 		return nil
 	})
 
@@ -220,7 +220,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) == 0 {
 			return fmt.Errorf("no driver was opened")
 		}
-		return w.dispatch(ctx, w.projectID, w.drivers[0].GetThreadId(), text)
+		return w.dispatch(ctx, w.projectID, w.drivers[0].GetHandle(), text)
 	})
 
 	sc.Step(`^the driver is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
@@ -228,8 +228,8 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) == 0 {
 			return fmt.Errorf("no driver was opened")
 		}
-		_, err := w.client.SetSessionPermissionMode(ctx,
-			&quaycrewv1.SetSessionPermissionModeRequest{Id: w.drivers[0].GetId(), Mode: mode})
+		_, err := w.client.SetThreadPermissionMode(ctx,
+			&quaycrewv1.SetThreadPermissionModeRequest{Id: w.drivers[0].GetId(), Mode: mode})
 		return err
 	})
 
@@ -252,12 +252,12 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 	// nobody.
 	sc.Step(`^the crew has one driver$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: w.projectID})
 		if err != nil {
 			return err
 		}
 		drivers := 0
-		for _, session := range listed.GetSessions() {
+		for _, session := range listed.GetThreads() {
 			if session.GetDriver() {
 				drivers++
 			}
@@ -308,8 +308,8 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		w.drivers = append(w.drivers, opened.GetSession())
-		return w.store.SetContext(ctx, store.ContextSession, opened.GetSession().GetId(), "")
+		w.drivers = append(w.drivers, opened.GetThread())
+		return w.store.SetContext(ctx, store.ContextSession, opened.GetThread().GetId(), "")
 	})
 
 	sc.Step(`^its memory file already says "([^"]*)"$`, func(ctx context.Context, body string) error {

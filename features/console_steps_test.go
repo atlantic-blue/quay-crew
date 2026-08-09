@@ -327,11 +327,11 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		session, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: row.ID})
+		session, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: row.ID})
 		if err != nil {
 			return err
 		}
-		if session.GetSession().GetModelSessionId() == "" {
+		if session.GetThread().GetModelSessionId() == "" {
 			return fmt.Errorf("the archived thread has no conversation handle left")
 		}
 		return nil

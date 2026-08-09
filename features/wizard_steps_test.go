@@ -72,11 +72,11 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the crew has (\d+) sessions?$`, func(ctx context.Context, want int) error {
-		listed, err := worldFrom(ctx).client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+		listed, err := worldFrom(ctx).client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
 		if err != nil {
 			return err
 		}
-		if got := len(listed.GetSessions()); got != want {
+		if got := len(listed.GetThreads()); got != want {
 			return fmt.Errorf("the crew has %d sessions, want %d", got, want)
 		}
 		return nil
@@ -97,15 +97,15 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		// Asked of the control plane rather than of the world, because this turn was dispatched by
 		// the console rather than by a step.
-		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetSessions()))
+		if len(listed.GetThreads()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetThreads()))
 		}
 		view := c.model.View()
-		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
+		if !strings.Contains(view, display.ShortID(listed.GetThreads()[0].GetId())) {
 			return fmt.Errorf("the console does not list the session the wizard made:\n%s", view)
 		}
 		return nil

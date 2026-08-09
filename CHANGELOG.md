@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The protocol says thread, the way every surface already does.** `message Session` is now
+  `Thread`, the session RPCs are thread RPCs, and a dispatch returns the thread's `id` beside its
+  `handle` instead of a `session_id` beside a `thread_id`. The three identifiers a thread carries
+  each have one job: `id` is the crew's row and names the sandbox container, `handle` is what a
+  channel dispatches to, and `model_session_id` stays in the model's own word because it is the
+  model's conversation. The store keeps the word session internally. Done now because the
+  repository is going public with `v1` in the package name, where the same rename becomes a
+  breaking change. ([#202](https://github.com/atlantic-blue/quay-crew/issues/202))
 - **A secret pasted into a conversation is not persisted in the clear.** Every published turn
   payload, the prompt, the reply and the failure, goes through the crew's redactor before it
   reaches the log, and therefore before the projection writes it to the `turns` table: every value

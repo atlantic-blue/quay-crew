@@ -25,7 +25,7 @@ const turnsStream = "turns"
 //
 // The record is keyed by session id, so every event for one session lands on one partition and stays
 // in the order it happened. A consumer rebuilding a conversation depends on that.
-func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TurnEvent) {
+func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Thread, event *quaycrewv1.TurnEvent) {
 	topic, err := s.turnsTopic(ctx, session.GetWorkspace())
 	if err != nil {
 		slog.Warn("no topic for this turn, so it is not on the log", "session", session.GetId(), "error", err)
@@ -45,10 +45,10 @@ func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Session, e
 	// The id is minted here rather than derived from the turn, because two turns can carry the same
 	// prompt in the same session and still be two different things that happened.
 	event.Id = store.NewID()
-	event.Session = session.GetId()
+	event.Thread = session.GetId()
 	event.Workspace = session.GetWorkspace()
 	event.Project = session.GetProject()
-	event.ThreadId = session.GetThreadId()
+	event.Handle = session.GetHandle()
 	event.OccurredAt = timestamppb.Now()
 
 	value, err := proto.Marshal(event)
@@ -66,7 +66,7 @@ func (s *Server) publishTurn(ctx context.Context, session *quaycrewv1.Session, e
 // sandbox was handed it, and the driver's token for a driver session. A name whose value cannot be
 // read is skipped rather than failing the turn, because the redactor still catches the published
 // token shape without it.
-func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Session) map[string]string {
+func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Thread) map[string]string {
 	values := map[string]string{}
 	names, err := s.secrets.Names(ctx, session.GetWorkspace())
 	if err != nil {

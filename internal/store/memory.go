@@ -24,7 +24,7 @@ type Memory struct {
 	channels   map[string][]*quaycrewv1.Channel
 	projects   map[string]*quaycrewv1.Project
 	deletedPrj map[string]bool
-	sessions   map[string]*quaycrewv1.Session
+	sessions   map[string]*quaycrewv1.Thread
 	byThread   map[string]string
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
@@ -50,7 +50,7 @@ func NewMemory() *Memory {
 		channels:   make(map[string][]*quaycrewv1.Channel),
 		projects:   make(map[string]*quaycrewv1.Project),
 		deletedPrj: make(map[string]bool),
-		sessions:   make(map[string]*quaycrewv1.Session),
+		sessions:   make(map[string]*quaycrewv1.Thread),
 		byThread:   make(map[string]string),
 	}
 }
@@ -228,7 +228,7 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 }
 
 // FindOrCreateSession returns the project's session for a thread, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) (*quaycrewv1.Session, error) {
+func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) (*quaycrewv1.Thread, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
@@ -239,11 +239,11 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) 
 		return clone(m.sessions[id]), nil
 	}
 	now := timestamppb.New(time.Now().UTC())
-	session := &quaycrewv1.Session{
+	session := &quaycrewv1.Thread{
 		Id:        NewID(),
 		Workspace: owner.GetWorkspace(),
 		Project:   project,
-		ThreadId:  thread,
+		Handle:    thread,
 		Status:    "idle",
 		// The mode every turn has run as since the control plane was written, now written down
 		// rather than hardcoded at the point of use.
@@ -274,7 +274,7 @@ func (m *Memory) RecordTurn(_ context.Context, id, modelSessionID, status string
 }
 
 // GetSession returns a session by id.
-func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, error) {
+func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Thread, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	session, ok := m.sessions[id]
@@ -285,10 +285,10 @@ func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, 
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
+func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
+	out := make([]*quaycrewv1.Thread, 0, len(m.sessions))
 	for _, session := range m.sessions {
 		if (session.GetArchivedAt() != nil) != filter.Archived {
 			continue
@@ -544,7 +544,7 @@ func (m *Memory) ListTurns(_ context.Context, session string, limit int) ([]*qua
 
 	out := make([]*quaycrewv1.Turn, 0)
 	for _, turn := range m.turns {
-		if turn.GetSession() == session {
+		if turn.GetThread() == session {
 			out = append(out, clone(turn))
 		}
 	}
@@ -558,7 +558,7 @@ func (m *Memory) ListTurns(_ context.Context, session string, limit int) ([]*qua
 }
 
 // FindOrCreateDriver returns the project's driver, creating it the first time somebody opens it.
-func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycrewv1.Session, error) {
+func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycrewv1.Thread, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
@@ -571,11 +571,11 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		}
 	}
 	now := timestamppb.New(time.Now().UTC())
-	session := &quaycrewv1.Session{
+	session := &quaycrewv1.Thread{
 		Id:        NewID(),
 		Workspace: owner.GetWorkspace(),
 		Project:   project,
-		ThreadId:  NewID(),
+		Handle:    NewID(),
 		Status:    "idle",
 		// The driver acts for the operator rather than doing work of its own, and a driver that stops
 		// to ask before every step describes the task instead of doing it. What bounds it is the
@@ -586,6 +586,6 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		UpdatedAt:      now,
 	}
 	m.sessions[session.GetId()] = session
-	m.byThread[threadKey(project, session.GetThreadId())] = session.GetId()
+	m.byThread[threadKey(project, session.GetHandle())] = session.GetId()
 	return clone(session), nil
 }

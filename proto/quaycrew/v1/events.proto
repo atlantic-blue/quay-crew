@@ -15,15 +15,15 @@ message TurnEvent {
   // record more than once and needs something to recognise it by: the projection writes it as the
   // primary key and lets a repeat collide harmlessly.
   string id = 10;
-  // session is the session the turn ran in, and the key the record is published under, so one
-  // session's events stay in order on one partition.
-  string session = 1;
+  // thread is the thread the turn ran in, and the key the record is published under, so one
+  // thread's events stay in order on one partition.
+  string thread = 1;
   // workspace and project are where the session sits, denormalised deliberately: a consumer must not
   // have to query the store to know what it is reading.
   string workspace = 2;
   string project = 3;
-  // thread_id is the channel's own name for the conversation.
-  string thread_id = 4;
+  // handle is the channel's own name for the conversation.
+  string handle = 4;
   // prompt is what was asked. reply is what came back, empty when the turn failed.
   string prompt = 5;
   string reply = 6;
