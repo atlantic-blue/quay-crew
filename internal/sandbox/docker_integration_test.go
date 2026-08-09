@@ -314,6 +314,44 @@ func TestGitFindsItsCredentialWithoutArguments(t *testing.T) {
 	}
 }
 
+// The github skill declares the gh binary, and a declaration is only worth what the image actually
+// carries. Asked of a real container rather than of the Dockerfile, because an install line that
+// fetches the wrong architecture or a dead address builds a file the reader believes and a container
+// that refuses.
+func TestTheImageCarriesGh(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to an image with gh in it")
+	}
+
+	provider := sandbox.DockerProvider{Image: image}
+	box, err := provider.Create(ctx, sandbox.Config{
+		ID: "githubbinary" + strings.Repeat("0", 12),
+	})
+	if err != nil {
+		t.Fatalf("create the sandbox: %v", err)
+	}
+	defer func() { _ = box.Close(ctx) }()
+
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"gh", "--version"}})
+	if err != nil {
+		t.Fatalf("run gh in the sandbox: %v", err)
+	}
+	said, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read what gh said: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("gh is not usable in the image: %v: %s", err, proc.Stderr())
+	}
+	if !strings.Contains(string(said), "gh version") {
+		t.Errorf("gh answered %q, want its version line", string(said))
+	}
+}
+
 // TestDockerProviderRemovesByName: stopping a thread has to work from a process that never made the
 // container, so removal goes by name rather than through a held handle. A container that is not
 // there is a remove that already happened, and the exact name shape keeps the compose stack's own

@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The github skill, and gh in the image.** The second shipped skill, in `skills/github/`, and
+  separate from git on purpose: git needs a repository and nothing else, github needs a credential,
+  the network, and it does things that cannot be undone. The brief says how pull requests are
+  opened here (branch first, a short What and Why, watch the checks land) and what a session never
+  does: merge, close somebody else's work, or delete a branch it did not make, unless asked in the
+  conversation. The image gains `gh` at a pinned release and curl beside it, proven usable inside a
+  real container. The stated cost: about forty megabytes on the sandbox image.
+  ([#214](https://github.com/atlantic-blue/quay-crew/issues/214))
 - **A crew that opens empty walks you through its own setup.** The console opening with no
   workspaces used to show an empty listing and nothing suggesting what to do next; getting to a
   working thread took four passes of the wizard and prior knowledge of the order. It now offers a

@@ -51,3 +51,50 @@ func TestTheShippedGitSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The github skill is the second shipped one, and it is separate from git on purpose: git needs a
+// repository and nothing else, github needs a credential, the network, and it does things that
+// cannot be undone.
+func TestTheShippedGitHubSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var github *Skill
+	for i := range skills {
+		if skills[i].Name == "github" {
+			github = &skills[i]
+		}
+	}
+	if github == nil {
+		t.Fatal("skills/ does not hold the github skill")
+	}
+
+	for _, binary := range []string{"git", "gh"} {
+		found := false
+		for _, declared := range github.Binaries {
+			if declared == binary {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("the github skill does not declare the %s binary, so a sandbox missing it is discovered halfway through instead of refused with a sentence", binary)
+		}
+	}
+
+	what, declared := github.Secrets["GH_TOKEN"]
+	if !declared {
+		t.Error("the github skill does not name GH_TOKEN, and gh cannot authenticate without it")
+	}
+	if strings.TrimSpace(what) == "" {
+		t.Error("GH_TOKEN carries no line saying what it is")
+	}
+
+	brief := strings.ToLower(github.Brief)
+	for _, said := range []string{"pull request", "branch", "merge"} {
+		if !strings.Contains(brief, said) {
+			t.Errorf("the brief never says %q, and how pull requests are opened here is the whole of what this skill is", said)
+		}
+	}
+}
