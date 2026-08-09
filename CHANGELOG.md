@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A skill can no longer select secrets the operator did not hand out.** A held skill's declared
+  secret travels only when the operator also names it in QC_SANDBOX_SECRETS; a turn whose skill
+  secret is set but not handed out is refused naming exactly what to add and where. A manifest
+  naming a secret starting QC_ or CLAUDE_ is refused at validation on both roads in, because those
+  names are the crew's own configuration and the model's token, and one stored by an earlier build
+  is filtered at the sandbox boundary. Before this a manifest was an arbitrary secret selector over
+  whatever the workspace held, bypassing the allowlist entirely.
+  ([#204](https://github.com/atlantic-blue/quay-crew/issues/204))
 - **The protocol says thread, the way every surface already does.** `message Session` is now
   `Thread`, the session RPCs are thread RPCs, and a dispatch returns the thread's `id` beside its
   `handle` instead of a `session_id` beside a `thread_id`. The three identifiers a thread carries

@@ -244,8 +244,11 @@ Verified against the repository and a running stack, rather than assumed:
 - `git` version 2.39.5, `rg` and `tmux` are in the sandbox image, and there is still no `gh`: verified by
   running `command -v gh` inside a real session's container on 8 August 2026. A commit has an author and a
   committer now, from the crew's configuration.
-- A workspace's secrets reach a sandbox by name, and a skill's declared secrets are among those names, so
-  a session holding the github skill is given `GH_TOKEN` and one whose workspace does not hold it is not.
+- A workspace's secrets reach a sandbox by name, and a skill's declared secrets travel only when the
+  operator also names them in `QC_SANDBOX_SECRETS`: a session holding the github skill is given
+  `GH_TOKEN` when the workspace holds it and the crew hands it out, and a turn whose skill secret is
+  set but not handed out is refused naming exactly what to add. A manifest naming a secret starting
+  `QC_` or `CLAUDE_` is refused at validation, because those names are the crew's own.
 - Context already has the four levels, the store, the rendering into files and the reading back, and
   a skill's brief follows that path rather than inventing a second one.
 - Automation graphs are designed and not built.

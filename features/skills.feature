@@ -70,14 +70,30 @@ Feature: A session is given the skills the crew has
     Then the control plane refuses it as the wrong state
     And the refusal names the binary and the image to add it to
 
-  # A session gets what its skills name and nothing else, which is the rule the whole design turns on.
+  # A session gets what its skills name and nothing else, which is the rule the whole design turns
+  # on. A skill's name alone is not enough: the operator hands the secret out by naming it in the
+  # crew's allowlist, so a manifest can never select a secret the operator did not choose to share.
   Scenario: A skill's secret reaches the sandbox, and nothing else does
-    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the crew has a skill "github" needing the secret "GH_TOKEN"
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
     When the operator dispatches "hello" to the project
     Then the sandbox carries "GH_TOKEN" set to "ghp-1234"
     And the sandbox carries nothing called "STRIPE_KEY"
+
+  Scenario: A skill's secret does not travel until the crew is told to hand it out
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    When the operator dispatches "hello" to the project
+    Then the control plane refuses it as the wrong state
+    And the refusal names "QC_SANDBOX_SECRETS" and the secret to add to it
+    And no sandbox has been created
+
+  Scenario: A skill naming the crew's own configuration is refused at import
+    When the operator imports a skill whose manifest names the secret "QC_TOKEN"
+    Then the crew refuses it saying "the crew's own"
+    And the crew holds no imported skills
 
   # The crew's skills directory is one way in and reaches every session. The other is importing a skill
   # into the store and attaching it to a workspace, which is where a credential belongs: a token for one
@@ -106,7 +122,8 @@ Feature: A session is given the skills the crew has
     Then the crew refuses it saying "read only when they are needed"
 
   Scenario: Attaching a skill puts it in front of the workspace's sessions
-    Given the operator imported the "github" skill
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
     When the operator attaches the "github" skill to the workspace
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator dispatches "hello" to the project
@@ -115,7 +132,8 @@ Feature: A session is given the skills the crew has
     And the brief the memory file points at is on disk
 
   Scenario: A skill reaches a session that is already running
-    Given the operator imported the "github" skill
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And a session started by dispatching "hello"
     When the operator attaches the "github" skill to the workspace
@@ -124,7 +142,8 @@ Feature: A session is given the skills the crew has
   # A brief left behind is a capability the model reads about and no longer has, which is worse than
   # never having had it, because it will try.
   Scenario: Detaching a skill takes it off the sessions that held it
-    Given the operator imported the "github" skill
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
     And a session started by dispatching "hello"
@@ -133,7 +152,8 @@ Feature: A session is given the skills the crew has
     And the "github" skill's directory is gone from the workspace
 
   Scenario: Detaching one of two skills leaves the other
-    Given the operator imported the "github" skill
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
     And the operator imported the "notes" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
@@ -170,7 +190,8 @@ Feature: A session is given the skills the crew has
   # memory has learned something. A skill is the opposite: it is a capability somebody granted, so an
   # edit from inside is not an edit of it.
   Scenario: A brief edited on the host does not survive
-    Given the operator imported the "github" skill
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
     And a session started by dispatching "hello"
@@ -182,7 +203,8 @@ Feature: A session is given the skills the crew has
   # target is a container that will not start, so the workspace's wins, being the narrower and more
   # deliberate statement of what that workspace should hold.
   Scenario: A workspace's own skill wins over the crew's of the same name
-    Given the crew has a skill "github" that says "the crew's own version"
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the crew has a skill "github" that says "the crew's own version"
     And the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     When the operator attaches the "github" skill to the workspace
