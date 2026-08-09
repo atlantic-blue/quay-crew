@@ -26,6 +26,12 @@ import (
 // construction, so the token cannot live there.
 const TokenFile = "crew.token"
 
+// DriverTokenFile is the file the driver's token lives in, beside the crew's. The driver holds its
+// own token rather than the operator's so the crew can tell its calls apart and refuse it the ones
+// that grant capability, and so a token that leaks out of a driver sandbox grants strictly less
+// than the operator holds.
+const DriverTokenFile = "driver.token"
+
 // TokenEnv is what a client reads first, and what the crew puts into a sandbox that is allowed to
 // drive it.
 const TokenEnv = "QC_TOKEN"
@@ -69,45 +75,76 @@ func TokenAt(path string) (string, error) {
 	return token, nil
 }
 
-// ServerOptions returns the interceptors that refuse every call not carrying the crew's token.
+// Deny is a policy over what a recognised driver may still not call. It sees the full method name
+// and the request, and returns the refusal or nil. Only driver calls are put through it: the
+// operator's token is refused nothing here.
+type Deny func(fullMethod string, request any) error
+
+// ServerOptions returns the interceptors that refuse every call not carrying one of the crew's
+// tokens, and put a recognised driver through the deny policy.
 //
-// A server built with no token refuses everything rather than everything getting in: the guard
+// A server built with no tokens refuses everything rather than everything getting in: the guard
 // failing open is the one behaviour this package exists to prevent.
-func ServerOptions(token string) []grpc.ServerOption {
+func ServerOptions(token, driverToken string, deny Deny) []grpc.ServerOption {
 	return []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo,
+		grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo,
 			handler grpc.UnaryHandler) (any, error) {
-			if err := recognise(ctx, token); err != nil {
+			caller, err := recognise(ctx, token, driverToken)
+			if err != nil {
 				return nil, err
+			}
+			if caller == callerDriver && deny != nil {
+				if err := deny(info.FullMethod, req); err != nil {
+					return nil, err
+				}
 			}
 			return handler(ctx, req)
 		}),
-		grpc.ChainStreamInterceptor(func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo,
+		grpc.ChainStreamInterceptor(func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo,
 			handler grpc.StreamHandler) error {
-			if err := recognise(stream.Context(), token); err != nil {
+			caller, err := recognise(stream.Context(), token, driverToken)
+			if err != nil {
 				return err
+			}
+			if caller == callerDriver && deny != nil {
+				// A stream carries no single request to judge, so the driver is judged on the
+				// method alone.
+				if err := deny(info.FullMethod, nil); err != nil {
+					return err
+				}
 			}
 			return handler(srv, stream)
 		}),
 	}
 }
 
-// recognise says whether a call carries the crew's token, and if not, why it is refused.
-func recognise(ctx context.Context, token string) error {
-	if token == "" {
-		return status.Error(codes.Unauthenticated,
+// caller is who a recognised token says is calling.
+type caller int
+
+const (
+	callerOperator caller = iota
+	callerDriver
+)
+
+// recognise says who a call is from by the token it carries, or why it is refused.
+func recognise(ctx context.Context, token, driverToken string) (caller, error) {
+	if token == "" && driverToken == "" {
+		return 0, status.Error(codes.Unauthenticated,
 			"this crew holds no token, so it cannot recognise any caller: restart the control plane with a data directory and one is minted")
 	}
 	presented := presentedToken(ctx)
 	if presented == "" {
-		return status.Error(codes.Unauthenticated,
+		return 0, status.Error(codes.Unauthenticated,
 			"this call carries no crew token, so the crew cannot tell who is calling: quay reads "+
 				TokenEnv+", or crew.token in the crew's data directory")
 	}
-	if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
-		return status.Error(codes.Unauthenticated, "the token this call carries is not this crew's")
+	if token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1 {
+		return callerOperator, nil
 	}
-	return nil
+	if driverToken != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(driverToken)) == 1 {
+		return callerDriver, nil
+	}
+	return 0, status.Error(codes.Unauthenticated, "the token this call carries is not this crew's")
 }
 
 // presentedToken reads the token a call carries, or nothing when it carries none.

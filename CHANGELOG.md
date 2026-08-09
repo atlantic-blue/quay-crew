@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The driver cannot grant itself anything.** The driver is handed its own token at sandbox birth,
+  minted into `driver.token` beside the crew's, so the control plane can tell its calls apart, and
+  the calls that grant capability are refused to it: setting or listing secrets, importing,
+  attaching or detaching skills, a session's permission mode, and context at the crew scope. The
+  refusal says the call is the operator's to make. Everything the driver exists to do stays open:
+  workspaces, projects, threads, dispatch, and context at the workspace and project scopes. Before
+  this the driver held the operator's own token, so a session that could drive the crew could also
+  widen itself. ([#198](https://github.com/atlantic-blue/quay-crew/issues/198))
 - **The crew refuses a caller it cannot recognise.** The control plane mints a token the first time
   it starts, kept at `crew.token` beside the key that seals secrets, and every call has to carry it
   or is refused with a message naming what to present. The listener binds to loopback by default and

@@ -97,9 +97,11 @@ type Config struct {
 	// Empty means a session cannot reach the crew at all, which is the default: a session that can
 	// drive the crew can also stop other sessions, so it is turned on rather than assumed.
 	Reachable string
-	// Token is the crew's own token, the one every caller has to present. The driver is handed it
-	// beside the crew's address, because an address without the token is a door that will not open.
-	Token string
+	// DriverToken is the driver's own token, handed to it beside the crew's address, because an
+	// address without a token is a door that will not open. It is the driver's rather than the
+	// operator's so the crew can tell the two apart and refuse the driver the calls that grant
+	// capability (see DeniedToDriver).
+	DriverToken string
 }
 
 // Identity is who a commit is by.
@@ -124,8 +126,9 @@ type Server struct {
 	storage  sandbox.Storage
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
-	// token is the crew's token, handed only to the driver so its dispatches are recognised.
-	token string
+	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
+	// as the driver's.
+	driverToken string
 	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
 	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
@@ -153,7 +156,7 @@ func NewServer(cfg Config) *Server {
 		events:         eventsOr(cfg.Events),
 		info:           cfg.Info,
 		reachable:      cfg.Reachable,
-		token:          cfg.Token,
+		driverToken:    cfg.DriverToken,
 		sandboxSecrets: cfg.SandboxSecrets,
 		gitAuthor:      cfg.GitAuthor,
 		skills:         cfg.Skills,
@@ -1313,8 +1316,8 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 		env[grpcAddrEnv] = s.reachable
 		// The token travels with the address and only with it: an ordinary session is told
 		// neither, and an address the crew refuses to answer would read as the crew being down.
-		if s.token != "" {
-			env[auth.TokenEnv] = s.token
+		if s.driverToken != "" {
+			env[auth.TokenEnv] = s.driverToken
 		}
 	}
 	// Who a commit is by. All four, because git wants an author and a committer and refuses on either

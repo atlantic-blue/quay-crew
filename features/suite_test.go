@@ -137,11 +137,13 @@ type world struct {
 	// something other than what the world's own client presents.
 	listener *bufconn.Listener
 	// token is the crew's token, which every caller has to present to be served.
-	token    string
-	conn     *grpc.ClientConn
-	client   quaycrewv1.ControlPlaneServiceClient
-	provider *sandbox.FakeProvider
-	runner   *recordingRunner
+	token string
+	// driverToken is the driver's own token: recognised, and refused the calls that grant capability.
+	driverToken string
+	conn        *grpc.ClientConn
+	client      quaycrewv1.ControlPlaneServiceClient
+	provider    *sandbox.FakeProvider
+	runner      *recordingRunner
 	// realRunner replaces the recording double when a scenario is about what the real one does with
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
@@ -209,6 +211,7 @@ func (w *world) start() error {
 	// Every scenario runs against a crew that guards itself, the way a real one does, so the whole
 	// suite proves the authenticated path and not a special unguarded one.
 	w.token = "the-token-this-scenario-was-minted"
+	w.driverToken = "the-driver-token-this-scenario-was-minted"
 	return w.serve()
 }
 
@@ -234,11 +237,11 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
-	w.grpcServer = grpc.NewServer(auth.ServerOptions(w.token)...)
+	w.grpcServer = grpc.NewServer(auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...)
 	server := controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
-		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor, Token: w.token,
+		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
 	// The way the real main starts: what strays while the crew is down is reaped on the way up.
