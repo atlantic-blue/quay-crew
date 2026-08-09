@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A secret pasted into a conversation is not persisted in the clear.** Every published turn
+  payload, the prompt, the reply and the failure, goes through the crew's redactor before it
+  reaches the log, and therefore before the projection writes it to the `turns` table: every value
+  the workspace keeps sealed is replaced with the secret's name, the driver's token is caught for a
+  driver session, and anything shaped like a subscription token is caught even when the crew never
+  held the value. What the crew cannot recognise is stored as typed, and `docs/EVENTS.md` says so.
+  ([#200](https://github.com/atlantic-blue/quay-crew/issues/200))
 - **The driver cannot grant itself anything.** The driver is handed its own token at sandbox birth,
   minted into `driver.token` beside the crew's, so the control plane can tell its calls apart, and
   the calls that grant capability are refused to it: setting or listing secrets, importing,
