@@ -24,14 +24,19 @@ import (
 // own.
 func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
+	return testClientWith(t, controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+}
+
+func testClientWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
-	srv := controlplane.NewServer(controlplane.Config{
-		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
-		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
-	})
+	srv := controlplane.NewServer(cfg)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, srv)
 	go func() { _ = grpcServer.Serve(lis) }()
 	t.Cleanup(grpcServer.Stop)

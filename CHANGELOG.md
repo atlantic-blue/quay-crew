@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **One resolver answers what a session holds, and the listing asks it.** What a session holds used
+  to be answered four separate times per sandbox creation, four store round trips that could
+  disagree, and the only honest answer was exposed to nobody. One resolver now answers holdings,
+  mounts and which skills need their files written out, in one round trip, and
+  `quay skill list <workspace>/<project>/<thread>` reports what that thread actually holds: the
+  crew's own skills and the workspace's, the workspace winning a name collision, exactly what its
+  sandbox is built from. ([#206](https://github.com/atlantic-blue/quay-crew/issues/206))
 - **A skill can no longer select secrets the operator did not hand out.** A held skill's declared
   secret travels only when the operator also names it in QC_SANDBOX_SECRETS; a turn whose skill
   secret is set but not handed out is refused naming exactly what to add and where. A manifest

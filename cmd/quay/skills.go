@@ -70,11 +70,12 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		typed = args[0]
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay skill list [<workspace>]")
+		return fmt.Errorf("usage: quay skill list [<workspace, or workspace/project/thread>]")
 	}
 
-	// With no address, this is what the crew holds. With one, it is what that workspace holds, which is
-	// the more useful of the two and also the narrower, so it is not the default.
+	// With no address, this is what the crew holds. With a workspace, what that workspace holds.
+	// With a thread, what that thread actually holds: the same answer its sandbox is built from,
+	// crew skills included, which no attachment row records.
 	request := &quaycrewv1.ListSkillsRequest{}
 	where := "the crew"
 	if typed != "" {
@@ -84,6 +85,24 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		}
 		request.Workspace = located.WorkspaceID
 		where = located.Path.Workspace
+		if located.ThreadID != "" {
+			// The address resolves to the thread's handle; holdings hang off the thread itself,
+			// so find its row by the handle.
+			threads, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: located.ProjectID})
+			if err != nil {
+				return err
+			}
+			for _, thread := range threads.GetThreads() {
+				if thread.GetHandle() == located.ThreadID {
+					request = &quaycrewv1.ListSkillsRequest{Thread: thread.GetId()}
+					where = "thread " + located.ThreadID
+					break
+				}
+			}
+			if request.GetThread() == "" {
+				return fmt.Errorf("thread %q is not in %s/%s", located.ThreadID, located.Path.Workspace, located.Path.Project)
+			}
+		}
 	}
 
 	resp, err := client.ListSkills(ctx, request)

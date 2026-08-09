@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -487,6 +488,35 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 		w.lastSkills = resp
 		return nil
 	})
+
+	sc.Step(`^the operator lists the thread's skills$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		last, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Thread: last.sessionID})
+		if err != nil {
+			return err
+		}
+		w.lastSkills = resp
+		return nil
+	})
+
+	sc.Step(`^the thread holds the "([^"]*)" and "([^"]*)" skills$`,
+		func(ctx context.Context, first, second string) error {
+			w := worldFrom(ctx)
+			names := importedNames(w.lastSkills)
+			for _, want := range []string{first, second} {
+				if !slices.Contains(names, want) {
+					return fmt.Errorf("the thread holds %v, want it to hold %q", names, want)
+				}
+			}
+			if len(names) != 2 {
+				return fmt.Errorf("the thread holds %v, want exactly the two", names)
+			}
+			return nil
+		})
 
 	sc.Step(`^the workspace holds no skills$`, func(ctx context.Context) error {
 		return holdsNothing(ctx, worldFrom(ctx).workspaceID, "the workspace")

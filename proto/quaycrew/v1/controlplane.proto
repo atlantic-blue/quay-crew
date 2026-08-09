@@ -352,10 +352,13 @@ message ImportSkillResponse {
   Skill skill = 1;
 }
 
-// ListSkillsRequest lists what the crew has imported, or what one workspace holds when workspace is
-// set.
+// ListSkillsRequest lists what the crew has imported, what one workspace holds when workspace is
+// set, or what one thread actually holds when thread is set: the same answer the thread's sandbox
+// is built from, both the crew's own skills and the workspace's, the workspace winning a name
+// collision.
 message ListSkillsRequest {
   string workspace = 1;
+  string thread = 2;
 }
 message ListSkillsResponse {
   repeated Skill skills = 1;

@@ -95,6 +95,16 @@ Feature: A session is given the skills the crew has
     Then the crew refuses it saying "the crew's own"
     And the crew holds no imported skills
 
+  # What a thread holds is one question with one answer: the same resolver that builds its sandbox
+  # answers its listing, so the listing cannot say one thing while the sandbox does another.
+  Scenario: The listing for a thread says what it actually holds
+    Given the crew has a skill "git" that says "Branch first."
+    And the operator imported the "notes" skill
+    And the operator attached the "notes" skill to the workspace
+    And a session started by dispatching "hello"
+    When the operator lists the thread's skills
+    Then the thread holds the "git" and "notes" skills
+
   # The crew's skills directory is one way in and reaches every session. The other is importing a skill
   # into the store and attaching it to a workspace, which is where a credential belongs: a token for one
   # capability should not be handed to every session the crew has.

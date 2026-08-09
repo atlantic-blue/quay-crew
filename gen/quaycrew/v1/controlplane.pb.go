@@ -3132,11 +3132,14 @@ func (x *ImportSkillResponse) GetSkill() *Skill {
 	return nil
 }
 
-// ListSkillsRequest lists what the crew has imported, or what one workspace holds when workspace is
-// set.
+// ListSkillsRequest lists what the crew has imported, what one workspace holds when workspace is
+// set, or what one thread actually holds when thread is set: the same answer the thread's sandbox
+// is built from, both the crew's own skills and the workspace's, the workspace winning a name
+// collision.
 type ListSkillsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Thread        string                 `protobuf:"bytes,2,opt,name=thread,proto3" json:"thread,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3174,6 +3177,13 @@ func (*ListSkillsRequest) Descriptor() ([]byte, []int) {
 func (x *ListSkillsRequest) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
+	}
+	return ""
+}
+
+func (x *ListSkillsRequest) GetThread() string {
+	if x != nil {
+		return x.Thread
 	}
 	return ""
 }
@@ -4319,9 +4329,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12ImportSkillRequest\x12,\n" +
 	"\x05files\x18\x01 \x03(\v2\x16.quaycrew.v1.SkillFileR\x05files\"?\n" +
 	"\x13ImportSkillResponse\x12(\n" +
-	"\x05skill\x18\x01 \x01(\v2\x12.quaycrew.v1.SkillR\x05skill\"1\n" +
+	"\x05skill\x18\x01 \x01(\v2\x12.quaycrew.v1.SkillR\x05skill\"I\n" +
 	"\x11ListSkillsRequest\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"@\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06thread\x18\x02 \x01(\tR\x06thread\"@\n" +
 	"\x12ListSkillsResponse\x12*\n" +
 	"\x06skills\x18\x01 \x03(\v2\x12.quaycrew.v1.SkillR\x06skills\"F\n" +
 	"\x12AttachSkillRequest\x12\x1c\n" +
