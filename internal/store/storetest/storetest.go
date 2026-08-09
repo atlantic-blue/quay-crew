@@ -14,6 +14,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -772,6 +773,91 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if same.GetModelSessionId() != "conversation-1" {
 			t.Fatalf("the resumed session lost its conversation handle: %q", same.GetModelSessionId())
+		}
+	})
+
+	t.Run("a flow graph is pinned per version and the newest is served", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		if err := s.ImportFlowGraph(ctx, "fix-red", 1, "version one"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "fix-red", 1, "changed"); err == nil {
+			t.Fatal("a version was imported twice, so a run's pin can change under it")
+		}
+		if err := s.ImportFlowGraph(ctx, "fix-red", 2, "version two"); err != nil {
+			t.Fatalf("ImportFlowGraph the second version: %v", err)
+		}
+		version, definition, err := s.LatestFlowGraph(ctx, "fix-red")
+		if err != nil || version != 2 || definition != "version two" {
+			t.Fatalf("LatestFlowGraph gave version %d %q (%v), want 2 %q", version, definition, err, "version two")
+		}
+		if _, _, err := s.LatestFlowGraph(ctx, "never-imported"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("a graph nobody imported answered %v, want not found", err)
+		}
+	})
+
+	t.Run("a flow run moves with its record and its dispatch claim in one breath", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "fix-red", 1, "the definition"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		run := &flow.Run{
+			ID: "run-1", Workspace: workspace.GetId(), Project: project.GetId(),
+			GraphName: "fix-red", GraphVersion: 1, Node: "", Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		if err := s.CreateFlowRun(ctx, run); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		run.Node, run.Attempts = "fix", map[string]int{"fix": 1}
+		dispatch := &flow.Command{Kind: flow.CommandDispatch, Node: "fix", Attempt: 1, Prompt: "fix it"}
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventStarted, Node: "fix", Dispatch: dispatch}); err != nil {
+			t.Fatalf("AdvanceFlowRun: %v", err)
+		}
+
+		// The same key again refuses the whole movement: no second claim, no second record, and the
+		// run row stays where it was, because a duplicate dispatch is a turn paid for twice.
+		moved := *run
+		moved.Node = "somewhere-else"
+		if err := s.AdvanceFlowRun(ctx, &moved, flow.Transition{Event: flow.EventStarted, Node: "somewhere-else", Dispatch: dispatch}); err == nil {
+			t.Fatal("the same dispatch key was claimed twice")
+		}
+		kept, err := s.GetFlowRun(ctx, "run-1")
+		if err != nil {
+			t.Fatalf("GetFlowRun: %v", err)
+		}
+		if kept.Node != "fix" || kept.Status != flow.StatusRunning || kept.Attempts["fix"] != 1 {
+			t.Fatalf("after the refused movement the run reads %+v, want it unmoved on fix", kept)
+		}
+		transitions, err := s.ListFlowTransitions(ctx, "run-1")
+		if err != nil {
+			t.Fatalf("ListFlowTransitions: %v", err)
+		}
+		if len(transitions) != 1 || transitions[0].Node != "fix" || transitions[0].Event != flow.EventStarted {
+			t.Fatalf("the transitions read back as %+v, want exactly the one movement that happened", transitions)
+		}
+	})
+
+	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		if _, err := s.GetFlowRun(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("a run nobody made answered %v, want not found", err)
+		}
+		ghost := &flow.Run{ID: "ghost", Status: flow.StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
+		if err := s.AdvanceFlowRun(ctx, ghost, flow.Transition{Event: flow.EventStarted, Node: "a"}); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("moving a run nobody made answered %v, want not found", err)
 		}
 	})
 

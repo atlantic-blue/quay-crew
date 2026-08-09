@@ -10,6 +10,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -34,8 +35,12 @@ type Memory struct {
 	// repositories are the repositories each workspace works in, in the order they were added.
 	// skills is every revision the crew holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
-	skills   map[string]Imported
-	attached map[string]map[string]int
+	skills          map[string]Imported
+	attached        map[string]map[string]int
+	flowGraphs      map[string]map[int]string
+	flowRuns        map[string]*flow.Run
+	flowTransitions map[string][]flow.RecordedTransition
+	flowDispatches  map[string]bool
 	// turns is a session's history, oldest first, and turnSeen is what makes writing the
 	// same record twice harmless.
 	turns    []*quaycrewv1.Turn
