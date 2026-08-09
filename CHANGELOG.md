@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A thread whose sandbox predates the workspace's skills says so, instead of being lied to.** A
+  sandbox is born with its capabilities and never drifts: the mount, the secrets and the setup only
+  happen at container creation. What each live sandbox was born holding is now recorded, and a
+  thread whose birth set differs from the workspace's current skills is marked stale, over the API
+  and beside its status in the console. Stopping and restarting it builds a sandbox born current,
+  and the conversation is bind mounted so nothing is lost. Attach and detach say this out loud. A
+  stopped thread is never stale, because its next sandbox is born with the current set.
+  ([#208](https://github.com/atlantic-blue/quay-crew/issues/208))
 - **One resolver answers what a session holds, and the listing asks it.** What a session holds used
   to be answered four separate times per sandbox creation, four store round trips that could
   disagree, and the only honest answer was exposed to nobody. One resolver now answers holdings,

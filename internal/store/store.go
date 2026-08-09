@@ -94,6 +94,11 @@ type Store interface {
 	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
 	// lands in the same session.
 	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Thread, error)
+	// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears
+	// it. SessionSkills reads it back, empty when no live sandbox is known. Stopping or archiving
+	// a session clears it, because the sandbox goes with it and the next one is born current.
+	SetSessionSkills(ctx context.Context, id, fingerprint string) error
+	SessionSkills(ctx context.Context, id string) (string, error)
 	// FindOrCreateDriver returns the project's driver, one per project, creating it on first open.
 	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Thread, error)
 	// RecordTurn leaves the stored handle alone when modelSessionID is empty, so a failed turn cannot

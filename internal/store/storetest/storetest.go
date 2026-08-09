@@ -255,6 +255,47 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("what a sandbox was born holding is recorded, and closing the sandbox clears it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a")
+
+		if fingerprint, err := s.SessionSkills(ctx, session.GetId()); err != nil || fingerprint != "" {
+			t.Fatalf("a fresh session answers %q, %v; want empty and no error", fingerprint, err)
+		}
+		if err := s.SetSessionSkills(ctx, session.GetId(), "set-a"); err != nil {
+			t.Fatalf("SetSessionSkills: %v", err)
+		}
+		if fingerprint, _ := s.SessionSkills(ctx, session.GetId()); fingerprint != "set-a" {
+			t.Fatalf("read back %q, want set-a", fingerprint)
+		}
+
+		if err := s.StopSession(ctx, session.GetId()); err != nil {
+			t.Fatalf("StopSession: %v", err)
+		}
+		if fingerprint, _ := s.SessionSkills(ctx, session.GetId()); fingerprint != "" {
+			t.Fatalf("a stopped session still answers %q: its sandbox is gone, so the next one is born current", fingerprint)
+		}
+
+		if err := s.SetSessionSkills(ctx, session.GetId(), "set-b"); err != nil {
+			t.Fatalf("SetSessionSkills after stop: %v", err)
+		}
+		if err := s.ArchiveSession(ctx, session.GetId()); err != nil {
+			t.Fatalf("ArchiveSession: %v", err)
+		}
+		if fingerprint, _ := s.SessionSkills(ctx, session.GetId()); fingerprint != "" {
+			t.Fatalf("an archived session still answers %q", fingerprint)
+		}
+
+		if err := s.SetSessionSkills(ctx, "ghost", "set-c"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("setting on a missing session returned %v, want ErrNotFound", err)
+		}
+		if _, err := s.SessionSkills(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("reading a missing session returned %v, want ErrNotFound", err)
+		}
+	})
+
 	// The conversation handle is what makes this worth having: it is the only pointer to a
 	// conversation the model keeps on its own disk, and a restart that lost it would leave the
 	// conversation stranded and unreachable.
