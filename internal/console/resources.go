@@ -485,6 +485,16 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return names
 }
 
+// statusLabel is the status cell, carrying the stale mark when the thread's live sandbox was born
+// before the workspace's current skills: the operator's cue that stopping and restarting it gets a
+// sandbox born current.
+func statusLabel(session *quaycrewv1.Thread) string {
+	if session.GetStale() {
+		return session.GetStatus() + " stale"
+	}
+	return session.GetStatus()
+}
+
 func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) Row {
 	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
@@ -496,7 +506,7 @@ func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) R
 			display.Name(workspaceName, session.GetWorkspace()),
 			display.Name(projectName, session.GetProject()),
 			display.ShortID(session.GetHandle()),
-			session.GetStatus(),
+			statusLabel(session),
 			permissionLabel(session.GetPermissionMode()),
 			tokens(session.GetUsage().GetInput()),
 			tokens(session.GetUsage().GetOutput()),

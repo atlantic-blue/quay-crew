@@ -278,6 +278,17 @@ func (s Skill) Fingerprint() string {
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
+// FingerprintHeld is one string for a whole skill set, so what a sandbox was born holding can be
+// compared with what a fresh one would hold. Name, version and each skill's own fingerprint go in,
+// so an edited skill changes the answer the same way an attached or detached one does.
+func FingerprintHeld(held []Held) string {
+	sum := sha256.New()
+	for _, one := range held {
+		fmt.Fprintf(sum, "%s\x00%d\x00%s\x00", one.Name, one.Version, one.Fingerprint())
+	}
+	return hex.EncodeToString(sum.Sum(nil))
+}
+
 // Index is what a session is told about the skills it holds: one line each, and where to read the rest.
 //
 // This is why a skill can carry more than a page without every session paying for it. The line says the

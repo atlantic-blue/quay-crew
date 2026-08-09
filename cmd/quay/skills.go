@@ -145,6 +145,7 @@ func runSkillAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	for _, secret := range resp.GetSkill().GetSecrets() {
 		fmt.Fprintf(out, "it needs %s: %s\n", secret.GetName(), secret.GetPurpose())
 	}
+	fmt.Fprintln(out, "threads already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
 	return nil
 }
 
@@ -163,6 +164,7 @@ func runSkillDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return err
 	}
 	fmt.Fprintf(out, "%s no longer holds %s\n", located.Path.Workspace, name)
+	fmt.Fprintln(out, "threads already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
 	return nil
 }
 

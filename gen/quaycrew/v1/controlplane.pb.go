@@ -316,7 +316,12 @@ type Thread struct {
 	Driver bool `protobuf:"varint,11,opt,name=driver,proto3" json:"driver,omitempty"`
 	// usage is what this thread's conversation has cost so far, read from the transcript the model
 	// keeps. Unset for a thread nobody has spoken in.
-	Usage         *Usage `protobuf:"bytes,12,opt,name=usage,proto3" json:"usage,omitempty"`
+	Usage *Usage `protobuf:"bytes,12,opt,name=usage,proto3" json:"usage,omitempty"`
+	// stale says this thread's live sandbox was born before the workspace's current skill set, so it
+	// does not hold what a fresh one would. A sandbox is born with its capabilities and never
+	// drifts; restarting the thread builds a new one, born current. A stopped thread is never
+	// stale, because its next sandbox is born with the current set.
+	Stale         bool `protobuf:"varint,13,opt,name=stale,proto3" json:"stale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -433,6 +438,13 @@ func (x *Thread) GetUsage() *Usage {
 		return x.Usage
 	}
 	return nil
+}
+
+func (x *Thread) GetStale() bool {
+	if x != nil {
+		return x.Stale
+	}
+	return false
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -4163,7 +4175,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
 	"\x06remote\x18\x03 \x01(\tR\x06remote\x125\n" +
-	"\badded_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\aaddedAt\"\xc8\x03\n" +
+	"\badded_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\aaddedAt\"\xde\x03\n" +
 	"\x06Thread\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -4180,7 +4192,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fpermission_mode\x18\n" +
 	" \x01(\tR\x0epermissionMode\x12\x16\n" +
 	"\x06driver\x18\v \x01(\bR\x06driver\x12(\n" +
-	"\x05usage\x18\f \x01(\v2\x12.quaycrew.v1.UsageR\x05usage\"y\n" +
+	"\x05usage\x18\f \x01(\v2\x12.quaycrew.v1.UsageR\x05usage\x12\x14\n" +
+	"\x05stale\x18\r \x01(\bR\x05stale\"y\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12\x16\n" +
 	"\x06output\x18\x02 \x01(\x03R\x06output\x12\x1d\n" +

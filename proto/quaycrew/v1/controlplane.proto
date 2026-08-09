@@ -68,6 +68,11 @@ message Thread {
   // usage is what this thread's conversation has cost so far, read from the transcript the model
   // keeps. Unset for a thread nobody has spoken in.
   Usage usage = 12;
+  // stale says this thread's live sandbox was born before the workspace's current skill set, so it
+  // does not hold what a fresh one would. A sandbox is born with its capabilities and never
+  // drifts; restarting the thread builds a new one, born current. A stopped thread is never
+  // stale, because its next sandbox is born with the current set.
+  bool stale = 13;
 }
 
 // Usage is what a conversation has cost, in tokens.

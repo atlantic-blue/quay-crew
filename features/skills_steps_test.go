@@ -489,6 +489,47 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	staleness := func(ctx context.Context, want bool) error {
+		w := worldFrom(ctx)
+		last, err := w.lastTurn()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: last.sessionID})
+		if err != nil {
+			return err
+		}
+		if got := resp.GetThread().GetStale(); got != want {
+			return fmt.Errorf("the listing says stale=%t for that thread, want %t", got, want)
+		}
+		return nil
+	}
+	sc.Step(`^the listing marks that thread stale$`, func(ctx context.Context) error {
+		return staleness(ctx, true)
+	})
+	sc.Step(`^the listing does not mark that thread stale$`, func(ctx context.Context) error {
+		return staleness(ctx, false)
+	})
+
+	sc.Step(`^the newest sandbox mounts the workspace's ([^ ]+) skill read only$`,
+		func(ctx context.Context, name string) error {
+			w := worldFrom(ctx)
+			if len(w.provider.Created) == 0 {
+				return fmt.Errorf("no sandbox was made")
+			}
+			newest := w.provider.Created[len(w.provider.Created)-1]
+			want := skill.DirIn(sandbox.SkillsPath, name)
+			for _, mount := range newest.Mounts {
+				if mount.Target == want {
+					if !mount.ReadOnly {
+						return fmt.Errorf("the %s skill is mounted writable", name)
+					}
+					return nil
+				}
+			}
+			return fmt.Errorf("the newest sandbox does not mount %s: %+v", want, newest.Mounts)
+		})
+
 	sc.Step(`^the operator lists the thread's skills$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		last, err := w.lastTurn()

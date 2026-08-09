@@ -95,6 +95,46 @@ Feature: A session is given the skills the crew has
     Then the crew refuses it saying "the crew's own"
     And the crew holds no imported skills
 
+  # A sandbox is born with its capabilities and never drifts: the mount, the secrets and the setup
+  # only ever happen at container creation. So attaching or detaching a skill changes what future
+  # sandboxes are born with, and a thread whose live sandbox predates the current set is marked
+  # stale rather than lied to. Restarting it builds a new sandbox, born with the current skills.
+  Scenario: A thread whose sandbox predates a new skill is marked stale
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And a session started by dispatching "hello"
+    When the operator attaches the "github" skill to the workspace
+    Then the listing marks that thread stale
+
+  Scenario: A thread whose sandbox holds the current set is not stale
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And the operator attached the "github" skill to the workspace
+    When the operator dispatches "hello" to the project
+    Then the listing does not mark that thread stale
+
+  Scenario: Stopping and restarting a stale thread is born with the current skills
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And a session started by dispatching "hello"
+    And the operator attaches the "github" skill to the workspace
+    When the operator stops the session
+    And the operator restarts the session
+    Then the listing does not mark that thread stale
+    And the newest sandbox mounts the workspace's github skill read only
+
+  Scenario: A stopped thread is never stale
+    Given a crew that gives its sessions the secret "GH_TOKEN"
+    And the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And a session started by dispatching "hello"
+    And the operator stops the session
+    When the operator attaches the "github" skill to the workspace
+    Then the listing does not mark that thread stale
+
   # What a thread holds is one question with one answer: the same resolver that builds its sandbox
   # answers its listing, so the listing cannot say one thing while the sandbox does another.
   Scenario: The listing for a thread says what it actually holds

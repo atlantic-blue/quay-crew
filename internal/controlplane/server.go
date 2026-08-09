@@ -302,6 +302,13 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 		return nil, err
 	}
 	s.sandboxes[session.GetId()] = box
+	// What this sandbox was born holding, recorded so a listing can say when the workspace's
+	// skills have moved on underneath it. Only when the row holds nothing: a non empty answer
+	// means the container already existed and was adopted, and its birth set is the one already
+	// written, not whatever is current now.
+	if born, err := s.store.SessionSkills(ctx, session.GetId()); err == nil && born == "" {
+		_ = s.store.SetSessionSkills(ctx, session.GetId(), skill.FingerprintHeld(caps.held))
+	}
 	return box, nil
 }
 
@@ -694,6 +701,9 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 		_ = box.Close(ctx)
 	}
 	_ = s.provider.Remove(ctx, sessionID)
+	// With the sandbox goes what it was born holding: the next one is born with the current set,
+	// so a session with no sandbox is never stale.
+	_ = s.store.SetSessionSkills(ctx, sessionID, "")
 }
 
 // stopSessions stops every live session the filter matches and closes its sandbox. It is what
@@ -1165,8 +1175,10 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 	return &quaycrewv1.ListSkillsResponse{Skills: out}, nil
 }
 
-// AttachSkill gives a workspace a skill, and puts it in front of the sessions already running there
-// rather than waiting for each of them to be replaced.
+// AttachSkill gives a workspace a skill, for every sandbox born from now on. A session already
+// running keeps what its sandbox was born with: the mount, the secrets and the setup only happen
+// at container creation, so the honest thing is to mark it stale in the listing rather than
+// rewrite an index it cannot follow.
 func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillRequest) (*quaycrewv1.AttachSkillResponse, error) {
 	attached, err := s.store.AttachSkill(ctx, req.GetWorkspace(), req.GetName())
 	if err != nil {
@@ -1338,6 +1350,7 @@ func (s *Server) ListThreads(ctx context.Context, req *quaycrewv1.ListThreadsReq
 	for _, session := range sessions {
 		s.withUsage(session)
 	}
+	s.withStaleness(ctx, sessions)
 	return &quaycrewv1.ListThreadsResponse{Threads: sessions}, nil
 }
 
@@ -1348,7 +1361,27 @@ func (s *Server) GetThread(ctx context.Context, req *quaycrewv1.GetThreadRequest
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
+	s.withStaleness(ctx, []*quaycrewv1.Thread{session})
 	return &quaycrewv1.GetThreadResponse{Thread: session}, nil
+}
+
+// withStaleness marks the threads whose live sandbox was born before the workspace's current skill
+// set. A thread with no recorded birth set has no live sandbox and is never stale. The current set
+// is computed once per workspace, not once per thread, because a listing is most of what the
+// console asks for.
+func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Thread) {
+	current := map[string]string{}
+	for _, session := range sessions {
+		born, err := s.store.SessionSkills(ctx, session.GetId())
+		if err != nil || born == "" {
+			continue
+		}
+		workspace := session.GetWorkspace()
+		if _, known := current[workspace]; !known {
+			current[workspace] = skill.FingerprintHeld(s.capabilityOf(ctx, session).held)
+		}
+		session.Stale = born != current[workspace]
+	}
 }
 
 // withUsage puts what a thread's conversation has cost onto it, read from the transcript the model

@@ -26,6 +26,9 @@ type Memory struct {
 	deletedPrj map[string]bool
 	sessions   map[string]*quaycrewv1.Thread
 	byThread   map[string]string
+	// skillsBorn is what skill set each session's live sandbox was born with. Absent means no live
+	// sandbox is known, so the session can never be stale.
+	skillsBorn map[string]string
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
 	// repositories are the repositories each workspace works in, in the order they were added.
@@ -52,6 +55,7 @@ func NewMemory() *Memory {
 		deletedPrj: make(map[string]bool),
 		sessions:   make(map[string]*quaycrewv1.Thread),
 		byThread:   make(map[string]string),
+		skillsBorn: make(map[string]string),
 	}
 }
 
@@ -318,7 +322,36 @@ func (m *Memory) StopSession(_ context.Context, id string) error {
 	}
 	session.Status = "stopped"
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	// Stopping closes the sandbox, and with it goes what it was born holding: the next one is born
+	// with the current set, so a stopped session is never stale.
+	delete(m.skillsBorn, id)
 	return nil
+}
+
+// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears it.
+func (m *Memory) SetSessionSkills(_ context.Context, id, fingerprint string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.sessions[id]; !ok {
+		return ErrNotFound
+	}
+	if fingerprint == "" {
+		delete(m.skillsBorn, id)
+		return nil
+	}
+	m.skillsBorn[id] = fingerprint
+	return nil
+}
+
+// SessionSkills reads what skill set the session's live sandbox was born with, empty when no live
+// sandbox is known.
+func (m *Memory) SessionSkills(_ context.Context, id string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.sessions[id]; !ok {
+		return "", ErrNotFound
+	}
+	return m.skillsBorn[id], nil
 }
 
 // RestartSession marks a session idle again.
@@ -349,6 +382,9 @@ func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
 
 // ArchiveSession stamps a session as put away.
 func (m *Memory) ArchiveSession(_ context.Context, id string) error {
+	m.mu.Lock()
+	delete(m.skillsBorn, id)
+	m.mu.Unlock()
 	return m.stampArchived(id, timestamppb.New(time.Now().UTC()))
 }
 

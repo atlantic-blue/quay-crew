@@ -354,7 +354,7 @@ func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*q
 // StopSession marks a session stopped.
 func (p *Postgres) StopSession(ctx context.Context, id string) error {
 	tag, err := p.pool.Exec(ctx,
-		`update sessions set status = 'stopped', updated_at = now() where id = $1`, id)
+		`update sessions set status = 'stopped', skills_fingerprint = '', updated_at = now() where id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("stop session: %w", err)
 	}
@@ -362,6 +362,34 @@ func (p *Postgres) StopSession(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears it.
+func (p *Postgres) SetSessionSkills(ctx context.Context, id, fingerprint string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set skills_fingerprint = $2, updated_at = now() where id = $1`, id, fingerprint)
+	if err != nil {
+		return fmt.Errorf("set session skills: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SessionSkills reads what skill set the session's live sandbox was born with, empty when no live
+// sandbox is known.
+func (p *Postgres) SessionSkills(ctx context.Context, id string) (string, error) {
+	var fingerprint string
+	err := p.pool.QueryRow(ctx,
+		`select skills_fingerprint from sessions where id = $1`, id).Scan(&fingerprint)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("session skills: %w", err)
+	}
+	return fingerprint, nil
 }
 
 // RestartSession marks a session idle again. The conversation handle is left exactly as it was: it
@@ -394,7 +422,7 @@ func (p *Postgres) SetPermissionMode(ctx context.Context, id, mode string) error
 // ArchiveSession stamps a session as put away. Nothing is deleted, which is the whole point: the row,
 // the conversation handle and the files on the host are all untouched, so restoring is one update.
 func (p *Postgres) ArchiveSession(ctx context.Context, id string) error {
-	return p.stampArchived(ctx, id, `archived_at = now()`)
+	return p.stampArchived(ctx, id, `archived_at = now(), skills_fingerprint = ''`)
 }
 
 // RestoreSession clears the stamp, bringing the thread back into the default listing.
