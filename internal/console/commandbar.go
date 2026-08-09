@@ -1,0 +1,198 @@
+package console
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// CommandRunner runs one quay command and hands back everything it printed.
+//
+// The console runs the tool rather than importing it: every command lives in package main under
+// cmd/quay and cannot be imported, and the console already builds commands for attaching and for
+// the panel, so this is the shape that was already here. It also means a command added later works
+// in the bar without being plumbed through anything.
+//
+// The output is returned even when the command failed, because what a failed command said is worth
+// more than the fact that it failed.
+type CommandRunner func(ctx context.Context, args []string) (string, error)
+
+// needTerminal are the commands that take over the screen. Capturing one would leave the console
+// waiting forever for output that is never coming, so they are refused before anything is started.
+var needTerminal = map[string]bool{
+	"attach":  true,
+	"panel":   true,
+	"console": true,
+	"header":  true,
+	"shell":   true,
+}
+
+// commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
+// crew, short enough that a command which will never answer gives the console back.
+const commandTimeout = 30 * time.Second
+
+// waitDelay is how long to keep reading a killed command's output before giving up on its pipes.
+// Long enough for a program that is exiting cleanly to finish saying what it was saying, short
+// enough that a child holding the pipe open does not hold the console with it.
+const waitDelay = 200 * time.Millisecond
+
+// WithCommandRunner wires the bar to whatever runs a quay command. A console with none refuses to
+// run anything and says so, which is better than a key that appears to do nothing.
+func (m Model) WithCommandRunner(run CommandRunner) Model {
+	m.runCommand = run
+	return m
+}
+
+// commandOutputMsg is what a command printed, on its way back to the console.
+type commandOutputMsg struct {
+	typed  string
+	output string
+	err    error
+}
+
+// runTyped decides what the words in the bar are: a view to switch to, or a command to run.
+//
+// A view name wins, because that is what the bar has always done and `:sessions` must keep working.
+// Anything else is handed to the tool, so the bar does the obvious thing with what was typed rather
+// than making the operator remember which kind of thing they are typing.
+func (m Model) runTyped() (Model, tea.Cmd) {
+	typed := strings.TrimSpace(m.input)
+	m.mode, m.input = modeBrowse, ""
+	if typed == "" {
+		return m, nil
+	}
+
+	if _, found := m.registry.Resolve(typed); found {
+		m.input = typed
+		return m.openTyped()
+	}
+
+	args := strings.Fields(typed)
+	if needTerminal[args[0]] {
+		m.err = fmt.Errorf("%s needs a terminal of its own, so it cannot run in here; leave the console and run it, or press enter on a row to attach", args[0])
+		return m, nil
+	}
+	if m.runCommand == nil {
+		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the crew with quay", typed)
+		return m, nil
+	}
+
+	run := m.runCommand
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+		defer cancel()
+		output, err := run(ctx, args)
+		return commandOutputMsg{typed: typed, output: output, err: err}
+	}
+}
+
+// showCommandOutput puts what a command said on the screen.
+//
+// A command that failed shows its output too, and the error under it: the words are the useful part,
+// and "exit status 1" on its own tells nobody anything. A command that said nothing at all says so,
+// because a blank panel reads as the console having broken rather than as an empty listing.
+func (m Model) showCommandOutput(msg commandOutputMsg) Model {
+	m.mode, m.commandTop = modeOutput, 0
+	m.commandTyped = msg.typed
+	m.commandOutput = strings.Split(strings.TrimRight(msg.output, "\n"), "\n")
+	if strings.TrimSpace(msg.output) == "" {
+		m.commandOutput = []string{"(it said nothing)"}
+	}
+	m.err = msg.err
+	return m
+}
+
+// updateOutputKey scrolls what a command said, and closes it on anything else. The same shape the
+// help overlay has, because it is the same kind of thing: something to read, over the rows.
+func (m Model) updateOutputKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		m.commandTop--
+	case "down", "j":
+		m.commandTop++
+	case "pgup", "ctrl+b":
+		m.commandTop -= m.bodyHeight()
+	case "pgdown", "ctrl+f":
+		m.commandTop += m.bodyHeight()
+	default:
+		m.mode, m.commandTop, m.err = modeBrowse, 0, nil
+		m.commandOutput, m.commandTyped = nil, ""
+		return m, nil
+	}
+	if m.commandTop < 0 {
+		m.commandTop = 0
+	}
+	if most := len(m.commandOutput) - 1; m.commandTop > most {
+		m.commandTop = most
+	}
+	return m, nil
+}
+
+// commandBody is the window of the output that fits, with the command that produced it at the top
+// so a screen of rows says what it is answering.
+func (m Model) commandBody() []string {
+	height := m.bodyHeight()
+	if height < 1 {
+		height = 1
+	}
+	lines := append([]string{prompt.Render(":" + m.commandTyped)}, m.commandOutput...)
+	top := m.commandTop
+	if top > len(lines)-1 {
+		top = len(lines) - 1
+	}
+	if top < 0 {
+		top = 0
+	}
+	end := top + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return lines[top:end]
+}
+
+// TheToolItself runs a quay command by running this same binary again.
+//
+// The tool rather than a copy of its logic: every command lives in package main under cmd/quay and
+// cannot be imported, and running the real one means a command added tomorrow works in the bar with
+// nothing plumbed through. It costs one short lived process per command typed, which is nothing
+// against a person's typing speed.
+//
+// Standard error is folded in with standard output, because a refusal is what the operator most
+// needs to read and it comes back on the error stream.
+func TheToolItself() CommandRunner {
+	return func(ctx context.Context, args []string) (string, error) {
+		self, err := os.Executable()
+		if err != nil {
+			// The name is resolved from PATH, which is the copy the shell ran to get here anyway.
+			self = "quay"
+		}
+		return RunNamed(ctx, self, args)
+	}
+}
+
+// RunNamed runs one program and hands back everything it printed on either stream.
+//
+// Exported so the runner the console ships with can be driven against a real process in a test: a
+// double proves the bar reacts to output, and only this proves the console can start something,
+// wait for it, and read what it said.
+func RunNamed(ctx context.Context, program string, args []string) (string, error) {
+	command := exec.CommandContext(ctx, program, args...)
+	// Killing a program does not close the pipes its own children inherited, so reading its output
+	// can block long past the deadline: a command whose child outlives it would freeze the console
+	// for as long as that child ran, whatever the timeout said. This gives up on the pipes shortly
+	// after the kill, which is what makes the deadline mean something.
+	command.WaitDelay = waitDelay
+	// Both streams together, because a refusal comes back on the error one and that is what the
+	// operator most needs to read.
+	output, err := command.CombinedOutput()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return string(output), fmt.Errorf("%s took longer than %s and was given up on", strings.Join(args, " "), commandTimeout)
+	}
+	return string(output), err
+}

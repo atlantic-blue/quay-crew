@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The command bar runs quay commands, not just view names.** Typing `:` in the console has always
+  opened a bar at the bottom, vim style, and it switched views. It now runs anything the tool can
+  do: `:workspace list`, `:flow list`, `:skill list <workspace>`. Output opens in a panel over the
+  rows that scrolls with `j` and `k` and closes on any other key, the way the help overlay already
+  did, because a listing is taller than one row. A view name still switches views, so `:sessions`
+  keeps working and the bar does the obvious thing with whatever was typed. A command that failed
+  shows what it said rather than just that it failed, since "exit status 1" on its own tells nobody
+  anything. Commands that take over the screen (`attach`, `panel`, `console`, `header`) are refused
+  by name, because capturing one would leave the console waiting forever for output that is never
+  coming. ([#232](https://github.com/atlantic-blue/quay-crew/issues/232))
 - **A flow can start itself.** A graph declares `on: { every: 24h }`, and
   `quay flow schedule <workspace>/<project> <graph>` says where it runs. Until now an automation
   was a script somebody still had to remember to run. The interval lives in the graph, versioned

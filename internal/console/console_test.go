@@ -1135,9 +1135,12 @@ func TestTheCommandBarOffersWhatItCanOpen(t *testing.T) {
 		t.Fatalf("typing a still offers projects:\n%s", view)
 	}
 
+	// Words matching no view are not nothing any more: enter runs them as a quay command, so the
+	// bar says that rather than "nothing called that", which would be a lie about the very next
+	// keystroke.
 	model = typeAll(t, model, "zzz")
-	if view := model.View(); !strings.Contains(view, "nothing called that") {
-		t.Fatalf("a prefix matching nothing says nothing about it:\n%s", view)
+	if view := model.View(); !strings.Contains(view, "runs this as a quay command") {
+		t.Fatalf("a prefix matching no view does not say what enter will do with it:\n%s", view)
 	}
 }
 
