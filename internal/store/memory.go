@@ -36,7 +36,7 @@ type Memory struct {
 	// version of which skill each workspace pinned.
 	skills   map[string]Imported
 	attached map[string]map[string]int
-	// turns is the projection of the event log, oldest first, and turnSeen is what makes writing the
+	// turns is a session's history, oldest first, and turnSeen is what makes writing the
 	// same record twice harmless.
 	turns    []*quaycrewv1.Turn
 	turnSeen map[string]bool
@@ -505,7 +505,7 @@ func clone[T proto.Message](message T) T { return proto.Clone(message).(T) }
 // AppendTurn records a turn, ignoring one it has already seen.
 func (m *Memory) AppendTurn(_ context.Context, turn *quaycrewv1.Turn, _, _, _ string) error {
 	if turn.GetId() == "" {
-		return errors.New("store: a turn needs an id, because the projection sees the same one twice")
+		return errors.New("store: a turn needs an id, so writing the same one twice leaves one turn")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

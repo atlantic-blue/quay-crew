@@ -20,7 +20,6 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/projection"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
@@ -147,18 +146,6 @@ func main() {
 			SandboxBuild: sandboxBuild,
 		},
 	})
-	// The projection reads the log back into the store, so a session's history can be listed without
-	// replaying the log on every request. It runs here rather than as its own service because it
-	// materialises into the store this process already owns; when it needs to scale separately, it
-	// moves out behind the same interfaces.
-	if eventsKind != "" {
-		go func() {
-			if err := projection.New(events, durable, logger).Run(ctx); err != nil && ctx.Err() == nil {
-				logger.Error("projection stopped, so session history will go stale until a restart", "error", err)
-			}
-		}()
-	}
-
 	// What strayed while the crew was down is reaped on the way up: a container whose thread was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
@@ -190,21 +177,23 @@ func main() {
 	}
 }
 
-// openEventLog returns the log turns are published to. With QC_KAFKA_SEEDS set it is Kafka, spoken
-// to Redpanda locally. Without it, turns run and nothing records that they did, which the status
-// block says out loud rather than leaving an empty column to read as fine.
+// openEventLog returns the log turns are exported to. With QC_KAFKA_SEEDS set it is Kafka, spoken
+// to Redpanda locally. Without it, nothing is exported and nothing is lost: history is written to
+// the store in the same breath as the turn, and the log only ever carried a copy for a second
+// consumer. The status block says the export is off rather than leaving an empty column to read as
+// fine.
 //
 // The producer connects lazily, so a broker that is not up yet does not stop the control plane from
 // serving. A publish that cannot reach it is dropped rather than failing the turn.
 func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string) {
 	brokers := splitAndTrim(seeds)
 	if len(brokers) == 0 {
-		logger.Warn("no QC_KAFKA_SEEDS set: turns will run without being recorded on the event log")
+		logger.Info("no QC_KAFKA_SEEDS set: history is kept in the store, and there is no audit export")
 		return messaging.Discard{}, ""
 	}
 	client, err := messaging.NewClient(brokers...)
 	if err != nil {
-		logger.Warn("event log unavailable, turns will run without being recorded", "error", err)
+		logger.Warn("event log unavailable, so turns are not exported; history in the store is unaffected", "error", err)
 		return messaging.Discard{}, ""
 	}
 	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)

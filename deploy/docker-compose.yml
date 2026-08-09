@@ -1,7 +1,11 @@
 name: quaycrew
 
 services:
+  # The audit export's broker. Started only with: docker compose --profile export up. History lives
+  # in Postgres either way; this exists for a second consumer (a dashboard, a pipeline, another
+  # machine), and a crew that has none needs no broker at all.
   redpanda:
+    profiles: ["export"]
     image: redpandadata/redpanda:v24.2.7
     command:
       - redpanda
@@ -53,10 +57,7 @@ services:
     environment:
       QC_SERVICE_NAME: gateway
       QC_OTEL_ENDPOINT: otel-collector:4317
-      QC_KAFKA_SEEDS: redpanda:9092
     depends_on:
-      redpanda:
-        condition: service_healthy
       otel-collector:
         condition: service_started
 
@@ -106,9 +107,10 @@ services:
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
       QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quaycrew/data}
-      # Every turn is written to <workspace>.turns here. Unset it and turns still run, with nothing
-      # recording that they did.
-      QC_KAFKA_SEEDS: redpanda:9092
+      # The audit export. History is written to Postgres in the same breath as each turn either
+      # way; set this (redpanda:9092 with the export profile up) and every turn is also exported to
+      # <workspace>.turns for a second consumer. Unset, nothing is exported and nothing is lost.
+      QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS:-}
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
@@ -122,8 +124,6 @@ services:
       otel-collector:
         condition: service_started
       postgres:
-        condition: service_healthy
-      redpanda:
         condition: service_healthy
 
   # Observability stack. Started only with: make up-observability

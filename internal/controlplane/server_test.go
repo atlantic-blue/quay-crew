@@ -234,3 +234,72 @@ func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID st
 	}
 	return workspace.GetWorkspace().GetId(), project.GetProject().GetId()
 }
+
+// hangsUpRunner cancels the caller's context while the turn runs, which is what a client
+// disconnecting after a long turn does to the dispatch path.
+type hangsUpRunner struct {
+	model.FakeRunner
+	hangUp context.CancelFunc
+}
+
+func (r *hangsUpRunner) Run(ctx context.Context, box sandbox.Sandbox, req model.Request) (model.Response, error) {
+	r.hangUp()
+	return r.FakeRunner.Run(ctx, box, req)
+}
+
+// contextHonouringStore refuses writes on a dead context, the way Postgres does and the memory
+// store does not. Without it this test would pass whatever the dispatch path did.
+type contextHonouringStore struct {
+	store.Store
+}
+
+func (s contextHonouringStore) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.Store.AppendTurn(ctx, turn, workspace, project, thread)
+}
+
+// A caller hanging up after a long turn must not lose the record of the very turn they were waiting
+// on: history is written on a context detached from the request's.
+func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
+	ctx, hangUp := context.WithCancel(context.Background())
+	defer hangUp()
+
+	runner := &hangsUpRunner{FakeRunner: model.FakeRunner{Reply: "done", SessionID: "model-1"}, hangUp: hangUp}
+	s := controlplane.NewServer(controlplane.Config{
+		Store:    contextHonouringStore{Store: store.NewMemory()},
+		Runner:   runner,
+		Provider: &sandbox.FakeProvider{},
+		Secrets:  secrets.NewMemory(),
+	})
+
+	workspace, err := s.CreateWorkspace(context.Background(), &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
+	if err != nil {
+		t.Fatalf("CreateWorkspace: %v", err)
+	}
+	project, err := s.CreateProject(context.Background(), &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	dispatched, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: project.GetProject().GetId(), Text: "hello",
+	})
+	if err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	listed, err := s.ListTurns(context.Background(), &quaycrewv1.ListTurnsRequest{Thread: dispatched.GetId()})
+	if err != nil {
+		t.Fatalf("ListTurns: %v", err)
+	}
+	if len(listed.GetTurns()) != 1 {
+		t.Fatalf("the session has %d turns after the caller hung up, want the 1 that ran", len(listed.GetTurns()))
+	}
+	if listed.GetTurns()[0].GetReply() != "done" {
+		t.Fatalf("the recorded turn says %q, want the reply that ran", listed.GetTurns()[0].GetReply())
+	}
+}

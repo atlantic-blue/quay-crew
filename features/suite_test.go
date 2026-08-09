@@ -204,9 +204,6 @@ func (w *world) start() error {
 	w.secrets = secrets.NewMemory()
 	w.store = store.NewMemory()
 	w.events = messaging.NewMemory()
-	// A scenario drives the projection itself and waits for it to finish, so the log says when it
-	// has handed over everything it holds rather than leaving a test to guess with a timeout.
-	w.events.StopWhenDrained = true
 	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
 	// Every scenario runs against a crew that guards itself, the way a real one does, so the whole
 	// suite proves the authenticated path and not a special unguarded one.

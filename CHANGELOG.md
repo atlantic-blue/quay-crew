@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **History is written in the same breath as the turn, and the broker became optional.** A turn
+  used to reach the `turns` table only by going out to Redpanda and back through a projection, so
+  every turn that ran while the broker was down or `QC_KAFKA_SEEDS` was unset was silently and
+  permanently absent from history. The dispatch path now writes the redacted turn to the store
+  synchronously, on a context detached from the request's, so a client hanging up after a long
+  turn cannot lose the record either. The projection is retired. Publishing to the log became an
+  audit export for a second consumer that does not exist yet: Redpanda moved behind the compose
+  `export` profile, and a plain `make up` needs Postgres and Docker and nothing else. Phase 3 of
+  the architecture review, first slice.
+  ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **The aws skill, reads but never mutates.** `skills/aws/` closes the set Julian named: describe,
   list, get and logs are always fine, starting with `aws sts get-caller-identity` so every answer
   says which account it read; anything that mutates infrastructure or data ships as Terraform

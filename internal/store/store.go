@@ -140,7 +140,7 @@ type Store interface {
 	WorkspaceSkills(ctx context.Context, workspace string) ([]Imported, error)
 
 	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
-	// turn: delivery from the event log is at least once, so a projection replaying a record it has
+	// turn: a caller retrying a write it is not sure landed must leave one turn, so a record it has
 	// already written must not double it. The turn's Id is what makes that possible.
 	AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error
 	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads

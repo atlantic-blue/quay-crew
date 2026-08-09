@@ -12,7 +12,7 @@ import (
 
 // runTurns prints one session's history: what was asked, what came back, in the order it happened.
 //
-// This reads the projection of the event log rather than the model's own conversation store, so it
+// This reads the history the dispatch path writes rather than the model's own conversation store, so it
 // answers without starting a container, and it keeps answering for a session whose sandbox is long
 // gone. What it does not have is the working inside a turn, the tool calls and the thinking: for
 // that, `quay attach` opens the conversation itself.
