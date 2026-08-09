@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The linear skill.** A brief over Linear's GraphQL API in `skills/linear/`: reading is always
+  fine, writing happens when the conversation asks for it, and the key travels as
+  LINEAR_API_KEY to sessions holding the skill and nowhere else. No binary beyond curl. The image
+  guard also grew from one binary to the whole class: every binary any shipped skill declares is
+  proven present inside a real container, so the next skill cannot promise a tool the sandbox does
+  not have. ([#215](https://github.com/atlantic-blue/quay-crew/issues/215))
 - **The github skill, and gh in the image.** The second shipped skill, in `skills/github/`, and
   separate from git on purpose: git needs a repository and nothing else, github needs a credential,
   the network, and it does things that cannot be undone. The brief says how pull requests are
