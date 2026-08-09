@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The jira skill.** The linear skill's sibling in `skills/jira/`: a brief over Jira Cloud's REST
+  API, authenticating as the JIRA_EMAIL and JIRA_API_TOKEN pair, both by name. Where the instance
+  lives is workspace context rather than skill content, and the brief says to ask rather than
+  guess when nothing names it. Reading is always fine; commenting and transitions happen when the
+  conversation asks; creating, resolving and reassigning only on explicit instruction.
+  ([#216](https://github.com/atlantic-blue/quay-crew/issues/216))
 - **The linear skill.** A brief over Linear's GraphQL API in `skills/linear/`: reading is always
   fine, writing happens when the conversation asks for it, and the key travels as
   LINEAR_API_KEY to sessions holding the skill and nowhere else. No binary beyond curl. The image
