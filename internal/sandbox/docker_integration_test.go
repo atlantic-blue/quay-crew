@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 )
 
 // TestDockerProvider creates a real per session container, execs a command inside it, reads the
@@ -314,41 +315,51 @@ func TestGitFindsItsCredentialWithoutArguments(t *testing.T) {
 	}
 }
 
-// The github skill declares the gh binary, and a declaration is only worth what the image actually
-// carries. Asked of a real container rather than of the Dockerfile, because an install line that
-// fetches the wrong architecture or a dead address builds a file the reader believes and a container
-// that refuses.
-func TestTheImageCarriesGh(t *testing.T) {
+// Every binary a shipped skill declares has to actually be in the image, or the declaration is a
+// promise the sandbox breaks on somebody's first turn. One guard over the whole class, so the next
+// skill cannot repeat the gap: the set of binaries is read from skills/ itself, and each is asked
+// for inside a real container rather than looked for in the Dockerfile.
+func TestTheImageCarriesEveryBinaryAShippedSkillDeclares(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_TEST_SANDBOX_IMAGE to an image with gh in it")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the sandbox image")
+	}
+
+	shipped, err := skill.Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+	binaries := map[string]bool{}
+	for _, one := range shipped {
+		for _, binary := range one.Binaries {
+			binaries[binary] = true
+		}
+	}
+	if len(binaries) == 0 {
+		t.Fatal("no shipped skill declares any binary, so this test proves nothing")
 	}
 
 	provider := sandbox.DockerProvider{Image: image}
 	box, err := provider.Create(ctx, sandbox.Config{
-		ID: "githubbinary" + strings.Repeat("0", 12),
+		ID: "skillbinaries" + strings.Repeat("0", 11),
 	})
 	if err != nil {
 		t.Fatalf("create the sandbox: %v", err)
 	}
 	defer func() { _ = box.Close(ctx) }()
 
-	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"gh", "--version"}})
-	if err != nil {
-		t.Fatalf("run gh in the sandbox: %v", err)
-	}
-	said, err := io.ReadAll(proc.Stdout())
-	if err != nil {
-		t.Fatalf("read what gh said: %v", err)
-	}
-	if err := proc.Wait(); err != nil {
-		t.Fatalf("gh is not usable in the image: %v: %s", err, proc.Stderr())
-	}
-	if !strings.Contains(string(said), "gh version") {
-		t.Errorf("gh answered %q, want its version line", string(said))
+	for binary := range binaries {
+		proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", `command -v -- "$1"`, "sh", binary}})
+		if err != nil {
+			t.Fatalf("ask for %s in the sandbox: %v", binary, err)
+		}
+		_, _ = io.Copy(io.Discard, proc.Stdout())
+		if err := proc.Wait(); err != nil {
+			t.Errorf("a shipped skill declares %s and the image does not carry it: %v: %s", binary, err, proc.Stderr())
+		}
 	}
 }
 
