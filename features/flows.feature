@@ -45,6 +45,84 @@ Feature: A flow runs a graph across sessions
     Then the flow run is done
     And the run's thread was asked 1 turn
 
+  # A wait is a row rather than a timer somebody is holding, which is the whole reason it survives
+  # the crew being restarted underneath it.
+  Scenario: A run waits, and carries on when its time comes
+    Given the crew holds this flow graph:
+      """
+      name: patient
+      version: 1
+      nodes:
+        ask:   { type: dispatch, prompt: "start the build" }
+        pause: { type: wait, for: 10m }
+        check: { type: dispatch, prompt: "is it done" }
+      edges:
+        - [ask, pause]
+        - [pause, check]
+        - [check, done]
+      """
+    When the operator starts the flow "patient" in the project
+    Then the flow run is waiting
+    And the run's thread was asked 1 turn
+    When ten minutes pass and the crew looks for waits that are due
+    Then the flow run is done
+    And the run's thread was asked "start the build" and then "is it done"
+
+  Scenario: A wait that is not yet due is left alone
+    Given the crew holds this flow graph:
+      """
+      name: patient
+      version: 1
+      nodes:
+        ask:   { type: dispatch, prompt: "start the build" }
+        pause: { type: wait, for: 10m }
+        check: { type: dispatch, prompt: "is it done" }
+      edges:
+        - [ask, pause]
+        - [pause, check]
+        - [check, done]
+      """
+    When the operator starts the flow "patient" in the project
+    And the crew looks for waits that are due
+    Then the flow run is waiting
+    And the run's thread was asked 1 turn
+
+  # Editing a graph must not change an automation that is halfway through it, which is the whole
+  # reason a run pins a version. A wait is where that gets tested, because it is the only moment a
+  # run sits still long enough for somebody to edit the file underneath it.
+  Scenario: A graph edited while a run waits does not change that run
+    Given the crew holds this flow graph:
+      """
+      name: patient
+      version: 1
+      nodes:
+        ask:   { type: dispatch, prompt: "start the build" }
+        pause: { type: wait, for: 10m }
+        check: { type: dispatch, prompt: "is it done" }
+      edges:
+        - [ask, pause]
+        - [pause, check]
+        - [check, done]
+      """
+    When the operator starts the flow "patient" in the project
+    Then the flow run is waiting
+    Given the crew holds this flow graph:
+      """
+      name: patient
+      version: 2
+      nodes:
+        ask:   { type: dispatch, prompt: "start the build" }
+        pause: { type: wait, for: 10m }
+        check: { type: dispatch, prompt: "the second version asks something else" }
+      edges:
+        - [ask, pause]
+        - [pause, check]
+        - [check, done]
+      """
+    When ten minutes pass and the crew looks for waits that are due
+    Then the flow run is done
+    And the run's thread was asked "start the build" and then "is it done"
+
   Scenario: A run is pinned to the version it started with
     Given the crew holds this flow graph:
       """

@@ -146,6 +146,10 @@ func main() {
 			SandboxBuild: sandboxBuild,
 		},
 	})
+	// Waits that came due while the crew was down are resumed on the way up, and every one after
+	// that on a tick: a wait is a row, so a restart loses none of them.
+	go server.RunFlowPoller(ctx)
+
 	// What strayed while the crew was down is reaped on the way up: a container whose thread was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)

@@ -129,6 +129,16 @@ func (s *Server) StopFlowRun(ctx context.Context, req *quaycrewv1.StopFlowRunReq
 	return &quaycrewv1.StopFlowRunResponse{Run: asFlowRun(run)}, nil
 }
 
+// RunFlowPoller resumes waiting runs until ctx is done. It blocks, so the caller runs it in a
+// goroutine and owns its lifetime.
+//
+// A wait is a row rather than a timer somebody is holding, which is what makes it survive a
+// restart: this reads the rows on the way up, so a crew restarted onto a pile of overdue waits
+// resumes them immediately rather than losing them.
+func (s *Server) RunFlowPoller(ctx context.Context) {
+	s.flowPoller.Run(ctx)
+}
+
 // ThreadTokens is what one thread's conversation has cost, which is what a run's ceiling is checked
 // against. Zero for a thread that is gone, has no conversation yet, or whose transcript cannot be
 // read: a cost that cannot be read is not a reason to stop work that is already under way.

@@ -954,6 +954,81 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a waiting flow run is due, is carried on, and keeps its pinned version", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "patient", 1, "version one"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "patient", 2, "version two"); err != nil {
+			t.Fatalf("ImportFlowGraph the second: %v", err)
+		}
+		// The version a run pinned is readable while a newer one exists, or a graph edited during
+		// a wait would change what the run does when it wakes.
+		if definition, err := s.FlowGraph(ctx, "patient", 1); err != nil || definition != "version one" {
+			t.Fatalf("FlowGraph gave %q (%v), want the pinned version", definition, err)
+		}
+
+		run := &flow.Run{
+			ID: "run-wait", Workspace: workspace.GetId(), Project: project.GetId(),
+			GraphName: "patient", GraphVersion: 1, Node: "ask", Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		if err := s.CreateFlowRun(ctx, run); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		due := time.Now().UTC().Add(-time.Minute)
+		run.Node, run.Status = "pause", flow.StatusWaiting
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
+			Event: flow.EventTurnFinished, Node: "pause", Due: &due,
+		}); err != nil {
+			t.Fatalf("AdvanceFlowRun into the wait: %v", err)
+		}
+
+		overdue, err := s.DueFlowRuns(ctx, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("DueFlowRuns: %v", err)
+		}
+		if len(overdue) != 1 || overdue[0].ID != "run-wait" {
+			t.Fatalf("%d runs are due, want the one waiting", len(overdue))
+		}
+
+		// A wait still ahead of us is not due, or every waiting run would be resumed at once.
+		notYet, err := s.DueFlowRuns(ctx, time.Now().UTC().Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("DueFlowRuns before it was due: %v", err)
+		}
+		if len(notYet) != 0 {
+			t.Fatalf("%d runs are due an hour before their time", len(notYet))
+		}
+
+		// A waiting run is live, so the poller can carry it on. A store that refused this would
+		// leave every wait stuck forever, which is a whole feature dead with a green suite.
+		run.Node, run.Status = "check", flow.StatusRunning
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventDue, Node: "check"}); err != nil {
+			t.Fatalf("carrying a waiting run on: %v", err)
+		}
+		kept, err := s.GetFlowRun(ctx, "run-wait")
+		if err != nil {
+			t.Fatalf("GetFlowRun: %v", err)
+		}
+		if kept.Status != flow.StatusRunning || kept.Node != "check" {
+			t.Fatalf("the resumed run reads %q on %q", kept.Status, kept.Node)
+		}
+		if kept.DueAt != nil {
+			t.Fatalf("the resumed run still carries a due time, so the poller would pick it up again")
+		}
+	})
+
 	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

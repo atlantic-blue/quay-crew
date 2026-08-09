@@ -14,6 +14,7 @@ package flow
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,6 +29,7 @@ const DoneNode = "done"
 const (
 	NodeDispatch = "dispatch"
 	NodeChoice   = "choice"
+	NodeWait     = "wait"
 	NodeDone     = "done"
 )
 
@@ -72,6 +74,9 @@ type Node struct {
 	// to answer true. Equality only, deliberately: accepting arbitrary expressions means owning a
 	// language and a sandbox.
 	On map[string]string
+	// For is how long a wait node waits. It becomes a due time on the run, read by a poller, so a
+	// waiting run costs nothing and survives the crew being restarted underneath it.
+	For time.Duration
 }
 
 // Edge joins two nodes. When is the label a choice's answer must match, empty on the single edge
@@ -92,6 +97,7 @@ type graphFile struct {
 		Type   string            `yaml:"type"`
 		Prompt string            `yaml:"prompt"`
 		On     map[string]string `yaml:"on"`
+		For    string            `yaml:"for"`
 	} `yaml:"nodes"`
 	Edges [][]string `yaml:"edges"`
 }
@@ -126,6 +132,7 @@ func Parse(source []byte) (Graph, error) {
 
 	graph := Graph{Name: file.Name, Version: file.Version, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
+		var waitFor time.Duration
 		if name == DoneNode {
 			return Graph{}, fmt.Errorf("flow: graph %s declares a node called %s, which is the implicit end of every graph", file.Name, DoneNode)
 		}
@@ -138,10 +145,22 @@ func Parse(source []byte) (Graph, error) {
 			if len(node.On) == 0 {
 				return Graph{}, fmt.Errorf("flow: choice node %s has no condition", name)
 			}
+		case NodeWait:
+			if strings.TrimSpace(node.For) == "" {
+				return Graph{}, fmt.Errorf("flow: wait node %s has no `for`, so a run would sit on it forever; say how long, as 30s or 10m or 2h", name)
+			}
+			waits, err := time.ParseDuration(node.For)
+			if err != nil {
+				return Graph{}, fmt.Errorf("flow: wait node %s waits %q, which is not a length of time; say 30s or 10m or 2h", name, node.For)
+			}
+			if waits <= 0 {
+				return Graph{}, fmt.Errorf("flow: wait node %s waits %s, which is not a wait at all", name, waits)
+			}
+			waitFor = waits
 		default:
-			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, DoneNode)
+			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, DoneNode)
 		}
-		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On}
+		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor}
 	}
 
 	pointedAt := map[string]bool{}
@@ -197,9 +216,9 @@ func usableEdges(graph Graph, name string, node Node) error {
 		}
 	}
 	switch node.Type {
-	case NodeDispatch:
+	case NodeDispatch, NodeWait:
 		if len(out) != 1 || out[0].When != "" {
-			return fmt.Errorf("flow: dispatch node %s needs exactly one unlabeled edge out, and has %d", name, len(out))
+			return fmt.Errorf("flow: %s node %s needs exactly one unlabeled edge out, and has %d", node.Type, name, len(out))
 		}
 	case NodeChoice:
 		answers := map[string]bool{}

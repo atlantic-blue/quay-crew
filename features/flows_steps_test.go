@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"strings"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
@@ -66,6 +69,34 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		run, err := engine.Start(ctx, name, w.workspaceID, w.projectID, nil)
 		w.flowRun, w.lastErr = run, err
 		return nil
+	})
+
+	sc.Step(`^the flow run is waiting$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("the run did not start: %v", w.lastErr)
+		}
+		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+		if err != nil {
+			return err
+		}
+		if kept.Status != flow.StatusWaiting {
+			return fmt.Errorf("the run reads back as %q on node %q, want it waiting", kept.Status, kept.Node)
+		}
+		if kept.DueAt == nil {
+			return fmt.Errorf("the run is waiting with no due time, so nothing would ever wake it")
+		}
+		return nil
+	})
+
+	// The clock is moved rather than slept through: a scenario that waited out ten real minutes
+	// would be a scenario nobody runs.
+	sc.Step(`^ten minutes pass and the crew looks for waits that are due$`, func(ctx context.Context) error {
+		return tickFlowPoller(ctx, 11*time.Minute)
+	})
+
+	sc.Step(`^the crew looks for waits that are due$`, func(ctx context.Context) error {
+		return tickFlowPoller(ctx, 0)
 	})
 
 	sc.Step(`^the flow run is done$`, func(ctx context.Context) error {
@@ -168,6 +199,18 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// tickFlowPoller moves the clock forward and runs one tick, which is what the crew's own poller
+// does every few seconds. Driven directly rather than waited for: a scenario that slept would be
+// slow when it passed and flaky when it did not.
+func tickFlowPoller(ctx context.Context, forward time.Duration) error {
+	w := worldFrom(ctx)
+	at := time.Now().UTC().Add(forward)
+	engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil).
+		WithClock(func() time.Time { return at })
+	flow.NewPoller(engine, 0, slog.New(slog.NewTextHandler(io.Discard, nil))).Tick(ctx)
+	return nil
 }
 
 // flowRunThread finds the run's own thread by its handle, among the live or the archived.
