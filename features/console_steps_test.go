@@ -26,6 +26,8 @@ type consoleWorld struct {
 	openErr error
 	// model is the real console, driven by keys, for the scenarios about what a key does.
 	model console.Model
+	// contextFile is a file a scenario wrote for the guided setup's context stage to read.
+	contextFile string
 }
 
 type consoleKey struct{}

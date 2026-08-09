@@ -674,6 +674,11 @@ func (m Model) wizardPrompt() string {
 	} else if m.making.picking() && m.making.loaded {
 		line += faint.Render("   nothing here yet")
 	}
+	if m.making.guided {
+		// Honest about both differences: an empty answer moves on, and escape cannot unmake the
+		// stages already made.
+		return line + faint.Render("   enter accepts, empty skips, esc leaves the setup")
+	}
 	return line + faint.Render("   enter accepts, esc cancels and makes nothing")
 }
 

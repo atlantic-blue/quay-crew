@@ -84,8 +84,10 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console is asking nothing$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		if strings.Contains(view, "esc cancels and makes nothing") {
-			return fmt.Errorf("the wizard is still asking a question:\n%s", view)
+		// "enter accepts" is common to the wizard's hint and the guided setup's, so an open
+		// question from either fails here rather than only the standalone one.
+		if strings.Contains(view, "enter accepts") {
+			return fmt.Errorf("the console is still asking a question:\n%s", view)
 		}
 		if strings.Contains(view, "making ") {
 			return fmt.Errorf("the console is still drawn on the wizard working:\n%s", view)

@@ -111,8 +111,17 @@ type (
 	errMsg struct{ err error }
 	// tickMsg is the refresh clock.
 	tickMsg struct{}
-	// actionDoneMsg is an action that finished, successfully or not.
-	actionDoneMsg struct{ err error }
+	// actionDoneMsg is an action that finished, successfully or not. kind and made say what the
+	// wizard built, so the guided setup can carry a new workspace or project into its next stage.
+	actionDoneMsg struct {
+		err  error
+		kind wizardKind
+		made wizardChoice
+	}
+
+	// firstRunMsg answers whether the crew has any workspaces at all, which is what decides
+	// whether opening the console offers the guided setup.
+	firstRunMsg struct{ empty bool }
 	// infoMsg carries what the control plane says it is running.
 	infoMsg struct{ info Info }
 	// behindMsg says the control plane is too old to answer at all.
@@ -155,7 +164,10 @@ type Model struct {
 	waiting  pending
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
-	client quaycrewv1.ControlPlaneServiceClient
+	// offeredSetup says the guided setup has had its one chance this run, so an emptied listing
+	// later cannot reopen it over whatever the operator is doing.
+	offeredSetup bool
+	client       quaycrewv1.ControlPlaneServiceClient
 	// headless leaves the header to the pane above, which draws it across both halves. Drawing it
 	// here as well would show it twice and cost the list the rows.
 	headless bool
@@ -263,13 +275,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// worse than none: it looks live and is not.
 		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 	case rowsMsg:
-		return m.applyRows(msg), nil
+		next := m.applyRows(msg)
+		// A first listing with nothing in it is the one moment the guided setup can be worth
+		// offering. Whether the crew is genuinely empty is the workspaces' answer, not this
+		// view's: the console opens on sessions, and a crew can have workspaces and no sessions.
+		if !next.offeredSetup && next.mode == modeBrowse && next.parent == "" &&
+			len(msg.rows) == 0 && next.client != nil {
+			next.offeredSetup = true
+			return next, firstRunCmd(next.client)
+		}
+		return next, nil
+	case firstRunMsg:
+		if msg.empty && m.mode == modeBrowse {
+			m.mode, m.making, m.err = modeWizard, guidedSetup(), nil
+			return m, m.wizardChoicesCmd()
+		}
+		return m, nil
 	case errMsg:
 		// The previous rows stay on screen. A failed refresh should not blank the view the
 		// operator is reading.
 		m.err = msg.err
 		return m, nil
 	case actionDoneMsg:
+		// The guided setup carries on: a made workspace or project is what the later stages act
+		// on, and a refusal re-asks the stage's last question rather than abandoning the chain.
+		if m.mode == modeWizard && m.making.guided {
+			if msg.err != nil {
+				m.err = msg.err
+				m.making.at = len(m.making.kind.steps()) - 1
+				return m, m.wizardChoicesCmd()
+			}
+			switch msg.kind {
+			case kindWorkspace:
+				m.making.workspace = msg.made
+			case kindProject:
+				m.making.project = msg.made
+			}
+			next, cmd := m.advanceGuided()
+			return next, tea.Batch(cmd, listCmd(next.active, next.parent))
+		}
 		m.err = msg.err
 		// The wizard is finished the moment the crew answers, so it closes and the refreshed list
 		// shows what it made. Left open it drew "making it" over a list it had already updated, which
@@ -286,7 +330,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.info.Behind = true
 		return m, nil
 	case wizardChoicesMsg:
-		return m.applyWizardChoices(msg), nil
+		applied := m.applyWizardChoices(msg)
+		// A skill stage in the guided setup with nothing to offer passes itself over: a question
+		// with no possible answer is not a question.
+		if applied.mode == modeWizard && applied.making.guided &&
+			applied.making.step() == stepPickSkill && applied.making.loaded &&
+			len(applied.making.choices) == 0 {
+			return applied.advanceGuided()
+		}
+		return applied, nil
 	case conversationMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -417,6 +469,20 @@ func (m Model) bodyHeight() int {
 		return 1
 	}
 	return body
+}
+
+// firstRunCmd asks whether the crew has any workspaces. An error is not an empty crew: offering a
+// setup over a crew that could not answer would offer to remake what may exist.
+func firstRunCmd(client quaycrewv1.ControlPlaneServiceClient) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		listed, err := client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
+		if err != nil {
+			return firstRunMsg{}
+		}
+		return firstRunMsg{empty: len(listed.GetWorkspaces()) == 0}
+	}
 }
 
 // listCmd loads a resource's rows. It is the only place the console reads from the world.

@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A crew that opens empty walks you through its own setup.** The console opening with no
+  workspaces used to show an empty listing and nothing suggesting what to do next; getting to a
+  working thread took four passes of the wizard and prior knowledge of the order. It now offers a
+  guided setup chaining the wizard's own stages in the order the crew needs them: a workspace, a
+  project, the model token, context for the project (pasted, or a file path the crew reads), a
+  skill from what the store holds, and a first message that becomes the first thread. An empty
+  answer skips a stage, a skipped project takes the stages that need one with it, a crew holding
+  no skills is never asked about them, and escape leaves the setup keeping whatever was already
+  made. Once a workspace exists it is never offered. The wizard also learned `skill` as a kind of
+  its own, so attaching a skill no longer needs the command line.
+  ([#211](https://github.com/atlantic-blue/quay-crew/issues/211))
 - **A repository is cloned in conversation, following the git skill, and the machinery that did it
   for you is gone.** A skill is a text file the session follows, and the git capability had grown an
   API instead: repository records on the workspace, a clone at sandbox birth into the workspace's
