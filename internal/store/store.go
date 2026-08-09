@@ -18,6 +18,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/google/uuid"
 )
@@ -143,6 +144,16 @@ type Store interface {
 	// turn: a caller retrying a write it is not sure landed must leave one turn, so a record it has
 	// already written must not double it. The turn's Id is what makes that possible.
 	AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error
+
+	// The flow engine's substrate: a run and its transitions are rows written in one transaction,
+	// which is what makes reconstructable a guarantee rather than a sentence. The contract is
+	// flow.Store; the reads beside it are for listings and tests.
+	ImportFlowGraph(ctx context.Context, name string, version int, definition string) error
+	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
+	CreateFlowRun(ctx context.Context, run *flow.Run) error
+	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
+	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
+	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
 	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.
 	ListTurns(ctx context.Context, session string, limit int) ([]*quaycrewv1.Turn, error)

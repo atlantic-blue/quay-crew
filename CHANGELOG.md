@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **The flow engine: a graph runs across sessions, every movement a row.** `internal/flow` is the
+  automation substrate the review decided on: a graph of dispatches and choices authored as a file,
+  imported at a version a run is pinned to, and a pure reducer a table test can hold. A run owns
+  its own thread, named after the graph and the run; a movement, its record and its dispatch claim
+  land in one Postgres transaction (migration 0014), so a run is reconstructable by construction
+  and the same turn can never be sent, and paid for, twice: the claim is keyed by run, node and
+  attempt. A finished run archives its thread, because a finished run must not leave a container
+  behind. Slice one ships dispatch, choice and done with the engine driven directly; wait, ask,
+  ceilings, stop and the operator surface follow. Phase 3 of the architecture review, second
+  slice. ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **History is written in the same breath as the turn, and the broker became optional.** A turn
   used to reach the `turns` table only by going out to Redpanda and back through a projection, so
   every turn that ran while the broker was down or `QC_KAFKA_SEEDS` was unset was silently and
