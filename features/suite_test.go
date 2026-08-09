@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -132,10 +133,15 @@ type turn struct {
 // into each other.
 type world struct {
 	grpcServer *grpc.Server
-	conn       *grpc.ClientConn
-	client     quaycrewv1.ControlPlaneServiceClient
-	provider   *sandbox.FakeProvider
-	runner     *recordingRunner
+	// listener is kept so a scenario can dial the same crew as a different caller, presenting
+	// something other than what the world's own client presents.
+	listener *bufconn.Listener
+	// token is the crew's token, which every caller has to present to be served.
+	token    string
+	conn     *grpc.ClientConn
+	client   quaycrewv1.ControlPlaneServiceClient
+	provider *sandbox.FakeProvider
+	runner   *recordingRunner
 	// realRunner replaces the recording double when a scenario is about what the real one does with
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
@@ -200,6 +206,9 @@ func (w *world) start() error {
 	// has handed over everything it holds rather than leaving a test to guess with a timeout.
 	w.events.StopWhenDrained = true
 	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
+	// Every scenario runs against a crew that guards itself, the way a real one does, so the whole
+	// suite proves the authenticated path and not a special unguarded one.
+	w.token = "the-token-this-scenario-was-minted"
 	return w.serve()
 }
 
@@ -224,11 +233,12 @@ func (w *world) restart() error {
 // serve stands up a control plane over the world's existing dependencies.
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
-	w.grpcServer = grpc.NewServer()
+	w.listener = listener
+	w.grpcServer = grpc.NewServer(auth.ServerOptions(w.token)...)
 	server := controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
-		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor,
+		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor, Token: w.token,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
 	// The way the real main starts: what strays while the crew is down is reaped on the way up.
@@ -240,6 +250,7 @@ func (w *world) serve() error {
 		"passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(auth.Credentials(w.token)),
 	)
 	if err != nil {
 		return fmt.Errorf("dial the control plane: %w", err)
@@ -376,6 +387,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
 	initializeSandboxEnvSteps(sc)
+	initializeAuthSteps(sc)
 	initializeWorkspaceSteps(sc)
 	initializeWizardSteps(sc)
 	initializeReachableSteps(sc)

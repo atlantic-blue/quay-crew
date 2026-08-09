@@ -115,7 +115,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${QC_DATA_HOST:-${HOME}/.quaycrew/data}:/var/lib/quaycrew
     ports:
-      - "50051:50051"
+      # Loopback only: the port is the whole crew, and the token guards a caller, not the network.
+      # Publish it wider only behind transport you own.
+      - "127.0.0.1:50051:50051"
     depends_on:
       otel-collector:
         condition: service_started

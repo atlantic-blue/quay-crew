@@ -120,6 +120,30 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the sandbox carries the crew's token, so what it dispatches is not refused$`,
+		func(ctx context.Context) error {
+			w := worldFrom(ctx)
+			env, err := onlySandboxEnv(w)
+			if err != nil {
+				return err
+			}
+			if got := env["QC_TOKEN"]; got != w.token {
+				return fmt.Errorf("the sandbox carries the token %q, want the crew's", got)
+			}
+			return nil
+		})
+
+	sc.Step(`^the sandbox carries no crew token$`, func(ctx context.Context) error {
+		env, err := onlySandboxEnv(worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if got, set := env["QC_TOKEN"]; set {
+			return fmt.Errorf("the sandbox carries the token %q, and an ordinary session gets none", got)
+		}
+		return nil
+	})
+
 	sc.Step(`^the sandbox carries no address at all$`, func(ctx context.Context) error {
 		env, err := onlySandboxEnv(worldFrom(ctx))
 		if err != nil {

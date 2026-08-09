@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
@@ -96,6 +97,9 @@ type Config struct {
 	// Empty means a session cannot reach the crew at all, which is the default: a session that can
 	// drive the crew can also stop other sessions, so it is turned on rather than assumed.
 	Reachable string
+	// Token is the crew's own token, the one every caller has to present. The driver is handed it
+	// beside the crew's address, because an address without the token is a door that will not open.
+	Token string
 }
 
 // Identity is who a commit is by.
@@ -120,6 +124,8 @@ type Server struct {
 	storage  sandbox.Storage
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
+	// token is the crew's token, handed only to the driver so its dispatches are recognised.
+	token string
 	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
 	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
@@ -147,6 +153,7 @@ func NewServer(cfg Config) *Server {
 		events:         eventsOr(cfg.Events),
 		info:           cfg.Info,
 		reachable:      cfg.Reachable,
+		token:          cfg.Token,
 		sandboxSecrets: cfg.SandboxSecrets,
 		gitAuthor:      cfg.GitAuthor,
 		skills:         cfg.Skills,
@@ -1304,6 +1311,11 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 	// not on a network that could reach it anyway.
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
+		// The token travels with the address and only with it: an ordinary session is told
+		// neither, and an address the crew refuses to answer would read as the crew being down.
+		if s.token != "" {
+			env[auth.TokenEnv] = s.token
+		}
 	}
 	// Who a commit is by. All four, because git wants an author and a committer and refuses on either
 	// missing: setting the author alone produces "Committer identity unknown" and a wall of advice,

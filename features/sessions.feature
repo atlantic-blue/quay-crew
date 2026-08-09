@@ -344,12 +344,14 @@ Feature: Sessions run in isolated sandboxes
     When the operator opens the driver
     And the driver is sent "hello"
     Then the sandbox carries the address of the crew
+    And the sandbox carries the crew's token, so what it dispatches is not refused
     And the sandbox carries no address it was not given
 
   Scenario: An ordinary session is told nothing, even when the crew can be reached
     Given a crew that sessions can reach at "controlplane:50051"
     When the operator dispatches "hello" to the project
     Then the sandbox carries no address at all
+    And the sandbox carries no crew token
 
   Scenario: The driver is the same session every time it is opened
     When the operator opens the driver
