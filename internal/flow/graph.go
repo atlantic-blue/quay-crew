@@ -31,11 +31,30 @@ const (
 	NodeDone     = "done"
 )
 
+// DefaultTransitions is how many movements a run may take when its graph declares no cap.
+//
+// A number rather than no limit, because an automation dispatches turns with nobody watching and a
+// cycling edge is a spend loop. Generous enough that no reasonable graph meets it by accident, and
+// small enough that a runaway is a bill somebody shrugs at rather than one that ruins the week.
+const DefaultTransitions = 100
+
+// Limits are what a run may spend before it is stopped.
+type Limits struct {
+	// Transitions is how many movements a run may take. Always set: a graph that declares none
+	// gets DefaultTransitions.
+	Transitions int
+	// Tokens is what the run's own conversation may cost, counting everything the model was sent
+	// and sent back. Zero means no ceiling, because what is reasonable differs per automation and
+	// a made up number would either stop real work or protect nothing.
+	Tokens int64
+}
+
 // Graph is one automation as authored: named, versioned, and static enough to answer what it will
 // do without running it.
 type Graph struct {
 	Name    string
 	Version int
+	Limits  Limits
 	Nodes   map[string]Node
 	Edges   []Edge
 	// Start is the one node no edge points into, derived rather than declared so the file cannot
@@ -65,7 +84,11 @@ type Edge struct {
 type graphFile struct {
 	Name    string `yaml:"name"`
 	Version int    `yaml:"version"`
-	Nodes   map[string]struct {
+	Limits  struct {
+		Transitions *int  `yaml:"transitions"`
+		Tokens      int64 `yaml:"tokens"`
+	} `yaml:"limits"`
+	Nodes map[string]struct {
 		Type   string            `yaml:"type"`
 		Prompt string            `yaml:"prompt"`
 		On     map[string]string `yaml:"on"`
@@ -90,7 +113,18 @@ func Parse(source []byte) (Graph, error) {
 		return Graph{}, fmt.Errorf("flow: graph %s has no nodes", file.Name)
 	}
 
-	graph := Graph{Name: file.Name, Version: file.Version, Nodes: map[string]Node{}}
+	limits := Limits{Transitions: DefaultTransitions, Tokens: file.Limits.Tokens}
+	if file.Limits.Transitions != nil {
+		if *file.Limits.Transitions < 1 {
+			return Graph{}, fmt.Errorf("flow: graph %s allows %d transitions, and a run of it could never take its first step; leave it out for the default of %d", file.Name, *file.Limits.Transitions, DefaultTransitions)
+		}
+		limits.Transitions = *file.Limits.Transitions
+	}
+	if limits.Tokens < 0 {
+		return Graph{}, fmt.Errorf("flow: graph %s allows %d tokens; leave it out for no ceiling", file.Name, limits.Tokens)
+	}
+
+	graph := Graph{Name: file.Name, Version: file.Version, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
 		if name == DoneNode {
 			return Graph{}, fmt.Errorf("flow: graph %s declares a node called %s, which is the implicit end of every graph", file.Name, DoneNode)

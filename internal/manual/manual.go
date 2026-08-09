@@ -42,7 +42,7 @@ commands:
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
   flow list [<address>]                   what has run, newest first
-  flow show <run>                         where one run got to, and what it knows
+  flow show <run>                         where one run got to, what it cost, why it stopped
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   turns <session id>                      what a session was asked, and what came back

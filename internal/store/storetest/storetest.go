@@ -849,6 +849,57 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a stopped flow run keeps what it spent and why it stopped", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		project, err := s.CreateProject(ctx, workspace.GetId(), "house-bills")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if err := s.ImportFlowGraph(ctx, "loop", 1, "the definition"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		run := &flow.Run{
+			ID: "run-stopped", Workspace: workspace.GetId(), Project: project.GetId(),
+			GraphName: "loop", GraphVersion: 1, Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		if err := s.CreateFlowRun(ctx, run); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		run.Status, run.Reason = flow.StatusStopped, "stopped after 5 transitions"
+		run.Transitions, run.Spent = 5, 1_724_656
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTurnFinished, Node: "more"}); err != nil {
+			t.Fatalf("AdvanceFlowRun: %v", err)
+		}
+
+		// Read back through both roads: a run that reads as running in one and stopped in the other
+		// would have the console and the command line disagreeing about whether work is happening.
+		kept, err := s.GetFlowRun(ctx, "run-stopped")
+		if err != nil {
+			t.Fatalf("GetFlowRun: %v", err)
+		}
+		if kept.Status != flow.StatusStopped || kept.Reason == "" {
+			t.Fatalf("the run reads back as %q saying %q, want stopped with its reason", kept.Status, kept.Reason)
+		}
+		if kept.Transitions != 5 || kept.Spent != 1_724_656 {
+			t.Fatalf("the run reads back with %d transitions and %d spent, want 5 and 1724656", kept.Transitions, kept.Spent)
+		}
+		listed, err := s.ListFlowRuns(ctx, project.GetId())
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("ListFlowRuns gave %d runs (%v), want the one", len(listed), err)
+		}
+		if listed[0].Status != flow.StatusStopped || listed[0].Reason != kept.Reason {
+			t.Fatalf("the listing says %q %q while reading it says %q %q",
+				listed[0].Status, listed[0].Reason, kept.Status, kept.Reason)
+		}
+	})
+
 	t.Run("a flow run that does not exist cannot move and cannot be read", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

@@ -135,7 +135,16 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		return err
 	}
 	fmt.Fprintf(out, "%s  %s version %d\n", display.ShortID(run.GetId()), run.GetGraphName(), run.GetGraphVersion())
-	fmt.Fprintf(out, "%s at node %s\n", run.GetStatus(), run.GetNode())
+	fmt.Fprintf(out, "%s at node %s, %d transitions", run.GetStatus(), run.GetNode(), run.GetTransitions())
+	if run.GetSpent() > 0 {
+		fmt.Fprintf(out, ", %d tokens", run.GetSpent())
+	}
+	fmt.Fprintln(out)
+	// Why it stopped, on its own line and before the state, because a run that halted and a run
+	// that went quiet look identical without it.
+	if run.GetReason() != "" {
+		fmt.Fprintf(out, "%s\n", run.GetReason())
+	}
 	keys := make([]string, 0, len(run.GetState()))
 	for key := range run.GetState() {
 		keys = append(keys, key)

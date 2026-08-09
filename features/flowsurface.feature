@@ -43,6 +43,19 @@ Feature: The operator drives flows from the command line
     And reading the run back says it ended on "done"
     And reading the run back carries what the last turn replied
 
+  # The reason the brakes exist: an automation dispatches turns with nobody watching, so a graph
+  # that cycles would spend until somebody noticed the bill.
+  Scenario: A cycling graph stops itself at its cap, and says so
+    When the operator imports a flow graph that cycles, capped at 4 transitions
+    And the operator starts a run of "loop" in the project
+    Then the run stops
+    And reading the run back says it was stopped for hitting its cap
+    And the run's thread was asked no more than 4 turns
+
+  Scenario: A graph whose cap could never be met is refused at import
+    When the operator imports a flow graph capped at 0 transitions
+    Then the control plane refuses it as invalid
+
   # The driver is a session that can drive the crew. Writing an automation down is the operator's
   # act, the way importing a skill is; running one is dispatch, which the driver already has.
   Scenario: The driver cannot import a flow graph

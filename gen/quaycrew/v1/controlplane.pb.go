@@ -1076,9 +1076,16 @@ type FlowRun struct {
 	Node   string `protobuf:"bytes,6,opt,name=node,proto3" json:"node,omitempty"`
 	Status string `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
 	// state is the run's own small memory: what the trigger carried, and what the last turn replied.
-	State         map[string]string      `protobuf:"bytes,8,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	State     map[string]string      `protobuf:"bytes,8,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// transitions is how many movements the run has taken, against the cap its graph declares, and
+	// spent is what its conversation has cost in tokens.
+	Transitions int32 `protobuf:"varint,11,opt,name=transitions,proto3" json:"transitions,omitempty"`
+	Spent       int64 `protobuf:"varint,12,opt,name=spent,proto3" json:"spent,omitempty"`
+	// reason says why a stopped run stopped. Empty on one that is running or that finished: a run
+	// that went quiet and a run that was halted must never read the same.
+	Reason        string `protobuf:"bytes,13,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1181,6 +1188,27 @@ func (x *FlowRun) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *FlowRun) GetTransitions() int32 {
+	if x != nil {
+		return x.Transitions
+	}
+	return 0
+}
+
+func (x *FlowRun) GetSpent() int64 {
+	if x != nil {
+		return x.Spent
+	}
+	return 0
+}
+
+func (x *FlowRun) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 // ImportFlowRequest carries a graph as authored. The version inside it is the pin a run takes, so
@@ -4379,7 +4407,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x13ListProjectsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"H\n" +
 	"\x14ListProjectsResponse\x120\n" +
-	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\xa8\x03\n" +
+	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\xf8\x03\n" +
 	"\aFlowRun\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -4394,7 +4422,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x1a8\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12 \n" +
+	"\vtransitions\x18\v \x01(\x05R\vtransitions\x12\x14\n" +
+	"\x05spent\x18\f \x01(\x03R\x05spent\x12\x16\n" +
+	"\x06reason\x18\r \x01(\tR\x06reason\x1a8\n" +
 	"\n" +
 	"StateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

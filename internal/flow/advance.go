@@ -12,6 +12,10 @@ const (
 	StatusRunning = "running"
 	StatusDone    = "done"
 	StatusFailed  = "failed"
+	// StatusStopped is a run brought to a halt rather than one that finished: it hit a limit, or
+	// somebody stopped it. A run that went quiet and a run that was halted must never read the
+	// same, which is why this is its own word and why it carries a reason.
+	StatusStopped = "stopped"
 )
 
 // Event kinds. Started begins a run; a finished turn is the result of the one dispatch the run was
@@ -45,6 +49,14 @@ type Run struct {
 	// Attempts counts dispatches per node, which is one third of the idempotency key run, node and
 	// attempt.
 	Attempts map[string]int
+	// Transitions is how many movements the run has taken, counted against the graph's cap so a
+	// cycling graph terminates on its own.
+	Transitions int
+	// Spent is what the run's own conversation has cost in tokens, read from the model's transcript
+	// before each dispatch and checked against the graph's ceiling.
+	Spent int64
+	// Reason says why a stopped run stopped. Empty on a run that is running or that finished.
+	Reason string
 }
 
 // Event is one thing that happened to a run.
@@ -72,6 +84,12 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 	if run.Status != StatusRunning {
 		return run, nil, fmt.Errorf("flow: run %s is %s, and a run that ended does not move", run.ID, run.Status)
 	}
+	// The brakes are checked before the movement rather than after it, so the dispatch that would
+	// cross a line is never made and never paid for.
+	if stopped, halted := brake(graph, run); halted {
+		return stopped, nil, nil
+	}
+	run.Transitions++
 	if run.State == nil {
 		run.State = map[string]string{}
 	}
@@ -103,6 +121,27 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 	default:
 		return run, nil, fmt.Errorf("flow: run %s was handed an event of kind %q", run.ID, event.Kind)
 	}
+}
+
+// brake stops a run that has reached a limit, saying which one in words the operator can act on.
+//
+// Both limits are the same idea: an automation runs with nobody watching, so it has to be able to
+// stop itself. The transition cap catches a graph that cycles; the token ceiling catches a graph
+// that does not cycle but whose turns are expensive.
+func brake(graph Graph, run Run) (Run, bool) {
+	if run.Transitions >= graph.Limits.Transitions {
+		run.Status = StatusStopped
+		run.Reason = fmt.Sprintf("stopped after %d transitions, which is the cap graph %s declares; raise limits.transitions if the automation genuinely needs more steps",
+			run.Transitions, graph.Name)
+		return run, true
+	}
+	if graph.Limits.Tokens > 0 && run.Spent >= graph.Limits.Tokens {
+		run.Status = StatusStopped
+		run.Reason = fmt.Sprintf("stopped having spent %d tokens against the ceiling of %d that graph %s declares; raise limits.tokens if this is the cost of the work",
+			run.Spent, graph.Limits.Tokens, graph.Name)
+		return run, true
+	}
+	return run, false
 }
 
 // settle places the run on a node and keeps moving while the node is pure, so a chain of choices

@@ -47,6 +47,17 @@ type RecordedTransition struct {
 	Node  string
 }
 
+// Spend is what a run's own thread has cost so far, in tokens. The engine reads it before each
+// movement and hands it to the reducer, which is the only way a ceiling can stop a turn before it
+// is paid for rather than after.
+//
+// It takes the thread rather than a conversation because resolving one to the other is the crew's
+// job, not the engine's: the thread row knows which conversation it is having and which workspace
+// keeps the transcript. An implementation that cannot tell answers zero.
+type Spend interface {
+	ThreadTokens(ctx context.Context, thread string) int64
+}
+
 // ControlPlane is what the engine may do on a run's behalf. It is the same service every other
 // caller speaks to, deliberately: the engine holds no privileged road into anything.
 type ControlPlane interface {
@@ -60,11 +71,13 @@ type ControlPlane interface {
 type Engine struct {
 	store Store
 	plane ControlPlane
+	spend Spend
 }
 
-// NewEngine builds one.
-func NewEngine(store Store, plane ControlPlane) *Engine {
-	return &Engine{store: store, plane: plane}
+// NewEngine builds one. A nil spend reader means the token ceiling has nothing to read, so a graph
+// declaring one is bounded by its transition cap alone; the crew wires the real reader in.
+func NewEngine(store Store, plane ControlPlane, spend Spend) *Engine {
+	return &Engine{store: store, plane: plane, spend: spend}
 }
 
 // Start begins a run of the newest version of a graph and drives it to a standstill before
@@ -133,6 +146,10 @@ func (e *Engine) create(ctx context.Context, graphName, workspace, project strin
 // dispatch: the run is done, or waiting on something no slice has built yet.
 func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event) (Run, error) {
 	for {
+		// What the run has cost, read fresh before every movement, so the ceiling is checked
+		// against what the model actually charged rather than against a number from the start.
+		run.Spent = e.spentBy(ctx, run)
+
 		next, commands, err := Advance(graph, run, event)
 		if err != nil {
 			return run, err
@@ -177,6 +194,16 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 		run.State[threadKey] = resp.GetId()
 		event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Reply: resp.GetReply()}
 	}
+}
+
+// spentBy is what the run's thread has cost. It keeps the last known number when there is no reader
+// wired or no thread yet: a cost that cannot be read must not silently reset a run's spend to zero
+// and hand it a fresh ceiling.
+func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
+	if e.spend == nil || run.State[threadKey] == "" {
+		return run.Spent
+	}
+	return e.spend.ThreadTokens(ctx, run.State[threadKey])
 }
 
 // threadKey is where the run remembers its thread's identifier, learned from the first dispatch.

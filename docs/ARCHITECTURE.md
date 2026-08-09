@@ -407,11 +407,18 @@ as the model takes. `quay flow import|start|list|show` is the operator surface, 
 graph is refused to the driver for the same reason importing a skill is, while starting a run is
 not, because a run is dispatch and the driver already has that.
 
-**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound; a run has no
-spend ceiling and no transition cap, so a graph that loops is bounded only by its own shape; and
-there is no way to stop a run in flight. Those are the next slices of
-[#182](https://github.com/atlantic-blue/quay-crew/issues/182), and until they land a graph should be
-written without cycles.
+**A run cannot spend without bound.** Every graph has a transition cap, declared as
+`limits.transitions` or defaulted to 100, and may declare `limits.tokens` as a ceiling on what its
+own conversation costs. Both are checked before a movement rather than after it, so the dispatch
+that would cross a line is never made and never paid for. Hitting either stops the run, and a
+stopped run carries the reason it stopped: a run that was halted and a run that went quiet must
+never read the same. The token ceiling is opt in because what is reasonable differs per automation
+and a made up number would either stop real work or protect nothing; the transition cap is not,
+because a cycling graph with nobody watching is the failure that costs money.
+
+**What is not built yet.** `wait` and `ask` need a timer source and the gated outbound, and there is
+no way for the operator to stop a run in flight: a run stops itself at a limit, or it finishes.
+Those are the next slices of [#182](https://github.com/atlantic-blue/quay-crew/issues/182).
 
 ```mermaid
 sequenceDiagram
