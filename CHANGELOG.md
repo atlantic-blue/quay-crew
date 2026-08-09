@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 9 August 2026
 
+- **A flow run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a
+  run in flight. Before this the only lever over a running automation was taking the crew down,
+  which takes every other conversation with it. The stop is cooperative rather than a kill: a run
+  waiting on a turn finishes that turn, because the model is already working and abandoning it mid
+  sentence gains nothing, and what it cannot do is take another step. The database enforces that
+  rather than the engine noticing, so a stop landing while the engine waits is never written back
+  over. A run that already ended is not stopped again, because how it ended is the useful part.
+  ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **A flow run cannot spend without bound.** An automation dispatches turns with nobody watching, so
   a graph with a cycle was bounded only by its own shape. Every graph now has a transition cap,
   declared as `limits.transitions` or defaulted to 100, and may declare `limits.tokens` as a ceiling

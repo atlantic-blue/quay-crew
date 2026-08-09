@@ -148,6 +148,52 @@ edges:
 		return fmt.Errorf("no thread carries the run's handle")
 	})
 
+	sc.Step(`^a turn takes a moment$`, func(ctx context.Context) error {
+		worldFrom(ctx).runner.takes = 200 * time.Millisecond
+		return nil
+	})
+
+	sc.Step(`^the operator stops the run, saying "([^"]*)"$`, func(ctx context.Context, reason string) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.StopFlowRun(ctx, &quaycrewv1.StopFlowRunRequest{
+			Id: w.flowRunID, Reason: reason,
+		})
+		return nil
+	})
+
+	sc.Step(`^the operator stops a run that does not exist$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.StopFlowRun(ctx, &quaycrewv1.StopFlowRunRequest{Id: "no-such-run"})
+		return nil
+	})
+
+	sc.Step(`^reading the run back says it was stopped saying "([^"]*)"$`, func(ctx context.Context, reason string) error {
+		run, err := readFlowRun(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if run.GetReason() != reason {
+			return fmt.Errorf("the run says it stopped because %q, want %q", run.GetReason(), reason)
+		}
+		return nil
+	})
+
+	sc.Step(`^the run's thread stops being asked, well short of the cap$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		// The turn already under way when the stop landed finishes, by design, so this waits for
+		// the count to settle rather than expecting it to be frozen the instant the stop returns.
+		settled, err := settledTurnCount(ctx, w)
+		if err != nil {
+			return err
+		}
+		// The graph cycles with a cap of 50, so a stop that did nothing would leave 50 turns here.
+		// A handful means the run halted; the exact number depends on where the in flight turn was.
+		if settled > 5 {
+			return fmt.Errorf("the stopped run dispatched %d turns, so it kept going rather than halting", settled)
+		}
+		return nil
+	})
+
 	sc.Step(`^the run finishes$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr != nil {
@@ -225,6 +271,56 @@ edges:
 		}
 		return nil
 	})
+}
+
+// settledTurnCount waits for the run's turn count to stop changing and answers what it settled at.
+// A stop is cooperative, so the turn already in flight lands after it; what matters is that no
+// further turn follows.
+func settledTurnCount(ctx context.Context, w *world) (int, error) {
+	deadline := time.Now().Add(10 * time.Second)
+	last := -1
+	stable := 0
+	for time.Now().Before(deadline) {
+		count, err := flowRunTurnCount(ctx, w)
+		if err != nil {
+			return 0, err
+		}
+		if count == last {
+			stable++
+			if stable >= 3 {
+				return count, nil
+			}
+		} else {
+			stable, last = 0, count
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return 0, fmt.Errorf("the run's turn count never settled; it is still dispatching")
+}
+
+// flowRunTurnCount is how many turns the run's own thread has been asked, live or archived.
+func flowRunTurnCount(ctx context.Context, w *world) (int, error) {
+	run, err := readFlowRun(ctx, w)
+	if err != nil {
+		return 0, err
+	}
+	for _, archived := range []bool{false, true} {
+		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Archived: archived})
+		if err != nil {
+			return 0, err
+		}
+		for _, thread := range listed.GetThreads() {
+			if !strings.HasPrefix(thread.GetHandle(), run.GetGraphName()+"-") {
+				continue
+			}
+			turns, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: thread.GetId()})
+			if err != nil {
+				return 0, err
+			}
+			return len(turns.GetTurns()), nil
+		}
+	}
+	return 0, fmt.Errorf("no thread carries the run's handle")
 }
 
 // startFlowRun is the shared body of the two ways a scenario starts a run: the operator's, and the

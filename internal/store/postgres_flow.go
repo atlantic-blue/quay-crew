@@ -74,16 +74,26 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Only a run the database still holds as running moves. That condition is what makes stopping
+	// one take effect: the operator's stop lands first, and this finds nothing to update rather
+	// than setting the run back to running underneath them.
 	tag, err := tx.Exec(ctx, `
 		update flow_runs set node = $2, status = $3, state = $4, attempts = $5,
 		    transitions = $6, spent = $7, reason = $8, updated_at = now()
-		where id = $1`,
-		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason)
+		where id = $1 and status = $9`,
+		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason,
+		flow.StatusRunning)
 	if err != nil {
 		return fmt.Errorf("advance flow run: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		// Which of the two it is decides what the caller should do, so it is asked rather than
+		// guessed: a run that is gone is an error, a run that was halted is an answer.
+		var status string
+		if err := p.pool.QueryRow(ctx, `select status from flow_runs where id = $1`, run.ID).Scan(&status); err != nil {
+			return ErrNotFound
+		}
+		return flow.ErrRunHalted
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -108,6 +118,26 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 		return fmt.Errorf("advance flow run: %w", err)
 	}
 	return nil
+}
+
+// StopFlowRun halts a run that is still running, keeping the reason. A run that already ended is
+// refused rather than overwritten: the record of how it ended is the useful part.
+func (p *Postgres) StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error) {
+	tag, err := p.pool.Exec(ctx, `
+		update flow_runs set status = $2, reason = $3, updated_at = now()
+		where id = $1 and status = $4`,
+		id, flow.StatusStopped, reason, flow.StatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("stop flow run: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		run, err := p.GetFlowRun(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("store: run %s is %s, and a run that already ended is not stopped again", id, run.Status)
+	}
+	return p.GetFlowRun(ctx, id)
 }
 
 // GetFlowRun reads one run back.

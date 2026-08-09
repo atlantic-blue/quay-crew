@@ -154,6 +154,9 @@ type Store interface {
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
 	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error)
+	// StopFlowRun halts a run that is still running, keeping the reason. A run that already ended is
+	// refused rather than overwritten: the record of how it ended is the useful part.
+	StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error)
 	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
 	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.

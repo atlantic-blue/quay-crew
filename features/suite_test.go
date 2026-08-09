@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
+	"time"
 )
 
 func TestFeatures(t *testing.T) {
@@ -79,11 +80,22 @@ type recordingRunner struct {
 	// failNext makes the next turn fail, which is how a scenario gets a session that exists but has
 	// no conversation behind it.
 	failNext bool
+	// takes is how long a turn pretends to take. Zero is instant, which is right for almost every
+	// scenario and wrong for any scenario about something happening while a turn is under way:
+	// with an instant model a whole automation finishes before the next step runs, and a scenario
+	// about stopping one would be racing rather than specifying.
+	takes time.Duration
 }
 
 var _ model.Runner = (*recordingRunner)(nil)
 
 func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
+	r.mu.Lock()
+	takes := r.takes
+	r.mu.Unlock()
+	if takes > 0 {
+		time.Sleep(takes)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.requests = append(r.requests, req)

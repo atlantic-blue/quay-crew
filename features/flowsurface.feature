@@ -56,6 +56,35 @@ Feature: The operator drives flows from the command line
     When the operator imports a flow graph capped at 0 transitions
     Then the control plane refuses it as invalid
 
+  # A run dispatches turns on its own. Without a way to stop one, the only lever an operator has is
+  # taking the crew down, which takes every other conversation with it.
+  Scenario: The operator stops a run in flight, and the reason is kept
+    Given a turn takes a moment
+    When the operator imports a flow graph that cycles, capped at 50 transitions
+    And the operator starts a run of "loop" in the project
+    And the operator stops the run, saying "it is fixing the wrong thing"
+    Then the run stops
+    And reading the run back says it was stopped saying "it is fixing the wrong thing"
+
+  Scenario: A stopped run dispatches nothing more
+    Given a turn takes a moment
+    When the operator imports a flow graph that cycles, capped at 50 transitions
+    And the operator starts a run of "loop" in the project
+    And the operator stops the run, saying "enough"
+    Then the run stops
+    And the run's thread stops being asked, well short of the cap
+
+  Scenario: A run that already finished cannot be stopped
+    When the operator imports the flow graph "fix-red"
+    And the operator starts a run of "fix-red" in the project
+    And the run finishes
+    And the operator stops the run, saying "too late"
+    Then the control plane refuses it as the wrong state
+
+  Scenario: Stopping a run nobody started is refused
+    When the operator stops a run that does not exist
+    Then the control plane refuses it as not found
+
   # The driver is a session that can drive the crew. Writing an automation down is the operator's
   # act, the way importing a skill is; running one is dispatch, which the driver already has.
   Scenario: The driver cannot import a flow graph

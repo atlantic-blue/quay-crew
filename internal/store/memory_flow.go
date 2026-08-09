@@ -59,13 +59,34 @@ func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run) error {
 	return nil
 }
 
+// StopFlowRun halts a run that is still running, keeping the reason.
+func (m *Memory) StopFlowRun(_ context.Context, id, reason string) (*flow.Run, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	run, held := m.flowRuns[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if run.Status != flow.StatusRunning {
+		return nil, fmt.Errorf("store: run %s is %s, and a run that already ended is not stopped again", id, run.Status)
+	}
+	run.Status, run.Reason = flow.StatusStopped, reason
+	kept := cloneRun(*run)
+	return &kept, nil
+}
+
 // AdvanceFlowRun moves a run, appends the transition, and claims the dispatch key, all together the
-// way the Postgres store does in one transaction. A claimed key refuses the whole movement.
+// way the Postgres store does in one transaction. A claimed key refuses the whole movement, and a
+// run somebody has stopped is refused too, so a stop that lands mid turn is not written back over.
 func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flow.Transition) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, held := m.flowRuns[run.ID]; !held {
+	held, found := m.flowRuns[run.ID]
+	if !found {
 		return ErrNotFound
+	}
+	if held.Status != flow.StatusRunning {
+		return flow.ErrRunHalted
 	}
 	if transition.Dispatch != nil {
 		if m.flowDispatches == nil {
