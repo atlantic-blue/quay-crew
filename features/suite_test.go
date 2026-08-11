@@ -163,8 +163,6 @@ type world struct {
 	realRunner model.Runner
 	// reachable is the address a session is told to dial for the crew, empty when it cannot reach it.
 	reachable string
-	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
-	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor controlplane.Identity
 	// flowRun is the run the last flow step started.
@@ -257,7 +255,7 @@ func (w *world) serve() error {
 	server := controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
-		SandboxSecrets: w.sandboxSecrets, GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
+		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
 	// The way the real main starts: what strays while the crew is down is reaped on the way up.

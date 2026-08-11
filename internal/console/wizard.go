@@ -217,9 +217,9 @@ func (w wizard) prompt() string {
 	case stepMessage:
 		return "first message to " + w.where()
 	case stepPickSkill:
-		// The reminder rides on the question: a skill's named secrets travel only when the operator
-		// also hands them out, and the moment of attaching is when somebody can still act on that.
-		return "which skill for " + w.workspace.name + " (secrets it names go in QC_SANDBOX_SECRETS too)"
+		// The reminder rides on the question, because a skill whose secret is unset refuses the turn
+		// rather than the attach, and attaching is the moment somebody can still act on it.
+		return "which skill for " + w.workspace.name + " (set the secrets it names on this workspace)"
 	default:
 		return "making it"
 	}

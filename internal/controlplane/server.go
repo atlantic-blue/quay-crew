@@ -13,7 +13,6 @@ import (
 	"errors"
 	"io"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -83,15 +82,6 @@ type Config struct {
 	// GitAuthor is who a commit made inside a sandbox is by: both a name and an address, or neither.
 	// Without it git refuses to commit rather than guessing.
 	GitAuthor Identity
-	// SandboxSecrets are the workspace secrets a session's sandbox is given, by name. The model's own
-	// token is always carried and does not need naming here.
-	//
-	// Named rather than all of them, because a sandbox holds a value for the life of its container
-	// and the model can read it.
-	//
-	// A skill names its own secrets and those reach a session that holds it without being listed here.
-	// This is the crew wide list: what every session may reach whatever it holds.
-	SandboxSecrets []string
 	// Reachable is the address a session should dial to reach this control plane, put into every
 	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the crew without being told where it is.
 	//
@@ -136,8 +126,6 @@ type Server struct {
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
 	// as the driver's.
 	driverToken string
-	// sandboxSecrets are the workspace secrets a sandbox is given, by name.
-	sandboxSecrets []string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor Identity
 	// skills are the capabilities a session is given, and where they are on the host.
@@ -155,21 +143,20 @@ type Server struct {
 // default), a sandbox provider (one sandbox per session) and a secrets store.
 func NewServer(cfg Config) *Server {
 	server := &Server{
-		store:          cfg.Store,
-		secrets:        cfg.Secrets,
-		runner:         cfg.Runner,
-		provider:       cfg.Provider,
-		storage:        cfg.Storage,
-		events:         eventsOr(cfg.Events),
-		info:           cfg.Info,
-		reachable:      cfg.Reachable,
-		driverToken:    cfg.DriverToken,
-		sandboxSecrets: cfg.SandboxSecrets,
-		gitAuthor:      cfg.GitAuthor,
-		skills:         cfg.Skills,
-		skillsHost:     cfg.SkillsHost,
-		sandboxImage:   cfg.SandboxImage,
-		sandboxes:      make(map[string]sandbox.Sandbox),
+		store:        cfg.Store,
+		secrets:      cfg.Secrets,
+		runner:       cfg.Runner,
+		provider:     cfg.Provider,
+		storage:      cfg.Storage,
+		events:       eventsOr(cfg.Events),
+		info:         cfg.Info,
+		reachable:    cfg.Reachable,
+		driverToken:  cfg.DriverToken,
+		gitAuthor:    cfg.GitAuthor,
+		skills:       cfg.Skills,
+		skillsHost:   cfg.SkillsHost,
+		sandboxImage: cfg.SandboxImage,
+		sandboxes:    make(map[string]sandbox.Sandbox),
 	}
 	// The engine dispatches through this same server rather than dialing it: it is already inside
 	// the process, and a run is started by a caller the interceptor has already authenticated. It
@@ -298,7 +285,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
-		Env:       environ(s.turnEnv(ctx, session, caps.held)),
+		Env:       environ(s.turnEnv(ctx, session)),
 		Mounts:    caps.mounts,
 		Driver:    session.GetDriver(),
 	})
@@ -349,15 +336,6 @@ func (s *Server) skillsAreUsable(ctx context.Context, session *quaycrewv1.Thread
 					"the %s skill needs the secret %s, which this workspace has not set: %s. "+
 						"Set it with quay secret set %s %s <value>",
 					given.Name, name, given.Secrets[name], session.GetWorkspace(), name)
-			}
-			// The operator hands a secret out by naming it, so a manifest alone can never select
-			// one. Without this a skill is an arbitrary secret selector over whatever the
-			// workspace holds.
-			if !slices.Contains(s.sandboxSecrets, name) {
-				return status.Errorf(codes.FailedPrecondition,
-					"the %s skill needs the secret %s, which is set but not handed to sandboxes: "+
-						"add %s to QC_SANDBOX_SECRETS (deploy/.env on a compose stack) and restart the crew",
-					given.Name, name, name)
 			}
 		}
 	}
@@ -855,7 +833,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session),
-		Env:            s.turnEnv(ctx, session, s.capabilityOf(ctx, session).held),
+		Env:            s.turnEnv(ctx, session),
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")
@@ -1163,10 +1141,10 @@ func environ(values map[string]string) []string {
 	return entries
 }
 
-// turnEnv gathers the environment a turn runs with from the workspace's secrets. Right now that is the
-// Claude Code subscription token, if one is set. A workspace that has not set it (or a model backend
-// that does not need it) simply runs with no extra env, so the lookup never fails a turn.
-func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held) map[string]string {
+// turnEnv gathers the environment a turn runs with from the workspace's secrets. A workspace that has
+// set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
+// turn, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
+func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread) map[string]string {
 	env := map[string]string{}
 	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
 	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
@@ -1189,24 +1167,26 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread, held [
 		env["GIT_COMMITTER_NAME"] = s.gitAuthor.Name
 		env["GIT_COMMITTER_EMAIL"] = s.gitAuthor.Email
 	}
-	// By name rather than all of them: a sandbox holds a value for the life of its container and the
-	// model can read it. The model's own token is always carried, and a name with nothing set against
-	// it is skipped rather than refused. A skill contributes the names it declares, so a workspace can
-	// hold a token for one capability without every session in the crew being handed it.
-	named := append([]string{model.ClaudeCodeOAuthTokenEnv}, s.sandboxSecrets...)
-	for _, given := range held {
-		for _, name := range given.SecretNames() {
-			// A skill declaring a crew owned name is refused at validation; this filter is for one
-			// stored by a build from before that refusal, so an old import cannot do what a new
-			// one cannot.
-			if skill.CrewOwnName(name) {
-				continue
-			}
-			named = append(named, name)
-		}
+	// Everything the workspace holds. Setting a secret on a workspace is the operator saying its
+	// sessions may use it, and a skill is attached to a workspace by the same person, so a further
+	// list of which names are allowed out was a third answer to a question already answered twice.
+	//
+	// The model's own token is asked for by name as well, so a store that cannot enumerate still
+	// runs a turn rather than failing one for a reason the operator cannot see.
+	named := []string{model.ClaudeCodeOAuthTokenEnv}
+	stored, err := s.secrets.Names(ctx, session.GetWorkspace())
+	if err == nil {
+		named = append(named, stored...)
 	}
 	for _, name := range named {
 		if _, already := env[name]; already {
+			continue
+		}
+		// QC_ is the crew's own configuration: the address a session dials and the token it dials
+		// with are put here by the crew, so a workspace secret answering to one of those would be
+		// posing as the crew rather than being handed out by it. CLAUDE_ names travel, since the
+		// model's token is one and is set exactly this way.
+		if strings.HasPrefix(name, crewOwnPrefix) {
 			continue
 		}
 		value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
@@ -1224,6 +1204,10 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread, held [
 // grpcAddrEnv is what the quay command line reads to find a control plane. A session gets it so the
 // tool inside a sandbox needs no arguments.
 const grpcAddrEnv = "QC_GRPC_ADDR"
+
+// crewOwnPrefix marks the names the crew puts into a sandbox itself, so a workspace secret cannot
+// take one of them and be read as configuration the crew wrote.
+const crewOwnPrefix = "QC_"
 
 // ListSessions lists sessions, optionally filtered by workspace.
 func (s *Server) ListThreads(ctx context.Context, req *quaycrewv1.ListThreadsRequest) (*quaycrewv1.ListThreadsResponse, error) {

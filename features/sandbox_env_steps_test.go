@@ -23,19 +23,23 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return w.restart()
 	})
 
-	// Which of a workspace's secrets a session is given. Named here, set separately: the crew carries
-	// a name only when there is a value behind it.
-	sc.Step(`^a crew that gives its sessions the secret "([^"]*)"$`, func(ctx context.Context, name string) error {
-		w := worldFrom(ctx)
-		w.sandboxSecrets = append(w.sandboxSecrets, name)
-		return w.restart()
-	})
-
 	sc.Step(`^the workspace has the secret "([^"]*)" set to "([^"]*)"$`,
 		func(ctx context.Context, name, value string) error {
 			w := worldFrom(ctx)
 			_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
 				Workspace: w.workspaceID, Key: name, Value: value,
+			})
+			return err
+		})
+
+	sc.Step(`^the second workspace has the secret "([^"]*)" set to "([^"]*)"$`,
+		func(ctx context.Context, name, value string) error {
+			w := worldFrom(ctx)
+			if w.secondWorkspaceID == "" {
+				return fmt.Errorf("no second workspace was created")
+			}
+			_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+				Workspace: w.secondWorkspaceID, Key: name, Value: value,
 			})
 			return err
 		})

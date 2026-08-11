@@ -40,7 +40,7 @@ Feature: The first run is guided
     And the workspace named "acme" holds the skill "notes"
     And the console lists the session the wizard started
 
-  Scenario: The skill stage says a secret a skill names must also be handed out
+  Scenario: The skill stage says a secret a skill names has to be set on the workspace
     Given the operator imported the "git" skill
     When the operator opens the console on the empty crew
     And the operator answers the guided setup with:
@@ -48,7 +48,7 @@ Feature: The first run is guided
       | house-bills           |
       | sk-ant-oat-a-fake-one |
       | some context          |
-    Then the guided setup mentions "QC_SANDBOX_SECRETS"
+    Then the guided setup mentions "set the secrets it names"
 
   Scenario: An empty answer skips a stage
     When the operator opens the console on the empty crew

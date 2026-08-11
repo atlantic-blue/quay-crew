@@ -38,26 +38,43 @@ Feature: A sandbox keeps a session's state outside itself
     Then the sandboxes were created for one workspace but different projects
 
   # A sandbox holds a value for the life of its container and the model can read it, which is the
-  # point of giving it one. So a session is handed the secrets it needs by name, not everything the
-  # workspace happens to hold. Before this only the model's own token could reach a sandbox at all,
-  # hardcoded, so a workspace could keep a token for anything else and no session could ever use it.
-  Scenario: A session is given the secrets the crew named, and no others
-    Given a crew that gives its sessions the secret "GITHUB_TOKEN"
-    And a workspace named "acme"
+  # point of giving it one. Setting a secret on a workspace is the operator saying its sessions may
+  # use it, so that is the whole of the decision and there is no second list to keep.
+  Scenario: A session is given the secrets its workspace holds
+    Given a workspace named "acme"
     And a project named "house-bills"
     And the workspace has the secret "GITHUB_TOKEN" set to "ghp-1234"
-    And the workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
+    And the workspace has the secret "STRIPE_KEY" set to "sk-live-and-wanted"
     When the operator dispatches "hello" to the project
     Then the sandbox carries "GITHUB_TOKEN" set to "ghp-1234"
-    And the sandbox carries nothing called "STRIPE_KEY"
+    And the sandbox carries "STRIPE_KEY" set to "sk-live-and-wanted"
 
-  Scenario: A name with nothing set against it is skipped rather than refused
-    Given a crew that gives its sessions the secret "GITHUB_TOKEN"
-    And a workspace named "acme"
+  # One workspace's secrets are its own. This is the isolation the whole design turns on, and it is
+  # the only boundary left now that naming is gone.
+  Scenario: A session is given nothing from another workspace
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    And a second workspace named "rivals" with a project
+    And the second workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries nothing called "STRIPE_KEY"
+
+  Scenario: A secret nobody set is not carried
+    Given a workspace named "acme"
     And a project named "house-bills"
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
     And the sandbox carries nothing called "GITHUB_TOKEN"
+
+  # The crew puts the address a session dials and the token it dials with into the sandbox itself.
+  # A workspace secret answering to one of those names would be posing as the crew rather than being
+  # handed out by it, so those names never travel however they were set.
+  Scenario: A workspace secret cannot pose as the crew's own configuration
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    And the workspace has the secret "QC_TOKEN" set to "not-the-crews-token"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries nothing called "QC_TOKEN"
 
   # The model's token is how a turn runs at all, so it is carried without being named.
   Scenario: The model's own token needs no naming
