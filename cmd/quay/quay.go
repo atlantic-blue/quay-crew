@@ -288,22 +288,65 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	return nil
 }
 
+// secretUsage names the piped form first, because it is the one that keeps a credential out of the
+// shell history and out of the process list.
+const secretUsage = "usage: <value> | quay secret set [<workspace>] <key>" +
+	"\n   or: quay secret set [<workspace>] <key> <value>"
+
+// standardInputIsPiped says whether something is being fed in rather than a person typing. A
+// character device is a terminal; anything else is a pipe or a file redirection.
+func standardInputIsPiped() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice == 0
+}
+
 func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "list" {
 		return runSecretList(ctx, client, args[1:], out)
 	}
 	if len(args) == 0 || args[0] != "set" {
-		return fmt.Errorf("usage: quay secret set [<workspace>] <key> <value>")
+		return fmt.Errorf("%s", secretUsage)
 	}
 	rest := args[1:]
-	typed := ""
-	if len(rest) == 3 {
-		typed, rest = rest[0], rest[1:]
+
+	// Whether something is being piped in decides how the arguments read, because a value on standard
+	// input is the one that never reaches the shell history or the process list, and that is the road
+	// worth making obvious. With a pipe every argument is an address or a name; without one the last
+	// argument is still the value, so the shape that scripts already use keeps working.
+	piped := standardInputIsPiped()
+	var typed, key, value string
+	switch {
+	case piped && len(rest) == 1:
+		key = rest[0]
+	case piped && len(rest) == 2:
+		typed, key = rest[0], rest[1]
+	case !piped && len(rest) == 2:
+		key, value = rest[0], rest[1]
+	case !piped && len(rest) == 3:
+		typed, key, value = rest[0], rest[1], rest[2]
+	case !piped && len(rest) == 1:
+		return fmt.Errorf("no value for %s, and nothing is being piped in"+
+			"\n\npipe it, so it never reaches your shell history: gh auth token | quay secret set %s"+
+			"\nor from a file: quay secret set %s < token.txt", rest[0], rest[0], rest[0])
+	default:
+		return fmt.Errorf("%s", secretUsage)
 	}
-	if len(rest) != 2 {
-		return fmt.Errorf("usage: quay secret set [<workspace>] <key> <value>")
+
+	if piped {
+		read, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading the value: %w", err)
+		}
+		// Trimmed, because the tools that produce a credential end with a newline. `gh auth token`
+		// does, and a token carrying one authenticates nothing while looking exactly right.
+		value = strings.TrimSpace(string(read))
+		if value == "" {
+			return fmt.Errorf("nothing was piped in, so %s was not set", key)
+		}
 	}
-	key, value := rest[0], rest[1]
 
 	located, err := locate(ctx, client, typed)
 	if err != nil {
