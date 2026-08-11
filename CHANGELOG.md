@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **`quay mode <thread> [<mode>]`, so a turn can be given room to work without a terminal.** A thread
+  is born in `edits`, and a dispatched turn has nobody at a keyboard, so every approval the model
+  asked for was denied by nobody and came back as a polite refusal. A session asked to clone a
+  repository answered that it needed explicit approval for network access, with the token sitting
+  right there in its environment. The mode could only be changed by pressing `D` in the full screen
+  console, so a turn from a script, a flow or the driver was stuck with what it was born in. Now it
+  reads the mode with one argument and sets it with two, taking the words the listing prints
+  (`plan`, `edits`, `dangerous`) as well as the model's own spellings, and refusing anything else by
+  naming the three. It takes effect on the next turn with nothing restarted, because the mode travels
+  with the turn rather than with the container.
+  ([#254](https://github.com/atlantic-blue/quay-crew/issues/254))
+
 - **A workspace's secrets reach that workspace's sandboxes.** Setting a secret is now the whole of
   the decision. There used to be a second list, `QC_SANDBOX_SECRETS` in `deploy/.env`, naming which
   secrets were allowed to leave the store at all, and a name missing from it meant the turn was
