@@ -901,6 +901,19 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 		dirs = append(dirs, s.contextDir(ctx, store.ContextProject,
 			project.GetId(), project.GetName(), found[1]))
 	}
+	// A workspace with no projects contributed no row at all, because the rows were built by walking
+	// projects. Its context is stored and rendered either way, so writing an org's context into a
+	// fresh workspace and then being told the crew held nothing was the listing's fault, not the
+	// write's. There is no directory to name yet: a context directory belongs to a project.
+	if req.GetProject() == "" {
+		for _, workspace := range workspaces {
+			if seenWorkspace[workspace.GetId()] {
+				continue
+			}
+			dirs = append(dirs, s.contextDir(ctx, store.ContextWorkspace,
+				workspace.GetId(), workspace.GetName(), sandbox.Context{}))
+		}
+	}
 	return &quaycrewv1.ListContextsResponse{Dirs: dirs}, nil
 }
 

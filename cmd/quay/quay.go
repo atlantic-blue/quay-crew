@@ -516,8 +516,12 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(args) > 0 && args[0] == "set" {
 		return runContextSet(ctx, client, args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "clear" {
+		return runContextClear(ctx, client, args[1:], out)
+	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context [<address>] | quay context edit [<address>]")
+		return fmt.Errorf("usage: quay context [<address>] | quay context set [<address>] < file " +
+			"| quay context edit [<address>] | quay context clear [<address>]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -597,6 +601,20 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return fmt.Errorf("reading what to say: %w", err)
 	}
+	// Nothing on standard input is almost never somebody asking to erase a level. It is a forgotten
+	// redirection, or a file that turned out to be empty, and there is no undo: what was there is
+	// gone the moment this returns. Emptying a level deliberately has its own command, which says
+	// what it is doing.
+	if len(strings.TrimSpace(string(body))) == 0 {
+		held, err := contextLength(ctx, client, scope, owner)
+		if err != nil || held == 0 {
+			fmt.Fprintf(out, "%s %s was already empty, and nothing was on standard input\n", scope, name)
+			return nil
+		}
+		return fmt.Errorf("nothing was on standard input, so %s %s is untouched and still says %d "+
+			"characters\n\npipe something in: cat notes.md | quay context set %s"+
+			"\nor empty it deliberately: quay context clear %s", scope, name, held, typed, typed)
+	}
 	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
 		Scope: scope, Owner: owner, Body: string(body),
 	}); err != nil {
@@ -604,6 +622,52 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	fmt.Fprintf(out, "%s %s now says %d characters\n", scope, name, len(body))
 	return nil
+}
+
+// runContextClear empties a level, which context set used to do by accident whenever standing input
+// was empty. Saying it out loud is the whole point of it being its own command.
+func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context clear [<address>|crew]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	scope, owner, name, err := contextTarget(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	held, err := contextLength(ctx, client, scope, owner)
+	if err != nil {
+		return err
+	}
+	if held == 0 {
+		fmt.Fprintf(out, "%s %s was already empty\n", scope, name)
+		return nil
+	}
+	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
+		Scope: scope, Owner: owner, Body: "",
+	}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s %s emptied, and it said %d characters\n", scope, name, held)
+	return nil
+}
+
+// contextLength is how much a level says today, so a refusal can name what it is protecting and
+// clearing can say what it removed.
+func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (int, error) {
+	resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
+	if err != nil {
+		return 0, err
+	}
+	for _, dir := range resp.GetDirs() {
+		if dir.GetScope() == scope && dir.GetOwner() == owner {
+			return len(dir.GetBody()), nil
+		}
+	}
+	return 0, nil
 }
 
 // contextTarget works out which level an address means. The word "crew" is the level above every

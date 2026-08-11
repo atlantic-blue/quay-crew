@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **The command that loads a file is in the usage, an empty file no longer erases a level, and a
+  workspace's context is visible before it has a project.** Migrating an org into a crew is writing
+  context, and `context set` was the only command that could do it from a file while being the one
+  command the usage never mentioned: it offered the listing and `context edit`, which opens an editor
+  and so cannot be scripted. It is listed now, beside a new `context clear`. That exists because
+  `context set` with nothing on standard input silently wrote zero characters over whatever was
+  there, with no undo, which is a forgotten redirection rather than a request to erase: it is refused
+  now, naming how much it is protecting, and emptying a level on purpose says what it removed. And a
+  workspace with no projects contributed no row to the listing at all, because the rows were built by
+  walking projects, so an org's context could be written, stored and rendered while the crew appeared
+  to hold nothing. ([#252](https://github.com/atlantic-blue/quay-crew/issues/252))
+
 - **A refusal names the level that failed, and says what is actually there.** One message served all
   three levels of an address and it named the wrong one: a missing project came out as
   `workspace: no workspace with that id or name: project "nope"`, which blames the only part of the
