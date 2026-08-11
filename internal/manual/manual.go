@@ -38,8 +38,11 @@ commands:
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
+  workspace delete <workspace>            remove it, its projects, threads and secrets. Type its
+                                          name to confirm, or pipe the name in to script it
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
+  project delete [<workspace>/]<project>  remove it and the threads inside it, confirmed the same way
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
   flow schedule [<address>] <graph>       let it run on its own, as often as it says

@@ -364,9 +364,11 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 
 func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay workspace <create|list>")
+		return fmt.Errorf("usage: quay workspace <create|list|delete>")
 	}
 	switch args[0] {
+	case "delete":
+		return runWorkspaceDelete(ctx, client, args[1:], out)
 	case "create":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: quay workspace create <name>")
@@ -392,15 +394,17 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		}
 		return nil
 	default:
-		return fmt.Errorf("usage: quay workspace <create|list>")
+		return fmt.Errorf("usage: quay workspace <create|list|delete>")
 	}
 }
 
 func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay project <create|list>")
+		return fmt.Errorf("usage: quay project <create|list|delete>")
 	}
 	switch args[0] {
+	case "delete":
+		return runProjectDelete(ctx, client, args[1:], out)
 	case "create":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: quay project create [<workspace>/]<name>")
@@ -453,7 +457,7 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return nil
 
 	default:
-		return fmt.Errorf("usage: quay project <create|list|remote>")
+		return fmt.Errorf("usage: quay project <create|list|delete>")
 	}
 }
 

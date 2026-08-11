@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **A crew can be taken apart: `quay workspace delete` and `quay project delete`.** The command line
+  had create and list and nothing else, so a crew only ever grew. A workspace made by a typo was
+  there for good, and starting again meant going around the tool entirely, into Docker and the data
+  directory, which is what wiping a live crew actually took today. Both calls already existed on the
+  control plane and were reachable only by writing a throwaway program against the API. Deleting
+  names what goes with it, a workspace's projects, threads and secrets counted out, and asks for the
+  name to be typed back before anything happens, which is the only guard a tool with no flags can
+  offer. Piping the name in makes it scriptable without making it silent. Deleting where you are
+  standing steps you back out, rather than leaving the tool pointing at something gone.
+  ([#250](https://github.com/atlantic-blue/quay-crew/issues/250))
+
 - **A secret is piped in rather than typed, so it never reaches your shell history.** The value was a
   positional argument and there was no other road, which put every credential the crew holds into the
   history file and into the process list, where any other process can read it with `ps`. It is the
