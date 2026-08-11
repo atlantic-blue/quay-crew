@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -2644,11 +2645,11 @@ func TestTokensReadAsNumbersAPersonCanCompare(t *testing.T) {
 		{1723404, "1.7M"},
 		{12000000, "12M"},
 	} {
-		if got := tokens(tc.count); got != tc.want {
+		if got := display.Tokens(tc.count); got != tc.want {
 			t.Errorf("%d reads as %q, want %q", tc.count, got, tc.want)
 		}
-		if len(tokens(tc.count)) > 7 {
-			t.Errorf("%d reads as %q, which does not fit its column", tc.count, tokens(tc.count))
+		if len(display.Tokens(tc.count)) > 7 {
+			t.Errorf("%d reads as %q, which does not fit its column", tc.count, display.Tokens(tc.count))
 		}
 	}
 }
