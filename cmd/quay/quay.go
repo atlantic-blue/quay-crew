@@ -135,6 +135,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSessions(ctx, client, args[1:], out)
 	case "turns":
 		return runTurns(ctx, client, args[1:], out)
+	case "mode":
+		return runMode(ctx, client, args[1:], out)
 	case "context":
 		return runContext(ctx, client, args[1:], out)
 	case "secret":

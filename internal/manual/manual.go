@@ -50,6 +50,9 @@ commands:
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list sessions
   turns <session id>                      what a session was asked, and what came back
+  mode <thread> [<mode>]                  what a thread's turns may do without asking: plan, edits
+                                          or dangerous. A dispatched turn has nobody to approve
+                                          anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
   context edit [<address>]                open a project's context in $EDITOR
   attach <session id>                     open a session's conversation, with its history
