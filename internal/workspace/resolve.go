@@ -18,8 +18,47 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ErrNotFound is returned when a reference matches no workspace, by id or by name.
-var ErrNotFound = errors.New("workspace: no workspace with that id or name")
+// ErrNotFound is the sentinel for "that address does not exist", at any level. What the operator
+// reads is a NotFoundError, which knows which level failed; this stays so errors.Is keeps working.
+var ErrNotFound = errors.New("no such address")
+
+// NotFoundError says which level of an address did not resolve, where it was looked for, and what is
+// actually there.
+//
+// One message used to serve all three levels, and it named the wrong one: a missing project came out
+// as "workspace: no workspace with that id or name: project \"nope\"", which sent the operator to
+// check the one part of the address that was correct.
+type NotFoundError struct {
+	// What is the level: workspace, project or thread.
+	What string
+	// Name is what was typed.
+	Name string
+	// In is the address it was looked for inside, empty at the top level.
+	In string
+	// Have is what does exist there, in the words a listing prints them in. Empty means nothing
+	// exists at that level yet, which is a different sentence: the operator has nothing to pick.
+	Have []string
+	// Make is the command that creates one, for when there is nothing to pick.
+	Make string
+}
+
+func (e *NotFoundError) Error() string {
+	where := "this crew"
+	if e.In != "" {
+		where = e.In
+	}
+	if len(e.Have) == 0 {
+		if e.Make == "" {
+			return fmt.Sprintf("%s has no %ss", where, e.What)
+		}
+		return fmt.Sprintf("%s has no %ss yet: %s", where, e.What, e.Make)
+	}
+	return fmt.Sprintf("%s has no %s %q. it has: %s", where, e.What, e.Name, strings.Join(e.Have, ", "))
+}
+
+// Is makes errors.Is(err, ErrNotFound) answer for every level, so callers that only care whether
+// something was missing keep working.
+func (e *NotFoundError) Is(target error) bool { return target == ErrNotFound }
 
 // AmbiguousError is returned when a name belongs to more than one thing. It carries the candidate
 // ids so the operator can pick one rather than guess which the tool chose.
@@ -68,13 +107,30 @@ func Resolve(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, r
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("%w: %q", ErrNotFound, reference)
+		return "", &NotFoundError{
+			What: "workspace", Name: reference,
+			Have: namesOf(resp.GetWorkspaces(), func(i int) string { return resp.GetWorkspaces()[i].GetName() }),
+			Make: "make one with quay workspace create <name>",
+		}
 	case 1:
 		return matches[0], nil
 	default:
 		sort.Strings(matches)
 		return "", &AmbiguousError{What: "workspaces", Name: reference, IDs: matches}
 	}
+}
+
+// namesOf pulls the names out of a listing, sorted, so a refusal offers them in the order a listing
+// would. Taken by index and accessor because the three listings are three unrelated message types.
+func namesOf[T any](items []T, name func(int) string) []string {
+	names := make([]string, 0, len(items))
+	for index := range items {
+		if got := name(index); got != "" {
+			names = append(names, got)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ResolveProject turns a reference into a project id, the same way Resolve does for a workspace.
@@ -115,7 +171,11 @@ func ResolveProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("%w: project %q", ErrNotFound, projectRef)
+		return "", &NotFoundError{
+			What: "project", Name: projectRef, In: strings.TrimSpace(workspaceRef),
+			Have: namesOf(resp.GetProjects(), func(i int) string { return resp.GetProjects()[i].GetName() }),
+			Make: "make one with quay project create <name>",
+		}
 	case 1:
 		return matches[0], nil
 	default:

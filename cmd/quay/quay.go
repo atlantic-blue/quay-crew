@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"io"
@@ -183,7 +184,25 @@ func locate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ty
 	if err != nil {
 		return workspace.Location{}, err
 	}
-	return workspace.ResolvePath(ctx, client, path)
+	located, err := workspace.ResolvePath(ctx, client, path)
+	return located, standing(typed, path, err)
+}
+
+// standing rewrites a failure to resolve an address the operator did not type, because an address
+// nobody typed came from the place they are standing in.
+//
+// That place is kept on this machine and the crew's own state is not, so anything that empties a crew
+// leaves the tool pointing at something gone: a wipe, a fresh install against a different crew, or a
+// colleague's crew on another address. Every command that defaults to where you are then refuses with
+// a sentence about a missing workspace, which reads as the crew being broken rather than as you being
+// nowhere.
+func standing(typed string, path workspace.Path, err error) error {
+	if err == nil || strings.TrimSpace(typed) != "" || !errors.Is(err, workspace.ErrNotFound) {
+		return err
+	}
+	return fmt.Errorf("you are standing in %s, which this crew does not have: %w"+
+		"\n\nmove with quay use <workspace>/<project>, or see what there is with quay workspace list",
+		path, err)
 }
 
 // addressFrom returns the address to act on, without touching the control plane.
@@ -519,7 +538,7 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	case err == nil && !path.IsZero():
 		located, err := workspace.ResolvePath(ctx, client, path)
 		if err != nil {
-			return err
+			return standing(typed, path, err)
 		}
 		request.Project = located.ProjectID
 	}
@@ -602,7 +621,7 @@ func contextTarget(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	located, err := workspace.ResolvePath(ctx, client, path)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", standing(typed, path, err)
 	}
 	// A workspace on its own means the workspace's own context, which is the level an org lives at.
 	if located.ProjectID == "" {
@@ -633,7 +652,7 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	case err == nil && !path.IsZero():
 		located, err := workspace.ResolvePath(ctx, client, path)
 		if err != nil {
-			return err
+			return standing(typed, path, err)
 		}
 		request.Project = located.ProjectID
 	}
@@ -694,7 +713,7 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	case err == nil && !path.IsZero():
 		located, err := workspace.ResolvePath(ctx, client, path)
 		if err != nil {
-			return err
+			return standing(typed, path, err)
 		}
 		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
 	}
