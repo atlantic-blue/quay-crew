@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **Asking for help is answered, and `thread` is a command.** The first thing anybody types was
+  refused four ways: `help` and `-h` came back as unknown commands, and `--help` and `--version` were
+  told the tool takes no flags and to say where with an address instead, which is not what either was
+  asking. Now `help`, `-h`, `--help`, `-help` and `?` all print the usage and succeed, `--version`
+  names `quay version`, and a flag that really is somebody trying to say where they are still gets
+  the address advice. Separately the tool taught the word thread three times on the same screen and
+  then refused it as a command: `quay thread list` and `quay threads` now answer exactly as
+  `quay sessions` does. ([#240](https://github.com/atlantic-blue/quay-crew/issues/240),
+  [#241](https://github.com/atlantic-blue/quay-crew/issues/241))
+
 - **`quay mode <thread> [<mode>]`, so a turn can be given room to work without a terminal.** A thread
   is born in `edits`, and a dispatched turn has nobody at a keyboard, so every approval the model
   asked for was denied by nobody and came back as a polite refusal. A session asked to clone a

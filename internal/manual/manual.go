@@ -31,6 +31,7 @@ you work in one place at a time, and say where with an address: workspace/projec
   quay dispatch "when is the electricity bill due"
 
 commands:
+  help                                    print this, which -h and --help do too
   version                                 print which build this is
   features                                what this crew can do, and what proves it
   manual                                  what quay is and how to drive it, to pipe into a context
@@ -48,7 +49,7 @@ commands:
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
   dispatch [<address>] <text>             start or continue a thread
-  sessions [<address>]                    list sessions
+  sessions [<address>]                    list threads, which thread and threads also do
   turns <session id>                      what a session was asked, and what came back
   mode <thread> [<mode>]                  what a thread's turns may do without asking: plan, edits
                                           or dangerous. A dispatched turn has nobody to approve
