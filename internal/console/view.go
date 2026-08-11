@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -234,9 +235,9 @@ func (m Model) spent() string {
 	if m.info.Spent.Empty() {
 		return ""
 	}
-	return "   " + statusKey.Render("↑") + tokens(m.info.Spent.Output) +
-		statusKey.Render(" ↓") + tokens(m.info.Spent.Input) +
-		statusKey.Render(" ⟳") + tokens(m.info.Spent.CacheRead)
+	return "   " + statusKey.Render("↑") + display.Tokens(m.info.Spent.Output) +
+		statusKey.Render(" ↓") + display.Tokens(m.info.Spent.Input) +
+		statusKey.Render(" ⟳") + display.Tokens(m.info.Spent.CacheRead)
 }
 
 // statePhrase says where a conversation is kept. Empty means nowhere: it lives in the container and

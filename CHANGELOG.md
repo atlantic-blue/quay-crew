@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **One listing of threads, in both surfaces.** The console showed ten columns and the command line
+  four, from two separate pieces of code, so a thread's mode, its tokens in and out, its cache spend
+  and how long ago it was touched were visible in one place and invisible in the other. Neither
+  printed a header, and reading `102` as a turn count when it is input tokens is what happens without
+  one. Both now render from `display.ThreadCells`, so the two cannot drift again, and the command
+  line prints a header with columns as wide as their widest value, since it has the whole terminal.
+  A listing narrowed to where you are standing says so and how to widen it, because a narrowed
+  listing and a smaller crew look identical. ([#244](https://github.com/atlantic-blue/quay-crew/issues/244))
+
 - **A crew can be taken apart: `quay workspace delete` and `quay project delete`.** The command line
   had create and list and nothing else, so a crew only ever grew. A workspace made by a typo was
   there for good, and starting again meant going around the tool entirely, into Docker and the data

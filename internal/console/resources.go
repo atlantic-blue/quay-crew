@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Workspaces lists the workspaces the control plane knows about, and drills into their sessions.
@@ -49,7 +47,7 @@ func workspaceRow(workspace *quaycrewv1.Workspace) Row {
 	return Row{
 		ID:    workspace.GetId(),
 		Label: workspace.GetName(),
-		Cells: []string{display.ShortID(workspace.GetId()), workspace.GetName(), age(workspace.GetCreatedAt())},
+		Cells: []string{display.ShortID(workspace.GetId()), workspace.GetName(), display.Age(workspace.GetCreatedAt())},
 		State: StateReady,
 	}
 }
@@ -92,7 +90,7 @@ func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
 			display.ShortID(project.GetId()),
 			project.GetName(),
 			display.Name(workspaceName, project.GetWorkspace()),
-			age(project.GetCreatedAt()),
+			display.Age(project.GetCreatedAt()),
 		},
 		State: StateReady,
 	}
@@ -485,88 +483,15 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return names
 }
 
-// statusLabel is the status cell, carrying the stale mark when the thread's live sandbox was born
-// before the workspace's current skills: the operator's cue that stopping and restarting it gets a
-// sandbox born current.
-func statusLabel(session *quaycrewv1.Thread) string {
-	if session.GetStale() {
-		return session.GetStatus() + " stale"
-	}
-	return session.GetStatus()
-}
-
 func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) Row {
 	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
 		Label:  display.ShortID(session.GetHandle()),
-		Cells: []string{
-			display.ShortID(session.GetId()),
-			display.Name(workspaceName, session.GetWorkspace()),
-			display.Name(projectName, session.GetProject()),
-			display.ShortID(session.GetHandle()),
-			statusLabel(session),
-			permissionLabel(session.GetPermissionMode()),
-			tokens(session.GetUsage().GetInput()),
-			tokens(session.GetUsage().GetOutput()),
-			tokens(session.GetUsage().GetCacheRead()),
-			// The last column is how long ago it was put away in the archived view, and how long ago
-			// it was touched everywhere else. A live thread has no archived stamp, so one rule covers
-			// both without either view having to say which it is.
-			age(lastMoved(session)),
-		},
-		State: stateFromStatus(session.GetStatus()),
+		Cells:  display.ThreadCells(session, workspaceName, projectName),
+		State:  stateFromStatus(session.GetStatus()),
 	}
-}
-
-// tokens is a count in a column seven characters wide: 52, 6.9k, 1.7M.
-//
-// Nothing at all for a thread that has spent nothing, because a conversation nobody has had has not
-// cost zero, it has no cost. A column of zeroes would read as a crew that is free.
-func tokens(count int64) string {
-	switch {
-	case count <= 0:
-		return ""
-	case count < 1000:
-		return strconv.FormatInt(count, 10)
-	case count < 1_000_000:
-		return trimZero(float64(count)/1000) + "k"
-	case count < 1_000_000_000:
-		return trimZero(float64(count)/1_000_000) + "M"
-	default:
-		return trimZero(float64(count)/1_000_000_000) + "B"
-	}
-}
-
-// trimZero renders one decimal place, and drops it when it says nothing: 1.7 and 12 rather than 1.7
-// and 12.0, so the column stays narrow where it can.
-func trimZero(value float64) string {
-	rendered := strconv.FormatFloat(value, 'f', 1, 64)
-	return strings.TrimSuffix(rendered, ".0")
-}
-
-// permissionLabel never leaves the cell blank: a thread from before the mode existed runs acceptEdits,
-// and an empty cell would read as "asks first", the opposite. bypassPermissions becomes "dangerous",
-// the only one of the three worth spotting from across a list.
-func permissionLabel(mode string) string {
-	switch mode {
-	case model.PermissionBypass:
-		return "dangerous"
-	case model.PermissionPlan:
-		return "plan"
-	default:
-		return "edits"
-	}
-}
-
-// lastMoved is when the thread last went anywhere: when it was put away if it was, and when it was
-// last touched otherwise.
-func lastMoved(session *quaycrewv1.Thread) *timestamppb.Timestamp {
-	if session.GetArchivedAt() != nil {
-		return session.GetArchivedAt()
-	}
-	return session.GetUpdatedAt()
 }
 
 // projectColumn is where a thread's project sits in its row, which the shell prompt names so the
@@ -735,30 +660,6 @@ func stateFromStatus(status string) State {
 		return StateFailed
 	default:
 		return StateUnknown
-	}
-}
-
-// age renders how long ago a timestamp was, compactly. An unset timestamp shows a dash rather than
-// fifty years, which is what the zero value would otherwise read as.
-func age(stamp *timestamppb.Timestamp) string {
-	if stamp == nil || !stamp.IsValid() || stamp.AsTime().IsZero() {
-		return "-"
-	}
-	return compactDuration(time.Since(stamp.AsTime()))
-}
-
-func compactDuration(elapsed time.Duration) string {
-	switch {
-	case elapsed < 0:
-		return "0s"
-	case elapsed < time.Minute:
-		return fmt.Sprintf("%ds", int(elapsed.Seconds()))
-	case elapsed < time.Hour:
-		return fmt.Sprintf("%dm", int(elapsed.Minutes()))
-	case elapsed < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(elapsed.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(elapsed.Hours())/24)
 	}
 }
 

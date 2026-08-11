@@ -833,19 +833,26 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
+	// Said out loud, because a listing narrowed to where you are standing looks exactly like a crew
+	// with fewer threads in it, and the operator has no way to tell the two apart.
+	scope := "the whole crew"
+	if !path.IsZero() {
+		scope = path.String()
+	}
 	if len(resp.GetThreads()) == 0 {
-		fmt.Fprintln(out, "no threads")
+		fmt.Fprintf(out, "no threads in %s\n", scope)
 		return nil
 	}
 	// Names, not identifiers: a listing of hex says nothing about what any of it is.
 	workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
-	for _, s := range resp.GetThreads() {
-		fmt.Fprintf(out, "%s  %s/%s  handle %s  %s\n",
-			display.ShortID(s.GetId()),
-			display.Name(workspaces[s.GetWorkspace()], s.GetWorkspace()),
-			display.Name(projects[s.GetProject()], s.GetProject()),
-			display.ShortID(s.GetHandle()),
-			s.GetStatus())
+	rows := make([][]string, 0, len(resp.GetThreads()))
+	for _, thread := range resp.GetThreads() {
+		rows = append(rows, display.ThreadCells(thread,
+			workspaces[thread.GetWorkspace()], projects[thread.GetProject()]))
+	}
+	fmt.Fprint(out, display.Rows(display.ThreadColumns(), rows))
+	if !path.IsZero() {
+		fmt.Fprintf(out, "\n%d in %s. quay threads on its own lists the whole crew\n", len(rows), scope)
 	}
 	return nil
 }
