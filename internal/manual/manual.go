@@ -55,7 +55,9 @@ commands:
                                           or dangerous. A dispatched turn has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
+  context set [<address>] < file          write what a level says, from standard input
   context edit [<address>]                open a project's context in $EDITOR
+  context clear [<address>]               empty what a level says
   attach <session id>                     open a session's conversation, with its history
   secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
   secret list [<workspace>]               which secrets are set, never what they say
