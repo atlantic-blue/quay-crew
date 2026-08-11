@@ -6,6 +6,23 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 11 August 2026
+
+- **A workspace's secrets reach that workspace's sandboxes.** Setting a secret is now the whole of
+  the decision. There used to be a second list, `QC_SANDBOX_SECRETS` in `deploy/.env`, naming which
+  secrets were allowed to leave the store at all, and a name missing from it meant the turn was
+  refused however carefully the operator had set the secret and attached the skill. Nothing in
+  `quay secret list` said so, the refusal only arrived at dispatch, and the fix lived in a file
+  inside a repository that somebody who installed the tool does not have. It is deleted rather than
+  moved: the operator says yes by setting the secret on the workspace, and again by attaching the
+  skill, and a third answer to the same question was worth less than the confusion it caused. One
+  boundary is kept and one is new: another workspace's secrets are still never carried, and a
+  workspace secret whose name starts `QC_` never travels, because those names are how the crew
+  tells a sandbox where it is and what to dial with. A skill whose secret the workspace has not set
+  is still refused before anything is built, naming the secret and the command that sets it. A crew
+  started with the old list still in its configuration says out loud that it is no longer read.
+  ([#247](https://github.com/atlantic-blue/quay-crew/issues/247))
+
 ## 9 August 2026
 
 - **Two fixes to the command bar, from driving it.** Output lines are cut and padded to exactly the

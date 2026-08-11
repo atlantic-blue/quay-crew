@@ -91,6 +91,9 @@ func main() {
 		logger.Warn("skills are not mounted: set QC_SKILLS_HOST to the skills directory as the host sees it",
 			"skills", len(skills))
 	}
+	if notice, retired := sandboxSecretsRetired(os.Getenv("QC_SANDBOX_SECRETS")); retired {
+		logger.Warn(notice)
+	}
 	// Which build the sandbox image was made from, read once at startup: it is configuration, and an
 	// image is not rebuilt under a running control plane without restarting this stack anyway.
 	sandboxBuild := sandbox.ImageBuild(ctx, os.Getenv("QC_SANDBOX_IMAGE"))
@@ -122,9 +125,6 @@ func main() {
 		// The driver's own token, handed to it beside the address above: recognised, and refused
 		// the calls that grant capability.
 		DriverToken: driverToken,
-		// Which of a workspace's secrets a sandbox is given, by name. The model's own token is
-		// always carried and does not need naming.
-		SandboxSecrets: splitAndTrim(os.Getenv("QC_SANDBOX_SECRETS")),
 		// The capabilities a session is given, and where they are on the host so they can be mounted.
 		Skills:       skills,
 		SkillsHost:   os.Getenv("QC_SKILLS_HOST"),
@@ -278,6 +278,20 @@ func stateKind(storage sandbox.Storage) string {
 		return ""
 	}
 	return "host directory " + storage.Host
+}
+
+// sandboxSecretsRetired says what to tell an operator whose configuration still names the allowlist
+// that used to decide which secrets reached a sandbox, and whether there is anything to say.
+//
+// A setting that quietly stops being read is worse than one that never existed: the operator chose
+// which secrets could travel, the crew now hands over all of a workspace's own, and nothing on the
+// screen would say the two disagree.
+func sandboxSecretsRetired(value string) (string, bool) {
+	if strings.TrimSpace(value) == "" {
+		return "", false
+	}
+	return "QC_SANDBOX_SECRETS is set and is no longer read: a workspace's secrets reach that " +
+		"workspace's sandboxes, so the list can be removed from deploy/.env", true
 }
 
 func splitAndTrim(csv string) []string {

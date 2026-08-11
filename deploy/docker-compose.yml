@@ -85,9 +85,6 @@ services:
       QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-}
       # Host paths only the driver gets, so it has something to bring to the crew.
       QC_DRIVER_MOUNTS: ${QC_DRIVER_MOUNTS:-}
-      # Which of a workspace's secrets a session's sandbox is given, by name. The model's own token
-      # is always carried. Everything else is named here or it does not travel.
-      QC_SANDBOX_SECRETS: ${QC_SANDBOX_SECRETS:-}
       # Who a commit made inside a sandbox is by. Both or neither: git refuses on either missing.
       # The skills a session is given: this container's view of the directory, and the host's, which
       # is what a bind mount needs. Unset and a session is given none.
