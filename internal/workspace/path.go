@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
 // Separator divides the levels of an address.
@@ -135,7 +136,14 @@ func resolveThread(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("%w: thread %q", ErrNotFound, reference)
+		// Shortened, because a listing prints them shortened and that is what gets typed back.
+		return "", &NotFoundError{
+			What: "thread", Name: reference,
+			Have: namesOf(resp.GetThreads(), func(i int) string {
+				return display.ShortID(resp.GetThreads()[i].GetHandle())
+			}),
+			Make: `start one with quay dispatch "..."`,
+		}
 	case 1:
 		return matches[0], nil
 	default:

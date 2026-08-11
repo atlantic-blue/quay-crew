@@ -8,6 +8,19 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **A refusal names the level that failed, and says what is actually there.** One message served all
+  three levels of an address and it named the wrong one: a missing project came out as
+  `workspace: no workspace with that id or name: project "nope"`, which blames the only part of the
+  address that was correct and sends the operator to check their workspace. Now `quay use itv/nope`
+  says `itv has no project "nope". it has: fe-player`, and the same shape covers a missing workspace
+  and a missing thread. A level with nothing in it says how to make one rather than listing nothing.
+  And where you are standing lives on this machine while the crew's state does not, so a wiped crew,
+  a fresh install or a different crew left every defaulting command refusing with a sentence about a
+  missing workspace: it now says `you are standing in ghost/gone, which this crew does not have`, and
+  how to move. An address you typed yourself still gets the plain refusal.
+  ([#242](https://github.com/atlantic-blue/quay-crew/issues/242),
+  [#251](https://github.com/atlantic-blue/quay-crew/issues/251))
+
 - **Asking for help is answered, and `thread` is a command.** The first thing anybody types was
   refused four ways: `help` and `-h` came back as unknown commands, and `--help` and `--version` were
   told the tool takes no flags and to say where with an address instead, which is not what either was
