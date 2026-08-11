@@ -74,6 +74,17 @@ var removedFlags = map[string]string{
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
 		"with quay skill attach <workspace> git and ask the session to clone what it works on",
+	// Not flags this tool ever took, but the ones everybody's fingers type first. Refusing them with
+	// "say where with an address instead" was advice that could not be acted on, since neither is
+	// asking where anything is.
+	"--version": "which build this is: quay version",
+}
+
+// helpSpellings are every way somebody asks what this tool does. Asking for help is the one thing
+// that should never be refused, whichever convention the person came from, so all of these print the
+// usage and succeed rather than being taken for an unknown command or a flag.
+var helpSpellings = map[string]bool{
+	"help": true, "-h": true, "--help": true, "-help": true, "?": true,
 }
 
 // refuseFlags returns an error when an invocation uses a flag. This tool has none: everything it used
@@ -98,6 +109,12 @@ func refuseFlags(args []string) error {
 func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer, addr string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
+	}
+	// Before the flag refusal, because two of the spellings are flags and being told this tool takes
+	// no flags is not an answer to "what does this tool do".
+	if helpSpellings[args[0]] {
+		fmt.Fprintln(out, usage)
+		return nil
 	}
 	if err := refuseFlags(args); err != nil {
 		return err
@@ -131,7 +148,9 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHeader(ctx, client, args[1:], out, addr)
 	case "console":
 		return runBareConsole(ctx, client, args[1:], addr)
-	case "sessions":
+	// thread and threads answer here too. The protocol says thread, the usage says thread three
+	// times over, and the command was sessions alone, so the tool taught a word it then refused.
+	case "sessions", "session", "threads", "thread":
 		return runSessions(ctx, client, args[1:], out)
 	case "turns":
 		return runTurns(ctx, client, args[1:], out)
