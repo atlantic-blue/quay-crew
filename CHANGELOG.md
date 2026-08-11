@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
+- **A secret is piped in rather than typed, so it never reaches your shell history.** The value was a
+  positional argument and there was no other road, which put every credential the crew holds into the
+  history file and into the process list, where any other process can read it with `ps`. It is the
+  first thing anybody does with a new crew, so the model token was always the first casualty, and a
+  real Jira token was pasted onto a command line while driving this and had to be rotated. Now
+  `gh auth token | quay secret set GH_TOKEN` works, and so does `quay secret set GH_TOKEN < token.txt`.
+  Whether something is being piped in decides how the arguments read, so the form scripts already use
+  keeps working. The trailing newline every credential tool prints is trimmed, because a token
+  carrying one authenticates nothing while looking exactly right in the listing, and an empty pipe is
+  refused rather than stored. ([#253](https://github.com/atlantic-blue/quay-crew/issues/253))
+
 - **The command that loads a file is in the usage, an empty file no longer erases a level, and a
   workspace's context is visible before it has a project.** Migrating an org into a crew is writing
   context, and `context set` was the only command that could do it from a file while being the one

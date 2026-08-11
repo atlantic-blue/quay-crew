@@ -59,7 +59,9 @@ commands:
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
   attach <session id>                     open a session's conversation, with its history
-  secret set [<workspace>] <key> <value>  set a workspace secret (for example the model token)
+  secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
+                                          never reaches your shell history: pipe it in, or redirect
+                                          a file. A value given as an argument still works
   secret list [<workspace>]               which secrets are set, never what they say
   skill import <directory>                take a skill into the crew from its directory
   skill list [<workspace>]                what the crew can do, or what one workspace holds
