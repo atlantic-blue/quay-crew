@@ -6,6 +6,20 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 12 August 2026
+
+- **The Simplified Technical English skill, and it is off unless you ask for it.** ASD-STE100 is the
+  controlled English the aerospace industry writes maintenance documentation in, built so a sentence
+  cannot be read two ways: one meaning per word, active voice, simple tenses, one instruction per
+  sentence, twenty words. That is worth having for text something else has to parse, an error
+  message, a tool description, a message to another session. It is the wrong thing entirely for
+  writing a person is meant to enjoy, because the flatness that removes ambiguity also removes
+  rhythm and voice. So this is the first shipped skill that is off by default: holding it is not a
+  reason to use it, it applies only when the operator asks, and it never touches a blog post, a
+  newsletter, marketing, or anything whose context describes how the writing should sound. Where the
+  skill and a context disagree the context wins. The method and the worked examples live in
+  `rewriting.md` beside the brief, read only when a rewrite is actually happening.
+
 ## 11 August 2026
 
 - **One listing of threads, in both surfaces.** The console showed ten columns and the command line
