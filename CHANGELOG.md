@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 12 August 2026
 
+- **A skill that asks for nothing can be imported.** The Simplified Technical English skill declares
+  no binaries and no secrets, and importing it into a real crew was refused: `null value in column
+  "binaries" violates not-null constraint`. A nil list arrives at Postgres as an explicit NULL rather
+  than as an absent value, so the column's `default '{}'` never applies. Every skill shipped before
+  this one declared at least one binary, and the conformance suite only ever imported a skill
+  declaring `git` and `gh`, so nothing had written an empty list. The memory store accepted it
+  happily, which is how the two stores diverged without a test noticing. There is now a conformance
+  case both stores answer, proven red then green against real Postgres.
 - **The Simplified Technical English skill, and it is off unless you ask for it.** ASD-STE100 is the
   controlled English the aerospace industry writes maintenance documentation in, built so a sentence
   cannot be read two ways: one meaning per word, active voice, simple tenses, one instruction per
