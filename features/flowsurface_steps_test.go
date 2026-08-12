@@ -299,6 +299,12 @@ func settledTurnCount(ctx context.Context, w *world) (int, error) {
 }
 
 // flowRunTurnCount is how many turns the run's own thread has been asked, live or archived.
+//
+// No thread at all is none of them, not a failure. A run owns its thread and the thread is created by
+// the first dispatch, so a run stopped before the poller got that far leaves nothing carrying its
+// handle. Reading that as an error made the whole suite depend on losing a race: on a loaded runner
+// the stop lands first, and a scenario asserting the run halted then failed for having halted sooner
+// than expected.
 func flowRunTurnCount(ctx context.Context, w *world) (int, error) {
 	run, err := readFlowRun(ctx, w)
 	if err != nil {
@@ -320,7 +326,7 @@ func flowRunTurnCount(ctx context.Context, w *world) (int, error) {
 			return len(turns.GetTurns()), nil
 		}
 	}
-	return 0, fmt.Errorf("no thread carries the run's handle")
+	return 0, nil
 }
 
 // startFlowRun is the shared body of the two ways a scenario starts a run: the operator's, and the
