@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 12 August 2026
 
+- **Ctrl+c quits the console from wherever you are standing.** It took two presses: inside the command
+  bar, the filter or the wizard, ctrl+c was a second escape, so the first press dropped you back to
+  browsing and only the second one quit. The command bar is the one way in now, so that was most
+  presses. Ctrl+c is handled once, before any mode sees it, and escape is the key that cancels a mode.
+
 - **A fresh crew starts holding the skills this build ships with.** The image carries `skills/`, and a
   crew whose catalogue is empty imports all seven on startup and takes git and github at the crew
   level, so the first workspace has them without an import and without an attach. The other five sit

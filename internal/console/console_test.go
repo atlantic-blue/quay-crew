@@ -400,6 +400,61 @@ func TestQuitStopsTheProgram(t *testing.T) {
 	}
 }
 
+// Ctrl+c means quit, from wherever you are standing. It used to be a second escape inside the bars,
+// so leaving the command bar and leaving the console were the same key and quitting took two presses.
+// The command bar is the one way in, so that was most presses.
+func TestCtrlCQuitsFromEveryMode(t *testing.T) {
+	for _, mode := range []struct {
+		name  string
+		enter tea.KeyMsg
+	}{
+		{"browsing", runes("")},
+		{"the command bar", runes(":")},
+		{"the filter", runes("/")},
+		{"the wizard", runes("n")},
+		{"help", runes("?")},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			model := newTestModel(t, staticResource("sessions"))
+			if len(mode.enter.Runes) > 0 {
+				model, _ = update(t, model, mode.enter)
+			}
+			model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyCtrlC})
+			if !model.quitting {
+				t.Fatalf("ctrl+c in %s did not quit, it left the console in mode %v", mode.name, model.mode)
+			}
+			if cmd == nil {
+				t.Fatalf("ctrl+c in %s marked the model quitting without a quit command", mode.name)
+			}
+		})
+	}
+}
+
+// The way off the old behaviour: escape is what cancels a mode now, and it must still do that, or
+// this trade takes the cancel key with it.
+func TestEscapeStillCancelsEachModeWithoutQuitting(t *testing.T) {
+	for _, mode := range []struct {
+		name  string
+		enter tea.KeyMsg
+	}{
+		{"the command bar", runes(":")},
+		{"the filter", runes("/")},
+		{"the wizard", runes("n")},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			model := newTestModel(t, staticResource("sessions"))
+			model, _ = update(t, model, mode.enter)
+			model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+			if model.quitting {
+				t.Fatalf("escape in %s quit the console, and only ctrl+c should", mode.name)
+			}
+			if model.mode != modeBrowse {
+				t.Fatalf("escape in %s left the console in mode %v, want browsing", mode.name, model.mode)
+			}
+		})
+	}
+}
+
 // ---------- drilling ----------
 
 func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {

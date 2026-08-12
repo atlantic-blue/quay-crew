@@ -30,6 +30,14 @@ func (m Model) updateKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// Ctrl+c quits, from every mode, before any of them see it. It used to be a second escape inside
+	// the command bar, the filter and the wizard, which meant leaving a bar and leaving the console
+	// were the same key: the first press dropped you back to browsing and only the second quit. The
+	// command bar is the one way in, so that was most presses. Escape is the key that cancels a mode.
+	if msg.String() == "ctrl+c" {
+		m.quitting = true
+		return m, tea.Quit
+	}
 	switch m.mode {
 	case modeCommand:
 		return m.updateCommandKey(msg)
@@ -71,7 +79,7 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 // updateBrowseKey handles the default mode: move, drill, go back, act.
 func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "q":
 		m.quitting = true
 		return m, tea.Quit
 	case ":":
@@ -278,7 +286,7 @@ func (m Model) back() (Model, tea.Cmd) {
 // updateCommandKey handles the command bar: type a resource name or alias, enter to switch.
 func (m Model) updateCommandKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	case "esc":
 		m.mode, m.input = modeBrowse, ""
 		return m, nil
 	case "enter":
@@ -313,7 +321,7 @@ func (m Model) openTyped() (Model, tea.Cmd) {
 // updateFilterKey handles the filter bar. Filtering is live: every keystroke narrows the rows.
 func (m Model) updateFilterKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	case "esc":
 		m.mode, m.input, m.filter = modeBrowse, "", ""
 		return m.clampSelection(), nil
 	case "enter":
