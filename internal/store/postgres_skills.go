@@ -39,7 +39,7 @@ func (p *Postgres) ImportSkill(ctx context.Context, imported Imported) error {
 	if _, err := tx.Exec(ctx, `
 		insert into skills (name, version, summary, binaries, brief, fingerprint)
 		values ($1, $2, $3, $4, $5, $6)`,
-		imported.Name, imported.Version, imported.Summary, imported.Binaries, imported.Brief,
+		imported.Name, imported.Version, imported.Summary, textArray(imported.Binaries), imported.Brief,
 		imported.Fingerprint()); err != nil {
 		return fmt.Errorf("import skill %s: %w", imported.Name, err)
 	}
@@ -248,4 +248,17 @@ func (p *Postgres) fillFiles(ctx context.Context, held *Imported) error {
 		return fmt.Errorf("read skill %s files: %w", held.Name, err)
 	}
 	return nil
+}
+
+// textArray is a list on its way into a text[] column that is declared not null.
+//
+// A nil slice arrives as an explicit NULL rather than as an absent value, so the column's default of
+// '{}' never applies and the insert is refused. Every skill shipped until now declared at least one
+// binary, so a skill that needs nothing from the sandbox was the first thing to hit it, and it hit it
+// on a real crew rather than in a test.
+func textArray(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }

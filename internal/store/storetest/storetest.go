@@ -1153,6 +1153,48 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// A skill that needs nothing from the sandbox: no binary to check for, no secret to hand over.
+	// Every skill shipped until the Simplified Technical English one declared at least one binary, so
+	// nothing ever wrote an empty list, and the Postgres column is declared not null with a default
+	// that an explicit NULL walks straight past. The memory store took it happily, which is exactly
+	// how the two diverged without a test noticing.
+	t.Run("a skill that asks for nothing is imported", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		asks := aSkill("ste", 1)
+		asks.Binaries = nil
+		asks.Secrets = nil
+		if err := s.ImportSkill(ctx, asks); err != nil {
+			t.Fatalf("ImportSkill for a skill declaring nothing: %v", err)
+		}
+
+		held, err := s.GetSkill(ctx, "ste", 1)
+		if err != nil {
+			t.Fatalf("GetSkill: %v", err)
+		}
+		if len(held.Binaries) != 0 {
+			t.Errorf("binaries came back as %v, want none", held.Binaries)
+		}
+		if len(held.Secrets) != 0 {
+			t.Errorf("secrets came back as %v, want none", held.Secrets)
+		}
+		// It has to reach a listing too, since that is what the operator and the wizard read.
+		listed, err := s.ListSkills(ctx)
+		if err != nil {
+			t.Fatalf("ListSkills: %v", err)
+		}
+		found := false
+		for _, one := range listed {
+			if one.Name == "ste" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("a skill that asks for nothing is missing from the listing")
+		}
+	})
+
 	t.Run("a skill is imported with its files and comes back whole", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
