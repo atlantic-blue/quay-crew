@@ -171,6 +171,9 @@ type world struct {
 	// told when it tried something.
 	flowRunID string
 	driverErr error
+	// server is the control plane itself, kept so a scenario can drive what main does at startup
+	// rather than only what a client can call.
+	server *controlplane.Server
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
@@ -252,15 +255,15 @@ func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
 	w.grpcServer = grpc.NewServer(auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...)
-	server := controlplane.NewServer(controlplane.Config{
+	w.server = controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
 	// The way the real main starts: what strays while the crew is down is reaped on the way up.
-	server.ReapStrays(context.Background())
-	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, server)
+	w.server.ReapStrays(context.Background())
+	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, w.server)
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
 	conn, err := grpc.NewClient(

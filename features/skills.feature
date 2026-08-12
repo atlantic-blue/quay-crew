@@ -215,6 +215,35 @@ Feature: A session is given the skills the crew has
     When the operator detaches the "github" skill from the crew
     Then the workspace holds no skills
 
+  # A crew that starts with nothing makes every operator do the same setup before it can do anything:
+  # import each skill, then attach each one to each workspace. The files are in the image already, so
+  # a fresh crew is simply given them.
+  #
+  # These seed from skills/ at the root of this repository, the same directory the image carries, so a
+  # shipped manifest that stops loading fails here rather than on somebody's first run.
+  Scenario: A fresh crew is given the skills this build ships with
+    When the crew starts, seeded from the skills this build ships with
+    Then the workspace holds the "git" skill
+    And the listing says the "git" skill is held by the crew
+
+  Scenario: A skill a fresh crew was only offered is in the catalogue and not in front of anybody
+    When the crew starts, seeded from the skills this build ships with
+    Then the crew holds the "terraform" skill
+    And the workspace does not hold the "terraform" skill
+
+  # Seeding is what a fresh crew gets, never a policy that reasserts itself. An operator who takes a
+  # skill off the crew has said something, and starting the control plane again must not undo it.
+  Scenario: Starting again leaves what the operator decided alone
+    Given the crew started, seeded from the skills this build ships with
+    And the operator detaches the "github" skill from the crew
+    When the crew starts, seeded from the skills this build ships with
+    Then the workspace does not hold the "github" skill
+
+  Scenario: A crew that already holds a skill is not seeded over
+    Given the operator imported the "github" skill
+    When the crew starts, seeded from the skills this build ships with
+    Then the workspace holds no skills
+
   Scenario: A malformed skill is refused, and says what is wrong
     When the operator imports a skill whose manifest has no version
     Then the crew refuses it saying "no version"

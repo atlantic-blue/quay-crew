@@ -154,6 +154,11 @@ func main() {
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
+	// A crew with no skills at all is a fresh one, and it starts with the ones this build ships
+	// with rather than making every operator import them by hand. Only ever on an empty catalogue,
+	// so it is a starting point and not a policy that undoes a decision.
+	server.Seed(ctx, envOr("QC_SEED_SKILLS_DIR", controlplane.SeedDir), logger)
+
 	grpcServer := grpc.NewServer(auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 

@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 12 August 2026
 
+- **A fresh crew starts holding the skills this build ships with.** The image carries `skills/`, and a
+  crew whose catalogue is empty imports all seven on startup and takes git and github at the crew
+  level, so the first workspace has them without an import and without an attach. The other five sit
+  in the catalogue waiting to be attached, because a cloud or a tracker skill in front of every
+  session is a decision rather than a default. Only ever on an empty catalogue: an operator who takes
+  a skill off the crew has said something, and restarting the control plane does not undo it. The
+  behaviour scenarios seed from the same `skills/` directory the image carries, so a shipped manifest
+  that stops loading fails in continuous integration rather than on somebody's first run.
+  ([#273](https://github.com/atlantic-blue/quay-crew/issues/273))
 - **A skill can be held by the whole crew, so a new workspace starts with something.** `quay skill
   attach crew github` and every workspace has it, including the ones made next month, which is the
   difference between setting a crew up once and setting each workspace up again. It takes the word

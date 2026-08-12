@@ -90,6 +90,9 @@ services:
       # is what a bind mount needs. Unset and a session is given none.
       # The data directory already carries the crew's own state, and the skills sit beside it, so both
       # views of it come from the mapping above: /var/lib/quaycrew in here, the host's path outside.
+      # The skills this build ships with, carried in the image. A crew whose catalogue is empty is
+      # given them on startup; a crew that already holds any is left exactly as the operator left it.
+      QC_SEED_SKILLS_DIR: /skills
       QC_SKILLS_DIR: /var/lib/quaycrew/skills
       QC_SKILLS_HOST: ${QC_DATA_HOST:-${HOME}/.quaycrew/data}/skills
       QC_GIT_AUTHOR_NAME: ${QC_GIT_AUTHOR_NAME:-}
