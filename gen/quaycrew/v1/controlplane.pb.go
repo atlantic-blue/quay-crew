@@ -3431,9 +3431,13 @@ type Skill struct {
 	Summary string `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
 	// binaries are the commands the skill needs in the sandbox image. A session missing one is refused
 	// before a turn runs.
-	Binaries      []string               `protobuf:"bytes,4,rep,name=binaries,proto3" json:"binaries,omitempty"`
-	Secrets       []*SkillSecret         `protobuf:"bytes,5,rep,name=secrets,proto3" json:"secrets,omitempty"`
-	ImportedAt    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
+	Binaries   []string               `protobuf:"bytes,4,rep,name=binaries,proto3" json:"binaries,omitempty"`
+	Secrets    []*SkillSecret         `protobuf:"bytes,5,rep,name=secrets,proto3" json:"secrets,omitempty"`
+	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
+	// left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
+	// is given. A skill naming a secret the workspace has not set is held and not given, rather than
+	// refusing the turn, so one unusable skill cannot stop every conversation in the workspace.
+	LeftOut       string `protobuf:"bytes,7,opt,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3508,6 +3512,13 @@ func (x *Skill) GetImportedAt() *timestamppb.Timestamp {
 		return x.ImportedAt
 	}
 	return nil
+}
+
+func (x *Skill) GetLeftOut() string {
+	if x != nil {
+		return x.LeftOut
+	}
+	return ""
 }
 
 // SkillSecret names a secret a skill needs and says what it is for. Never a value: a value written into
@@ -4945,7 +4956,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12ListSecretsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"G\n" +
 	"\x13ListSecretsResponse\x120\n" +
-	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\xdc\x01\n" +
+	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\xf7\x01\n" +
 	"\x05Skill\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x18\n" +
@@ -4953,7 +4964,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bbinaries\x18\x04 \x03(\tR\bbinaries\x122\n" +
 	"\asecrets\x18\x05 \x03(\v2\x18.quaycrew.v1.SkillSecretR\asecrets\x12;\n" +
 	"\vimported_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"importedAt\";\n" +
+	"importedAt\x12\x19\n" +
+	"\bleft_out\x18\a \x01(\tR\aleftOut\";\n" +
 	"\vSkillSecret\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\apurpose\x18\x02 \x01(\tR\apurpose\"S\n" +

@@ -116,8 +116,12 @@ the container. One resolver answers what a session holds, and everything else as
 At sandbox creation the control plane resolves the skills that reach this session, and then:
 
 1. Refuses early, with a sentence naming what is wrong, if a binary the skill declares is not in the
-   image or a secret it names is not set. A capability that cannot work should say so before a turn
-   runs, not through the model discovering `gh: command not found`.
+   image. A capability that cannot work should say so before a turn runs, not through the model
+   discovering `gh: command not found`. A secret the skill names and the workspace has not set is
+   answered differently: that skill alone is left out of the session, and the listing carries the
+   reason. The image is one thing for the whole crew, while a secret is one workspace's to set, and
+   refusing every turn in a workspace over one skill it has not finished setting up is the wrong
+   trade the moment a skill is held crew wide rather than attached one workspace at a time.
 2. Mounts each skill's directory read only, so a session can read its scripts and cannot edit them. A
    skill imported into the store is written onto the host first, under the workspace it belongs to,
    because it has to be somewhere before it can be mounted from anywhere. Nothing about a skill is ever
@@ -230,8 +234,9 @@ adapter maps it onto its own. A skill is not rewritten for either.
 - **Setup runs inside the sandbox, never on the host.** A skill is code somebody else wrote. The
   container is the boundary and there is no second one.
 - **Secrets are named, never carried.** A value in a skill file is a value in a git repository.
-- **Refuse early and say what is missing.** A capability that silently does not work is worse than
-  one that is absent, because the model will improvise around it.
+- **Never half give a capability.** A capability that silently does not work is worse than one that
+  is absent, because the model will improvise around it. So a skill either reaches the session whole
+  or does not reach it at all, and what is missing is said in the listing either way.
 - **A brief is short and the detail is on disk.** Everything loaded at conversation start is paid for
   on every session that holds the skill. See [What it costs](#what-it-costs).
 - **No fetching at turn time.** A skill is imported deliberately, not resolved from the network while
@@ -245,8 +250,10 @@ Verified against the repository and a running stack, rather than assumed:
   running `command -v gh` inside a real session's container on 8 August 2026. A commit has an author and a
   committer now, from the crew's configuration.
 - A workspace's secrets reach that workspace's sandboxes. A session holding the github skill is given
-  `GH_TOKEN` because the workspace holds it, and a turn whose skill names a secret the workspace has
-  not set is refused naming the secret and the command that sets it. A manifest naming a secret
+  `GH_TOKEN` because the workspace holds it. A skill naming a secret the workspace has not set is
+  left out of the session instead, and `quay skill list` says which secret left it out and how to set
+  it, so the turn still runs and the model is never handed a brief it cannot follow. A manifest
+  naming a secret
   starting `QC_` or `CLAUDE_` is refused at validation, because those names are the crew's own, and a
   workspace secret starting `QC_` never travels for the same reason.
 - Context already has the four levels, the store, the rendering into files and the reading back, and

@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"slices"
 	"sort"
@@ -32,6 +33,17 @@ type capability struct {
 	// away over a transient error.
 	attached      []store.Imported
 	attachedKnown bool
+	// leftOut is what the workspace holds and the session was not given, each carrying why. Empty
+	// when everything held is given. The listing reports these so a skill that is nowhere in the
+	// conversation is not also nowhere in the answer.
+	leftOut []notGiven
+}
+
+// notGiven is a skill the workspace holds that its sessions do not get, and the reason.
+type notGiven struct {
+	skill.Skill
+	// Why is a sentence for a person: what is missing and how to set it.
+	Why string
 }
 
 // capabilityOf answers what a session holds, in one store round trip.
@@ -81,5 +93,54 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Thread) c
 		}
 	}
 	sort.Slice(caps.held, func(i, j int) bool { return caps.held[i].Name < caps.held[j].Name })
+	return s.withoutUnusable(ctx, session, caps)
+}
+
+// withoutUnusable takes out what the workspace cannot actually use, keeping the reason.
+//
+// A skill names the secrets it needs and the workspace either has them or does not. Giving a session
+// a skill whose secret is missing is worse than not giving it at all: the model reads the brief,
+// runs the command, and improvises around the failure, and the operator reads the improvisation as
+// the answer.
+//
+// Refusing the whole turn was the earlier answer to that, and it makes one unusable skill enough to
+// stop every conversation in the workspace. That trade only held while a skill was attached one
+// workspace at a time, deliberately, by the person who had just set its secret.
+func (s *Server) withoutUnusable(ctx context.Context, session *quaycrewv1.Thread, caps capability) capability {
+	usable := caps.held[:0:0]
+	out := map[string]bool{}
+	for _, one := range caps.held {
+		missing := s.secretMissing(ctx, session.GetWorkspace(), one)
+		if missing == "" {
+			usable = append(usable, one)
+			continue
+		}
+		caps.leftOut = append(caps.leftOut, notGiven{Skill: one.Skill, Why: missing})
+		out[one.Name] = true
+	}
+	if len(caps.leftOut) == 0 {
+		return caps
+	}
+	caps.held = usable
+	caps.mounts = slices.DeleteFunc(caps.mounts, func(mount sandbox.Mount) bool {
+		return out[path.Base(mount.Target)]
+	})
+	caps.attached = slices.DeleteFunc(caps.attached, func(one store.Imported) bool {
+		return out[one.Name]
+	})
 	return caps
+}
+
+// secretMissing names the first secret the skill needs that the workspace has not set, and says how
+// to set it. Empty when the workspace has them all.
+func (s *Server) secretMissing(ctx context.Context, workspace string, one skill.Held) string {
+	for _, name := range one.SecretNames() {
+		value, err := s.secrets.Get(ctx, workspace, name)
+		if err != nil || value == "" {
+			return fmt.Sprintf("needs the secret %s, which this workspace has not set: %s. "+
+				"Set it with quay secret set %s %s",
+				name, one.Secrets[name], workspace, name)
+		}
+	}
+	return ""
 }
