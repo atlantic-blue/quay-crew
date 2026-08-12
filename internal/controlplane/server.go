@@ -274,13 +274,10 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 	// not there. Creating is idempotent, so the daemon is the source of truth and this map is only
 	// what to close later.
 	s.syncContext(ctx, session)
-	// What the session is missing, said before a container exists rather than discovered inside one.
-	// A capability that silently does not work is worse than one that is absent, because the model
-	// improvises around it and the operator reads the improvisation as the answer.
+	// What the session holds, which is not everything it was given: a skill whose secret the
+	// workspace has not set is left out here rather than improvised around in the sandbox, and the
+	// listing carries the reason. See withoutUnusable.
 	caps := s.capabilityOf(ctx, session)
-	if err := s.skillsAreUsable(ctx, session, caps.held); err != nil {
-		return nil, err
-	}
 	box, err := s.provider.Create(ctx, sandbox.Config{
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
@@ -320,26 +317,6 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 // following the git skill, so the only provisioning a sandbox needs is its skills.
 func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
 	return s.readySkills(ctx, session, held, box)
-}
-
-// skillsAreUsable refuses when a skill names a secret the workspace has not set.
-//
-// Before the sandbox, because this is the half that can be answered without one, and a refusal that
-// arrives before anything is built is cheaper to read and cheaper to fix. The binaries are the other
-// half and they can only be answered inside the container, which readySkills does.
-func (s *Server) skillsAreUsable(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held) error {
-	for _, given := range held {
-		for _, name := range given.SecretNames() {
-			value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
-			if err != nil || value == "" {
-				return status.Errorf(codes.FailedPrecondition,
-					"the %s skill needs the secret %s, which this workspace has not set: %s. "+
-						"Set it with quay secret set %s %s <value>",
-					given.Name, name, given.Secrets[name], session.GetWorkspace(), name)
-			}
-		}
-	}
-	return nil
 }
 
 // readySkills checks the sandbox has what its skills need, and runs each skill's setup once.
@@ -1031,10 +1008,18 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 			return nil, storeError(err, "thread")
 		}
 		caps := s.capabilityOf(ctx, session)
-		out := make([]*quaycrewv1.Skill, 0, len(caps.held))
+		out := make([]*quaycrewv1.Skill, 0, len(caps.held)+len(caps.leftOut))
 		for _, one := range caps.held {
 			out = append(out, skillAsProto(one.Skill))
 		}
+		// The ones the workspace holds and the session was not given, so the listing answers why a
+		// skill the operator attached is nowhere in the conversation.
+		for _, one := range caps.leftOut {
+			carried := skillAsProto(one.Skill)
+			carried.LeftOut = one.Why
+			out = append(out, carried)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].GetName() < out[j].GetName() })
 		return &quaycrewv1.ListSkillsResponse{Skills: out}, nil
 	}
 	var held []store.Imported
@@ -1049,7 +1034,14 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 	}
 	out := make([]*quaycrewv1.Skill, 0, len(held))
 	for _, one := range held {
-		out = append(out, asSkill(one))
+		carried := asSkill(one)
+		// A workspace's listing answers the same question its sessions do, so a skill its secrets
+		// leave out says so here rather than only once a thread exists. The crew's own listing has
+		// no workspace to answer for, so it says nothing.
+		if req.GetWorkspace() != "" {
+			carried.LeftOut = s.secretMissing(ctx, req.GetWorkspace(), skill.Held{Skill: one.Skill})
+		}
+		out = append(out, carried)
 	}
 	return &quaycrewv1.ListSkillsResponse{Skills: out}, nil
 }

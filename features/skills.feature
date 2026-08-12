@@ -55,13 +55,34 @@ Feature: A session is given the skills the crew has
     And the memory file names the "git" skill exactly once
 
   # A capability that silently does not work is worse than one that is absent, because the model
-  # improvises around it and the operator reads the improvisation as the answer.
-  Scenario: A skill needing a secret the workspace has not set is refused before the turn runs
+  # improvises around it and the operator reads the improvisation as the answer. So a skill whose
+  # secret the workspace has not set is left out of the session entirely, and the listing carries the
+  # reason for a person to read.
+  #
+  # Refusing the whole turn was the earlier answer. It made one unusable skill enough to stop every
+  # conversation in the workspace, which is the wrong trade the moment a skill is held crew wide
+  # rather than attached one workspace at a time.
+  Scenario: A skill needing a secret the workspace has not set is left out, and the turn still runs
     Given the crew has a skill "github" needing the secret "GH_TOKEN"
     When the operator dispatches "hello" to the project
-    Then the control plane refuses it as the wrong state
-    And the refusal names the secret and how to set it
-    And no sandbox has been created
+    Then the reply is "you said: hello"
+    And the sandbox does not mount the github skill
+    And the memory file does not name the "github" skill
+
+  Scenario: The listing says which secret left a skill out
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    When the operator dispatches "hello" to the project
+    And the operator lists the thread's skills
+    Then the listing says the "github" skill was left out, needing "GH_TOKEN"
+
+  # Setting the secret is the whole of it, and a sandbox is born with its capabilities, so it is the
+  # next sandbox that holds the skill rather than the one already running.
+  Scenario: Setting the secret is enough for the next sandbox to hold the skill
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    When the operator dispatches "hello" to the project
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    And the operator dispatches "a different subject" to a new thread
+    Then the newest sandbox mounts the crew's github skill read only
 
   Scenario: A skill needing a binary the image does not carry is refused, and names the image
     Given the crew has a skill "github" needing the binary "gh"

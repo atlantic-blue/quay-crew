@@ -393,6 +393,10 @@ message Skill {
   repeated string binaries = 4;
   repeated SkillSecret secrets = 5;
   google.protobuf.Timestamp imported_at = 6;
+  // left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
+  // is given. A skill naming a secret the workspace has not set is held and not given, rather than
+  // refusing the turn, so one unusable skill cannot stop every conversation in the workspace.
+  string left_out = 7;
 }
 
 // SkillSecret names a secret a skill needs and says what it is for. Never a value: a value written into

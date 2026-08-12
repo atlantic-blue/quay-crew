@@ -8,6 +8,19 @@ read, or run with `make features`.
 
 ## 12 August 2026
 
+- **A skill whose secret is not set is left out of the session, rather than stopping the turn.** One
+  skill the workspace had not finished setting up refused every conversation in it: the github skill
+  names `GH_TOKEN`, and without it a dispatch came back `FailedPrecondition` before a sandbox was
+  built, whatever the turn was actually about. Now that skill alone is left out. It is not mounted,
+  the model is never told it exists, and `quay skill list` carries the line `left out: needs the
+  secret GH_TOKEN ...` against it with the command that sets it. The reasoning that produced the
+  refusal has not changed and is why the skill is withheld whole rather than half given: a
+  capability that silently does not work is worse than one that is absent, because the model
+  improvises around it and the operator reads the improvisation as the answer. What changed is the
+  blast radius, and it changes now because a skill held by the whole crew cannot take every
+  workspace down with it. A missing binary still refuses the turn: the image is one thing for the
+  whole crew, while a secret is one workspace's to set.
+  ([#273](https://github.com/atlantic-blue/quay-crew/issues/273))
 - **A skill that asks for nothing can be imported.** The Simplified Technical English skill declares
   no binaries and no secrets, and importing it into a real crew was refused: `null value in column
   "binaries" violates not-null constraint`. A nil list arrives at Postgres as an explicit NULL rather

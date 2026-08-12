@@ -194,18 +194,70 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the refusal names the secret and how to set it$`, func(ctx context.Context) error {
+	sc.Step(`^the sandbox does not mount the ([^ ]+) skill$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		if w.lastErr == nil {
-			return fmt.Errorf("the turn was allowed to run")
+		if len(w.provider.Created) == 0 {
+			return fmt.Errorf("no sandbox was made, so this proves nothing about what it mounts")
 		}
-		for _, want := range []string{"GH_TOKEN", "quay secret set"} {
-			if !strings.Contains(w.lastErr.Error(), want) {
-				return fmt.Errorf("the refusal is %q, want it to say %q", w.lastErr, want)
+		at := skill.DirIn(sandbox.SkillsPath, name)
+		for _, made := range w.provider.Created {
+			for _, mount := range made.Mounts {
+				if mount.Target == at {
+					return fmt.Errorf("the %s skill is mounted at %s after all", name, mount.Target)
+				}
 			}
 		}
 		return nil
 	})
+
+	// The crew's skills are mounted from the crew's own directory, which is what separates this from
+	// the workspace's step below it.
+	sc.Step(`^the newest sandbox mounts the crew's ([^ ]+) skill read only$`,
+		func(ctx context.Context, name string) error {
+			w := worldFrom(ctx)
+			if len(w.provider.Created) == 0 {
+				return fmt.Errorf("no sandbox was made")
+			}
+			newest := w.provider.Created[len(w.provider.Created)-1]
+			want := skill.DirIn(sandbox.SkillsPath, name)
+			for _, mount := range newest.Mounts {
+				if mount.Target != want {
+					continue
+				}
+				if !mount.ReadOnly {
+					return fmt.Errorf("the %s skill is mounted writable", name)
+				}
+				if mount.Source != filepath.Join(w.skillsDir, name) {
+					return fmt.Errorf("the %s skill is mounted from %s, want the crew's own directory %s",
+						name, mount.Source, filepath.Join(w.skillsDir, name))
+				}
+				return nil
+			}
+			return fmt.Errorf("the newest sandbox does not mount %s: %+v", want, newest.Mounts)
+		})
+
+	sc.Step(`^the listing says the "([^"]*)" skill was left out, needing "([^"]*)"$`,
+		func(ctx context.Context, name, secret string) error {
+			w := worldFrom(ctx)
+			if w.lastSkills == nil {
+				return fmt.Errorf("nothing has been listed")
+			}
+			for _, one := range w.lastSkills.GetSkills() {
+				if one.GetName() != name {
+					continue
+				}
+				reason := one.GetLeftOut()
+				if reason == "" {
+					return fmt.Errorf("the listing gives the %s skill as held, not left out", name)
+				}
+				if !strings.Contains(reason, secret) {
+					return fmt.Errorf("the %s skill was left out saying %q, want it to name %q",
+						name, reason, secret)
+				}
+				return nil
+			}
+			return fmt.Errorf("the listing does not carry the %s skill at all", name)
+		})
 
 	sc.Step(`^the refusal names "([^"]*)" and the secret to add to it$`, func(ctx context.Context, allowlist string) error {
 		w := worldFrom(ctx)

@@ -115,6 +115,11 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	for _, held := range resp.GetSkills() {
 		fmt.Fprintf(out, "%-16s v%-3d %s\n", held.GetName(), held.GetVersion(), held.GetSummary())
+		// Held and not given, which is the line that stops somebody hunting for a skill the model
+		// never had. It goes first because it is the reason the rest of the entry does not apply.
+		if held.GetLeftOut() != "" {
+			fmt.Fprintf(out, "%-16s      left out: %s\n", "", held.GetLeftOut())
+		}
 		if len(held.GetBinaries()) > 0 {
 			fmt.Fprintf(out, "%-16s      needs: %s\n", "", strings.Join(held.GetBinaries(), " "))
 		}
