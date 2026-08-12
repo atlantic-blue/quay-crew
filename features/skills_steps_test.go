@@ -3,6 +3,7 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -630,6 +631,30 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	seed := func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		// The real directory this build ships, which is what the image carries, so a manifest that
+		// stopped loading is caught here.
+		w.server.Seed(ctx, "../skills", slog.New(slog.DiscardHandler))
+		return nil
+	}
+	sc.Step(`^the crew starts, seeded from the skills this build ships with$`, seed)
+	sc.Step(`^the crew started, seeded from the skills this build ships with$`, seed)
+
+	sc.Step(`^the workspace does not hold the "([^"]*)" skill$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Workspace: w.workspaceID})
+		if err != nil {
+			return err
+		}
+		for _, one := range resp.GetSkills() {
+			if one.GetName() == name {
+				return fmt.Errorf("the workspace holds the %s skill after all", name)
+			}
+		}
+		return nil
+	})
 
 	sc.Step(`^the workspace holds the "([^"]*)" skill$`, func(ctx context.Context, name string) error {
 		return holds(ctx, worldFrom(ctx).workspaceID, "the workspace", name)

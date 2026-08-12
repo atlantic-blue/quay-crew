@@ -103,6 +103,11 @@ workspace reaches that workspace's sessions: that is the workspace level, and it
 narrow belongs, because a capability for one kind of work should not be in front of every session the
 crew has.
 
+A crew whose catalogue is empty is given the skills this build ships with when the control plane
+starts: all seven imported, git and github taken at the crew level, the rest waiting to be attached.
+It happens only on an empty catalogue, so it is where a crew begins rather than a policy that undoes a
+decision later.
+
 A skill the crew holds is rendered into each workspace's own directory and mounted from there, exactly
 as a workspace's own skill is, so the writing out, the sweeping when it is let go, and the staleness of
 a sandbox born before it all come for free rather than as a second path.

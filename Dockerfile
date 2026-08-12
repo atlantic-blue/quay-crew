@@ -26,6 +26,9 @@ ENTRYPOINT ["/service"]
 # socket is already equivalent to root on the host, so this grants nothing further.
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime-docker
 COPY --from=build /out/service /service
+# The skills this build ships with, so a fresh crew can be given them without the operator importing
+# each one by hand. They are read once, at startup, into a crew whose catalogue is empty.
+COPY --from=build /src/skills /skills
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 USER root:root
 ENTRYPOINT ["/service"]

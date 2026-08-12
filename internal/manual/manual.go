@@ -58,7 +58,9 @@ commands:
                                           or dangerous. A dispatched turn has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
-  context set [<address>] < file          write what a level says, from standard input
+  context set [<address>] < file          write what a level says, from standard input. Say crew
+                                          where the address goes and it applies to everything the
+                                          crew does, which skill attach takes too
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
   attach <session id>                     open a session's conversation, with its history
@@ -66,7 +68,8 @@ commands:
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works
   secret list [<workspace>]               which secrets are set, never what they say
-  skill import <directory>                take a skill into the crew from its directory
+  skill import <directory>                take a skill into the crew from its directory. A fresh
+                                          crew already holds the ones this build ships with
   skill list [<workspace>]                what the crew can do, or what one workspace holds
   skill attach [<workspace>] <name>       give a workspace a skill, so its sessions hold it. Say
                                           crew where the workspace goes and every workspace holds
