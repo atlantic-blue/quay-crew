@@ -425,7 +425,7 @@ func (w wizard) summary() string {
 // updateWizardKey handles the wizard: type, enter to accept, escape to cancel everything.
 func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	case "esc":
 		// Nothing has been made yet, by construction, so there is nothing to undo. Escape works while
 		// the crew is being asked too, so a crew that never answers is not a trap.
 		m.mode, m.making = modeBrowse, wizard{}
