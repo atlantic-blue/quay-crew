@@ -169,6 +169,52 @@ Feature: A session is given the skills the crew has
     And the listing says the skill needs "git"
     And the listing names the secret "GH_TOKEN" and what it is for
 
+  # A skill given to the crew is held by every workspace, including the ones made after it, which is
+  # the difference between setting a crew up once and setting each workspace up again. The crew's own
+  # directory already does this for skills the operator keeps as files. This is the same level reached
+  # from the tool, for a skill that was imported, and it takes the word crew where a workspace goes
+  # exactly as quay context set does.
+  #
+  # The files are rendered into each workspace's own directory and mounted from there, the same path a
+  # workspace's own skill takes, so the writing out, the sweeping and the staleness all come for free.
+  Scenario: A skill the crew holds reaches a workspace that attached nothing
+    Given the operator imported the "github" skill
+    And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
+    When the operator attaches the "github" skill to the crew
+    And the operator dispatches "hello" to the project
+    Then the memory file names the "github" skill and where its brief is
+    And the sandbox mounts the workspace's github skill read only
+
+  Scenario: A workspace created after the crew took a skill holds it too
+    Given the operator imported the "github" skill
+    And the operator attached the "github" skill to the crew
+    When a second workspace named "widgets" with a project
+    Then the second workspace holds the "github" skill
+
+  Scenario: The listing says a skill came from the crew
+    Given the operator imported the "github" skill
+    And the operator attached the "github" skill to the crew
+    When the operator lists the workspace's skills
+    Then the listing says the "github" skill is held by the crew
+
+  # Two separate statements, and the wider one does not undo the narrower one.
+  Scenario: Taking a skill off the crew leaves a workspace's own attachment alone
+    Given the operator imported the "github" skill
+    And the operator attached the "github" skill to the crew
+    And the operator attached the "github" skill to the workspace
+    When the operator detaches the "github" skill from the crew
+    Then the workspace holds the "github" skill
+    And the listing says the "github" skill is the workspace's own
+
+  # The holding is asserted before it is taken away, because a scenario that only checks the end state
+  # passes just as happily against a crew attach that never did anything.
+  Scenario: Taking a skill off the crew takes it off a workspace that only had it that way
+    Given the operator imported the "github" skill
+    And the operator attached the "github" skill to the crew
+    And the workspace holds the "github" skill
+    When the operator detaches the "github" skill from the crew
+    Then the workspace holds no skills
+
   Scenario: A malformed skill is refused, and says what is wrong
     When the operator imports a skill whose manifest has no version
     Then the crew refuses it saying "no version"

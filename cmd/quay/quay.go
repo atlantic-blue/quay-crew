@@ -577,7 +577,7 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 	request := &quaycrewv1.ListContextsRequest{}
 	// The crew's level is in every listing, so asking for it by name is asking for the listing.
-	if typed == "crew" {
+	if typed == crewScope {
 		typed = ""
 	}
 	// An address typed in wins; otherwise the operator's own place narrows it. Standing nowhere shows

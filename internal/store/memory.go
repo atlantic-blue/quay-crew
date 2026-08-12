@@ -35,8 +35,11 @@ type Memory struct {
 	// repositories are the repositories each workspace works in, in the order they were added.
 	// skills is every revision the crew holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
-	skills          map[string]Imported
-	attached        map[string]map[string]int
+	skills   map[string]Imported
+	attached map[string]map[string]int
+	// crewAttached is which version of which skill the whole crew pinned, so every workspace holds
+	// it without an attachment of its own.
+	crewAttached    map[string]int
 	flowGraphs      map[string]map[int]string
 	flowRuns        map[string]*flow.Run
 	flowTransitions map[string][]flow.RecordedTransition
@@ -475,6 +478,48 @@ func (m *Memory) WorkspaceSkills(_ context.Context, workspace string) ([]Importe
 	defer m.mu.RUnlock()
 	out := make([]Imported, 0, len(m.attached[workspace]))
 	for name, version := range m.attached[workspace] {
+		held, found := m.skills[skillKey(name, version)]
+		if !found {
+			continue
+		}
+		out = append(out, held)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// AttachCrewSkill gives the whole crew a skill at the newest revision it holds.
+func (m *Memory) AttachCrewSkill(_ context.Context, name string) (Imported, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	newest, found := m.newestSkill(name)
+	if !found {
+		return Imported{}, ErrNotFound
+	}
+	if m.crewAttached == nil {
+		m.crewAttached = make(map[string]int)
+	}
+	m.crewAttached[name] = newest.Version
+	return newest, nil
+}
+
+// DetachCrewSkill takes a skill away from the crew.
+func (m *Memory) DetachCrewSkill(_ context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, found := m.crewAttached[name]; !found {
+		return ErrNotFound
+	}
+	delete(m.crewAttached, name)
+	return nil
+}
+
+// CrewSkills returns what the crew holds, at the versions it pinned.
+func (m *Memory) CrewSkills(_ context.Context) ([]Imported, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Imported, 0, len(m.crewAttached))
+	for name, version := range m.crewAttached {
 		held, found := m.skills[skillKey(name, version)]
 		if !found {
 			continue

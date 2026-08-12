@@ -117,6 +117,9 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		fmt.Fprintf(out, "%-16s v%-3d %s\n", held.GetName(), held.GetVersion(), held.GetSummary())
 		// Held and not given, which is the line that stops somebody hunting for a skill the model
 		// never had. It goes first because it is the reason the rest of the entry does not apply.
+		if held.GetCrew() {
+			fmt.Fprintf(out, "%-16s      held by the crew, so every workspace has it\n", "")
+		}
 		if held.GetLeftOut() != "" {
 			fmt.Fprintf(out, "%-16s      left out: %s\n", "", held.GetLeftOut())
 		}
@@ -134,6 +137,24 @@ func runSkillAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	name, typed, err := skillAndAddress(args, "attach")
 	if err != nil {
 		return err
+	}
+	// "crew" where a workspace goes, the same word quay context set takes, and it means the same
+	// thing: everything this crew does, including the workspaces made after today.
+	if typed == crewScope {
+		resp, err := client.AttachSkill(ctx, &quaycrewv1.AttachSkillRequest{
+			Scope: crewScope, Name: name,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "the crew holds %s version %d, so every workspace has it\n",
+			resp.GetSkill().GetName(), resp.GetSkill().GetVersion())
+		for _, secret := range resp.GetSkill().GetSecrets() {
+			fmt.Fprintf(out, "it needs %s in each workspace that is to use it: %s\n",
+				secret.GetName(), secret.GetPurpose())
+		}
+		fmt.Fprintln(out, "a workspace without those secrets set is left out of this one skill, and its turns still run")
+		return nil
 	}
 	located, err := locate(ctx, client, typed)
 	if err != nil {
@@ -159,6 +180,16 @@ func runSkillDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if err != nil {
 		return err
 	}
+	if typed == crewScope {
+		if _, err := client.DetachSkill(ctx, &quaycrewv1.DetachSkillRequest{
+			Scope: crewScope, Name: name,
+		}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "the crew no longer holds %s\n", name)
+		fmt.Fprintln(out, "a workspace that attached it for itself keeps it")
+		return nil
+	}
 	located, err := locate(ctx, client, typed)
 	if err != nil {
 		return err
@@ -175,6 +206,10 @@ func runSkillDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 
 // skillAndAddress reads the two shapes these commands take: a skill name on its own, acting where the
 // operator already is, or a workspace and a skill name.
+// crewScope is the word an address takes to mean the whole crew rather than one workspace, the same
+// one quay context set already takes.
+const crewScope = "crew"
+
 func skillAndAddress(args []string, verb string) (name, typed string, err error) {
 	switch len(args) {
 	case 1:

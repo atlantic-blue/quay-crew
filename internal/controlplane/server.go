@@ -1026,15 +1026,27 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 	var err error
 	if req.GetWorkspace() != "" {
 		held, err = s.store.WorkspaceSkills(ctx, req.GetWorkspace())
+		if err == nil {
+			held = s.withCrewSkills(ctx, held)
+		}
 	} else {
 		held, err = s.store.ListSkills(ctx)
 	}
 	if err != nil {
 		return nil, storeError(err, "list skills")
 	}
+	// Which of them the crew holds, so a listing says where a skill came from rather than leaving the
+	// operator to guess why a workspace they attached nothing to has four.
+	crew := map[string]bool{}
+	if held, err := s.store.CrewSkills(ctx); err == nil {
+		for _, one := range held {
+			crew[one.Name] = true
+		}
+	}
 	out := make([]*quaycrewv1.Skill, 0, len(held))
 	for _, one := range held {
 		carried := asSkill(one)
+		carried.Crew = crew[one.Name]
 		// A workspace's listing answers the same question its sessions do, so a skill its secrets
 		// leave out says so here rather than only once a thread exists. The crew's own listing has
 		// no workspace to answer for, so it says nothing.
@@ -1051,6 +1063,18 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 // at container creation, so the honest thing is to mark it stale in the listing rather than
 // rewrite an index it cannot follow.
 func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillRequest) (*quaycrewv1.AttachSkillResponse, error) {
+	// The crew holding a skill is one statement about every workspace, so it renders to every live
+	// session rather than to one workspace's.
+	if req.GetScope() == crewScope {
+		attached, err := s.store.AttachCrewSkill(ctx, req.GetName())
+		if err != nil {
+			return nil, storeError(err, "attach skill")
+		}
+		s.renderTo(ctx, store.ContextCrew, "")
+		carried := asSkill(attached)
+		carried.Crew = true
+		return &quaycrewv1.AttachSkillResponse{Skill: carried}, nil
+	}
 	attached, err := s.store.AttachSkill(ctx, req.GetWorkspace(), req.GetName())
 	if err != nil {
 		return nil, storeError(err, "attach skill")
@@ -1061,6 +1085,13 @@ func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillReq
 
 // DetachSkill takes a skill away from a workspace, and takes its files off the sessions that held it.
 func (s *Server) DetachSkill(ctx context.Context, req *quaycrewv1.DetachSkillRequest) (*quaycrewv1.DetachSkillResponse, error) {
+	if req.GetScope() == crewScope {
+		if err := s.store.DetachCrewSkill(ctx, req.GetName()); err != nil {
+			return nil, storeError(err, "detach skill")
+		}
+		s.renderTo(ctx, store.ContextCrew, "")
+		return &quaycrewv1.DetachSkillResponse{}, nil
+	}
 	if err := s.store.DetachSkill(ctx, req.GetWorkspace(), req.GetName()); err != nil {
 		return nil, storeError(err, "detach skill")
 	}

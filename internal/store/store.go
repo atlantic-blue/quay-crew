@@ -139,6 +139,15 @@ type Store interface {
 	// WorkspaceSkills returns the skills a workspace holds, at the versions it pinned, files included,
 	// which is what a sandbox needs to be built.
 	WorkspaceSkills(ctx context.Context, workspace string) ([]Imported, error)
+	// AttachCrewSkill gives the skill to the whole crew, pinned to the newest revision the crew holds
+	// now, so every workspace has it and a workspace made tomorrow has it too. Attaching again is how
+	// the crew moves to a newer revision.
+	AttachCrewSkill(ctx context.Context, name string) (Imported, error)
+	// DetachCrewSkill takes a skill away from the crew. A workspace that attached it for itself keeps
+	// it: the two are separate statements, and the narrower one is not undone by the wider one.
+	DetachCrewSkill(ctx context.Context, name string) error
+	// CrewSkills returns what the crew holds, at the versions it pinned, files included.
+	CrewSkills(ctx context.Context) ([]Imported, error)
 
 	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
 	// turn: a caller retrying a write it is not sure landed must leave one turn, so a record it has

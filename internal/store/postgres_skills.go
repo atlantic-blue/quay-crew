@@ -180,6 +180,69 @@ func (p *Postgres) WorkspaceSkills(ctx context.Context, workspace string) ([]Imp
 	return out, nil
 }
 
+// AttachCrewSkill gives the whole crew a skill at the newest revision it holds.
+func (p *Postgres) AttachCrewSkill(ctx context.Context, name string) (Imported, error) {
+	newest, err := p.skillRow(ctx, `where name = $1 order by version desc limit 1`, name)
+	if err != nil {
+		return Imported{}, err
+	}
+	if _, err := p.pool.Exec(ctx, `
+		insert into crew_skills (name, version) values ($1, $2)
+		on conflict (name) do update
+		  set version = excluded.version, attached_at = now()`,
+		newest.Name, newest.Version); err != nil {
+		return Imported{}, fmt.Errorf("attach crew skill %s: %w", name, err)
+	}
+	if err := p.fillSkill(ctx, &newest); err != nil {
+		return Imported{}, err
+	}
+	return newest, nil
+}
+
+// DetachCrewSkill takes a skill away from the crew.
+func (p *Postgres) DetachCrewSkill(ctx context.Context, name string) error {
+	tag, err := p.pool.Exec(ctx, `delete from crew_skills where name = $1`, name)
+	if err != nil {
+		return fmt.Errorf("detach crew skill %s: %w", name, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// CrewSkills returns what the crew holds, at the versions it pinned, files included.
+func (p *Postgres) CrewSkills(ctx context.Context) ([]Imported, error) {
+	rows, err := p.pool.Query(ctx, `
+		select s.name, s.version, s.summary, s.binaries, s.brief, s.imported_at
+		from crew_skills c
+		join skills s on s.name = c.name and s.version = c.version
+		order by s.name`)
+	if err != nil {
+		return nil, fmt.Errorf("list crew skills: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Imported
+	for rows.Next() {
+		var held Imported
+		if err := rows.Scan(&held.Name, &held.Version, &held.Summary, &held.Binaries, &held.Brief,
+			&held.ImportedAt); err != nil {
+			return nil, fmt.Errorf("list crew skills: %w", err)
+		}
+		out = append(out, held)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list crew skills: %w", err)
+	}
+	for at := range out {
+		if err := p.fillSkill(ctx, &out[at]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 // skillRow reads one skill's own row, without its secrets or its files.
 func (p *Postgres) skillRow(ctx context.Context, where string, args ...any) (Imported, error) {
 	var held Imported

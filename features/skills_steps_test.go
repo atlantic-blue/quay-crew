@@ -520,6 +520,26 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the operator attaches the "([^"]*)" skill to the workspace$`, attach)
+
+	attachToCrew := func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		_, err := w.client.AttachSkill(ctx, &quaycrewv1.AttachSkillRequest{
+			Scope: "crew", Name: name,
+		})
+		w.lastErr = err
+		return err
+	}
+	sc.Step(`^the operator attaches the "([^"]*)" skill to the crew$`, attachToCrew)
+	sc.Step(`^the operator attached the "([^"]*)" skill to the crew$`, attachToCrew)
+
+	sc.Step(`^the operator detaches the "([^"]*)" skill from the crew$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		_, err := w.client.DetachSkill(ctx, &quaycrewv1.DetachSkillRequest{
+			Scope: "crew", Name: name,
+		})
+		w.lastErr = err
+		return err
+	})
 	sc.Step(`^the operator attached the "([^"]*)" skill to the workspace$`, attach)
 
 	sc.Step(`^the operator detaches the "([^"]*)" skill from the workspace$`,
@@ -610,6 +630,48 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	sc.Step(`^the workspace holds the "([^"]*)" skill$`, func(ctx context.Context, name string) error {
+		return holds(ctx, worldFrom(ctx).workspaceID, "the workspace", name)
+	})
+
+	sc.Step(`^the second workspace holds the "([^"]*)" skill$`, func(ctx context.Context, name string) error {
+		return holds(ctx, worldFrom(ctx).secondWorkspaceID, "the second workspace", name)
+	})
+
+	sc.Step(`^the listing says the "([^"]*)" skill is the workspace's own$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		if w.lastSkills == nil {
+			return fmt.Errorf("nothing has been listed")
+		}
+		for _, one := range w.lastSkills.GetSkills() {
+			if one.GetName() != name {
+				continue
+			}
+			if one.GetCrew() {
+				return fmt.Errorf("the listing still gives the %s skill as the crew's", name)
+			}
+			return nil
+		}
+		return fmt.Errorf("the listing does not carry the %s skill at all", name)
+	})
+
+	sc.Step(`^the listing says the "([^"]*)" skill is held by the crew$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		if w.lastSkills == nil {
+			return fmt.Errorf("nothing has been listed")
+		}
+		for _, one := range w.lastSkills.GetSkills() {
+			if one.GetName() != name {
+				continue
+			}
+			if !one.GetCrew() {
+				return fmt.Errorf("the listing gives the %s skill as the workspace's own, not the crew's", name)
+			}
+			return nil
+		}
+		return fmt.Errorf("the listing does not carry the %s skill at all", name)
+	})
 
 	sc.Step(`^the workspace holds no skills$`, func(ctx context.Context) error {
 		return holdsNothing(ctx, worldFrom(ctx).workspaceID, "the workspace")
@@ -744,6 +806,23 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 }
 
 // holdsNothing is the same assertion for either workspace, so a failure names which one.
+// holds says the listing for one workspace carries a skill by name, whichever level put it there.
+func holds(ctx context.Context, workspace, which, name string) error {
+	w := worldFrom(ctx)
+	resp, err := w.client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Workspace: workspace})
+	if err != nil {
+		return err
+	}
+	// Kept, so a scenario can go on to ask what the listing said about it without listing twice.
+	w.lastSkills = resp
+	for _, one := range resp.GetSkills() {
+		if one.GetName() == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s holds %v, want the %s skill among them", which, importedNames(resp), name)
+}
+
 func holdsNothing(ctx context.Context, workspace, which string) error {
 	resp, err := worldFrom(ctx).client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Workspace: workspace})
 	if err != nil {

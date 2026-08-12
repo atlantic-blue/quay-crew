@@ -1393,6 +1393,99 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Errorf("detaching a skill the workspace does not hold returned %v, want ErrNotFound", err)
 		}
 	})
+
+	t.Run("the crew holds a skill for every workspace, pinned to a version", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("a fresh crew holds %d skills (%v), want none", len(held), err)
+		}
+		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachCrewSkill: %v", err)
+		}
+
+		held, err := s.CrewSkills(ctx)
+		if err != nil {
+			t.Fatalf("CrewSkills: %v", err)
+		}
+		if len(held) != 1 || held[0].Name != "github" {
+			t.Fatalf("the crew holds %+v, want the github skill", held)
+		}
+		// The files come back, because a crew skill is mounted into a sandbox exactly like a
+		// workspace's, and a listing without them could mount nothing.
+		if len(held[0].Files) == 0 {
+			t.Error("the crew's skills came back without their files, so nothing could be mounted")
+		}
+		if len(held[0].Secrets) == 0 {
+			t.Error("the crew's skills came back without the secrets they name")
+		}
+
+		// Pinned, and attaching again is how the crew moves, the same as a workspace.
+		if err := s.ImportSkill(ctx, aSkill("github", 2)); err != nil {
+			t.Fatalf("ImportSkill v2: %v", err)
+		}
+		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 1 {
+			t.Fatalf("the crew moved to %+v on its own (%v), want it pinned at version 1", held, err)
+		}
+		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachCrewSkill again: %v", err)
+		}
+		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 2 {
+			t.Fatalf("re-attaching left the crew at %+v (%v), want version 2", held, err)
+		}
+
+		if err := s.DetachCrewSkill(ctx, "github"); err != nil {
+			t.Fatalf("DetachCrewSkill: %v", err)
+		}
+		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("the crew still holds %d skills (%v) after detaching", len(held), err)
+		}
+		if _, err := s.GetSkill(ctx, "github", 2); err != nil {
+			t.Errorf("detaching from the crew removed the skill from the catalogue: %v", err)
+		}
+	})
+
+	t.Run("the crew's holding and a workspace's are separate statements", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
+			t.Fatalf("ImportSkill: %v", err)
+		}
+		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachCrewSkill: %v", err)
+		}
+		if _, err := s.AttachSkill(ctx, workspace.GetId(), "github"); err != nil {
+			t.Fatalf("AttachSkill: %v", err)
+		}
+
+		// Taking it off the crew leaves the workspace's own attachment alone: the narrower statement
+		// is not undone by the wider one.
+		if err := s.DetachCrewSkill(ctx, "github"); err != nil {
+			t.Fatalf("DetachCrewSkill: %v", err)
+		}
+		if held, err := s.WorkspaceSkills(ctx, workspace.GetId()); err != nil || len(held) != 1 {
+			t.Fatalf("the workspace holds %d skills (%v) after the crew let go, want 1", len(held), err)
+		}
+	})
+
+	t.Run("attaching to the crew what does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		if _, err := s.AttachCrewSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching a skill the crew has not imported returned %v, want ErrNotFound", err)
+		}
+		if err := s.DetachCrewSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("detaching a skill the crew does not hold returned %v, want ErrNotFound", err)
+		}
+	})
 }
 
 // aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two
