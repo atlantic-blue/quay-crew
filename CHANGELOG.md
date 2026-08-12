@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 12 August 2026
 
+- **A skill can be held by the whole crew, so a new workspace starts with something.** `quay skill
+  attach crew github` and every workspace has it, including the ones made next month, which is the
+  difference between setting a crew up once and setting each workspace up again. It takes the word
+  crew where a workspace goes, exactly as `quay context set crew` does, so the two levels are said the
+  same way. Until now the only way to reach every session was the crew's own skills directory on the
+  machine, which a crew running on a pod has no way to fill, and the only way from the tool was
+  importing a skill and then attaching it to each workspace by hand. The crew's holding and a
+  workspace's are separate statements: the workspace's wins on a name, and detaching from the crew
+  leaves a workspace that attached it for itself holding it. `quay skill list` says which ones came
+  from the crew. Proved against real Postgres as well as the memory store, through the conformance
+  suite both answer. ([#273](https://github.com/atlantic-blue/quay-crew/issues/273))
 - **A skill whose secret is not set is left out of the session, rather than stopping the turn.** One
   skill the workspace had not finished setting up refused every conversation in it: the github skill
   names `GH_TOKEN`, and without it a dispatch came back `FailedPrecondition` before a sandbox was

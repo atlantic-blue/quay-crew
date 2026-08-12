@@ -3434,6 +3434,8 @@ type Skill struct {
 	Binaries   []string               `protobuf:"bytes,4,rep,name=binaries,proto3" json:"binaries,omitempty"`
 	Secrets    []*SkillSecret         `protobuf:"bytes,5,rep,name=secrets,proto3" json:"secrets,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
+	// crew says the crew holds this skill, so every workspace has it without attaching anything.
+	Crew bool `protobuf:"varint,8,opt,name=crew,proto3" json:"crew,omitempty"`
 	// left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
 	// is given. A skill naming a secret the workspace has not set is held and not given, rather than
 	// refusing the turn, so one unusable skill cannot stop every conversation in the workspace.
@@ -3512,6 +3514,13 @@ func (x *Skill) GetImportedAt() *timestamppb.Timestamp {
 		return x.ImportedAt
 	}
 	return nil
+}
+
+func (x *Skill) GetCrew() bool {
+	if x != nil {
+		return x.Crew
+	}
+	return false
 }
 
 func (x *Skill) GetLeftOut() string {
@@ -3836,9 +3845,14 @@ func (x *ListSkillsResponse) GetSkills() []*Skill {
 // AttachSkillRequest gives a workspace a skill, at the version the crew holds now. Every session in the
 // workspace then holds it.
 type AttachSkillRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// workspace is the workspace to give it to, and is ignored when scope is "crew".
+	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// scope is "workspace", which is what an empty value means, or "crew". A skill attached to the
+	// crew is held by every workspace, including the ones made after it, which is the difference
+	// between setting a crew up once and setting each workspace up again.
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3883,6 +3897,13 @@ func (x *AttachSkillRequest) GetWorkspace() string {
 func (x *AttachSkillRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *AttachSkillRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -3933,9 +3954,12 @@ func (x *AttachSkillResponse) GetSkill() *Skill {
 
 // DetachSkillRequest takes a skill away from a workspace. The skill stays imported.
 type DetachSkillRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// workspace is the workspace to take it from, and is ignored when scope is "crew".
+	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// scope is "workspace", which is what an empty value means, or "crew".
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3980,6 +4004,13 @@ func (x *DetachSkillRequest) GetWorkspace() string {
 func (x *DetachSkillRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *DetachSkillRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -4956,7 +4987,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12ListSecretsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"G\n" +
 	"\x13ListSecretsResponse\x120\n" +
-	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\xf7\x01\n" +
+	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\x8b\x02\n" +
 	"\x05Skill\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x18\n" +
@@ -4964,7 +4995,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bbinaries\x18\x04 \x03(\tR\bbinaries\x122\n" +
 	"\asecrets\x18\x05 \x03(\v2\x18.quaycrew.v1.SkillSecretR\asecrets\x12;\n" +
 	"\vimported_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"importedAt\x12\x19\n" +
+	"importedAt\x12\x12\n" +
+	"\x04crew\x18\b \x01(\bR\x04crew\x12\x19\n" +
 	"\bleft_out\x18\a \x01(\tR\aleftOut\";\n" +
 	"\vSkillSecret\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
@@ -4983,15 +5015,17 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06thread\x18\x02 \x01(\tR\x06thread\"@\n" +
 	"\x12ListSkillsResponse\x12*\n" +
-	"\x06skills\x18\x01 \x03(\v2\x12.quaycrew.v1.SkillR\x06skills\"F\n" +
+	"\x06skills\x18\x01 \x03(\v2\x12.quaycrew.v1.SkillR\x06skills\"\\\n" +
 	"\x12AttachSkillRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"?\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"?\n" +
 	"\x13AttachSkillResponse\x12(\n" +
-	"\x05skill\x18\x01 \x01(\v2\x12.quaycrew.v1.SkillR\x05skill\"F\n" +
+	"\x05skill\x18\x01 \x01(\v2\x12.quaycrew.v1.SkillR\x05skill\"\\\n" +
 	"\x12DetachSkillRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\x15\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"\x15\n" +
 	"\x13DetachSkillResponse\"/\n" +
 	"\x13ListContextsRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\"C\n" +

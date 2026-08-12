@@ -393,6 +393,8 @@ message Skill {
   repeated string binaries = 4;
   repeated SkillSecret secrets = 5;
   google.protobuf.Timestamp imported_at = 6;
+  // crew says the crew holds this skill, so every workspace has it without attaching anything.
+  bool crew = 8;
   // left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
   // is given. A skill naming a secret the workspace has not set is held and not given, rather than
   // refusing the turn, so one unusable skill cannot stop every conversation in the workspace.
@@ -444,8 +446,13 @@ message ListSkillsResponse {
 // AttachSkillRequest gives a workspace a skill, at the version the crew holds now. Every session in the
 // workspace then holds it.
 message AttachSkillRequest {
+  // workspace is the workspace to give it to, and is ignored when scope is "crew".
   string workspace = 1;
   string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew". A skill attached to the
+  // crew is held by every workspace, including the ones made after it, which is the difference
+  // between setting a crew up once and setting each workspace up again.
+  string scope = 3;
 }
 message AttachSkillResponse {
   Skill skill = 1;
@@ -453,8 +460,11 @@ message AttachSkillResponse {
 
 // DetachSkillRequest takes a skill away from a workspace. The skill stays imported.
 message DetachSkillRequest {
+  // workspace is the workspace to take it from, and is ignored when scope is "crew".
   string workspace = 1;
   string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew".
+  string scope = 3;
 }
 message DetachSkillResponse {}
 

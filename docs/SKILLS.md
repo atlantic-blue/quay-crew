@@ -91,12 +91,21 @@ sandbox user, which is the boundary that was already there.
 
 ## How a skill reaches a session
 
-A skill reaches a session two ways, and they are the outer two of the four levels context already has.
+A skill reaches a session three ways, at the outer two of the four levels context already has.
 
-The crew's own skills directory reaches every session: that is the crew level, and it is the right home
-for a capability with nothing to authenticate. A skill imported into the store and attached to a
-workspace reaches that workspace's sessions: that is the workspace level, and it is where a credential
-belongs, because a token for one capability should not be handed to every session the crew has.
+The crew's own skills directory reaches every session: that is the crew level, for skills the operator
+keeps as files on the machine. An imported skill attached to the crew reaches every session too, with
+`quay skill attach crew <name>`, taking the same word where a workspace goes that `quay context set
+crew` takes. That is the crew level again, reached from the tool rather than from the filesystem,
+which matters because a crew on a pod has no directory to drop files into and because setting a crew
+up once is the difference from setting each workspace up again. A skill imported and attached to one
+workspace reaches that workspace's sessions: that is the workspace level, and it is where something
+narrow belongs, because a capability for one kind of work should not be in front of every session the
+crew has.
+
+A skill the crew holds is rendered into each workspace's own directory and mounted from there, exactly
+as a workspace's own skill is, so the writing out, the sweeping when it is let go, and the staleness of
+a sandbox born before it all come for free rather than as a second path.
 
 Both are mounted read only at the same path inside the sandbox, so whoever reads the index does not need
 to know which it came from. Where a name is held by both, the workspace's own wins: two mounts on one

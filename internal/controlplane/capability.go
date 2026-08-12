@@ -13,6 +13,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
+// crewScope is what a caller says to mean the whole crew rather than one workspace. It is the same
+// word the context calls address uses, so a skill and a piece of context are given to everything the
+// crew does the same way.
+const crewScope = "crew"
+
 // capability is everything a session holds, answered in one place: the skills, where each mounts
 // inside the sandbox, and which of them live in the store and need their files written to the host
 // before a mount can serve them. The question used to be answered four separate times per sandbox
@@ -55,6 +60,7 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Thread) c
 	var caps capability
 	attached, err := s.store.WorkspaceSkills(ctx, session.GetWorkspace())
 	if err == nil {
+		attached = s.withCrewSkills(ctx, attached)
 		caps.attached = attached
 		caps.attachedKnown = true
 		workspaceHost, hostKnown := s.storage.WorkspaceSkillsHost(session.GetWorkspace())
@@ -94,6 +100,32 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Thread) c
 	}
 	sort.Slice(caps.held, func(i, j int) bool { return caps.held[i].Name < caps.held[j].Name })
 	return s.withoutUnusable(ctx, session, caps)
+}
+
+// withCrewSkills adds what the crew holds to what this workspace holds, the workspace winning a name
+// collision because the narrower statement is the more deliberate one.
+//
+// A crew skill is rendered into the workspace's own directory and mounted from there, exactly like a
+// skill the workspace attached itself. Duplicating the files per workspace costs a few kilobytes and
+// buys the whole existing path: the writing out, the sweeping when it is let go, the staleness of a
+// sandbox born before it, and one mount root rather than two.
+//
+// A failure reading the crew's skills leaves the workspace's own alone, for the same reason the
+// caller survives a failed workspace read: fewer skills is better than no turn.
+func (s *Server) withCrewSkills(ctx context.Context, attached []store.Imported) []store.Imported {
+	crew, err := s.store.CrewSkills(ctx)
+	if err != nil || len(crew) == 0 {
+		return attached
+	}
+	out := attached
+	for _, one := range crew {
+		if slices.ContainsFunc(attached, func(held store.Imported) bool { return held.Name == one.Name }) {
+			continue
+		}
+		out = append(out, one)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // withoutUnusable takes out what the workspace cannot actually use, keeping the reason.
