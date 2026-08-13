@@ -53,7 +53,7 @@ commands:
   flow answer <run> <answer>              tell a run waiting on you what you decided
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list threads, which thread and threads also do
-  turns <session id>                      what a session was asked, and what came back
+  turns <thread>                          what a thread was asked, and what came back
   mode <thread> [<mode>]                  what a thread's turns may do without asking: plan, edits
                                           or dangerous. A dispatched turn has nobody to approve
                                           anything, so this is how it is given room to work
@@ -63,7 +63,7 @@ commands:
                                           crew does, which skill attach takes too
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
-  attach <session id>                     open a session's conversation, with its history
+  attach <thread>                         open a thread's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works

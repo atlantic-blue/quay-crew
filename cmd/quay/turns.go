@@ -18,7 +18,7 @@ import (
 // that, `quay attach` opens the conversation itself.
 func runTurns(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: quay turns <session id>")
+		return fmt.Errorf("usage: quay turns <thread>\n\na thread is its id, its handle, or its address")
 	}
 
 	sessionID, err := resolveSession(ctx, client, args[0])
