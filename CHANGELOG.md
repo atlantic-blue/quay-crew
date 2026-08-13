@@ -6,6 +6,18 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 13 August 2026
+
+- **`quay` opens the crew. It no longer refuses to.** `quay use atlantic-blue` printed "now in
+  atlantic-blue", and `quay` then answered "say where to open: `quay use <workspace>/<project>`
+  first". The workspace just named counted for nothing: the driver read where you were standing only
+  when you stood in a project, then counted projects across the whole crew, and refused because there
+  was more than one. Now it narrows to the workspace you are standing in, so a workspace holding one
+  project opens it. Where it still cannot choose, the console opens on its own and you pick from it,
+  which is what the same code already did for a crew with no projects at all. `quay` opening the crew
+  is the whole command; telling you to type something first was never an answer. It had no test, in
+  the way an untested branch usually does not; it has a table test now, mutation checked.
+
 ## 12 August 2026
 
 - **Ctrl+c quits the console from wherever you are standing.** It took two presses: inside the command

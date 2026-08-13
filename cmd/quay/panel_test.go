@@ -271,3 +271,86 @@ func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
 		})
 	}
 }
+
+// Which project the driver opens in, which is what `quay` on its own has to decide before it can put
+// a conversation beside the console.
+//
+// It had no test at all, and it was wrong in the way an untested branch usually is: it read where you
+// are standing only when you stood in a project, then counted projects across the whole crew. So
+// `quay use atlantic-blue` printed "now in atlantic-blue", and `quay` then refused to open, because
+// the crew held eight projects and it would not choose between them. The workspace the operator had
+// just named counted for nothing.
+func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
+	for _, one := range []struct {
+		name     string
+		standing []string
+		want     string
+		beside   bool
+	}{
+		{
+			name:     "standing in a project opens that project",
+			standing: []string{"use", "acme/house-bills"},
+			want:     "house-bills",
+			beside:   true,
+		},
+		{
+			name:     "standing in a workspace with one project opens that project",
+			standing: []string{"use", "solo"},
+			want:     "only-one",
+			beside:   true,
+		},
+		{
+			name:     "standing in a workspace with two projects opens the console alone",
+			standing: []string{"use", "acme"},
+			beside:   false,
+		},
+		{
+			name:   "standing nowhere with projects in reach opens the console alone",
+			beside: false,
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			client := testClient(t)
+			mustRun(t, client, "workspace", "create", "acme")
+			mustRun(t, client, "project", "create", "house-bills")
+			mustRun(t, client, "project", "create", "gardening")
+			mustRun(t, client, "workspace", "create", "solo")
+			mustRun(t, client, "project", "create", "only-one")
+			if len(one.standing) > 0 {
+				mustRun(t, client, one.standing...)
+			} else {
+				// Making a project moves you into it, so standing nowhere means forgetting where the
+				// setup left us rather than saying so: `quay use` has no word for nowhere.
+				t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			}
+
+			project, err := driverProject(context.Background(), client)
+			if !one.beside {
+				if err == nil {
+					return
+				}
+				if !errors.Is(err, errNothingBeside) {
+					t.Fatalf("driverProject refused with %v, and every refusal here has to let the "+
+						"console open on its own: quay opens the crew", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("driverProject: %v", err)
+			}
+			listed, err := client.ListProjects(context.Background(), &quaycrewv1.ListProjectsRequest{})
+			if err != nil {
+				t.Fatalf("ListProjects: %v", err)
+			}
+			for _, held := range listed.GetProjects() {
+				if held.GetId() == project {
+					if held.GetName() != one.want {
+						t.Fatalf("the driver opened in %q, want %q", held.GetName(), one.want)
+					}
+					return
+				}
+			}
+			t.Fatalf("the driver opened in %q, which is no project this crew has", project)
+		})
+	}
+}
