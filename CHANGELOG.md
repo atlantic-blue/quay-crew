@@ -8,6 +8,19 @@ read, or run with `make features`.
 
 ## 13 August 2026
 
+- **A session can sign its commits.** A session commits as the operator and had no way to sign, so on
+  any repository that requires verified signatures it produced a branch nobody could merge, which is
+  most of the work it was asked to do. A session on this crew hit exactly that today and refused to
+  commit rather than commit unsigned, which is what its rules ask for and is also a dead end. Now a
+  workspace holding `GIT_SSH_SIGNING_KEY` gets sandboxes that sign: the key is written once when the
+  sandbox is born, under `umask 077`, and git is pointed at it. An ssh key rather than a gpg one,
+  because signing with ssh needs one private key file and no agent, no keyring and no pinentry prompt
+  to hang a turn nobody is watching. A workspace without the key is untouched, because a private key
+  is the most sensitive thing this crew carries and silence is the right default. The key is read
+  from the container's own environment rather than passed as an argument, where every process could
+  read it and the turn record would keep it.
+  ([#279](https://github.com/atlantic-blue/quay-crew/issues/279))
+
 - **`quay` opens the crew. It no longer refuses to.** `quay use atlantic-blue` printed "now in
   atlantic-blue", and `quay` then answered "say where to open: `quay use <workspace>/<project>`
   first". The workspace just named counted for nothing: the driver read where you were standing only

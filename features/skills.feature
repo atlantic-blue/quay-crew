@@ -367,3 +367,21 @@ Feature: A session is given the skills the crew has
     And something appends "the vendor prefers invoices on Fridays" to the workspace memory file
     And the operator dispatches "and again" to the same thread
     Then the workspace context carries "the vendor prefers invoices on Fridays"
+
+  # A session commits as the operator, and on a repository that requires verified signatures a commit
+  # it cannot sign produces a branch nobody can merge. The key travels the way every other credential
+  # does, as a workspace secret, and the sandbox writes it out once when it is born.
+  #
+  # An ssh key rather than a gpg one: signing with ssh needs one private key file and no agent, no
+  # keyring and no pinentry prompt to hang a turn nobody is watching.
+  Scenario: A workspace holding a signing key gets sandboxes that sign
+    Given the workspace has the secret "GIT_SSH_SIGNING_KEY" set to "-----BEGIN OPENSSH PRIVATE KEY-----"
+    When the operator dispatches "hello" to the project
+    Then the sandbox was set up to sign commits
+    And the signing key was never passed as an argument
+
+  # Off unless the workspace holds the key. A private key is the most sensitive thing this crew would
+  # carry, so a crew that has not opted in is left exactly as it was.
+  Scenario: A workspace with no signing key is left alone
+    When the operator dispatches "hello" to the project
+    Then the sandbox was not set up to sign commits

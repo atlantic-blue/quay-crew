@@ -299,5 +299,9 @@ if the rest waits:
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does
    things that cannot be undone, so they are attached separately.
 7. A skills view in the console.
-8. Signing forwarded into the sandbox, per workspace, off by default.
+8. Signing forwarded into the sandbox, per workspace, off by default. Done. A workspace holding
+   `GIT_SSH_SIGNING_KEY` gets sandboxes that sign, and one without it is untouched. An ssh key rather
+   than a gpg one: one private key file, no agent, no keyring and no pinentry prompt to hang a turn
+   nobody is watching. The key is read from the container's own environment rather than passed as an
+   argument, and written under `umask 077`.
 9. Propose and approve, so an agent can offer a skill and nothing it offers applies itself.
