@@ -149,6 +149,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHeader(ctx, client, args[1:], out, addr)
 	case "console":
 		return runBareConsole(ctx, client, args[1:], addr)
+	case "hook-ste100":
+		return runSTE100Hook(args[1:], os.Stdin, out)
 	// thread and threads answer here too. The protocol says thread, the usage says thread three
 	// times over, and the command was sessions alone, so the tool taught a word it then refused.
 	case "sessions", "session", "threads", "thread":

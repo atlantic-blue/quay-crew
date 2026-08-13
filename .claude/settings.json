@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "quay hook-ste100",
+            "statusMessage": "Checking the last message against Simplified Technical English"
+          }
+        ]
+      }
+    ]
+  }
+}
