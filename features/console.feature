@@ -171,6 +171,7 @@ Feature: The operator sees the crew from the console
       | session     |
       | acme        |
       | house-bills |
+      | dangerous   |
       | hello       |
     Then the crew has 1 session
     And the crew has 1 workspace
@@ -210,6 +211,7 @@ Feature: The operator sees the crew from the console
       | session     |
       | acme        |
       | house-bills |
+      | dangerous   |
       | hello       |
     Then the console is asking nothing
     And the console lists the session the wizard started
@@ -240,3 +242,25 @@ Feature: The operator sees the crew from the console
     And the help panel names what the crew is running
     And the help panel says what the keys on this view do
     And the help panel never asks a question it has already answered
+
+  # A sandbox is born with its capabilities and never drifts, so the mode is decided when the thread
+  # starts rather than changed afterwards, which costs a restart. A thread born unable to act is a
+  # thread that apologises: on this crew one was asked to clone a repository and answered that it
+  # needed approval from somebody who was not there.
+  Scenario: The wizard asks what a thread may do, and the thread is born in it
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | plan        |
+      | hello       |
+    Then the crew has 1 session
+    And that thread's mode is "plan"
+
+  Scenario: The wizard refuses a mode that is not one of the three
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | whatever    |
+    Then the console says "not one of them"

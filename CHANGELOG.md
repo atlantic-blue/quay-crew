@@ -8,6 +8,17 @@ read, or run with `make features`.
 
 ## 13 August 2026
 
+- **The wizard asks what a thread may do, and the thread is born in it.** `n` then `session` started a
+  thread and never asked, so every one arrived in the crew's default. That is the one decision worth
+  making at birth: a sandbox is born with its capabilities and never drifts, so changing the mode
+  afterwards costs a restart, and a thread born unable to act is a thread that apologises. On this
+  crew one was asked to clone a repository and answered that it needed approval from somebody who was
+  not there. The wizard now offers plan, edits and dangerous, in the words `quay mode` already takes,
+  and refuses anything else. `DispatchRequest` carries the mode so it applies before the sandbox is
+  built rather than after. The guided first run does not ask: it is already six questions long, and a
+  thread it starts keeps the default exactly as it did.
+  ([#270](https://github.com/atlantic-blue/quay-crew/issues/270))
+
 - **A session can sign its commits.** A session commits as the operator and had no way to sign, so on
   any repository that requires verified signatures it produced a branch nobody could merge, which is
   most of the work it was asked to do. A session on this crew hit exactly that today and refused to

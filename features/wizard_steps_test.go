@@ -167,3 +167,30 @@ func (c *consoleWorld) answerWizard(answers *godog.Table) error {
 	}
 	return nil
 }
+
+// The mode a thread was born in, read off the crew rather than off the wizard, because what matters
+// is what the thread holds and not what was typed at it.
+func initializeWizardModeSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^that thread's mode is "([^"]*)"$`, func(ctx context.Context, want string) error {
+		listed, err := worldFrom(ctx).client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		if err != nil {
+			return err
+		}
+		if len(listed.GetThreads()) != 1 {
+			return fmt.Errorf("the crew has %d threads, so there is no single one to ask about",
+				len(listed.GetThreads()))
+		}
+		if got := listed.GetThreads()[0].GetPermissionMode(); got != want {
+			return fmt.Errorf("the thread was born in %q, want %q", got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console says "([^"]*)"$`, func(ctx context.Context, want string) error {
+		view := consoleFrom(ctx).model.View()
+		if !strings.Contains(view, want) {
+			return fmt.Errorf("the console does not say %q:\n%s", want, view)
+		}
+		return nil
+	})
+}

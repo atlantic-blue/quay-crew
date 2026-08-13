@@ -802,6 +802,21 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, storeError(err, "project")
 	}
 
+	// A mode given here applies before the sandbox is built, because a sandbox is born with its
+	// capabilities and never drifts: setting it afterwards costs a restart, and a thread born unable
+	// to read its own skills is the failure this prevents.
+	if mode := req.GetPermissionMode(); mode != "" {
+		if !model.KnownPermissionMode(mode) {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"%q is not a permission mode: use %s, %s or %s",
+				mode, model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
+		}
+		if err := s.store.SetPermissionMode(ctx, session.GetId(), mode); err != nil {
+			return nil, storeError(err, "thread")
+		}
+		session.PermissionMode = mode
+	}
+
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", "failed")

@@ -252,6 +252,13 @@ message DispatchRequest {
   string project = 1;
   string handle = 2;
   string text = 3;
+  // permission_mode is what the thread's turns may do without asking, and it applies from this turn
+  // on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the thread as it is, which is what
+  // every caller that does not care sends.
+  //
+  // It travels with the dispatch that starts a thread because a sandbox is born with its
+  // capabilities and never drifts. Starting a thread and then changing its mode costs a restart.
+  string permission_mode = 4;
 }
 message DispatchResponse {
   string id = 1;

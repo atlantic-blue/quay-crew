@@ -79,6 +79,10 @@ const (
 	stepMessage
 	// stepPickSkill chooses a skill the crew holds in its store, to attach to the workspace.
 	stepPickSkill
+	// stepMode chooses what the thread's turns may do without asking. It is asked rather than
+	// defaulted, because a sandbox is born with its capabilities: a thread started in the wrong mode
+	// costs a restart, and one that cannot act is a thread that apologises instead of working.
+	stepMode
 	// stepWorking is the crew being asked to make it.
 	stepWorking
 )
@@ -95,12 +99,23 @@ func (k wizardKind) steps() []wizardStep {
 	case kindContext:
 		return []wizardStep{stepPickWorkspace, stepPickProject, stepContext}
 	case kindSession:
-		return []wizardStep{stepPickWorkspace, stepPickProject, stepMessage}
+		return []wizardStep{stepPickWorkspace, stepPickProject, stepMode, stepMessage}
 	case kindSkill:
 		return []wizardStep{stepPickWorkspace, stepPickSkill}
 	default:
 		return nil
 	}
+}
+
+// without is steps with one dropped, for a flow that does not ask that question.
+func without(steps []wizardStep, drop wizardStep) []wizardStep {
+	kept := make([]wizardStep, 0, len(steps))
+	for _, step := range steps {
+		if step != drop {
+			kept = append(kept, step)
+		}
+	}
+	return kept
 }
 
 // wizardChoice is one thing the crew already has, offered where a step needs a parent.
@@ -126,7 +141,10 @@ type wizard struct {
 	secret  string
 	context string
 	message string
-	skill   wizardChoice
+	// mode is what the thread's turns may do without asking, in the protocol's words rather than the
+	// operator's, because it travels straight into the dispatch that starts the thread.
+	mode  string
+	skill wizardChoice
 
 	// choices is what the current step can offer, and loaded says the crew has answered. The two are
 	// separate because no workspaces at all is a real answer and needs its own sentence.
@@ -181,6 +199,12 @@ func (w wizard) step() wizardStep {
 		return stepKind
 	}
 	steps := w.kind.steps()
+	// The guided setup does not ask. It is the first run of an empty crew, walking somebody through
+	// six questions already, and a thread it starts keeps the crew's default the way every thread did
+	// before this step existed. Asking is for the wizard the operator opens deliberately.
+	if w.guided {
+		steps = without(steps, stepMode)
+	}
 	if w.at >= len(steps) {
 		return stepWorking
 	}
@@ -192,6 +216,18 @@ func (w wizard) picking() bool {
 	step := w.step()
 	return step == stepPickWorkspace || step == stepPickProject || step == stepPickSkill
 }
+
+// modeWords are what a mode is called where an operator types it, which is what `quay mode` already
+// takes. The protocol's own words are longer and nobody types them.
+var modeWords = map[string]string{
+	"plan":      model.PermissionPlan,
+	"edits":     model.PermissionAcceptEdits,
+	"dangerous": model.PermissionBypass,
+}
+
+// modeOrder is the order the modes are offered, narrowest first, so the most permissive is never the
+// one under the cursor.
+var modeOrder = []string{"plan", "edits", "dangerous"}
 
 // prompt is what the step asks, and what pressing enter accepts.
 func (w wizard) prompt() string {
@@ -220,6 +256,10 @@ func (w wizard) prompt() string {
 		// The reminder rides on the question, because a skill whose secret is unset refuses the turn
 		// rather than the attach, and attaching is the moment somebody can still act on it.
 		return "which skill for " + w.workspace.name + " (set the secrets it names on this workspace)"
+	case stepMode:
+		// What it may do rather than what the mode is called: an operator picking this is deciding
+		// how much room the thread gets, not naming a setting.
+		return "what may it do without asking (plan, edits, dangerous)"
 	default:
 		return "making it"
 	}
@@ -239,6 +279,8 @@ func (w wizard) offers() []string {
 		for _, kind := range kinds {
 			names = append(names, kind.String())
 		}
+	case w.step() == stepMode:
+		names = append(names, modeOrder...)
 	case w.picking():
 		for _, choice := range w.choices {
 			names = append(names, choice.name)
@@ -312,6 +354,12 @@ func (w wizard) accept() (wizard, error) {
 			return w, fmt.Errorf("%s: this one is needed", w.prompt())
 		}
 		w.context = w.typed
+	case stepMode:
+		mode, known := modeWords[strings.ToLower(answer)]
+		if !known {
+			return w, fmt.Errorf("%q is not one of them: plan, edits or dangerous", answer)
+		}
+		w.mode = mode
 	case stepMessage:
 		if answer == "" {
 			return w, fmt.Errorf("%s: this one is needed", w.prompt())
@@ -595,7 +643,7 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 			}
 		case kindSession:
 			if _, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-				Project: plan.project.id, Text: plan.message,
+				Project: plan.project.id, Text: plan.message, PermissionMode: plan.mode,
 			}); err != nil {
 				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("a session in %s: %w", plan.where(), err)}
 			}

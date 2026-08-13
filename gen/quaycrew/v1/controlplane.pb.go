@@ -2270,12 +2270,19 @@ func (*SetSecretResponse) Descriptor() ([]byte, []int) {
 
 // DispatchRequest starts a new thread (handle empty) or continues an existing one.
 type DispatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	Handle        string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
-	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Handle  string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
+	Text    string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	// permission_mode is what the thread's turns may do without asking, and it applies from this turn
+	// on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the thread as it is, which is what
+	// every caller that does not care sends.
+	//
+	// It travels with the dispatch that starts a thread because a sandbox is born with its
+	// capabilities and never drifts. Starting a thread and then changing its mode costs a restart.
+	PermissionMode string `protobuf:"bytes,4,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *DispatchRequest) Reset() {
@@ -2325,6 +2332,13 @@ func (x *DispatchRequest) GetHandle() string {
 func (x *DispatchRequest) GetText() string {
 	if x != nil {
 		return x.Text
+	}
+	return ""
+}
+
+func (x *DispatchRequest) GetPermissionMode() string {
+	if x != nil {
+		return x.PermissionMode
 	}
 	return ""
 }
@@ -4923,11 +4937,12 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\tR\x05value\"\x13\n" +
-	"\x11SetSecretResponse\"W\n" +
+	"\x11SetSecretResponse\"\x80\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
-	"\x04text\x18\x03 \x01(\tR\x04text\"P\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12'\n" +
+	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\"P\n" +
 	"\x10DispatchResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x14\n" +
