@@ -8,6 +8,16 @@ read, or run with `make features`.
 
 ## 13 August 2026
 
+- **A command takes the identifier the listing shows you.** A listing prints two identifiers for
+  every thread, the id and the handle, and dispatch takes an address on top of those. `attach`,
+  `mode`, `panel` and `turns` took only the id. So an operator read `300979a5` off the thread column,
+  typed it back, and got `no session with id or prefix "300979a5"` from all four. The mode of a new
+  thread was the case that hurt: you could see the thread and you could not give it room to work.
+  All four now take the id, the handle, a prefix of either, and an address, which is every form on
+  the screen. A refusal names the threads that exist and both of their identifiers, rather than only
+  repeating what was typed.
+  ([#265](https://github.com/atlantic-blue/quay-crew/issues/265))
+
 - **The wizard asks what a thread may do, and the thread is born in it.** `n` then `session` started a
   thread and never asked, so every one arrived in the crew's default. That is the one decision worth
   making at birth: a sandbox is born with its capabilities and never drifts, so changing the mode

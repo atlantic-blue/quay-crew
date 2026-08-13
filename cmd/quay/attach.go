@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
 
 // runAttach opens a session's conversation: it asks the control plane where the conversation is, then
@@ -17,7 +19,7 @@ import (
 // puts you in the conversation, with its history, able to keep typing.
 func runAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: quay attach <session id>")
+		return fmt.Errorf("usage: quay attach <thread>\n\na thread is its id, its handle, or its address")
 	}
 
 	sessionID, err := resolveSession(ctx, client, args[0])
@@ -53,33 +55,90 @@ func attachCommand(spec *quaycrewv1.AttachThreadResponse) (*exec.Cmd, error) {
 	return exec.Command("docker", args...), nil
 }
 
-// resolveSession turns what the operator typed into a session id. Listings print identifiers
-// shortened, so the thing on their screen is a prefix, and typing it back has to work.
+// resolveSession turns what the operator typed into a thread id.
+//
+// A listing prints two identifiers for every thread, the id and the handle, and dispatch takes an
+// address on top of those. All three are on the operator's screen, so all three get typed back, and
+// each one has to reach the thread. Until this took more than the id, the identifier in the thread
+// column was refused by every command that reads it, which is most of them.
+//
+// Identifiers are printed shortened, so a prefix counts.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, reference string) (string, error) {
-	if strings.TrimSpace(reference) == "" {
-		return "", fmt.Errorf("a session id is required")
+	typed := strings.TrimSpace(reference)
+	if typed == "" {
+		return "", fmt.Errorf("a thread is required: its id, its handle, or its address")
 	}
 	resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
 	if err != nil {
 		return "", err
 	}
+	if strings.Contains(typed, workspace.Separator) {
+		return threadAtAddress(ctx, client, typed, resp.GetThreads())
+	}
+	return threadWithIdentifier(typed, resp.GetThreads())
+}
 
-	matches := make([]string, 0, 1)
-	for _, session := range resp.GetThreads() {
-		if session.GetId() == reference {
-			return reference, nil
+// threadAtAddress reads an address the way dispatch does, then turns the handle it lands on into the
+// thread id every other command works in.
+func threadAtAddress(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string, threads []*quaycrewv1.Thread) (string, error) {
+	path, err := workspace.ParsePath(typed)
+	if err != nil {
+		return "", err
+	}
+	if path.Thread == "" {
+		return "", fmt.Errorf("%q names a project, not a thread: add the thread from the listing, for example %s/3cb04bf5",
+			typed, typed)
+	}
+	located, err := workspace.ResolvePath(ctx, client, path)
+	if err != nil {
+		return "", err
+	}
+	for _, thread := range threads {
+		if thread.GetHandle() == located.ThreadID {
+			return thread.GetId(), nil
 		}
-		if strings.HasPrefix(session.GetId(), reference) {
-			matches = append(matches, session.GetId())
+	}
+	return "", fmt.Errorf("%q resolved to a thread the crew no longer lists", typed)
+}
+
+// threadWithIdentifier matches a bare identifier against both of the ones a listing prints. An exact
+// match wins outright, so a short identifier that happens to prefix another thread still resolves to
+// itself.
+func threadWithIdentifier(typed string, threads []*quaycrewv1.Thread) (string, error) {
+	matches := make([]string, 0, 1)
+	for _, thread := range threads {
+		if thread.GetId() == typed || thread.GetHandle() == typed {
+			return thread.GetId(), nil
+		}
+		if strings.HasPrefix(thread.GetId(), typed) || strings.HasPrefix(thread.GetHandle(), typed) {
+			matches = append(matches, thread.GetId())
 		}
 	}
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("no session with id or prefix %q", reference)
+		return "", &workspace.NotFoundError{
+			What: "thread", Name: typed,
+			Have: identifiersOf(threads),
+			Make: `start one with quay dispatch "..."`,
+		}
 	case 1:
 		return matches[0], nil
 	default:
-		return "", fmt.Errorf("%q matches %d sessions, type more of the id", reference, len(matches))
+		sort.Strings(matches)
+		return "", &workspace.AmbiguousError{What: "threads", Name: typed, IDs: matches}
 	}
+}
+
+// identifiersOf is every thread the crew holds, written as the listing writes it: the id, then the
+// handle beside it. Both, because the operator was refused for typing one of them and has no way to
+// tell from the refusal which one the command wanted.
+func identifiersOf(threads []*quaycrewv1.Thread) []string {
+	have := make([]string, 0, len(threads))
+	for _, thread := range threads {
+		have = append(have, fmt.Sprintf("%s (thread %s)",
+			display.ShortID(thread.GetId()), display.ShortID(thread.GetHandle())))
+	}
+	sort.Strings(have)
+	return have
 }
