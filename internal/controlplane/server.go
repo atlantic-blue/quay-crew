@@ -316,7 +316,12 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 // A session's working directory starts empty on purpose: a repository is cloned in conversation,
 // following the git skill, so the only provisioning a sandbox needs is its skills.
 func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
-	return s.readySkills(ctx, session, held, box)
+	if err := s.readySkills(ctx, session, held, box); err != nil {
+		return err
+	}
+	// After the skills, because a skill can refuse the turn and signing never does: a sandbox that
+	// cannot be set up to sign is one that asks the operator to commit, which the git skill covers.
+	return s.readySigning(ctx, session, box)
 }
 
 // readySkills checks the sandbox has what its skills need, and runs each skill's setup once.

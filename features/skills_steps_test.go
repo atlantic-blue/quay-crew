@@ -879,3 +879,48 @@ func importedNames(resp *quaycrewv1.ListSkillsResponse) []string {
 	}
 	return out
 }
+
+// What the sandbox was told to do about signing. The assertion is on the commands the sandbox ran,
+// because that is the whole of it: the control plane writes no key itself and holds no git state.
+func initializeSigningSteps(sc *godog.ScenarioContext) {
+	ran := func(ctx context.Context) string {
+		var all []string
+		for _, box := range worldFrom(ctx).provider.Boxes {
+			for _, spec := range box.Ran {
+				all = append(all, strings.Join(spec.Argv, " "))
+			}
+		}
+		return strings.Join(all, "\n")
+	}
+
+	sc.Step(`^the sandbox was set up to sign commits$`, func(ctx context.Context) error {
+		did := ran(ctx)
+		for _, want := range []string{"gpg.format ssh", "user.signingkey", "commit.gpgsign true"} {
+			if !strings.Contains(did, want) {
+				return fmt.Errorf("the sandbox was never told %q. It ran:\n%s", want, did)
+			}
+		}
+		if !strings.Contains(did, "umask 077") {
+			return fmt.Errorf("the key is written without umask 077, so it is readable on disk first")
+		}
+		return nil
+	})
+
+	sc.Step(`^the signing key was never passed as an argument$`, func(ctx context.Context) error {
+		did := ran(ctx)
+		if strings.Contains(did, "BEGIN OPENSSH PRIVATE KEY") {
+			return fmt.Errorf("the key itself is in a command line, where every process can read it:\n%s", did)
+		}
+		if !strings.Contains(did, "$GIT_SSH_SIGNING_KEY") {
+			return fmt.Errorf("the setup does not read the key from the environment:\n%s", did)
+		}
+		return nil
+	})
+
+	sc.Step(`^the sandbox was not set up to sign commits$`, func(ctx context.Context) error {
+		if did := ran(ctx); strings.Contains(did, "commit.gpgsign") {
+			return fmt.Errorf("a workspace with no signing key was set up to sign anyway:\n%s", did)
+		}
+		return nil
+	})
+}
