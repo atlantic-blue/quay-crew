@@ -1963,7 +1963,7 @@ func TestTheWizardMakesOneThing(t *testing.T) {
 		{"project", []string{"project", "acme", "gardening"}, func(c *wizardClient) []string { return c.projects }},
 		{"secret", []string{"secret", "acme", "tok-xyz"}, func(c *wizardClient) []string { return c.secrets }},
 		{"context", []string{"context", "acme", "house-bills", "the water bill"}, func(c *wizardClient) []string { return c.contexts }},
-		{"session", []string{"session", "acme", "house-bills", "hello"}, func(c *wizardClient) []string { return c.dispatched }},
+		{"session", []string{"session", "acme", "house-bills", "dangerous", "hello"}, func(c *wizardClient) []string { return c.dispatched }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			client := &wizardClient{}

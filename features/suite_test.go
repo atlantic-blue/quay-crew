@@ -418,6 +418,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeUsageSteps(sc)
 	initializeSkillSteps(sc)
 	initializeSigningSteps(sc)
+	initializeWizardModeSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
