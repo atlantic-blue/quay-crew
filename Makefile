@@ -3,17 +3,21 @@
 
 PROJECT ?=
 COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
-COMPOSE := docker compose -p $(COMPOSE_PROJECT) -f deploy/docker-compose.yml
 GOBIN := $(shell go env GOPATH)/bin
+
+# CONFIG_DIR is where quay keeps what the operator chose, beside the context file the tool already
+# writes there. It is deliberately outside this checkout: a crew that is installed rather than cloned
+# has no checkout to put configuration in, and configuration that lives in one cannot be given to
+# anybody. Compose is told the path rather than left to find a file next to its own compose file.
+CONFIG_DIR ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/quay
+ENV_FILE ?= $(CONFIG_DIR)/env
+
+COMPOSE := docker compose -p $(COMPOSE_PROJECT) --env-file $(ENV_FILE) -f deploy/docker-compose.yml
 
 # BINDIR is where `make install` puts the quay binary. Left unset, it installs over whatever quay
 # your shell already runs, and falls back to Go's bin directory when there is none, so installing
 # always leaves you running the build you just made rather than an older copy earlier on your PATH.
 BINDIR ?=
-
-# ENV_FILE is the configuration compose reads. Overridable so the drift check below can be run against
-# a fixture rather than against the operator's own file.
-ENV_FILE ?= deploy/.env
 
 # UPGRADE_BRANCH is the branch `make upgrade` is willing to build the stack from. It exists because a
 # stack built from somebody's half finished branch is a stack nobody can reason about.
@@ -33,10 +37,27 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image env-check help
+.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image config env-check help
+
+# print-<name> is what a variable expands to. The tests that check where configuration lives read it
+# through this, so they see what make actually computes rather than a pattern matched over the text.
+print-%:
+	@echo "$($*)"
+
+## config: create the configuration file from the shipped template, if it is not there yet
+#
+# Compose is given the path, so the file has to exist before any compose command runs. Seeding it
+# rather than refusing means a first `make up` works, and the operator edits a file that already says
+# what each key is for.
+config:
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		mkdir -p "$(dir $(ENV_FILE))"; \
+		cp deploy/env.example "$(ENV_FILE)"; \
+		echo "wrote $(ENV_FILE) from deploy/env.example. Edit it to say which model and image to run."; \
+	fi
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
-up:
+up: config
 	$(COMPOSE) up --build -d
 
 ## start: alias for up
@@ -46,16 +67,17 @@ start: up
 sandbox-image:
 	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
 
-## env-check: name the configuration in deploy/env.example that your deploy/.env does not have
+## env-check: name the configuration in deploy/env.example that your configuration file does not have
 #
-# An upgrade adds configuration, and nobody's .env grows with it. Compose fills a key that is not
-# there with an empty string, so the feature it turns on is simply off and nothing says why: a driver
-# whose crew had no address spent an evening reporting that the control plane was refusing
+# An upgrade adds configuration, and nobody's configuration grows with it. Compose fills a key that is
+# not there with an empty string, so the feature it turns on is simply off and nothing says why: a
+# driver whose crew had no address spent an evening reporting that the control plane was refusing
 # connections, while the control plane was up the whole time.
 env-check:
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		echo "note: no $(ENV_FILE), so the stack comes up with the defaults in the compose file."; \
-		echo "      copy deploy/env.example to deploy/.env to keep your model and image across upgrades."; \
+		echo "      run make config to write one from deploy/env.example, and keep your model and"; \
+		echo "      image across upgrades."; \
 		exit 0; \
 	fi; \
 	missing=""; \
@@ -95,6 +117,7 @@ upgrade:
 	@echo "rebuilding the sandbox image. Sessions run whatever it holds, so leaving it behind means"
 	@echo "upgrading the tool and the stack while every conversation keeps the build from before."
 	@$(MAKE) --no-print-directory sandbox-image
+	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
 	@echo "clearing the sandboxes from before the upgrade. They run the old image, the control plane"
 	@echo "has forgotten them, and their names would block those threads from starting again."
@@ -106,19 +129,19 @@ upgrade:
 	$(COMPOSE) up --build -d
 
 ## up-observability: also start Grafana, Loki, Tempo, Prometheus
-up-observability:
+up-observability: config
 	$(COMPOSE) --profile observability up --build -d
 
 ## down: stop and remove everything
-down:
+down: config
 	$(COMPOSE) --profile observability down
 
 ## logs: follow all service logs
-logs:
+logs: config
 	$(COMPOSE) logs -f
 
 ## ps: show running services
-ps:
+ps: config
 	$(COMPOSE) ps
 
 ## proto: regenerate Go code from the protobuf contracts

@@ -8,7 +8,7 @@ import (
 
 // TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave.
 //
-// An upgrade adds configuration and nobody's `deploy/.env` grows with it. Compose fills a key that is
+// An upgrade adds configuration and nobody's own file grows with it. Compose fills a key that is
 // not there with an empty string, so whatever it turns on is simply off, and nothing anywhere says
 // why: a driver whose crew had no address reported that the control plane was refusing connections
 // for an evening, while the control plane was up the whole time.
@@ -39,7 +39,7 @@ func TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave(t *testing.T) {
 		{
 			name:    "no configuration at all",
 			file:    "deploy/testdata/absent.env",
-			want:    []string{"copy deploy/env.example"},
+			want:    []string{"make config"},
 			because: "the stack comes up on the compose defaults, which is worth saying once",
 		},
 	} {
