@@ -223,25 +223,55 @@ func builtBy(layout panel.Layout) string {
 // driverProject is the project the driver belongs to: where the operator is standing, or the only
 // project there is when they are standing nowhere yet.
 func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) (string, error) {
-	if current, err := currentPath(); err == nil && current.Project != "" {
+	current, err := currentPath()
+	if err != nil {
+		current = workspace.Path{}
+	}
+	if current.Project != "" {
 		resolved, err := workspace.ResolveProject(ctx, client, current.Workspace, current.Project)
 		if err == nil {
 			return resolved, nil
 		}
 	}
-	listed, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+
+	// Narrowed to the workspace you are standing in. `quay use atlantic-blue` said something, and
+	// counting projects across the whole crew threw it away: a crew with eight projects refused to
+	// open even though the workspace it was standing in held one.
+	request := &quaycrewv1.ListProjectsRequest{}
+	if current.Workspace != "" {
+		if id, err := workspace.Resolve(ctx, client, current.Workspace); err == nil {
+			request.Workspace = id
+		}
+	}
+	listed, err := client.ListProjects(ctx, request)
 	if err != nil {
 		return "", err
 	}
-	switch len(listed.GetProjects()) {
-	case 0:
-		return "", fmt.Errorf("%w: there is no project for the crew to open in, make one with `quay`, "+
-			"press n, and choose project", errNothingBeside)
-	case 1:
+	if len(listed.GetProjects()) == 1 {
 		return listed.GetProjects()[0].GetId(), nil
-	default:
-		return "", fmt.Errorf("say where to open: `quay use <workspace>/<project>` first")
 	}
+
+	// None to choose from, or too many to choose between. Both mean the same thing to the operator:
+	// there is nothing to put beside the console, so the console opens on its own and they pick from
+	// it. `quay` opens the crew. It does not refuse to open the crew and tell them to type something
+	// first, which is what it did with more than one project in reach.
+	return "", fmt.Errorf("%w: %s", errNothingBeside, whyNoConversation(current, len(listed.GetProjects())))
+}
+
+// whyNoConversation is the reason nothing opened beside the console, for a caller that reports it.
+// Opening the crew swallows this by design, because the console is the answer rather than a message.
+func whyNoConversation(current workspace.Path, projects int) string {
+	if projects == 0 {
+		if current.Workspace == "" {
+			return "there is no project for the crew to open in, press n and choose project"
+		}
+		return "there is no project in " + current.Workspace + ", press n and choose project"
+	}
+	if current.Workspace == "" {
+		return "there is more than one project, so say which: quay use <workspace>/<project>"
+	}
+	return "there is more than one project in " + current.Workspace +
+		", so say which: quay use " + current.Workspace + "/<project>"
 }
 
 // endConversationBeside ends the conversation the driver is in, so the next open starts one.
