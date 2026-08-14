@@ -92,6 +92,15 @@ type Action struct {
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
 	// this is what tells the crew about it.
 	After func(ctx context.Context, row Row) error
+	// Asks is what a key that wants a line of text says while it waits, for example "call it". A key
+	// with it opens the line rather than acting, and RunTyped is what acts once enter is pressed.
+	Asks string
+	// RunTyped acts on the row with the line that was typed. Empty text is a real answer, not a
+	// cancel: it is how a name is cleared. Escape is how nothing happens.
+	RunTyped func(ctx context.Context, row Row, typed string) error
+	// Typed is what the line starts as, so editing a name begins from the name rather than from
+	// nothing and the operator does not retype it to change one word.
+	Typed func(row Row) string
 	// Offers are the things this key asks the operator to pick between, in the order they are offered.
 	// A key with them opens a picker rather than acting, and RunChosen is what acts once one is
 	// picked. Confirm still applies, and Widens decides when: a key that both narrows and widens asks

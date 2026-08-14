@@ -676,6 +676,8 @@ func (m Model) footer() string {
 		return truncate(m.confirmPrompt(), m.width)
 	case modeChoose:
 		return truncate(m.choosePrompt(), m.width)
+	case modeType:
+		return truncate(m.typePrompt(), m.width)
 	case modeWizard:
 		return truncate(m.wizardPrompt(), m.width)
 	case modeOutput:
@@ -692,6 +694,13 @@ func (m Model) footer() string {
 func (m Model) confirmPrompt() string {
 	return prompt.Render(" ") + alert.Render(strings.ToLower(m.waiting.action.Label)+" "+
 		m.active.One()+" "+m.waiting.row.Name()+"?") + faint.Render("  y to confirm, any other key cancels")
+}
+
+// typePrompt draws the line being typed, naming what it is about so a name is typed onto a thread
+// rather than into the console.
+func (m Model) typePrompt() string {
+	return prompt.Render(" "+m.typing.action.Asks+" ") + m.typing.row.Name() + "  " +
+		m.input + prompt.Render("_") + faint.Render("  enter names it, empty clears it, esc cancels")
 }
 
 // choosePrompt draws what a key offers, with the one under the cursor marked, on the line the command

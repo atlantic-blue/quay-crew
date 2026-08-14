@@ -63,6 +63,12 @@ message Thread {
   // drifts; restarting the thread builds a new one, born current. A stopped thread is never
   // stale, because its next sandbox is born with the current set.
   bool stale = 13;
+  // label is what the operator calls this conversation, empty until they say. Nothing automatic ever
+  // writes it: a name somebody picked is the one thing in a listing that is certainly right.
+  string label = 14;
+  // description is what the crew observed the conversation to be, one line, written by the model that
+  // had the turn. Empty until a turn has happened. A listing prefers the label when there is one.
+  string description = 15;
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -493,6 +499,15 @@ message SetThreadPermissionModeRequest {
 message SetThreadPermissionModeResponse {
   Thread thread = 1;
 }
+message SetThreadLabelRequest {
+  string id = 1;
+  // label is what to call this conversation. Empty clears it, which is the only way back to the
+  // identifier, so it is a value rather than an absence.
+  string label = 2;
+}
+message SetThreadLabelResponse {
+  Thread thread = 1;
+}
 
 // RestoreThreadRequest brings an archived thread back into the default listing.
 message RestoreThreadRequest {
@@ -610,6 +625,7 @@ service ControlPlaneService {
   rpc ArchiveThread(ArchiveThreadRequest) returns (ArchiveThreadResponse);
   rpc RestoreThread(RestoreThreadRequest) returns (RestoreThreadResponse);
   rpc SetThreadPermissionMode(SetThreadPermissionModeRequest) returns (SetThreadPermissionModeResponse);
+  rpc SetThreadLabel(SetThreadLabelRequest) returns (SetThreadLabelResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
 

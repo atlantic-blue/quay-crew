@@ -335,6 +335,19 @@ func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
 	return nil
 }
 
+// SetLabel records what the operator calls a thread. Empty clears it.
+func (m *Memory) SetLabel(_ context.Context, id, label string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	session.Label = label
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return nil
+}
+
 // ArchiveSession stamps a session as put away.
 func (m *Memory) ArchiveSession(_ context.Context, id string) error {
 	m.mu.Lock()

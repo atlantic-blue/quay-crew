@@ -40,6 +40,9 @@ const (
 	// modeWizard is making something: a workspace, a project, and whatever else was offered along the
 	// way. Nothing is made until the last step, so leaving it creates nothing.
 	modeWizard
+	// modeType is a key asking for a line of text about the selected row, drawn where the command bar
+	// draws. Naming a thread is the one so far.
+	modeType
 	// modeChoose is a key offering a few named things and waiting for one to be picked. It draws
 	// where the confirmation draws, because it is the same kind of thing: a question with the answer
 	// on screen. Leaving it does nothing, so it is also how somebody reads what the choices are.
@@ -174,6 +177,9 @@ type Model struct {
 	height   int
 	mode     mode
 	choosing choice
+	// typing is the row a typed line will be applied to, held for the same reason a confirmation
+	// holds one: a refresh underneath must not move what the answer is about.
+	typing   pending
 	input    string
 	filter   string
 	err      error

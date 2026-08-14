@@ -269,7 +269,7 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Threa
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
 func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description
 		from sessions
 		where ($2 = '' or project = $2)
 		  and ($2 <> '' or $1 = '' or workspace = $1)
@@ -362,6 +362,19 @@ func (p *Postgres) SetPermissionMode(ctx context.Context, id, mode string) error
 	return nil
 }
 
+// SetLabel records what the operator calls a thread. Empty clears it.
+func (p *Postgres) SetLabel(ctx context.Context, id, label string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set label = $2, updated_at = now() where id = $1`, id, label)
+	if err != nil {
+		return fmt.Errorf("set label: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ArchiveSession stamps a session as put away. Nothing is deleted, which is the whole point: the row,
 // the conversation handle and the files on the host are all untouched, so restoring is one update.
 func (p *Postgres) ArchiveSession(ctx context.Context, id string) error {
@@ -421,7 +434,7 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Thread, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description
 		from sessions where `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -444,9 +457,10 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 		archivedAt                                             *time.Time
 		permissionMode                                         string
 		driver                                                 bool
+		label, description                                     string
 	)
 	if err := rows.Scan(&id, &workspace, &project, &thread, &status, &modelSessionID,
-		&createdAt, &updatedAt, &archivedAt, &permissionMode, &driver); err != nil {
+		&createdAt, &updatedAt, &archivedAt, &permissionMode, &driver, &label, &description); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	session := &quaycrewv1.Thread{
@@ -460,6 +474,8 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 		UpdatedAt:      timestamppb.New(updatedAt),
 		PermissionMode: permissionMode,
 		Driver:         driver,
+		Label:          label,
+		Description:    description,
 	}
 	if archivedAt != nil {
 		session.ArchivedAt = timestamppb.New(*archivedAt)
@@ -543,7 +559,7 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 		return nil, fmt.Errorf("open the driver: %w", err)
 	}
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver
+		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description
 		from sessions where project = $1 and driver`, project)
 	if err != nil {
 		return nil, fmt.Errorf("open the driver: %w", err)

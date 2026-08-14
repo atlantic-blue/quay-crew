@@ -40,6 +40,7 @@ type fakeClient struct {
 	archived         []string
 	restored         []string
 	modesSet         []string
+	labelsSet        []string
 	contexts         []*quaycrewv1.ContextDir
 	secrets          []*quaycrewv1.SecretRef
 	listErr          error
@@ -120,6 +121,11 @@ func (f *fakeClient) ListContexts(_ context.Context, _ *quaycrewv1.ListContextsR
 		return nil, f.listErr
 	}
 	return &quaycrewv1.ListContextsResponse{Dirs: f.contexts}, nil
+}
+
+func (f *fakeClient) SetThreadLabel(_ context.Context, req *quaycrewv1.SetThreadLabelRequest, _ ...grpc.CallOption) (*quaycrewv1.SetThreadLabelResponse, error) {
+	f.labelsSet = append(f.labelsSet, req.GetLabel())
+	return &quaycrewv1.SetThreadLabelResponse{}, nil
 }
 
 func (f *fakeClient) SetThreadPermissionMode(_ context.Context, req *quaycrewv1.SetThreadPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetThreadPermissionModeResponse, error) {

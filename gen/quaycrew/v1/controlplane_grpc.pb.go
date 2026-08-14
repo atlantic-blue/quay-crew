@@ -48,6 +48,7 @@ const (
 	ControlPlaneService_ArchiveThread_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveThread"
 	ControlPlaneService_RestoreThread_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreThread"
 	ControlPlaneService_SetThreadPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetThreadPermissionMode"
+	ControlPlaneService_SetThreadLabel_FullMethodName          = "/quaycrew.v1.ControlPlaneService/SetThreadLabel"
 	ControlPlaneService_ListContexts_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ListContexts"
 	ControlPlaneService_SetContext_FullMethodName              = "/quaycrew.v1.ControlPlaneService/SetContext"
 	ControlPlaneService_ImportSkill_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ImportSkill"
@@ -94,6 +95,7 @@ type ControlPlaneServiceClient interface {
 	ArchiveThread(ctx context.Context, in *ArchiveThreadRequest, opts ...grpc.CallOption) (*ArchiveThreadResponse, error)
 	RestoreThread(ctx context.Context, in *RestoreThreadRequest, opts ...grpc.CallOption) (*RestoreThreadResponse, error)
 	SetThreadPermissionMode(ctx context.Context, in *SetThreadPermissionModeRequest, opts ...grpc.CallOption) (*SetThreadPermissionModeResponse, error)
+	SetThreadLabel(ctx context.Context, in *SetThreadLabelRequest, opts ...grpc.CallOption) (*SetThreadLabelResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
 	ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error)
@@ -405,6 +407,16 @@ func (c *controlPlaneServiceClient) SetThreadPermissionMode(ctx context.Context,
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) SetThreadLabel(ctx context.Context, in *SetThreadLabelRequest, opts ...grpc.CallOption) (*SetThreadLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetThreadLabelResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetThreadLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListContextsResponse)
@@ -530,6 +542,7 @@ type ControlPlaneServiceServer interface {
 	ArchiveThread(context.Context, *ArchiveThreadRequest) (*ArchiveThreadResponse, error)
 	RestoreThread(context.Context, *RestoreThreadRequest) (*RestoreThreadResponse, error)
 	SetThreadPermissionMode(context.Context, *SetThreadPermissionModeRequest) (*SetThreadPermissionModeResponse, error)
+	SetThreadLabel(context.Context, *SetThreadLabelRequest) (*SetThreadLabelResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
 	ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error)
@@ -637,6 +650,9 @@ func (UnimplementedControlPlaneServiceServer) RestoreThread(context.Context, *Re
 }
 func (UnimplementedControlPlaneServiceServer) SetThreadPermissionMode(context.Context, *SetThreadPermissionModeRequest) (*SetThreadPermissionModeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetThreadPermissionMode not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetThreadLabel(context.Context, *SetThreadLabelRequest) (*SetThreadLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetThreadLabel not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListContexts not implemented")
@@ -1208,6 +1224,24 @@ func _ControlPlaneService_SetThreadPermissionMode_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_SetThreadLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetThreadLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetThreadLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetThreadLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetThreadLabel(ctx, req.(*SetThreadLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListContexts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListContextsRequest)
 	if err := dec(in); err != nil {
@@ -1492,6 +1526,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetThreadPermissionMode",
 			Handler:    _ControlPlaneService_SetThreadPermissionMode_Handler,
+		},
+		{
+			MethodName: "SetThreadLabel",
+			Handler:    _ControlPlaneService_SetThreadLabel_Handler,
 		},
 		{
 			MethodName: "ListContexts",
