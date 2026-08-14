@@ -103,6 +103,9 @@ services:
       # What a thread's turns may do when it is born: plan, edits or dangerous. Unset keeps edits,
       # which is what every thread had before this was configurable.
       QC_PERMISSION_MODE: ${QC_PERMISSION_MODE:-}
+      # How many turns past its description a conversation goes before the crew writes it again.
+      # "off" turns it off, which a crew paying for automation runs wants.
+      QC_DESCRIBE_EVERY: ${QC_DESCRIBE_EVERY:-}
       # A workspace's conversation store and a project's files live here, on the host, rather than
       # inside the sandbox container, so replacing a container does not destroy the conversation the
       # database holds a handle to. QC_DATA_DIR is this container's view of the directory, the one it

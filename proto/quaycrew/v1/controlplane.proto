@@ -69,6 +69,9 @@ message Thread {
   // description is what the crew observed the conversation to be, one line, written by the model that
   // had the turn. Empty until a turn has happened. A listing prefers the label when there is one.
   string description = 15;
+  // described_at_turn is how many turns the thread had when its description was written, so a
+  // conversation that has moved on can be described again. Zero means never described.
+  int32 described_at_turn = 16;
 }
 
 // Usage is what a conversation has cost, in tokens.

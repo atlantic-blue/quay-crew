@@ -143,7 +143,11 @@ func truncate(t *testing.T) {
 	// its own name, so one subtest's github was still there for the next one to attach, at a version it
 	// never imported. The cascade then takes skill_secrets, skill_files and workspace_skills.
 	if _, err := pool.Exec(ctx,
-		`truncate sessions, channels, workspaces, skills, contexts, flow_graphs restart identity cascade`); err != nil {
+		// Turns are named here for the same reason as skills. A turn is keyed by its own id and
+		// survived a truncate that claimed to leave nothing behind, so one subtest's turn-0 was still
+		// there when the next one wrote its own, and AppendTurn's "on conflict do nothing" dropped it
+		// silently. What that looked like was a case reading zero turns it had just written.
+		`truncate sessions, turns, channels, workspaces, skills, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

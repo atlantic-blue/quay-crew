@@ -113,6 +113,12 @@ type Store interface {
 	// SetPermissionMode records what a thread's turns may do without asking. Whether the mode is one
 	// the model understands is the control plane's question, not the store's.
 	SetPermissionMode(ctx context.Context, id, mode string) error
+	// SetDescription records what the crew observed a thread to be, and how many turns it had when
+	// that was written, so the two can never disagree about how current the description is.
+	SetDescription(ctx context.Context, id, description string, atTurn int) error
+	// CountTurns is how many turns a thread has had, which is what decides whether a description has
+	// fallen behind the conversation.
+	CountTurns(ctx context.Context, session string) (int, error)
 	// SetLabel records what the operator calls a thread. Empty clears it, which is the only way back
 	// to the identifier, so it is a value rather than an absence.
 	SetLabel(ctx context.Context, id, label string) error

@@ -203,6 +203,72 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a thread keeps what the crew observed it to be, and when", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+
+		if err := s.SetDescription(ctx, thread.GetId(), "the electricity bill", 3); err != nil {
+			t.Fatalf("SetDescription: %v", err)
+		}
+
+		described, err := s.GetSession(ctx, thread.GetId())
+		if err != nil {
+			t.Fatalf("GetSession: %v", err)
+		}
+		if described.GetDescription() != "the electricity bill" {
+			t.Fatalf("the crew describes it as %q", described.GetDescription())
+		}
+		// The turn count travels with the text. Kept apart they drift, and a description that says it
+		// is current when it is not is worse than one that admits it is old.
+		if described.GetDescribedAtTurn() != 3 {
+			t.Fatalf("it was described at turn %d, want 3", described.GetDescribedAtTurn())
+		}
+	})
+
+	t.Run("how many turns a thread has had", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		other, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
+		if err != nil {
+			t.Fatalf("FindOrCreateSession other: %v", err)
+		}
+
+		count, err := s.CountTurns(ctx, thread.GetId())
+		if err != nil || count != 0 {
+			t.Fatalf("a thread nobody has spoken in has %d turns (%v)", count, err)
+		}
+
+		for at := range 3 {
+			turn := &quaycrewv1.Turn{
+				Id: fmt.Sprintf("counted-turn-%d", at), Thread: thread.GetId(),
+				Prompt: "hello", Reply: "ok", OccurredAt: timestamppb.Now(),
+			}
+			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
+				t.Fatalf("AppendTurn: %v", err)
+			}
+		}
+
+		count, err = s.CountTurns(ctx, thread.GetId())
+		if err != nil || count != 3 {
+			t.Fatalf("the thread has %d turns (%v), want 3", count, err)
+		}
+		// Counted per thread, not per crew: a busy neighbour must not make this one look described.
+		count, err = s.CountTurns(ctx, other.GetId())
+		if err != nil || count != 0 {
+			t.Fatalf("the other thread has %d turns (%v), want 0", count, err)
+		}
+	})
+
 	t.Run("naming a thread that does not exist is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if err := s.SetLabel(context.Background(), "ghost", "anything"); !errors.Is(err, store.ErrNotFound) {
