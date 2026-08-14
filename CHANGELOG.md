@@ -6,6 +6,26 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 14 August 2026
+
+- **Configuration lives outside the checkout.** A crew read `deploy/.env`, which compose loads on its
+  own because it sits beside the compose file. That file cannot be given to anybody: a crew that was
+  installed rather than cloned has no checkout to keep it in, and the quick start told the operator to
+  create one with `cp`. Configuration now lives at `~/.quay/env`, which is where a crew keeps what
+  belongs to it on this machine, and compose is told the path rather than left to find a file. `make
+  config` writes it from `deploy/env.example` and leaves an existing one alone, and `make up` calls it,
+  so a first run works and an edit survives. Set `QUAY_HOME` to put it elsewhere. A test reads what
+  make computes and fails if the path is relative or inside the checkout, and a second test scans every
+  tracked file for the old path, so the instruction cannot come back through a document nobody thought
+  to change.
+  ([#248](https://github.com/atlantic-blue/quay-crew/issues/248))
+
+  Carry your settings over with one command, once:
+
+  ```sh
+  mkdir -p ~/.quay && mv deploy/.env ~/.quay/env
+  ```
+
 ## 13 August 2026
 
 - **A command takes the identifier the listing shows you.** A listing prints two identifiers for

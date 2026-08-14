@@ -161,5 +161,5 @@ not. Deciding they stay separate is defensible; deciding it without writing down
 
 **Whether a driver and image mismatch is refused.** The pairing exists in configuration and nothing
 checks it, so the failure arrives at the first turn rather than at startup. Refusing it early is
-cheap, and it is the same shape as `make env-check` naming configuration that `deploy/.env` does not
-have.
+cheap, and it is the same shape as `make env-check` naming configuration that the crew's own file does
+not have.

@@ -74,8 +74,8 @@ func unreachable(err error, told string, sandboxed bool) error {
 	}
 	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
 		"address it fell back to. It reaches the control plane only when the crew is set up for it: "+
-		"QC_SANDBOX_NETWORK and QC_SANDBOX_CONTROL_PLANE on the control plane, which is deploy/.env "+
-		"on a compose stack, see deploy/env.example. Then start this thread again, because a sandbox "+
+		"QC_SANDBOX_NETWORK and QC_SANDBOX_CONTROL_PLANE on the control plane, which is the crew's "+
+		"configuration file, ~/.quay/env on a compose stack. Then start this thread again, because a sandbox "+
 		"keeps the configuration it was made with. (%w)", err)
 }
 

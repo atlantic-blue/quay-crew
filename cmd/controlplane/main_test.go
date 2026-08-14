@@ -10,7 +10,7 @@ func TestAConfiguredAllowlistIsSaidToBeIgnored(t *testing.T) {
 	if !retired {
 		t.Fatal("a crew configured with QC_SANDBOX_SECRETS said nothing about it")
 	}
-	for _, want := range []string{"QC_SANDBOX_SECRETS", "no longer read", "deploy/.env"} {
+	for _, want := range []string{"QC_SANDBOX_SECRETS", "no longer read", "configuration"} {
 		if !strings.Contains(notice, want) {
 			t.Errorf("the notice does not mention %q: %s", want, notice)
 		}

@@ -296,7 +296,7 @@ func sandboxSecretsRetired(value string) (string, bool) {
 		return "", false
 	}
 	return "QC_SANDBOX_SECRETS is set and is no longer read: a workspace's secrets reach that " +
-		"workspace's sandboxes, so the list can be removed from deploy/.env", true
+		"workspace's sandboxes, so the list can be removed from the crew's configuration", true
 }
 
 func splitAndTrim(csv string) []string {

@@ -33,12 +33,12 @@ You need Docker and a Claude subscription.
 3. Say which model and image the stack runs, once, then start it:
 
    ```
-   cp deploy/env.example deploy/.env
+   make config
    make up
    ```
 
-   `deploy/.env` is read by compose on every command, so `make upgrade` cannot bring the stack back as
-   something else. The two variables can still be given on the command line for a one off. Without
+   `make config` writes `~/.quay/env` from `deploy/env.example`, and the stack reads it on every
+   command, so `make upgrade` cannot bring the stack back as something else. The two variables can still be given on the command line for a one off. Without
    either, the stack uses a lightweight image and an echo backend, which is what continuous integration
    runs, because it has no subscription.
 
