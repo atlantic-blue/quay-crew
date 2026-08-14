@@ -166,9 +166,14 @@ func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string
 		return Run{}, err
 	}
 	driving := context.WithoutCancel(ctx)
+	// The goroutine drives its own copy. A run carries maps, so handing it the same value hands it the
+	// same maps, and it then writes to them while the caller is reading the answer: gRPC marshalled a
+	// response whose map grew between protobuf's sizing pass and its encoding pass, and refused it with
+	// "size mismatch". About one run in six.
+	driven := run.copy()
 	go func() {
-		if _, err := e.advance(driving, graph, run, Event{Kind: EventStarted}); err != nil {
-			slog.Warn("a flow run stopped moving", "run", run.ID, "graph", graphName, "error", err)
+		if _, err := e.advance(driving, graph, driven, Event{Kind: EventStarted}); err != nil {
+			slog.Warn("a flow run stopped moving", "run", driven.ID, "graph", graphName, "error", err)
 		}
 	}()
 	return run, nil
@@ -299,6 +304,24 @@ func (e *Engine) archive(ctx context.Context, run Run) {
 		return
 	}
 	_, _ = e.plane.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: id})
+}
+
+// copy is a run that shares nothing writable with the one it came from.
+//
+// A struct copy is not enough. State and Attempts are maps, so a copied Run points at the same two,
+// and a goroutine advancing one writes into the other. Both are made rather than left nil, because
+// the run that gets driven writes into them on its first transition.
+func (r Run) copy() Run {
+	copied := r
+	copied.State = make(map[string]string, len(r.State))
+	for key, value := range r.State {
+		copied.State[key] = value
+	}
+	copied.Attempts = make(map[string]int, len(r.Attempts))
+	for key, value := range r.Attempts {
+		copied.Attempts[key] = value
+	}
+	return copied
 }
 
 // ThreadHandle names the run's own thread: the graph and a short run identifier, so a listing reads
