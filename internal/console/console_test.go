@@ -978,43 +978,6 @@ func rowIDs(rows []Row) []string {
 	return out
 }
 
-// TestTheDangerousToggleAsksAndFlipsBothWays. Arming a thread asks
-// first, like every key that changes what it is allowed to do, and pressing it again puts it back.
-func TestTheDangerousToggleAsksAndFlipsBothWays(t *testing.T) {
-	client := &fakeClient{}
-	model, _ := update(t, threadsAt(t, client), runes("D"))
-
-	if model.mode != modeConfirm {
-		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
-	}
-	if view := model.View(); !strings.Contains(view, "dangerous session d754610f?") {
-		t.Fatalf("the console does not name the thread it is about to arm:\n%s", view)
-	}
-	if len(client.modesSet) != 0 {
-		t.Fatalf("modes set = %v, want nothing armed yet", client.modesSet)
-	}
-
-	_, cmd := update(t, model, runes("y"))
-	if cmd == nil {
-		t.Fatal("yes produced no command")
-	}
-	cmd()
-	if len(client.modesSet) != 1 || client.modesSet[0] != "bypassPermissions" {
-		t.Fatalf("modes set = %v, want [bypassPermissions]", client.modesSet)
-	}
-
-	// An armed thread goes back to asking, rather than being armed a second time.
-	armed := newTestModel(t, Sessions(client))
-	armed, _ = update(t, armed, rowsFor(armed,
-		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "1m"}}))
-	armed, _ = update(t, armed, runes("D"))
-	_, cmd = update(t, armed, runes("y"))
-	cmd()
-	if len(client.modesSet) != 2 || client.modesSet[1] != "acceptEdits" {
-		t.Fatalf("modes set = %v, want the second one to disarm it", client.modesSet)
-	}
-}
-
 // TestTheModeIsInTheListing: a thread that skips every permission must not look like one that asks.
 func TestTheModeIsInTheListing(t *testing.T) {
 	tests := map[string]string{

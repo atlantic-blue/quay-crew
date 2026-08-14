@@ -643,6 +643,8 @@ func (m Model) footer() string {
 		return truncate(prompt.Render("/")+m.input+prompt.Render("_"), m.width)
 	case modeConfirm:
 		return truncate(m.confirmPrompt(), m.width)
+	case modeChoose:
+		return truncate(m.choosePrompt(), m.width)
 	case modeWizard:
 		return truncate(m.wizardPrompt(), m.width)
 	case modeOutput:
@@ -659,6 +661,24 @@ func (m Model) footer() string {
 func (m Model) confirmPrompt() string {
 	return prompt.Render(" ") + alert.Render(strings.ToLower(m.waiting.action.Label)+" "+
 		m.active.One()+" "+m.waiting.row.Name()+"?") + faint.Render("  y to confirm, any other key cancels")
+}
+
+// choosePrompt draws what a key offers, with the one under the cursor marked, on the line the command
+// bar and the confirmation draw on. Every choice is on screen at once because there are a handful of
+// them and reading them is half the reason somebody opens this.
+func (m Model) choosePrompt() string {
+	offers := m.choosing.action.Offers
+	shown := make([]string, 0, len(offers))
+	for at, offer := range offers {
+		if at == m.choosing.at {
+			shown = append(shown, selectedRow.Render(" "+offer+" "))
+			continue
+		}
+		shown = append(shown, faint.Render(" "+offer+" "))
+	}
+	return prompt.Render(" "+strings.ToLower(m.choosing.action.Label)+" ") +
+		m.choosing.row.Name() + "  " + strings.Join(shown, "") +
+		faint.Render("  j and k move, enter picks, esc cancels")
 }
 
 // offered is what the command bar could open, narrowed by what has been typed. Pressing colon used to
