@@ -34,6 +34,13 @@ type Column struct {
 	// Give is the order a column is dropped in when the window is too narrow: 1 goes first, zero
 	// never. Without it the line is cut at the end rather than at the least useful column.
 	Give int
+	// Colour is the escape sequence a cell in this column is written in, from the cell's own text.
+	// Nil leaves the cell in whatever the row is, which is what every column was before a listing of
+	// thirty rows in one colour turned out to be a listing nobody could read.
+	//
+	// It is a property of the column rather than of the row because the rule is about the kind of
+	// thing in it: a workspace is coloured by which workspace it is, a mode by how much it allows.
+	Colour func(cell string) string
 }
 
 // Row is one listed item: the cells to show, the identifier actions operate on, and the parent it

@@ -589,11 +589,18 @@ func (m Model) bodyLines(visible []Row) []string {
 func (m Model) rowLine(row Row, isSelected bool) string {
 	// Sized to the full width inside the panel, so the cursor is a bar across the row rather than a
 	// highlight around the text that happens to be in it.
-	text := m.fit(m.renderCells(row.Cells))
+	// The cursor is a bar across the whole row, so a cell keeping its own colour inside it would be
+	// coloured text on a coloured background. Colour comes off for the selected row, exactly as the
+	// sessions tool does it.
 	if isSelected {
-		return selectedRow.Render(text)
+		return selectedRow.Render(m.fit(m.renderCells(row.Cells)))
 	}
-	return styleFor(row.State).Render(text)
+	// A row with a state of its own keeps it: a failed thread reads as failed before it reads as
+	// anything else, and that beats colouring its workspace.
+	if row.State != StateUnknown {
+		return styleFor(row.State).Render(m.fit(m.renderCells(row.Cells)))
+	}
+	return m.fit(m.renderColouredCells(row.Cells))
 }
 
 // renderCells lays cells out in the active resource's columns. A zero width column takes whatever
@@ -602,8 +609,32 @@ func (m Model) renderCells(cells []string) string {
 	return m.renderCellsIn(m.columns(), cells)
 }
 
+// renderColouredCells is the same layout, with each cell written in its column's colour. The colour
+// goes on after a cell has been cut and padded to its column, so it cannot change where anything
+// sits: an escape sequence is zero columns wide on screen and several characters long in the string.
+func (m Model) renderColouredCells(cells []string) string {
+	columns := m.columns()
+	laid := m.laidOut(columns, cells)
+	for at, column := range columns {
+		if column.Colour == nil || at >= len(laid) {
+			continue
+		}
+		if colour := column.Colour(strings.TrimSpace(laid[at])); colour != "" {
+			laid[at] = colour + laid[at] + offCode
+		}
+	}
+	return strings.Join(laid, " ")
+}
+
 // renderCellsIn lays cells out in the columns given, which are the ones that fit.
 func (m Model) renderCellsIn(columns []visible, cells []string) string {
+	return strings.Join(m.laidOut(columns, cells), " ")
+}
+
+// laidOut is each cell cut and padded to its column, before anything is joined or coloured. It is
+// separate so the coloured and uncoloured rows lay out through the same code: two copies of this
+// would drift, and the drift would be columns that line up in one row and not in the next.
+func (m Model) laidOut(columns []visible, cells []string) []string {
 	fixed := 0
 	for _, column := range columns {
 		fixed += column.Width
@@ -631,7 +662,7 @@ func (m Model) renderCellsIn(columns []visible, cells []string) string {
 		}
 		parts = append(parts, pad(truncate(cell, width), width))
 	}
-	return strings.Join(parts, " ")
+	return parts
 }
 
 // footer is the command bar, the filter bar, or the breadcrumb.
