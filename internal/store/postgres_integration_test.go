@@ -237,7 +237,7 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 	}
 
 	// The thread must still resolve to the same session, or the next turn starts a new conversation.
-	same, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "thread-1")
+	same, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "thread-1", "")
 	if err != nil {
 		t.Fatalf("FindOrCreateSession after the rename: %v", err)
 	}

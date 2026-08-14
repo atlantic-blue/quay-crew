@@ -189,7 +189,7 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 }
 
 // FindOrCreateSession returns the project's session for a thread, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) (*quaycrewv1.Thread, error) {
+func (m *Memory) FindOrCreateSession(_ context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
@@ -201,14 +201,12 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, thread string) 
 	}
 	now := timestamppb.New(time.Now().UTC())
 	session := &quaycrewv1.Thread{
-		Id:        NewID(),
-		Workspace: owner.GetWorkspace(),
-		Project:   project,
-		Handle:    thread,
-		Status:    "idle",
-		// The mode every turn has run as since the control plane was written, now written down
-		// rather than hardcoded at the point of use.
-		PermissionMode: model.PermissionAcceptEdits,
+		Id:             NewID(),
+		Workspace:      owner.GetWorkspace(),
+		Project:        project,
+		Handle:         thread,
+		Status:         "idle",
+		PermissionMode: model.PermissionModeBornIn(bornIn),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -55,6 +56,12 @@ func main() {
 	// The kinds are resolved through the same functions the constructors use, so what the control
 	// plane says it is running cannot drift from what it built.
 	modelKind, _ := model.ResolveKind(os.Getenv("QC_MODEL"))
+
+	bornIn, err := birthPermissionMode(os.Getenv("QC_PERMISSION_MODE"))
+	if err != nil {
+		logger.Error("configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// QC_DATA_DIR is where this process writes a workspace's conversation store and a project's
 	// files; QC_DATA_HOST is the same directory as the host daemon sees it, which is what a sandbox
@@ -120,6 +127,8 @@ func main() {
 		Secrets:  credentials,
 		Storage:  storage,
 		Events:   events,
+		// What a thread's turns may do when it is born, from the crew's configuration.
+		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
 		// The driver's own token, handed to it beside the address above: recognised, and refused
@@ -318,4 +327,24 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// birthPermissionMode reads what a thread's turns may do when it is born.
+//
+// It refuses a value that is not a mode rather than falling back, because falling back is silent: a
+// crew configured for "planning" would run every turn in acceptEdits and look exactly like a crew
+// configured for acceptEdits. Startup is where the operator is standing and can fix it.
+//
+// Empty is not a refusal. It is what every crew's configuration says until somebody sets this, and it
+// keeps the mode every thread has had since the control plane was written.
+func birthPermissionMode(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	mode, known := model.PermissionModeNamed(value)
+	if !known {
+		return "", fmt.Errorf("QC_PERMISSION_MODE is %q, which is not a mode: the modes are %s",
+			value, strings.Join(model.PermissionModesOffered(), ", "))
+	}
+	return mode, nil
 }

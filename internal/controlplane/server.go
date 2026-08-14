@@ -93,6 +93,12 @@ type Config struct {
 	// operator's so the crew can tell the two apart and refuse the driver the calls that grant
 	// capability (see DeniedToDriver).
 	DriverToken string
+	// BirthPermissionMode is what a thread's turns may do when nothing else says. It used to be a
+	// constant here, so every thread that did not come through the console's wizard arrived in
+	// acceptEdits and the only way to change that was to edit the binary. Empty keeps acceptEdits,
+	// because an upgrade that quietly widens what a thread may do is the worst way to learn this
+	// setting exists.
+	BirthPermissionMode string
 }
 
 // Identity is who a commit is by.
@@ -128,6 +134,8 @@ type Server struct {
 	driverToken string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor Identity
+	// birthMode is what a thread's turns may do when nothing else says. Empty means acceptEdits.
+	birthMode string
 	// skills are the capabilities a session is given, and where they are on the host.
 	skills       []skill.Skill
 	skillsHost   string
@@ -153,6 +161,7 @@ func NewServer(cfg Config) *Server {
 		reachable:    cfg.Reachable,
 		driverToken:  cfg.DriverToken,
 		gitAuthor:    cfg.GitAuthor,
+		birthMode:    cfg.BirthPermissionMode,
 		skills:       cfg.Skills,
 		skillsHost:   cfg.SkillsHost,
 		sandboxImage: cfg.SandboxImage,
@@ -797,7 +806,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if thread == "" {
 		thread = store.NewID()
 	}
-	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), thread)
+	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), thread, s.birthMode)
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
@@ -829,7 +838,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	resp, err := s.runner.Run(ctx, box, model.Request{
 		Text:           req.GetText(),
 		ModelSessionID: session.GetModelSessionId(),
-		PermissionMode: permissionModeOf(session),
+		PermissionMode: permissionModeOf(session, s.birthMode),
 		Env:            s.turnEnv(ctx, session),
 	})
 	if err != nil {
@@ -849,9 +858,12 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 
 // permissionModeOf is the mode a thread's turns run in. A thread from before the mode was written
 // down has none, and every one of those has been running acceptEdits, so that is what it keeps.
-func permissionModeOf(session *quaycrewv1.Thread) string {
+func permissionModeOf(session *quaycrewv1.Thread, born string) string {
 	if mode := session.GetPermissionMode(); model.KnownPermissionMode(mode) {
 		return mode
+	}
+	if model.KnownPermissionMode(born) {
+		return born
 	}
 	return model.PermissionAcceptEdits
 }
@@ -1386,7 +1398,7 @@ func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadR
 	return &quaycrewv1.AttachThreadResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
-			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session)},
+			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session, s.birthMode)},
 	}, nil
 }
 

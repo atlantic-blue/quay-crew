@@ -4,24 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 )
-
-// spokenModes are the words an operator types, against the words the model understands. The console
-// has always printed "edits" and "dangerous" in its listing, so those are what somebody reads before
-// they type anything; the model's own spellings are accepted too, because they are what the protocol
-// and the manual say.
-var spokenModes = map[string]string{
-	"plan":              model.PermissionPlan,
-	"edits":             model.PermissionAcceptEdits,
-	"acceptedits":       model.PermissionAcceptEdits,
-	"dangerous":         model.PermissionBypass,
-	"bypasspermissions": model.PermissionBypass,
-}
 
 // runMode reads or sets what a thread's turns may do without asking.
 //
@@ -41,7 +28,7 @@ func runMode(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 		return sayMode(ctx, client, threadID, out)
 	}
 
-	mode, known := spokenModes[strings.ToLower(strings.TrimSpace(args[1]))]
+	mode, known := model.PermissionModeNamed(args[1])
 	if !known {
 		return fmt.Errorf("there is no %q mode: the modes are %s", args[1], offeredModes())
 	}

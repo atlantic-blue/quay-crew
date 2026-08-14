@@ -217,17 +217,10 @@ func (w wizard) picking() bool {
 	return step == stepPickWorkspace || step == stepPickProject || step == stepPickSkill
 }
 
-// modeWords are what a mode is called where an operator types it, which is what `quay mode` already
-// takes. The protocol's own words are longer and nobody types them.
-var modeWords = map[string]string{
-	"plan":      model.PermissionPlan,
-	"edits":     model.PermissionAcceptEdits,
-	"dangerous": model.PermissionBypass,
-}
-
 // modeOrder is the order the modes are offered, narrowest first, so the most permissive is never the
-// one under the cursor.
-var modeOrder = []string{"plan", "edits", "dangerous"}
+// one under the cursor. The words themselves live with the model, because the command line, this
+// wizard and the crew's configuration all have to take the same ones.
+var modeOrder = model.PermissionModesOffered()
 
 // prompt is what the step asks, and what pressing enter accepts.
 func (w wizard) prompt() string {
@@ -355,9 +348,9 @@ func (w wizard) accept() (wizard, error) {
 		}
 		w.context = w.typed
 	case stepMode:
-		mode, known := modeWords[strings.ToLower(answer)]
+		mode, known := model.PermissionModeNamed(answer)
 		if !known {
-			return w, fmt.Errorf("%q is not one of them: plan, edits or dangerous", answer)
+			return w, fmt.Errorf("%q is not one of them: %s", answer, strings.Join(modeOrder, ", "))
 		}
 		w.mode = mode
 	case stepMessage:
