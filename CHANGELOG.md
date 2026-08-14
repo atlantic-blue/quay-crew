@@ -24,6 +24,13 @@ read, or run with `make features`.
   number presented as derived, and what would replace it is a count of how often a rewrite actually
   differs from the description before it. `QC_DESCRIBE_EVERY=off` turns it off, which a crew running
   automation wants, since a flow makes a thread per run.
+
+  What comes back is checked against the question that was asked, line for line, and discarded when it
+  is the question rather than an answer to it. A backend that echoes hands the instruction straight
+  back, and continuous integration runs one, so without that check every thread in a composed stack
+  was named "Here is the start of a conversation:". The check matches whole lines rather than any
+  occurrence, because the question carries examples of a good answer and a model that produced one of
+  those examples exactly would otherwise have it thrown away.
   ([#271](https://github.com/atlantic-blue/quay-crew/issues/271))
 
 

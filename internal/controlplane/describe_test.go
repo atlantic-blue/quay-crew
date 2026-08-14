@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
@@ -188,5 +189,42 @@ func TestDescribingNeverOverwritesTheNameYouChose(t *testing.T) {
 	}
 	if display.ThreadName(thread) != "the harness post" {
 		t.Fatalf("the listing shows %q, want the operator's name", display.ThreadName(thread))
+	}
+}
+
+// A backend that echoes hands the question back, and continuous integration runs one. Without this
+// every thread is named "Here is the start of a conversation:", which is worse in a listing than the
+// identifier it replaced.
+func TestTheQuestionComingBackIsNotADescription(t *testing.T) {
+	prompt := describePrompt([]*quaycrewv1.Turn{{Prompt: "write the blog post", Reply: "ok"}})
+
+	for _, tc := range []struct {
+		name string
+		said string
+		back bool
+	}{
+		{name: "the whole question echoed", said: prompt, back: true},
+		{name: "the first line of it", said: "Here is the start of a conversation:", back: true},
+		{name: "a line from the middle of it", said: "asked: write the blog post", back: true},
+		{name: "an actual description", said: "blog post about the agentic harness", back: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTheQuestionBack(prompt, tidyDescription(tc.said)); got != tc.back {
+				t.Fatalf("isTheQuestionBack(%q) = %v, want %v", tc.said, got, tc.back)
+			}
+		})
+	}
+}
+
+// And end to end: a crew whose model echoes names nothing, rather than naming everything after the
+// question.
+func TestACrewWhoseModelEchoesNamesNothing(t *testing.T) {
+	crew := describingCrewOf(t, 10)
+	crew.runner.Echoes = true
+
+	crew.dispatch(t, "help me write the blog post")
+
+	if got := crew.description(t); got != "" {
+		t.Fatalf("the thread is described as %q, which is the question it was asked", got)
 	}
 }

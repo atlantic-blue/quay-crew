@@ -24,6 +24,8 @@ type describingRunner struct {
 	DescribeErr error
 	// Says is what a description comes back as, before the crew tidies it.
 	Says string
+	// Echoes answers with the question, the way the echo backend continuous integration runs does.
+	Echoes bool
 }
 
 func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
@@ -36,6 +38,9 @@ func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.R
 		r.Described++
 		if r.DescribeErr != nil {
 			return model.Response{}, r.DescribeErr
+		}
+		if r.Echoes {
+			return model.Response{Reply: req.Text}, nil
 		}
 		says := r.Says
 		if says == "" {

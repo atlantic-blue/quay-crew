@@ -250,7 +250,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		for at := range 3 {
 			turn := &quaycrewv1.Turn{
-				Id: fmt.Sprintf("turn-%d", at), Thread: thread.GetId(),
+				Id: fmt.Sprintf("counted-turn-%d", at), Thread: thread.GetId(),
 				Prompt: "hello", Reply: "ok", OccurredAt: timestamppb.Now(),
 			}
 			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {

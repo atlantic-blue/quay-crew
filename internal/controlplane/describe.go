@@ -162,8 +162,9 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 	// Its own conversation, not the thread's. Describing inside the thread would put a request the
 	// operator never made into their history, and would add its tokens to what the listing says the
 	// conversation cost, so the cost column would stop describing the work.
+	prompt := describePrompt(history)
 	said, err := s.runner.Run(ctx, box, model.Request{
-		Text:           describePrompt(history),
+		Text:           prompt,
 		PermissionMode: model.PermissionPlan,
 		Env:            s.turnEnv(ctx, thread),
 	})
@@ -172,10 +173,33 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 		return
 	}
 	description := tidyDescription(said.Reply)
-	if description == "" {
+	if description == "" || isTheQuestionBack(prompt, description) {
 		return
 	}
 	if err := s.store.SetDescription(ctx, threadID, description, turns); err != nil {
 		slog.Debug("a thread's description could not be kept", "thread", threadID, "error", err)
 	}
+}
+
+// isTheQuestionBack says whether what came back is the question rather than an answer to it.
+//
+// A backend that echoes is the obvious case, and continuous integration runs one, so without this the
+// crew names every thread "Here is the start of a conversation:". It is worth guarding beyond that
+// though: a model that answers badly enough to hand the instruction back would put the instruction in
+// the listing, where it is worse than the identifier it replaced, and nothing else would notice.
+//
+// Whole lines, not any occurrence. The question carries examples of what a good answer looks like, so
+// a model that produced exactly one of those examples would have its answer thrown away by a check
+// that asked only whether the text appears somewhere in the prompt.
+func isTheQuestionBack(prompt, description string) bool {
+	if description == "" {
+		return false
+	}
+	wanted := strings.ToLower(description)
+	for _, line := range strings.Split(prompt, "\n") {
+		if strings.ToLower(strings.TrimSpace(line)) == wanted {
+			return true
+		}
+	}
+	return false
 }
