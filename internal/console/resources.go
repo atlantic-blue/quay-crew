@@ -322,7 +322,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "workspace", Width: 16, Colour: colourOfName},
 			{Title: "project", Width: 20, Colour: colourOfName},
-			{Title: "thread", Width: 10, Colour: colourOfName},
+			// Wider than the identifier it replaced, because it holds a name now and a name cut to
+			// ten characters is not a name. It is the flexible column, so it takes what is left.
+			{Title: "name", Width: 0, Colour: colourOfName},
 			{Title: "status", Width: 10},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
@@ -331,7 +333,7 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
-			{Title: "age", Width: 0, Colour: dim},
+			{Title: "age", Width: 6, Colour: dim},
 		},
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
 		// under it.
@@ -492,7 +494,14 @@ func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) R
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
-		Label:  display.ShortID(session.GetHandle()),
+		// What to call it: the name the operator gave it, then the crew's own, then the identifier. The
+		// breadcrumb reads this, so drilling into a named thread says what it is about rather than
+		// eight characters of hexadecimal.
+		Label: display.ThreadName(session),
+		// Detail is the name alone, which is what naming it starts from. Label falls back to the
+		// identifier, and starting an edit from the identifier would have the operator delete it
+		// before typing.
+		Detail: session.GetLabel(),
 		Cells:  display.ThreadCells(session, workspaceName, projectName),
 		State:  stateFromStatus(session.GetStatus()),
 	}
@@ -590,6 +599,24 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 					return fmt.Errorf("no session selected")
 				}
 				_, err := client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: row.ID})
+				return err
+			},
+		},
+		{
+			// Naming a thread. Not r, which the sessions tool uses and which #84 asked for: r is
+			// refresh here, and refreshing is the thing an operator presses constantly while naming
+			// is rare, so the cheap key stays with the frequent action.
+			Key:   "L",
+			Label: "Name",
+			Asks:  "call",
+			Typed: func(row Row) string { return row.Detail },
+			RunTyped: func(ctx context.Context, row Row, typed string) error {
+				if row.ID == "" {
+					return fmt.Errorf("no session selected")
+				}
+				_, err := client.SetThreadLabel(ctx, &quaycrewv1.SetThreadLabelRequest{
+					Id: row.ID, Label: typed,
+				})
 				return err
 			},
 		},

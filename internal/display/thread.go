@@ -17,7 +17,7 @@ import (
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
 func ThreadColumns() []string {
-	return []string{"id", "workspace", "project", "thread", "status", "mode", "in", "out", "cache", "age"}
+	return []string{"id", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
 }
 
 // ThreadCells is one thread as a listing shows it, matching ThreadColumns.
@@ -26,7 +26,7 @@ func ThreadCells(thread *quaycrewv1.Thread, workspaceName, projectName string) [
 		ShortID(thread.GetId()),
 		Name(workspaceName, thread.GetWorkspace()),
 		Name(projectName, thread.GetProject()),
-		ShortID(thread.GetHandle()),
+		ThreadName(thread),
 		StatusLabel(thread),
 		PermissionLabel(thread.GetPermissionMode()),
 		Tokens(thread.GetUsage().GetInput()),
@@ -156,4 +156,20 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 		}
 	}
 	out.WriteString("\n")
+}
+
+// ThreadName is what to call a thread in a listing: the name the operator gave it, then the one the
+// crew wrote for itself, then the identifier.
+//
+// The operator's name wins because a name somebody picked beats a name a machine wrote. The
+// identifier is last because it is the thing nobody remembers, and it is still in the id column
+// beside this one, so nothing is hidden by preferring a name.
+func ThreadName(thread *quaycrewv1.Thread) string {
+	if label := strings.TrimSpace(thread.GetLabel()); label != "" {
+		return label
+	}
+	if described := strings.TrimSpace(thread.GetDescription()); described != "" {
+		return described
+	}
+	return ShortID(thread.GetHandle())
 }

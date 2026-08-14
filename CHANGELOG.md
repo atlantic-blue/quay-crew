@@ -8,6 +8,27 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A thread carries a name you chose.** A listing was a column of hexadecimal, so working out which
+  conversation was the one about the electricity bill meant opening them. `quay label <thread>
+  "the electricity bill"` names one, no text reads it back, and `""` clears it. `L` in the console
+  names the selected thread, starting from the name it already has so changing one word does not mean
+  retyping it. The listing shows the name where the thread identifier was, falling back to the
+  identifier when there is none, and the breadcrumb reads it too, so drilling in says
+  `me > house-bills > the electricity bill`.
+
+  Not `r`, which the `sessions` tool uses and which the issue asked for: `r` is refresh here by an
+  earlier decision, and refreshing is pressed constantly while naming is rare, so the cheap key stays
+  with the frequent action.
+
+  A label is trimmed, flattened onto one line and capped at 60 characters rather than refused. It is a
+  name somebody typed, so the only ways it can be wrong are invisible leading space, a newline that
+  would draw a row two rows tall and break the cursor, and a length that pushes every other column off
+  the screen.
+
+  The migration adds the description column beside it, unused until the crew writes its own.
+  ([#84](https://github.com/atlantic-blue/quay-crew/issues/84))
+
+
 - **A run is not written while it is being read.** `quay flow start` failed about one run in six with
   `grpc: error while marshaling: size mismatch, calculated=110, measured=169`. `Engine.Begin` answered
   with the run and drove the same value in a goroutine behind that answer. A `Run` carries two maps,

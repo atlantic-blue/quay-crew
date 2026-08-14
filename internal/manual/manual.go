@@ -54,6 +54,9 @@ commands:
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list threads, which thread and threads also do
   turns <thread>                          what a thread was asked, and what came back
+  label <thread> [<text>]                 what you call a conversation, so a listing reads as
+                                          conversations rather than identifiers. No text reads it,
+                                          and "" clears it
   mode <thread> [<mode>]                  what a thread's turns may do without asking: plan, edits
                                           or dangerous. A dispatched turn has nobody to approve
                                           anything, so this is how it is given room to work

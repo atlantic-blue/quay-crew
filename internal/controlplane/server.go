@@ -1184,6 +1184,38 @@ func (s *Server) SetThreadPermissionMode(ctx context.Context, req *quaycrewv1.Se
 	return &quaycrewv1.SetThreadPermissionModeResponse{Thread: s.reread(ctx, req.GetId())}, nil
 }
 
+// SetThreadLabel records what the operator calls a conversation. Empty clears it.
+//
+// A label is trimmed and capped rather than refused. It is a name somebody typed, so the only ways it
+// can be wrong are leading space, which is invisible, and being long enough to push every other
+// column off the screen. Neither is worth a refusal the operator has to read.
+func (s *Server) SetThreadLabel(ctx context.Context, req *quaycrewv1.SetThreadLabelRequest) (*quaycrewv1.SetThreadLabelResponse, error) {
+	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
+		return nil, storeError(err, "session")
+	}
+	if err := s.store.SetLabel(ctx, req.GetId(), tidyLabel(req.GetLabel())); err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.SetThreadLabelResponse{Thread: s.reread(ctx, req.GetId())}, nil
+}
+
+// labelLimit is how much of a label is kept. A listing gives the name one column among ten, so a
+// label longer than this is one nobody can read anyway, and keeping it whole would only push the
+// columns that say what the thread is doing off the screen.
+const labelLimit = 60
+
+// tidyLabel is a label as it is stored: trimmed, one line, and capped.
+//
+// A newline matters more than it looks. A label goes into a listing row, and a stored newline draws a
+// row that is two rows tall, which breaks the cursor and every count of what is on screen.
+func tidyLabel(label string) string {
+	tidy := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(label, "\r", " "), "\n", " "))
+	if runes := []rune(tidy); len(runes) > labelLimit {
+		return strings.TrimSpace(string(runes[:labelLimit]))
+	}
+	return tidy
+}
+
 // recordTurn stores the outcome of a turn. A store failure here must not replace the turn's own
 // result, which the operator already has, so it is not returned; a later read shows a stale status
 // rather than the turn appearing to have failed when it did not.

@@ -49,6 +49,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateConfirmKey(msg)
 	case modeChoose:
 		return m.updateChooseKey(msg)
+	case modeType:
+		return m.updateTypeKey(msg)
 	case modeWizard:
 		return m.updateWizardKey(msg)
 	case modeOutput:
@@ -161,6 +163,13 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 	for _, action := range m.active.Actions {
 		if !action.Bound(key) {
 			continue
+		}
+		if action.RunTyped != nil {
+			m.mode, m.typing, m.input = modeType, pending{action: action, row: row}, ""
+			if action.Typed != nil {
+				m.input = action.Typed(row)
+			}
+			return m, nil
 		}
 		if len(action.Offers) > 0 {
 			m.mode, m.choosing = modeChoose, choice{action: action, row: row, at: 0}
@@ -404,6 +413,41 @@ func chosenCmd(action Action, row Row, chosen string) tea.Cmd {
 		defer cancel()
 
 		if err := action.RunChosen(ctx, row, chosen); err != nil {
+			return actionDoneMsg{err: fmt.Errorf("%s %s: %w", action.Label, row.ID, err)}
+		}
+		return actionDoneMsg{}
+	}
+}
+
+// updateTypeKey collects a line of text for the selected row.
+//
+// Enter applies it, including when it is empty: an empty name is how a name is cleared, and a key
+// that refused to clear would leave the operator with no way back to the identifier. Escape is how
+// nothing happens, which is why clearing has to be enter rather than escape.
+func (m Model) updateTypeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode, m.typing, m.input = modeBrowse, pending{}, ""
+		return m, nil
+	case "enter":
+		typed, action, row := m.input, m.typing.action, m.typing.row
+		m.mode, m.typing, m.input = modeBrowse, pending{}, ""
+		return m, typedCmd(action, row, typed)
+	case "backspace":
+		m.input = trimLastRune(m.input)
+		return m, nil
+	}
+	m.input += typedText(msg)
+	return m, nil
+}
+
+// typedCmd applies a typed line, off the keyboard, the same shape as every other action.
+func typedCmd(action Action, row Row, typed string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := action.RunTyped(ctx, row, typed); err != nil {
 			return actionDoneMsg{err: fmt.Errorf("%s %s: %w", action.Label, row.ID, err)}
 		}
 		return actionDoneMsg{}

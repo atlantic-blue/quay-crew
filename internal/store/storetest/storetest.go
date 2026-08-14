@@ -156,6 +156,60 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// Both implementations, because a listing that shows a label the operator set on one store and an
+	// identifier on the other is worse than no labels at all.
+	t.Run("a thread carries the name the operator gave it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		if thread.GetLabel() != "" {
+			t.Fatalf("a new thread is already called %q, and nobody has named it", thread.GetLabel())
+		}
+
+		if err := s.SetLabel(ctx, thread.GetId(), "the electricity bill"); err != nil {
+			t.Fatalf("SetLabel: %v", err)
+		}
+		named, err := s.GetSession(ctx, thread.GetId())
+		if err != nil {
+			t.Fatalf("GetSession: %v", err)
+		}
+		if named.GetLabel() != "the electricity bill" {
+			t.Fatalf("the thread is called %q", named.GetLabel())
+		}
+
+		// It is in the listing too, which is the only place anybody reads it.
+		listed, err := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("ListSessions: %d threads, %v", len(listed), err)
+		}
+		if listed[0].GetLabel() != "the electricity bill" {
+			t.Fatalf("the listing calls it %q", listed[0].GetLabel())
+		}
+
+		// Clearing it puts the identifier back, which is the only way back and so has to work.
+		if err := s.SetLabel(ctx, thread.GetId(), ""); err != nil {
+			t.Fatalf("clearing the label: %v", err)
+		}
+		cleared, err := s.GetSession(ctx, thread.GetId())
+		if err != nil {
+			t.Fatalf("GetSession after clearing: %v", err)
+		}
+		if cleared.GetLabel() != "" {
+			t.Fatalf("the label survived being cleared: %q", cleared.GetLabel())
+		}
+	})
+
+	t.Run("naming a thread that does not exist is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		if err := s.SetLabel(context.Background(), "ghost", "anything"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetLabel on a missing thread returned %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("a thread always lands in the same session", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
