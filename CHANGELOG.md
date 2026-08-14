@@ -6,6 +6,24 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 15 August 2026
+
+- **The threads listing is readable in colour.** Thirty rows in one colour meant reading every
+  character of every row to find the conversation you wanted. Each cell is now coloured the way the
+  `sessions` tool colours its own, because that is the listing already read all day: a workspace,
+  project and thread name each carry a colour of their own so the eye finds their rows without reading
+  them, identifiers and ages and counts are dim so they stop competing, a token count in the millions
+  is marked, and the mode is coloured by how much it allows, since that is the cell that costs most to
+  misread. The selected row drops cell colour entirely, because the cursor is a bar across the row and
+  coloured text on a coloured background is unreadable.
+
+  The palette is twenty four colours rather than the `sessions` tool's twelve, and that is measured
+  rather than preferred: across the fourteen workspace and project names on this crew, twelve put
+  `atlantic-blue` and `itv` on the same colour, and both are workspaces. Ten names into twelve slots
+  collide by arithmetic, so a different hash does not fix it, and FNV-1a over the same names collided
+  three times where this one collided once. At twenty four every workspace is distinct and two pairs
+  of projects in different workspaces share.
+
 ## 14 August 2026
 
 - **A thread's mode is picked in the console, not cycled.** `D` flipped between edits and dangerous,

@@ -1,6 +1,11 @@
 package console
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // The palette is lifted from the operator's own hub tools (sessions, pulls, todo) so the console
 // looks like it belongs next to them: black on green for the column header, black on cyan for the
@@ -15,6 +20,17 @@ const (
 	ansiGreen  = lipgloss.Color("2")
 	ansiYellow = lipgloss.Color("3")
 	ansiCyan   = lipgloss.Color("6")
+)
+
+// The same colours again as escape sequences, for the per cell colouring in a listing. Lipgloss
+// styles a whole string; a row is padded to its columns first and then coloured cell by cell, so
+// these are written on directly and the widths cannot move.
+const (
+	dimCode        = "\x1b[2m"
+	offCode        = "\x1b[0m"
+	ansiRedCode    = "\x1b[31m"
+	ansiGreenCode  = "\x1b[32m"
+	ansiYellowCode = "\x1b[33m"
 )
 
 var (
@@ -73,3 +89,58 @@ func styleFor(state State) lipgloss.Style {
 func hint(key, label string) string {
 	return hotKey.Render("<"+key+">") + " " + hotKeyLabel.Render(label)
 }
+
+// namePalette is 256 colour codes for names. The first twelve are the sessions tool's set, so the
+// listings look like each other, and twelve more follow them.
+//
+// Twelve was not enough, and this is measured rather than assumed: over the fourteen workspace and
+// project names on this crew, twelve colours put "atlantic-blue" and "itv" on the same one, and both
+// are workspaces. Ten names into twelve slots collides by arithmetic, so a different hash does not
+// fix it: FNV-1a over the same names collided three times where this one collided once. Twenty four
+// leaves every workspace distinct and collides only between two pairs of projects in different
+// workspaces.
+var namePalette = []int{
+	75, 114, 213, 179, 150, 209, 141, 110, 168, 84, 222, 117,
+	80, 176, 108, 215, 146, 204, 115, 183, 109, 173, 78, 139,
+}
+
+// colourOfName is a stable colour for a name: the same workspace is the same colour on every refresh
+// and in every view, which is what lets the eye find its rows without reading them.
+//
+// A hash into twelve colours collides eventually, and that is accepted: two workspaces sharing a
+// colour is a smaller problem than thirty rows sharing one.
+func colourOfName(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return ""
+	}
+	hash := uint32(0)
+	for _, char := range name {
+		hash = hash*31 + uint32(char)
+	}
+	return fmt.Sprintf("\x1b[38;5;%dm", namePalette[int(hash)%len(namePalette)])
+}
+
+// colourOfMode is what a thread may do, coloured by how much that is. This is the cell it costs most
+// to misread, so it is the one cell coloured by meaning rather than by identity.
+func colourOfMode(mode string) string {
+	switch mode {
+	case "plan":
+		return ansiGreenCode
+	case "dangerous":
+		return ansiRedCode
+	default:
+		return ""
+	}
+}
+
+// colourOfTokens dims a number nobody acts on and marks one they might. The threshold is the sessions
+// tool's, which is the listing this is being made to match.
+func colourOfTokens(cell string) string {
+	if strings.HasSuffix(cell, "M") {
+		return ansiYellowCode
+	}
+	return dimCode
+}
+
+// dim is anything secondary: an identifier, an age, a count that is only there for completeness.
+func dim(string) string { return dimCode }

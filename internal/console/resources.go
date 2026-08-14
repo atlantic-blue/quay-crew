@@ -314,20 +314,24 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "sessions",
 		Aliases: []string{"s", "sess", "session", "threads", "thread", "t"},
+		// The colours are the sessions tool's, because that is the listing the operator already reads
+		// all day: a name carries its own colour so the eye finds its rows without reading them,
+		// identifiers and counts are dim so they stop competing, and the mode is coloured by how much
+		// it allows, since it is the cell that costs most to misread.
 		Columns: []Column{
-			{Title: "id", Width: 10},
-			{Title: "workspace", Width: 16},
-			{Title: "project", Width: 20},
-			{Title: "thread", Width: 10},
+			{Title: "id", Width: 10, Colour: dim},
+			{Title: "workspace", Width: 16, Colour: colourOfName},
+			{Title: "project", Width: 20, Colour: colourOfName},
+			{Title: "thread", Width: 10, Colour: colourOfName},
 			{Title: "status", Width: 10},
-			{Title: "mode", Width: 12},
+			{Title: "mode", Width: 12, Colour: colourOfMode},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
 			// the first to give way, because at half a window the age of a thread is worth more than
 			// what it read from a cache.
-			{Title: "in", Width: 7, Give: 3},
-			{Title: "out", Width: 7, Give: 2},
-			{Title: "cache", Width: 7, Give: 1},
-			{Title: "age", Width: 0},
+			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
+			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
+			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
+			{Title: "age", Width: 0, Colour: dim},
 		},
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
 		// under it.
