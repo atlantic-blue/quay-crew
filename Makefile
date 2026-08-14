@@ -44,12 +44,17 @@ SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 print-%:
 	@echo "$($*)"
 
-## config: create the configuration file from the shipped template, if it is not there yet
+## config: create the crew's directory and its configuration file, if they are not there yet
 #
 # Compose is given the path, so the file has to exist before any compose command runs. Seeding it
 # rather than refusing means a first `make up` works, and the operator edits a file that already says
 # what each key is for.
+#
+# The data directory is made here too, and made first, because docker creates a missing bind mount
+# source itself and creates it as root. That would leave the crew's own directory owned by root, and
+# the next `quay use` unable to write the address you are working in into it.
 config:
+	@mkdir -p "$(QUAY_HOME)/data"
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		mkdir -p "$(dir $(ENV_FILE))"; \
 		cp deploy/env.example "$(ENV_FILE)"; \

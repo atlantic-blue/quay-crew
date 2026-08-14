@@ -156,3 +156,36 @@ func TestTheStackStartsOnceTheDataHasMoved(t *testing.T) {
 		t.Fatalf("a crew that has already moved was refused: %v\n%s", err, out)
 	}
 }
+
+// TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt.
+//
+// Docker creates a missing bind mount source itself, as root. The crew's directory now holds the
+// files the tool writes as well as the data the stack mounts, so a stack that came up first would
+// leave it owned by root and the next `quay use` would fail with permission denied on a path it had
+// just been told to write. That is what happened: the tests were green and the composed stack was not.
+func TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "crew")
+
+	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
+		"config", "QUAY_HOME="+home).CombinedOutput()
+	if err != nil {
+		t.Fatalf("make config: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{home, filepath.Join(home, "data")} {
+		info, err := os.Stat(want)
+		if err != nil {
+			t.Fatalf("%s was not made, so docker would make it as root: %v", want, err)
+		}
+		if !info.IsDir() {
+			t.Fatalf("%s is not a directory", want)
+		}
+	}
+
+	// Writable by whoever ran it, which is the whole point of making it here rather than letting the
+	// daemon do it.
+	probe := filepath.Join(home, "context")
+	if err := os.WriteFile(probe, []byte("me/bills\n"), 0o644); err != nil {
+		t.Fatalf("the crew's directory is not writable by the operator: %v", err)
+	}
+}
