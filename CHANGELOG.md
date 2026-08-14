@@ -11,10 +11,10 @@ read, or run with `make features`.
 - **Configuration lives outside the checkout.** A crew read `deploy/.env`, which compose loads on its
   own because it sits beside the compose file. That file cannot be given to anybody: a crew that was
   installed rather than cloned has no checkout to keep it in, and the quick start told the operator to
-  create one with `cp`. Configuration now lives at `~/.config/quay/env`, beside the context file quay
-  already writes there, and compose is told the path rather than left to find a file. `make config`
-  writes it from `deploy/env.example` and leaves an existing one alone, and `make up` calls it, so a
-  first run works and an edit survives. Set `XDG_CONFIG_HOME` to put it elsewhere. A test reads what
+  create one with `cp`. Configuration now lives at `~/.quay/env`, which is where a crew keeps what
+  belongs to it on this machine, and compose is told the path rather than left to find a file. `make
+  config` writes it from `deploy/env.example` and leaves an existing one alone, and `make up` calls it,
+  so a first run works and an edit survives. Set `QUAY_HOME` to put it elsewhere. A test reads what
   make computes and fails if the path is relative or inside the checkout, and a second test scans every
   tracked file for the old path, so the instruction cannot come back through a document nobody thought
   to change.
@@ -23,7 +23,7 @@ read, or run with `make features`.
   Carry your settings over with one command, once:
 
   ```sh
-  mkdir -p ~/.config/quay && mv deploy/.env ~/.config/quay/env
+  mkdir -p ~/.quay && mv deploy/.env ~/.quay/env
   ```
 
 ## 13 August 2026

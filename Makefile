@@ -5,12 +5,12 @@ PROJECT ?=
 COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 GOBIN := $(shell go env GOPATH)/bin
 
-# CONFIG_DIR is where quay keeps what the operator chose, beside the context file the tool already
-# writes there. It is deliberately outside this checkout: a crew that is installed rather than cloned
-# has no checkout to put configuration in, and configuration that lives in one cannot be given to
-# anybody. Compose is told the path rather than left to find a file next to its own compose file.
-CONFIG_DIR ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/quay
-ENV_FILE ?= $(CONFIG_DIR)/env
+# QUAY_HOME is where a crew keeps what belongs to it on this machine. It is deliberately outside this
+# checkout: a crew that is installed rather than cloned has no checkout to put configuration in, and
+# configuration that lives in one cannot be given to anybody. Compose is told the path rather than
+# left to find a file next to its own compose file.
+QUAY_HOME ?= $(HOME)/.quay
+ENV_FILE ?= $(QUAY_HOME)/env
 
 COMPOSE := docker compose -p $(COMPOSE_PROJECT) --env-file $(ENV_FILE) -f deploy/docker-compose.yml
 

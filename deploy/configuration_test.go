@@ -27,8 +27,8 @@ func TestTheStackIsToldWhereItsConfigurationIs(t *testing.T) {
 	}
 }
 
-// TestTheConfigurationPathIsOutsideTheCheckout, and follows XDG_CONFIG_HOME, so it lands beside the
-// context file quay already writes rather than in a second place of its own.
+// TestTheConfigurationPathIsOutsideTheCheckout, and sits under QUAY_HOME, which is where a crew keeps
+// what belongs to it on this machine.
 func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 	printed := makeVariable(t, "ENV_FILE")
 

@@ -76,7 +76,7 @@ control plane API, and each workspace is isolated from the others.
 ## Quick start
 
 ```sh
-make config                                                   # say which model and image to run, in ~/.config/quay/env
+make config                                                   # say which model and image to run, in ~/.quay/env
 make sandbox-image                                            # the image a session runs in
 make up                                                       # bring the stack up
 make install                                                  # build quay and install it over the copy you run
@@ -87,7 +87,7 @@ quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
 quay dispatch "say pong"
 ```
 
-The stack reads `~/.config/quay/env` on every command, so the model and image you chose survive a restart
+The stack reads `~/.quay/env` on every command, so the model and image you chose survive a restart
 and an upgrade. It sits outside this checkout, because a crew that was installed rather than cloned has no
 checkout to keep configuration in. Creating something moves you into it, so nothing above says where twice, and `quay use` tells
 you where you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
