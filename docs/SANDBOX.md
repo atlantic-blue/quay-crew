@@ -139,8 +139,8 @@ A sandbox is a container, and a container's filesystem is thrown away with it. S
 that matter are mounted in from the host:
 
 ```
-~/.quaycrew/data/workspaces/<workspace>/claude                       ->  /home/agent/.claude
-~/.quaycrew/data/workspaces/<workspace>/projects/<project>/workspace  ->  /home/agent/workspace
+~/.quay/data/workspaces/<workspace>/claude                       ->  /home/agent/.claude
+~/.quay/data/workspaces/<workspace>/projects/<project>/workspace  ->  /home/agent/workspace
 ```
 
 The first is the model's own store: its settings, the transcripts `--resume` reads, and the
@@ -151,7 +151,7 @@ container being replaced.
 That is also how you give a project context. Write it with an editor:
 
 ```
-echo "Supplier is Octopus, account 123." >> ~/.quaycrew/data/workspaces/<workspace>/projects/<project>/workspace/CLAUDE.md
+echo "Supplier is Octopus, account 123." >> ~/.quay/data/workspaces/<workspace>/projects/<project>/workspace/CLAUDE.md
 ```
 
 Every thread in that project reads it on the next turn, because the model already looks for

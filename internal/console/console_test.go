@@ -1806,7 +1806,7 @@ func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
 		{name: "nothing known yet", size: [2]int{120, 24}},
 		{name: "the crew answered", info: Info{
 			Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres",
-			State: "host directory /Users/x/.quaycrew/data",
+			State: "host directory /Users/x/.quay/data",
 		}, size: [2]int{120, 24}},
 		{name: "more rows than fit", info: Info{Address: "here"}, rows: 40, size: [2]int{120, 24}},
 		{name: "an error to show", err: errors.New("list sessions: nope"), size: [2]int{120, 24}},

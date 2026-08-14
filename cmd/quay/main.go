@@ -23,6 +23,12 @@ import (
 var version = "dev"
 
 func main() {
+	// Before anything reads a token or an address, because both are in the directory this checks for.
+	if err := theOldLayout(); err != nil {
+		fmt.Fprintln(os.Stderr, "quay:", err)
+		os.Exit(1)
+	}
+
 	told := os.Getenv("QC_GRPC_ADDR")
 	addr := told
 	if addr == "" {

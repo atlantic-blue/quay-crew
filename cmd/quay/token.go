@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -22,11 +21,11 @@ func crewToken(getenv func(string) string, read func(string) ([]byte, error)) st
 	}
 	dir := getenv("QC_DATA_HOST")
 	if dir == "" {
-		home, err := os.UserHomeDir()
+		home, err := quayHome()
 		if err != nil {
 			return ""
 		}
-		dir = filepath.Join(home, ".quaycrew", "data")
+		dir = filepath.Join(home, "data")
 	}
 	raw, err := read(filepath.Join(dir, auth.TokenFile))
 	if err != nil {

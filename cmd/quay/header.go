@@ -119,7 +119,7 @@ func viewFile() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "quay", "panel-view"), nil
+	return filepath.Join(home, "panel-view"), nil
 }
 
 // currentView is the view the console says it is showing, falling back to the one the panel opens on.

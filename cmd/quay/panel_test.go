@@ -321,7 +321,7 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 			} else {
 				// Making a project moves you into it, so standing nowhere means forgetting where the
 				// setup left us rather than saying so: `quay use` has no word for nowhere.
-				t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+				t.Setenv(HomeEnv, t.TempDir())
 			}
 
 			project, err := driverProject(context.Background(), client)

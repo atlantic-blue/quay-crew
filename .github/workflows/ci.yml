@@ -128,7 +128,7 @@ jobs:
       - name: Read the crew's token
         run: |
           set -euo pipefail
-          token_file="$HOME/.quaycrew/data/crew.token"
+          token_file="$HOME/.quay/data/crew.token"
           for i in $(seq 1 15); do
             sudo test -s "$token_file" && break
             sleep 2

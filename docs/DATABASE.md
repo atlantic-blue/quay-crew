@@ -15,7 +15,7 @@ what would happen otherwise.
 When a session runs a turn, the model keeps the conversation on its own disk and hands back a handle
 to it. That handle is stored as `model_session_id` on the session row, and it is the only pointer to
 that conversation anywhere in the system. Lose the row and the conversation still exists, sitting in
-`~/.quaycrew/data`, unreachable forever. Nothing can reconstruct the handle.
+`~/.quay/data`, unreachable forever. Nothing can reconstruct the handle.
 
 So the database is not a cache and it is not an optimisation. It is the thing that makes a session
 something you can come back to tomorrow.
@@ -149,7 +149,7 @@ select substr(id, 1, 8) as session, status, created_at
 from sessions where model_session_id = '';
 ```
 
-The handle itself, which is also the directory name to look for under `~/.quaycrew/data`:
+The handle itself, which is also the directory name to look for under `~/.quay/data`:
 
 ```sql
 select substr(id, 1, 8) as session, model_session_id
@@ -236,7 +236,7 @@ docker compose -p quaycrew -f deploy/docker-compose.yml down -v
 ```
 
 That throws away every workspace, project and session. The conversations themselves stay on disk
-under `~/.quaycrew/data`, and without the rows there is nothing left that knows how to reach them.
+under `~/.quay/data`, and without the rows there is nothing left that knows how to reach them.
 
 ---
 

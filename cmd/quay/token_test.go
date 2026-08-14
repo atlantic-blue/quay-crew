@@ -34,13 +34,11 @@ func TestCrewTokenReadsTheFileWhereTheOperatorMovedTheData(t *testing.T) {
 	}
 }
 
-func TestCrewTokenFallsBackToTheHomeDataDirectory(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home directory to fall back to here")
-	}
+func TestCrewTokenFallsBackToTheCrewsDataDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(HomeEnv, home)
 	read := func(path string) ([]byte, error) {
-		want := filepath.Join(home, ".quaycrew", "data", "crew.token")
+		want := filepath.Join(home, "data", "crew.token")
 		if path != want {
 			return nil, fmt.Errorf("read %s, want %s", path, want)
 		}
@@ -48,7 +46,7 @@ func TestCrewTokenFallsBackToTheHomeDataDirectory(t *testing.T) {
 	}
 
 	if got := crewToken(env(nil), read); got != "from-the-default-file" {
-		t.Fatalf("crewToken = %q, want the file under the home data directory", got)
+		t.Fatalf("crewToken = %q, want the file under the crew's data directory", got)
 	}
 }
 
