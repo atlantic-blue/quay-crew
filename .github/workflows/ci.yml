@@ -91,6 +91,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Docker creates a missing bind mount source as root, and the crew's directory holds the files
+      # the tool writes as well as the data the stack mounts. Made here, by this user, before compose
+      # can make it as root.
+      - name: Make the crew's directory
+        run: mkdir -p "$HOME/.quay/data"
+
       - name: Build images
         run: docker compose -f deploy/docker-compose.yml build
 
@@ -128,7 +134,7 @@ jobs:
       - name: Read the crew's token
         run: |
           set -euo pipefail
-          token_file="$HOME/.quaycrew/data/crew.token"
+          token_file="$HOME/.quay/data/crew.token"
           for i in $(seq 1 15); do
             sudo test -s "$token_file" && break
             sleep 2

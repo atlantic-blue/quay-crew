@@ -8,6 +8,27 @@ read, or run with `make features`.
 
 ## 14 August 2026
 
+- **A crew is one directory.** It was three. The data sat under `~/.quaycrew`, the tool's own files
+  followed `XDG_CONFIG_HOME` into `~/.config/quay`, and configuration was in a checkout an installed
+  crew does not have. Three places to find, three to back up, and no answer to "where is my crew".
+  Everything now lives in `~/.quay`: `env`, `data/`, `context` and `panel-view`. Set `QUAY_HOME` to put
+  it elsewhere.
+
+  Nothing is moved for you. What is sitting there is a gigabyte of transcripts, two tokens and the key
+  that unseals every secret, so both ways in refuse instead and print the exact commands: the tool
+  before it reads a token, and `make up` before it mounts the data directory. Starting anyway was the
+  real risk, because a crew that comes up on an empty directory mints a new token and reads as one
+  that lost every conversation.
+
+  ```sh
+  mkdir -p ~/.quay
+  mv ~/.quaycrew/data ~/.quay/data
+  mv ~/.config/quay/context ~/.quay/context
+  mv ~/.config/quay/panel-view ~/.quay/panel-view
+  ```
+
+  ([#248](https://github.com/atlantic-blue/quay-crew/issues/248))
+
 - **Configuration lives outside the checkout.** A crew read `deploy/.env`, which compose loads on its
   own because it sits beside the compose file. That file cannot be given to anybody: a crew that was
   installed rather than cloned has no checkout to keep it in, and the quick start told the operator to

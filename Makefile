@@ -37,27 +37,48 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image config env-check help
+.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image config home-check env-check help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
 print-%:
 	@echo "$($*)"
 
-## config: create the configuration file from the shipped template, if it is not there yet
+## config: create the crew's directory and its configuration file, if they are not there yet
 #
 # Compose is given the path, so the file has to exist before any compose command runs. Seeding it
 # rather than refusing means a first `make up` works, and the operator edits a file that already says
 # what each key is for.
+#
+# The data directory is made here too, and made first, because docker creates a missing bind mount
+# source itself and creates it as root. That would leave the crew's own directory owned by root, and
+# the next `quay use` unable to write the address you are working in into it.
 config:
+	@mkdir -p "$(QUAY_HOME)/data"
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		mkdir -p "$(dir $(ENV_FILE))"; \
 		cp deploy/env.example "$(ENV_FILE)"; \
 		echo "wrote $(ENV_FILE) from deploy/env.example. Edit it to say which model and image to run."; \
 	fi
 
+## home-check: refuse to start a crew whose data is still in the layout from before ~/.quay
+#
+# The stack mounts $(QUAY_HOME)/data. A crew made before the move has its tokens, its sealing key and
+# every conversation under ~/.quaycrew/data, so starting would mount an empty directory, mint a new
+# token, and look exactly like a crew that had lost everything. The tool refuses for the same reason;
+# this is the same refusal on the path that does not go through the tool.
+home-check:
+	@if [ -d "$(HOME)/.quaycrew/data" ] && [ ! -d "$(QUAY_HOME)/data" ]; then \
+		echo "refusing: this crew's data is still at $(HOME)/.quaycrew/data, and the stack now mounts"; \
+		echo "          $(QUAY_HOME)/data. Starting would come up empty on a new token. Move it, once:"; \
+		echo ""; \
+		echo "  mkdir -p $(QUAY_HOME)"; \
+		echo "  mv $(HOME)/.quaycrew/data $(QUAY_HOME)/data"; \
+		exit 1; \
+	fi
+
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
-up: config
+up: home-check config
 	$(COMPOSE) up --build -d
 
 ## start: alias for up
@@ -117,6 +138,7 @@ upgrade:
 	@echo "rebuilding the sandbox image. Sessions run whatever it holds, so leaving it behind means"
 	@echo "upgrading the tool and the stack while every conversation keeps the build from before."
 	@$(MAKE) --no-print-directory sandbox-image
+	@$(MAKE) --no-print-directory home-check
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
 	@echo "clearing the sandboxes from before the upgrade. They run the old image, the control plane"

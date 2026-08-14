@@ -32,7 +32,7 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 
 func testClientWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv(HomeEnv, t.TempDir())
 
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()

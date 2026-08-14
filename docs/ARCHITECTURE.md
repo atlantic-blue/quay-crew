@@ -227,7 +227,7 @@ A workspace and a project are named in lowercase with hyphens, because a name is
 disk. The control plane refuses a name that could not be part of one, and says what would work.
 
 The three levels are addressed as a path, and the operator stands in one of them at a time. `quay use
-me/house-bills` records that in `~/.config/quay/context`, the way kubectl keeps a current context, and
+me/house-bills` records that in `~/.quay/context`, the way kubectl keeps a current context, and
 every command after it acts there until an address typed on the command line says otherwise. A thread
 is the third level, so standing in one continues that conversation rather than starting another.
 
