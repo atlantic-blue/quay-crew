@@ -8,6 +8,15 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A run is not written while it is being read.** `quay flow start` failed about one run in six with
+  `grpc: error while marshaling: size mismatch, calculated=110, measured=169`. `Engine.Begin` answered
+  with the run and drove the same value in a goroutine behind that answer. A `Run` carries two maps,
+  so the struct copy shared them: the goroutine wrote into a map while gRPC was marshalling a response
+  that contained it, and the message grew between protobuf's sizing pass and its encoding pass. The
+  goroutine drives its own copy now. `go test -race ./cmd/quay/` reported five races before and none
+  after, and twelve runs of the package that was failing all pass.
+
+
 - **The threads listing is readable in colour.** Thirty rows in one colour meant reading every
   character of every row to find the conversation you wanted. Each cell is now coloured the way the
   `sessions` tool colours its own, because that is the listing already read all day: a workspace,
