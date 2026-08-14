@@ -100,6 +100,9 @@ services:
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
       # Claude Code CLI and its credentials is in place.
       QC_MODEL: ${QC_MODEL:-echo}
+      # What a thread's turns may do when it is born: plan, edits or dangerous. Unset keeps edits,
+      # which is what every thread had before this was configurable.
+      QC_PERMISSION_MODE: ${QC_PERMISSION_MODE:-}
       # A workspace's conversation store and a project's files live here, on the host, rather than
       # inside the sandbox container, so replacing a container does not destroy the conversation the
       # database holds a handle to. QC_DATA_DIR is this container's view of the directory, the one it

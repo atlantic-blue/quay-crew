@@ -225,15 +225,18 @@ func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
 //
 // The insert races with any other caller dispatching to the same thread, so it defers to the unique
 // constraint on (workspace, thread_id) and reads the winner back rather than trusting a prior select.
-func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Thread, error) {
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
 		return nil, err
 	}
+	// The mode is written here rather than left to the column's default, because the default is one
+	// value for every crew and this is the crew's own choice.
 	if _, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, thread_id, status) values ($1, $2, $3, $4, 'idle')
+		insert into sessions (id, workspace, project, thread_id, status, permission_mode)
+		values ($1, $2, $3, $4, 'idle', $5)
 		on conflict (project, thread_id) do nothing`,
-		NewID(), owner.GetWorkspace(), project, thread); err != nil {
+		NewID(), owner.GetWorkspace(), project, thread, model.PermissionModeBornIn(bornIn)); err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 	return p.sessionBy(ctx, `project = $1 and thread_id = $2`, project, thread)

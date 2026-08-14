@@ -8,6 +8,27 @@ read, or run with `make features`.
 
 ## 14 August 2026
 
+- **What a thread may do when it is born comes from the crew's configuration.** It was a constant in
+  the control plane and another in the store, so every thread that did not come through the console's
+  wizard arrived in `acceptEdits`, and the only way to change that was to edit the binary. A
+  dispatched turn has nobody to approve anything, so a crew whose work needs more than that had a
+  thread stopping to ask somebody who was not there, every time, from birth. `QC_PERMISSION_MODE` in
+  `~/.quay/env` takes `plan`, `edits` or `dangerous`.
+
+  A value that is not a mode stops the crew starting and names the three. Falling back would be
+  silent, and a crew configured for `planning` would run every turn in `acceptEdits` while looking
+  exactly like a crew configured for `acceptEdits`. Unset is not a refusal: it keeps `edits`, which is
+  what every thread has had since the control plane was written, so an upgrade cannot quietly widen
+  what a thread may do.
+
+  Configuration reaches a thread when it is created and never after. A thread that already exists
+  keeps what it was born in, because changing a file must not widen a conversation already running.
+  `quay mode <thread>` still changes one thread after the fact.
+
+  The words for a mode were written out three times, in the command line tool, in the wizard, and
+  nearly a fourth time here. They live with the model now, and all three read the same table.
+  ([#270](https://github.com/atlantic-blue/quay-crew/issues/270))
+
 - **A crew is one directory.** It was three. The data sat under `~/.quaycrew`, the tool's own files
   followed `XDG_CONFIG_HOME` into `~/.config/quay`, and configuration was in a checkout an installed
   crew does not have. Three places to find, three to back up, and no answer to "where is my crew".

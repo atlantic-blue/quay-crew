@@ -85,7 +85,13 @@ type Store interface {
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
 	// lands in the same session.
-	FindOrCreateSession(ctx context.Context, project, thread string) (*quaycrewv1.Thread, error)
+	//
+	// bornIn is what the thread's turns may do when it is created, which comes from the crew's
+	// configuration. An unknown or empty one is the mode every thread had before this was
+	// configurable, so a crew that says nothing does not change under an upgrade. It is ignored for a
+	// thread that already exists: what a thread may do is its own, and changing configuration must not
+	// widen a conversation already running.
+	FindOrCreateSession(ctx context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error)
 	// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears
 	// it. SessionSkills reads it back, empty when no live sandbox is known. Stopping or archiving
 	// a session clears it, because the sandbox goes with it and the next one is born current.
