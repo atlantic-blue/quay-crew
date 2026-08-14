@@ -85,6 +85,16 @@ type Action struct {
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
 	// this is what tells the crew about it.
 	After func(ctx context.Context, row Row) error
+	// Offers are the things this key asks the operator to pick between, in the order they are offered.
+	// A key with them opens a picker rather than acting, and RunChosen is what acts once one is
+	// picked. Confirm still applies, and Widens decides when: a key that both narrows and widens asks
+	// only when the pick gives the row more than it had.
+	Offers []string
+	// RunChosen acts on the row with what was picked. It is the Run of a key that offers.
+	RunChosen func(ctx context.Context, row Row, chosen string) error
+	// Widens says whether picking this would give the row more than it has now, which is what decides
+	// whether a pick is asked about. Nil means every pick is treated the same way Confirm says.
+	Widens func(row Row, chosen string) bool
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own

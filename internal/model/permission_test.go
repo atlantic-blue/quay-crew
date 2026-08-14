@@ -56,3 +56,30 @@ func TestTheModesAreOfferedNarrowestFirst(t *testing.T) {
 		t.Fatalf("the modes are offered as %v, want %v, narrowest first so the most permissive is never first", offered, want)
 	}
 }
+
+// A surface that asks before it widens and not before it narrows has to know which way a change goes.
+func TestWideningIsMovingTowardsDoingMore(t *testing.T) {
+	for _, tc := range []struct {
+		from, to string
+		widens   bool
+	}{
+		{from: model.PermissionPlan, to: model.PermissionAcceptEdits, widens: true},
+		{from: model.PermissionPlan, to: model.PermissionBypass, widens: true},
+		{from: model.PermissionAcceptEdits, to: model.PermissionBypass, widens: true},
+		{from: model.PermissionBypass, to: model.PermissionAcceptEdits, widens: false},
+		{from: model.PermissionBypass, to: model.PermissionPlan, widens: false},
+		{from: model.PermissionAcceptEdits, to: model.PermissionPlan, widens: false},
+		// Standing still is not widening, so re-picking the mode a thread is already in asks nothing.
+		{from: model.PermissionAcceptEdits, to: model.PermissionAcceptEdits, widens: false},
+		// A thread from before the mode was written down has none, and runs acceptEdits, so it
+		// compares as one rather than as the narrowest thing there is.
+		{from: "", to: model.PermissionBypass, widens: true},
+		{from: "", to: model.PermissionPlan, widens: false},
+	} {
+		t.Run(tc.from+" to "+tc.to, func(t *testing.T) {
+			if got := model.PermissionModeWidens(tc.from, tc.to); got != tc.widens {
+				t.Fatalf("widening from %q to %q reported %v, want %v", tc.from, tc.to, got, tc.widens)
+			}
+		})
+	}
+}

@@ -512,13 +512,24 @@ func shellPrompt(row Row) string {
 // which way it is going.
 const permissionColumn = 5
 
-// nextPermissionMode is the other side of the toggle: an armed thread goes back to asking before it
-// does anything outside its files, and anything else arms it.
-func nextPermissionMode(row Row) string {
-	if len(row.Cells) > permissionColumn && row.Cells[permissionColumn] == "dangerous" {
+// offeredModes are the modes the picker offers, narrowest first, in the words the listing prints. The
+// order is the model's, so the console cannot offer a set that `quay mode` does not take.
+func offeredModes() []string {
+	return model.PermissionModesOffered()
+}
+
+// modeOfRow is what the selected thread may do now, read out of the listing rather than fetched,
+// because the listing is what the operator is looking at when they press the key. A row from before
+// the mode was written down has an empty cell, and those threads run acceptEdits.
+func modeOfRow(row Row) string {
+	if len(row.Cells) <= permissionColumn {
 		return model.PermissionAcceptEdits
 	}
-	return model.PermissionBypass
+	named, known := model.PermissionModeNamed(row.Cells[permissionColumn])
+	if !known {
+		return model.PermissionAcceptEdits
+	}
+	return named
 }
 
 func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
@@ -579,18 +590,34 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			// The dangerous toggle. It asks first, like every key that changes what a thread is
-			// allowed to do, and it flips between the two modes worth flipping between: planning is
-			// set deliberately rather than toggled into.
-			Key:     "D",
-			Label:   "Dangerous",
+			// What a thread may do, picked rather than cycled. This used to flip between two of the
+			// three, so planning was reachable from the command line and from the wizard and not from
+			// the surface an operator lives in.
+			//
+			// D still opens it. It was the flip for as long as the console has had one, so it is in
+			// somebody's fingers, and a key that silently stopped working is worse than one that
+			// changed shape.
+			Key:     "m",
+			Also:    []string{"D"},
+			Label:   "Mode",
 			Confirm: true,
-			Run: func(ctx context.Context, row Row) error {
+			Offers:  offeredModes(),
+			// Widening gives the model more room, so it asks. Narrowing takes room away and does not:
+			// there is nothing to be careful about, and asking would only be in the way.
+			Widens: func(row Row, chosen string) bool {
+				picked, _ := model.PermissionModeNamed(chosen)
+				return model.PermissionModeWidens(modeOfRow(row), picked)
+			},
+			RunChosen: func(ctx context.Context, row Row, chosen string) error {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
+				picked, known := model.PermissionModeNamed(chosen)
+				if !known {
+					return fmt.Errorf("%q is not a mode", chosen)
+				}
 				_, err := client.SetThreadPermissionMode(ctx, &quaycrewv1.SetThreadPermissionModeRequest{
-					Id: row.ID, Mode: nextPermissionMode(row),
+					Id: row.ID, Mode: picked,
 				})
 				return err
 			},

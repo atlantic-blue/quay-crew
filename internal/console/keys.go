@@ -47,6 +47,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateBrowseKey(msg)
 	case modeConfirm:
 		return m.updateConfirmKey(msg)
+	case modeChoose:
+		return m.updateChooseKey(msg)
 	case modeWizard:
 		return m.updateWizardKey(msg)
 	case modeOutput:
@@ -160,6 +162,10 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 		if !action.Bound(key) {
 			continue
 		}
+		if len(action.Offers) > 0 {
+			m.mode, m.choosing = modeChoose, choice{action: action, row: row, at: 0}
+			return m, nil
+		}
 		if action.Confirm {
 			m.mode, m.waiting = modeConfirm, pending{action: action, row: row}
 			return m, nil
@@ -192,6 +198,9 @@ func (m Model) updateConfirmKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	if msg.String() != "y" {
 		return m, nil
+	}
+	if waiting.chosen != "" {
+		return m, chosenCmd(waiting.action, waiting.row, waiting.chosen)
 	}
 	return m.perform(waiting.action, waiting.row)
 }
@@ -355,4 +364,48 @@ func trimLastRune(text string) string {
 		return ""
 	}
 	return string(runes[:len(runes)-1])
+}
+
+// updateChooseKey moves the cursor through what a key offers, and picks one.
+//
+// A pick that gives the row more than it has asks first, the way every widening key in the console
+// does. A pick that takes something away does not: there is nothing to be careful about, and asking
+// would only be in the way.
+func (m Model) updateChooseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	offers := m.choosing.action.Offers
+	switch msg.String() {
+	case "esc", "q":
+		m.mode, m.choosing = modeBrowse, choice{}
+		return m, nil
+	case "up", "k", "shift+tab":
+		m.choosing.at = (m.choosing.at - 1 + len(offers)) % len(offers)
+		return m, nil
+	case "down", "j", "tab":
+		m.choosing.at = (m.choosing.at + 1) % len(offers)
+		return m, nil
+	case "enter":
+		chosen := offers[m.choosing.at]
+		action, row := m.choosing.action, m.choosing.row
+		m.mode, m.choosing = modeBrowse, choice{}
+		if action.Confirm && (action.Widens == nil || action.Widens(row, chosen)) {
+			m.mode, m.waiting = modeConfirm, pending{action: action, row: row, chosen: chosen}
+			return m, nil
+		}
+		return m, chosenCmd(action, row, chosen)
+	}
+	return m, nil
+}
+
+// chosenCmd runs what was picked, off the keyboard, so a slow crew does not hold the console still.
+// The same shape as runCmd, because a pick is a run that happens to carry an answer.
+func chosenCmd(action Action, row Row, chosen string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := action.RunChosen(ctx, row, chosen); err != nil {
+			return actionDoneMsg{err: fmt.Errorf("%s %s: %w", action.Label, row.ID, err)}
+		}
+		return actionDoneMsg{}
+	}
 }

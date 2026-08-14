@@ -50,3 +50,26 @@ func PermissionModeBornIn(configured string) string {
 	}
 	return PermissionAcceptEdits
 }
+
+// PermissionModeWidens says whether moving from one mode to another gives the model more room.
+//
+// The modes are ordered, narrowest first, so this is a comparison of where each sits: plan reads and
+// proposes, edits changes files in one directory, dangerous does anything. A surface that asks before
+// it widens and not before it narrows needs to know which way a change goes, and computing that from
+// the order rather than listing the pairs means a fourth mode cannot be added without it.
+//
+// An unknown mode counts as the mode a thread with nothing set actually runs in, which is what makes
+// a thread from before the mode was written down compare like every other one.
+func PermissionModeWidens(from, to string) bool {
+	return permissionRank(to) > permissionRank(from)
+}
+
+func permissionRank(mode string) int {
+	spelt := PermissionModeBornIn(mode)
+	for at, spoken := range modeOrder {
+		if named, _ := PermissionModeNamed(spoken); named == spelt {
+			return at
+		}
+	}
+	return 0
+}

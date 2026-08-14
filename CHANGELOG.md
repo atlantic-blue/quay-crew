@@ -8,6 +8,24 @@ read, or run with `make features`.
 
 ## 14 August 2026
 
+- **A thread's mode is picked in the console, not cycled.** `D` flipped between edits and dangerous,
+  so planning was reachable from the command line and from the wizard and not from the surface an
+  operator actually lives in. `m` now offers all three, narrowest first, and takes a pick. `D` opens
+  the same picker, because it was the flip for as long as the console has had one and a key that
+  silently stopped working is worse than one that changed shape.
+
+  Widening what a thread may do asks first, the way every key that gives a thread more room does.
+  Narrowing does not: it takes capability away, so there is nothing to be careful about and asking
+  would only be in the way. Which way a pick goes is computed from the order the modes sit in rather
+  than from a list of pairs, so a fourth mode cannot be added without it.
+
+  ```
+   mode d754610f   plan  edits  dangerous   j and k move, enter picks, esc cancels
+  ```
+
+  Rendered from a table test, not captured from a running console.
+  ([#270](https://github.com/atlantic-blue/quay-crew/issues/270))
+
 - **What a thread may do when it is born comes from the crew's configuration.** It was a constant in
   the control plane and another in the store, so every thread that did not come through the console's
   wizard arrived in `acceptEdits`, and the only way to change that was to edit the binary. A
