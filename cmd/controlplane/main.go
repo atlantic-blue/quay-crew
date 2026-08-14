@@ -121,12 +121,14 @@ func main() {
 	defer events.Close()
 
 	server := controlplane.NewServer(controlplane.Config{
-		Store:    durable,
-		Runner:   runner,
-		Provider: provider,
-		Secrets:  credentials,
-		Storage:  storage,
-		Events:   events,
+		// How often a thread describes itself, from the crew's configuration.
+		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
+		Store:         durable,
+		Runner:        runner,
+		Provider:      provider,
+		Secrets:       credentials,
+		Storage:       storage,
+		Events:        events,
 		// What a thread's turns may do when it is born, from the crew's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.

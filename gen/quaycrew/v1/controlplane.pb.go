@@ -256,9 +256,12 @@ type Thread struct {
 	Label string `protobuf:"bytes,14,opt,name=label,proto3" json:"label,omitempty"`
 	// description is what the crew observed the conversation to be, one line, written by the model that
 	// had the turn. Empty until a turn has happened. A listing prefers the label when there is one.
-	Description   string `protobuf:"bytes,15,opt,name=description,proto3" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Description string `protobuf:"bytes,15,opt,name=description,proto3" json:"description,omitempty"`
+	// described_at_turn is how many turns the thread had when its description was written, so a
+	// conversation that has moved on can be described again. Zero means never described.
+	DescribedAtTurn int32 `protobuf:"varint,16,opt,name=described_at_turn,json=describedAtTurn,proto3" json:"described_at_turn,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Thread) Reset() {
@@ -394,6 +397,13 @@ func (x *Thread) GetDescription() string {
 		return x.Description
 	}
 	return ""
+}
+
+func (x *Thread) GetDescribedAtTurn() int32 {
+	if x != nil {
+		return x.DescribedAtTurn
+	}
+	return 0
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -4921,7 +4931,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x96\x04\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xc2\x04\n" +
 	"\x06Thread\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -4941,7 +4951,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05usage\x18\f \x01(\v2\x12.quaycrew.v1.UsageR\x05usage\x12\x14\n" +
 	"\x05stale\x18\r \x01(\bR\x05stale\x12\x14\n" +
 	"\x05label\x18\x0e \x01(\tR\x05label\x12 \n" +
-	"\vdescription\x18\x0f \x01(\tR\vdescription\"y\n" +
+	"\vdescription\x18\x0f \x01(\tR\vdescription\x12*\n" +
+	"\x11described_at_turn\x18\x10 \x01(\x05R\x0fdescribedAtTurn\"y\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12\x16\n" +
 	"\x06output\x18\x02 \x01(\x03R\x06output\x12\x1d\n" +

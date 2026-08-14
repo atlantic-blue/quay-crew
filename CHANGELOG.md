@@ -8,6 +8,25 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A thread says what it is about, written by the crew.** A label fixes a listing only for the
+  threads somebody stopped to name, and naming things is work nobody does consistently. A thread now
+  describes itself after its first turn, and again once the conversation has moved ten turns past that
+  description. A listing prefers your own name when there is one, then the crew's, then the
+  identifier, and nothing automatic ever writes the name you chose.
+
+  The describing call is its own conversation, not the thread's, so a request you never made does not
+  land in your history and its tokens do not count towards what the listing says the thread cost. It
+  runs behind the answer, so a turn is never slower for it, and every failure in it is a log line:
+  a turn that worked is not reported as failed because the crew could not think of a name.
+
+  Ten is a starting number, not a measured one. Nothing has run long enough to say how far a
+  conversation drifts per turn, so it is `QC_DESCRIBE_EVERY` in the crew's configuration rather than a
+  number presented as derived, and what would replace it is a count of how often a rewrite actually
+  differs from the description before it. `QC_DESCRIBE_EVERY=off` turns it off, which a crew running
+  automation wants, since a flow makes a thread per run.
+  ([#271](https://github.com/atlantic-blue/quay-crew/issues/271))
+
+
 - **A thread carries a name you chose.** A listing was a column of hexadecimal, so working out which
   conversation was the one about the electricity bill meant opening them. `quay label <thread>
   "the electricity bill"` names one, no text reads it back, and `""` clears it. `L` in the console

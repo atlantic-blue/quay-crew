@@ -1,0 +1,181 @@
+package controlplane
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"strconv"
+	"strings"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+)
+
+// A thread says what it is about, written by the crew rather than by the operator.
+//
+// A listing is a column of hexadecimal, and a label fixes that only for the threads somebody stopped
+// to name. Naming things is work and nobody does it consistently, so the half that actually gets used
+// is the one the crew writes itself.
+//
+// It never touches the label. A name somebody picked is the one thing in a listing that is certainly
+// right, and nothing automatic is allowed to overwrite it.
+
+const (
+	// describeEveryDefault is how many turns past its description a conversation goes before it is
+	// described again.
+	//
+	// Ten is a starting number, not a measured one. Nothing here has been running long enough to say
+	// how far a conversation drifts per turn, so this is set where it can be changed rather than
+	// presented as derived: QC_DESCRIBE_EVERY in the crew's configuration. What would replace it is a
+	// count of how often a re-description actually differs from the one before it.
+	describeEveryDefault = 10
+	// descriptionLimit is how much of a description is kept. It shares a column with the operator's
+	// own label, so it is capped at the same kind of length for the same reason: a listing gives the
+	// name one column among ten.
+	descriptionLimit = 60
+	// describeTurns is how much of a conversation is read to describe it. The opening exchange says
+	// what a conversation is for better than the middle of it does, and reading the whole thing would
+	// cost more than the turn being described.
+	describeTurns = 6
+)
+
+// DescribeEvery reads how often a thread is described from what the crew was configured with.
+//
+// "off" and zero both turn it off, because a crew running automation makes a thread per run and
+// should be able to pay for none of this. Anything unreadable keeps the default rather than refusing:
+// the crew starting matters more than this setting being exactly right, which is the opposite of the
+// permission mode, where being wrong changes what a thread may do.
+func DescribeEvery(configured string) int {
+	value := strings.ToLower(strings.TrimSpace(configured))
+	if value == "" {
+		return describeEveryDefault
+	}
+	if value == "off" || value == "no" || value == "false" {
+		return 0
+	}
+	every, err := strconv.Atoi(value)
+	if err != nil || every < 0 {
+		return describeEveryDefault
+	}
+	return every
+}
+
+// worthDescribing says whether a thread's description has fallen behind its conversation.
+//
+// The first turn is always worth describing, because until then the listing has nothing but an
+// identifier. After that it is turns since, not turns total: a thread described at turn one is
+// described again at eleven, not at ten.
+func worthDescribing(turns, describedAtTurn, every int) bool {
+	if every <= 0 || turns == 0 {
+		return false
+	}
+	if describedAtTurn == 0 {
+		return true
+	}
+	return turns-describedAtTurn >= every
+}
+
+// tidyDescription is what the model said, as a listing can hold it: the first line, unquoted,
+// trimmed and capped.
+//
+// The model is asked for one line and does not always give one. What comes back goes straight into a
+// row, so a paragraph draws a row several rows tall and breaks the cursor, and a quoted answer puts
+// quotation marks in the middle of a listing.
+func tidyDescription(said string) string {
+	line := strings.TrimSpace(said)
+	if cut := strings.IndexAny(line, "\r\n"); cut >= 0 {
+		line = strings.TrimSpace(line[:cut])
+	}
+	line = strings.TrimSpace(strings.Trim(line, `"'`))
+	if runes := []rune(line); len(runes) > descriptionLimit {
+		return strings.TrimSpace(string(runes[:descriptionLimit]))
+	}
+	return line
+}
+
+// describePrompt asks for the one line, from the conversation so far.
+//
+// It says what not to write as firmly as what to write. Asked without that, a model answers with a
+// title in its own voice, and a listing of "an engaging exploration of agent tooling" is worse than a
+// listing of hexadecimal because it takes longer to read and says less.
+func describePrompt(turns []*quaycrewv1.Turn) string {
+	var conversation strings.Builder
+	for _, turn := range turns {
+		fmt.Fprintf(&conversation, "asked: %s\n", oneLine(turn.GetPrompt(), 300))
+		if reply := turn.GetReply(); reply != "" {
+			fmt.Fprintf(&conversation, "answered: %s\n", oneLine(reply, 300))
+		}
+	}
+	return "Here is the start of a conversation:\n\n" + conversation.String() +
+		"\nIn one short line, say what this conversation is for, in plain words, as a person would " +
+		"describe it to a colleague. For example \"blog post about the agentic harness\" or " +
+		"\"fixing the payout job\". No title case, no quotation marks, no adjectives about how " +
+		"interesting it is, and nothing but the line itself."
+}
+
+// oneLine flattens text to a single line and caps it, so a long turn does not become most of the
+// prompt that describes it.
+func oneLine(text string, limit int) string {
+	flat := strings.Join(strings.Fields(text), " ")
+	if runes := []rune(flat); len(runes) > limit {
+		return string(runes[:limit]) + "…"
+	}
+	return flat
+}
+
+// describeThread writes what a thread is about, if it has fallen behind.
+//
+// It takes the thread's id rather than the thread, and reads everything it needs again, because it
+// runs behind a turn that has already been answered: anything handed to it would be a value somebody
+// else is still reading. That is the same mistake that made `quay flow start` fail one run in six.
+//
+// Every failure is a log line and nothing else. A description is a convenience, and a turn that
+// worked must not be reported as failed because the crew could not think of a name for it.
+func (s *Server) describeThread(ctx context.Context, threadID string) {
+	if s.describeEvery <= 0 {
+		return
+	}
+	thread, err := s.store.GetSession(ctx, threadID)
+	if err != nil {
+		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		return
+	}
+	turns, err := s.store.CountTurns(ctx, threadID)
+	if err != nil {
+		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		return
+	}
+	if !worthDescribing(turns, int(thread.GetDescribedAtTurn()), s.describeEvery) {
+		return
+	}
+
+	history, err := s.store.ListTurns(ctx, threadID, describeTurns)
+	if err != nil || len(history) == 0 {
+		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		return
+	}
+	box, err := s.sandboxFor(ctx, thread)
+	if err != nil {
+		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		return
+	}
+	// Its own conversation, not the thread's. Describing inside the thread would put a request the
+	// operator never made into their history, and would add its tokens to what the listing says the
+	// conversation cost, so the cost column would stop describing the work.
+	said, err := s.runner.Run(ctx, box, model.Request{
+		Text:           describePrompt(history),
+		PermissionMode: model.PermissionPlan,
+		Env:            s.turnEnv(ctx, thread),
+	})
+	if err != nil {
+		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		return
+	}
+	description := tidyDescription(said.Reply)
+	if description == "" {
+		return
+	}
+	if err := s.store.SetDescription(ctx, threadID, description, turns); err != nil {
+		slog.Debug("a thread's description could not be kept", "thread", threadID, "error", err)
+	}
+}

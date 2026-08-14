@@ -348,6 +348,33 @@ func (m *Memory) SetLabel(_ context.Context, id, label string) error {
 	return nil
 }
 
+// SetDescription records what the crew observed a thread to be.
+func (m *Memory) SetDescription(_ context.Context, id, description string, atTurn int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	session.Description = description
+	session.DescribedAtTurn = int32(atTurn)
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return nil
+}
+
+// CountTurns is how many turns a thread has had.
+func (m *Memory) CountTurns(_ context.Context, session string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	count := 0
+	for _, turn := range m.turns {
+		if turn.GetThread() == session {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // ArchiveSession stamps a session as put away.
 func (m *Memory) ArchiveSession(_ context.Context, id string) error {
 	m.mu.Lock()

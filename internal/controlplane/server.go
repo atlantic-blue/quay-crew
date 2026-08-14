@@ -99,6 +99,9 @@ type Config struct {
 	// because an upgrade that quietly widens what a thread may do is the worst way to learn this
 	// setting exists.
 	BirthPermissionMode string
+	// DescribeEvery is how many turns past its description a conversation goes before the crew writes
+	// it again. Zero is off.
+	DescribeEvery int
 }
 
 // Identity is who a commit is by.
@@ -136,6 +139,12 @@ type Server struct {
 	gitAuthor Identity
 	// birthMode is what a thread's turns may do when nothing else says. Empty means acceptEdits.
 	birthMode string
+	// describeEvery is how many turns past its description a conversation goes before the crew writes
+	// it again. Zero is off, which is what a crew paying for automation runs wants.
+	describeEvery int
+	// describing counts the descriptions still being written, so a test can wait for them rather than
+	// sleeping and a shutdown can tell whether any are in flight.
+	describing sync.WaitGroup
 	// skills are the capabilities a session is given, and where they are on the host.
 	skills       []skill.Skill
 	skillsHost   string
@@ -151,21 +160,22 @@ type Server struct {
 // default), a sandbox provider (one sandbox per session) and a secrets store.
 func NewServer(cfg Config) *Server {
 	server := &Server{
-		store:        cfg.Store,
-		secrets:      cfg.Secrets,
-		runner:       cfg.Runner,
-		provider:     cfg.Provider,
-		storage:      cfg.Storage,
-		events:       eventsOr(cfg.Events),
-		info:         cfg.Info,
-		reachable:    cfg.Reachable,
-		driverToken:  cfg.DriverToken,
-		gitAuthor:    cfg.GitAuthor,
-		birthMode:    cfg.BirthPermissionMode,
-		skills:       cfg.Skills,
-		skillsHost:   cfg.SkillsHost,
-		sandboxImage: cfg.SandboxImage,
-		sandboxes:    make(map[string]sandbox.Sandbox),
+		store:         cfg.Store,
+		secrets:       cfg.Secrets,
+		runner:        cfg.Runner,
+		provider:      cfg.Provider,
+		storage:       cfg.Storage,
+		events:        eventsOr(cfg.Events),
+		info:          cfg.Info,
+		reachable:     cfg.Reachable,
+		driverToken:   cfg.DriverToken,
+		gitAuthor:     cfg.GitAuthor,
+		birthMode:     cfg.BirthPermissionMode,
+		describeEvery: cfg.DescribeEvery,
+		skills:        cfg.Skills,
+		skillsHost:    cfg.SkillsHost,
+		sandboxImage:  cfg.SandboxImage,
+		sandboxes:     make(map[string]sandbox.Sandbox),
 	}
 	// The engine dispatches through this same server rather than dialing it: it is already inside
 	// the process, and a run is started by a caller the interceptor has already authenticated. It
@@ -852,6 +862,15 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
 		Prompt: req.GetText(), Reply: resp.Reply, Status: "idle",
 	})
+
+	// Behind the answer, so the operator waits for their turn rather than for the crew to think of a
+	// name for it. Only the identifier crosses into it: everything else is read again in there, so
+	// nothing this call is still holding can be written underneath it.
+	s.describing.Add(1)
+	go func(threadID string) {
+		defer s.describing.Done()
+		s.describeThread(context.WithoutCancel(ctx), threadID)
+	}(session.GetId())
 
 	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread, Reply: resp.Reply}, nil
 }
