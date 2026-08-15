@@ -80,6 +80,11 @@ const (
 	ConversationPath = "/home/agent/.claude"
 	WorkingPath      = "/home/agent/workspace"
 	SkillsPath       = "/home/agent/skills"
+	// HooksPath is where the hooks a session runs under are mounted, read only, together with the
+	// settings file that binds them to their events. The runtime is pointed at that file explicitly,
+	// which is what lets the crew own this directory outright rather than merging into the
+	// conversation directory's own settings.
+	HooksPath = "/home/agent/hooks"
 	// SharedPath is the workspace's own volume, mounted read write into every session in it. The
 	// repositories a workspace works in are cloned here once and shared; anything else a workspace
 	// accumulates and wants its sessions to see can live here too.

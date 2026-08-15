@@ -20,6 +20,10 @@ type Request struct {
 	// Env is filled from the workspace's secrets, so a value reaches the sandbox without ever being
 	// part of the request text or the event log.
 	Env map[string]string
+	// Settings is an extra settings file inside the sandbox for the runtime to load, which is how the
+	// hooks a session runs under reach it. Empty means the session is under none, and the flag is left
+	// off entirely: pointing the runtime at a file that is not there fails the turn.
+	Settings string
 }
 
 // Response is the result of a turn.

@@ -314,12 +314,18 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 	// workspace has not set is left out here rather than improvised around in the sandbox, and the
 	// listing carries the reason. See withoutUnusable.
 	caps := s.capabilityOf(ctx, session)
+	// The hooks the session runs under, written out and mounted beside its skills. A hook reaches a
+	// container when the container is built and never after, which is why attaching one says so.
+	mounts := caps.mounts
+	if mount, under := s.renderHooks(ctx, session); under {
+		mounts = append(mounts, mount)
+	}
 	box, err := s.provider.Create(ctx, sandbox.Config{
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
 		Env:       environ(s.turnEnv(ctx, session)),
-		Mounts:    caps.mounts,
+		Mounts:    mounts,
 		Driver:    session.GetDriver(),
 	})
 	if err != nil {
@@ -934,6 +940,7 @@ func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text stri
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session, s.birthMode),
 		Env:            s.turnEnv(ctx, session),
+		Settings:       s.settingsFor(ctx, session),
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
