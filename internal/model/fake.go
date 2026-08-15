@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -18,6 +19,15 @@ type FakeRunner struct {
 	// instant model a whole automation finishes before a second command can be typed, and a test
 	// of stopping one would be racing rather than testing.
 	Takes time.Duration
+	// Gate holds a turn open until it is closed. Same purpose as Takes and none of its guesswork: a
+	// test that waits for a duration is a test that passes on a fast machine, and the thing being
+	// tested here is what is true *while* a turn runs. Nil runs straight through.
+	Gate chan struct{}
+	// Started is closed once, when the first turn begins, so a test can know a turn is under way
+	// rather than assume it by the time it took to ask.
+	Started chan struct{}
+
+	once sync.Once
 }
 
 // compile time check.
@@ -26,6 +36,16 @@ var _ Runner = (*FakeRunner)(nil)
 // Run records the request and returns the canned response (or Err). The sandbox is ignored.
 func (f *FakeRunner) Run(ctx context.Context, _ sandbox.Sandbox, req Request) (Response, error) {
 	f.LastReq = req
+	if f.Started != nil {
+		f.once.Do(func() { close(f.Started) })
+	}
+	if f.Gate != nil {
+		select {
+		case <-f.Gate:
+		case <-ctx.Done():
+			return Response{}, ctx.Err()
+		}
+	}
 	if f.Takes > 0 {
 		select {
 		case <-time.After(f.Takes):
