@@ -30,6 +30,27 @@ read, or run with `make features`.
   tool added unpinned fails here rather than months later, and one asks the built image what it runs,
   because a pin the registry quietly ignores reads exactly like a pin that works.
 
+## 16 August 2026
+
+- **A turn is called a task.** "Turn" is a word from conversation analysis, where it means one party
+  holding the floor. It arrived in this product the way it arrived in every model provider's
+  documentation, already meaning something, and it never fitted: a turn in conversation is short, and
+  here holding the floor means reading a repository for ten minutes. The word implied an exchange and
+  the thing is a piece of work.
+
+  The glossary made it worse. It defined five words and then defined `thread` with a sixth it never
+  defined anywhere: "one conversation. A turn runs in a project." The one place that exists to teach
+  the vocabulary used the undefined term to explain a defined one.
+
+  So `quay turns` is `quay tasks`, the console's history view is `tasks`, and the glossary gains the
+  entry it never had, including the part nobody was told: minutes is normal. `quay turns` is refused
+  by name and says what to type instead, rather than becoming an unknown command, because it is in
+  fingers, in scripts and in notes. The console keeps `turns` as an alias, since muscle memory
+  outlives a rename and answering to it costs nothing.
+
+  The protocol, the store and its table still say turn. That is the next change, and it is invisible
+  from outside.
+
 ## 15 August 2026
 
 - **Go, in the sandbox image.** A session working on this repository could read the Go source and

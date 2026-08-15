@@ -571,9 +571,9 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 	return console.Row{}, false
 }
 
-// initializeTurnsViewSteps registers the steps for the console's history view. They live here rather
+// initializeTasksViewSteps registers the steps for the console's history view. They live here rather
 // than with the other turns steps because they drive the console's own reducer.
-func initializeTurnsViewSteps(sc *godog.ScenarioContext) {
+func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
@@ -597,17 +597,17 @@ func initializeTurnsViewSteps(sc *godog.ScenarioContext) {
 		return fmt.Errorf("the %s view has nothing bound to l", c.active.Name)
 	})
 
-	sc.Step(`^the console is showing turns$`, func(ctx context.Context) error {
-		if got := consoleFrom(ctx).active.Name; got != "turns" {
-			return fmt.Errorf("the console is showing %q, want turns", got)
+	sc.Step(`^the console is showing tasks$`, func(ctx context.Context) error {
+		if got := consoleFrom(ctx).active.Name; got != "tasks" {
+			return fmt.Errorf("the console is showing %q, want tasks", got)
 		}
 		return nil
 	})
 
-	sc.Step(`^the history lists (\d+) turns? saying "([^"]*)"$`, func(ctx context.Context, want int, asked string) error {
+	sc.Step(`^the history lists (\d+) tasks? saying "([^"]*)"$`, func(ctx context.Context, want int, asked string) error {
 		c := consoleFrom(ctx)
 		if len(c.rows) != want {
-			return fmt.Errorf("the history lists %d turns, want %d", len(c.rows), want)
+			return fmt.Errorf("the history lists %d tasks, want %d", len(c.rows), want)
 		}
 		if len(c.rows) == 0 {
 			return nil
