@@ -92,16 +92,19 @@ func (s *Server) exportTurn(ctx context.Context, session *quaycrewv1.Thread, eve
 // token shape without it.
 func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Thread) map[string]string {
 	values := map[string]string{}
-	names, err := s.secrets.Names(ctx, session.GetWorkspace())
+	refs, err := s.secrets.List(ctx, session.GetWorkspace())
 	if err != nil {
 		slog.Warn("the workspace's secret names could not be listed for redaction", "session", session.GetId(), "error", err)
 	}
-	for _, name := range names {
-		value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
+	// Every projection, because a value is worth redacting wherever it came from. A mounted secret
+	// reaches the sandbox as a file rather than as an environment variable, and a session that reads
+	// that file can still say what is in it.
+	for _, ref := range refs {
+		value, err := s.secrets.Get(ctx, session.GetWorkspace(), ref.Name)
 		if err != nil || value == "" {
 			continue
 		}
-		values[name] = value
+		values[ref.Name] = value
 	}
 	if session.GetDriver() && s.driverToken != "" {
 		values[auth.TokenEnv] = s.driverToken

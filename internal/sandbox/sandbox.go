@@ -6,6 +6,7 @@ package sandbox
 import (
 	"context"
 	"io"
+	"path"
 )
 
 // Spec describes a command to run inside a Sandbox.
@@ -89,6 +90,16 @@ const (
 	// repositories a workspace works in are cloned here once and shared; anything else a workspace
 	// accumulates and wants its sessions to see can live here too.
 	SharedPath = "/home/agent/shared"
+	// SecretsPath is where a file projected secret lands, one file per secret, named after it. The
+	// path is Docker's own default for a secret and the conventional mount point for one in
+	// Kubernetes, so a session that has met either already knows where to look.
+	//
+	// Memory backed, so a value never reaches the container's writable layer or the host's disk.
+	SecretsPath = "/run/secrets"
+	// UserID is the identifier of the image's agent user. A memory backed mount belongs to root
+	// unless it is told otherwise, and the crew writes secrets into it as the sandbox's own user, so
+	// the mount has to name that user.
+	UserID = 1001
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
 	// opening a thread twice lands in the one already running.
 	AttachedSessionName = "quay"
@@ -98,6 +109,11 @@ const (
 	// everything running with it.
 	OpenConversation = "open-conversation"
 )
+
+// SecretFilePath is where a file projected secret lands inside a sandbox. Derived from the name
+// rather than stored, so every reader answers the same, and a name that could not be a file name is
+// refused before it reaches the store.
+func SecretFilePath(name string) string { return path.Join(SecretsPath, name) }
 
 const ContainerPrefix = "quaycrew-"
 

@@ -358,6 +358,11 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 // A session's working directory starts empty on purpose: a repository is cloned in conversation,
 // following the git skill, so the only provisioning a sandbox needs is its skills.
 func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
+	// Before the skills, because a skill's setup can need a credential that is mounted rather than
+	// exported, and a setup that runs before the file is there fails for a reason nothing explains.
+	if err := s.readySecretFiles(ctx, session, box); err != nil {
+		return err
+	}
 	if err := s.readySkills(ctx, session, held, box); err != nil {
 		return err
 	}
@@ -787,10 +792,37 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	if _, err := s.store.GetWorkspace(ctx, req.GetWorkspace()); err != nil {
 		return nil, storeError(err, "workspace")
 	}
-	if err := s.secrets.Set(ctx, req.GetWorkspace(), req.GetKey(), req.GetValue()); err != nil {
+	secret := secrets.Secret{
+		Name:       req.GetKey(),
+		Value:      req.GetValue(),
+		Projection: projectionOf(req.GetProjection()),
+	}
+	// Refused here rather than only in the backend, so a name that cannot be a file name comes back
+	// as a bad request instead of as an internal failure the caller cannot act on.
+	if err := secret.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.secrets.Set(ctx, req.GetWorkspace(), secret); err != nil {
 		return nil, status.Errorf(codes.Internal, "set secret: %v", err)
 	}
 	return &quaycrewv1.SetSecretResponse{}, nil
+}
+
+// projectionOf reads the wire's answer for how a secret reaches a sandbox. Unspecified is the
+// environment, so a client written before projections existed sets the secrets it always set.
+func projectionOf(projection quaycrewv1.SecretProjection) secrets.Projection {
+	if projection == quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE {
+		return secrets.File
+	}
+	return secrets.Env
+}
+
+// wireProjection is projectionOf the other way round, for a listing.
+func wireProjection(projection secrets.Projection) quaycrewv1.SecretProjection {
+	if projection.Or() == secrets.File {
+		return quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE
+	}
+	return quaycrewv1.SecretProjection_SECRET_PROJECTION_ENV
 }
 
 // ListSecrets says what each workspace has set, and never what any of it says.
@@ -809,15 +841,16 @@ func (s *Server) ListSecrets(ctx context.Context, req *quaycrewv1.ListSecretsReq
 		if req.GetWorkspace() != "" && workspace.GetId() != req.GetWorkspace() {
 			continue
 		}
-		names, err := s.secrets.Names(ctx, workspace.GetId())
+		refs, err := s.secrets.List(ctx, workspace.GetId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
 		}
-		for _, name := range names {
+		for _, ref := range refs {
 			out = append(out, &quaycrewv1.SecretRef{
 				Workspace:     workspace.GetId(),
 				WorkspaceName: workspace.GetName(),
-				Name:          name,
+				Name:          ref.Name,
+				Projection:    wireProjection(ref.Projection),
 			})
 		}
 	}
@@ -1402,10 +1435,19 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread) map[st
 	//
 	// The model's own token is asked for by name as well, so a store that cannot enumerate still
 	// runs a turn rather than failing one for a reason the operator cannot see.
+	//
+	// A mounted secret is left out. It reaches the sandbox as a file, and putting it here as well
+	// would hand back the exposure the file exists to avoid: a container's environment is readable
+	// through docker inspect for the life of that container.
 	named := []string{model.ClaudeCodeOAuthTokenEnv}
-	stored, err := s.secrets.Names(ctx, session.GetWorkspace())
+	stored, err := s.secrets.List(ctx, session.GetWorkspace())
 	if err == nil {
-		named = append(named, stored...)
+		for _, ref := range stored {
+			if ref.Projection.Or() == secrets.File {
+				continue
+			}
+			named = append(named, ref.Name)
+		}
 	}
 	for _, name := range named {
 		if _, already := env[name]; already {

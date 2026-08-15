@@ -57,3 +57,18 @@ func TestTheSandboxStillCarriesItsEnvironmentAndMounts(t *testing.T) {
 		}
 	}
 }
+
+// Every sandbox gets the memory backed directory a mounted secret lands in, whether or not its
+// workspace has mounted one. A mount is a create time decision, so the alternative is that the first
+// workspace to mount a secret needs a fresh container before it can have the directory at all.
+//
+// It names the sandbox user. Without that the directory belongs to root, and the crew writes into it
+// as the sandbox's own user, so every write is refused.
+func TestEverySandboxGetsSomewhereToPutAMountedSecret(t *testing.T) {
+	got := strings.Join(DockerProvider{Image: "img"}.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")
+
+	want := "--tmpfs /run/secrets:mode=0700,uid=1001,gid=1001"
+	if !strings.Contains(got, want) {
+		t.Fatalf("the sandbox has nowhere to put a mounted secret, want %q:\n%s", want, got)
+	}
+}

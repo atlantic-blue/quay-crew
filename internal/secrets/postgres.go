@@ -31,47 +31,56 @@ func NewPostgres(pool *pgxpool.Pool, key []byte) (*Postgres, error) {
 }
 
 // Set stores a workspace's secret, sealed.
-func (p *Postgres) Set(ctx context.Context, workspace, name, value string) error {
-	if workspace == "" || name == "" {
-		return fmt.Errorf("secrets: a secret needs a workspace and a name")
+func (p *Postgres) Set(ctx context.Context, workspace string, secret Secret) error {
+	if workspace == "" {
+		return fmt.Errorf("secrets: a secret needs a workspace")
 	}
-	sealed, err := Seal(p.key, value)
+	if err := secret.Validate(); err != nil {
+		return err
+	}
+	sealed, err := Seal(p.key, secret.Value)
 	if err != nil {
 		return err
 	}
+	// The projection is updated on conflict too. Setting a secret again is how an operator changes
+	// which way it reaches a sandbox, and a stored projection that outlived the value it described
+	// would send the new value somewhere the operator did not ask for.
 	_, err = p.pool.Exec(ctx, `
-		insert into secrets (workspace, name, sealed) values ($1, $2, $3)
-		on conflict (workspace, name) do update set sealed = excluded.sealed, updated_at = now()`,
-		workspace, name, sealed)
+		insert into secrets (workspace, name, sealed, projection) values ($1, $2, $3, $4)
+		on conflict (workspace, name) do update
+			set sealed = excluded.sealed, projection = excluded.projection, updated_at = now()`,
+		workspace, secret.Name, sealed, string(secret.Projection.Or()))
 	if err != nil {
 		// Never the value, and never the sealed bytes: an error is a thing people paste.
-		return fmt.Errorf("secrets: storing %s for %s: %w", name, workspace, err)
+		return fmt.Errorf("secrets: storing %s for %s: %w", secret.Name, workspace, err)
 	}
 	return nil
 }
 
-// Names lists what a workspace has set, sorted, and never what any of it says. The sealed bytes are
-// not selected at all, so this call cannot leak one by mistake.
-func (p *Postgres) Names(ctx context.Context, workspace string) ([]string, error) {
+// List says what a workspace has set and how each one reaches a sandbox, sorted, and never what any
+// of it says. The sealed bytes are not selected at all, so this call cannot leak one by mistake.
+func (p *Postgres) List(ctx context.Context, workspace string) ([]Ref, error) {
 	rows, err := p.pool.Query(ctx,
-		`select name from secrets where workspace = $1 order by name`, workspace)
+		`select name, projection from secrets where workspace = $1 order by name`, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
 	}
 	defer rows.Close()
 
-	names := make([]string, 0)
+	refs := make([]Ref, 0)
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var ref Ref
+		var projection string
+		if err := rows.Scan(&ref.Name, &projection); err != nil {
 			return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
 		}
-		names = append(names, name)
+		ref.Projection = Projection(projection).Or()
+		refs = append(refs, ref)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("secrets: listing what %s has set: %w", workspace, err)
 	}
-	return names, nil
+	return refs, nil
 }
 
 // Get returns a workspace's secret.

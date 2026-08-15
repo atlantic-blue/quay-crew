@@ -250,11 +250,26 @@ message AttachChannelResponse {
   Channel channel = 1;
 }
 
+// SecretProjection is how a secret reaches a sandbox. The store holds bytes under a name and knows
+// nothing else about them; how they are presented is a separate choice, which is the shape Kubernetes
+// and Docker both settled on.
+//
+// Unspecified reads as the environment, so a client written before this existed still sets the
+// secrets it always set.
+enum SecretProjection {
+  SECRET_PROJECTION_UNSPECIFIED = 0;
+  // The value becomes an environment variable named after the secret.
+  SECRET_PROJECTION_ENV = 1;
+  // The value becomes a file, and does not reach the environment at all.
+  SECRET_PROJECTION_FILE = 2;
+}
+
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 message SetSecretRequest {
   string workspace = 1;
   string key = 2;
   string value = 3;
+  SecretProjection projection = 4;
 }
 message SetSecretResponse {}
 
@@ -395,6 +410,9 @@ message SecretRef {
   string workspace_name = 2;
   string name = 3;
   google.protobuf.Timestamp updated_at = 4;
+  // projection is how this one reaches a sandbox. Where it lands is not carried, because it is
+  // derived from the name and every reader would derive the same path.
+  SecretProjection projection = 5;
 }
 
 // ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty.
