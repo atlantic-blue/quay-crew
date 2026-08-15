@@ -27,6 +27,42 @@ read, or run with `make features`.
   host's disk. Proved against the real daemon and the real image: without the owner on the mount the
   write is refused, which is what the measurement showed before the code was written.
 
+- **The analyser's child model call keeps the credential it needs.** It shipped stripping every
+  `CLAUDE_` variable before running its child, so the child would not inherit what the running session
+  set for itself. On a machine with a logged in install that costs nothing, because the credential is
+  a file. A quay sandbox has no credentials file: the workspace's subscription arrives as
+  `CLAUDE_CODE_OAUTH_TOKEN`, and it was being dropped.
+
+  Nothing looked wrong. The hook ran in 946 milliseconds, exited 0 and let the message through,
+  because it fails open by design. The child exited 1 with an empty standard error, and the only sign
+  anywhere was the word "no answer" in a file in `/tmp`. Found by dispatching a turn on a real crew and
+  reading what the hook actually wrote, not by any test.
+
+  A stub on the path now stands in for the model in an integration test, so the token's arrival is
+  proved without a subscription.
+
+- **The prompt analyser is the crew's first hook, and every crew starts under it.** It reads the
+  message a session was sent, asks a small model to restate it, and hands the session the message and
+  that restatement together. It never replaces what was typed: the runtime does not allow that, and it
+  should not, because a reading of a message is a guess and the words are not.
+
+  It goes first because it cannot be wrong in the expensive direction. Every other hook worth having
+  refuses something, and one that refuses wrongly blocks the work. This one only adds, so it is the
+  one hook a fresh crew is given rather than merely offered. Taking it off and restarting leaves it
+  off: seeding runs only into a crew that holds none, because putting a constraint back is the crew
+  overruling the person operating it.
+
+  What it reads inside a sandbox is not what the same hook reads on a laptop, which is why the paths
+  are configuration rather than code: the skills at `/home/agent/skills`, and what the session was
+  told at `/home/agent/.claude/CLAUDE.md`.
+
+  One defect worth recording, because every test was green when it shipped and it failed on the first
+  message. Node decides whether to strip TypeScript types by the file extension, not by the flag in
+  the shebang, so an entry point named `bin/hook` was read as plain JavaScript and died on its own
+  type imports with `SyntaxError: Unexpected identifier 'AnalysisFacts'`. It is `bin/hook.ts` now,
+  there is a test that any entry point using type stripping is named so node strips them, and there is
+  another that runs the shipped analyser inside the real sandbox image and reads what it says.
+
 - **A crew can enforce a rule, not only ask for one.** Every rule a crew carries was context, and
   context is advice the model takes or leaves. The evidence is one working session: 100 kilobytes of
   rules in the context, three of them broken, and the one it did not break was the one a hook refuses
