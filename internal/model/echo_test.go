@@ -55,7 +55,7 @@ func TestEchoRunnerSurfacesExecFailure(t *testing.T) {
 }
 
 func TestNewRunnerBuildsTheEchoRunner(t *testing.T) {
-	runner, err := model.NewRunner("echo", "")
+	runner, err := model.NewRunner("echo", "", "")
 	if err != nil {
 		t.Fatalf("NewRunner(echo): %v", err)
 	}
@@ -65,7 +65,7 @@ func TestNewRunnerBuildsTheEchoRunner(t *testing.T) {
 }
 
 func TestNewRunnerRejectsUnknownKinds(t *testing.T) {
-	if _, err := model.NewRunner("gpt", ""); err == nil {
+	if _, err := model.NewRunner("gpt", "", ""); err == nil {
 		t.Fatal("NewRunner(gpt) = nil error, want error")
 	}
 }

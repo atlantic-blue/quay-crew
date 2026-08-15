@@ -102,7 +102,7 @@ echo READY`)
 func aSessionWhoseWorkspaceMounts(ctx context.Context, t *testing.T, image, configuration string) string {
 	t.Helper()
 
-	runner, err := model.NewRunner("echo", "")
+	runner, err := model.NewRunner("echo", "", "")
 	if err != nil {
 		t.Fatalf("model runner: %v", err)
 	}
