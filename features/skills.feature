@@ -380,8 +380,12 @@ Feature: A session is given the skills the crew has
     Then the sandbox was set up to sign commits
     And the signing key was never passed as an argument
 
-  # Off unless the workspace holds the key. A private key is the most sensitive thing this crew would
-  # carry, so a crew that has not opted in is left exactly as it was.
-  Scenario: A workspace with no signing key is left alone
+  # A private key is the most sensitive thing this crew would carry, so a workspace that has not
+  # opted in gets no key, and nothing pointed at one.
+  #
+  # What such a sandbox is told about signing is in gitconfig.feature. It is told not to sign, which
+  # is not the same as being told nothing: the operator's own configuration reaches a session now,
+  # and it usually asks for signing.
+  Scenario: A workspace with no signing key gets no key
     When the operator dispatches "hello" to the project
-    Then the sandbox was not set up to sign commits
+    Then no signing key reaches the sandbox

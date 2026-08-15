@@ -23,26 +23,31 @@ const SigningKeyEnv = "GIT_SSH_SIGNING_KEY"
 // reader expects to find it.
 const signingKeyPath = "/home/agent/.ssh/signing_key"
 
-// readySigning configures git to sign commits, when the workspace holds a signing key.
+// readySigning makes the sandbox's signing state match the workspace: signing on when the workspace
+// holds a key, and off when it does not.
 //
 // A session commits as the operator. Where a repository requires verified signatures, a session that
 // cannot sign produces a branch the operator cannot merge, which is most of the work the session was
 // for. So the key travels the way every other credential does, as a workspace secret, and the sandbox
 // writes it out once at birth.
 //
-// Off unless the workspace holds the key. A crew that has not opted in is unchanged, and a private key
-// is the most sensitive thing this crew would ever carry, so silence is the right default.
+// Turning it off is the other half, and it is not the same as leaving it alone. An operator's own git
+// configuration reaches a session now, and most operators who sign have signing on for everything,
+// against a key held by their machine and not by a container. Left as it arrives, that configuration
+// fails every commit a session makes, on a key it was never going to have. So a workspace with no
+// signing key says so to git rather than saying nothing.
 //
 // The key is never an argument. The value is already in the container's environment, so the script
 // reads it from there: an argument is visible to every process on the host that can list them, and it
 // would reach the turn record.
 func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
 	value, err := s.secrets.Get(ctx, session.GetWorkspace(), SigningKeyEnv)
+	script := signingSetup
 	if err != nil || strings.TrimSpace(value) == "" {
-		return nil
+		script = signingOff
 	}
 
-	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", signingSetup}})
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", script}})
 	if err != nil {
 		// A sandbox that cannot be configured to sign is a sandbox that cannot sign, which the git
 		// skill already tells a session to handle by asking rather than committing unsigned. Failing
@@ -67,3 +72,11 @@ git config --global gpg.format ssh
 git config --global user.signingkey ` + signingKeyPath + `
 git config --global commit.gpgsign true
 git config --global tag.gpgsign true`
+
+// signingOff says out loud that this sandbox does not sign, for the workspace that holds no key.
+//
+// Written after the include, so it beats whatever the operator's own configuration asked for: git
+// takes the last value it reads, and the include sits above these lines in the same file.
+const signingOff = `set -e
+git config --global commit.gpgsign false
+git config --global tag.gpgsign false`

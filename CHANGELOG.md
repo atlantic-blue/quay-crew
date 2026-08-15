@@ -8,6 +8,22 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **An operator's git configuration reaches a session.** A session commits as the operator and had no
+  way to know who that was. Identity was four environment variables set on the turn's own process, so
+  a commit made from an attached terminal, or by anything the session started for itself, had none,
+  and git refused it with `Author identity unknown`.
+
+  The image now ships a git configuration holding one line, an include pointing at where a mounted
+  secret named `gitconfig` lands. `quay secret mount <workspace> gitconfig ~/.gitconfig` gives every
+  git process in the sandbox the operator's own identity, aliases and settings, from any shell. A
+  workspace that mounts nothing is unchanged, because git ignores an include that is not there.
+
+  Signing is the one part the crew decides rather than the operator. Most configurations that sign
+  have it on for everything, against a key the machine holds and a container does not, so a workspace
+  holding no signing key is now told not to sign rather than told nothing. Left alone, a mounted
+  configuration fails every commit: with that half taken back out, the same test dies with
+  `cannot run gpg`, which is what the measurement showed.
+
 - **A session can sign a commit.** Signing landed on 13 August and never worked. Git makes an ssh format
   signature by running `ssh-keygen`, and the sandbox image did not carry it, so a workspace with a
   signing key configured could not commit at all: git answered `cannot run ssh-keygen` before it read

@@ -165,6 +165,25 @@ made before you mounted it: stop the thread to get one that has it. And `quay se
 because a token gains a newline from the tool that printed it, while `quay secret mount` does not,
 because a file's bytes are the file.
 
+## Who a session commits as
+
+A session commits as you, and it has to be told who that is. Mount your own git configuration:
+
+```
+quay secret mount <workspace> gitconfig ~/.gitconfig
+```
+
+The image ships a git configuration holding one line, `[include] path = /run/secrets/gitconfig`, so
+what you mount reaches every git process in the sandbox: your identity, your aliases, your settings,
+from any shell rather than only the process a turn runs in. A workspace that mounts nothing is
+unchanged, because git ignores an include that is not there.
+
+Signing is the one part the crew decides rather than you, and it has to. Most configurations that
+sign have it on for everything, against a key your machine holds and a container does not, so left
+alone it fails every commit a session makes. A workspace holding `GIT_SSH_SIGNING_KEY` signs with
+that key; a workspace holding none is told not to sign. The crew writes its answer after the include,
+and git takes the last value it reads.
+
 ## Where a session's state lives
 
 A sandbox is a container, and a container's filesystem is thrown away with it. So the two directories

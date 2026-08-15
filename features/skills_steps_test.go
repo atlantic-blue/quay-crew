@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -917,9 +918,12 @@ func initializeSigningSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the sandbox was not set up to sign commits$`, func(ctx context.Context) error {
-		if did := ran(ctx); strings.Contains(did, "commit.gpgsign") {
-			return fmt.Errorf("a workspace with no signing key was set up to sign anyway:\n%s", did)
+	sc.Step(`^no signing key reaches the sandbox$`, func(ctx context.Context) error {
+		did := ran(ctx)
+		for _, unwanted := range []string{"user.signingkey", "gpg.format", "$" + controlplane.SigningKeyEnv} {
+			if strings.Contains(did, unwanted) {
+				return fmt.Errorf("a workspace with no signing key was given %q anyway:\n%s", unwanted, did)
+			}
 		}
 		return nil
 	})
