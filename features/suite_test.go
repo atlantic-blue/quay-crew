@@ -477,6 +477,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeUsageSteps(sc)
 	initializeSkillSteps(sc)
 	initializeSigningSteps(sc)
+	initializeSecretFileSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeHookSteps(sc)

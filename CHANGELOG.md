@@ -8,6 +8,25 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A secret can reach a session as a file.** Some credentials are not values. A git configuration, a
+  private key, a cloud credentials file: a tool opens each one by path, so there was nothing a crew
+  could do for them. One credential had already been forced through, the ssh signing key, by a script
+  written for that one case.
+
+  A secret now says how it reaches a sandbox, which is the shape Kubernetes and Docker both settled
+  on: the store holds bytes under a name, and whether those bytes become an environment variable or a
+  file is a separate choice. `quay secret set` is the environment and stays the default, so nothing
+  already set moves. `quay secret mount gitconfig ~/.gitconfig` is a file, landing at
+  `/run/secrets/gitconfig`, and `quay secret list` says where each one goes.
+
+  A mounted secret does not also reach the environment, and that is the second reason to mount one.
+  A container's environment is readable for the life of that container, through `docker inspect`
+  among other things, which `docs/SANDBOX.md` has recorded as an accepted cost since the subscription
+  token landed. The directory is created with the container, memory backed, owned by the sandbox user
+  and shut to everybody else, so a mounted value never reaches the container's writable layer or the
+  host's disk. Proved against the real daemon and the real image: without the owner on the mount the
+  write is refused, which is what the measurement showed before the code was written.
+
 - **A crew can enforce a rule, not only ask for one.** Every rule a crew carries was context, and
   context is advice the model takes or leaves. The evidence is one working session: 100 kilobytes of
   rules in the context, three of them broken, and the one it did not break was the one a hook refuses

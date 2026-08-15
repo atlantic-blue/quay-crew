@@ -147,12 +147,16 @@ func truncate(t *testing.T) {
 	// Hooks landed here the same way and cost the same hour: the memory store gives every subtest a
 	// fresh map and passed, while against real Postgres the first attach in a subtest came back at
 	// version 2 from rows the previous subtest had left behind.
+	//
+	// Secrets are the third. They are keyed by a workspace identifier that is a plain string rather
+	// than a reference, so nothing cascades to them, and one test's token was still set for "acme"
+	// when the next one listed what that workspace held.
 	if _, err := pool.Exec(ctx,
 		// Turns are named here for the same reason as skills. A turn is keyed by its own id and
 		// survived a truncate that claimed to leave nothing behind, so one subtest's turn-0 was still
 		// there when the next one wrote its own, and AppendTurn's "on conflict do nothing" dropped it
 		// silently. What that looked like was a case reading zero turns it had just written.
-		`truncate sessions, turns, channels, workspaces, skills, hooks, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, turns, channels, workspaces, skills, hooks, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -295,7 +299,9 @@ func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
 		t.Fatalf("open secrets: %v", err)
 	}
 	const token = "sk-ant-oat-not-a-real-one"
-	if err := kept.Set(ctx, "acme", "CLAUDE_CODE_OAUTH_TOKEN", token); err != nil {
+	if err := kept.Set(ctx, "acme", secrets.Secret{
+		Name: "CLAUDE_CODE_OAUTH_TOKEN", Value: token,
+	}); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 	before.Close()
@@ -329,6 +335,75 @@ func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
 	}
 	if strings.Contains(string(sealed), token) {
 		t.Fatal("the token is in the database in the clear")
+	}
+}
+
+// How a secret reaches a sandbox has to survive a restart the same way the value does. A crew that
+// forgot it would put a mounted credential back into the environment of every container, which is
+// the exposure mounting it was for.
+func TestHowASecretReachesASandboxSurvivesARestart(t *testing.T) {
+	ctx := context.Background()
+	truncate(t)
+
+	key, err := secrets.KeyAt(filepath.Join(t.TempDir(), "secrets.key"))
+	if err != nil {
+		t.Fatalf("KeyAt: %v", err)
+	}
+	durable, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	t.Cleanup(durable.Close)
+	kept, err := secrets.NewPostgres(durable.Pool(), key)
+	if err != nil {
+		t.Fatalf("open secrets: %v", err)
+	}
+
+	if err := kept.Set(ctx, "acme", secrets.Secret{
+		Name: "gitconfig", Value: "[user]\n\tname = operator\n", Projection: secrets.File,
+	}); err != nil {
+		t.Fatalf("Set mounted: %v", err)
+	}
+	if err := kept.Set(ctx, "acme", secrets.Secret{Name: "GH_TOKEN", Value: "ghp-1234"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	refs, err := kept.List(ctx, "acme")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	want := map[string]secrets.Projection{"GH_TOKEN": secrets.Env, "gitconfig": secrets.File}
+	if len(refs) != len(want) {
+		t.Fatalf("List = %+v, want %d secrets", refs, len(want))
+	}
+	for _, ref := range refs {
+		if ref.Projection != want[ref.Name] {
+			t.Fatalf("%s reaches a sandbox as %q, want %q", ref.Name, ref.Projection, want[ref.Name])
+		}
+	}
+
+	// The file's bytes are the file's bytes. A configuration that comes back a byte shorter than the
+	// one the operator mounted is one they cannot reason about.
+	got, err := kept.Get(ctx, "acme", "gitconfig")
+	if err != nil {
+		t.Fatalf("Get mounted: %v", err)
+	}
+	if got != "[user]\n\tname = operator\n" {
+		t.Fatalf("the mounted file came back as %q", got)
+	}
+
+	// Setting it again is how an operator moves it, and the stored answer moves with it.
+	if err := kept.Set(ctx, "acme", secrets.Secret{Name: "gitconfig", Value: "x"}); err != nil {
+		t.Fatalf("Set again: %v", err)
+	}
+	moved, err := kept.List(ctx, "acme")
+	if err != nil {
+		t.Fatalf("List after moving: %v", err)
+	}
+	for _, ref := range moved {
+		if ref.Name == "gitconfig" && ref.Projection != secrets.Env {
+			t.Fatalf("gitconfig still reaches a sandbox as %q", ref.Projection)
+		}
 	}
 }
 
