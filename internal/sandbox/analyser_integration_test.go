@@ -16,14 +16,19 @@ import (
 
 // The shipped analyser, run inside the real sandbox image, the way the runtime runs it.
 //
-// This is the test that would have caught the defect it was written after. The entry point was named
-// bin/hook, node decides whether to strip types by the file extension rather than by the flag, so it
-// was read as plain JavaScript and died on its own type imports:
+// This is the test that would have caught the defect it was written after. Back when the hook was
+// TypeScript the entry point was named bin/hook, and node decides whether to strip types by the file
+// extension rather than by the flag, so it was read as plain JavaScript and died on its own type
+// imports:
 //
 //	SyntaxError: Unexpected identifier 'AnalysisFacts'
 //
 // Everything else was green. The hook loaded, the manifest validated, the settings bound it, the
 // mount was right. It failed on the first message, inside a container, with nothing outside saying so.
+//
+// The hook is a compiled Go binary now, which removes that particular trap and adds another: the
+// binary is built rather than committed, so the whole thing rests on the image build having built it
+// for the right machine. That is what this test now proves.
 //
 // The image is the crew's own sandbox image rather than busybox, because what is being proved is that
 // this image can run this hook. QC_SANDBOX_IMAGE names it; without one there is nothing to prove

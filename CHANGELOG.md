@@ -20,6 +20,29 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **The prompt analyser is Go, and it has tests.** It was about 690 lines of TypeScript across two
+  files with no test of any kind behind them, run by node through a shebang that stripped types at
+  load. Every rule it applied, which lines of a model's answer survive, what a half written config
+  file falls back to, which variables the child inherits, was readable only by reading the hook and
+  hoping.
+
+  It is one Go module now, its own, because a hook is a plugin rather than part of the crew: it does
+  not share the crew's dependencies and cannot import its internals. The standard library is all it
+  needs. 47 tests cover the parts that were bare before, and the two that carry the most weight were
+  mutation checked: dropping the guard from the child environment, and keeping every line of the
+  model's answer instead of the known fields, each turn the suite red.
+
+  The entry point is `bin/hook`, built by `make hooks` and by the image build rather than committed.
+  A hook is an executable, an executable is a build artifact, and one committed binary runs on one
+  processor type while this image is built on both arm and amd machines. `node` is off the hook's
+  list of what it needs, leaving `claude` alone.
+
+  Behaviour is unchanged, and it was checked by running the built binary the way the runtime does:
+  the message as typed and the analysis both reach the session, the guard and the zero thinking
+  budget reach the child, the subscription token survives while the session's own variables are
+  dropped, and a missing model, an unreadable payload and an empty message each end in exit 0 with
+  the message still getting through.
+
 - **Go, in the sandbox image.** A session working on this repository could read the Go source and
   never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
   carried none. Copied from the stage that already builds `quay` rather than downloaded again, so

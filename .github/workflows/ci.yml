@@ -42,13 +42,33 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # A hook ships as an executable, and its entry point is a build artifact rather than something
+      # in the history. Anything that reads the hooks directory has to build it first, and the hook
+      # loader refuses a hook whose entry point is not there.
+      - name: Build the hooks
+        run: make hooks
+
       - name: Vet
         run: go vet ./...
+
+      # Each hook is its own module, so the sweep above does not reach it.
+      - name: Vet the hooks
+        run: |
+          for dir in $(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do
+            go vet -C "$dir" ./...
+          done
 
       # -count=1 so a run always executes. Go's build cache will happily report ok for a package it
       # has seen before, which turns a check that proves something into a check that proves it once.
       - name: Unit tests
         run: go test -count=1 ./...
+
+      # Separate modules, so `go test ./...` above never sees them.
+      - name: Hook tests
+        run: |
+          for dir in $(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do
+            go test -C "$dir" -count=1 ./...
+          done
 
       # Run the behaviour specifications again on their own, verbosely, so the log reports what the
       # product does scenario by scenario rather than a single ok line.
@@ -59,6 +79,9 @@ jobs:
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
           "$(go env GOPATH)/bin/golangci-lint" run ./internal/... ./cmd/... ./features/...
+          for dir in $(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do
+            (cd "$dir" && "$(go env GOPATH)/bin/golangci-lint" run ./...)
+          done
 
   integration:
     runs-on: ubuntu-latest
@@ -73,6 +96,11 @@ jobs:
       # both were running on one laptop and nowhere else.
       - name: Build the sandbox image
         run: make sandbox-image
+
+      # The analyser test reads the shipped hooks off disk, and the loader refuses one whose entry
+      # point is not there. Without this the test fails on a missing file rather than on the hook.
+      - name: Build the hooks
+        run: make hooks
 
       # testcontainers spins up Redpanda in Docker (available on the runner) to test the
       # messaging client and networking against a real broker.

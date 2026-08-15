@@ -11,11 +11,14 @@ import (
 // The hooks this build ships, in hooks/ at the root of this repository, held to the same rules an
 // imported hook answers to. A first party hook that does not load is worse than none: it is the
 // example everybody copies, and a constraint the crew believes it seeded.
+//
+// The entry points are built rather than committed, so `make hooks` comes first. Every failure here
+// that names a missing entry point means that step was skipped.
 
 func TestTheShippedHooksLoad(t *testing.T) {
 	hooks, err := Load("../../hooks")
 	if err != nil {
-		t.Fatalf("loading the shipped hooks: %v", err)
+		t.Fatalf("loading the shipped hooks: %v (run `make hooks` first: the entry points are built)", err)
 	}
 	// A directory that finds nothing reports success just the same, so this suite would prove nothing.
 	if len(hooks) == 0 {
@@ -24,19 +27,7 @@ func TestTheShippedHooksLoad(t *testing.T) {
 }
 
 func TestTheShippedPromptAnalyserIsWholeAndRunnable(t *testing.T) {
-	hooks, err := Load("../../hooks")
-	if err != nil {
-		t.Fatalf("loading the shipped hooks: %v", err)
-	}
-	var analyser *Hook
-	for i := range hooks {
-		if hooks[i].Name == "prompt-analyser" {
-			analyser = &hooks[i]
-		}
-	}
-	if analyser == nil {
-		t.Fatal("hooks/ does not hold the prompt analyser")
-	}
+	analyser := shipped(t, "prompt-analyser")
 
 	if len(analyser.Events) != 1 || analyser.Events[0].On != "UserPromptSubmit" {
 		t.Fatalf("the analyser fires on %+v, and it reads a message, so it fires on UserPromptSubmit",
@@ -49,74 +40,94 @@ func TestTheShippedPromptAnalyserIsWholeAndRunnable(t *testing.T) {
 	}
 
 	// Declared, so a sandbox image without one refuses the session with a sentence rather than the
-	// hook failing inside the container with nothing pointing back here.
-	for _, needed := range []string{"node", "claude"} {
-		found := false
-		for _, binary := range analyser.Binaries {
-			if binary == needed {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("the analyser does not declare %s, which it cannot run without", needed)
-		}
+	// hook failing inside the container with nothing pointing back here. The hook is a compiled
+	// binary, so the only command it cannot work without is the one it shells out to.
+	if len(analyser.Binaries) != 1 || analyser.Binaries[0] != "claude" {
+		t.Errorf("the analyser declares %v, and it needs claude and nothing else", analyser.Binaries)
 	}
 
-	// Whole: the entry point, the library it imports, and its configuration. A hook missing one of
-	// these imports cleanly and dies on its first message.
+	// Whole: the entry point and its configuration. A hook missing either imports cleanly and dies on
+	// its first message.
 	carried := map[string]bool{}
 	for _, file := range analyser.Files {
 		carried[file.Path] = true
 	}
-	for _, needed := range []string{"bin/hook.ts", "lib/analyser.ts", "hook.config.json"} {
+	for _, needed := range []string{"bin/hook", "hook.config.json"} {
 		if !carried[needed] {
 			t.Errorf("the analyser does not carry %s, so it would fail on its first message", needed)
 		}
 	}
 }
 
-// The entry point imports its library by a relative path. Left pointing at where it came from, it
-// resolves to nothing inside a sandbox, and the hook dies on the first message with a module error.
-func TestTheAnalyserImportsTheLibraryItShipsWith(t *testing.T) {
-	body, err := os.ReadFile(filepath.Join("../../hooks/prompt-analyser/bin/hook.ts"))
-	if err != nil {
-		t.Fatalf("read the entry point: %v", err)
+// The way off the runtime the hook used to need.
+//
+// It was TypeScript run by node, and node is gone from the image's reach as far as this hook is
+// concerned. A hook that still shipped a .ts entry point beside a binary would run neither reliably,
+// and the two would disagree about what the hook does.
+func TestTheAnalyserCarriesNoneOfTheTypeScriptItReplaced(t *testing.T) {
+	analyser := shipped(t, "prompt-analyser")
+
+	for _, file := range analyser.Files {
+		if strings.HasSuffix(file.Path, ".ts") {
+			t.Errorf("the analyser still carries %s, and it is a compiled binary now", file.Path)
+		}
 	}
-	source := string(body)
-	if strings.Contains(source, "../bin/lib/") {
-		t.Error("the entry point still imports the library from the hub layout, which is not in a sandbox")
-	}
-	if !strings.Contains(source, `"../lib/analyser.ts"`) {
-		t.Error("the entry point does not import the library it ships beside")
-	}
-	// Run directly by the runtime, by absolute path, so it needs its own interpreter line.
-	if !strings.HasPrefix(source, "#!") {
-		t.Error("the entry point has no shebang, and the runtime runs it as a command")
+	for _, binary := range analyser.Binaries {
+		if binary == "node" {
+			t.Error("the analyser still declares node, which it no longer runs on")
+		}
 	}
 }
 
-// Node decides whether to strip types by the file extension, not by the flag. Named bin/hook, this
-// entry point was read as plain JavaScript and died on its own type imports with
-// "SyntaxError: Unexpected identifier 'AnalysisFacts'". Every test passed: the hook loaded, the
-// manifest was valid, the settings bound it, and it failed on the first message inside a container.
-//
-// So any TypeScript entry point has to end in .ts, whatever the shebang says.
-func TestATypeScriptEntryPointIsNamedSoNodeStripsItsTypes(t *testing.T) {
+// A hook is a plugin: somebody reviews it, versions it and hands it to another crew. It does not
+// share the crew's dependencies and it cannot import the crew's internals, and its own module is
+// what enforces both.
+func TestEachShippedHookIsItsOwnModuleWithNothingBehindIt(t *testing.T) {
+	hooks, err := Load("../../hooks")
+	if err != nil {
+		t.Fatalf("loading the shipped hooks: %v", err)
+	}
+	for _, one := range hooks {
+		body, err := os.ReadFile(filepath.Join("../../hooks", one.Name, "go.mod"))
+		if err != nil {
+			t.Errorf("%s has no go.mod, so it is part of the crew rather than a plugin: %v", one.Name, err)
+			continue
+		}
+		if strings.Contains(string(body), "require") {
+			t.Errorf("%s depends on something outside the standard library, which a sandbox has to carry: %s",
+				one.Name, body)
+		}
+	}
+}
+
+// The entry point is what the runtime executes by absolute path. It has to exist, it has to be
+// runnable, and it has to be the built thing rather than a source file somebody committed by mistake.
+func TestEveryShippedEntryPointIsABuiltExecutable(t *testing.T) {
 	hooks, err := Load("../../hooks")
 	if err != nil {
 		t.Fatalf("loading the shipped hooks: %v", err)
 	}
 	for _, one := range hooks {
 		for _, binding := range one.Events {
-			body, err := os.ReadFile(filepath.Join("../../hooks", one.Name, binding.Entry))
+			at := filepath.Join("../../hooks", one.Name, binding.Entry)
+			info, err := os.Stat(at)
 			if err != nil {
-				t.Fatalf("read %s entry %s: %v", one.Name, binding.Entry, err)
-			}
-			if !strings.Contains(string(body), "strip-types") {
+				t.Errorf("%s runs %s and it is not there; run `make hooks`: %v", one.Name, binding.Entry, err)
 				continue
 			}
-			if !strings.HasSuffix(binding.Entry, ".ts") {
-				t.Errorf("%s runs %q with type stripping and the name does not end in .ts, so node reads it as JavaScript and it dies on its own types",
+			if info.Mode().Perm()&0o111 == 0 {
+				t.Errorf("%s runs %s and it is not executable, so it would fail inside a container",
+					one.Name, binding.Entry)
+			}
+			// A shell script or a source file here would mean the sandbox needs an interpreter the
+			// manifest never declared.
+			body, err := os.ReadFile(at)
+			if err != nil {
+				t.Errorf("read %s: %v", at, err)
+				continue
+			}
+			if strings.HasPrefix(string(body), "#!") {
+				t.Errorf("%s runs %s and it starts with an interpreter line, so it is a script rather than the built binary",
 					one.Name, binding.Entry)
 			}
 		}
@@ -154,4 +165,20 @@ func TestTheAnalyserIsConfiguredForASandboxRatherThanTheOperatorsMachine(t *test
 	if strings.Contains(string(body), "~/") {
 		t.Error("the config still carries a home relative path from the operator's machine")
 	}
+}
+
+// shipped is one hook out of the directory this build ships, or a failure naming what is missing.
+func shipped(t *testing.T, name string) Hook {
+	t.Helper()
+	hooks, err := Load("../../hooks")
+	if err != nil {
+		t.Fatalf("loading the shipped hooks: %v (run `make hooks` first)", err)
+	}
+	for _, one := range hooks {
+		if one.Name == name {
+			return one
+		}
+	}
+	t.Fatalf("hooks/ does not hold %s", name)
+	return Hook{}
 }

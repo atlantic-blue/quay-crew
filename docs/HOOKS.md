@@ -58,10 +58,15 @@ executable.
 ```
 hooks/prompt-analyser/
   hook.yaml         what it is, and what event it fires on
-  bin/hook.ts       the executable the runtime calls
-  lib/              whatever it needs beside it
+  bin/hook          the executable the runtime calls, built rather than committed
+  go.mod            its own module, because a hook is not part of the crew
+  *.go              the source, beside the thing it builds
   hook.config.json  what it reads, so the paths are not compiled in
 ```
+
+The entry point is built by `make hooks` and by the image build, and it is not in the history. A hook
+is an executable, an executable is a build artifact, and one committed binary would run on one
+processor type: this repository's image is built on both arm and amd machines.
 
 `hook.yaml` is data. No expressions, no conditionals, nothing that runs on the host.
 
@@ -71,10 +76,9 @@ version: 1
 summary: Reads every message and hands the session a short brief beside it.
 events:
   - on: UserPromptSubmit
-    entry: bin/hook.ts
+    entry: bin/hook
     timeoutSeconds: 20
 binaries:
-  - node
   - claude
 secrets: {}
 ```
@@ -173,5 +177,12 @@ version, attached at a level, rendered into a sandbox. They do not share machine
 they should is a real question and it is open, recorded here rather than answered by building the
 third one the same way and calling it a pattern.
 
-The sandbox has `node` and `sh` and no `python3`, so a hook is written in TypeScript or shell. That
-says what a hook may be written in. It says nothing about where a hook lives.
+A hook is a compiled executable, so what it was written in is its own business and the sandbox does
+not need a runtime for it. The one shipped here is Go, built to a static binary, which is why its
+`binaries` list names only the commands it shells out to. That says what a hook may be written in. It
+says nothing about where a hook lives.
+
+The layout is the crew's own and predates the Claude Code plugin format, which is
+`.claude-plugin/plugin.json` beside a `hooks/hooks.json` that resolves paths through
+`${CLAUDE_PLUGIN_ROOT}`. Whether to move onto it is open, and it is the same question as the one
+above about skills, hooks and documents sharing machinery.
