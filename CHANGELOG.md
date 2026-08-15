@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **Go, in the sandbox image.** A session working on this repository could read the Go source and
+  never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
+  carried none. Copied from the stage that already builds `quay` rather than downloaded again, so
+  the sandbox never carries a Go that disagrees with the one `quay` itself was built with.
 - **The signing key is mounted, not set.** It was a workspace secret that reached the environment, so
   the private key sat in every container's environment for the life of that container, where
   `docker inspect` reads it. That was the exposure the file projection was built to remove, and the
