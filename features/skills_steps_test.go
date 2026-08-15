@@ -896,31 +896,18 @@ func initializeSigningSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the sandbox was set up to sign commits$`, func(ctx context.Context) error {
 		did := ran(ctx)
-		for _, want := range []string{"gpg.format ssh", "user.signingkey", "commit.gpgsign true"} {
+		pointedAt := "user.signingkey " + sandbox.SecretFilePath(controlplane.SigningKeySecret)
+		for _, want := range []string{"gpg.format ssh", pointedAt, "commit.gpgsign true"} {
 			if !strings.Contains(did, want) {
 				return fmt.Errorf("the sandbox was never told %q. It ran:\n%s", want, did)
 			}
-		}
-		if !strings.Contains(did, "umask 077") {
-			return fmt.Errorf("the key is written without umask 077, so it is readable on disk first")
-		}
-		return nil
-	})
-
-	sc.Step(`^the signing key was never passed as an argument$`, func(ctx context.Context) error {
-		did := ran(ctx)
-		if strings.Contains(did, "BEGIN OPENSSH PRIVATE KEY") {
-			return fmt.Errorf("the key itself is in a command line, where every process can read it:\n%s", did)
-		}
-		if !strings.Contains(did, "$GIT_SSH_SIGNING_KEY") {
-			return fmt.Errorf("the setup does not read the key from the environment:\n%s", did)
 		}
 		return nil
 	})
 
 	sc.Step(`^no signing key reaches the sandbox$`, func(ctx context.Context) error {
 		did := ran(ctx)
-		for _, unwanted := range []string{"user.signingkey", "gpg.format", "$" + controlplane.SigningKeyEnv} {
+		for _, unwanted := range []string{"user.signingkey", "gpg.format"} {
 			if strings.Contains(did, unwanted) {
 				return fmt.Errorf("a workspace with no signing key was given %q anyway:\n%s", unwanted, did)
 			}

@@ -3,48 +3,43 @@ package controlplane
 import (
 	"context"
 	"io"
-	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
 )
 
-// SigningKeyEnv is the workspace secret that holds the private key a session signs commits with, in
-// OpenSSH format.
+// SigningKeySecret is the workspace secret that holds the private key a session signs commits with,
+// in OpenSSH format. Mounted, never set: it is a file, and it is the most sensitive thing this crew
+// carries.
 //
 // An ssh key rather than a gpg one. Signing with ssh needs one private key file and nothing else: no
 // agent, no keyring, no pinentry, and no interactive prompt to hang a turn nobody is watching. GitHub
 // verifies both formats. The cost is that a commit signed in a sandbox verifies against a different
 // key from one signed on the operator's own machine, so both keys have to be on the account.
-const SigningKeyEnv = "GIT_SSH_SIGNING_KEY"
-
-// signingKeyPath is where the key is written inside the sandbox. Under the agent's home, because that
-// is the only writable place a session keeps across a turn, and beside the ssh configuration where a
-// reader expects to find it.
-const signingKeyPath = "/home/agent/.ssh/signing_key"
+const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
 
 // readySigning makes the sandbox's signing state match the workspace: signing on when the workspace
-// holds a key, and off when it does not.
+// mounts a key, and off when it does not.
 //
 // A session commits as the operator. Where a repository requires verified signatures, a session that
 // cannot sign produces a branch the operator cannot merge, which is most of the work the session was
-// for. So the key travels the way every other credential does, as a workspace secret, and the sandbox
-// writes it out once at birth.
+// for.
 //
-// Turning it off is the other half, and it is not the same as leaving it alone. An operator's own git
-// configuration reaches a session now, and most operators who sign have signing on for everything,
-// against a key held by their machine and not by a container. Left as it arrives, that configuration
-// fails every commit a session makes, on a key it was never going to have. So a workspace with no
-// signing key says so to git rather than saying nothing.
+// The key is already in the sandbox by the time this runs, written as a file by readySecretFiles, so
+// there is nothing here but pointing git at it. It was written out by hand before the crew could
+// mount anything, and that path put the private key in the container's environment for the life of
+// the container, where docker inspect reads it.
 //
-// The key is never an argument. The value is already in the container's environment, so the script
-// reads it from there: an argument is visible to every process on the host that can list them, and it
-// would reach the turn record.
+// Turning signing off is the other half, and it is not the same as leaving it alone. An operator's
+// own git configuration reaches a session, and most operators who sign have signing on for
+// everything, against a key held by their machine and not by a container. Left as it arrives, that
+// configuration fails every commit a session makes, on a key it was never going to have. So a
+// workspace that mounts no key says so to git rather than saying nothing.
 func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
-	value, err := s.secrets.Get(ctx, session.GetWorkspace(), SigningKeyEnv)
-	script := signingSetup
-	if err != nil || strings.TrimSpace(value) == "" {
-		script = signingOff
+	script := signingOff
+	if s.mountsASigningKey(ctx, session.GetWorkspace()) {
+		script = signingSetup
 	}
 
 	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", script}})
@@ -59,21 +54,33 @@ func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Thread, b
 	return nil
 }
 
-// signingSetup writes the key and points git at it. Every line is idempotent, because a sandbox is
-// adopted across turns and this runs again on a replacement.
-//
-// `umask 077` before the write rather than a chmod after it, so the key is never on disk readable even
-// for the moment between the two.
-const signingSetup = `set -e
-umask 077
-mkdir -p /home/agent/.ssh
-printf '%s\n' "$` + SigningKeyEnv + `" > ` + signingKeyPath + `
+// mountsASigningKey asks the listing rather than reading the value, because the value is not wanted
+// here and a crew that never handles it cannot leak it.
+func (s *Server) mountsASigningKey(ctx context.Context, workspace string) bool {
+	held, err := s.secrets.List(ctx, workspace)
+	if err != nil {
+		return false
+	}
+	for _, ref := range held {
+		if ref.Name == SigningKeySecret && ref.Projection.Or() == secrets.File {
+			return true
+		}
+	}
+	return false
+}
+
+// signingKeyPath is where the mounted key lands, which is the only place it exists.
+var signingKeyPath = sandbox.SecretFilePath(SigningKeySecret)
+
+// signingSetup points git at the key. Every line is idempotent, because a sandbox is adopted across
+// turns and this runs again on a replacement.
+var signingSetup = `set -e
 git config --global gpg.format ssh
 git config --global user.signingkey ` + signingKeyPath + `
 git config --global commit.gpgsign true
 git config --global tag.gpgsign true`
 
-// signingOff says out loud that this sandbox does not sign, for the workspace that holds no key.
+// signingOff says out loud that this sandbox does not sign, for the workspace that mounts no key.
 //
 // Written after the include, so it beats whatever the operator's own configuration asked for: git
 // takes the last value it reads, and the include sits above these lines in the same file.

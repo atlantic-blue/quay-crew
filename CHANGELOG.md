@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **The signing key is mounted, not set.** It was a workspace secret that reached the environment, so
+  the private key sat in every container's environment for the life of that container, where
+  `docker inspect` reads it. That was the exposure the file projection was built to remove, and the
+  key is the most sensitive thing this crew carries.
+
+  `quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519` now, and the crew only points
+  git at where the file lands. The write that put the key on disk by hand is gone with it, and so is
+  the crew ever holding the value. Setting the key is refused, and the refusal says what to type
+  instead: a key that looks stored and never signs anything is worse than one that was never
+  accepted.
+
+  Nothing to migrate. Checked before deciding: no workspace on this crew holds a signing key, so
+  nobody had opted into signing at all.
+
 - **An operator's git configuration reaches a session.** A session commits as the operator and had no
   way to know who that was. Identity was four environment variables set on the turn's own process, so
   a commit made from an attached terminal, or by anything the session started for itself, had none,

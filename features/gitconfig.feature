@@ -14,8 +14,8 @@ Feature: An operator's git configuration reaches a session
 
   Signing is the one thing the crew decides rather than the operator, and it has to, because most
   operators who sign have signing on for everything against a key their machine holds and a container
-  does not. A workspace holding a signing key signs with it. A workspace holding none says so to git,
-  rather than saying nothing and letting the mounted configuration fail every commit.
+  does not. A workspace that mounts a signing key signs with it. A workspace that mounts none says so
+  to git, rather than saying nothing and letting the mounted configuration fail every commit.
 
   These scenarios use a sandbox double, so they say what the crew asks a sandbox to do and not that
   git honours it. The real thing is proved against the image in
@@ -39,8 +39,8 @@ Feature: An operator's git configuration reaches a session
     Then the sandbox is told to set "commit.gpgsign" to "false"
     And the sandbox is told to set "tag.gpgsign" to "false"
 
-  Scenario: A workspace with a signing key still signs
-    Given the workspace has the secret "GIT_SSH_SIGNING_KEY" set to "a private key"
+  Scenario: A workspace that mounts a signing key still signs
+    Given the workspace mounts the secret "GIT_SSH_SIGNING_KEY" holding "a private key"
     When the operator dispatches "hello" to the project
     Then the sandbox is told to set "commit.gpgsign" to "true"
     And the sandbox is told to set "gpg.format" to "ssh"

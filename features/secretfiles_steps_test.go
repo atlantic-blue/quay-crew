@@ -37,6 +37,31 @@ func initializeSecretFileSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
+	// The way onto the environment, kept separate for the same reason: this one is about being
+	// refused, so it must not fail the scenario when the call comes back with an error.
+	sc.Step(`^the operator tries to set the secret "([^"]*)" to "([^"]*)"$`,
+		func(ctx context.Context, name, value string) error {
+			w := worldFrom(ctx)
+			_, w.lastErr = w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+				Workspace: w.workspaceID,
+				Key:       name,
+				Value:     value,
+			})
+			return nil
+		})
+
+	sc.Step(`^the crew refuses it, saying to mount the key instead$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("the crew accepted it, and the key would be in every container's environment")
+		}
+		// The command, not just the objection. A refusal the operator cannot act on is a dead end.
+		if !strings.Contains(w.lastErr.Error(), "quay secret mount") {
+			return fmt.Errorf("the crew refused it saying %q, which does not say what to type", w.lastErr)
+		}
+		return nil
+	})
+
 	sc.Step(`^the crew refuses it, saying it cannot be a file name$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {

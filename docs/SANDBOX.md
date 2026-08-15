@@ -180,9 +180,19 @@ unchanged, because git ignores an include that is not there.
 
 Signing is the one part the crew decides rather than you, and it has to. Most configurations that
 sign have it on for everything, against a key your machine holds and a container does not, so left
-alone it fails every commit a session makes. A workspace holding `GIT_SSH_SIGNING_KEY` signs with
-that key; a workspace holding none is told not to sign. The crew writes its answer after the include,
-and git takes the last value it reads.
+alone it fails every commit a session makes. A workspace that mounts a signing key signs with it; a
+workspace that mounts none is told not to sign. The crew writes its answer after the include, and git
+takes the last value it reads.
+
+```
+quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519
+```
+
+Mounted, not set. Setting it is refused, and the refusal says this instead. A private key in the
+environment is readable through `docker inspect` for the life of the container, which is the exposure
+mounting exists to avoid, and the key is the most sensitive thing this crew carries. Put the public
+half on the account you push to as a signing key, alongside the one your own machine signs with: a
+commit signed in a sandbox is signed by a different key from one signed on your laptop.
 
 ## Where a session's state lives
 

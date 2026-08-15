@@ -19,19 +19,19 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// A workspace holds a signing key, and a commit made in the session it gets verifies.
+// A workspace mounts a signing key, and a commit made in the session it gets verifies.
 //
-// The crew already wrote the key out and pointed git at it. What it could not do was sign, because
-// git makes an ssh format signature by running ssh-keygen and the image did not carry it: every
-// commit in every sandbox failed with "cannot run ssh-keygen", whatever the key was.
+// Two things this proves that nothing else does. That the key is usable where it lands: a mounted
+// secret is a file in a memory backed directory owned by the sandbox user, and ssh-keygen refuses a
+// key file it does not like the look of. And that git can sign at all, which it could not before the
+// image carried ssh-keygen.
 //
-// So the assertion is a verified commit rather than the presence of a program. Checking for the
-// binary would pass on an image where git still refused to use it, and the operator's interest is
-// the commit, not the package list.
+// So the assertion is a verified commit rather than the presence of a program or a file. Either of
+// those would pass on a sandbox where git still refused to sign, and the operator's interest is the
+// commit.
 //
-// Identity is set here rather than by the crew. A session gets none today, which is its own piece of
-// work; this test would fail on "please tell me who you are" long before it reached a signature, and
-// that would be a different failure wearing this test's name.
+// Identity is set inline rather than mounted, to keep this test about the key. Where it comes from
+// in a real session is TestAnOperatorsConfigurationDecidesWhoCommits.
 func TestASessionCanMakeACommitThatVerifies(t *testing.T) {
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
@@ -67,11 +67,12 @@ func TestASessionCanMakeACommitThatVerifies(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 	if _, err := server.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-		Workspace: workspace.GetWorkspace().GetId(),
-		Key:       controlplane.SigningKeyEnv,
-		Value:     private,
+		Workspace:  workspace.GetWorkspace().GetId(),
+		Key:        controlplane.SigningKeySecret,
+		Value:      private,
+		Projection: quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE,
 	}); err != nil {
-		t.Fatalf("set the signing key: %v", err)
+		t.Fatalf("mount the signing key: %v", err)
 	}
 
 	dispatched, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
@@ -85,13 +86,13 @@ func TestASessionCanMakeACommitThatVerifies(t *testing.T) {
 
 	// Everything from here runs through docker exec, because asking the crew whether the sandbox can
 	// sign is not evidence that it can. The signature is checked against an allowed signers file
-	// holding the public half of the key the workspace was given, which is how a reader who was not
+	// holding the public half of the key the workspace mounted, which is how a reader who was not
 	// there confirms the commit came from that key and not from any key.
 	said := inTheSandbox(ctx, t, container, `set -e
 git config --global user.name operator
 git config --global user.email operator@example.com
-printf 'operator@example.com %s\n' "$QC_TEST_PUBLIC_KEY" > /home/agent/.ssh/allowed_signers
-git config --global gpg.ssh.allowedSignersFile /home/agent/.ssh/allowed_signers
+printf 'operator@example.com %s\n' "$QC_TEST_PUBLIC_KEY" > /tmp/allowed_signers
+git config --global gpg.ssh.allowedSignersFile /tmp/allowed_signers
 mkdir -p /tmp/repo && cd /tmp/repo && git init -q .
 echo hello > a.txt
 git add a.txt
