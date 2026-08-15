@@ -118,8 +118,8 @@ Feature: The operator sees the crew from the console
     Given a session started by dispatching "hello"
     When the operator opens the console
     And the operator asks for the selected session's history
-    Then the console is showing turns
-    And the history lists 1 turn saying "hello"
+    Then the console is showing tasks
+    And the history lists 1 task saying "hello"
 
   Scenario: Asking for a history does not open the conversation
     Given a session started by dispatching "hello"

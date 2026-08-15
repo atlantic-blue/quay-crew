@@ -100,6 +100,12 @@ services:
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
       # Claude Code CLI and its credentials is in place.
       QC_MODEL: ${QC_MODEL:-echo}
+      # Which model that backend runs against. The default is here rather than in the code so a crew
+      # whose configuration file was written before this key existed still gets it, and so raising a
+      # generation is one edit in one place. A full name rather than the "opus" alias, for the same
+      # reason the command line tool itself is pinned: an alias moves on its own and nothing records
+      # that it did.
+      QC_CLAUDE_MODEL: ${QC_CLAUDE_MODEL:-claude-opus-5}
       # What a thread's turns may do when it is born: plan, edits or dangerous. Unset keeps edits,
       # which is what every thread had before this was configurable.
       QC_PERMISSION_MODE: ${QC_PERMISSION_MODE:-}

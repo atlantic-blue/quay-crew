@@ -16,9 +16,9 @@ import (
 // answers without starting a container, and it keeps answering for a session whose sandbox is long
 // gone. What it does not have is the working inside a turn, the tool calls and the thinking: for
 // that, `quay attach` opens the conversation itself.
-func runTurns(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+func runTasks(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: quay turns <thread>\n\na thread is its id, its handle, or its address")
+		return fmt.Errorf("usage: quay tasks <thread>\n\na thread is its id, its handle, or its address")
 	}
 
 	sessionID, err := resolveSession(ctx, client, args[0])

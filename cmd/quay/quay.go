@@ -153,8 +153,15 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	// times over, and the command was sessions alone, so the tool taught a word it then refused.
 	case "sessions", "session", "threads", "thread":
 		return runSessions(ctx, client, args[1:], out)
-	case "turns":
-		return runTurns(ctx, client, args[1:], out)
+	case "tasks", "task":
+		return runTasks(ctx, client, args[1:], out)
+	// The way off the old word. Refused by name rather than treated as an unknown command, because
+	// it is still in fingers, in scripts and in notes, and a command that silently stops existing
+	// reads as the tool being broken.
+	case "turns", "turn":
+		return fmt.Errorf(
+			"there is no turns command: a turn is called a task now, because a turn is a word from " +
+				"conversation analysis and nothing about it said how long it takes. Use quay tasks <thread>")
 	case "mode":
 		return runMode(ctx, client, args[1:], out)
 	case "label":

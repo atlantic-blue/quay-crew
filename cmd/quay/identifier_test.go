@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"io"
 	"strings"
 	"testing"
 )
@@ -44,14 +46,31 @@ func TestAThreadScopedCommandTakesAnAddress(t *testing.T) {
 
 // The history command shares the resolver, so it takes the same forms. A fix that only reached mode
 // would leave the operator refused by the command that reads what a thread did.
-func TestTurnsTakesTheHandleAndTheAddressToo(t *testing.T) {
+func TestTasksTakesTheHandleAndTheAddressToo(t *testing.T) {
 	client, _ := aThreadWatchingTheModel(t)
 	thread := onlyThread(t, client)
 
 	for _, typed := range []string{thread.GetId()[:8], thread.GetHandle()[:8], addressOf(t, client)} {
-		said := mustRun(t, client, "turns", typed)
+		said := mustRun(t, client, "tasks", typed)
 		if !strings.Contains(said, "hello") {
-			t.Fatalf("quay turns %s said %q, want the turn that was dispatched", typed, said)
+			t.Fatalf("quay tasks %s said %q, want the task that was dispatched", typed, said)
+		}
+	}
+}
+
+// The way off the old word, not only the way onto the new one.
+//
+// quay turns is in fingers, in scripts and in notes. A command that simply stops existing reads as
+// the tool being broken, and the refusal has to name what to type instead or it is no better.
+func TestTheOldTurnsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
+	client, _ := aThreadWatchingTheModel(t)
+	for _, typed := range []string{"turns", "turn"} {
+		err := run(context.Background(), client, []string{typed, "anything"}, io.Discard, "")
+		if err == nil {
+			t.Fatalf("quay %s was accepted, and it no longer does anything", typed)
+		}
+		if !strings.Contains(err.Error(), "quay tasks") {
+			t.Fatalf("the refusal for quay %s does not say what to type instead: %v", typed, err)
 		}
 	}
 }
