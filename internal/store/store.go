@@ -19,6 +19,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/google/uuid"
 )
@@ -55,6 +56,19 @@ var ErrSkillChanged = errors.New("store: that version of the skill is already im
 // Imported is a skill the crew holds: the skill as its author wrote it, and when it came in.
 type Imported struct {
 	skill.Skill
+	ImportedAt time.Time
+}
+
+// ErrHookChanged is returned when a version of a hook is imported again carrying a different hook.
+//
+// A refusal rather than an overwrite, and the stakes are higher here than for a skill: overwriting
+// would change a constraint under sessions already running under it, which is how a gate quietly
+// stops gating. The way forward is to raise the version in the manifest.
+var ErrHookChanged = errors.New("store: that version of the hook is already imported and differs")
+
+// ImportedHook is a hook the crew holds: the hook as its author wrote it, and when it came in.
+type ImportedHook struct {
+	hook.Hook
 	ImportedAt time.Time
 }
 
@@ -163,6 +177,36 @@ type Store interface {
 	DetachCrewSkill(ctx context.Context, name string) error
 	// CrewSkills returns what the crew holds, at the versions it pinned, files included.
 	CrewSkills(ctx context.Context) ([]Imported, error)
+
+	// The same six questions again for hooks. A hook is the same kind of thing as a skill, authored
+	// as files and attached at a level, and it is a separate set of calls rather than one generic
+	// set because the two entities are separate: a session refused a skill still runs, and a session
+	// refused a hook is a session running without the constraint it was supposed to have.
+	//
+	// ImportHook takes a hook into the crew at the version its manifest declares. The same name and
+	// version again is fine when it is the same hook and refused when it is not, for the reason
+	// ImportSkill gives.
+	ImportHook(ctx context.Context, imported ImportedHook) error
+	// GetHook returns one revision of a hook, its files included.
+	GetHook(ctx context.Context, name string, version int) (ImportedHook, error)
+	// ListHooks returns the newest revision of every hook the crew holds, without their files.
+	ListHooks(ctx context.Context) ([]ImportedHook, error)
+	// AttachHook gives a workspace a hook, pinned to the newest revision the crew holds now.
+	AttachHook(ctx context.Context, workspace, name string) (ImportedHook, error)
+	// DetachHook takes a hook away from a workspace. The hook stays imported.
+	DetachHook(ctx context.Context, workspace, name string) error
+	// WorkspaceHooks returns the hooks a workspace holds, at the versions it pinned, files included,
+	// which is what a sandbox needs to be built.
+	WorkspaceHooks(ctx context.Context, workspace string) ([]ImportedHook, error)
+	// AttachCrewHook gives the hook to the whole crew, so every workspace has it and one made
+	// tomorrow has it too. This is the level most hooks want: a constraint the crew agreed on is not
+	// usually a per workspace opinion.
+	AttachCrewHook(ctx context.Context, name string) (ImportedHook, error)
+	// DetachCrewHook takes a hook away from the crew. A workspace that attached it for itself keeps
+	// it: the two are separate statements, and the narrower one is not undone by the wider one.
+	DetachCrewHook(ctx context.Context, name string) error
+	// CrewHooks returns what the crew holds, at the versions it pinned, files included.
+	CrewHooks(ctx context.Context) ([]ImportedHook, error)
 
 	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
 	// turn: a caller retrying a write it is not sure landed must leave one turn, so a record it has

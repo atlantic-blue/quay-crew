@@ -11,6 +11,8 @@
 package hook
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path"
 	"regexp"
@@ -162,6 +164,20 @@ func FromFiles(files []File) (Hook, error) {
 	copy(loaded.Files, files)
 	sort.Slice(loaded.Files, func(i, j int) bool { return loaded.Files[i].Path < loaded.Files[j].Path })
 	return loaded, loaded.check(loaded.Name, byPath)
+}
+
+// Fingerprint is what this revision is, over every file.
+//
+// Importing the same version twice is only harmless when it is the same hook. This answers that
+// without reading the files back, and it is what makes a refusal possible rather than an overwrite
+// of a constraint that sessions are already running under.
+func (h Hook) Fingerprint() string {
+	sum := sha256.New()
+	for _, file := range h.Files {
+		fmt.Fprintf(sum, "%s\x00%t\x00%d\x00", file.Path, file.Executable, len(file.Body))
+		sum.Write(file.Body)
+	}
+	return hex.EncodeToString(sum.Sum(nil))
 }
 
 // SecretNames are the secrets this hook names, sorted, so a refusal and a listing say them in the
