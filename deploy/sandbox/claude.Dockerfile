@@ -28,8 +28,12 @@ LABEL com.quaycrew.build=$QC_VERSION
 
 # git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network;
 # curl because the api skills speak plain https and the gh install below needs it anyway.
+#
+# openssh-client is here for ssh-keygen, not for ssh. Git signs an ssh format signature by running
+# ssh-keygen, so without this package a session with a signing key configured cannot commit at all:
+# git fails with "cannot run ssh-keygen" before it reads the key.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep tmux \
+    && apt-get install -y --no-install-recommends ca-certificates curl git openssh-client ripgrep tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # gh, for the github skill. A pinned release rather than an apt repository, so the image builds the
@@ -109,6 +113,11 @@ COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
 # Executable at copy time, because everything after the image drops to the sandbox's own user and
 # that user cannot chmod a file it does not own.
 COPY --chmod=0755 deploy/sandbox/open-conversation.sh /usr/local/bin/open-conversation
+
+# Where a session's git configuration comes from. A file in the repository rather than a printf here,
+# so a test can read the same thing the image ships. Owned by the sandbox user, because the crew
+# writes to it at sandbox birth.
+COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 
 RUN mkdir -p /home/agent/.claude \
     && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \

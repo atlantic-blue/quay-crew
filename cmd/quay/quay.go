@@ -165,6 +165,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSecret(ctx, client, args[1:], out)
 	case "skill":
 		return runSkill(ctx, client, args[1:], out)
+	case "hook":
+		return runHook(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
 	case "repository":
@@ -284,16 +286,28 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		return nil
 	}
 	for _, secret := range resp.GetSecrets() {
-		fmt.Fprintf(out, "%-20s %-32s set, and not shown anywhere\n",
-			display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()), secret.GetName())
+		fmt.Fprintf(out, "%-20s %-32s %s\n",
+			display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()), secret.GetName(),
+			whereItLands(secret.GetName(), secret.GetProjection()))
 	}
 	return nil
+}
+
+// whereItLands says how a secret reaches a session, which is the one thing about it worth showing:
+// a session looking for a credential at a path and a session looking for it in the environment fail
+// in different places, and the listing is where that is answered.
+func whereItLands(name string, projection quaycrewv1.SecretProjection) string {
+	if projection == quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE {
+		return "mounted at " + sandbox.SecretFilePath(name)
+	}
+	return "set, and not shown anywhere"
 }
 
 // secretUsage names the piped form first, because it is the one that keeps a credential out of the
 // shell history and out of the process list.
 const secretUsage = "usage: <value> | quay secret set [<workspace>] <key>" +
-	"\n   or: quay secret set [<workspace>] <key> <value>"
+	"\n   or: quay secret set [<workspace>] <key> <value>" +
+	"\n   or: quay secret mount [<workspace>] <name> <path>   (a credential that is a file)"
 
 // standardInputIsPiped says whether something is being fed in rather than a person typing. A
 // character device is a terminal; anything else is a pipe or a file redirection.
@@ -308,6 +322,9 @@ func standardInputIsPiped() bool {
 func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "list" {
 		return runSecretList(ctx, client, args[1:], out)
+	}
+	if len(args) > 0 && args[0] == "mount" {
+		return runSecretMount(ctx, client, args[1:], out)
 	}
 	if len(args) == 0 || args[0] != "set" {
 		return fmt.Errorf("%s", secretUsage)
@@ -362,6 +379,82 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	// Confirm without echoing the value.
 	fmt.Fprintf(out, "set secret %s for workspace %s\n", key, located.Path.Workspace)
 	return nil
+}
+
+// mountUsage names the file form first, because a credential that is a file is what this command is
+// for and the piped form is the way to mount one that is not on disk.
+const mountUsage = "usage: quay secret mount [<workspace>] <name> <path>" +
+	"\n   or: <contents> | quay secret mount [<workspace>] <name>"
+
+// runSecretMount stores a secret that reaches a session as a file rather than as an environment
+// variable.
+//
+// Some credentials are files: a git configuration, a private key, a cloud credentials file. A tool
+// opens them by path, so there is nothing an environment variable can do for them. Kubernetes and
+// Docker both answer this the same way, by making the presentation of a secret a separate choice
+// from the storing of it, and this is that choice said out loud.
+func runSecretMount(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	piped := standardInputIsPiped()
+	var typed, name, from string
+	switch {
+	case piped && len(args) == 1:
+		name = args[0]
+	case piped && len(args) == 2:
+		typed, name = args[0], args[1]
+	case !piped && len(args) == 2:
+		name, from = args[0], args[1]
+	case !piped && len(args) == 3:
+		typed, name, from = args[0], args[1], args[2]
+	default:
+		return fmt.Errorf("%s", mountUsage)
+	}
+
+	value, err := contentsOf(from)
+	if err != nil {
+		return err
+	}
+	if value == "" {
+		return fmt.Errorf("there is nothing to mount, so %s was not set", name)
+	}
+
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+		Workspace:  located.WorkspaceID,
+		Key:        name,
+		Value:      value,
+		Projection: quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE,
+	}); err != nil {
+		return err
+	}
+	// Where it lands, because a session has to be told the path and the operator is the one who tells
+	// it. Then the caveat, because a mount happens when a container is made: a session already
+	// running was made without this one.
+	fmt.Fprintf(out, "mounted %s for workspace %s at %s\n", name, located.Path.Workspace, sandbox.SecretFilePath(name))
+	fmt.Fprintln(out, "a session already running was made before this, so stop it to get a sandbox that has it")
+	return nil
+}
+
+// contentsOf reads what to mount, from a path or from standard input.
+//
+// Byte for byte, unlike `quay secret set`, which trims. A token gains a newline from the tool that
+// printed it and is worth trimming; a file's bytes are the file, and one that arrives a byte shorter
+// than the operator's own is a file they cannot reason about.
+func contentsOf(from string) (string, error) {
+	if from == "" {
+		read, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading what to mount: %w", err)
+		}
+		return string(read), nil
+	}
+	read, err := os.ReadFile(from)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", from, err)
+	}
+	return string(read), nil
 }
 
 func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

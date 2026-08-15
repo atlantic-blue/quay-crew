@@ -12,6 +12,144 @@ read, or run with `make features`.
   never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
   carried none. Copied from the stage that already builds `quay` rather than downloaded again, so
   the sandbox never carries a Go that disagrees with the one `quay` itself was built with.
+- **The signing key is mounted, not set.** It was a workspace secret that reached the environment, so
+  the private key sat in every container's environment for the life of that container, where
+  `docker inspect` reads it. That was the exposure the file projection was built to remove, and the
+  key is the most sensitive thing this crew carries.
+
+  `quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519` now, and the crew only points
+  git at where the file lands. The write that put the key on disk by hand is gone with it, and so is
+  the crew ever holding the value. Setting the key is refused, and the refusal says what to type
+  instead: a key that looks stored and never signs anything is worse than one that was never
+  accepted.
+
+  Nothing to migrate. Checked before deciding: no workspace on this crew holds a signing key, so
+  nobody had opted into signing at all.
+
+- **An operator's git configuration reaches a session.** A session commits as the operator and had no
+  way to know who that was. Identity was four environment variables set on the turn's own process, so
+  a commit made from an attached terminal, or by anything the session started for itself, had none,
+  and git refused it with `Author identity unknown`.
+
+  The image now ships a git configuration holding one line, an include pointing at where a mounted
+  secret named `gitconfig` lands. `quay secret mount <workspace> gitconfig ~/.gitconfig` gives every
+  git process in the sandbox the operator's own identity, aliases and settings, from any shell. A
+  workspace that mounts nothing is unchanged, because git ignores an include that is not there.
+
+  Signing is the one part the crew decides rather than the operator. Most configurations that sign
+  have it on for everything, against a key the machine holds and a container does not, so a workspace
+  holding no signing key is now told not to sign rather than told nothing. Left alone, a mounted
+  configuration fails every commit: with that half taken back out, the same test dies with
+  `cannot run gpg`, which is what the measurement showed.
+
+- **A session can sign a commit.** Signing landed on 13 August and never worked. Git makes an ssh format
+  signature by running `ssh-keygen`, and the sandbox image did not carry it, so a workspace with a
+  signing key configured could not commit at all: git answered `cannot run ssh-keygen` before it read
+  the key. Every commit in every sandbox failed, whatever the key was. The image now installs
+  `openssh-client` alongside git, and an integration test makes a commit in a container the crew
+  built and checks git verifies the signature against the public half of the workspace's key. Run
+  against the image without the package, that test reproduces the original failure exactly.
+
+- **A secret can reach a session as a file.** Some credentials are not values. A git configuration, a
+  private key, a cloud credentials file: a tool opens each one by path, so there was nothing a crew
+  could do for them. One credential had already been forced through, the ssh signing key, by a script
+  written for that one case.
+
+  A secret now says how it reaches a sandbox, which is the shape Kubernetes and Docker both settled
+  on: the store holds bytes under a name, and whether those bytes become an environment variable or a
+  file is a separate choice. `quay secret set` is the environment and stays the default, so nothing
+  already set moves. `quay secret mount gitconfig ~/.gitconfig` is a file, landing at
+  `/run/secrets/gitconfig`, and `quay secret list` says where each one goes.
+
+  A mounted secret does not also reach the environment, and that is the second reason to mount one.
+  A container's environment is readable for the life of that container, through `docker inspect`
+  among other things, which `docs/SANDBOX.md` has recorded as an accepted cost since the subscription
+  token landed. The directory is created with the container, memory backed, owned by the sandbox user
+  and shut to everybody else, so a mounted value never reaches the container's writable layer or the
+  host's disk. Proved against the real daemon and the real image: without the owner on the mount the
+  write is refused, which is what the measurement showed before the code was written.
+
+- **A fix to a shipped hook can now reach a crew that already has it.** Seeding both imported and
+  attached, and both only into a crew holding no hooks at all, which is no crew that has ever been
+  used. So the analyser's credential fix above landed in the repository, shipped in the image, and
+  reached nobody: an upgraded crew kept running the version it was seeded with, and the only way to
+  see that was to read the hook's own file inside a container.
+
+  The two halves are separate now. Importing runs on every start, so a newer version of a shipped hook
+  reaches the catalogue of any crew that upgrades. Attaching still runs only into a crew that held
+  nothing, so an operator who took a hook off keeps it off, and an upgrade never moves a crew onto a
+  newer version of a constraint by itself. A hook is pinned so it cannot change under a running
+  session, and `quay hook attach` is how somebody decides to take the new one.
+
+- **The analyser's child model call keeps the credential it needs.** It shipped stripping every
+  `CLAUDE_` variable before running its child, so the child would not inherit what the running session
+  set for itself. On a machine with a logged in install that costs nothing, because the credential is
+  a file. A quay sandbox has no credentials file: the workspace's subscription arrives as
+  `CLAUDE_CODE_OAUTH_TOKEN`, and it was being dropped.
+
+  Nothing looked wrong. The hook ran in 946 milliseconds, exited 0 and let the message through,
+  because it fails open by design. The child exited 1 with an empty standard error, and the only sign
+  anywhere was the word "no answer" in a file in `/tmp`. Found by dispatching a turn on a real crew and
+  reading what the hook actually wrote, not by any test.
+
+  A stub on the path now stands in for the model in an integration test, so the token's arrival is
+  proved without a subscription.
+
+- **The prompt analyser is the crew's first hook, and every crew starts under it.** It reads the
+  message a session was sent, asks a small model to restate it, and hands the session the message and
+  that restatement together. It never replaces what was typed: the runtime does not allow that, and it
+  should not, because a reading of a message is a guess and the words are not.
+
+  It goes first because it cannot be wrong in the expensive direction. Every other hook worth having
+  refuses something, and one that refuses wrongly blocks the work. This one only adds, so it is the
+  one hook a fresh crew is given rather than merely offered. Taking it off and restarting leaves it
+  off: seeding runs only into a crew that holds none, because putting a constraint back is the crew
+  overruling the person operating it.
+
+  What it reads inside a sandbox is not what the same hook reads on a laptop, which is why the paths
+  are configuration rather than code: the skills at `/home/agent/skills`, and what the session was
+  told at `/home/agent/.claude/CLAUDE.md`.
+
+  One defect worth recording, because every test was green when it shipped and it failed on the first
+  message. Node decides whether to strip TypeScript types by the file extension, not by the flag in
+  the shebang, so an entry point named `bin/hook` was read as plain JavaScript and died on its own
+  type imports with `SyntaxError: Unexpected identifier 'AnalysisFacts'`. It is `bin/hook.ts` now,
+  there is a test that any entry point using type stripping is named so node strips them, and there is
+  another that runs the shipped analyser inside the real sandbox image and reads what it says.
+
+- **A crew can enforce a rule, not only ask for one.** Every rule a crew carries was context, and
+  context is advice the model takes or leaves. The evidence is one working session: 100 kilobytes of
+  rules in the context, three of them broken, and the one it did not break was the one a hook refuses
+  on the operator's machine. A quay sandbox had no such gate.
+
+  A hook is now content the crew holds, the same shape as a skill: a directory with a manifest and an
+  executable, imported with `quay hook import`, pinned to a version, attached to a workspace or to the
+  whole crew with `quay hook attach`. It is a third entity beside a skill and a workflow, and keeping
+  them apart is the point. A skill is a capability, what a session **can** do, and it is passive. A
+  workflow is a plan, with control flow, state and a durable run. A hook is a constraint: no state, no
+  say in what happens next, and never in the model's context. Moving a checkable rule out of the
+  prompt makes the advice that stays behind stronger.
+
+  What a hook fires on is an allow list rather than free text, and that is the refusal worth knowing
+  about. A misspelled event imports, attaches, mounts and is never called, and a hook that is never
+  called cannot be told from one that approves of everything. The import is the only moment anybody is
+  looking, so it is refused there, by name, with the events that exist.
+
+  The files are mounted read only at `/home/agent/hooks`, and a settings file the crew owns outright
+  is rendered beside them and loaded with `claude --settings`. Not into the conversation directory's
+  own settings, which the runtime writes and the operator edits: that would mean merging on every turn
+  and losing an edit the first time the merge was wrong. Both the dispatched turn and the attached
+  conversation load it, because a gate that only runs on dispatched turns is one you walk around by
+  opening the thread.
+
+  A hook reaches a container when the container is built and never after, so `quay hook attach` says
+  so every time. Somebody who believes a gate is on when it is not is worse off than somebody who
+  knows there is no gate.
+
+  Proved against a real container rather than a double: the command the settings file names is run
+  inside the container, by absolute path, and the mount is checked to be read only by trying to
+  rewrite the file that binds the hooks. A session that can edit what constrains it is not constrained.
+
 - **Starting a thread from the console no longer waits for its first turn.** Creating a session in
   the wizard failed, and the operator read the failure as the container being slow to start. Neither
   half was true. The wizard put a thirty second deadline on the call, and a dispatch runs the whole

@@ -250,11 +250,26 @@ message AttachChannelResponse {
   Channel channel = 1;
 }
 
+// SecretProjection is how a secret reaches a sandbox. The store holds bytes under a name and knows
+// nothing else about them; how they are presented is a separate choice, which is the shape Kubernetes
+// and Docker both settled on.
+//
+// Unspecified reads as the environment, so a client written before this existed still sets the
+// secrets it always set.
+enum SecretProjection {
+  SECRET_PROJECTION_UNSPECIFIED = 0;
+  // The value becomes an environment variable named after the secret.
+  SECRET_PROJECTION_ENV = 1;
+  // The value becomes a file, and does not reach the environment at all.
+  SECRET_PROJECTION_FILE = 2;
+}
+
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 message SetSecretRequest {
   string workspace = 1;
   string key = 2;
   string value = 3;
+  SecretProjection projection = 4;
 }
 message SetSecretResponse {}
 
@@ -395,6 +410,9 @@ message SecretRef {
   string workspace_name = 2;
   string name = 3;
   google.protobuf.Timestamp updated_at = 4;
+  // projection is how this one reaches a sandbox. Where it lands is not carried, because it is
+  // derived from the name and every reader would derive the same path.
+  SecretProjection projection = 5;
 }
 
 // ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty.
@@ -495,6 +513,96 @@ message DetachSkillRequest {
   string scope = 3;
 }
 message DetachSkillResponse {}
+
+// Hook is a constraint a session runs under: what it may not do, checked when it tries. It is never
+// read by the model, which is why there is no brief here and a skill has one.
+message Hook {
+  string name = 1;
+  int32 version = 2;
+  // summary is the line a listing shows. Nothing pays for it per turn, because a hook is invisible
+  // to the model until it fires.
+  string summary = 3;
+  // events are what this hook fires on, in the order they were written, which is the order they are
+  // rendered into a session's settings.
+  repeated HookBinding events = 4;
+  // binaries are the commands the hook needs in the sandbox image. A session missing one is refused
+  // before a turn runs.
+  repeated string binaries = 5;
+  repeated SkillSecret secrets = 6;
+  google.protobuf.Timestamp imported_at = 7;
+  // crew says the crew holds this hook, so every workspace has it without attaching anything. It is
+  // the level most hooks want: a constraint the crew agreed on is not usually a per workspace
+  // opinion.
+  bool crew = 8;
+  // left_out says why a hook the workspace holds is not given to its sessions, and is empty when it
+  // is given.
+  string left_out = 9;
+}
+
+// HookBinding is one event a hook fires on.
+message HookBinding {
+  // on is the event the runtime raises, for example "PreToolUse" or "UserPromptSubmit". A name the
+  // runtime never raises is refused at import, because a hook that is never called cannot be told
+  // from one that approves of everything.
+  string on = 1;
+  // matcher is which tools this fires for, empty for every tool. Only PreToolUse and PostToolUse
+  // fire per tool.
+  string matcher = 2;
+  // entry is the executable to run, relative to the hook's own directory.
+  string entry = 3;
+  // timeout_seconds is how long the runtime waits. Zero means the runtime's own default.
+  int32 timeout_seconds = 4;
+}
+
+// HookFile is one file of a hook's directory.
+message HookFile {
+  // path is relative to the hook's directory, with forward slashes.
+  string path = 1;
+  bytes body = 2;
+  // executable says the file has to be runnable, which an entry point is.
+  bool executable = 3;
+}
+
+// ImportHookRequest carries a hook's whole directory, for the same reason ImportSkillRequest does:
+// the control plane runs in a container where a path on the operator's machine means nothing.
+message ImportHookRequest {
+  repeated HookFile files = 1;
+}
+message ImportHookResponse {
+  Hook hook = 1;
+}
+
+// ListHooksRequest lists what the crew has imported, what one workspace holds when workspace is set,
+// or what one thread actually holds when thread is set.
+message ListHooksRequest {
+  string workspace = 1;
+  string thread = 2;
+}
+message ListHooksResponse {
+  repeated Hook hooks = 1;
+}
+
+// AttachHookRequest gives a workspace a hook, at the version the crew holds now.
+message AttachHookRequest {
+  // workspace is the workspace to give it to, and is ignored when scope is "crew".
+  string workspace = 1;
+  string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew".
+  string scope = 3;
+}
+message AttachHookResponse {
+  Hook hook = 1;
+}
+
+// DetachHookRequest takes a hook away from a workspace. The hook stays imported.
+message DetachHookRequest {
+  // workspace is the workspace to take it from, and is ignored when scope is "crew".
+  string workspace = 1;
+  string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew".
+  string scope = 3;
+}
+message DetachHookResponse {}
 
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
@@ -648,6 +756,11 @@ service ControlPlaneService {
   rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
   rpc AttachSkill(AttachSkillRequest) returns (AttachSkillResponse);
   rpc DetachSkill(DetachSkillRequest) returns (DetachSkillResponse);
+
+  rpc ImportHook(ImportHookRequest) returns (ImportHookResponse);
+  rpc ListHooks(ListHooksRequest) returns (ListHooksResponse);
+  rpc AttachHook(AttachHookRequest) returns (AttachHookResponse);
+  rpc DetachHook(DetachHookRequest) returns (DetachHookResponse);
 
   rpc ListTurns(ListTurnsRequest) returns (ListTurnsResponse);
 

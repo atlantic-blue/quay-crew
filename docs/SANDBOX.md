@@ -133,6 +133,67 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
 
+## A credential that is a file
+
+Some credentials are not values. A git configuration, a private key, a cloud credentials file: a tool
+opens each one by path, so there is nothing an environment variable can do for them.
+
+So a secret says how it reaches a sandbox, which is the shape Kubernetes and Docker both settled on.
+The store holds bytes under a name and knows nothing else about them; whether those bytes become an
+environment variable or a file is a separate choice. A Kubernetes Secret is read through
+`secretKeyRef` or mounted through a `secret` volume; a Docker secret is given a target and lands
+under `/run/secrets`. Neither writes the presentation into the store.
+
+`quay secret set` is the environment. `quay secret mount` is a file:
+
+```
+quay secret mount gitconfig ~/.gitconfig
+cat ~/.gitconfig | quay secret mount gitconfig
+```
+
+It lands at `/run/secrets/<name>`, one file per secret, and `quay secret list` says so. The directory
+is created with the container and is memory backed, owned by the sandbox user and shut to everybody
+else, so a mounted value never reaches the container's writable layer or the host's disk.
+
+A mounted secret is **not** also in the environment, and that is the second reason to mount one. The
+trade recorded above for the subscription token is real: a container's environment is readable for
+the life of that container, for example through `docker inspect`. A file in a memory backed directory
+is not.
+
+Two things to know. The value is written when the sandbox is made, so a session already running was
+made before you mounted it: stop the thread to get one that has it. And `quay secret set` trims,
+because a token gains a newline from the tool that printed it, while `quay secret mount` does not,
+because a file's bytes are the file.
+
+## Who a session commits as
+
+A session commits as you, and it has to be told who that is. Mount your own git configuration:
+
+```
+quay secret mount <workspace> gitconfig ~/.gitconfig
+```
+
+The image ships a git configuration holding one line, `[include] path = /run/secrets/gitconfig`, so
+what you mount reaches every git process in the sandbox: your identity, your aliases, your settings,
+from any shell rather than only the process a turn runs in. A workspace that mounts nothing is
+unchanged, because git ignores an include that is not there.
+
+Signing is the one part the crew decides rather than you, and it has to. Most configurations that
+sign have it on for everything, against a key your machine holds and a container does not, so left
+alone it fails every commit a session makes. A workspace that mounts a signing key signs with it; a
+workspace that mounts none is told not to sign. The crew writes its answer after the include, and git
+takes the last value it reads.
+
+```
+quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519
+```
+
+Mounted, not set. Setting it is refused, and the refusal says this instead. A private key in the
+environment is readable through `docker inspect` for the life of the container, which is the exposure
+mounting exists to avoid, and the key is the most sensitive thing this crew carries. Put the public
+half on the account you push to as a signing key, alongside the one your own machine signs with: a
+commit signed in a sandbox is signed by a different key from one signed on your laptop.
+
 ## Where a session's state lives
 
 A sandbox is a container, and a container's filesystem is thrown away with it. So the two directories

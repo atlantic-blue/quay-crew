@@ -6,6 +6,7 @@ package sandbox
 import (
 	"context"
 	"io"
+	"path"
 )
 
 // Spec describes a command to run inside a Sandbox.
@@ -80,10 +81,25 @@ const (
 	ConversationPath = "/home/agent/.claude"
 	WorkingPath      = "/home/agent/workspace"
 	SkillsPath       = "/home/agent/skills"
+	// HooksPath is where the hooks a session runs under are mounted, read only, together with the
+	// settings file that binds them to their events. The runtime is pointed at that file explicitly,
+	// which is what lets the crew own this directory outright rather than merging into the
+	// conversation directory's own settings.
+	HooksPath = "/home/agent/hooks"
 	// SharedPath is the workspace's own volume, mounted read write into every session in it. The
 	// repositories a workspace works in are cloned here once and shared; anything else a workspace
 	// accumulates and wants its sessions to see can live here too.
 	SharedPath = "/home/agent/shared"
+	// SecretsPath is where a file projected secret lands, one file per secret, named after it. The
+	// path is Docker's own default for a secret and the conventional mount point for one in
+	// Kubernetes, so a session that has met either already knows where to look.
+	//
+	// Memory backed, so a value never reaches the container's writable layer or the host's disk.
+	SecretsPath = "/run/secrets"
+	// UserID is the identifier of the image's agent user. A memory backed mount belongs to root
+	// unless it is told otherwise, and the crew writes secrets into it as the sandbox's own user, so
+	// the mount has to name that user.
+	UserID = 1001
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
 	// opening a thread twice lands in the one already running.
 	AttachedSessionName = "quay"
@@ -92,7 +108,19 @@ const (
 	// OpenConversation keeps the terminal alive when a conversation ends, so ending one does not take
 	// everything running with it.
 	OpenConversation = "open-conversation"
+	// GitConfigSecret is the workspace secret an operator mounts to give every session their own git
+	// configuration. The image's own configuration includes the file it lands in, so identity,
+	// aliases and settings reach a session from any shell rather than only the process a turn runs.
+	GitConfigSecret = "gitconfig"
+	// GitConfigPath is the sandbox user's git configuration, the file git reads as global. Shipped by
+	// the image holding the include, and written to by the crew at sandbox birth.
+	GitConfigPath = "/home/agent/.gitconfig"
 )
+
+// SecretFilePath is where a file projected secret lands inside a sandbox. Derived from the name
+// rather than stored, so every reader answers the same, and a name that could not be a file name is
+// refused before it reaches the store.
+func SecretFilePath(name string) string { return path.Join(SecretsPath, name) }
 
 const ContainerPrefix = "quaycrew-"
 

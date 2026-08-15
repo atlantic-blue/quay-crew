@@ -174,6 +174,10 @@ func main() {
 	// so it is a starting point and not a policy that undoes a decision.
 	server.Seed(ctx, envOr("QC_SEED_SKILLS_DIR", controlplane.SeedDir), logger)
 
+	// And the hooks, on the same terms: only into a crew that holds none, so taking one off and
+	// restarting does not put it back.
+	server.SeedHooks(ctx, envOr("QC_SEED_HOOKS_DIR", controlplane.SeedHooksDir), logger)
+
 	grpcServer := grpc.NewServer(auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 

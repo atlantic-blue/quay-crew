@@ -163,7 +163,7 @@ func (s *dockerSandbox) Close(ctx context.Context) error {
 // read what the daemon would be asked for without a daemon: whether the sandbox joins a network at all
 // is the difference between a session that can drive the crew and one that cannot.
 func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
-	args := []string{"run", "--detach", "--name", name}
+	args := []string{"run", "--detach", "--name", name, "--tmpfs", secretsMount()}
 	if cfg.Driver && d.Network != "" {
 		args = append(args, "--network", d.Network)
 	}
@@ -186,6 +186,17 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 		args = append(args, "-v", mount)
 	}
 	return append(args, d.Image, "sleep", "infinity")
+}
+
+// secretsMount is the memory backed directory a file projected secret lands in, on every sandbox
+// whether or not the workspace has set one. Created with the container rather than on demand,
+// because a mount is a create time decision and the alternative is that the first workspace to mount
+// a secret needs a fresh container to get the directory.
+//
+// It is owned by the sandbox user and shut to everybody else. Without the owner it belongs to root,
+// and the crew, which writes into it as the sandbox's own user, is refused.
+func secretsMount() string {
+	return fmt.Sprintf("%s:mode=0700,uid=%d,gid=%d", SecretsPath, UserID, UserID)
 }
 
 // BuildLabel is where a sandbox image records which build of the crew it was made from. `make

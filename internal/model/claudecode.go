@@ -61,6 +61,12 @@ func buildArgs(req Request) []string {
 	if req.ModelSessionID != "" {
 		args = append(args, "--resume", req.ModelSessionID)
 	}
+	// Additional settings, so the operator's own file inside the sandbox still applies and the crew's
+	// hooks are added to it rather than replacing it. Left off when there are none, because a path to
+	// a file that is not there is a turn that fails before it starts.
+	if req.Settings != "" {
+		args = append(args, "--settings", req.Settings)
+	}
 	return args
 }
 

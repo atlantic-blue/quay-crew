@@ -404,3 +404,76 @@ func TestDockerProviderRemovesByName(t *testing.T) {
 		t.Fatalf("Stranded still lists %s after Remove", id)
 	}
 }
+
+// A mounted secret has to be a file the session's own user can read, on a mount that is memory
+// backed, and readable by nobody else. Every one of those is a property of the daemon rather than of
+// the code, so this asks the daemon.
+//
+// It ran against the real sandbox image on purpose. A looser image manufactures green here: busybox
+// runs as root, so a write into a directory owned by root succeeds there and fails in the image
+// sessions actually use, where the user is not root and the mount would have belonged to root.
+func TestAMountedSecretIsAFileTheSandboxUserCanReadAndNobodyElseCan(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the sandbox image")
+	}
+
+	provider := sandbox.DockerProvider{Image: image}
+	box, err := provider.Create(ctx, sandbox.Config{ID: "secretfile" + strings.Repeat("0", 13)})
+	if err != nil {
+		t.Fatalf("create the sandbox: %v", err)
+	}
+	defer func() { _ = box.Close(ctx) }()
+
+	// The same shape the crew uses: the value through the environment of the one command, never as an
+	// argument, and umask before the write so the file is never briefly readable.
+	const contents = "[user]\n\tname = operator\n"
+	at := sandbox.SecretFilePath("gitconfig")
+	write, err := box.Exec(ctx, sandbox.Spec{
+		Argv: []string{"sh", "-c", "set -e\numask 077\nmkdir -p " + sandbox.SecretsPath +
+			"\nprintf '%s' \"$QC_SECRET_FILE_VALUE\" > " + at},
+		Env: []string{"QC_SECRET_FILE_VALUE=" + contents},
+	})
+	if err != nil {
+		t.Fatalf("write the secret: %v", err)
+	}
+	_, _ = io.ReadAll(write.Stdout())
+	if err := write.Wait(); err != nil {
+		t.Fatalf("the sandbox user could not write into %s: %v: %s", sandbox.SecretsPath, err, write.Stderr())
+	}
+
+	read, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
+		"cat " + at + " && echo '|' && stat -c '%a %U' " + at +
+			" && echo '|' && stat -f -c %T " + sandbox.SecretsPath}})
+	if err != nil {
+		t.Fatalf("read the secret back: %v", err)
+	}
+	said, err := io.ReadAll(read.Stdout())
+	if err != nil {
+		t.Fatalf("read what the sandbox said: %v", err)
+	}
+	if err := read.Wait(); err != nil {
+		t.Fatalf("the sandbox user could not read the file it was given: %v: %s", err, read.Stderr())
+	}
+
+	parts := strings.Split(string(said), "|\n")
+	if len(parts) != 3 {
+		t.Fatalf("the sandbox said %q, which is not the three answers asked for", said)
+	}
+	if parts[0] != contents {
+		t.Fatalf("the file holds %q, want the bytes it was given", parts[0])
+	}
+	// Readable and writable by the sandbox user, and nothing to anybody else. The umask is what makes
+	// this 600, and a file that arrives readable is one any other process in the container can take.
+	if got := strings.TrimSpace(parts[1]); got != "600 agent" {
+		t.Fatalf("the file is %q, want it owned by the sandbox user and shut to everybody else", got)
+	}
+	// Memory backed, so the value never reaches the container's writable layer or the host's disk.
+	// The whole reason a mounted credential is safer than one in the environment rests on this.
+	if got := strings.TrimSpace(parts[2]); got != "tmpfs" {
+		t.Fatalf("%s is a %s, want tmpfs", sandbox.SecretsPath, got)
+	}
+}

@@ -29,6 +29,10 @@ COPY --from=build /out/service /service
 # The skills this build ships with, so a fresh crew can be given them without the operator importing
 # each one by hand. They are read once, at startup, into a crew whose catalogue is empty.
 COPY --from=build /src/skills /skills
+
+# The hooks this build ships with, on the same terms as the skills above: in the image so a fresh crew
+# can be put under them without the operator importing anything.
+COPY --from=build /src/hooks /hooks
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 USER root:root
 ENTRYPOINT ["/service"]
