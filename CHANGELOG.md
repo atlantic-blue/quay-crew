@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **The analyser's child model call keeps the credential it needs.** It shipped stripping every
+  `CLAUDE_` variable before running its child, so the child would not inherit what the running session
+  set for itself. On a machine with a logged in install that costs nothing, because the credential is
+  a file. A quay sandbox has no credentials file: the workspace's subscription arrives as
+  `CLAUDE_CODE_OAUTH_TOKEN`, and it was being dropped.
+
+  Nothing looked wrong. The hook ran in 946 milliseconds, exited 0 and let the message through,
+  because it fails open by design. The child exited 1 with an empty standard error, and the only sign
+  anywhere was the word "no answer" in a file in `/tmp`. Found by dispatching a turn on a real crew and
+  reading what the hook actually wrote, not by any test.
+
+  A stub on the path now stands in for the model in an integration test, so the token's arrival is
+  proved without a subscription.
+
 - **The prompt analyser is the crew's first hook, and every crew starts under it.** It reads the
   message a session was sent, asks a small model to restate it, and hands the session the message and
   that restatement together. It never replaces what was typed: the runtime does not allow that, and it

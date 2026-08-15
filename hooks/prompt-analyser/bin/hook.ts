@@ -41,6 +41,20 @@ const HOME = homedir();
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = join(HERE, "..", "hook.config.json");
 const GUARD = "CLAUDE_PROMPT_ANALYSER";
+/**
+ * The CLAUDE_ variables the child keeps, against a rule that drops the rest.
+ *
+ * The rule exists so the child does not inherit what the running session set for itself. A
+ * credential is not that, and the difference is where it lives. On a machine with a logged in
+ * install the credential is a file, so stripping every CLAUDE_ variable costs nothing. In a quay
+ * sandbox there is no credentials file: the workspace's subscription arrives as
+ * CLAUDE_CODE_OAUTH_TOKEN, and dropping it left the child with nothing to authenticate with.
+ *
+ * What that looked like was the hook working: it ran in 946 milliseconds, exited 0 and let the
+ * message through, because it fails open. The child exited 1 with an empty standard error, and the
+ * only sign anywhere was the word "no answer" in a file in /tmp.
+ */
+const KEPT = new Set(["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN"]);
 /** With this set, the hook reports what it sent, what came back, and how long it took. */
 const DEBUG = process.env.CLAUDE_PROMPT_ANALYSER_DEBUG === "1";
 
@@ -154,10 +168,11 @@ function gatherFacts(cwd: string): AnalysisFacts {
 function childEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
-    // CLAUDE_CONFIG_DIR is where the credentials live, so it has to survive
-    if (key !== "CLAUDE_CONFIG_DIR" && (key.startsWith("CLAUDE_") || key === "CLAUDECODE")) {
+    if (KEPT.has(key)) {
+      env[key] = value;
       continue;
     }
+    if (key.startsWith("CLAUDE_") || key === "CLAUDECODE") continue;
     env[key] = value;
   }
   env[GUARD] = "1";

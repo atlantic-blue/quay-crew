@@ -94,3 +94,77 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 		}
 	}
 }
+
+// The child model call must keep the credential the sandbox gave the session.
+//
+// The analyser drops every CLAUDE_ variable before running its child, so the child does not inherit
+// what the running session set for itself. On a machine with a logged in install that costs nothing,
+// because the credential is a file. A quay sandbox has no credentials file: the workspace's
+// subscription arrives as CLAUDE_CODE_OAUTH_TOKEN, and dropping it left the child unable to
+// authenticate.
+//
+// Nothing looked wrong. The hook ran in under a second, exited 0 and let the message through, because
+// it fails open by design. The only sign was the word "no answer" in a file in /tmp.
+//
+// A stub on the path stands in for the model, so this needs no subscription and still proves the
+// variable arrives.
+func TestTheAnalysersChildKeepsTheSubscriptionToken(t *testing.T) {
+	image := os.Getenv("QC_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_SANDBOX_IMAGE to the crew's sandbox image to run this")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	root := t.TempDir()
+	shipped, err := hook.Load("../../hooks")
+	if err != nil {
+		t.Fatalf("loading the shipped hooks: %v", err)
+	}
+	if err := sandbox.WriteHooks(root, shipped); err != nil {
+		t.Fatalf("WriteHooks: %v", err)
+	}
+
+	const sentinel = "sk-ant-oat-sentinel-value"
+	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, sandbox.Config{
+		ID:     "itest-analyser-2",
+		Env:    []string{"CLAUDE_CODE_OAUTH_TOKEN=" + sentinel},
+		Mounts: []sandbox.Mount{{Source: root, Target: sandbox.HooksPath, ReadOnly: true}},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = box.Close(context.Background()) })
+
+	// A stub claude that records the token it was given and answers with something the hook will
+	// print, so a failure tells the two cases apart: the child never ran, or it ran without the token.
+	stub := `mkdir -p /tmp/stub && cat > /tmp/stub/claude <<'SH'
+#!/bin/sh
+printf '%s' "${CLAUDE_CODE_OAUTH_TOKEN:-NO-TOKEN}" > /tmp/stub/seen
+cat > /dev/null
+echo "goal: something"
+SH
+chmod +x /tmp/stub/claude
+echo '{"prompt":"fix the flaky test","cwd":"/home/agent/workspace"}' | PATH=/tmp/stub:$PATH ` +
+		sandbox.HooksPath + `/prompt-analyser/bin/hook.ts
+echo "---seen---"
+cat /tmp/stub/seen`
+
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", stub}})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("the analyser did not run: %v\nstderr: %s\nstdout: %s", err, proc.Stderr(), out)
+	}
+	if strings.Contains(string(out), "NO-TOKEN") {
+		t.Fatal("the child model call ran without the subscription token, so it cannot authenticate and the hook silently produces nothing")
+	}
+	if !strings.Contains(string(out), sentinel) {
+		t.Fatalf("the child was never given the token: %s", out)
+	}
+}
