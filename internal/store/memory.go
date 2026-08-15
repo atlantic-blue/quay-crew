@@ -39,7 +39,14 @@ type Memory struct {
 	attached map[string]map[string]int
 	// crewAttached is which version of which skill the whole crew pinned, so every workspace holds
 	// it without an attachment of its own.
-	crewAttached    map[string]int
+	crewAttached map[string]int
+	// hooks is every revision of every hook the crew holds, and hooksAttached and crewHooks are the
+	// same two attachment levels again. Separate maps rather than one generic set: a skill and a
+	// hook are different entities, and sharing the storage here would be the first step to sharing
+	// the semantics.
+	hooks           map[string]ImportedHook
+	hooksAttached   map[string]map[string]int
+	crewHooks       map[string]int
 	flowGraphs      map[string]map[int]string
 	flowRuns        map[string]*flow.Run
 	flowTransitions map[string][]flow.RecordedTransition

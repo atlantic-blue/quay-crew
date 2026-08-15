@@ -138,16 +138,21 @@ func truncate(t *testing.T) {
 	if !exists {
 		return
 	}
-	// Skills and contexts are named here rather than left to the cascade. Nothing references them from
-	// workspaces, so they survived a truncate that claimed to leave nothing behind: a skill is keyed by
-	// its own name, so one subtest's github was still there for the next one to attach, at a version it
-	// never imported. The cascade then takes skill_secrets, skill_files and workspace_skills.
+	// Skills, hooks and contexts are named here rather than left to the cascade. Nothing references
+	// them from workspaces, so they survived a truncate that claimed to leave nothing behind: a skill
+	// is keyed by its own name, so one subtest's github was still there for the next one to attach, at
+	// a version it never imported. The cascade then takes skill_secrets, skill_files and
+	// workspace_skills, and hook_events, hook_secrets, hook_files, workspace_hooks and crew_hooks.
+	//
+	// Hooks landed here the same way and cost the same hour: the memory store gives every subtest a
+	// fresh map and passed, while against real Postgres the first attach in a subtest came back at
+	// version 2 from rows the previous subtest had left behind.
 	if _, err := pool.Exec(ctx,
 		// Turns are named here for the same reason as skills. A turn is keyed by its own id and
 		// survived a truncate that claimed to leave nothing behind, so one subtest's turn-0 was still
 		// there when the next one wrote its own, and AppendTurn's "on conflict do nothing" dropped it
 		// silently. What that looked like was a case reading zero turns it had just written.
-		`truncate sessions, turns, channels, workspaces, skills, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, turns, channels, workspaces, skills, hooks, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

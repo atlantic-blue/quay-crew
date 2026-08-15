@@ -1648,6 +1648,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Errorf("detaching a skill the crew does not hold returned %v, want ErrNotFound", err)
 		}
 	})
+
+	runHookConformance(t, newDataset)
 }
 
 // aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two
