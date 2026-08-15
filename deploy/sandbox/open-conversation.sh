@@ -18,6 +18,17 @@ stty -ixon 2>/dev/null || true
 conversation="$1"
 mode="$2"
 
+# The hooks this session runs under, if it is under any. The crew renders the file and mounts it read
+# only, so its presence is the whole question: a session with no hooks has no directory at all.
+#
+# Checked here rather than passed in, so opening a conversation is under the same constraints a
+# dispatched turn is. A gate that only runs on dispatched turns is one the operator walks around by
+# opening the thread, which is the easiest thing in the product to do.
+settings=""
+if [ -f /home/agent/hooks/settings.json ]; then
+    settings="--settings /home/agent/hooks/settings.json"
+fi
+
 # Where the model keeps this conversation. The working directory is the same in every sandbox, so the
 # transcript's name is the conversation's name, and its presence is how this script tells resuming
 # from starting.
@@ -29,11 +40,11 @@ while true; do
     # is the first open rather than a loss, and starting it under that name is what makes the name
     # true. Resuming a name that is not there would print "No conversation found" and exit.
     if [ -z "$conversation" ]; then
-        claude --permission-mode "$mode" || true
+        claude $settings --permission-mode "$mode" || true
     elif [ -f "$transcript" ]; then
-        claude --resume "$conversation" --permission-mode "$mode" || true
+        claude $settings --resume "$conversation" --permission-mode "$mode" || true
     else
-        claude --session-id "$conversation" --permission-mode "$mode" || true
+        claude $settings --session-id "$conversation" --permission-mode "$mode" || true
     fi
 
     printf '\n  This conversation is closed. Nothing was lost: it is on disk and can be opened again.\n'

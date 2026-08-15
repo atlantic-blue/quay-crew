@@ -8,6 +8,39 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A crew can enforce a rule, not only ask for one.** Every rule a crew carries was context, and
+  context is advice the model takes or leaves. The evidence is one working session: 100 kilobytes of
+  rules in the context, three of them broken, and the one it did not break was the one a hook refuses
+  on the operator's machine. A quay sandbox had no such gate.
+
+  A hook is now content the crew holds, the same shape as a skill: a directory with a manifest and an
+  executable, imported with `quay hook import`, pinned to a version, attached to a workspace or to the
+  whole crew with `quay hook attach`. It is a third entity beside a skill and a workflow, and keeping
+  them apart is the point. A skill is a capability, what a session **can** do, and it is passive. A
+  workflow is a plan, with control flow, state and a durable run. A hook is a constraint: no state, no
+  say in what happens next, and never in the model's context. Moving a checkable rule out of the
+  prompt makes the advice that stays behind stronger.
+
+  What a hook fires on is an allow list rather than free text, and that is the refusal worth knowing
+  about. A misspelled event imports, attaches, mounts and is never called, and a hook that is never
+  called cannot be told from one that approves of everything. The import is the only moment anybody is
+  looking, so it is refused there, by name, with the events that exist.
+
+  The files are mounted read only at `/home/agent/hooks`, and a settings file the crew owns outright
+  is rendered beside them and loaded with `claude --settings`. Not into the conversation directory's
+  own settings, which the runtime writes and the operator edits: that would mean merging on every turn
+  and losing an edit the first time the merge was wrong. Both the dispatched turn and the attached
+  conversation load it, because a gate that only runs on dispatched turns is one you walk around by
+  opening the thread.
+
+  A hook reaches a container when the container is built and never after, so `quay hook attach` says
+  so every time. Somebody who believes a gate is on when it is not is worse off than somebody who
+  knows there is no gate.
+
+  Proved against a real container rather than a double: the command the settings file names is run
+  inside the container, by absolute path, and the mount is checked to be read only by trying to
+  rewrite the file that binds the hooks. A session that can edit what constrains it is not constrained.
+
 - **Starting a thread from the console no longer waits for its first turn.** Creating a session in
   the wizard failed, and the operator read the failure as the container being slow to start. Neither
   half was true. The wizard put a thirty second deadline on the call, and a dispatch runs the whole

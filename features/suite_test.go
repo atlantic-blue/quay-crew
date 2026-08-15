@@ -480,6 +480,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeHookSteps(sc)
+	initializeHookSandboxSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
