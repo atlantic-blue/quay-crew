@@ -65,6 +65,13 @@ RUN arch="$(uname -m)" \
     && rm -rf /tmp/awscli.zip /tmp/aws \
     && apt-get remove -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
+# Go, so a session can build and test the repository it is sitting inside: quay-crew is Go only,
+# and `make fmt`, `make lint` and `go test` all need the toolchain. Copied from the stage that
+# already built quay rather than downloaded again, so the sandbox never carries a Go that
+# disagrees with the one quay itself was built with.
+COPY --from=tool /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+
 RUN npm install -g @anthropic-ai/claude-code
 
 # Reaching the control plane is a separate decision, made once in configuration: without a network

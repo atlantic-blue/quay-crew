@@ -27,8 +27,8 @@ You need Docker and a Claude subscription.
    make sandbox-image
    ```
 
-   This builds `quaycrew-sandbox-claude:local` from `deploy/sandbox/claude.Dockerfile` (Node, the
-   Claude Code CLI, git, and ripgrep, running as a non-root user).
+   This builds `quaycrew-sandbox-claude:local` from `deploy/sandbox/claude.Dockerfile` (Node, Go,
+   the Claude Code CLI, git, and ripgrep, running as a non-root user).
 
 3. Say which model and image the stack runs, once, then start it:
 

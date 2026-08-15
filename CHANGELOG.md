@@ -8,6 +8,10 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **Go, in the sandbox image.** A session working on this repository could read the Go source and
+  never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
+  carried none. Copied from the stage that already builds `quay` rather than downloaded again, so
+  the sandbox never carries a Go that disagrees with the one `quay` itself was built with.
 - **Starting a thread from the console no longer waits for its first turn.** Creating a session in
   the wizard failed, and the operator read the failure as the container being slow to start. Neither
   half was true. The wizard put a thirty second deadline on the call, and a dispatch runs the whole
