@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **A session can sign a commit.** Signing landed on 13 August and never worked. Git makes an ssh format
+  signature by running `ssh-keygen`, and the sandbox image did not carry it, so a workspace with a
+  signing key configured could not commit at all: git answered `cannot run ssh-keygen` before it read
+  the key. Every commit in every sandbox failed, whatever the key was. The image now installs
+  `openssh-client` alongside git, and an integration test makes a commit in a container the crew
+  built and checks git verifies the signature against the public half of the workspace's key. Run
+  against the image without the package, that test reproduces the original failure exactly.
+
 - **A secret can reach a session as a file.** Some credentials are not values. A git configuration, a
   private key, a cloud credentials file: a tool opens each one by path, so there was nothing a crew
   could do for them. One credential had already been forced through, the ssh signing key, by a script
