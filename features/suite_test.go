@@ -494,6 +494,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
+	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)

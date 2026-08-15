@@ -35,6 +35,18 @@ read, or run with `make features`.
   host's disk. Proved against the real daemon and the real image: without the owner on the mount the
   write is refused, which is what the measurement showed before the code was written.
 
+- **A fix to a shipped hook can now reach a crew that already has it.** Seeding both imported and
+  attached, and both only into a crew holding no hooks at all, which is no crew that has ever been
+  used. So the analyser's credential fix above landed in the repository, shipped in the image, and
+  reached nobody: an upgraded crew kept running the version it was seeded with, and the only way to
+  see that was to read the hook's own file inside a container.
+
+  The two halves are separate now. Importing runs on every start, so a newer version of a shipped hook
+  reaches the catalogue of any crew that upgrades. Attaching still runs only into a crew that held
+  nothing, so an operator who took a hook off keeps it off, and an upgrade never moves a crew onto a
+  newer version of a constraint by itself. A hook is pinned so it cannot change under a running
+  session, and `quay hook attach` is how somebody decides to take the new one.
+
 - **The analyser's child model call keeps the credential it needs.** It shipped stripping every
   `CLAUDE_` variable before running its child, so the child would not inherit what the running session
   set for itself. On a machine with a logged in install that costs nothing, because the credential is
