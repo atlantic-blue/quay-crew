@@ -34,6 +34,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// Where a thread is. These four are the whole vocabulary of Thread.status, written down here because
+// the console colours by them and a fifth invented at a call site would come out uncoloured.
+const (
+	// StatusIdle is a thread waiting for you: no turn is running and the last one landed.
+	StatusIdle = "idle"
+	// StatusRunning is a turn under way. A detached dispatch sets it before it answers, so the
+	// listing drawn straight afterwards says the thread is busy rather than ready.
+	StatusRunning = "running"
+	// StatusFailed is a thread whose last turn did not land. The turn record carries why.
+	StatusFailed = "failed"
+	// StatusStopped is a thread that was put down. Its sandbox is gone and its history is not.
+	StatusStopped = "stopped"
+)
+
 // Info is what this control plane is running, reported over the API so an operator can see which
 // crew they are about to act on. It is configuration: never a secret, and never a health verdict.
 type Info struct {
@@ -145,6 +159,9 @@ type Server struct {
 	// describing counts the descriptions still being written, so a test can wait for them rather than
 	// sleeping and a shutdown can tell whether any are in flight.
 	describing sync.WaitGroup
+	// turning counts the detached turns still running, for the same reasons: a turn nobody is waiting
+	// on is still a turn, and a process that cannot count them cannot tell whether it is idle.
+	turning sync.WaitGroup
 	// skills are the capabilities a session is given, and where they are on the host.
 	skills       []skill.Skill
 	skillsHost   string
@@ -638,7 +655,7 @@ func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) {
 		return
 	}
 	for _, session := range sessions {
-		if session.GetStatus() != "stopped" {
+		if session.GetStatus() != StatusStopped {
 			_ = s.store.StopSession(ctx, session.GetId())
 		}
 		s.closeSandbox(ctx, session.GetId())
@@ -659,9 +676,49 @@ func (s *Server) ReapStrays(ctx context.Context) {
 		case errors.Is(err, store.ErrNotFound):
 			_ = s.provider.Remove(ctx, id)
 		case err != nil:
-		case session.GetArchivedAt() != nil, session.GetStatus() == "stopped":
+		case session.GetArchivedAt() != nil, session.GetStatus() == StatusStopped:
 			_ = s.provider.Remove(ctx, id)
 		}
+	}
+}
+
+// WaitForTurns blocks until every detached turn has landed, or until the caller gives up.
+//
+// A detached turn is a goroutine and not a call, so draining requests does not drain it: a graceful
+// stop that skips this exits mid turn, and the thread comes back up settled as failed for no better
+// reason than that nobody waited. Bounded by the caller, because a turn takes as long as the work
+// takes and a shutdown cannot.
+func (s *Server) WaitForTurns(ctx context.Context) {
+	landed := make(chan struct{})
+	go func() {
+		defer close(landed)
+		s.turning.Wait()
+	}()
+	select {
+	case <-landed:
+	case <-ctx.Done():
+	}
+}
+
+// SettleTurns marks every thread the store still calls running as failed, and runs once at startup.
+//
+// A turn runs in this process. Nothing survives the process going down, so a row saying running on
+// the way up is a turn that died with the last one, and leaving it says a thread is busy for as long
+// as the crew lives. That reads as a hung conversation and there is nothing to wait for.
+func (s *Server) SettleTurns(ctx context.Context) {
+	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
+	if err != nil {
+		return
+	}
+	for _, session := range sessions {
+		if session.GetStatus() != StatusRunning {
+			continue
+		}
+		s.recordTurn(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
+		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
+			Status:  StatusFailed,
+			Failure: "the crew restarted while this turn was running, so it did not finish",
+		})
 	}
 }
 
@@ -836,31 +893,61 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		session.PermissionMode = mode
 	}
 
+	if req.GetDetach() {
+		// Marked running before the goroutine starts, not inside it: the caller is about to be told the
+		// thread exists, and a thread that reads idle in the listing it draws next is a thread the
+		// operator will type into while its first turn is still running.
+		s.recordTurn(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+		// Detached from the caller's context as well as from its patience. The caller is a console that
+		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a turn
+		// carrying that context would be killed by the very thing that started it.
+		s.turning.Add(1)
+		go func(session *quaycrewv1.Thread, text string) {
+			defer s.turning.Done()
+			_, _ = s.turn(context.WithoutCancel(ctx), session, text)
+		}(session, req.GetText())
+		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread}, nil
+	}
+
+	reply, err := s.turn(ctx, session, req.GetText())
+	if err != nil {
+		return nil, err
+	}
+	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread, Reply: reply}, nil
+}
+
+// turn runs one turn of a thread and records what came of it, whichever way it was dispatched. Both
+// roads meet here so a detached turn and a waited one cannot come to mean different things: the same
+// sandbox, the same recording, the same description behind it.
+func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text string) (string, error) {
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
-		s.recordTurn(ctx, session.GetId(), "", "failed")
+		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
 		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
-			Prompt: req.GetText(), Status: "failed", Failure: "the session's sandbox could not be created",
+			Prompt: text, Status: StatusFailed, Failure: "the session's sandbox could not be created: " + err.Error(),
 		})
-		return nil, sandboxError(err, "create sandbox")
+		return "", sandboxError(err, "create sandbox")
 	}
 
 	resp, err := s.runner.Run(ctx, box, model.Request{
-		Text:           req.GetText(),
+		Text:           text,
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session, s.birthMode),
 		Env:            s.turnEnv(ctx, session),
 	})
 	if err != nil {
-		s.recordTurn(ctx, session.GetId(), "", "failed")
+		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
+		// The error itself, not a sentence about turns. Every failure used to read "the model did not
+		// complete the turn", so a deadline, a crash and a refusal were one indistinguishable line and
+		// the operator had nothing to act on.
 		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
-			Prompt: req.GetText(), Status: "failed", Failure: "the model did not complete the turn",
+			Prompt: text, Status: StatusFailed, Failure: turnFailure(err),
 		})
-		return nil, status.Errorf(codes.Internal, "run turn: %v", err)
+		return "", status.Errorf(codes.Internal, "run turn: %v", err)
 	}
-	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, "idle")
+	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
 	s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
-		Prompt: req.GetText(), Reply: resp.Reply, Status: "idle",
+		Prompt: text, Reply: resp.Reply, Status: StatusIdle,
 	})
 
 	// Behind the answer, so the operator waits for their turn rather than for the crew to think of a
@@ -872,7 +959,23 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		s.describeThread(context.WithoutCancel(ctx), threadID)
 	}(session.GetId())
 
-	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread, Reply: resp.Reply}, nil
+	return resp.Reply, nil
+}
+
+// turnFailure is what the operator is told a failed turn failed of.
+//
+// A cancelled turn is named for what actually happened to it, because "context canceled" describes
+// the plumbing rather than the event, and the two causes need telling apart: a deadline is a caller
+// that would not wait, and a cancellation is a caller that went away.
+func turnFailure(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "the turn ran past the time the caller allowed it"
+	case errors.Is(err, context.Canceled):
+		return "the turn was cancelled before it finished"
+	default:
+		return err.Error()
+	}
 }
 
 // permissionModeOf is the mode a thread's turns run in. A thread from before the mode was written
@@ -1427,7 +1530,7 @@ func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadR
 		}
 		session.ModelSessionId = named
 	}
-	if session.GetStatus() == "stopped" {
+	if session.GetStatus() == StatusStopped {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"thread %s is stopped: restart it first", display.ShortID(session.GetHandle()))
 	}
@@ -1467,7 +1570,7 @@ func (s *Server) RestartThread(ctx context.Context, req *quaycrewv1.RestartThrea
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	if session.GetStatus() != "stopped" {
+	if session.GetStatus() != StatusStopped {
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"session %s is %s, not stopped, so there is nothing to restart", req.GetId(), session.GetStatus())
 	}
@@ -1499,7 +1602,7 @@ func (s *Server) ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThrea
 	}
 	// A container left running for a thread nobody can see is exactly the leak this project keeps
 	// finding, so put the sandbox away with the thread.
-	if session.GetStatus() != "stopped" {
+	if session.GetStatus() != StatusStopped {
 		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
 			return nil, storeError(err, "session")
 		}

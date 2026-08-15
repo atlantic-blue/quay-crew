@@ -177,6 +177,44 @@ Feature: The operator sees the crew from the console
     And the crew has 1 workspace
     And the crew has 1 project
 
+  # A turn takes as long as the work takes, which is minutes, and the console has a screen to draw.
+  # The wizard waited for one anyway: it held every key while it waited, gave up at thirty seconds,
+  # and left behind a thread with a container, a row, and no conversation in it. The operator saw a
+  # frozen "making it" and then an error, and read the freeze as the container being slow to start.
+  #
+  # The turn is held open here rather than timed, because what is being specified is what is true
+  # while a turn runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: The wizard comes back before the turn it started has finished
+    Given the model takes longer over a turn than anybody will wait
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | dangerous   |
+      | hello       |
+    Then the console is asking nothing
+    And the crew has 1 session
+    And a turn is under way
+    And the crew's one thread is reported as running
+    When the model finishes the turn
+    Then the crew's one thread is reported as idle
+    And the thread carries what the model said
+
+  # A turn runs inside the crew's own process, so nothing of it survives that process going down. A
+  # row still saying running on the way up is a turn that died with the last one, and left alone it
+  # reads as a conversation that has been thinking since the restart.
+  Scenario: A thread left mid turn by a restart is settled rather than left running
+    Given the model takes longer over a turn than anybody will wait
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+      | dangerous   |
+      | hello       |
+    And a turn is under way
+    And the control plane restarts
+    Then the crew's one thread is reported as failed
+
   # Escape at any point makes nothing at all. The last row here is typed and never accepted, so escape
   # lands on a half answered question rather than on a finished one.
   #

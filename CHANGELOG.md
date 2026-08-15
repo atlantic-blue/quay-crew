@@ -8,6 +8,33 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **Starting a thread from the console no longer waits for its first turn.** Creating a session in
+  the wizard failed, and the operator read the failure as the container being slow to start. Neither
+  half was true. The wizard put a thirty second deadline on the call, and a dispatch runs the whole
+  model turn before it answers, so any first message worth sending was killed by the deadline. What
+  was left behind was a thread with a container, a row, and no conversation in it. Measured on the
+  machine that reported it: a bare `docker run` of the sandbox image takes 0.24 seconds, and a
+  command line dispatch that created a fresh container and answered a short prompt took 4.0 seconds.
+  The wait was the wizard holding the screen, not the daemon.
+
+  A dispatch can now detach: it answers as soon as the thread exists and runs the turn behind the
+  answer. The console uses it, so the wizard closes at once and the row says `running` until the turn
+  lands. The command line and the flow engine still wait, because both want the reply. Driven for
+  real afterwards through the console: the wizard came back in under a second, and the turn ran for
+  87.56 seconds, nearly three times the deadline that used to kill it, then landed as `idle`.
+
+  Two things fall out of it. A turn runs in the crew's own process, so a thread the store still calls
+  running when the crew starts is one whose turn died with the last process; startup settles those
+  rather than leaving a conversation that appears to have been thinking since the restart. And a
+  graceful stop now waits for turns as well as for calls, because a detached turn is a goroutine and
+  draining requests does not drain it.
+
+- **A failed turn says what actually failed.** Every failure read "the model did not complete the
+  turn", so a deadline, a crash and a refusal were one line with nothing to act on in it. That
+  sentence is what sent this bug to the wrong place: the record said the model had not finished, when
+  the caller had stopped waiting. The reason is recorded now, and a turn killed by a deadline or a
+  cancellation is named for what happened to it rather than for the plumbing underneath.
+
 - **A thread says what it is about, written by the crew.** A label fixes a listing only for the
   threads somebody stopped to name, and naming things is work nobody does consistently. A thread now
   describes itself after its first turn, and again once the conversation has moved ten turns past that

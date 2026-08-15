@@ -635,8 +635,12 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the context for %s: %w", plan.where(), err)}
 			}
 		case kindSession:
+			// Detached, because a turn takes as long as the work takes and the console has a screen to
+			// draw. Waiting for one meant the wizard held every key until the thirty second deadline
+			// below killed the turn, and the thread it left had a container, a row, and no
+			// conversation. The row says running until it lands.
 			if _, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-				Project: plan.project.id, Text: plan.message, PermissionMode: plan.mode,
+				Project: plan.project.id, Text: plan.message, PermissionMode: plan.mode, Detach: true,
 			}); err != nil {
 				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("a session in %s: %w", plan.where(), err)}
 			}

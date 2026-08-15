@@ -37,6 +37,8 @@ message Thread {
   // handle is the name a channel dispatches to: dispatch to the same handle and the conversation
   // continues. It is chosen by whoever starts the thread, or minted when nobody did.
   string handle = 3;
+  // status is where the thread is: "idle" when it is waiting for you, "running" while a turn is under
+  // way, "failed" when the last turn did not land, and "stopped" when the thread was put down.
   string status = 4;
   // model_session_id is the model's own identifier for the conversation, in the model's own word,
   // used to resume it.
@@ -268,10 +270,20 @@ message DispatchRequest {
   // It travels with the dispatch that starts a thread because a sandbox is born with its
   // capabilities and never drifts. Starting a thread and then changing its mode costs a restart.
   string permission_mode = 4;
+  // detach answers as soon as the thread exists and runs the turn behind the answer. The reply comes
+  // back empty, because there is not one yet: the thread reads "running" until the turn lands, and
+  // its turns say what came back.
+  //
+  // It is what a surface that draws a screen needs. A turn takes as long as the work takes, which is
+  // minutes, and a caller that waits for one is a caller that is not drawing anything. The console
+  // waited, gave up at thirty seconds, and left a thread whose conversation never happened.
+  bool detach = 5;
 }
 message DispatchResponse {
   string id = 1;
   string handle = 2;
+  // reply is what the model said, and is empty when the request detached: the turn is still running,
+  // so there is nothing to say yet.
   string reply = 3;
 }
 

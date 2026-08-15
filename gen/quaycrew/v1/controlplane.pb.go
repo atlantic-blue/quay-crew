@@ -225,6 +225,8 @@ type Thread struct {
 	// handle is the name a channel dispatches to: dispatch to the same handle and the conversation
 	// continues. It is chosen by whoever starts the thread, or minted when nobody did.
 	Handle string `protobuf:"bytes,3,opt,name=handle,proto3" json:"handle,omitempty"`
+	// status is where the thread is: "idle" when it is waiting for you, "running" while a turn is under
+	// way, "failed" when the last turn did not land, and "stopped" when the thread was put down.
 	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	// model_session_id is the model's own identifier for the conversation, in the model's own word,
 	// used to resume it.
@@ -2311,8 +2313,16 @@ type DispatchRequest struct {
 	// It travels with the dispatch that starts a thread because a sandbox is born with its
 	// capabilities and never drifts. Starting a thread and then changing its mode costs a restart.
 	PermissionMode string `protobuf:"bytes,4,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// detach answers as soon as the thread exists and runs the turn behind the answer. The reply comes
+	// back empty, because there is not one yet: the thread reads "running" until the turn lands, and
+	// its turns say what came back.
+	//
+	// It is what a surface that draws a screen needs. A turn takes as long as the work takes, which is
+	// minutes, and a caller that waits for one is a caller that is not drawing anything. The console
+	// waited, gave up at thirty seconds, and left a thread whose conversation never happened.
+	Detach        bool `protobuf:"varint,5,opt,name=detach,proto3" json:"detach,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DispatchRequest) Reset() {
@@ -2373,11 +2383,20 @@ func (x *DispatchRequest) GetPermissionMode() string {
 	return ""
 }
 
+func (x *DispatchRequest) GetDetach() bool {
+	if x != nil {
+		return x.Detach
+	}
+	return false
+}
+
 type DispatchResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Handle        string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
-	Reply         string                 `protobuf:"bytes,3,opt,name=reply,proto3" json:"reply,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Handle string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
+	// reply is what the model said, and is empty when the request detached: the turn is still running,
+	// so there is nothing to say yet.
+	Reply         string `protobuf:"bytes,3,opt,name=reply,proto3" json:"reply,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5068,12 +5087,13 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\tR\x05value\"\x13\n" +
-	"\x11SetSecretResponse\"\x80\x01\n" +
+	"\x11SetSecretResponse\"\x98\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12'\n" +
-	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\"P\n" +
+	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\x12\x16\n" +
+	"\x06detach\x18\x05 \x01(\bR\x06detach\"P\n" +
 	"\x10DispatchResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x14\n" +

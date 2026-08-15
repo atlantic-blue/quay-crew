@@ -165,6 +165,10 @@ func main() {
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
+	// And what was mid turn when the crew went down is settled the same way: a turn runs in this
+	// process, so a thread the store still calls running is one whose turn died with the last one.
+	server.SettleTurns(ctx)
+
 	// A crew with no skills at all is a fresh one, and it starts with the ones this build ships
 	// with rather than making every operator import them by hand. Only ever on an empty catalogue,
 	// so it is a starting point and not a policy that undoes a decision.
@@ -189,6 +193,13 @@ func main() {
 	<-ctx.Done()
 	logger.Info("shutting down")
 	grpcServer.GracefulStop()
+
+	// Draining requests is not draining turns: a detached turn is a goroutine nobody is calling, so
+	// without this the process exits mid turn and the thread comes back up settled as failed. Given a
+	// minute, which is a turn's grace and not its length.
+	turnsCtx, doneWaiting := context.WithTimeout(context.Background(), time.Minute)
+	server.WaitForTurns(turnsCtx)
+	doneWaiting()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

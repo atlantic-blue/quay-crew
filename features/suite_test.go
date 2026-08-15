@@ -85,14 +85,54 @@ type recordingRunner struct {
 	// with an instant model a whole automation finishes before the next step runs, and a scenario
 	// about stopping one would be racing rather than specifying.
 	takes time.Duration
+	// gate holds every turn open until it is closed, which is takes without the guesswork: a scenario
+	// about what is true *while* a turn runs cannot be written against a clock, because the clock is
+	// a different length on every machine. Nil runs straight through.
+	gate chan struct{}
+	// started is closed when the first turn begins, so a scenario can know a turn is genuinely under
+	// way rather than infer it from how long a step took.
+	started chan struct{}
+	once    sync.Once
+}
+
+// hold makes every turn wait, and returns the func that lets them go.
+func (r *recordingRunner) hold() func() {
+	r.mu.Lock()
+	r.gate, r.started = make(chan struct{}), make(chan struct{})
+	gate := r.gate
+	r.mu.Unlock()
+	return func() { close(gate) }
+}
+
+// waitForTurn blocks until a turn has reached the runner, so a scenario never asserts on a thread
+// whose turn has not started yet.
+func (r *recordingRunner) waitForTurn() error {
+	r.mu.Lock()
+	started := r.started
+	r.mu.Unlock()
+	if started == nil {
+		return fmt.Errorf("no turn was held, so there is nothing to wait for")
+	}
+	select {
+	case <-started:
+		return nil
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("no turn reached the model runner")
+	}
 }
 
 var _ model.Runner = (*recordingRunner)(nil)
 
 func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes := r.takes
+	takes, gate, started := r.takes, r.gate, r.started
 	r.mu.Unlock()
+	if started != nil {
+		r.once.Do(func() { close(started) })
+	}
+	if gate != nil {
+		<-gate
+	}
 	if takes > 0 {
 		time.Sleep(takes)
 	}
@@ -174,6 +214,8 @@ type world struct {
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
+	// release lets go of a turn a scenario is holding open, and is nil when none is held.
+	release func()
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
@@ -242,6 +284,18 @@ func (w *world) eventLog() messaging.EventLog {
 	return w.events
 }
 
+// settled waits for every detached turn to land, so a scenario asserting on what a turn left behind
+// is never asserting on a turn still running. The same wait the real shutdown does.
+func (w *world) settled(ctx context.Context) error {
+	waiting, giveUp := context.WithTimeout(ctx, 10*time.Second)
+	defer giveUp()
+	w.server.WaitForTurns(waiting)
+	if waiting.Err() != nil {
+		return fmt.Errorf("a detached turn never landed")
+	}
+	return nil
+}
+
 // restart tears the control plane down and stands a new one up over the same store, model and
 // sandbox provider, which is what a process restart looks like from the outside. Anything the new
 // instance can still see was in the store rather than in the old process.
@@ -261,8 +315,10 @@ func (w *world) serve() error {
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
-	// The way the real main starts: what strays while the crew is down is reaped on the way up.
+	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
+	// a thread the store still calls running is settled, because its turn died with the last process.
 	w.server.ReapStrays(context.Background())
+	w.server.SettleTurns(context.Background())
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, w.server)
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -419,6 +475,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSkillSteps(sc)
 	initializeSigningSteps(sc)
 	initializeWizardModeSteps(sc)
+	initializeDetachSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
