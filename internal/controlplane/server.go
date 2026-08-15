@@ -802,6 +802,15 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	if err := secret.Validate(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	// The signing key used to be set, and setting it now would put the private key in every
+	// container's environment, where docker inspect reads it for the life of the container. Refused
+	// rather than quietly accepted and ignored: a key that looks stored and never signs anything is
+	// worse than one that was never accepted.
+	if secret.Name == SigningKeySecret && secret.Projection.Or() != secrets.File {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"a signing key is mounted, not set: quay secret mount %s %s <path to the private key>",
+			req.GetWorkspace(), SigningKeySecret)
+	}
 	if err := s.secrets.Set(ctx, req.GetWorkspace(), secret); err != nil {
 		return nil, status.Errorf(codes.Internal, "set secret: %v", err)
 	}

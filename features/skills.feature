@@ -369,16 +369,16 @@ Feature: A session is given the skills the crew has
     Then the workspace context carries "the vendor prefers invoices on Fridays"
 
   # A session commits as the operator, and on a repository that requires verified signatures a commit
-  # it cannot sign produces a branch nobody can merge. The key travels the way every other credential
-  # does, as a workspace secret, and the sandbox writes it out once when it is born.
+  # it cannot sign produces a branch nobody can merge. The key is mounted, so it lands in the
+  # sandbox as a file and the crew never handles the value at all.
   #
   # An ssh key rather than a gpg one: signing with ssh needs one private key file and no agent, no
   # keyring and no pinentry prompt to hang a turn nobody is watching.
-  Scenario: A workspace holding a signing key gets sandboxes that sign
-    Given the workspace has the secret "GIT_SSH_SIGNING_KEY" set to "-----BEGIN OPENSSH PRIVATE KEY-----"
+  Scenario: A workspace mounting a signing key gets sandboxes that sign
+    Given the workspace mounts the secret "GIT_SSH_SIGNING_KEY" holding "-----BEGIN OPENSSH PRIVATE KEY-----"
     When the operator dispatches "hello" to the project
     Then the sandbox was set up to sign commits
-    And the signing key was never passed as an argument
+    And the sandbox is given the file "/run/secrets/GIT_SSH_SIGNING_KEY" holding "-----BEGIN OPENSSH PRIVATE KEY-----"
 
   # A private key is the most sensitive thing this crew would carry, so a workspace that has not
   # opted in gets no key, and nothing pointed at one.
@@ -389,3 +389,10 @@ Feature: A session is given the skills the crew has
   Scenario: A workspace with no signing key gets no key
     When the operator dispatches "hello" to the project
     Then no signing key reaches the sandbox
+
+  # The way off the old form. Setting it put the private key in every container's environment for the
+  # life of the container, and a refusal that does not say what to type instead is a dead end.
+  Scenario: Setting a signing key, rather than mounting it, is refused
+    When the operator tries to set the secret "GIT_SSH_SIGNING_KEY" to "-----BEGIN OPENSSH PRIVATE KEY-----"
+    Then the crew refuses it, saying to mount the key instead
+
