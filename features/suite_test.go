@@ -18,6 +18,8 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -219,6 +221,9 @@ type world struct {
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
 	// attachment does and does not reach.
 	otherWorkspaceID string
+	// seedHooks says this scenario is a crew that seeds the shipped hooks, so a restart seeds again
+	// the way the real main does.
+	seedHooks bool
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
@@ -322,6 +327,12 @@ func (w *world) serve() error {
 	// a thread the store still calls running is settled, because its turn died with the last process.
 	w.server.ReapStrays(context.Background())
 	w.server.SettleTurns(context.Background())
+	// The way the real main starts, for a scenario about what survives a restart: the shipped hooks
+	// are offered again, and a crew that already holds some is left exactly as it is.
+	if w.seedHooks {
+		w.server.SeedHooks(context.Background(), "../hooks",
+			slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, w.server)
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
@@ -481,6 +492,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDetachSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
+	initializeSeededHookSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)

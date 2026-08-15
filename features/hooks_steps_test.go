@@ -3,6 +3,8 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -190,4 +192,27 @@ func importOf(name string, version int, event, matcher, body string) *quaycrewv1
 		{Path: "hook.yaml", Body: []byte(manifest)},
 		{Path: "bin/hook", Body: []byte("#!/bin/sh\n" + body + "\n"), Executable: true},
 	}}
+}
+
+// The hooks this build ships, seeded the way the real main seeds them at startup.
+func initializeSeededHookSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^a crew seeded with the hooks this build ships$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		w.seedHooks = true
+		w.server.SeedHooks(ctx, "../hooks", slog.New(slog.NewTextHandler(io.Discard, nil)))
+		return nil
+	})
+
+	sc.Step(`^the crew holds the "([^"]*)" hook$`, func(ctx context.Context, name string) error {
+		listed, err := worldFrom(ctx).client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
+		if err != nil {
+			return err
+		}
+		for _, one := range listed.GetHooks() {
+			if one.GetName() == name {
+				return nil
+			}
+		}
+		return fmt.Errorf("the crew does not hold %s: %+v", name, listed.GetHooks())
+	})
 }

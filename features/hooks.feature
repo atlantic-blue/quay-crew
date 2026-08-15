@@ -101,3 +101,18 @@ Feature: A hook is a constraint the crew holds
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries no hooks directory
     And the turn was not told to load any settings
+
+  # The crew ships the analyser because it only adds context and can never wrongly refuse. Anything
+  # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the work.
+  Scenario: A fresh crew is already under the hooks this build ships
+    Given a crew seeded with the hooks this build ships
+    Then the crew holds the "prompt-analyser" hook
+    And the workspace runs under 1 hook
+
+  # An operator who takes a hook off has said something. Putting it back on the next restart is the
+  # crew overruling the person operating it.
+  Scenario: A hook taken off the crew stays off across a restart
+    Given a crew seeded with the hooks this build ships
+    When the operator takes the hook "prompt-analyser" off the crew
+    And the control plane restarts
+    Then the workspace runs under 0 hooks

@@ -1,0 +1,14 @@
+{
+  "_comment": "Config for the prompt-analyser hook inside a quay sandbox. The paths are the sandbox's, not the operator's machine: skills are mounted at /home/agent/skills and the crew writes what a session is told into /home/agent/.claude/CLAUDE.md. Everything is optional and falls back to the default in lib/analyser.ts.",
+  "model": "haiku",
+  "timeoutMs": 12000,
+  "maxAnalysisChars": 1400,
+  "maxDocChars": 4000,
+  "skillDirs": [
+    "/home/agent/skills"
+  ],
+  "docs": [],
+  "rulesFile": "/home/agent/.claude/CLAUDE.md",
+  "skip": [],
+  "lastRunFile": "/tmp/prompt-analyser.last"
+}
