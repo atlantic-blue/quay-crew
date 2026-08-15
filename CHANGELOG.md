@@ -6,6 +6,18 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 16 August 2026
+
+- **The sandbox image pins Claude Code.** It was installed at whatever the registry called latest on
+  the day the image was built, so two builds of the same commit produced two different images and
+  nothing recorded which one a session ran. `gh`, terraform and the AWS command line were already
+  pinned; the model runtime, the one thing a session cannot work without, was not.
+
+  It is `CLAUDE_CODE_VERSION` now, and raising it is a deliberate change with a commit behind it.
+  Two checks: one refuses any global install in this image that does not name a version, so the next
+  tool added unpinned fails here rather than months later, and one asks the built image what it runs,
+  because a pin the registry quietly ignores reads exactly like a pin that works.
+
 ## 15 August 2026
 
 - **Go, in the sandbox image.** A session working on this repository could read the Go source and
