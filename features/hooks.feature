@@ -116,3 +116,19 @@ Feature: A hook is a constraint the crew holds
     When the operator takes the hook "prompt-analyser" off the crew
     And the control plane restarts
     Then the workspace runs under 0 hooks
+
+  # A fix to a shipped hook has to be able to reach a crew that is already using it. Seeding once
+  # reached only a crew with no hooks at all, which is no crew that has ever been used, and the
+  # analyser's first fix was stranded there.
+  Scenario: A newer version of a shipped hook reaches a crew that already holds an older one
+    Given a crew already under version 1 of "prompt-analyser"
+    When the control plane restarts
+    Then the crew holds "prompt-analyser" at version 2
+
+  # Importing offers it. Being under it is a separate decision, because a hook is pinned so it cannot
+  # change under a session already running with it.
+  Scenario: An upgrade does not move a crew onto a newer version of a hook by itself
+    Given a crew already under version 1 of "prompt-analyser"
+    When the control plane restarts
+    Then the workspace is still under "prompt-analyser" at version 1
+    And attaching it again moves the workspace to version 2

@@ -1,5 +1,5 @@
 name: prompt-analyser
-version: 1
+version: 2
 summary: Reads every message and hands the session a short brief beside it, never replacing what was typed.
 events:
   - on: UserPromptSubmit

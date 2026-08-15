@@ -216,3 +216,108 @@ func initializeSeededHookSteps(sc *godog.ScenarioContext) {
 		return fmt.Errorf("the crew does not hold %s: %+v", name, listed.GetHooks())
 	})
 }
+
+// Versions of a shipped hook, which is how a fix reaches a crew that already has one.
+func initializeHookVersionSteps(sc *godog.ScenarioContext) {
+	// The crew as it was before this build: holding, and under, an earlier version of a hook this
+	// build also ships. Seeded by hand at version 1, so the shipped one is genuinely newer and the
+	// upgrade has something to do.
+	sc.Step(`^a crew already under version (\d+) of "([^"]*)"$`,
+		func(ctx context.Context, version int, name string) error {
+			w := worldFrom(ctx)
+			w.seedHooks = true
+			if _, err := w.client.ImportHook(ctx, importAt(name, version)); err != nil {
+				return err
+			}
+			if _, err := w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
+				Scope: "crew", Name: name,
+			}); err != nil {
+				return err
+			}
+			return nil
+		})
+
+	sc.Step(`^the crew holds "([^"]*)" at version (\d+)$`,
+		func(ctx context.Context, name string, want int) error {
+			got, err := newestHeld(ctx, name)
+			if err != nil {
+				return err
+			}
+			if got != int32(want) {
+				// The catalogue is what the crew could run. A fix that never reaches it can never be
+				// taken by anybody.
+				return fmt.Errorf("the newest %s the crew holds is version %d, want %d", name, got, want)
+			}
+			return nil
+		})
+
+	sc.Step(`^the workspace is still under "([^"]*)" at version (\d+)$`,
+		func(ctx context.Context, name string, want int) error {
+			got, err := workspaceVersion(ctx, name)
+			if err != nil {
+				return err
+			}
+			if got != int32(want) {
+				return fmt.Errorf("an upgrade moved the crew to version %d on its own, and a hook is pinned so it cannot change under a running session",
+					got)
+			}
+			return nil
+		})
+
+	sc.Step(`^attaching it again moves the workspace to version (\d+)$`,
+		func(ctx context.Context, want int) error {
+			w := worldFrom(ctx)
+			if _, err := w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
+				Scope: "crew", Name: "prompt-analyser",
+			}); err != nil {
+				return err
+			}
+			got, err := workspaceVersion(ctx, "prompt-analyser")
+			if err != nil {
+				return err
+			}
+			if got != int32(want) {
+				return fmt.Errorf("attaching again left the workspace on version %d, want %d", got, want)
+			}
+			return nil
+		})
+}
+
+// newestHeld is the newest version of a hook in the crew's catalogue.
+func newestHeld(ctx context.Context, name string) (int32, error) {
+	listed, err := worldFrom(ctx).client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
+	if err != nil {
+		return 0, err
+	}
+	for _, one := range listed.GetHooks() {
+		if one.GetName() == name {
+			return one.GetVersion(), nil
+		}
+	}
+	return 0, fmt.Errorf("the crew does not hold %s at all", name)
+}
+
+// workspaceVersion is the version of a hook the workspace's sessions actually run under.
+func workspaceVersion(ctx context.Context, name string) (int32, error) {
+	w := worldFrom(ctx)
+	listed, err := w.client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{Workspace: w.workspaceID})
+	if err != nil {
+		return 0, err
+	}
+	for _, one := range listed.GetHooks() {
+		if one.GetName() == name {
+			return one.GetVersion(), nil
+		}
+	}
+	return 0, fmt.Errorf("the workspace is not under %s", name)
+}
+
+// importAt is a hook on the wire at a given version, standing in for one an earlier build shipped.
+func importAt(name string, version int) *quaycrewv1.ImportHookRequest {
+	manifest := fmt.Sprintf("name: %s\nversion: %d\nsummary: An earlier build's version.\nevents:\n  - on: UserPromptSubmit\n    entry: bin/hook\n",
+		name, version)
+	return &quaycrewv1.ImportHookRequest{Files: []*quaycrewv1.HookFile{
+		{Path: "hook.yaml", Body: []byte(manifest)},
+		{Path: "bin/hook", Body: []byte("#!/bin/sh\nexit 0\n"), Executable: true},
+	}}
+}
