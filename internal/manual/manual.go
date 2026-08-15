@@ -78,6 +78,14 @@ commands:
                                           crew where the workspace goes and every workspace holds
                                           it, including the ones made later
   skill detach [<workspace>] <name>       take a skill away from a workspace, or from the crew
+  hook import <directory>                 take a hook into the crew from its directory. A hook is a
+                                          constraint a session runs under, checked when it acts
+  hook list [<workspace>]                 what the crew enforces, or what one workspace runs under
+  hook attach [<workspace>] <name>        put a workspace's sessions under a hook. Say crew where
+                                          the workspace goes and every workspace is under it. A
+                                          thread already running is not: a hook reaches a sandbox
+                                          when the sandbox is built
+  hook detach [<workspace>] <name>        take a hook away from a workspace, or from the crew
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
 may be the shortened id a listing prints. An address typed on the command line applies to that

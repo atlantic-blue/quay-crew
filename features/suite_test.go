@@ -216,6 +216,9 @@ type world struct {
 	server *controlplane.Server
 	// release lets go of a turn a scenario is holding open, and is nil when none is held.
 	release func()
+	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
+	// attachment does and does not reach.
+	otherWorkspaceID string
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
@@ -476,6 +479,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSigningSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
+	initializeHookSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)

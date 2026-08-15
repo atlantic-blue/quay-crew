@@ -165,6 +165,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSecret(ctx, client, args[1:], out)
 	case "skill":
 		return runSkill(ctx, client, args[1:], out)
+	case "hook":
+		return runHook(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
 	case "repository":
