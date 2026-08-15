@@ -133,6 +133,18 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
 
+## What the image pins
+
+Every tool the image installs names its version, as a build argument at the top of the step that
+installs it: `CLAUDE_CODE_VERSION`, `GH_VERSION`, `TF_VERSION`, `AWS_CLI_VERSION`. Raising one is an
+edit to `deploy/sandbox/claude.Dockerfile` with a commit behind it, so the same commit builds the
+same image on any day and a session that starts behaving differently has a change to point at.
+
+Two tests hold this. `TestNothingInTheSandboxImageFloats` refuses any global install in the image
+that does not name a version, so the next tool added unpinned fails there rather than months later.
+`TestTheImageRunsTheClaudeCodeItPins` asks the built image what it runs, because a pin the registry
+quietly ignores reads exactly like a pin that works.
+
 ## A credential that is a file
 
 Some credentials are not values. A git configuration, a private key, a cloud credentials file: a tool
