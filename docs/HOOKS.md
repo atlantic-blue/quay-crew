@@ -58,9 +58,9 @@ executable.
 ```
 hooks/prompt-analyser/
   hook.yaml         what it is, and what event it fires on
-  bin/hook          the executable the runtime calls
+  bin/hook.ts       the executable the runtime calls
   lib/              whatever it needs beside it
-  test/             proves it refuses what it says it refuses
+  hook.config.json  what it reads, so the paths are not compiled in
 ```
 
 `hook.yaml` is data. No expressions, no conditionals, nothing that runs on the host.
@@ -71,10 +71,11 @@ version: 1
 summary: Reads every message and hands the session a short brief beside it.
 events:
   - on: UserPromptSubmit
-    entry: bin/hook
+    entry: bin/hook.ts
     timeoutSeconds: 20
 binaries:
   - node
+  - claude
 secrets: {}
 ```
 
