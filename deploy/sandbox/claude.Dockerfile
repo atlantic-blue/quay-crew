@@ -28,8 +28,12 @@ LABEL com.quaycrew.build=$QC_VERSION
 
 # git and ripgrep are what an agent reaches for most; ca-certificates so it can talk to the network;
 # curl because the api skills speak plain https and the gh install below needs it anyway.
+#
+# openssh-client is here for ssh-keygen, not for ssh. Git signs an ssh format signature by running
+# ssh-keygen, so without this package a session with a signing key configured cannot commit at all:
+# git fails with "cannot run ssh-keygen" before it reads the key.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep tmux \
+    && apt-get install -y --no-install-recommends ca-certificates curl git openssh-client ripgrep tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # gh, for the github skill. A pinned release rather than an apt repository, so the image builds the
