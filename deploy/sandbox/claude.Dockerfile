@@ -107,6 +107,11 @@ COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
 # that user cannot chmod a file it does not own.
 COPY --chmod=0755 deploy/sandbox/open-conversation.sh /usr/local/bin/open-conversation
 
+# Where a session's git configuration comes from. A file in the repository rather than a printf here,
+# so a test can read the same thing the image ships. Owned by the sandbox user, because the crew
+# writes to it at sandbox birth.
+COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
+
 RUN mkdir -p /home/agent/.claude \
     && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \
     && printf '%s\n' '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true,"hasCompletedProjectOnboarding":true}}}' > /home/agent/.claude.json

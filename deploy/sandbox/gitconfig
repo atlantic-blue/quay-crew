@@ -1,0 +1,16 @@
+# The sandbox user's git configuration.
+#
+# It holds one line, and everything an operator wants is on the other side of it. Mount a secret
+# named gitconfig on the workspace and it lands at the path below, so a session gets the operator's
+# own identity, aliases and settings from any shell, in any repository:
+#
+#     quay secret mount <workspace> gitconfig ~/.gitconfig
+#
+# An include rather than the configuration itself, because the configuration is the operator's and
+# the image is shared. A missing include is not an error in git, so a workspace that mounts nothing
+# reads exactly as it did before.
+#
+# The crew appends to this file at sandbox birth, and what it appends wins: git takes the last value
+# it reads for a setting, and an include is read where it sits.
+[include]
+	path = /run/secrets/gitconfig

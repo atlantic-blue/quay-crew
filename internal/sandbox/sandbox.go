@@ -108,6 +108,13 @@ const (
 	// OpenConversation keeps the terminal alive when a conversation ends, so ending one does not take
 	// everything running with it.
 	OpenConversation = "open-conversation"
+	// GitConfigSecret is the workspace secret an operator mounts to give every session their own git
+	// configuration. The image's own configuration includes the file it lands in, so identity,
+	// aliases and settings reach a session from any shell rather than only the process a turn runs.
+	GitConfigSecret = "gitconfig"
+	// GitConfigPath is the sandbox user's git configuration, the file git reads as global. Shipped by
+	// the image holding the include, and written to by the crew at sandbox birth.
+	GitConfigPath = "/home/agent/.gitconfig"
 )
 
 // SecretFilePath is where a file projected secret lands inside a sandbox. Derived from the name

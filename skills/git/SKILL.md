@@ -22,9 +22,16 @@ Name the branch after the work, lowercase, words joined with hyphens.
 
 ## Commit as the operator
 
-Your author and committer identity are already in the environment. Do not set user.name or
-user.email, and do not add any signature, attribution line, or mention of a tool to a commit
-message. The commit is the operator's.
+Your author and committer identity come from the operator's own git configuration, which the
+workspace mounts for you. Do not set user.name or user.email, and do not add any signature,
+attribution line, or mention of a tool to a commit message. The commit is the operator's.
+
+If a commit fails because git does not know who you are, say the workspace needs the operator's
+configuration mounted with `quay secret mount <workspace> gitconfig ~/.gitconfig`, rather than
+inventing a name and an email to get past it.
+
+Whether you sign is already decided for you, so leave commit.gpgsign alone. A workspace that holds
+a signing key signs; one that does not, does not.
 
 Stage the specific files you changed, by name. Never `git add .` or `git add -A`: a sweep stages
 whatever else happens to be lying around, and you may not be the only thing writing here.
