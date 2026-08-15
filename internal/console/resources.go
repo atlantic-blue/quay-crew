@@ -343,13 +343,16 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Turns is one session's history, read from the turns the dispatch path writes, so it
+// Tasks is one thread's history, read from the tasks the dispatch path writes, so it
 // answers without starting a container and keeps answering once the sandbox is gone. It has no tool
 // calls and no thinking: opening the conversation is for that.
-func Turns(client quaycrewv1.ControlPlaneServiceClient) Resource {
+//
+// turns and turn stay as aliases. The word changed and the muscle memory did not, and a view that
+// answers to what somebody already types costs nothing.
+func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
-		Name:    "turns",
-		Aliases: []string{"turn", "history", "h"},
+		Name:    "tasks",
+		Aliases: []string{"task", "turns", "turn", "history", "h"},
 		Columns: []Column{
 			{Title: "when", Width: 10},
 			{Title: "status", Width: 10},
@@ -569,7 +572,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			Key:     "l",
 			Also:    []string{"h"},
 			Label:   "History",
-			Descend: "turns",
+			Descend: "tasks",
 		},
 		{
 			Key:   "s",
