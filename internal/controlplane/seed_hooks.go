@@ -18,12 +18,18 @@ const SeedHooksDir = "/hooks"
 // wrongly blocks the work, which is worse than no hook.
 var SeedHooksToCrew = []string{"prompt-analyser"}
 
-// SeedHooks puts the hooks this build ships with into a crew that has none.
+// SeedHooks offers the hooks this build ships, and puts a crew that holds none under them.
 //
-// Only when the crew holds none, which is what makes this a starting point rather than a policy that
-// reasserts itself. An operator who takes a hook off the crew has said something, and starting the
-// control plane again must not undo it. That matters more here than for skills: silently putting a
-// constraint back is the crew overruling the person operating it.
+// The two halves are separate on purpose.
+//
+// Importing runs every time, so a newer version of a shipped hook reaches the catalogue of any crew
+// that upgrades. Without that a fix could only ever reach a crew with no hooks at all, which is no
+// crew that has been used, and the analyser's first fix was stranded exactly there.
+//
+// Attaching runs only into a crew that held nothing. An operator who takes a hook off has said
+// something, and starting the control plane again must not undo it. Nor does an upgrade quietly move
+// a crew onto a newer version of a constraint it is already under: a hook is pinned so it cannot
+// change under a running session, and `quay hook attach` is how somebody decides to take the new one.
 //
 // A failure to seed is logged and not fatal, and it is logged rather than swallowed because a crew
 // running without the constraint it believes it has is the thing this whole subsystem exists to stop.
@@ -36,9 +42,9 @@ func (s *Server) SeedHooks(ctx context.Context, dir string, logger *slog.Logger)
 		logger.Warn("hooks were not seeded", "error", err)
 		return
 	}
-	if len(held) > 0 {
-		return
-	}
+	// Whether this is a fresh crew, which decides whether anything is attached below. Read before
+	// importing, because importing is what stops it being empty.
+	fresh := len(held) == 0
 	shipped, err := hook.Load(dir)
 	if err != nil {
 		logger.Warn("hooks were not seeded", "directory", dir, "error", err)
@@ -51,7 +57,11 @@ func (s *Server) SeedHooks(ctx context.Context, dir string, logger *slog.Logger)
 			continue
 		}
 		seeded++
-		if !seededToCrew(one.Name) {
+		// Attaching is only for a crew that held nothing. Importing happens every time, and the two
+		// are deliberately different: the catalogue is what the crew could run, and an attachment is
+		// what it does run. A fix to a shipped hook that only reached a crew with no hooks at all
+		// could never reach anybody, which is exactly what happened to the analyser's first fix.
+		if !fresh || !seededToCrew(one.Name) {
 			continue
 		}
 		if _, err := s.store.AttachCrewHook(ctx, one.Name); err != nil {
