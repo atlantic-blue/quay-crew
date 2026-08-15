@@ -50,7 +50,7 @@ func TestRunForwardsEnvToTheSandbox(t *testing.T) {
 }
 
 func TestBuildArgs(t *testing.T) {
-	got := buildArgs(Request{Text: "do a thing"})
+	got := buildArgs(Request{Text: "do a thing"}, "")
 	want := "-p do a thing --output-format stream-json --verbose --permission-mode plan"
 	if strings.Join(got, " ") != want {
 		t.Fatalf("buildArgs = %q, want %q", strings.Join(got, " "), want)
@@ -58,12 +58,46 @@ func TestBuildArgs(t *testing.T) {
 }
 
 func TestBuildArgsResumeAndMode(t *testing.T) {
-	got := strings.Join(buildArgs(Request{Text: "go on", ModelSessionID: "sess-1", PermissionMode: "acceptEdits"}), " ")
+	got := strings.Join(buildArgs(Request{Text: "go on", ModelSessionID: "sess-1", PermissionMode: "acceptEdits"}, ""), " ")
 	if !strings.Contains(got, "--permission-mode acceptEdits") {
 		t.Fatalf("missing permission mode: %q", got)
 	}
 	if !strings.Contains(got, "--resume sess-1") {
 		t.Fatalf("missing resume: %q", got)
+	}
+}
+
+// A turn says which model it wants, and a turn that has not been told says nothing rather than
+// guessing. The command line tool picks Sonnet when nobody says, which is how every session came to
+// run Sonnet while the crew was configured for Claude Code and nothing anywhere was wrong.
+func TestBuildArgsNamesTheModel(t *testing.T) {
+	got := strings.Join(buildArgs(Request{Text: "do a thing"}, "claude-opus-5"), " ")
+	if !strings.Contains(got, "--model claude-opus-5") {
+		t.Fatalf("the turn does not name the model: %q", got)
+	}
+}
+
+func TestBuildArgsLeavesTheModelToTheToolWhenUnset(t *testing.T) {
+	got := strings.Join(buildArgs(Request{Text: "do a thing"}, ""), " ")
+	if strings.Contains(got, "--model") {
+		t.Fatalf("the turn names a model nobody chose: %q", got)
+	}
+}
+
+// The whole way from configuration to what the container is asked to run. The two halves each pass
+// their own test while the wire between them is cut: a runner built from a kind and a model name is
+// where the name is either carried or dropped.
+func TestARunnerBuiltFromConfigurationCarriesTheModelIntoTheSandbox(t *testing.T) {
+	runner, err := NewRunner(KindClaudeCode, "", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("NewRunner: %v", err)
+	}
+	box := &sandbox.FakeSandbox{Output: `{"type":"result","result":"ok","session_id":"s-1"}`}
+	if _, err := runner.Run(context.Background(), box, Request{Text: "hi"}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(strings.Join(box.LastSpec.Argv, " "), "--model claude-opus-5") {
+		t.Fatalf("the sandbox was not told which model to run: %v", box.LastSpec.Argv)
 	}
 }
 

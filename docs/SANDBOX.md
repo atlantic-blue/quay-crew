@@ -42,6 +42,16 @@ You need Docker and a Claude subscription.
    either, the stack uses a lightweight image and an echo backend, which is what continuous integration
    runs, because it has no subscription.
 
+   Three keys decide what a turn is. `QC_MODEL` is the backend: `claude-code` runs the real thing on
+   your subscription, `echo` runs `echo` in the sandbox instead. `QC_CLAUDE_MODEL` is which model that
+   backend runs against, either an alias for the newest of a tier (`opus`, `sonnet`) or a full name
+   (`claude-opus-5`, which is what a crew gets when it says nothing). `QC_SANDBOX_IMAGE` is the
+   container it all runs in.
+
+   Say nothing about the model and the command line tool chooses for itself, and it chooses Sonnet.
+   That is worth knowing, because a crew configured for Claude Code, holding an Opus subscription,
+   was running every session on Sonnet and nothing anywhere said so.
+
 4. Install the CLI, create a workspace, and give it the token:
 
    ```

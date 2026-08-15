@@ -45,7 +45,7 @@ func TestASessionCanMakeACommitThatVerifies(t *testing.T) {
 
 	private, public := aSigningKey(t)
 
-	runner, err := model.NewRunner("echo", "")
+	runner, err := model.NewRunner("echo", "", "")
 	if err != nil {
 		t.Fatalf("model runner: %v", err)
 	}

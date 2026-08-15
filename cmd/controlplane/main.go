@@ -48,7 +48,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	runner, err := model.NewRunner(os.Getenv("QC_MODEL"), os.Getenv("QC_WORKDIR"))
+	// QC_MODEL is the backend; QC_CLAUDE_MODEL is which model that backend runs against. Two keys
+	// because they are two decisions: a crew can run the echo backend, which has no model at all.
+	runner, err := model.NewRunner(os.Getenv("QC_MODEL"), os.Getenv("QC_WORKDIR"), os.Getenv("QC_CLAUDE_MODEL"))
 	if err != nil {
 		logger.Error("model runner config failed", "error", err)
 		os.Exit(1)

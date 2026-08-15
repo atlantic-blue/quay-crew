@@ -29,7 +29,10 @@ func ResolveKind(kind string) (string, error) {
 // NewRunner builds a Runner by kind, so the composition root chooses the model backend by config and
 // nothing downstream depends on a concrete implementation. The runner is handed a session sandbox per
 // turn, so it holds no sandbox itself.
-func NewRunner(kind, workdir string) (Runner, error) {
+//
+// model is which model a turn runs against, and it means nothing to the echo backend, which runs no
+// model at all.
+func NewRunner(kind, workdir, model string) (Runner, error) {
 	resolved, err := ResolveKind(kind)
 	if err != nil {
 		return nil, err
@@ -37,7 +40,7 @@ func NewRunner(kind, workdir string) (Runner, error) {
 	if resolved == KindEcho {
 		return EchoRunner{}, nil
 	}
-	return &ClaudeCodeRunner{Bin: "claude", DefaultWorkdir: workdir}, nil
+	return &ClaudeCodeRunner{Bin: "claude", DefaultWorkdir: workdir, Model: model}, nil
 }
 
 // The permission modes a turn can run in, which are the model's own, not ours.

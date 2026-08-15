@@ -36,7 +36,7 @@ func TestAMountedSecretReachesARealContainer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	runner, err := model.NewRunner("echo", "")
+	runner, err := model.NewRunner("echo", "", "")
 	if err != nil {
 		t.Fatalf("model runner: %v", err)
 	}

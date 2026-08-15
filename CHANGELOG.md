@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
+  choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
+  was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
+
+  `QC_CLAUDE_MODEL` in `~/.quay/env` now, defaulting to `claude-opus-5`. The default sits in the
+  compose file rather than in the code, so a configuration written before the key existed gets it
+  anyway; `make env-check` still names it, so you can put it in your own file and change it. A full
+  name rather than the `opus` alias, for the same reason the tool itself is pinned below: an alias
+  moves to the next generation on its own and nothing records that it did.
+
+  `QC_MODEL` is unchanged and is a different decision: it picks the backend, `claude-code` or `echo`.
+
 - **The sandbox image pins Claude Code.** It was installed at whatever the registry called latest on
   the day the image was built, so two builds of the same commit produced two different images and
   nothing recorded which one a session ran. `gh`, terraform and the AWS command line were already

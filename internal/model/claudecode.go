@@ -26,6 +26,10 @@ type ClaudeCodeRunner struct {
 	Bin string
 	// DefaultWorkdir is used when a Request does not set Workdir.
 	DefaultWorkdir string
+	// Model is which model a turn runs against, as an alias for the newest of a tier ("opus") or a
+	// full name ("claude-opus-5"). Empty passes no --model, which leaves the choice to the CLI, and
+	// the CLI chooses Sonnet.
+	Model string
 }
 
 // NewClaudeCodeRunner returns a runner that invokes "claude".
@@ -52,12 +56,18 @@ func envList(env map[string]string) []string {
 	return out
 }
 
-func buildArgs(req Request) []string {
+func buildArgs(req Request, model string) []string {
 	mode := req.PermissionMode
 	if mode == "" {
 		mode = "plan"
 	}
 	args := []string{"-p", req.Text, "--output-format", "stream-json", "--verbose", "--permission-mode", mode}
+	// Which model, when the crew has been told. Left off when it has not, so a crew can always fall
+	// back to whatever the CLI picks for itself: a name the CLI stops accepting would otherwise fail
+	// every turn with no way to configure around it.
+	if model != "" {
+		args = append(args, "--model", model)
+	}
 	if req.ModelSessionID != "" {
 		args = append(args, "--resume", req.ModelSessionID)
 	}
@@ -84,7 +94,7 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 		workdir = r.DefaultWorkdir
 	}
 
-	spec := sandbox.Spec{Argv: append([]string{bin}, buildArgs(req)...), Workdir: workdir, Env: envList(req.Env)}
+	spec := sandbox.Spec{Argv: append([]string{bin}, buildArgs(req, r.Model)...), Workdir: workdir, Env: envList(req.Env)}
 	proc, err := box.Exec(ctx, spec)
 	if err != nil {
 		return Response{}, fmt.Errorf("model: exec: %w", err)
