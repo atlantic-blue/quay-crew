@@ -5,19 +5,19 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/internal/logging"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
 	serviceName := envOr("QC_SERVICE_NAME", "gateway")
+	logger := logging.Init(serviceName, os.Stdout)
+
 	otelEndpoint := envOr("QC_OTEL_ENDPOINT", "localhost:4317")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -28,7 +28,7 @@ func main() {
 		logger.Error("telemetry init failed", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("service started", "service", serviceName, "otel_endpoint", otelEndpoint)
+	logger.Info("service started", "otel_endpoint", otelEndpoint)
 
 	<-ctx.Done()
 	logger.Info("shutting down")

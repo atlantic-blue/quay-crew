@@ -11,18 +11,31 @@ because the gap is large and nothing on screen tells you about it.
 
 Three signals, in three different conditions.
 
-**Logs are real.** Every service logs structured JSON to its own stdout through `slog`, from the
-first line. `make logs` follows all of them and `docker logs quaycrew-controlplane-1` gives you one.
-This is the signal that actually works, and it is the one worth reaching for when something is
-wrong.
+**Logs are real, and every line carries the call it happened under.** Every service logs structured
+JSON to its own stdout through `internal/logging`, from the first line. `make logs` follows all of
+them and `docker logs quaycrew-controlplane-1` gives you one. This is the signal that actually
+works, and it is the one worth reaching for when something is wrong.
 
-**Traces do not exist.** `telemetry.Init` builds a tracer provider and an OTLP exporter, and both
-services call it on startup. Nothing then creates a span. There is no gRPC interceptor on the server,
-no `otel.Tracer(...).Start(...)` anywhere in the codebase, so the exporter has nothing to export.
-This is not a collector problem or a configuration problem. There are no spans.
+Each line carries `service`, and a line written while a call is being served also carries
+`correlation_id`. That id is the trace id, not a second identifier beside it, so filtering the logs
+by it and opening the trace are the same question asked twice.
 
-**Metrics do not exist either**, for the same reason: a meter provider is set up and no instrument is
-ever created.
+Two things about the shape are worth knowing. A line only carries the id when the call site logs
+with a context, so `slog.WarnContext(ctx, ...)` rather than `slog.Warn(...)`. And the id survives
+`context.WithoutCancel`, which is what a turn and a flow run detach with, so the interesting half of
+a turn is correlated to the dispatch that started it rather than orphaned.
+
+**Traces exist for inbound calls.** `telemetry.ServerOptions` puts an OpenTelemetry stats handler on
+the control plane's gRPC server, so every message it serves runs in a span and the exporter has
+something to export. It is a stats handler rather than an interceptor because a stats handler runs
+first: a call refused by the crew's token guard is traced too, which is the call somebody is most
+likely to come looking for.
+
+Nothing else is traced yet. There is no span around a turn, a sandbox or the model, and the command
+line tool starts no trace of its own, so a trace today covers the crew's own handling of one message
+and stops there.
+
+**Metrics do not exist.** A meter provider is set up and no instrument is ever created.
 
 **The collector receives and discards.** `deploy/otel-collector.yaml` has one exporter, `debug`, on
 all three pipelines. Anything that did arrive would be summarised into the collector's own stdout and
@@ -35,10 +48,12 @@ with the caveats in the next section.
 You can confirm the whole picture in one command. On a stack that has been up and serving:
 
 ```
-docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans\|ResourceMetrics"
+docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans"
 ```
 
-It prints `0`. Every time, so far.
+That count grows as you use `quay`, because the collector's debug exporter summarises every batch it
+receives. Swap `ResourceSpans` for `ResourceMetrics` and it stays at `0`, because nothing creates an
+instrument.
 
 ## Why it is worth building anyway
 
@@ -126,30 +141,44 @@ before you go looking.
 
 In this order, because each step is pointless without the one above it.
 
-1. **Create spans and metrics (#3).** A gRPC interceptor on the control plane server, a correlation
-   id per inbound message that equals the trace id, and the audit event shape defined once rather
-   than retrofitted. Until something emits, nothing downstream matters.
-2. **Give the collector somewhere to send it (#12).** Exporters to Loki, Tempo and Prometheus, a
-   Tempo config file, and Grafana data sources provisioned as code. Dashboards and alerts as code
-   from there on.
-3. **Token, cost and resource metrics (#16).** The number that makes the rest worth having.
+1. ~~**Create spans (#3).**~~ Done: inbound calls are traced and every log line carries the
+   correlation id. What is left of #3 is the audit event carrying the trace id, so a turn in the
+   `turns` table joins to the trace that ran it.
+2. **Give the collector somewhere to send it (#12).** Exporters to Loki, Tempo and Prometheus, and
+   Grafana data sources provisioned as code. Prometheus has no configuration file at all today, so
+   it scrapes only itself. Until this lands the spans reach the collector and stop there, which is a
+   real signal in the collector's own log and nothing you can open in Grafana.
+3. **Token, cost and resource metrics (#16).** The number that makes the rest worth having. The
+   model runner already calls the command line tool with `--output-format stream-json`, and that
+   stream carries the token usage the crew currently reads past.
 
-## Checking whether it is working, once it is
+## Checking whether it is working
 
 The same command from the top of this document is the fastest signal, because the collector's debug
 exporter prints a summary of every batch it receives:
 
 ```
-docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans\|ResourceMetrics"
+docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans"
 ```
 
-Zero means nothing is being emitted. A number that grows while you use `quay` means the services are
-exporting and the question moves downstream, to whether the collector has anywhere to put it.
+Zero after a dispatch means the control plane is not exporting, so check `QC_OTEL_ENDPOINT` reaches
+the collector. A number that grows means the crew is exporting and the question moves downstream, to
+whether the collector has anywhere to put it, which today it does not.
+
+The other half is the correlation id. Take one from a log line and you have the trace it belongs to:
+
+```
+docker logs quaycrew-controlplane-1 2>&1 | jq -R 'fromjson? | select(.correlation_id)'
+```
 
 ---
 
-Everything above was checked against a running stack on 4 August 2026. The four observability
-services were brought up together and each was asked for its own health endpoint: Loki and Tempo both
-answered `ready`, Grafana answered `"database": "ok"`. Reproducing the collector count needs the core
-stack up (`make ps` showing `quaycrew-otel-collector-1`), and the count is expected to change the
-moment #3 lands, at which point this section should change with it.
+The health endpoint results above were captured from a running stack on 4 August 2026, and the four
+observability services have not changed since.
+
+That inbound calls are traced, that a refused call is traced too, and that a log line written inside
+a turn carries the trace id of the dispatch that started it are proved by `features/observability.feature`
+against the real gRPC interface, not by a screenshot. The collector counts in this document were not
+re run when the spans landed: the change was made and gated in an environment with no container
+runtime, so the two `docker logs` commands above are the reproduction steps and not a captured
+result. Run them on a stack with `make up` and at least one dispatch.

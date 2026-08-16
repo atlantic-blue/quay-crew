@@ -1,10 +1,11 @@
 // Package telemetry sets up OpenTelemetry tracing and metrics for a service, exporting over OTLP
-// gRPC to a collector. Every service calls Init on startup, so the moment something creates a span
-// or an instrument it has somewhere to go.
+// gRPC to a collector. Every service calls Init on startup, and ServerOptions puts every inbound
+// gRPC message in a span, so a call the crew serves is exported as a trace.
 //
-// Nothing creates one yet, and logs do not travel this way at all: they are structured JSON on a
-// service's own stdout through slog. See docs/OBSERVABILITY.md for what is real today and what is
-// only wired.
+// No instrument is created yet, so the metric half is still wired and empty. Logs do not travel
+// this way at all: they are structured JSON on a service's own stdout through internal/logging,
+// joined to a trace by the correlation id every line carries. See docs/OBSERVABILITY.md for what is
+// real today and what is only wired.
 package telemetry
 
 import (

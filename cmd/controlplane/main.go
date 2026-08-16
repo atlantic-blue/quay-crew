@@ -19,6 +19,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/logging"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -30,9 +31,9 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
 	serviceName := envOr("QC_SERVICE_NAME", "controlplane")
+	logger := logging.Init(serviceName, os.Stdout)
+
 	otelEndpoint := envOr("QC_OTEL_ENDPOINT", "localhost:4317")
 	// Loopback unless the operator says otherwise: the port is the whole crew, so it is not
 	// published to the network by default. The compose stack overrides this, because in a container
@@ -180,7 +181,10 @@ func main() {
 	// restarting does not put it back.
 	server.SeedHooks(ctx, envOr("QC_SEED_HOOKS_DIR", controlplane.SeedHooksDir), logger)
 
-	grpcServer := grpc.NewServer(auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...)
+	grpcServer := grpc.NewServer(append(
+		telemetry.ServerOptions(),
+		auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...,
+	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 
 	listener, err := net.Listen("tcp", grpcAddr)

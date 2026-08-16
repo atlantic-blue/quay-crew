@@ -137,12 +137,12 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	}
 	session, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
-		slog.Debug("a session could not be described", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	tasks, err := s.store.CountTasks(ctx, sessionID)
 	if err != nil {
-		slog.Debug("a session could not be described", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	if !worthDescribing(tasks, int(session.GetDescribedAtTask()), s.describeEvery) {
@@ -151,12 +151,12 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 
 	history, err := s.store.ListTasks(ctx, sessionID, describeTasks)
 	if err != nil || len(history) == 0 {
-		slog.Debug("a session could not be described", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
-		slog.Debug("a session could not be described", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	// Its own conversation, not the session's. Describing inside the session would put a request the
@@ -169,7 +169,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 		Env:            s.taskEnv(ctx, session),
 	})
 	if err != nil {
-		slog.Debug("a session could not be described", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	description := tidyDescription(said.Reply)
@@ -177,7 +177,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 		return
 	}
 	if err := s.store.SetDescription(ctx, sessionID, description, tasks); err != nil {
-		slog.Debug("a session's description could not be kept", "session", sessionID, "error", err)
+		slog.DebugContext(ctx, "a session's description could not be kept", "session", sessionID, "error", err)
 	}
 }
 

@@ -56,7 +56,7 @@ func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session,
 		OccurredAt: event.GetOccurredAt(),
 	}
 	if err := s.store.AppendTask(ctx, task, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
-		slog.Warn("a task could not be written to history", "session", session.GetId(), "error", err)
+		slog.WarnContext(ctx, "a task could not be written to history", "session", session.GetId(), "error", err)
 	}
 
 	s.exportTask(ctx, session, event)
@@ -72,16 +72,16 @@ func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session,
 func (s *Server) exportTask(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
 	topic, err := s.tasksTopic(ctx, session.GetWorkspace())
 	if err != nil {
-		slog.Warn("no topic for this task, so it is not exported", "session", session.GetId(), "error", err)
+		slog.WarnContext(ctx, "no topic for this task, so it is not exported", "session", session.GetId(), "error", err)
 		return
 	}
 	value, err := proto.Marshal(event)
 	if err != nil {
-		slog.Warn("a task could not be encoded, so it is not exported", "session", session.GetId(), "error", err)
+		slog.WarnContext(ctx, "a task could not be encoded, so it is not exported", "session", session.GetId(), "error", err)
 		return
 	}
 	if err := s.events.Publish(ctx, topic, []byte(session.GetId()), value); err != nil {
-		slog.Warn("a task could not be exported", "session", session.GetId(), "topic", topic, "error", err)
+		slog.WarnContext(ctx, "a task could not be exported", "session", session.GetId(), "topic", topic, "error", err)
 	}
 }
 
@@ -94,7 +94,7 @@ func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Session) 
 	values := map[string]string{}
 	refs, err := s.secrets.List(ctx, session.GetWorkspace())
 	if err != nil {
-		slog.Warn("the workspace's secret names could not be listed for redaction", "session", session.GetId(), "error", err)
+		slog.WarnContext(ctx, "the workspace's secret names could not be listed for redaction", "session", session.GetId(), "error", err)
 	}
 	// Every projection, because a value is worth redacting wherever it came from. A mounted secret
 	// reaches the sandbox as a file rather than as an environment variable, and a session that reads
