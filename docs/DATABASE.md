@@ -12,7 +12,7 @@ for the operator with a terminal open.
 The control plane holds no state of its own. That is the point, and it is worth being blunt about
 what would happen otherwise.
 
-When a session runs a turn, the model keeps the conversation on its own disk and hands back a handle
+When a session runs a task, the model keeps the conversation on its own disk and hands back a handle
 to it. That handle is stored as `model_session_id` on the session row, and it is the only pointer to
 that conversation anywhere in the system. Lose the row and the conversation still exists, sitting in
 `~/.quay/data`, unreachable forever. Nothing can reconstruct the handle.
@@ -79,21 +79,21 @@ workspace disappears from every read and its rows stay, because the sessions poi
 hold conversation handles.
 
 **`projects`** sits between a workspace and its sessions: `id`, `workspace`, `name`, timestamps,
-`deleted_at`. Same soft deletion for the same reason. A turn runs inside a project, and the
+`deleted_at`. Same soft deletion for the same reason. A task runs inside a project, and the
 project is where the files the model reads live.
 
 **`sessions`** is the interesting one. Each row is a session: one conversation, running in its own
-sandbox. The console calls them sessions too, and `threads` still opens that view.
+sandbox. The console calls them sessions too, and `sessions` still opens that view.
 
 - `id` is the session's identity, and the first eight characters are what the console shows you
 - `workspace` and `project` are where it sits
-- `thread_id` is the channel's own idea of the conversation, unique per project, so a channel that
-  knows only its own thread identifier always lands back in the same session
+- `handle` is the channel's own idea of the conversation, unique per project, so a channel that
+  knows only its own session identifier always lands back in the same session
 - `status` is `idle` or `stopped`, and nothing else is ever written today. The console also knows how
   to colour `running` and `dispatching`, which no code sets yet
-- `model_session_id` is the conversation handle described above. Empty means no turn has succeeded
+- `model_session_id` is the conversation handle described above. Empty means no task has succeeded
   yet, so there is nothing to attach to
-- `permission_mode` is what that session's turns may do without asking, `acceptEdits` by default and
+- `permission_mode` is what that session's tasks may do without asking, `acceptEdits` by default and
   `bypassPermissions` once you press `D` in the console
 - `archived_at` is set when you put a session away with `A`. Archiving hides it from the default
   listing, stops it, and closes its sandbox. It deletes nothing
@@ -108,8 +108,8 @@ shows it and `quay context edit` changes it.
 **`channels`** is where an attached chat channel would be recorded: `id`, `workspace`, `kind`. It is
 empty today, and it stays empty until the first chat channel lands. See `docs/EVENTS.md`.
 
-**`turns`** is the read model: one row per turn, carrying what was asked, what came back, the status
-and when. It is written by the projection that consumes `<workspace>.turns` off the event log, not by
+**`tasks`** is the read model: one row per task, carrying what was asked, what came back, the status
+and when. It is written by the projection that consumes `<workspace>.tasks` off the event log, not by
 the control plane directly, and it is the one table here that can be thrown away without losing
 anything, because the log can rebuild it. Its `id` comes from the event rather than from the
 database, which is what makes an at least once delivery safe to replay. See `docs/EVENTS.md`.
@@ -168,11 +168,11 @@ left join sessions s on s.project = p.id
 group by 1 order by 1;
 ```
 
-A session's history, which is the same thing `quay turns` prints:
+A session's history, which is the same thing `quay tasks` prints:
 
 ```sql
 select occurred_at, status, left(prompt, 60) as asked, left(reply, 60) as answered
-from turns where session = '<session id>'
+from tasks where session = '<session id>'
 order by occurred_at;
 ```
 

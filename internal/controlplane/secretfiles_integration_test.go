@@ -19,11 +19,11 @@ import (
 )
 
 // The whole path, with nothing standing in for anything: an operator mounts a secret, dispatches a
-// turn, and the file is in the container the daemon actually made.
+// task, and the file is in the container the daemon actually made.
 //
 // The scenarios prove what the crew asks a sandbox to do, and the sandbox tests prove a real daemon
 // honours it. Neither says the two meet, and the join is where this kind of feature fails: a write
-// that runs before the container exists, or after the turn it was for, passes both halves and
+// that runs before the container exists, or after the task it was for, passes both halves and
 // delivers nothing.
 //
 // The file is read with docker exec rather than through the crew's own handle, because asking the

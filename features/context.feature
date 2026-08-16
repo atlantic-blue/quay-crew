@@ -49,15 +49,15 @@ Feature: The operator can find the files the model reads
     And the workspace's memory file carries "no acronyms"
 
   # An agent that writes something into its own memory has learned something. Overwriting that on the
-  # next turn would make the crew's memory strictly worse than a text file, so the file wins and is
+  # next task would make the crew's memory strictly worse than a text file, so the file wins and is
   # taken into the store.
   Scenario: What an agent writes into its own memory is kept
     Given a session started by dispatching "hello"
     When something inside the sandbox writes "the account number is 4471" into its memory
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the session's context reads "the account number is 4471"
 
-  # Context only ever reached a sandbox when that sandbox was made, so telling a thread something
+  # Context only ever reached a sandbox when that sandbox was made, so telling a session something
   # while it was running did nothing you could see until it was replaced, and nobody replaces a
   # container to deliver a note.
   Scenario: A context change reaches a session that is already running
@@ -72,7 +72,7 @@ Feature: The operator can find the files the model reads
     Given a session started by dispatching "hello"
     When the operator sets the session's context to "the meter is under the stairs"
     And the sandbox's memory file is replaced with "notes from before any of this" and no marks
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the session's memory file carries "the meter is under the stairs"
     And the session's memory file carries "notes from before any of this"
 

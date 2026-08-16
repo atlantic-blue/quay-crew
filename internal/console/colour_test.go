@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// A listing of thirty threads was one colour, so reading it meant reading every character of every
+// A listing of thirty sessions was one colour, so reading it meant reading every character of every
 // row. These cases are the colouring that replaced that: the same rules the sessions tool uses, which
 // is the listing the operator already reads all day.
 
@@ -29,13 +29,13 @@ func TestAWorkspaceKeepsItsColourAndTwoWorkspacesDiffer(t *testing.T) {
 	}
 }
 
-// The mode is the cell it costs most to misread: a thread that skips every permission must not look
+// The mode is the cell it costs most to misread: a session that skips every permission must not look
 // like one that asks.
-func TestTheModeIsColouredByWhatItLetsAThreadDo(t *testing.T) {
+func TestTheModeIsColouredByWhatItLetsASessionDo(t *testing.T) {
 	plan, edits, dangerous := colourOfMode("plan"), colourOfMode("edits"), colourOfMode("dangerous")
 
 	if plan == dangerous {
-		t.Fatal("planning and dangerous are the same colour, and they are opposite ends of what a thread may do")
+		t.Fatal("planning and dangerous are the same colour, and they are opposite ends of what a session may do")
 	}
 	if edits == dangerous {
 		t.Fatal("edits and dangerous are the same colour")
@@ -45,7 +45,7 @@ func TestTheModeIsColouredByWhatItLetsAThreadDo(t *testing.T) {
 // A number nobody acts on should not compete with one they do.
 func TestALargeTokenCountStandsOutAndASmallOneDoesNot(t *testing.T) {
 	if colourOfTokens("1.2k") == colourOfTokens("42.3M") {
-		t.Fatal("a thread that has spent 42.3M reads the same as one that has spent 1.2k")
+		t.Fatal("a session that has spent 42.3M reads the same as one that has spent 1.2k")
 	}
 	if colourOfTokens("") != colourOfTokens("1.2k") {
 		t.Fatal("an empty cell is coloured differently from a small one, which draws the eye to nothing")
@@ -132,7 +132,7 @@ func TestARowWithAStateStillCarriesTheColoursOfItsCells(t *testing.T) {
 	}
 }
 
-// The one state loud enough to keep the whole line. A thread that ended badly has to read as ended
+// The one state loud enough to keep the whole line. A session that ended badly has to read as ended
 // badly from across the room, and that is worth more than knowing which workspace it was in.
 func TestAFailedRowIsStillDrawnInOneColour(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{}))
@@ -160,9 +160,9 @@ func TestTheStatusCellSaysHowARowIsDoing(t *testing.T) {
 		seen[colour] = named
 	}
 
-	// The stale mark rides on the same cell, and a stale thread is still running or still idle.
+	// The stale mark rides on the same cell, and a stale session is still running or still idle.
 	if colourOfStatus("idle stale") != idle {
-		t.Error("a stale thread loses its status colour, so the cell says nothing about how it is doing")
+		t.Error("a stale session loses its status colour, so the cell says nothing about how it is doing")
 	}
 	if colourOfStatus("something new") != "" {
 		t.Error("a status nobody has taught this is being coloured, which is a guess presented as a fact")
@@ -176,19 +176,19 @@ func TestAgeIsColouredByHowLongAgoItWas(t *testing.T) {
 	waiting, old, ancient := colourOfAge("40m"), colourOfAge("3h"), colourOfAge("6d")
 
 	if fresh != recent {
-		t.Error("a thread touched twelve seconds ago and one touched two minutes ago read differently")
+		t.Error("a session touched twelve seconds ago and one touched two minutes ago read differently")
 	}
 	if fresh == waiting {
-		t.Error("a thread touched two minutes ago reads the same as one left forty minutes")
+		t.Error("a session touched two minutes ago reads the same as one left forty minutes")
 	}
 	if waiting != old {
 		t.Error("forty minutes and three hours read differently, and both are today")
 	}
 	if old == ancient {
-		t.Error("a thread from this morning reads the same as one from last week")
+		t.Error("a session from this morning reads the same as one from last week")
 	}
 	if colourOfAge("-") != dimCode {
-		t.Error("a thread with no age is being coloured as though it had one")
+		t.Error("a session with no age is being coloured as though it had one")
 	}
 }
 

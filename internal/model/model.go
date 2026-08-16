@@ -1,5 +1,5 @@
 // Package model is the adapter between the control plane and whatever runs the model. The default
-// implementation drives the Claude Code command line tool inside the session's sandbox, so turns run
+// implementation drives the Claude Code command line tool inside the session's sandbox, so tasks run
 // on the operator's subscription; anything else sits behind the same Runner interface.
 package model
 
@@ -9,7 +9,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-// Request is one turn to run against the model.
+// Request is one task to run against the model.
 type Request struct {
 	Text string
 	// ModelSessionID resumes an existing conversation; empty starts one.
@@ -22,17 +22,17 @@ type Request struct {
 	Env map[string]string
 	// Settings is an extra settings file inside the sandbox for the runtime to load, which is how the
 	// hooks a session runs under reach it. Empty means the session is under none, and the flag is left
-	// off entirely: pointing the runtime at a file that is not there fails the turn.
+	// off entirely: pointing the runtime at a file that is not there fails the task.
 	Settings string
 }
 
-// Response is the result of a turn.
+// Response is the result of a task.
 type Response struct {
 	Reply          string
 	ModelSessionID string
 }
 
-// Runner runs one turn inside the session's sandbox.
+// Runner runs one task inside the session's sandbox.
 type Runner interface {
 	Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error)
 }

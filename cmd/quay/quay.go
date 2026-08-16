@@ -1,5 +1,5 @@
 // Command quay is the CLI channel: a synchronous client of the control plane. You create workspaces,
-// dispatch a turn, and list sessions, and the reply comes straight back. Async chat channels use the
+// dispatch a task, and list sessions, and the reply comes straight back. Async chat channels use the
 // event log instead; the CLI talks to the ControlPlaneService gRPC API directly.
 package main
 
@@ -71,7 +71,9 @@ var removedFlags = map[string]string{
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--workspace": "an address names the workspace: quay sessions <workspace>" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
-	"--thread": "an address names the thread: quay dispatch <workspace>/<project>/<thread> \"...\"" +
+	"--session": "an address names the session: quay dispatch <workspace>/<project>/<session> \"...\"" +
+		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
+	"--thread": "an address names the session: quay dispatch <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
 		"with quay skill attach <workspace> git and ask the session to clone what it works on",
@@ -149,19 +151,21 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHeader(ctx, client, args[1:], out, addr)
 	case "console":
 		return runBareConsole(ctx, client, args[1:], addr)
-	// thread and threads answer here too. The protocol says thread, the usage says thread three
-	// times over, and the command was sessions alone, so the tool taught a word it then refused.
-	case "sessions", "session", "threads", "thread":
+	case "sessions", "session":
 		return runSessions(ctx, client, args[1:], out)
 	case "tasks", "task":
 		return runTasks(ctx, client, args[1:], out)
-	// The way off the old word. Refused by name rather than treated as an unknown command, because
-	// it is still in fingers, in scripts and in notes, and a command that silently stops existing
+	// The way off the old words. Refused by name rather than treated as an unknown command, because
+	// they are still in fingers, in scripts and in notes, and a command that silently stops existing
 	// reads as the tool being broken.
+	case "threads", "thread":
+		return fmt.Errorf(
+			"there is no threads command: a thread is called a session now, because the crew has one " +
+				"word for a conversation and this was the second. Use quay sessions")
 	case "turns", "turn":
 		return fmt.Errorf(
 			"there is no turns command: a turn is called a task now, because a turn is a word from " +
-				"conversation analysis and nothing about it said how long it takes. Use quay tasks <thread>")
+				"conversation analysis and nothing about it said how long it takes. Use quay tasks <session>")
 	case "mode":
 		return runMode(ctx, client, args[1:], out)
 	case "label":
@@ -247,7 +251,7 @@ func runUse(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return nil
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay use <workspace>[/<project>[/<thread>]]")
+		return fmt.Errorf("usage: quay use <workspace>[/<project>[/<session>]]")
 	}
 
 	path, err := workspace.ParsePath(args[0])
@@ -617,19 +621,19 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 
 	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: located.ProjectID, Handle: located.ThreadID, Text: text,
+		Project: located.ProjectID, Handle: located.SessionID, Text: text,
 	})
 	if err != nil {
 		return err
 	}
 	fmt.Fprintln(out, resp.GetReply())
-	fmt.Fprintf(out, "(thread %s, handle %s)\n", resp.GetId(), resp.GetHandle())
+	fmt.Fprintf(out, "(session %s, handle %s)\n", resp.GetId(), resp.GetHandle())
 	return nil
 }
 
 // splitAddressFromText decides whether the first word is an address or the start of the message.
 //
-// An address has to reach a project for a turn to run, so it always carries a separator. That keeps
+// An address has to reach a project for a task to run, so it always carries a separator. That keeps
 // `quay dispatch hello there` a message rather than a mystifying lookup of "hello".
 func splitAddressFromText(args []string) (address string, words []string) {
 	if len(args) > 1 && strings.Contains(args[0], workspace.Separator) {
@@ -643,7 +647,7 @@ func splitAddressFromText(args []string) (address string, words []string) {
 func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, located workspace.Location) error {
 	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: located.WorkspaceID})
 	if err != nil {
-		return fmt.Errorf("%s is a workspace: a turn runs in a project inside it", located.Path.Workspace)
+		return fmt.Errorf("%s is a workspace: a task runs in a project inside it", located.Path.Workspace)
 	}
 	if len(resp.GetProjects()) == 0 {
 		return fmt.Errorf("%s holds no projects yet: create one with `quay project create <name>`", located.Path.Workspace)
@@ -652,7 +656,7 @@ func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	for _, project := range resp.GetProjects() {
 		names = append(names, project.GetName())
 	}
-	return fmt.Errorf("%s is a workspace: a turn runs in a project inside it, one of %s",
+	return fmt.Errorf("%s is a workspace: a task runs in a project inside it, one of %s",
 		located.Path.Workspace, strings.Join(names, ", "))
 }
 
@@ -916,7 +920,7 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		typed = args[0]
 	}
 
-	request := &quaycrewv1.ListThreadsRequest{}
+	request := &quaycrewv1.ListSessionsRequest{}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
 	// nowhere lists everything, because then the question was about the crew rather than a place.
 	path, err := addressFrom(typed)
@@ -931,30 +935,30 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
 	}
 
-	resp, err := client.ListThreads(ctx, request)
+	resp, err := client.ListSessions(ctx, request)
 	if err != nil {
 		return err
 	}
 	// Said out loud, because a listing narrowed to where you are standing looks exactly like a crew
-	// with fewer threads in it, and the operator has no way to tell the two apart.
+	// with fewer sessions in it, and the operator has no way to tell the two apart.
 	scope := "the whole crew"
 	if !path.IsZero() {
 		scope = path.String()
 	}
-	if len(resp.GetThreads()) == 0 {
-		fmt.Fprintf(out, "no threads in %s\n", scope)
+	if len(resp.GetSessions()) == 0 {
+		fmt.Fprintf(out, "no sessions in %s\n", scope)
 		return nil
 	}
 	// Names, not identifiers: a listing of hex says nothing about what any of it is.
 	workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
-	rows := make([][]string, 0, len(resp.GetThreads()))
-	for _, thread := range resp.GetThreads() {
-		rows = append(rows, display.ThreadCells(thread,
-			workspaces[thread.GetWorkspace()], projects[thread.GetProject()]))
+	rows := make([][]string, 0, len(resp.GetSessions()))
+	for _, session := range resp.GetSessions() {
+		rows = append(rows, display.SessionCells(session,
+			workspaces[session.GetWorkspace()], projects[session.GetProject()]))
 	}
-	fmt.Fprint(out, display.Rows(display.ThreadColumns(), rows))
+	fmt.Fprint(out, display.Rows(display.SessionColumns(), rows))
 	if !path.IsZero() {
-		fmt.Fprintf(out, "\n%d in %s. quay threads on its own lists the whole crew\n", len(rows), scope)
+		fmt.Fprintf(out, "\n%d in %s. quay sessions on its own lists the whole crew\n", len(rows), scope)
 	}
 	return nil
 }

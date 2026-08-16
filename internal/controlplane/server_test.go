@@ -53,7 +53,7 @@ func TestGetWorkspaceNotFound(t *testing.T) {
 	}
 }
 
-func TestDispatchStartsAndContinuesThread(t *testing.T) {
+func TestDispatchStartsAndContinuesSession(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "done", SessionID: "model-1"}
 	s := newServer(runner)
 	ctx := context.Background()
@@ -69,10 +69,10 @@ func TestDispatchStartsAndContinuesThread(t *testing.T) {
 		t.Fatalf("bad dispatch response: %+v", first)
 	}
 	if runner.LastReq.ModelSessionID != "" {
-		t.Fatalf("first turn should not resume, got %q", runner.LastReq.ModelSessionID)
+		t.Fatalf("first task should not resume, got %q", runner.LastReq.ModelSessionID)
 	}
 
-	// Continue the same thread: the runner should be asked to resume the model session.
+	// Continue the same session: the runner should be asked to resume the model session.
 	second, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Handle: first.GetHandle(), Text: "more"})
 	if err != nil {
 		t.Fatalf("Dispatch continue: %v", err)
@@ -110,7 +110,7 @@ func TestDispatchInjectsTheWorkspaceSubscriptionToken(t *testing.T) {
 	}
 
 	if got := runner.LastReq.Env[model.ClaudeCodeOAuthTokenEnv]; got != "tok-xyz" {
-		t.Fatalf("turn env[%s] = %q, want tok-xyz", model.ClaudeCodeOAuthTokenEnv, got)
+		t.Fatalf("task env[%s] = %q, want tok-xyz", model.ClaudeCodeOAuthTokenEnv, got)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 	}
 
 	if len(runner.LastReq.Env) != 0 {
-		t.Fatalf("turn env = %v, want empty when no secret is set", runner.LastReq.Env)
+		t.Fatalf("task env = %v, want empty when no secret is set", runner.LastReq.Env)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 	wid, pid := newProject(t, s)
 	_ = wid
 
-	// Two turns on the same thread must share one sandbox (created once, not per turn).
+	// Two tasks on the same session must share one sandbox (created once, not per task).
 	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "one"})
 	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Handle: first.GetHandle(), Text: "two"}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
@@ -170,7 +170,7 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 	}
 
 	// Stopping the session tears its sandbox down.
-	if _, err := s.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: first.GetId()}); err != nil {
+	if _, err := s.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: first.GetId()}); err != nil {
 		t.Fatalf("StopSession: %v", err)
 	}
 	if !provider.Boxes[0].Closed {
@@ -218,7 +218,7 @@ func TestOverGrpc(t *testing.T) {
 }
 
 // newProject creates a workspace and a project inside it: the smallest setup a dispatch needs now
-// that a thread lives inside a project.
+// that a session lives inside a project.
 func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -235,8 +235,8 @@ func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID st
 	return workspace.GetWorkspace().GetId(), project.GetProject().GetId()
 }
 
-// hangsUpRunner cancels the caller's context while the turn runs, which is what a client
-// disconnecting after a long turn does to the dispatch path.
+// hangsUpRunner cancels the caller's context while the task runs, which is what a client
+// disconnecting after a long task does to the dispatch path.
 type hangsUpRunner struct {
 	model.FakeRunner
 	hangUp context.CancelFunc
@@ -253,14 +253,14 @@ type contextHonouringStore struct {
 	store.Store
 }
 
-func (s contextHonouringStore) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error {
+func (s contextHonouringStore) AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return s.Store.AppendTurn(ctx, turn, workspace, project, thread)
+	return s.Store.AppendTask(ctx, task, workspace, project, session)
 }
 
-// A caller hanging up after a long turn must not lose the record of the very turn they were waiting
+// A caller hanging up after a long task must not lose the record of the very task they were waiting
 // on: history is written on a context detached from the request's.
 func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 	ctx, hangUp := context.WithCancel(context.Background())
@@ -292,14 +292,14 @@ func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
-	listed, err := s.ListTurns(context.Background(), &quaycrewv1.ListTurnsRequest{Thread: dispatched.GetId()})
+	listed, err := s.ListTasks(context.Background(), &quaycrewv1.ListTasksRequest{Session: dispatched.GetId()})
 	if err != nil {
-		t.Fatalf("ListTurns: %v", err)
+		t.Fatalf("ListTasks: %v", err)
 	}
-	if len(listed.GetTurns()) != 1 {
-		t.Fatalf("the session has %d turns after the caller hung up, want the 1 that ran", len(listed.GetTurns()))
+	if len(listed.GetTasks()) != 1 {
+		t.Fatalf("the session has %d tasks after the caller hung up, want the 1 that ran", len(listed.GetTasks()))
 	}
-	if listed.GetTurns()[0].GetReply() != "done" {
-		t.Fatalf("the recorded turn says %q, want the reply that ran", listed.GetTurns()[0].GetReply())
+	if listed.GetTasks()[0].GetReply() != "done" {
+		t.Fatalf("the recorded task says %q, want the reply that ran", listed.GetTasks()[0].GetReply())
 	}
 }

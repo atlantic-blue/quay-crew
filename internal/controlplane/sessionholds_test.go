@@ -15,9 +15,9 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// What a graph's claim about its own work is checked against: the thread's working directory as the
+// What a graph's claim about its own work is checked against: the session's working directory as the
 // crew keeps it, read without starting a container.
-func aCrewWithAThread(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
+func aCrewWithASession(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
 	t.Helper()
 	dir := t.TempDir()
 	storage := sandbox.Storage{Dir: dir, Host: dir}
@@ -45,11 +45,11 @@ func aCrewWithAThread(t *testing.T) (*controlplane.Server, sandbox.Storage, stri
 	return server, storage, dispatched.GetId()
 }
 
-func TestAThreadHoldsWhatTheTurnLeftInIt(t *testing.T) {
-	server, storage, thread := aCrewWithAThread(t)
+func TestASessionHoldsWhatTheTaskLeftInIt(t *testing.T) {
+	server, storage, session := aCrewWithASession(t)
 	ctx := context.Background()
 
-	held, err := server.ThreadHolds(ctx, thread, "package.json")
+	held, err := server.SessionHolds(ctx, session, "package.json")
 	if err != nil {
 		t.Fatalf("looking for a file that is not there: %v", err)
 	}
@@ -57,15 +57,15 @@ func TestAThreadHoldsWhatTheTurnLeftInIt(t *testing.T) {
 		t.Fatal("a file nobody wrote was found")
 	}
 
-	room, err := server.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: thread})
+	room, err := server.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: session})
 	if err != nil {
-		t.Fatalf("read the thread: %v", err)
+		t.Fatalf("read the session: %v", err)
 	}
 	dir, kept := storage.WorkingDir(sandbox.Config{
-		ID: thread, Workspace: room.GetThread().GetWorkspace(), Project: room.GetThread().GetProject(),
+		ID: session, Workspace: room.GetSession().GetWorkspace(), Project: room.GetSession().GetProject(),
 	})
 	if !kept {
-		t.Fatal("the crew keeps no working directory for a thread it just ran a turn in")
+		t.Fatal("the crew keeps no working directory for a session it just ran a task in")
 	}
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		t.Fatalf("make the working directory: %v", err)
@@ -74,23 +74,23 @@ func TestAThreadHoldsWhatTheTurnLeftInIt(t *testing.T) {
 		t.Fatalf("write the file: %v", err)
 	}
 
-	held, err = server.ThreadHolds(ctx, thread, "package.json")
+	held, err = server.SessionHolds(ctx, session, "package.json")
 	if err != nil {
 		t.Fatalf("looking for a file that is there: %v", err)
 	}
 	if !held {
-		t.Fatal("a file in the thread's own working directory was not found")
+		t.Fatal("a file in the session's own working directory was not found")
 	}
 }
 
 // A question that cannot be answered is an error rather than a false, because the run stops on an
 // error and carries on past a false. A check that quietly passes when nothing could look is the same
 // false green as no check at all.
-func TestAThreadNobodyHasCannotSatisfyACheck(t *testing.T) {
-	server, _, _ := aCrewWithAThread(t)
+func TestASessionNobodyHasCannotSatisfyACheck(t *testing.T) {
+	server, _, _ := aCrewWithASession(t)
 
-	if _, err := server.ThreadHolds(context.Background(), "no-such-thread", "package.json"); err == nil {
-		t.Fatal("a thread the crew does not have answered a question about its files")
+	if _, err := server.SessionHolds(context.Background(), "no-such-session", "package.json"); err == nil {
+		t.Fatal("a session the crew does not have answered a question about its files")
 	}
 }
 
@@ -117,9 +117,9 @@ func TestACrewKeepingNothingOnDiskSaysSoRatherThanAnsweringNo(t *testing.T) {
 		t.Fatalf("dispatch: %v", err)
 	}
 
-	_, err = server.ThreadHolds(ctx, dispatched.GetId(), "package.json")
+	_, err = server.SessionHolds(ctx, dispatched.GetId(), "package.json")
 	if err == nil {
-		t.Fatal("a crew with nowhere to look answered a question about a thread's files")
+		t.Fatal("a crew with nowhere to look answered a question about a session's files")
 	}
 	if !strings.Contains(err.Error(), "working directory") {
 		t.Errorf("it says %q, want it to say there is nowhere to look", err)

@@ -121,34 +121,34 @@ edges:
 		return nil
 	})
 
-	sc.Step(`^the run's thread was asked no more than (\d+) turns$`, func(ctx context.Context, most int) error {
+	sc.Step(`^the run's session was asked no more than (\d+) tasks$`, func(ctx context.Context, most int) error {
 		w := worldFrom(ctx)
 		run, err := readFlowRun(ctx, w)
 		if err != nil {
 			return err
 		}
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		for _, thread := range listed.GetThreads() {
-			if !strings.HasPrefix(thread.GetHandle(), run.GetGraphName()+"-") {
+		for _, session := range listed.GetSessions() {
+			if !strings.HasPrefix(session.GetHandle(), run.GetGraphName()+"-") {
 				continue
 			}
-			turns, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: thread.GetId()})
+			tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
 			if err != nil {
 				return err
 			}
-			if len(turns.GetTurns()) > most {
-				return fmt.Errorf("the run dispatched %d turns, want no more than %d: the cap did not hold",
-					len(turns.GetTurns()), most)
+			if len(tasks.GetTasks()) > most {
+				return fmt.Errorf("the run dispatched %d tasks, want no more than %d: the cap did not hold",
+					len(tasks.GetTasks()), most)
 			}
 			return nil
 		}
-		return fmt.Errorf("no thread carries the run's handle")
+		return fmt.Errorf("no session carries the run's handle")
 	})
 
-	sc.Step(`^a turn takes a moment$`, func(ctx context.Context) error {
+	sc.Step(`^a task takes a moment$`, func(ctx context.Context) error {
 		worldFrom(ctx).runner.takes = 200 * time.Millisecond
 		return nil
 	})
@@ -178,18 +178,18 @@ edges:
 		return nil
 	})
 
-	sc.Step(`^the run's thread stops being asked, well short of the cap$`, func(ctx context.Context) error {
+	sc.Step(`^the run's session stops being asked, well short of the cap$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		// The turn already under way when the stop landed finishes, by design, so this waits for
+		// The task already under way when the stop landed finishes, by design, so this waits for
 		// the count to settle rather than expecting it to be frozen the instant the stop returns.
-		settled, err := settledTurnCount(ctx, w)
+		settled, err := settledTaskCount(ctx, w)
 		if err != nil {
 			return err
 		}
-		// The graph cycles with a cap of 50, so a stop that did nothing would leave 50 turns here.
-		// A handful means the run halted; the exact number depends on where the in flight turn was.
+		// The graph cycles with a cap of 50, so a stop that did nothing would leave 50 tasks here.
+		// A handful means the run halted; the exact number depends on where the in flight task was.
 		if settled > 5 {
-			return fmt.Errorf("the stopped run dispatched %d turns, so it kept going rather than halting", settled)
+			return fmt.Errorf("the stopped run dispatched %d tasks, so it kept going rather than halting", settled)
 		}
 		return nil
 	})
@@ -225,7 +225,7 @@ edges:
 		return nil
 	})
 
-	sc.Step(`^reading the run back carries what the last turn replied$`, func(ctx context.Context) error {
+	sc.Step(`^reading the run back carries what the last task replied$`, func(ctx context.Context) error {
 		run, err := readFlowRun(ctx, worldFrom(ctx))
 		if err != nil {
 			return err
@@ -273,15 +273,15 @@ edges:
 	})
 }
 
-// settledTurnCount waits for the run's turn count to stop changing and answers what it settled at.
-// A stop is cooperative, so the turn already in flight lands after it; what matters is that no
-// further turn follows.
-func settledTurnCount(ctx context.Context, w *world) (int, error) {
+// settledTaskCount waits for the run's task count to stop changing and answers what it settled at.
+// A stop is cooperative, so the task already in flight lands after it; what matters is that no
+// further task follows.
+func settledTaskCount(ctx context.Context, w *world) (int, error) {
 	deadline := time.Now().Add(10 * time.Second)
 	last := -1
 	stable := 0
 	for time.Now().Before(deadline) {
-		count, err := flowRunTurnCount(ctx, w)
+		count, err := flowRunTaskCount(ctx, w)
 		if err != nil {
 			return 0, err
 		}
@@ -295,35 +295,35 @@ func settledTurnCount(ctx context.Context, w *world) (int, error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return 0, fmt.Errorf("the run's turn count never settled; it is still dispatching")
+	return 0, fmt.Errorf("the run's task count never settled; it is still dispatching")
 }
 
-// flowRunTurnCount is how many turns the run's own thread has been asked, live or archived.
+// flowRunTaskCount is how many tasks the run's own session has been asked, live or archived.
 //
-// No thread at all is none of them, not a failure. A run owns its thread and the thread is created by
+// No session at all is none of them, not a failure. A run owns its session and the session is created by
 // the first dispatch, so a run stopped before the poller got that far leaves nothing carrying its
 // handle. Reading that as an error made the whole suite depend on losing a race: on a loaded runner
 // the stop lands first, and a scenario asserting the run halted then failed for having halted sooner
 // than expected.
-func flowRunTurnCount(ctx context.Context, w *world) (int, error) {
+func flowRunTaskCount(ctx context.Context, w *world) (int, error) {
 	run, err := readFlowRun(ctx, w)
 	if err != nil {
 		return 0, err
 	}
 	for _, archived := range []bool{false, true} {
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Archived: archived})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Archived: archived})
 		if err != nil {
 			return 0, err
 		}
-		for _, thread := range listed.GetThreads() {
-			if !strings.HasPrefix(thread.GetHandle(), run.GetGraphName()+"-") {
+		for _, session := range listed.GetSessions() {
+			if !strings.HasPrefix(session.GetHandle(), run.GetGraphName()+"-") {
 				continue
 			}
-			turns, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: thread.GetId()})
+			tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
 			if err != nil {
 				return 0, err
 			}
-			return len(turns.GetTurns()), nil
+			return len(tasks.GetTasks()), nil
 		}
 	}
 	return 0, nil

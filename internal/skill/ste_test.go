@@ -16,7 +16,7 @@ func flowed(text string) string {
 // and this one describes a way of writing the operator has to ask for.
 //
 // That gate lives in the brief and nowhere else, because a skill is attached to a workspace and every
-// session in it then holds the text. So the words that turn it off are load bearing in a way no other
+// session in it then holds the text. So the words that task it off are load bearing in a way no other
 // skill's words are, and this is what holds them there.
 func TestTheShippedSteSkillIsOffUntilItIsAskedFor(t *testing.T) {
 	ste := shippedSkill(t, "ste")
@@ -74,7 +74,7 @@ func TestTheShippedSteSkillCarriesTheRules(t *testing.T) {
 }
 
 // This skill needs nothing from the sandbox, which is worth pinning: a brief that declared a binary
-// or a secret it never uses would refuse turns for no reason.
+// or a secret it never uses would refuse tasks for no reason.
 func TestTheShippedSteSkillAsksForNothing(t *testing.T) {
 	ste := shippedSkill(t, "ste")
 

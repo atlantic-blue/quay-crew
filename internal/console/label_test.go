@@ -9,11 +9,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// A listing of fourteen threads is a column of hexadecimal, and working out which conversation was
+// A listing of fourteen sessions is a column of hexadecimal, and working out which conversation was
 // the one about the electricity bill means opening them. These cases are the name that fixes that.
 
-// aThreadNamed is the listing showing one thread, named or not.
-func aThreadNamed(t *testing.T, client *fakeClient, label string) Model {
+// aSessionNamed is the listing showing one session, named or not.
+func aSessionNamed(t *testing.T, client *fakeClient, label string) Model {
 	t.Helper()
 	model := newTestModel(t, Sessions(client))
 	shown := label
@@ -26,9 +26,9 @@ func aThreadNamed(t *testing.T, client *fakeClient, label string) Model {
 	return model
 }
 
-func TestNamingAThreadSendsTheNameToTheCrew(t *testing.T) {
+func TestNamingASessionSendsTheNameToTheCrew(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, aThreadNamed(t, client, ""), runes("L"))
+	model, _ := update(t, aSessionNamed(t, client, ""), runes("L"))
 
 	if model.mode != modeType {
 		t.Fatalf("L left the console in %v, want it asking for a name", model.mode)
@@ -51,7 +51,7 @@ func TestNamingAThreadSendsTheNameToTheCrew(t *testing.T) {
 // refused to clear would leave no way back to the identifier.
 func TestAnEmptyNameClearsIt(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, aThreadNamed(t, client, "the electricity bill"), runes("L"))
+	model, _ := update(t, aSessionNamed(t, client, "the electricity bill"), runes("L"))
 
 	if model.input != "the electricity bill" {
 		t.Fatalf("naming started from %q, want the name it already has", model.input)
@@ -69,7 +69,7 @@ func TestAnEmptyNameClearsIt(t *testing.T) {
 
 func TestLeavingTheNameLineChangesNothing(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, aThreadNamed(t, client, ""), runes("L"))
+	model, _ := update(t, aSessionNamed(t, client, ""), runes("L"))
 	model, _ = update(t, model, runes("x"))
 
 	after, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
@@ -88,22 +88,22 @@ func TestLeavingTheNameLineChangesNothing(t *testing.T) {
 
 // The whole point: the listing reads as conversations rather than as identifiers.
 func TestTheListingShowsTheNameAndFallsBackToTheIdentifier(t *testing.T) {
-	named := &quaycrewv1.Thread{Id: "5d013d07aa", Handle: "d754610faa", Label: "the electricity bill"}
-	described := &quaycrewv1.Thread{Id: "6e124e18bb", Handle: "e865721abb", Description: "fixing the payout job"}
-	bare := &quaycrewv1.Thread{Id: "7f235f29cc", Handle: "f976832bcc"}
+	named := &quaycrewv1.Session{Id: "5d013d07aa", Handle: "d754610faa", Label: "the electricity bill"}
+	described := &quaycrewv1.Session{Id: "6e124e18bb", Handle: "e865721abb", Description: "fixing the payout job"}
+	bare := &quaycrewv1.Session{Id: "7f235f29cc", Handle: "f976832bcc"}
 
-	if got := display.ThreadName(named); got != "the electricity bill" {
-		t.Errorf("a named thread is listed as %q", got)
+	if got := display.SessionName(named); got != "the electricity bill" {
+		t.Errorf("a named session is listed as %q", got)
 	}
-	// A name somebody picked beats a name a machine wrote, so a thread with both shows the label.
-	both := &quaycrewv1.Thread{Handle: "aa11bb22", Label: "the electricity bill", Description: "fixing the payout job"}
-	if got := display.ThreadName(both); got != "the electricity bill" {
-		t.Errorf("a thread with both is listed as %q, want the operator's name", got)
+	// A name somebody picked beats a name a machine wrote, so a session with both shows the label.
+	both := &quaycrewv1.Session{Handle: "aa11bb22", Label: "the electricity bill", Description: "fixing the payout job"}
+	if got := display.SessionName(both); got != "the electricity bill" {
+		t.Errorf("a session with both is listed as %q, want the operator's name", got)
 	}
-	if got := display.ThreadName(described); got != "fixing the payout job" {
-		t.Errorf("a described thread is listed as %q", got)
+	if got := display.SessionName(described); got != "fixing the payout job" {
+		t.Errorf("a described session is listed as %q", got)
 	}
-	if got := display.ThreadName(bare); !strings.HasPrefix("f976832bcc", got) || got == "" {
-		t.Errorf("a thread with no name at all is listed as %q, want its identifier", got)
+	if got := display.SessionName(bare); !strings.HasPrefix("f976832bcc", got) || got == "" {
+		t.Errorf("a session with no name at all is listed as %q, want its identifier", got)
 	}
 }

@@ -124,7 +124,7 @@ func main() {
 	defer events.Close()
 
 	server := controlplane.NewServer(controlplane.Config{
-		// How often a thread describes itself, from the crew's configuration.
+		// How often a session describes itself, from the crew's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
 		Store:         durable,
 		Runner:        runner,
@@ -132,7 +132,7 @@ func main() {
 		Secrets:       credentials,
 		Storage:       storage,
 		Events:        events,
-		// What a thread's turns may do when it is born, from the crew's configuration.
+		// What a session's tasks may do when it is born, from the crew's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
@@ -164,13 +164,13 @@ func main() {
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
 
-	// What strayed while the crew was down is reaped on the way up: a container whose thread was
+	// What strayed while the crew was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
-	// And what was mid turn when the crew went down is settled the same way: a turn runs in this
-	// process, so a thread the store still calls running is one whose turn died with the last one.
-	server.SettleTurns(ctx)
+	// And what was mid task when the crew went down is settled the same way: a task runs in this
+	// process, so a session the store still calls running is one whose task died with the last one.
+	server.SettleTasks(ctx)
 
 	// A crew with no skills at all is a fresh one, and it starts with the ones this build ships
 	// with rather than making every operator import them by hand. Only ever on an empty catalogue,
@@ -204,11 +204,11 @@ func main() {
 	logger.Info("shutting down")
 	grpcServer.GracefulStop()
 
-	// Draining requests is not draining turns: a detached turn is a goroutine nobody is calling, so
-	// without this the process exits mid turn and the thread comes back up settled as failed. Given a
-	// minute, which is a turn's grace and not its length.
-	turnsCtx, doneWaiting := context.WithTimeout(context.Background(), time.Minute)
-	server.WaitForTurns(turnsCtx)
+	// Draining requests is not draining tasks: a detached task is a goroutine nobody is calling, so
+	// without this the process exits mid task and the session comes back up settled as failed. Given a
+	// minute, which is a task's grace and not its length.
+	tasksCtx, doneWaiting := context.WithTimeout(context.Background(), time.Minute)
+	server.WaitForTasks(tasksCtx)
 	doneWaiting()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -218,14 +218,14 @@ func main() {
 	}
 }
 
-// openEventLog returns the log turns are exported to. With QC_KAFKA_SEEDS set it is Kafka, spoken
+// openEventLog returns the log tasks are exported to. With QC_KAFKA_SEEDS set it is Kafka, spoken
 // to Redpanda locally. Without it, nothing is exported and nothing is lost: history is written to
-// the store in the same breath as the turn, and the log only ever carried a copy for a second
+// the store in the same breath as the task, and the log only ever carried a copy for a second
 // consumer. The status block says the export is off rather than leaving an empty column to read as
 // fine.
 //
 // The producer connects lazily, so a broker that is not up yet does not stop the control plane from
-// serving. A publish that cannot reach it is dropped rather than failing the turn.
+// serving. A publish that cannot reach it is dropped rather than failing the task.
 func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string) {
 	brokers := splitAndTrim(seeds)
 	if len(brokers) == 0 {
@@ -234,7 +234,7 @@ func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string
 	}
 	client, err := messaging.NewClient(brokers...)
 	if err != nil {
-		logger.Warn("event log unavailable, so turns are not exported; history in the store is unaffected", "error", err)
+		logger.Warn("event log unavailable, so tasks are not exported; history in the store is unaffected", "error", err)
 		return messaging.Discard{}, ""
 	}
 	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)
@@ -308,7 +308,7 @@ func openStore(ctx context.Context, databaseURL string, logger *slog.Logger) (st
 }
 
 // stateKind names where a session's conversation and files are kept, for the status block. It is
-// deliberately not a promise that any particular thread's sandbox has the mounts: a sandbox created
+// deliberately not a promise that any particular session's sandbox has the mounts: a sandbox created
 // before they were configured does not, which is why an upgrade clears the old ones.
 func stateKind(storage sandbox.Storage) string {
 	if storage.Dir == "" {
@@ -352,14 +352,14 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// birthPermissionMode reads what a thread's turns may do when it is born.
+// birthPermissionMode reads what a session's tasks may do when it is born.
 //
 // It refuses a value that is not a mode rather than falling back, because falling back is silent: a
-// crew configured for "planning" would run every turn in acceptEdits and look exactly like a crew
+// crew configured for "planning" would run every task in acceptEdits and look exactly like a crew
 // configured for acceptEdits. Startup is where the operator is standing and can fix it.
 //
 // Empty is not a refusal. It is what every crew's configuration says until somebody sets this, and it
-// keeps the mode every thread has had since the control plane was written.
+// keeps the mode every session has had since the control plane was written.
 func birthPermissionMode(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", nil

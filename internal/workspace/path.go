@@ -13,18 +13,18 @@ import (
 // Separator divides the levels of an address.
 const Separator = "/"
 
-// Path is an address into the crew: a workspace, optionally a project inside it, optionally a thread
+// Path is an address into the crew: a workspace, optionally a project inside it, optionally a session
 // inside that. "me", "me/house-bills" and "me/house-bills/3cb04bf5" are all paths.
 //
-// It says what the operator typed, not what it points at. Turning it into identifiers is Resolve's
+// It says what the operator typed, not what it points at. Tasking it into identifiers is Resolve's
 // job, because that needs the control plane.
 type Path struct {
 	Workspace string
 	Project   string
-	Thread    string
+	Session   string
 }
 
-// ParsePath reads an address. Each segment is an id or a name, and a thread may be typed as the
+// ParsePath reads an address. Each segment is an id or a name, and a session may be typed as the
 // shortened identifier a listing prints.
 func ParsePath(value string) (Path, error) {
 	trimmed := strings.TrimSpace(value)
@@ -33,7 +33,7 @@ func ParsePath(value string) (Path, error) {
 	}
 	segments := strings.Split(trimmed, Separator)
 	if len(segments) > 3 {
-		return Path{}, fmt.Errorf("workspace: %q has %d levels: an address is workspace/project/thread at most",
+		return Path{}, fmt.Errorf("workspace: %q has %d levels: an address is workspace/project/session at most",
 			trimmed, len(segments))
 	}
 	for _, segment := range segments {
@@ -47,7 +47,7 @@ func ParsePath(value string) (Path, error) {
 		parsed.Project = strings.TrimSpace(segments[1])
 	}
 	if len(segments) > 2 {
-		parsed.Thread = strings.TrimSpace(segments[2])
+		parsed.Session = strings.TrimSpace(segments[2])
 	}
 	return parsed, nil
 }
@@ -55,7 +55,7 @@ func ParsePath(value string) (Path, error) {
 // String renders the address back the way it was typed.
 func (p Path) String() string {
 	parts := make([]string, 0, 3)
-	for _, segment := range []string{p.Workspace, p.Project, p.Thread} {
+	for _, segment := range []string{p.Workspace, p.Project, p.Session} {
 		if segment == "" {
 			break
 		}
@@ -72,17 +72,17 @@ type Location struct {
 	Path        Path
 	WorkspaceID string
 	ProjectID   string
-	ThreadID    string
+	SessionID   string
 }
 
-// HasProject reports whether the location reaches a project, which is what a turn needs.
+// HasProject reports whether the location reaches a project, which is what a task needs.
 func (l Location) HasProject() bool { return l.ProjectID != "" }
 
-// ResolvePath turns an address into identifiers, one level at a time, so a failure names the level
+// ResolvePath tasks an address into identifiers, one level at a time, so a failure names the level
 // that failed rather than the whole address.
 //
 // The workspace narrows the project, which is what makes short project names usable: two workspaces
-// may each hold a project called "notes" without either being ambiguous. A thread may be given as
+// may each hold a project called "notes" without either being ambiguous. A session may be given as
 // the shortened identifier a listing prints, and is expanded within its project.
 func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, path Path) (Location, error) {
 	if path.IsZero() {
@@ -105,27 +105,27 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	located.ProjectID = projectID
 
-	if path.Thread == "" {
+	if path.Session == "" {
 		return located, nil
 	}
-	threadID, err := resolveThread(ctx, client, projectID, path.Thread)
+	sessionID, err := resolveSession(ctx, client, projectID, path.Session)
 	if err != nil {
 		return Location{}, err
 	}
-	located.ThreadID = threadID
+	located.SessionID = sessionID
 	return located, nil
 }
 
-// resolveThread turns a thread reference into a thread id within one project. Listings shorten
+// resolveSession tasks a session reference into a session id within one project. Listings shorten
 // identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
-func resolveThread(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
-	resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: projectID})
+func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
+	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
-		return "", fmt.Errorf("workspace: list threads: %w", err)
+		return "", fmt.Errorf("workspace: list sessions: %w", err)
 	}
 
 	matches := make([]string, 0, 1)
-	for _, session := range resp.GetThreads() {
+	for _, session := range resp.GetSessions() {
 		if session.GetHandle() == reference {
 			return reference, nil
 		}
@@ -138,9 +138,9 @@ func resolveThread(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	case 0:
 		// Shortened, because a listing prints them shortened and that is what gets typed back.
 		return "", &NotFoundError{
-			What: "thread", Name: reference,
-			Have: namesOf(resp.GetThreads(), func(i int) string {
-				return display.ShortID(resp.GetThreads()[i].GetHandle())
+			What: "session", Name: reference,
+			Have: namesOf(resp.GetSessions(), func(i int) string {
+				return display.ShortID(resp.GetSessions()[i].GetHandle())
 			}),
 			Make: `start one with quay dispatch "..."`,
 		}
@@ -148,6 +148,6 @@ func resolveThread(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		return matches[0], nil
 	default:
 		sort.Strings(matches)
-		return "", &AmbiguousError{What: "threads", Name: reference, IDs: matches}
+		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: matches}
 	}
 }

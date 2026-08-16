@@ -41,13 +41,13 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 		return resolveAddress(ctx, address)
 	})
 
-	sc.Step(`^the operator addresses the thread by its first eight characters$`, func(ctx context.Context) error {
+	sc.Step(`^the operator addresses the session by its first eight characters$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, current.threadID[:8]))
+		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, current.handle[:8]))
 	})
 
 	sc.Step(`^the address reaches the project$`, func(ctx context.Context) error {
@@ -73,22 +73,22 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("it reached workspace %q, want %q", a.located.WorkspaceID, w.workspaceID)
 		}
 		if a.located.HasProject() {
-			return fmt.Errorf("it reached project %q, want none: a workspace is not somewhere a turn runs", a.located.ProjectID)
+			return fmt.Errorf("it reached project %q, want none: a workspace is not somewhere a task runs", a.located.ProjectID)
 		}
 		return nil
 	})
 
-	sc.Step(`^the address reaches that thread$`, func(ctx context.Context) error {
+	sc.Step(`^the address reaches that session$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), addressFrom(ctx)
 		if a.err != nil {
 			return fmt.Errorf("the address did not resolve: %w", a.err)
 		}
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		if a.located.ThreadID != current.threadID {
-			return fmt.Errorf("it reached thread %q, want %q", a.located.ThreadID, current.threadID)
+		if a.located.SessionID != current.handle {
+			return fmt.Errorf("it reached session %q, want %q", a.located.SessionID, current.handle)
 		}
 		return nil
 	})

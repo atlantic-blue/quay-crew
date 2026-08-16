@@ -1,7 +1,7 @@
 # The default sandbox image for a session: an isolated environment with the Claude Code CLI in it.
 #
 # The control plane starts one container from this image per session and execs `claude` inside it.
-# The image carries no credentials. The subscription token is injected at turn time as
+# The image carries no credentials. The subscription token is injected at task time as
 # CLAUDE_CODE_OAUTH_TOKEN (minted by `claude setup-token`, stored as a per project secret), so the
 # same image is safe to build, share, and run anywhere.
 # quay itself, so a session can drive the crew from inside its sandbox. Built here rather than mounted
@@ -102,7 +102,7 @@ WORKDIR /home/agent/workspace
 
 # Get the first run out of the way.
 #
-# A turn is non interactive and skips all of this, but attaching to a conversation is interactive, and
+# A task is non interactive and skips all of this, but attaching to a conversation is interactive, and
 # a sandbox is a fresh container every time. Without this the operator lands in the theme picker and
 # then the workspace trust prompt instead of their conversation, which reads as "the token is not
 # working" because nothing ever gets far enough to authenticate.

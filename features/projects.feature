@@ -1,8 +1,8 @@
 Feature: Projects hold a body of work inside a workspace
 
-  A workspace is who you are. A project is a body of work inside it, and threads happen inside a
-  project. So "me" holds "house-bills", and the threads about the energy supplier and the council tax
-  sit together under it, apart from the threads about anything else.
+  A workspace is who you are. A project is a body of work inside it, and sessions happen inside a
+  project. So "me" holds "house-bills", and the sessions about the energy supplier and the council tax
+  sit together under it, apart from the sessions about anything else.
 
   Background:
     Given a running control plane
@@ -27,13 +27,13 @@ Feature: Projects hold a body of work inside a workspace
     And the refusal suggests "house-bills"
 
   # This is the point of the level. Two bodies of work in one workspace stay apart, even when a
-  # channel hands both of them the same thread identifier.
-  Scenario: Threads in two projects of one workspace are separate sessions
+  # channel hands both of them the same session identifier.
+  Scenario: Sessions in two projects of one workspace are separate sessions
     Given a project named "house-bills"
     And a second project named "gardening"
     When the operator dispatches "hello" to the project
     And the operator dispatches "hello" to the second project
-    Then the turns ran in different sessions
+    Then the tasks ran in different sessions
     And the workspace has 2 sessions
 
   Scenario: One workspace's projects are not another's

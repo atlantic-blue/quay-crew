@@ -35,7 +35,7 @@ type InboundMessage struct {
 	Sender string `protobuf:"bytes,3,opt,name=sender,proto3" json:"sender,omitempty"`
 	// text is the message body.
 	Text string `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
-	// handle continues an existing thread when set; empty starts a new one.
+	// handle continues an existing session when set; empty starts a new one.
 	Handle string `protobuf:"bytes,5,opt,name=handle,proto3" json:"handle,omitempty"`
 	// correlation_id is unique per inbound message and is also used as the trace id.
 	CorrelationId string `protobuf:"bytes,6,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
@@ -129,7 +129,7 @@ type OutboundMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// workspace is the isolation unit this reply belongs to.
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	// handle is the thread the reply belongs to.
+	// handle is the session the reply belongs to.
 	Handle string `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
 	// text is the reply body.
 	Text string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`

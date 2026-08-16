@@ -60,9 +60,9 @@ instrument.
 The logs answer "what did the control plane do". The three things they cannot answer are the reason
 the rest of this exists.
 
-- **What did one turn cost.** Tokens, and money. This is the number that decides whether a crew of
-  agents is a tool or a hobby, and it is per turn, per thread, per workspace. Issue #16.
-- **Where did a request go.** A turn crosses the command line tool, the control plane, a sandbox
+- **What did one task cost.** Tokens, and money. This is the number that decides whether a crew of
+  agents is a tool or a hobby, and it is per task, per session, per workspace. Issue #16.
+- **Where did a request go.** A task crosses the command line tool, the control plane, a sandbox
   container and the model. When it hangs, the interesting question is which of those it is sitting
   in, and a log line in each cannot tell you that. One trace can.
 - **What happened, in order, later.** An audit stream is not the same as logs on a container's
@@ -137,7 +137,7 @@ Two things to know before you spend time in there:
 So the profile now starts cleanly and has nothing to show you. Both halves of that are worth knowing
 before you go looking.
 
-## What would turn it on
+## What would task it on
 
 In this order, because each step is pointless without the one above it.
 

@@ -34,24 +34,24 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Where a thread is. These four are the whole vocabulary of Thread.status, written down here because
+// Where a session is. These four are the whole vocabulary of Session.status, written down here because
 // the console colours by them and a fifth invented at a call site would come out uncoloured.
 const (
-	// StatusIdle is a thread waiting for you: no turn is running and the last one landed.
+	// StatusIdle is a session waiting for you: no task is running and the last one landed.
 	StatusIdle = "idle"
-	// StatusRunning is a turn under way. A detached dispatch sets it before it answers, so the
-	// listing drawn straight afterwards says the thread is busy rather than ready.
+	// StatusRunning is a task under way. A detached dispatch sets it before it answers, so the
+	// listing drawn straight afterwards says the session is busy rather than ready.
 	StatusRunning = "running"
-	// StatusFailed is a thread whose last turn did not land. The turn record carries why.
+	// StatusFailed is a session whose last task did not land. The task record carries why.
 	StatusFailed = "failed"
-	// StatusStopped is a thread that was put down. Its sandbox is gone and its history is not.
+	// StatusStopped is a session that was put down. Its sandbox is gone and its history is not.
 	StatusStopped = "stopped"
 )
 
 // Info is what this control plane is running, reported over the API so an operator can see which
 // crew they are about to act on. It is configuration: never a secret, and never a health verdict.
 type Info struct {
-	// Model is the backend a turn runs against, for example "claude-code".
+	// Model is the backend a task runs against, for example "claude-code".
 	Model string
 	// Sandbox is what a session is isolated in, for example "docker".
 	Sandbox string
@@ -60,7 +60,7 @@ type Info struct {
 	// State is where a conversation and a project's files are kept, for example "host directory".
 	// Empty means they live in the container and are destroyed with it.
 	State string
-	// Events is the event log a turn is recorded on. Empty means nothing is connected to it.
+	// Events is the event log a task is recorded on. Empty means nothing is connected to it.
 	Events string
 	// Secrets is where a workspace's credentials are kept, for example "postgres, sealed".
 	Secrets string
@@ -77,10 +77,10 @@ type Config struct {
 	Provider sandbox.Provider
 	Secrets  secrets.Store
 	// Storage is where a workspace's conversation store lives on the host. The control plane reads it
-	// to tell a thread whose conversation is still there from one whose handle outlived it.
+	// to tell a session whose conversation is still there from one whose handle outlived it.
 	Storage sandbox.Storage
-	// Events is the log every turn is written to. Nil means nowhere, which is a stack with no broker
-	// configured rather than an error: turns run, and nothing records that they did.
+	// Events is the log every task is written to. Nil means nowhere, which is a stack with no broker
+	// configured rather than an error: tasks run, and nothing records that they did.
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
@@ -107,13 +107,13 @@ type Config struct {
 	// operator's so the crew can tell the two apart and refuse the driver the calls that grant
 	// capability (see DeniedToDriver).
 	DriverToken string
-	// BirthPermissionMode is what a thread's turns may do when nothing else says. It used to be a
-	// constant here, so every thread that did not come through the console's wizard arrived in
+	// BirthPermissionMode is what a session's tasks may do when nothing else says. It used to be a
+	// constant here, so every session that did not come through the console's wizard arrived in
 	// acceptEdits and the only way to change that was to edit the binary. Empty keeps acceptEdits,
-	// because an upgrade that quietly widens what a thread may do is the worst way to learn this
+	// because an upgrade that quietly widens what a session may do is the worst way to learn this
 	// setting exists.
 	BirthPermissionMode string
-	// DescribeEvery is how many turns past its description a conversation goes before the crew writes
+	// DescribeEvery is how many tasks past its description a conversation goes before the crew writes
 	// it again. Zero is off.
 	DescribeEvery int
 }
@@ -151,17 +151,17 @@ type Server struct {
 	driverToken string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor Identity
-	// birthMode is what a thread's turns may do when nothing else says. Empty means acceptEdits.
+	// birthMode is what a session's tasks may do when nothing else says. Empty means acceptEdits.
 	birthMode string
-	// describeEvery is how many turns past its description a conversation goes before the crew writes
+	// describeEvery is how many tasks past its description a conversation goes before the crew writes
 	// it again. Zero is off, which is what a crew paying for automation runs wants.
 	describeEvery int
 	// describing counts the descriptions still being written, so a test can wait for them rather than
 	// sleeping and a shutdown can tell whether any are in flight.
 	describing sync.WaitGroup
-	// turning counts the detached turns still running, for the same reasons: a turn nobody is waiting
-	// on is still a turn, and a process that cannot count them cannot tell whether it is idle.
-	turning sync.WaitGroup
+	// tasking counts the detached tasks still running, for the same reasons: a task nobody is waiting
+	// on is still a task, and a process that cannot count them cannot tell whether it is idle.
+	tasking sync.WaitGroup
 	// skills are the capabilities a session is given, and where they are on the host.
 	skills       []skill.Skill
 	skillsHost   string
@@ -212,23 +212,23 @@ func eventsOr(log messaging.EventLog) messaging.EventLog {
 	return log
 }
 
-// ListTurns returns a session's history, oldest first, from the turns the dispatch path writes in
-// the same breath as each turn.
+// ListTasks returns a session's history, oldest first, from the tasks the dispatch path writes in
+// the same breath as each task.
 //
 // It reads the store rather than the log: the log is the write side and replaying it on every
 // request would make a listing cost more the longer a crew has been running.
-func (s *Server) ListTurns(ctx context.Context, req *quaycrewv1.ListTurnsRequest) (*quaycrewv1.ListTurnsResponse, error) {
-	if req.GetThread() == "" {
+func (s *Server) ListTasks(ctx context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error) {
+	if req.GetSession() == "" {
 		return nil, status.Error(codes.InvalidArgument, "session is required")
 	}
-	if _, err := s.store.GetSession(ctx, req.GetThread()); err != nil {
+	if _, err := s.store.GetSession(ctx, req.GetSession()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	turns, err := s.store.ListTurns(ctx, req.GetThread(), int(req.GetLimit()))
+	tasks, err := s.store.ListTasks(ctx, req.GetSession(), int(req.GetLimit()))
 	if err != nil {
-		return nil, storeError(err, "list turns")
+		return nil, storeError(err, "list tasks")
 	}
-	return &quaycrewv1.ListTurnsResponse{Turns: turns}, nil
+	return &quaycrewv1.ListTasksResponse{Tasks: tasks}, nil
 }
 
 // GetInfo reports what this control plane is running.
@@ -245,11 +245,11 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 }
 
 // GetUsage adds up what every conversation in the crew has cost. Its own call rather than part of
-// GetInfo, which answers configuration and is fetched once. Archived threads are counted: a total
+// GetInfo, which answers configuration and is fetched once. Archived sessions are counted: a total
 // that shrinks when somebody tidies up is worse than no total.
 func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*quaycrewv1.GetUsageResponse, error) {
 	var total sandbox.Usage
-	var threads int64
+	var counted int64
 	for _, archived := range []bool{false, true} {
 		sessions, err := s.store.ListSessions(ctx, store.SessionFilter{Archived: archived})
 		if err != nil {
@@ -261,7 +261,7 @@ func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*
 				continue
 			}
 			total = total.Add(spent)
-			threads++
+			counted++
 		}
 	}
 	return &quaycrewv1.GetUsageResponse{
@@ -271,7 +271,7 @@ func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*
 			CacheRead:    total.CacheRead,
 			CacheWritten: total.CacheWritten,
 		},
-		Threads: threads,
+		Sessions: counted,
 	}, nil
 }
 
@@ -297,10 +297,10 @@ func storeError(err error, what string) error {
 
 // sandboxFor returns the session's sandbox, creating it on first use.
 //
-// The environment is set on the sandbox itself rather than on each turn, so attaching to the
-// conversation is authenticated too. A token set after the first turn does not reach the existing
+// The environment is set on the sandbox itself rather than on each task, so attaching to the
+// conversation is authenticated too. A token set after the first task does not reach the existing
 // sandbox: stop the session to get a fresh one.
-func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sandbox.Sandbox, error) {
+func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// Always ask the provider, never a remembered handle. What this process believes about containers
@@ -324,7 +324,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
-		Env:       environ(s.turnEnv(ctx, session)),
+		Env:       environ(s.taskEnv(ctx, session)),
 		Mounts:    mounts,
 		Driver:    session.GetDriver(),
 	})
@@ -353,11 +353,11 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Thread) (sa
 	return box, nil
 }
 
-// provision is everything a fresh sandbox needs before its first turn.
+// provision is everything a fresh sandbox needs before its first task.
 //
 // A session's working directory starts empty on purpose: a repository is cloned in conversation,
 // following the git skill, so the only provisioning a sandbox needs is its skills.
-func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
+func (s *Server) provision(ctx context.Context, session *quaycrewv1.Session, held []skill.Held, box sandbox.Sandbox) error {
 	// Before the skills, because a skill's setup can need a credential that is mounted rather than
 	// exported, and a setup that runs before the file is there fails for a reason nothing explains.
 	if err := s.readySecretFiles(ctx, session, box); err != nil {
@@ -366,7 +366,7 @@ func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held
 	if err := s.readySkills(ctx, session, held, box); err != nil {
 		return err
 	}
-	// After the skills, because a skill can refuse the turn and signing never does: a sandbox that
+	// After the skills, because a skill can refuse the task and signing never does: a sandbox that
 	// cannot be set up to sign is one that asks the operator to commit, which the git skill covers.
 	return s.readySigning(ctx, session, box)
 }
@@ -374,10 +374,10 @@ func (s *Server) provision(ctx context.Context, session *quaycrewv1.Thread, held
 // readySkills checks the sandbox has what its skills need, and runs each skill's setup once.
 //
 // Inside the container because that is the only place that knows what the image carries. Once,
-// because a sandbox is adopted across turns and a setup script run on every turn is a script whose
+// because a sandbox is adopted across tasks and a setup script run on every task is a script whose
 // author has to think about being run a thousand times. The marker lives in the container, so a
 // replaced container runs setup again, which is right: it is the container that was set up.
-func (s *Server) readySkills(ctx context.Context, session *quaycrewv1.Thread, held []skill.Held, box sandbox.Sandbox) error {
+func (s *Server) readySkills(ctx context.Context, session *quaycrewv1.Session, held []skill.Held, box sandbox.Sandbox) error {
 	for _, given := range held {
 		for _, binary := range given.Binaries {
 			if s.has(ctx, box, binary) {
@@ -431,8 +431,8 @@ func (s *Server) imageName() string {
 // it, and it is read back first: an agent that wrote into its own CLAUDE.md has learned something,
 // and overwriting that would make the crew's memory worse than a text file.
 //
-// A failure here never fails a turn.
-func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Thread) {
+// A failure here never fails a task.
+func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 	s.syncContextExcept(ctx, session, contextLevel{})
 }
 
@@ -442,7 +442,7 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Thread) {
 // `quay context set` is the operator saying what a level is now. Reading the file back for that level
 // first would hand them back the very body they were replacing, so at that one level the store wins
 // and everything else is still read back and kept.
-func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Thread, settled contextLevel) {
+func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Session, settled contextLevel) {
 	dirs := s.storage.MyDirs(sandbox.Config{
 		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
 	})
@@ -451,13 +451,13 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Thre
 	}
 	for at, levels := range contextFiles(session) {
 		// Read back first. Something inside the sandbox writing into its own memory has learned
-		// something, and overwriting that on the next turn would make the crew's memory strictly
+		// something, and overwriting that on the next task would make the crew's memory strictly
 		// worse than a text file.
 		// The skills index is a section in the same file and is not a level: it is rendered from what the
 		// session holds rather than written by anybody. It is named in every file so the read back
 		// recognises its mark and drops what sits under it, because text under a mark this build does not
 		// know is swept into the innermost level, which stores the index as though the operator had typed
-		// it and renders it again underneath itself on the next turn. The index belongs only to the outer
+		// it and renders it again underneath itself on the next task. The index belongs only to the outer
 		// file, but a build that wrote it into the session's own file has been and gone, so the inner
 		// file's read back has to know the mark too. It goes first, never last: the last scope is where
 		// unmarked text belongs, and a note an agent appends is a note, not an index.
@@ -514,8 +514,8 @@ func join(kept, added string) string {
 // `quay context set` is the operator saying what the context is now, so the store wins.
 //
 // A conversation already running does not see it. The tool reads its memory at the start, so a change
-// lands on the next turn or the next open.
-func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Thread) {
+// lands on the next task or the next open.
+func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session) {
 	dirs := s.storage.MyDirs(sandbox.Config{
 		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
 	})
@@ -531,7 +531,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Thread) 
 			}
 			// A level can carry a swept skills index, from a build whose read back did not know the mark
 			// in the session's own file. An index is rendered state, never context, so the store is put
-			// right here, once, rather than rendering the stale index on every turn from now on.
+			// right here, once, rather than rendering the stale index on every task from now on.
 			if cleaned, swept := sandbox.WithoutSection(body, sandbox.SkillsScope); swept {
 				body = cleaned
 				_ = s.store.SetContext(ctx, level.scope, level.owner, body)
@@ -561,9 +561,9 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Thread) 
 // The crew's skills are not written: they are already a directory the operator keeps, and they are
 // mounted from it. Only the ones that live in the store have to be put somewhere before they can be.
 //
-// A failure here does not fail a turn, for the same reason a context failure does not. The model is told
+// A failure here does not fail a task, for the same reason a context failure does not. The model is told
 // what it holds rather than made to depend on being told.
-func (s *Server) renderSkills(ctx context.Context, session *quaycrewv1.Thread, _ string) string {
+func (s *Server) renderSkills(ctx context.Context, session *quaycrewv1.Session, _ string) string {
 	caps := s.capabilityOf(ctx, session)
 	if caps.attachedKnown {
 		if dir, ok := s.storage.WorkspaceSkillsDir(session.GetWorkspace()); ok {
@@ -584,7 +584,7 @@ func (s *Server) renderSkills(ctx context.Context, session *quaycrewv1.Thread, _
 // renderTo writes a changed context out to every live session that reads it, so a change reaches the
 // sandboxes that are already running rather than waiting for each of them to be replaced.
 //
-// Archived threads are left alone. They are put away, their sandboxes are gone, and the render would
+// Archived sessions are left alone. They are put away, their sandboxes are gone, and the render would
 // only create directories for conversations nobody is having.
 func (s *Server) renderTo(ctx context.Context, scope store.ContextScope, owner string) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
@@ -599,7 +599,7 @@ func (s *Server) renderTo(ctx context.Context, scope store.ContextScope, owner s
 }
 
 // reads says whether a session's memory files carry this level of context.
-func reads(session *quaycrewv1.Thread, scope store.ContextScope, owner string) bool {
+func reads(session *quaycrewv1.Session, scope store.ContextScope, owner string) bool {
 	switch scope {
 	case store.ContextCrew:
 		return true
@@ -631,7 +631,7 @@ type contextLevel struct {
 // contextFiles is what goes in each of a session's two memory files: the outer two levels in the
 // conversation store's directory, which every session in the workspace reads, and the inner two in
 // this session's own working directory, which only it reads.
-func contextFiles(session *quaycrewv1.Thread) [][]contextLevel {
+func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 	return [][]contextLevel{
 		{{store.ContextCrew, ""}, {store.ContextWorkspace, session.GetWorkspace()}},
 		{{store.ContextProject, session.GetProject()}, {store.ContextSession, session.GetId()}},
@@ -642,7 +642,7 @@ func contextFiles(session *quaycrewv1.Thread) [][]contextLevel {
 //
 // The handle is closed when this process holds one, and the provider removes by name either way: the
 // map is a process map, so after a restart it is empty while every container runs on, which is how
-// stopping a thread used to mark the row and leave the container.
+// stopping a session used to mark the row and leave the container.
 func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 	s.mu.Lock()
 	box, ok := s.sandboxes[sessionID]
@@ -659,7 +659,7 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 
 // stopSessions stops every live session the filter matches and closes its sandbox. It is what
 // deleting has to do to the things it hides: sessions keep their history, and a container running
-// for a thread nobody can see is the leak archiving already closes.
+// for a session nobody can see is the leak archiving already closes.
 func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) {
 	sessions, err := s.store.ListSessions(ctx, filter)
 	if err != nil {
@@ -673,7 +673,7 @@ func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) {
 	}
 }
 
-// ReapStrays removes the sandboxes of threads that no longer want one: the row is gone, archived, or
+// ReapStrays removes the sandboxes of sessions that no longer want one: the row is gone, archived, or
 // says stopped. Anything stopped or deleted while the crew was down was marked in the store and left
 // running on the daemon, so this runs once at startup.
 func (s *Server) ReapStrays(ctx context.Context) {
@@ -693,17 +693,17 @@ func (s *Server) ReapStrays(ctx context.Context) {
 	}
 }
 
-// WaitForTurns blocks until every detached turn has landed, or until the caller gives up.
+// WaitForTasks blocks until every detached task has landed, or until the caller gives up.
 //
-// A detached turn is a goroutine and not a call, so draining requests does not drain it: a graceful
-// stop that skips this exits mid turn, and the thread comes back up settled as failed for no better
-// reason than that nobody waited. Bounded by the caller, because a turn takes as long as the work
+// A detached task is a goroutine and not a call, so draining requests does not drain it: a graceful
+// stop that skips this exits mid task, and the session comes back up settled as failed for no better
+// reason than that nobody waited. Bounded by the caller, because a task takes as long as the work
 // takes and a shutdown cannot.
-func (s *Server) WaitForTurns(ctx context.Context) {
+func (s *Server) WaitForTasks(ctx context.Context) {
 	landed := make(chan struct{})
 	go func() {
 		defer close(landed)
-		s.turning.Wait()
+		s.tasking.Wait()
 	}()
 	select {
 	case <-landed:
@@ -711,12 +711,12 @@ func (s *Server) WaitForTurns(ctx context.Context) {
 	}
 }
 
-// SettleTurns marks every thread the store still calls running as failed, and runs once at startup.
+// SettleTasks marks every session the store still calls running as failed, and runs once at startup.
 //
-// A turn runs in this process. Nothing survives the process going down, so a row saying running on
-// the way up is a turn that died with the last one, and leaving it says a thread is busy for as long
+// A task runs in this process. Nothing survives the process going down, so a row saying running on
+// the way up is a task that died with the last one, and leaving it says a session is busy for as long
 // as the crew lives. That reads as a hung conversation and there is nothing to wait for.
-func (s *Server) SettleTurns(ctx context.Context) {
+func (s *Server) SettleTasks(ctx context.Context) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
 	if err != nil {
 		return
@@ -725,10 +725,10 @@ func (s *Server) SettleTurns(ctx context.Context) {
 		if session.GetStatus() != StatusRunning {
 			continue
 		}
-		s.recordTurn(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
-		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
+		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
+		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
 			Status:  StatusFailed,
-			Failure: "the crew restarted while this turn was running, so it did not finish",
+			Failure: "the crew restarted while this task was running, so it did not finish",
 		})
 	}
 }
@@ -908,7 +908,7 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 	return &quaycrewv1.DeleteProjectResponse{}, nil
 }
 
-// Dispatch starts or continues a thread, running one turn through the model runner.
+// Dispatch starts or continues a session, running one task through the model runner.
 func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	if req.GetProject() == "" {
 		return nil, status.Error(codes.InvalidArgument, "project is required")
@@ -917,24 +917,24 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, status.Error(codes.InvalidArgument, "text is required")
 	}
 
-	thread := req.GetHandle()
-	if thread == "" {
-		thread = store.NewID()
+	handle := req.GetHandle()
+	if handle == "" {
+		handle = store.NewID()
 	}
-	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), thread, s.birthMode)
+	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle, s.birthMode)
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
-	// A handle is matched whether the thread is put away or not, so a dispatch to one the operator
-	// archived used to start a container for a thread nobody can see. Archiving stops the thread, and
+	// A handle is matched whether the session is put away or not, so a dispatch to one the operator
+	// archived used to start a container for a session nobody can see. Archiving stops the session, and
 	// stopped has to mean nothing runs here again until somebody brings it back.
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s is archived: restore it first", display.ShortID(session.GetHandle()))
+			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 
 	// A mode given here applies before the sandbox is built, because a sandbox is born with its
-	// capabilities and never drifts: setting it afterwards costs a restart, and a thread born unable
+	// capabilities and never drifts: setting it afterwards costs a restart, and a session born unable
 	// to read its own skills is the failure this prevents.
 	if mode := req.GetPermissionMode(); mode != "" {
 		if !model.KnownPermissionMode(mode) {
@@ -943,42 +943,42 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 				mode, model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
 		}
 		if err := s.store.SetPermissionMode(ctx, session.GetId(), mode); err != nil {
-			return nil, storeError(err, "thread")
+			return nil, storeError(err, "session")
 		}
 		session.PermissionMode = mode
 	}
 
 	if req.GetDetach() {
 		// Marked running before the goroutine starts, not inside it: the caller is about to be told the
-		// thread exists, and a thread that reads idle in the listing it draws next is a thread the
-		// operator will type into while its first turn is still running.
-		s.recordTurn(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+		// session exists, and a session that reads idle in the listing it draws next is a session the
+		// operator will type into while its first task is still running.
+		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
 		// Detached from the caller's context as well as from its patience. The caller is a console that
-		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a turn
+		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
 		// carrying that context would be killed by the very thing that started it.
-		s.turning.Add(1)
-		go func(session *quaycrewv1.Thread, text string) {
-			defer s.turning.Done()
-			_, _ = s.turn(context.WithoutCancel(ctx), session, text)
+		s.tasking.Add(1)
+		go func(session *quaycrewv1.Session, text string) {
+			defer s.tasking.Done()
+			_, _ = s.task(context.WithoutCancel(ctx), session, text)
 		}(session, req.GetText())
-		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread}, nil
+		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.turn(ctx, session, req.GetText())
+	reply, err := s.task(ctx, session, req.GetText())
 	if err != nil {
 		return nil, err
 	}
-	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: thread, Reply: reply}, nil
+	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle, Reply: reply}, nil
 }
 
-// turn runs one turn of a thread and records what came of it, whichever way it was dispatched. Both
-// roads meet here so a detached turn and a waited one cannot come to mean different things: the same
+// task runs one task of a session and records what came of it, whichever way it was dispatched. Both
+// roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
-func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text string) (string, error) {
+func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text string) (string, error) {
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
-		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
-		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
+		s.recordTask(ctx, session.GetId(), "", StatusFailed)
+		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
 			Prompt: text, Status: StatusFailed, Failure: "the session's sandbox could not be created: " + err.Error(),
 		})
 		return "", sandboxError(err, "create sandbox")
@@ -988,55 +988,55 @@ func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text stri
 		Text:           text,
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session, s.birthMode),
-		Env:            s.turnEnv(ctx, session),
+		Env:            s.taskEnv(ctx, session),
 		Settings:       s.settingsFor(ctx, session),
 	})
 	if err != nil {
-		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
-		// The error itself, not a sentence about turns. Every failure used to read "the model did not
-		// complete the turn", so a deadline, a crash and a refusal were one indistinguishable line and
+		s.recordTask(ctx, session.GetId(), "", StatusFailed)
+		// The error itself, not a sentence about tasks. Every failure used to read "the model did not
+		// complete the task", so a deadline, a crash and a refusal were one indistinguishable line and
 		// the operator had nothing to act on.
-		s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
-			Prompt: text, Status: StatusFailed, Failure: turnFailure(err),
+		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
+			Prompt: text, Status: StatusFailed, Failure: taskFailure(err),
 		})
-		return "", status.Errorf(codes.Internal, "run turn: %v", err)
+		return "", status.Errorf(codes.Internal, "run task: %v", err)
 	}
-	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
-	s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
+	s.recordTask(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
+	s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
 		Prompt: text, Reply: resp.Reply, Status: StatusIdle,
 	})
 
-	// Behind the answer, so the operator waits for their turn rather than for the crew to think of a
+	// Behind the answer, so the operator waits for their task rather than for the crew to think of a
 	// name for it. Only the identifier crosses into it: everything else is read again in there, so
 	// nothing this call is still holding can be written underneath it.
 	s.describing.Add(1)
-	go func(threadID string) {
+	go func(sessionID string) {
 		defer s.describing.Done()
-		s.describeThread(context.WithoutCancel(ctx), threadID)
+		s.describeSession(context.WithoutCancel(ctx), sessionID)
 	}(session.GetId())
 
 	return resp.Reply, nil
 }
 
-// turnFailure is what the operator is told a failed turn failed of.
+// taskFailure is what the operator is told a failed task failed of.
 //
-// A cancelled turn is named for what actually happened to it, because "context canceled" describes
+// A cancelled task is named for what actually happened to it, because "context canceled" describes
 // the plumbing rather than the event, and the two causes need telling apart: a deadline is a caller
 // that would not wait, and a cancellation is a caller that went away.
-func turnFailure(err error) string {
+func taskFailure(err error) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return "the turn ran past the time the caller allowed it"
+		return "the task ran past the time the caller allowed it"
 	case errors.Is(err, context.Canceled):
-		return "the turn was cancelled before it finished"
+		return "the task was cancelled before it finished"
 	default:
 		return err.Error()
 	}
 }
 
-// permissionModeOf is the mode a thread's turns run in. A thread from before the mode was written
+// permissionModeOf is the mode a session's tasks run in. A session from before the mode was written
 // down has none, and every one of those has been running acceptEdits, so that is what it keeps.
-func permissionModeOf(session *quaycrewv1.Thread, born string) string {
+func permissionModeOf(session *quaycrewv1.Session, born string) string {
 	if mode := session.GetPermissionMode(); model.KnownPermissionMode(mode) {
 		return mode
 	}
@@ -1105,7 +1105,7 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 }
 
 // SetContext records what the model should be told at a scope, and renders it into every directory
-// that already exists for it, so a sandbox already running picks it up on its next turn.
+// that already exists for it, so a sandbox already running picks it up on its next task.
 func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextRequest) (*quaycrewv1.SetContextResponse, error) {
 	scope := store.ContextScope(req.GetScope())
 	if !store.KnownContextScope(scope) {
@@ -1120,7 +1120,7 @@ func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextReque
 		return nil, storeError(err, "context")
 	}
 	// Out to the sessions that read it. Without this a context only reached a sandbox when that
-	// sandbox was created, so telling a running thread something did nothing you could see until it
+	// sandbox was created, so telling a running session something did nothing you could see until it
 	// was replaced, which is not a thing an operator would think to do.
 	s.renderTo(ctx, scope, req.GetOwner())
 	return &quaycrewv1.SetContextResponse{
@@ -1166,9 +1166,9 @@ func (s *Server) contextDir(ctx context.Context, scope store.ContextScope, owner
 	}
 }
 
-// SetSessionPermissionMode changes what a thread's turns may do without asking.
+// SetSessionPermissionMode changes what a session's tasks may do without asking.
 //
-// The mode belongs to the thread rather than to a turn, so a thread started to plan something keeps
+// The mode belongs to the session rather than to a task, so a session started to plan something keeps
 // planning instead of being re armed on every dispatch. An unknown mode is refused here rather than
 // handed to the model, which would take it as far as its own argument parser and no further.
 // ImportSkill takes a skill into the crew from the files a client read out of its directory.
@@ -1210,12 +1210,12 @@ func (s *Server) ImportSkill(ctx context.Context, req *quaycrewv1.ImportSkillReq
 
 // ListSkills says what the crew can do, or what one workspace holds.
 func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsRequest) (*quaycrewv1.ListSkillsResponse, error) {
-	// A thread's listing is the same answer its sandbox is built from, so the listing cannot say
+	// A session's listing is the same answer its sandbox is built from, so the listing cannot say
 	// one thing while the sandbox does another.
-	if req.GetThread() != "" {
-		session, err := s.store.GetSession(ctx, req.GetThread())
+	if req.GetSession() != "" {
+		session, err := s.store.GetSession(ctx, req.GetSession())
 		if err != nil {
-			return nil, storeError(err, "thread")
+			return nil, storeError(err, "session")
 		}
 		caps := s.capabilityOf(ctx, session)
 		out := make([]*quaycrewv1.Skill, 0, len(caps.held)+len(caps.leftOut))
@@ -1258,7 +1258,7 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 		carried := asSkill(one)
 		carried.Crew = crew[one.Name]
 		// A workspace's listing answers the same question its sessions do, so a skill its secrets
-		// leave out says so here rather than only once a thread exists. The crew's own listing has
+		// leave out says so here rather than only once a session exists. The crew's own listing has
 		// no workspace to answer for, so it says nothing.
 		if req.GetWorkspace() != "" {
 			carried.LeftOut = s.secretMissing(ctx, req.GetWorkspace(), skill.Held{Skill: one.Skill})
@@ -1339,18 +1339,18 @@ func skillAsProto(one skill.Skill) *quaycrewv1.Skill {
 	return out
 }
 
-func (s *Server) SetThreadPermissionMode(ctx context.Context, req *quaycrewv1.SetThreadPermissionModeRequest) (*quaycrewv1.SetThreadPermissionModeResponse, error) {
+func (s *Server) SetSessionPermissionMode(ctx context.Context, req *quaycrewv1.SetSessionPermissionModeRequest) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
 	if !model.KnownPermissionMode(req.GetMode()) {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a permission mode: use %s, %s or %s",
 			req.GetMode(), model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
 	}
 	// The one place where skipping every permission means the host rather than a container. The local
-	// backend is a stopgap for running without Docker, and arming a turn there gives the model the
+	// backend is a stopgap for running without Docker, and arming a task there gives the model the
 	// machine the operator is sitting at.
 	if req.GetMode() == model.PermissionBypass && s.info.Sandbox == "local" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"this crew runs turns on the host, not in a container, so %s would give the model your machine",
+			"this crew runs tasks on the host, not in a container, so %s would give the model your machine",
 			model.PermissionBypass)
 	}
 	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
@@ -1359,27 +1359,27 @@ func (s *Server) SetThreadPermissionMode(ctx context.Context, req *quaycrewv1.Se
 	if err := s.store.SetPermissionMode(ctx, req.GetId(), req.GetMode()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.SetThreadPermissionModeResponse{Thread: s.reread(ctx, req.GetId())}, nil
+	return &quaycrewv1.SetSessionPermissionModeResponse{Session: s.reread(ctx, req.GetId())}, nil
 }
 
-// SetThreadLabel records what the operator calls a conversation. Empty clears it.
+// SetSessionLabel records what the operator calls a conversation. Empty clears it.
 //
 // A label is trimmed and capped rather than refused. It is a name somebody typed, so the only ways it
 // can be wrong are leading space, which is invisible, and being long enough to push every other
 // column off the screen. Neither is worth a refusal the operator has to read.
-func (s *Server) SetThreadLabel(ctx context.Context, req *quaycrewv1.SetThreadLabelRequest) (*quaycrewv1.SetThreadLabelResponse, error) {
+func (s *Server) SetSessionLabel(ctx context.Context, req *quaycrewv1.SetSessionLabelRequest) (*quaycrewv1.SetSessionLabelResponse, error) {
 	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
 	if err := s.store.SetLabel(ctx, req.GetId(), tidyLabel(req.GetLabel())); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.SetThreadLabelResponse{Thread: s.reread(ctx, req.GetId())}, nil
+	return &quaycrewv1.SetSessionLabelResponse{Session: s.reread(ctx, req.GetId())}, nil
 }
 
 // labelLimit is how much of a label is kept. A listing gives the name one column among ten, so a
 // label longer than this is one nobody can read anyway, and keeping it whole would only push the
-// columns that say what the thread is doing off the screen.
+// columns that say what the session is doing off the screen.
 const labelLimit = 60
 
 // tidyLabel is a label as it is stored: trimmed, one line, and capped.
@@ -1394,20 +1394,20 @@ func tidyLabel(label string) string {
 	return tidy
 }
 
-// recordTurn stores the outcome of a turn. A store failure here must not replace the turn's own
+// recordTask stores the outcome of a task. A store failure here must not replace the task's own
 // result, which the operator already has, so it is not returned; a later read shows a stale status
-// rather than the turn appearing to have failed when it did not.
+// rather than the task appearing to have failed when it did not.
 //
-// An archived thread keeps its conversation handle and its status. Archiving stops a thread and takes
-// its container away, and the turn that was running in it lands afterwards: recording what that turn
-// came to put the thread back to idle, or marked it failed, so a thread the operator had just put
-// away read as one still working. The handle is still written, because restoring the thread has to
+// An archived session keeps its conversation handle and its status. Archiving stops a session and takes
+// its container away, and the task that was running in it lands afterwards: recording what that task
+// came to put the session back to idle, or marked it failed, so a session the operator had just put
+// away read as one still working. The handle is still written, because restoring the session has to
 // come back to the conversation it was in.
-func (s *Server) recordTurn(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
+func (s *Server) recordTask(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
 	if session, err := s.store.GetSession(ctx, sessionID); err == nil && session.GetArchivedAt() != nil {
 		sessionStatus = session.GetStatus()
 	}
-	_ = s.store.RecordTurn(ctx, sessionID, modelSessionID, sessionStatus)
+	_ = s.store.RecordTask(ctx, sessionID, modelSessionID, sessionStatus)
 }
 
 // environ renders an environment map as the "KEY=value" entries a sandbox expects, sorted so the
@@ -1428,10 +1428,10 @@ func environ(values map[string]string) []string {
 	return entries
 }
 
-// turnEnv gathers the environment a turn runs with from the workspace's secrets. A workspace that has
+// taskEnv gathers the environment a task runs with from the workspace's secrets. A workspace that has
 // set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
-// turn, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
-func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread) map[string]string {
+// task, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
+func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session) map[string]string {
 	env := map[string]string{}
 	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
 	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
@@ -1459,7 +1459,7 @@ func (s *Server) turnEnv(ctx context.Context, session *quaycrewv1.Thread) map[st
 	// list of which names are allowed out was a third answer to a question already answered twice.
 	//
 	// The model's own token is asked for by name as well, so a store that cannot enumerate still
-	// runs a turn rather than failing one for a reason the operator cannot see.
+	// runs a task rather than failing one for a reason the operator cannot see.
 	//
 	// A mounted secret is left out. It reaches the sandbox as a file, and putting it here as well
 	// would hand back the exposure the file exists to avoid: a container's environment is readable
@@ -1506,7 +1506,7 @@ const grpcAddrEnv = "QC_GRPC_ADDR"
 const crewOwnPrefix = "QC_"
 
 // ListSessions lists sessions, optionally filtered by workspace.
-func (s *Server) ListThreads(ctx context.Context, req *quaycrewv1.ListThreadsRequest) (*quaycrewv1.ListThreadsResponse, error) {
+func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{
 		Workspace: req.GetWorkspace(),
 		Project:   req.GetProject(),
@@ -1519,25 +1519,25 @@ func (s *Server) ListThreads(ctx context.Context, req *quaycrewv1.ListThreadsReq
 		s.withUsage(session)
 	}
 	s.withStaleness(ctx, sessions)
-	return &quaycrewv1.ListThreadsResponse{Threads: sessions}, nil
+	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
 }
 
 // GetSession returns a session by id.
-func (s *Server) GetThread(ctx context.Context, req *quaycrewv1.GetThreadRequest) (*quaycrewv1.GetThreadResponse, error) {
+func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionRequest) (*quaycrewv1.GetSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
-	s.withStaleness(ctx, []*quaycrewv1.Thread{session})
-	return &quaycrewv1.GetThreadResponse{Thread: session}, nil
+	s.withStaleness(ctx, []*quaycrewv1.Session{session})
+	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
 
-// withStaleness marks the threads whose live sandbox was born before the workspace's current skill
-// set. A thread with no recorded birth set has no live sandbox and is never stale. The current set
-// is computed once per workspace, not once per thread, because a listing is most of what the
+// withStaleness marks the sessions whose live sandbox was born before the workspace's current skill
+// set. A session with no recorded birth set has no live sandbox and is never stale. The current set
+// is computed once per workspace, not once per session, because a listing is most of what the
 // console asks for.
-func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Thread) {
+func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Session) {
 	current := map[string]string{}
 	for _, session := range sessions {
 		born, err := s.store.SessionSkills(ctx, session.GetId())
@@ -1552,13 +1552,13 @@ func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Threa
 	}
 }
 
-// withUsage puts what a thread's conversation has cost onto it, read from the transcript the model
+// withUsage puts what a session's conversation has cost onto it, read from the transcript the model
 // keeps rather than from anything the crew recorded.
 //
 // It has to come from there: the conversations worth counting are the ones held in the panel, and
-// those never pass through the control plane at all. A thread nobody has spoken in is left without a
+// those never pass through the control plane at all. A session nobody has spoken in is left without a
 // figure rather than reported as costing nothing, because those are different things.
-func (s *Server) withUsage(session *quaycrewv1.Thread) {
+func (s *Server) withUsage(session *quaycrewv1.Session) {
 	spent := s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId())
 	if spent.Empty() {
 		return
@@ -1577,17 +1577,17 @@ func (s *Server) withUsage(session *quaycrewv1.Thread) {
 // into the model's own store, not a secret, so the operator's environment supplies the subscription
 // token when they run it. Keeping the token out of this response is deliberate: a value the secrets
 // backend holds should not become readable through the API just because a client asks nicely.
-func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadRequest) (*quaycrewv1.AttachThreadResponse, error) {
+func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessionRequest) (*quaycrewv1.AttachSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
 	// A driver with no conversation yet is opened rather than refused: it is made the moment somebody
-	// opens the crew, and telling them to dispatch a turn to the thing they just opened is a loop.
+	// opens the crew, and telling them to dispatch a task to the thing they just opened is a loop.
 	// Everything below is about a conversation that exists, so it is skipped too.
 	if session.GetModelSessionId() == "" && !session.GetDriver() {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s has no conversation yet: send it a message with quay dispatch first",
+			"session %s has no conversation yet: send it a message with quay dispatch first",
 			display.ShortID(session.GetHandle()))
 	}
 	// The crew names the conversation rather than learning what it was called afterwards. A
@@ -1596,21 +1596,21 @@ func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadR
 	// back, no tokens to count, and no way to tell one transcript in the workspace from another.
 	//
 	// Assigned here rather than at creation: this is the moment a conversation starts to exist, and a
-	// thread that is only dispatched to gets its identifier from the turn.
+	// session that is only dispatched to gets its identifier from the task.
 	if session.GetModelSessionId() == "" {
 		named := store.NewConversationID()
-		if err := s.store.RecordTurn(ctx, session.GetId(), named, session.GetStatus()); err != nil {
+		if err := s.store.RecordTask(ctx, session.GetId(), named, session.GetStatus()); err != nil {
 			return nil, storeError(err, "name the conversation")
 		}
 		session.ModelSessionId = named
 	}
 	if session.GetStatus() == StatusStopped {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s is stopped: restart it first", display.ShortID(session.GetHandle()))
+			"session %s is stopped: restart it first", display.ShortID(session.GetHandle()))
 	}
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s is archived: restore it first", display.ShortID(session.GetHandle()))
+			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 	// A handle can outlive what it points at, and a conversation the crew has just named has no
 	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a
@@ -1621,39 +1621,39 @@ func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadR
 		return nil, sandboxError(err, "start sandbox")
 	}
 	// Inside tmux, so detaching leaves the model running. -A attaches to the session already there
-	// rather than starting a second beside it, and the permission mode is the thread's own, or a
-	// thread armed to skip permissions asks anyway the moment it is opened.
-	return &quaycrewv1.AttachThreadResponse{
+	// rather than starting a second beside it, and the permission mode is the session's own, or a
+	// session armed to skip permissions asks anyway the moment it is opened.
+	return &quaycrewv1.AttachSessionResponse{
 		Sandbox: sandbox.ContainerName(session.GetId()),
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
 			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session, s.birthMode)},
 	}, nil
 }
 
-// RestartSession gives a thread a fresh sandbox and leaves it idle, whatever state it was in.
+// RestartSession gives a session a fresh sandbox and leaves it idle, whatever state it was in.
 //
-// The sandbox is started here rather than on the next turn, so the operator can attach into the
-// conversation straight away instead of having to dispatch a turn to make the container exist. That
+// The sandbox is started here rather than on the next task, so the operator can attach into the
+// conversation straight away instead of having to dispatch a task to make the container exist. That
 // is only safe because a session's state lives on the host now: the sandbox this creates is a new
 // container over the same conversation store and the same project files.
 //
-// A thread that is already live is stopped first rather than refused. Restarting is what the operator
-// reaches for when the container is wrong: a wedged turn, a shell that will not answer, a credential
+// A session that is already live is stopped first rather than refused. Restarting is what the operator
+// reaches for when the container is wrong: a wedged task, a shell that will not answer, a credential
 // the sandbox was born without. Refusing until it was stopped made that two keys, and the second was
 // the one that did the work, so the first key read as broken.
 //
-// An archived thread is refused. It is put away, and bringing one back is what restore is for.
-func (s *Server) RestartThread(ctx context.Context, req *quaycrewv1.RestartThreadRequest) (*quaycrewv1.RestartThreadResponse, error) {
+// An archived session is refused. It is put away, and bringing one back is what restore is for.
+func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSessionRequest) (*quaycrewv1.RestartSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"thread %s is archived: restore it first", display.ShortID(session.GetHandle()))
+			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
-	// The old container goes before the new one is asked for, so the thread never holds two, and a
-	// turn running in the old one loses the room it was working in, which is the point of the key.
+	// The old container goes before the new one is asked for, so the session never holds two, and a
+	// task running in the old one loses the room it was working in, which is the point of the key.
 	if session.GetStatus() != StatusStopped {
 		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
 			return nil, storeError(err, "session")
@@ -1670,15 +1670,15 @@ func (s *Server) RestartThread(ctx context.Context, req *quaycrewv1.RestartThrea
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.RestartThreadResponse{Thread: restarted}, nil
+	return &quaycrewv1.RestartSessionResponse{Session: restarted}, nil
 }
 
-// ArchiveSession puts a thread away, stopping it first if it is running.
+// ArchiveSession puts a session away, stopping it first if it is running.
 //
 // Nothing is deleted, by anyone, here: the row, the conversation handle, the conversation store on
 // the host and the project's files are all untouched. Archiving is a stamp, so restoring is clearing
 // it. Deleting a conversation is a separate decision and not something to slip in behind a key.
-func (s *Server) ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThreadRequest) (*quaycrewv1.ArchiveThreadResponse, error) {
+func (s *Server) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
@@ -1686,8 +1686,8 @@ func (s *Server) ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThrea
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "session %s is already archived", req.GetId())
 	}
-	// A container left running for a thread nobody can see is exactly the leak this project keeps
-	// finding, so put the sandbox away with the thread.
+	// A container left running for a session nobody can see is exactly the leak this project keeps
+	// finding, so put the sandbox away with the session.
 	if session.GetStatus() != StatusStopped {
 		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
 			return nil, storeError(err, "session")
@@ -1697,12 +1697,12 @@ func (s *Server) ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThrea
 	if err := s.store.ArchiveSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.ArchiveThreadResponse{Thread: s.reread(ctx, req.GetId())}, nil
+	return &quaycrewv1.ArchiveSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
 }
 
-// RestoreSession brings an archived thread back into the default listing. It comes back stopped,
+// RestoreSession brings an archived session back into the default listing. It comes back stopped,
 // which is what it is: archiving stopped it, and starting a container again is what restart is for.
-func (s *Server) RestoreThread(ctx context.Context, req *quaycrewv1.RestoreThreadRequest) (*quaycrewv1.RestoreThreadResponse, error) {
+func (s *Server) RestoreSession(ctx context.Context, req *quaycrewv1.RestoreSessionRequest) (*quaycrewv1.RestoreSessionResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
@@ -1713,13 +1713,13 @@ func (s *Server) RestoreThread(ctx context.Context, req *quaycrewv1.RestoreThrea
 	if err := s.store.RestoreSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.RestoreThreadResponse{Thread: s.reread(ctx, req.GetId())}, nil
+	return &quaycrewv1.RestoreSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
 }
 
 // reread returns the session as it now is, so a caller does not have to ask again. A read that fails
 // here is not worth failing the write that already succeeded, so it yields nothing rather than an
 // error the caller would misread as the action not having happened.
-func (s *Server) reread(ctx context.Context, id string) *quaycrewv1.Thread {
+func (s *Server) reread(ctx context.Context, id string) *quaycrewv1.Session {
 	session, err := s.store.GetSession(ctx, id)
 	if err != nil {
 		return nil
@@ -1728,12 +1728,12 @@ func (s *Server) reread(ctx context.Context, id string) *quaycrewv1.Thread {
 }
 
 // StopSession marks a session stopped and tears down its sandbox.
-func (s *Server) StopThread(ctx context.Context, req *quaycrewv1.StopThreadRequest) (*quaycrewv1.StopThreadResponse, error) {
+func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionRequest) (*quaycrewv1.StopSessionResponse, error) {
 	if err := s.store.StopSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
 	s.closeSandbox(ctx, req.GetId())
-	return &quaycrewv1.StopThreadResponse{}, nil
+	return &quaycrewv1.StopSessionResponse{}, nil
 }
 
 // OpenDriver returns the project's driver, the session that drives the crew, creating it the first
@@ -1747,7 +1747,7 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 		return nil, storeError(err, "project")
 	}
 	s.teachDriver(ctx, session)
-	return &quaycrewv1.OpenDriverResponse{Thread: session}, nil
+	return &quaycrewv1.OpenDriverResponse{Session: session}, nil
 }
 
 // teachDriver writes what quay is into the driver's own context, so it opens knowing what it is for
@@ -1756,7 +1756,7 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 //
 // The driver's own level, not the project's, and written once: overwriting on every open would make
 // it the one context nobody can change.
-func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Thread) {
+func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
 	if existing, err := s.store.GetContext(ctx, store.ContextSession, session.GetId()); err == nil && existing != "" {
 		return
 	}

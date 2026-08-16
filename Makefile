@@ -34,7 +34,7 @@ VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --qui
 SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 
 # The default sandbox image: a container with the Claude Code CLI, built locally with `make
-# sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
+# sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
 .PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image image rebuild config home-check env-check hooks help
@@ -122,7 +122,7 @@ env-check:
 	if [ -n "$$missing" ]; then \
 		echo "note: $(ENV_FILE) does not set:$$missing"; \
 		echo "      deploy/env.example gained these after your copy was made, so the stack comes up with"; \
-		echo "      them empty and whatever they turn on is off. Compare the two and add what you want."; \
+		echo "      them empty and whatever they task on is off. Compare the two and add what you want."; \
 	fi
 
 ## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
@@ -156,7 +156,7 @@ upgrade:
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
 	@echo "clearing the sandboxes from before the upgrade. They run the old image, the control plane"
-	@echo "has forgotten them, and their names would block those threads from starting again."
+	@echo "has forgotten them, and their names would block those sessions from starting again."
 	@docker ps -a --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' \
 		| awk -F'|' '$$2 == "" { print $$1 }' \
 		| grep -E '$(SANDBOX_PATTERN)' \

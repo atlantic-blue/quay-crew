@@ -5,7 +5,7 @@ Feature: The operator drives flows from the command line
   other caller uses.
 
   Starting a run answers with the run's identifier rather than waiting for it: a run dispatches
-  turns, which take as long as the model takes, and a command line that hangs for ten minutes is a
+  tasks, which take as long as the model takes, and a command line that hangs for ten minutes is a
   command line nobody uses. The run advances behind that answer, and reading it back says where it
   got to.
 
@@ -41,25 +41,25 @@ Feature: The operator drives flows from the command line
     And the operator starts a run of "fix-red" in the project
     Then the run finishes
     And reading the run back says it ended on "done"
-    And reading the run back carries what the last turn replied
+    And reading the run back carries what the last task replied
 
-  # The reason the brakes exist: an automation dispatches turns with nobody watching, so a graph
+  # The reason the brakes exist: an automation dispatches tasks with nobody watching, so a graph
   # that cycles would spend until somebody noticed the bill.
   Scenario: A cycling graph stops itself at its cap, and says so
     When the operator imports a flow graph that cycles, capped at 4 transitions
     And the operator starts a run of "loop" in the project
     Then the run stops
     And reading the run back says it was stopped for hitting its cap
-    And the run's thread was asked no more than 4 turns
+    And the run's session was asked no more than 4 tasks
 
   Scenario: A graph whose cap could never be met is refused at import
     When the operator imports a flow graph capped at 0 transitions
     Then the control plane refuses it as invalid
 
-  # A run dispatches turns on its own. Without a way to stop one, the only lever an operator has is
+  # A run dispatches tasks on its own. Without a way to stop one, the only lever an operator has is
   # taking the crew down, which takes every other conversation with it.
   Scenario: The operator stops a run in flight, and the reason is kept
-    Given a turn takes a moment
+    Given a task takes a moment
     When the operator imports a flow graph that cycles, capped at 50 transitions
     And the operator starts a run of "loop" in the project
     And the operator stops the run, saying "it is fixing the wrong thing"
@@ -67,12 +67,12 @@ Feature: The operator drives flows from the command line
     And reading the run back says it was stopped saying "it is fixing the wrong thing"
 
   Scenario: A stopped run dispatches nothing more
-    Given a turn takes a moment
+    Given a task takes a moment
     When the operator imports a flow graph that cycles, capped at 50 transitions
     And the operator starts a run of "loop" in the project
     And the operator stops the run, saying "enough"
     Then the run stops
-    And the run's thread stops being asked, well short of the cap
+    And the run's session stops being asked, well short of the cap
 
   Scenario: A run that already finished cannot be stopped
     When the operator imports the flow graph "fix-red"

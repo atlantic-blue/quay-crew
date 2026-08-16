@@ -14,7 +14,7 @@ import (
 // carries.
 //
 // An ssh key rather than a gpg one. Signing with ssh needs one private key file and nothing else: no
-// agent, no keyring, no pinentry, and no interactive prompt to hang a turn nobody is watching. GitHub
+// agent, no keyring, no pinentry, and no interactive prompt to hang a task nobody is watching. GitHub
 // verifies both formats. The cost is that a commit signed in a sandbox verifies against a different
 // key from one signed on the operator's own machine, so both keys have to be on the account.
 const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
@@ -36,7 +36,7 @@ const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
 // everything, against a key held by their machine and not by a container. Left as it arrives, that
 // configuration fails every commit a session makes, on a key it was never going to have. So a
 // workspace that mounts no key says so to git rather than saying nothing.
-func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
+func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Session, box sandbox.Sandbox) error {
 	script := signingOff
 	if s.mountsASigningKey(ctx, session.GetWorkspace()) {
 		script = signingSetup
@@ -46,7 +46,7 @@ func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Thread, b
 	if err != nil {
 		// A sandbox that cannot be configured to sign is a sandbox that cannot sign, which the git
 		// skill already tells a session to handle by asking rather than committing unsigned. Failing
-		// the turn here would take the whole conversation down over it.
+		// the task here would take the whole conversation down over it.
 		return nil
 	}
 	_, _ = io.Copy(io.Discard, proc.Stdout())
@@ -73,7 +73,7 @@ func (s *Server) mountsASigningKey(ctx context.Context, workspace string) bool {
 var signingKeyPath = sandbox.SecretFilePath(SigningKeySecret)
 
 // signingSetup points git at the key. Every line is idempotent, because a sandbox is adopted across
-// turns and this runs again on a replacement.
+// tasks and this runs again on a replacement.
 var signingSetup = `set -e
 git config --global gpg.format ssh
 git config --global user.signingkey ` + signingKeyPath + `

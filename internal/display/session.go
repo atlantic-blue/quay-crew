@@ -10,45 +10,45 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ThreadColumns names what a listing of threads says, in order.
+// SessionColumns names what a listing of sessions says, in order.
 //
 // One list, because the console and the command line used to answer the same question differently:
-// the console had ten columns and the command line four, so a thread's cost, its mode and how long
+// the console had ten columns and the command line four, so a session's cost, its mode and how long
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
-func ThreadColumns() []string {
+func SessionColumns() []string {
 	return []string{"id", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
 }
 
-// ThreadCells is one thread as a listing shows it, matching ThreadColumns.
-func ThreadCells(thread *quaycrewv1.Thread, workspaceName, projectName string) []string {
+// SessionCells is one session as a listing shows it, matching SessionColumns.
+func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string) []string {
 	return []string{
-		ShortID(thread.GetId()),
-		Name(workspaceName, thread.GetWorkspace()),
-		Name(projectName, thread.GetProject()),
-		ThreadName(thread),
-		StatusLabel(thread),
-		PermissionLabel(thread.GetPermissionMode()),
-		Tokens(thread.GetUsage().GetInput()),
-		Tokens(thread.GetUsage().GetOutput()),
-		Tokens(thread.GetUsage().GetCacheRead()),
+		ShortID(session.GetId()),
+		Name(workspaceName, session.GetWorkspace()),
+		Name(projectName, session.GetProject()),
+		SessionName(session),
+		StatusLabel(session),
+		PermissionLabel(session.GetPermissionMode()),
+		Tokens(session.GetUsage().GetInput()),
+		Tokens(session.GetUsage().GetOutput()),
+		Tokens(session.GetUsage().GetCacheRead()),
 		// How long ago it was put away where it was, and how long ago it was touched otherwise. A
-		// live thread has no archived stamp, so one rule covers both.
-		Age(LastMoved(thread)),
+		// live session has no archived stamp, so one rule covers both.
+		Age(LastMoved(session)),
 	}
 }
 
-// StatusLabel is the status cell, carrying the stale mark when the thread's live sandbox was born
+// StatusLabel is the status cell, carrying the stale mark when the session's live sandbox was born
 // before the workspace's current skills: the cue that stopping and restarting it gets a sandbox born
 // current.
-func StatusLabel(thread *quaycrewv1.Thread) string {
-	if thread.GetStale() {
-		return thread.GetStatus() + " stale"
+func StatusLabel(session *quaycrewv1.Session) string {
+	if session.GetStale() {
+		return session.GetStatus() + " stale"
 	}
-	return thread.GetStatus()
+	return session.GetStatus()
 }
 
-// PermissionLabel never leaves the cell blank: a thread from before the mode existed runs
+// PermissionLabel never leaves the cell blank: a session from before the mode existed runs
 // acceptEdits, and an empty cell would read as "asks first", the opposite. bypassPermissions becomes
 // "dangerous", the only one of the three worth spotting from across a list.
 func PermissionLabel(mode string) string {
@@ -64,7 +64,7 @@ func PermissionLabel(mode string) string {
 
 // Tokens is a count in a column seven characters wide: 52, 6.9k, 1.7M.
 //
-// Nothing at all for a thread that has spent nothing, because a conversation nobody has had has not
+// Nothing at all for a session that has spent nothing, because a conversation nobody has had has not
 // cost zero, it has no cost. A column of zeroes would read as a crew that is free.
 func Tokens(count int64) string {
 	switch {
@@ -88,13 +88,13 @@ func trimZero(value float64) string {
 	return strings.TrimSuffix(rendered, ".0")
 }
 
-// LastMoved is when the thread last went anywhere: when it was put away if it was, and when it was
+// LastMoved is when the session last went anywhere: when it was put away if it was, and when it was
 // last touched otherwise.
-func LastMoved(thread *quaycrewv1.Thread) *timestamppb.Timestamp {
-	if thread.GetArchivedAt() != nil {
-		return thread.GetArchivedAt()
+func LastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
+	if session.GetArchivedAt() != nil {
+		return session.GetArchivedAt()
 	}
-	return thread.GetUpdatedAt()
+	return session.GetUpdatedAt()
 }
 
 // Age renders how long ago a timestamp was, compactly. An unset timestamp shows a dash rather than
@@ -158,18 +158,18 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 	out.WriteString("\n")
 }
 
-// ThreadName is what to call a thread in a listing: the name the operator gave it, then the one the
+// SessionName is what to call a session in a listing: the name the operator gave it, then the one the
 // crew wrote for itself, then the identifier.
 //
 // The operator's name wins because a name somebody picked beats a name a machine wrote. The
 // identifier is last because it is the thing nobody remembers, and it is still in the id column
 // beside this one, so nothing is hidden by preferring a name.
-func ThreadName(thread *quaycrewv1.Thread) string {
-	if label := strings.TrimSpace(thread.GetLabel()); label != "" {
+func SessionName(session *quaycrewv1.Session) string {
+	if label := strings.TrimSpace(session.GetLabel()); label != "" {
 		return label
 	}
-	if described := strings.TrimSpace(thread.GetDescription()); described != "" {
+	if described := strings.TrimSpace(session.GetDescription()); described != "" {
 		return described
 	}
-	return ShortID(thread.GetHandle())
+	return ShortID(session.GetHandle())
 }

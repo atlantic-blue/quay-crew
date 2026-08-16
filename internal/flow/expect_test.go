@@ -7,7 +7,7 @@ import (
 )
 
 // The graph the first real run should have been: it says what reading the repository would leave
-// behind, so a turn that could not find the repository cannot report success.
+// behind, so a task that could not find the repository cannot report success.
 const provingGraph = `
 name: site-check
 version: 1
@@ -36,7 +36,7 @@ func TestADispatchNodeDeclaresWhatProvesItWorked(t *testing.T) {
 	}
 }
 
-// The one that matters. A turn that could not do the work is not a failed turn, so before this the
+// The one that matters. A task that could not do the work is not a failed task, so before this the
 // run took the success edge and finished at done with the model's account of work that never
 // happened. It stops instead, and says what it was looking for.
 func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
@@ -47,10 +47,10 @@ func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 	run := Run{ID: "r1", Node: "read", Status: StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
 
 	next, commands, err := Advance(graph, run, Event{
-		Kind:  EventTurnFinished,
+		Kind:  EventTaskFinished,
 		Node:  "read",
 		Reply: "the working directory is empty, so I summarised the project from memory",
-		Unmet: "package.json is not in the run's thread",
+		Unmet: "package.json is not in the run's session",
 	})
 	if err != nil {
 		t.Fatalf("advance: %v", err)
@@ -64,7 +64,7 @@ func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 	if next.State["result.expected"] == "" {
 		t.Error("the run carries nothing about what was expected, so reading it back says only that it stopped")
 	}
-	// No archive. A run that stopped is one somebody has to look into, and its thread is where the
+	// No archive. A run that stopped is one somebody has to look into, and its session is where the
 	// evidence is; a finished run is the one that puts itself away.
 	if len(commands) != 0 {
 		t.Errorf("the stopped run asked for %d commands, want none", len(commands))
@@ -80,7 +80,7 @@ func TestAMetExpectationCarriesTheRunOn(t *testing.T) {
 	run := Run{ID: "r1", Node: "read", Status: StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
 
 	next, commands, err := Advance(graph, run, Event{
-		Kind: EventTurnFinished, Node: "read", Reply: "the tests run with npm test",
+		Kind: EventTaskFinished, Node: "read", Reply: "the tests run with npm test",
 	})
 	if err != nil {
 		t.Fatalf("advance: %v", err)
@@ -127,7 +127,7 @@ func TestAFileExpectationNobodyCanCheckStopsTheRun(t *testing.T) {
 	}
 	engine := &Engine{}
 
-	unmet := engine.unmet(context.Background(), graph.Nodes["read"], Run{State: map[string]string{ThreadKey: "t1"}}, "done")
+	unmet := engine.unmet(context.Background(), graph.Nodes["read"], Run{State: map[string]string{SessionKey: "t1"}}, "done")
 	if unmet == "" {
 		t.Fatal("an expectation nothing could check was treated as met")
 	}
@@ -173,9 +173,9 @@ edges:
 	}
 }
 
-// The path is read inside the thread's own working directory, so a graph cannot point the check at
+// The path is read inside the session's own working directory, so a graph cannot point the check at
 // the machine the crew runs on.
-func TestAnExpectedFileOutsideTheThreadIsRefused(t *testing.T) {
+func TestAnExpectedFileOutsideTheSessionIsRefused(t *testing.T) {
 	for _, path := range []string{"/etc/passwd", "../../etc/passwd", "up/../../out"} {
 		_, err := Parse([]byte(`
 name: nosy

@@ -71,7 +71,7 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		typed = args[0]
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay hook list [<workspace, or workspace/project/thread>]")
+		return fmt.Errorf("usage: quay hook list [<workspace, or workspace/project/session>]")
 	}
 
 	req := &quaycrewv1.ListHooksRequest{}
@@ -80,8 +80,8 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		if err != nil {
 			return err
 		}
-		if located.ThreadID != "" {
-			req.Thread = located.ThreadID
+		if located.SessionID != "" {
+			req.Session = located.SessionID
 		} else {
 			req.Workspace = located.WorkspaceID
 		}
@@ -182,10 +182,10 @@ func runHookDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 
 // staleWarning is said on every attach and detach, and it is not a nicety.
 //
-// A hook reaches a container at creation and never after, so a thread that is already running is not
+// A hook reaches a container at creation and never after, so a session that is already running is not
 // under the constraint that was just attached. Somebody who believes a gate is on when it is not is
 // worse off than somebody who knows there is no gate.
-const staleWarning = "threads already running are not under it: a hook reaches a sandbox when the sandbox is built, so restart a thread to put it under this one"
+const staleWarning = "sessions already running are not under it: a hook reaches a sandbox when the sandbox is built, so restart a session to put it under this one"
 
 // firesOn says what a hook fires on, in a line, which is the whole of what a listing is asked.
 func firesOn(one *quaycrewv1.Hook) string {

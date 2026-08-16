@@ -123,7 +123,7 @@ func colourOfName(name string) string {
 	return fmt.Sprintf("\x1b[38;5;%dm", namePalette[int(hash)%len(namePalette)])
 }
 
-// colourOfMode is what a thread may do, coloured by how much that is. This is the cell it costs most
+// colourOfMode is what a session may do, coloured by how much that is. This is the cell it costs most
 // to misread, so it is the one cell coloured by meaning rather than by identity.
 func colourOfMode(mode string) string {
 	switch mode {
@@ -172,8 +172,8 @@ func colourOfStatus(cell string) string {
 	}
 }
 
-// colourOfAge is how long ago a thread was touched, coloured by how long that is: the sessions tool's
-// three bands, so a fresh thread, a thread from this morning and a thread from last week are told
+// colourOfAge is how long ago a session was touched, coloured by how long that is: the sessions tool's
+// three bands, so a fresh session, a session from this morning and a session from last week are told
 // apart without reading the number.
 //
 // It reads the suffix compactDuration writes rather than a duration, because a column holds the text

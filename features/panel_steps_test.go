@@ -40,7 +40,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, panelKey{}, &panelWorld{}), nil
 	})
 
-	sc.Step(`^a session started by dispatching "([^"]*)" on a new thread$`, func(ctx context.Context, text string) error {
+	sc.Step(`^a session started by dispatching "([^"]*)" on a new session$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
 		if err := w.dispatch(ctx, w.projectID, "", text); err != nil {
 			return err
@@ -51,11 +51,11 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator opens the panel$`, func(ctx context.Context) error {
 		w, p := worldFrom(ctx), panelFrom(ctx)
 
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		newest, found := newestOpenable(listed.GetThreads())
+		newest, found := newestOpenable(listed.GetSessions())
 		if !found {
 			p.err = fmt.Errorf("there is no conversation to put beside the console yet: " +
 				"start one with `quay dispatch \"hello\"`, then open the panel again")
@@ -74,7 +74,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		if p.err != nil {
 			return fmt.Errorf("the panel refused: %w", p.err)
 		}
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		if p.err != nil {
 			return fmt.Errorf("the panel refused: %w", p.err)
 		}
-		newer, err := w.lastTurn()
+		newer, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -172,8 +172,8 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 // newestOpenable is the conversation last spoken to, skipping the ones that cannot be attached to at
 // all. It mirrors what the command does, which is the part worth stating here: the right half holds a
 // real session from the control plane rather than a name a scenario made up.
-func newestOpenable(sessions []*quaycrewv1.Thread) (string, bool) {
-	live := make([]*quaycrewv1.Thread, 0, len(sessions))
+func newestOpenable(sessions []*quaycrewv1.Session) (string, bool) {
+	live := make([]*quaycrewv1.Session, 0, len(sessions))
 	for _, session := range sessions {
 		if session.GetModelSessionId() != "" && session.GetArchivedAt() == nil {
 			live = append(live, session)

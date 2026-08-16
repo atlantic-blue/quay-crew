@@ -14,7 +14,7 @@ message InboundMessage {
   string sender = 3;
   // text is the message body.
   string text = 4;
-  // handle continues an existing thread when set; empty starts a new one.
+  // handle continues an existing session when set; empty starts a new one.
   string handle = 5;
   // correlation_id is unique per inbound message and is also used as the trace id.
   string correlation_id = 6;
@@ -26,7 +26,7 @@ message InboundMessage {
 message OutboundMessage {
   // workspace is the isolation unit this reply belongs to.
   string workspace = 1;
-  // handle is the thread the reply belongs to.
+  // handle is the session the reply belongs to.
   string handle = 2;
   // text is the reply body.
   string text = 3;

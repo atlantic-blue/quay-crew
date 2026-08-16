@@ -2,21 +2,21 @@
 
 Quay Crew can run a Kafka compatible event log, served locally by Redpanda behind the compose
 stack's `export` profile. It is an audit export, not the road anything travels by: history lives in
-Postgres, written in the same breath as each turn, and a crew with no broker loses nothing but the
+Postgres, written in the same breath as each task, and a crew with no broker loses nothing but the
 export.
 
 Read the next section before you go looking for messages in it.
 
 ## What state it is in today
 
-**Every turn is written to the store synchronously.** The dispatch path writes the redacted turn
-into the `turns` table in the same breath as the turn itself, on a context detached from the
+**Every task is written to the store synchronously.** The dispatch path writes the redacted task
+into the `tasks` table in the same breath as the task itself, on a context detached from the
 request's, so a client hanging up cannot lose the record and a broker being down cannot either.
-`quay turns <session>` and `l` on a session in the console read that table.
+`quay tasks <session>` and `l` on a session in the console read that table.
 
-**When an export is configured, the control plane also publishes each turn to the log**, on
-`<workspace>.turns`, keyed by session so one session's events stay in order on one partition. A
-turn that failed is exported too, because that is the one somebody comes looking for.
+**When an export is configured, the control plane also publishes each task to the log**, on
+`<workspace>.tasks`, keyed by session so one session's events stay in order on one partition. A
+task that failed is exported too, because that is the one somebody comes looking for.
 
 **The payload is redacted before it is written anywhere.** The record carries the prompt, the reply
 and the failure, and what an operator pastes into a conversation can be a credential, so all three
@@ -24,7 +24,7 @@ go through the crew's redactor first: every value the workspace keeps sealed is 
 replaced with the secret's name, the driver's token is matched for a driver session, and anything
 shaped like a subscription token is caught even when the crew never held the value. A value the
 crew could not know about, a password typed in that was never sealed as a secret, is stored as
-typed: the log and the `turns` table hold what was said minus what the crew can recognise, not a
+typed: the log and the `tasks` table hold what was said minus what the crew can recognise, not a
 guarantee that nothing sensitive was ever said.
 
 **Nothing consumes it.** There is no projection any more: history does not travel through the log,
@@ -36,7 +36,7 @@ the expected state, not a fault.
 that boots telemetry and waits, so the inbound stream a channel would write to does not exist. That
 work is #9 and #10, and it is blocked on a bot token rather than on code.
 
-Exporting never fails a turn. The turn already happened and the store already holds it, so a broker
+Exporting never fails a task. The task already happened and the store already holds it, so a broker
 that is unreachable is logged and the export record is dropped: the log is the audit copy, and the
 store is the source of truth.
 
@@ -46,7 +46,7 @@ status block says so rather than leaving an empty column to read as fine.
 ## Why an event log at all
 
 The synchronous path does not need one. Today `quay` speaks gRPC to the control plane, the control
-plane writes to Postgres and runs a turn in a sandbox, and a reply comes back down the same
+plane writes to Postgres and runs a task in a sandbox, and a reply comes back down the same
 connection. Adding a broker to that would be architecture for its own sake.
 
 The log earns its place at the point where the system stops being one operator at one terminal:
@@ -71,8 +71,8 @@ flowchart LR
     channel["chat channel"] --> gateway
     gateway -->|"publish workspace.inbound"| log[("event log")]
     log -->|consume| controlplane["control plane"]
-    controlplane -->|"write turns"| store[("Postgres")]
-    controlplane -->|"export workspace.turns"| log
+    controlplane -->|"write tasks"| store[("Postgres")]
+    controlplane -->|"export workspace.tasks"| log
     store --> console["console"]
     log -->|consume| second["a second consumer, when one exists"]
 ```
@@ -101,18 +101,18 @@ docker exec -it quaycrew-redpanda-1 rpk cluster health  is the broker itself wel
 docker exec -it quaycrew-redpanda-1 rpk cluster info    brokers and addresses
 ```
 
-One turn through `quay dispatch` creates the topic and puts a record on it, so `rpk topic list` shows
-`<workspace>.turns`. The topic is created by the publisher on first use rather than provisioned ahead
+One task through `quay dispatch` creates the topic and puts a record on it, so `rpk topic list` shows
+`<workspace>.tasks`. The topic is created by the publisher on first use rather than provisioned ahead
 of time, because a workspace's stream is named after a workspace nobody knew about yet. `rpk group
 list` still prints no groups, because nothing reads.
 
-This is how you watch turns go by, live:
+This is how you watch tasks go by, live:
 
 ```
-docker exec -it quaycrew-redpanda-1 rpk topic consume demo.turns
+docker exec -it quaycrew-redpanda-1 rpk topic consume demo.tasks
 ```
 
-The value is a protobuf `TurnEvent`, so the payload reads as binary in the terminal. What is legible
+The value is a protobuf `TaskEvent`, so the payload reads as binary in the terminal. What is legible
 without decoding is the key, which is the session identifier, and the topic it landed on.
 
 Add `--num 5` to take a few and stop, or `--offset start` to read a topic from the beginning rather
@@ -152,7 +152,7 @@ go test -tags=integration -count=1 ./internal/messaging/
 Continuous integration runs the same command across the repository. `-count=1` matters: a cached
 pass and a real one are indistinguishable otherwise.
 
-## What would turn it on
+## What would task it on
 
 In rough order, each an open issue:
 
@@ -160,19 +160,19 @@ In rough order, each an open issue:
   `workspace.inbound`. Blocked on a bot token rather than on code.
 - **Gated outbound delivery (#10)** and **a second channel (#11).** Replies going back out, and the
   proof that a second channel is additive.
-- **Read surface for the console (#45).** Turns, sandboxes, streams and metrics, which is what the
+- **Read surface for the console (#45).** Tasks, sandboxes, streams and metrics, which is what the
   console needs before it can show more than the store.
 - **A second consumer.** The first real reader of the export, whichever lands first: a dashboard, a
   pipeline, another machine.
 
-Until a consumer lands, the export accumulates turns that nothing reads when it is on at all. That
+Until a consumer lands, the export accumulates tasks that nothing reads when it is on at all. That
 is the right order to build it in, and it is written down here so an empty consumer group list does
 not read as a fault.
 
 ---
 
 The `rpk` commands above are the ones to run; the empty listings were captured from a running stack
-on 4 August 2026, before the publisher existed. That a turn reaches a real broker, creates its topic,
+on 4 August 2026, before the publisher existed. That a task reaches a real broker, creates its topic,
 arrives keyed by session and decodes back into the event that was sent is proved by
 `internal/controlplane/events_integration_test.go` against a real Redpanda, not by a screenshot.
-Reproducing the listing yourself needs the stack up and at least one turn dispatched.
+Reproducing the listing yourself needs the stack up and at least one task dispatched.

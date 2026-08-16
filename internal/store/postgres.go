@@ -28,7 +28,7 @@ func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
 	// Every query the control plane makes is short. A connection that cannot be had quickly is a
-	// failed turn, not a turn that hangs.
+	// failed task, not a task that hangs.
 	config.ConnConfig.ConnectTimeout = 10 * time.Second
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
@@ -221,11 +221,11 @@ func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindOrCreateSession returns the project's session for a thread, creating it on first use.
+// FindOrCreateSession returns the project's session for a session, creating it on first use.
 //
-// The insert races with any other caller dispatching to the same thread, so it defers to the unique
-// constraint on (workspace, thread_id) and reads the winner back rather than trusting a prior select.
-func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error) {
+// The insert races with any other caller dispatching to the same session, so it defers to the unique
+// constraint on (workspace, handle) and reads the winner back rather than trusting a prior select.
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
 		return nil, err
@@ -233,18 +233,18 @@ func (p *Postgres) FindOrCreateSession(ctx context.Context, project, thread, bor
 	// The mode is written here rather than left to the column's default, because the default is one
 	// value for every crew and this is the crew's own choice.
 	if _, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, thread_id, status, permission_mode)
+		insert into sessions (id, workspace, project, handle, status, permission_mode)
 		values ($1, $2, $3, $4, 'idle', $5)
-		on conflict (project, thread_id) do nothing`,
-		NewID(), owner.GetWorkspace(), project, thread, model.PermissionModeBornIn(bornIn)); err != nil {
+		on conflict (project, handle) do nothing`,
+		NewID(), owner.GetWorkspace(), project, session, model.PermissionModeBornIn(bornIn)); err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return p.sessionBy(ctx, `project = $1 and thread_id = $2`, project, thread)
+	return p.sessionBy(ctx, `project = $1 and handle = $2`, project, session)
 }
 
-// RecordTurn stores the model conversation handle and status after a turn. An empty handle leaves
-// the stored one alone, so a failed turn cannot erase the pointer to a live conversation.
-func (p *Postgres) RecordTurn(ctx context.Context, id, modelSessionID, status string) error {
+// RecordTask stores the model conversation handle and status after a task. An empty handle leaves
+// the stored one alone, so a failed task cannot erase the pointer to a live conversation.
+func (p *Postgres) RecordTask(ctx context.Context, id, modelSessionID, status string) error {
 	tag, err := p.pool.Exec(ctx, `
 		update sessions
 		set model_session_id = case when $2 = '' then model_session_id else $2 end,
@@ -253,7 +253,7 @@ func (p *Postgres) RecordTurn(ctx context.Context, id, modelSessionID, status st
 		where id = $1`,
 		id, modelSessionID, status)
 	if err != nil {
-		return fmt.Errorf("record turn: %w", err)
+		return fmt.Errorf("record task: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -262,14 +262,14 @@ func (p *Postgres) RecordTurn(ctx context.Context, id, modelSessionID, status st
 }
 
 // GetSession returns a session by id.
-func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Thread, error) {
+func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error) {
 	return p.sessionBy(ctx, `id = $1`, id)
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error) {
+func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_turn
+		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task
 		from sessions
 		where ($2 = '' or project = $2)
 		  and ($2 <> '' or $1 = '' or workspace = $1)
@@ -280,7 +280,7 @@ func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*q
 	}
 	defer rows.Close()
 
-	out := make([]*quaycrewv1.Thread, 0)
+	out := make([]*quaycrewv1.Session, 0)
 	for rows.Next() {
 		session, err := scanSession(rows)
 		if err != nil {
@@ -349,7 +349,7 @@ func (p *Postgres) RestartSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetPermissionMode records what a thread's turns may do without asking.
+// SetPermissionMode records what a session's tasks may do without asking.
 func (p *Postgres) SetPermissionMode(ctx context.Context, id, mode string) error {
 	tag, err := p.pool.Exec(ctx,
 		`update sessions set permission_mode = $2, updated_at = now() where id = $1`, id, mode)
@@ -362,7 +362,7 @@ func (p *Postgres) SetPermissionMode(ctx context.Context, id, mode string) error
 	return nil
 }
 
-// SetLabel records what the operator calls a thread. Empty clears it.
+// SetLabel records what the operator calls a session. Empty clears it.
 func (p *Postgres) SetLabel(ctx context.Context, id, label string) error {
 	tag, err := p.pool.Exec(ctx,
 		`update sessions set label = $2, updated_at = now() where id = $1`, id, label)
@@ -375,12 +375,12 @@ func (p *Postgres) SetLabel(ctx context.Context, id, label string) error {
 	return nil
 }
 
-// SetDescription records what the crew observed a thread to be, with the turn count it was written
+// SetDescription records what the crew observed a session to be, with the task count it was written
 // at, in one statement so the two can never disagree about how current it is.
-func (p *Postgres) SetDescription(ctx context.Context, id, description string, atTurn int) error {
+func (p *Postgres) SetDescription(ctx context.Context, id, description string, atTask int) error {
 	tag, err := p.pool.Exec(ctx,
-		`update sessions set description = $2, described_at_turn = $3, updated_at = now() where id = $1`,
-		id, description, atTurn)
+		`update sessions set description = $2, described_at_task = $3, updated_at = now() where id = $1`,
+		id, description, atTask)
 	if err != nil {
 		return fmt.Errorf("set description: %w", err)
 	}
@@ -390,12 +390,12 @@ func (p *Postgres) SetDescription(ctx context.Context, id, description string, a
 	return nil
 }
 
-// CountTurns is how many turns a thread has had.
-func (p *Postgres) CountTurns(ctx context.Context, session string) (int, error) {
+// CountTasks is how many tasks a session has had.
+func (p *Postgres) CountTasks(ctx context.Context, session string) (int, error) {
 	var count int
 	if err := p.pool.QueryRow(ctx,
-		`select count(*) from turns where session = $1`, session).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count turns: %w", err)
+		`select count(*) from tasks where session = $1`, session).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count tasks: %w", err)
 	}
 	return count, nil
 }
@@ -406,7 +406,7 @@ func (p *Postgres) ArchiveSession(ctx context.Context, id string) error {
 	return p.stampArchived(ctx, id, `archived_at = now(), skills_fingerprint = ''`)
 }
 
-// RestoreSession clears the stamp, bringing the thread back into the default listing.
+// RestoreSession clears the stamp, bringing the session back into the default listing.
 func (p *Postgres) RestoreSession(ctx context.Context, id string) error {
 	return p.stampArchived(ctx, id, `archived_at = null`)
 }
@@ -457,9 +457,9 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 }
 
 // sessionBy reads the single session matching a where clause.
-func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Thread, error) {
+func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_turn
+		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task
 		from sessions where `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -475,26 +475,26 @@ func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*q
 	return scanSession(rows)
 }
 
-func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
+func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	var (
-		id, workspace, project, thread, status, modelSessionID string
+		id, workspace, project, handle, status, modelSessionID string
 		createdAt, updatedAt                                   time.Time
 		archivedAt                                             *time.Time
 		permissionMode                                         string
 		driver                                                 bool
 		label, description                                     string
-		describedAtTurn                                        int32
+		describedAtTask                                        int32
 	)
-	if err := rows.Scan(&id, &workspace, &project, &thread, &status, &modelSessionID,
+	if err := rows.Scan(&id, &workspace, &project, &handle, &status, &modelSessionID,
 		&createdAt, &updatedAt, &archivedAt, &permissionMode, &driver, &label, &description,
-		&describedAtTurn); err != nil {
+		&describedAtTask); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
-	session := &quaycrewv1.Thread{
+	session := &quaycrewv1.Session{
 		Id:              id,
 		Workspace:       workspace,
 		Project:         project,
-		Handle:          thread,
+		Handle:          handle,
 		Status:          status,
 		ModelSessionId:  modelSessionID,
 		CreatedAt:       timestamppb.New(createdAt),
@@ -503,7 +503,7 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 		Driver:          driver,
 		Label:           label,
 		Description:     description,
-		DescribedAtTurn: describedAtTurn,
+		DescribedAtTask: describedAtTask,
 	}
 	if archivedAt != nil {
 		session.ArchivedAt = timestamppb.New(*archivedAt)
@@ -511,59 +511,59 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Thread, error) {
 	return session, nil
 }
 
-// AppendTurn records a turn. Writing the same one twice is harmless, which is what makes a consumer
+// AppendTask records a task. Writing the same one twice is harmless, which is what makes a consumer
 // with at least once delivery safe to replay.
-func (p *Postgres) AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error {
-	if turn.GetId() == "" {
-		return errors.New("store: a turn needs an id, so writing the same one twice leaves one turn")
+func (p *Postgres) AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error {
+	if task.GetId() == "" {
+		return errors.New("store: a task needs an id, so writing the same one twice leaves one task")
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into turns (id, session, workspace, project, thread_id, prompt, reply, status, failure, occurred_at)
+		insert into tasks (id, session, workspace, project, handle, prompt, reply, status, failure, occurred_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (id) do nothing`,
-		turn.GetId(), turn.GetThread(), workspace, project, thread,
-		turn.GetPrompt(), turn.GetReply(), turn.GetStatus(), turn.GetFailure(), turn.GetOccurredAt().AsTime())
+		task.GetId(), task.GetSession(), workspace, project, session,
+		task.GetPrompt(), task.GetReply(), task.GetStatus(), task.GetFailure(), task.GetOccurredAt().AsTime())
 	if err != nil {
-		return fmt.Errorf("append turn: %w", err)
+		return fmt.Errorf("append task: %w", err)
 	}
 	return nil
 }
 
-// ListTurns returns a session's turns oldest first, capped at limit.
+// ListTasks returns a session's tasks oldest first, capped at limit.
 //
 // The cap takes the most recent, because the end of a conversation is the part somebody is looking
 // for, and then the result is turned back the right way round so it reads as it happened.
-func (p *Postgres) ListTurns(ctx context.Context, session string, limit int) ([]*quaycrewv1.Turn, error) {
+func (p *Postgres) ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, session, prompt, reply, status, failure, occurred_at
-		from turns where session = $1
+		from tasks where session = $1
 		order by occurred_at desc, id desc
-		limit $2`, session, TurnLimit(limit))
+		limit $2`, session, TaskLimit(limit))
 	if err != nil {
-		return nil, fmt.Errorf("list turns: %w", err)
+		return nil, fmt.Errorf("list tasks: %w", err)
 	}
 	defer rows.Close()
 
-	turns := make([]*quaycrewv1.Turn, 0)
+	tasks := make([]*quaycrewv1.Task, 0)
 	for rows.Next() {
-		var turn quaycrewv1.Turn
+		var task quaycrewv1.Task
 		var occurredAt time.Time
-		if err := rows.Scan(&turn.Id, &turn.Thread, &turn.Prompt, &turn.Reply,
-			&turn.Status, &turn.Failure, &occurredAt); err != nil {
-			return nil, fmt.Errorf("scan turn: %w", err)
+		if err := rows.Scan(&task.Id, &task.Session, &task.Prompt, &task.Reply,
+			&task.Status, &task.Failure, &occurredAt); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
 		}
-		turn.OccurredAt = timestamppb.New(occurredAt)
-		turns = append(turns, &turn)
+		task.OccurredAt = timestamppb.New(occurredAt)
+		tasks = append(tasks, &task)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list turns: %w", err)
+		return nil, fmt.Errorf("list tasks: %w", err)
 	}
 	// Read back newest first so the limit keeps the end of the conversation; hand it over oldest
 	// first so it reads in the order it happened.
-	for i, j := 0, len(turns)-1; i < j; i, j = i+1, j-1 {
-		turns[i], turns[j] = turns[j], turns[i]
+	for i, j := 0, len(tasks)-1; i < j; i, j = i+1, j-1 {
+		tasks[i], tasks[j] = tasks[j], tasks[i]
 	}
-	return turns, nil
+	return tasks, nil
 }
 
 // FindOrCreateDriver returns the project's driver, the session that drives the crew, creating it the
@@ -571,7 +571,7 @@ func (p *Postgres) ListTurns(ctx context.Context, session string, limit int) ([]
 //
 // One per project, held by a unique index rather than by reading first and writing after: two opened
 // at once would otherwise each make one, and the second would be reached by nobody.
-func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Thread, error) {
+func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
 		return nil, err
@@ -580,14 +580,14 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 	// driver that stops to ask before every step describes the task instead of doing it. What bounds
 	// it is the sandbox, which is the same boundary it would have either way.
 	if _, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, thread_id, status, driver, permission_mode)
+		insert into sessions (id, workspace, project, handle, status, driver, permission_mode)
 		values ($1, $2, $3, $4, 'idle', true, $5)
 		on conflict do nothing`,
 		NewID(), owner.GetWorkspace(), project, NewID(), model.PermissionBypass); err != nil {
 		return nil, fmt.Errorf("open the driver: %w", err)
 	}
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, thread_id, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_turn
+		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task
 		from sessions where project = $1 and driver`, project)
 	if err != nil {
 		return nil, fmt.Errorf("open the driver: %w", err)
