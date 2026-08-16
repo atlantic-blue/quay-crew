@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A call can be followed after it happened.** Every message the control plane serves now runs in a
+  span, and every log line written while it runs carries a `correlation_id` equal to that span's
+  trace id. Take an id off a log line and you have the trace; open the trace and you can filter the
+  logs back to it.
+
+  The tracing was wired and unused. `telemetry.Init` built a tracer provider and an exporter on
+  startup, nothing ever started a span, and so the collector had received nothing since the stack was
+  written. It is a stats handler rather than an interceptor, because a stats handler runs before the
+  token guard: a refused call is traced too, and that is the call somebody comes looking for.
+
+  The logging half was worse than unused, it was misleading. Each service built a JSON logger and
+  never made it the default, while every line inside `internal/` is written through the package level
+  `slog`. So the crew's own log lines, the ones that say a secret could not be mounted or a turn could
+  not be exported, were going out in Go's default text format while the documentation said the
+  services log structured JSON. They do now.
+
+  A line only carries the id when the call site logs with a context, so those call sites now pass
+  one. The id survives `context.WithoutCancel`, which is what a turn and a flow run detach with, so
+  the half of a turn that outlives the request is correlated rather than orphaned.
+
+  Metrics are still wired and empty, the collector still exports to `debug` only, and nothing is
+  traced beyond the crew's own handling of one message.
+  ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
+
 - **A graph can tell work that was done from work that was explained away.** The first flow run
   against a real crew finished at `done`, reported four transitions and 669,649 tokens, and read back
   as a success. None of the work happened. The repository was not in the run's thread, every turn
@@ -1769,11 +1793,16 @@ read, or run with `make features`.
 
 ## Not shipped, despite appearances
 
-Two things the documentation has claimed and the code does not do yet, listed here so nobody plans
+Things the documentation has claimed and the code does not do yet, listed here so nobody plans
 around them:
 
-- **Nothing creates a span.** The OpenTelemetry SDK is wired and no tracer is ever used, so the
-  collector has received no telemetry at all.
-  ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
+- **Nothing creates a metric instrument.** The meter provider is wired and never used, so no token
+  count, no cost and no resource number leaves the crew.
+  ([#16](https://github.com/atlantic-blue/quay-crew/issues/16))
 - **The telemetry stack is not connected.** Grafana, Loki, Tempo and Prometheus are in the compose file
-  with nothing joining them up. ([#12](https://github.com/atlantic-blue/quay-crew/issues/12))
+  with nothing joining them up. Spans now reach the collector and stop there, because its only
+  exporter is `debug`, and Grafana comes up with no data source.
+  ([#12](https://github.com/atlantic-blue/quay-crew/issues/12))
+- **Only the crew's own handling of a message is traced.** There is no span around a turn, a sandbox
+  or the model, and the command line tool starts no trace, so a trace stops at the edge of the
+  control plane. ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))

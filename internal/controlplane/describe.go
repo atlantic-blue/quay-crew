@@ -137,12 +137,12 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 	}
 	thread, err := s.store.GetSession(ctx, threadID)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread could not be described", "thread", threadID, "error", err)
 		return
 	}
 	turns, err := s.store.CountTurns(ctx, threadID)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread could not be described", "thread", threadID, "error", err)
 		return
 	}
 	if !worthDescribing(turns, int(thread.GetDescribedAtTurn()), s.describeEvery) {
@@ -151,12 +151,12 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 
 	history, err := s.store.ListTurns(ctx, threadID, describeTurns)
 	if err != nil || len(history) == 0 {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread could not be described", "thread", threadID, "error", err)
 		return
 	}
 	box, err := s.sandboxFor(ctx, thread)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread could not be described", "thread", threadID, "error", err)
 		return
 	}
 	// Its own conversation, not the thread's. Describing inside the thread would put a request the
@@ -169,7 +169,7 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 		Env:            s.turnEnv(ctx, thread),
 	})
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread could not be described", "thread", threadID, "error", err)
 		return
 	}
 	description := tidyDescription(said.Reply)
@@ -177,7 +177,7 @@ func (s *Server) describeThread(ctx context.Context, threadID string) {
 		return
 	}
 	if err := s.store.SetDescription(ctx, threadID, description, turns); err != nil {
-		slog.Debug("a thread's description could not be kept", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a thread's description could not be kept", "thread", threadID, "error", err)
 	}
 }
 
