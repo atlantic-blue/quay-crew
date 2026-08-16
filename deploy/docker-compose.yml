@@ -145,6 +145,9 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    # Provisioned rather than added by hand, so every operator's Grafana is the same one.
+    volumes:
+      - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
     ports:
       - "3000:3000"
 
@@ -169,6 +172,13 @@ services:
   prometheus:
     image: prom/prometheus:v2.54.1
     profiles: ["observability"]
+    # Without this it falls back to the image default and scrapes only itself, which looks like a
+    # working Prometheus and holds none of the crew's numbers.
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
 
 volumes:
   redpanda-data:

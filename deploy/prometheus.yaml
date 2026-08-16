@@ -1,0 +1,20 @@
+# Prometheus for local development.
+#
+# It was started with no configuration file at all, so it fell back to the image default and scraped
+# nothing but itself. The crew's metrics arrive at the OpenTelemetry collector over OTLP and the
+# collector republishes them for scraping, so the collector is the target that matters here.
+#
+# Nothing creates a metric instrument yet, so this scrapes a real endpoint that publishes an empty
+# set. That is the honest state: the path is connected and there is nothing on it. See
+# docs/OBSERVABILITY.md and issue 16.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

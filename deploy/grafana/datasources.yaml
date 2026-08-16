@@ -1,0 +1,32 @@
+# Grafana's data sources, provisioned as code.
+#
+# Grafana came up empty and you added these by hand, which meant every operator did it again and
+# nobody's Grafana was the same as anybody else's. This file is mounted into the provisioning
+# directory, so the four containers come up already joined.
+#
+# The addresses are compose service names, which resolve inside the compose network. Opening Grafana
+# on localhost:3000 works because your browser talks to Grafana and Grafana talks to these.
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: true
+
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+
+  # Nothing reaches Loki yet: the services log structured JSON to their own stdout and no collector
+  # pipeline forwards it. The data source is provisioned anyway so the join is one piece of work
+  # rather than two, and so an empty Loki reads as empty rather than as missing.
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100

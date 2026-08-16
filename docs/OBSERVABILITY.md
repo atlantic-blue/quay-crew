@@ -37,13 +37,20 @@ and stops there.
 
 **Metrics do not exist.** A meter provider is set up and no instrument is ever created.
 
-**The collector receives and discards.** `deploy/otel-collector.yaml` has one exporter, `debug`, on
-all three pipelines. Anything that did arrive would be summarised into the collector's own stdout and
-dropped. Nothing is forwarded to Loki, Tempo or Prometheus, and the file says so in a comment.
+**The collector forwards traces and metrics, and still discards logs.** `deploy/otel-collector.yaml`
+sends traces to Tempo and republishes metrics for Prometheus to scrape, keeping the `debug` exporter
+beside both so the collector's own log stays the fastest way to see whether anything is arriving. The
+logs pipeline is still `debug` only, because the services log to their own stdout and nothing
+forwards it.
 
-**The telemetry stack is not running.** Grafana, Loki, Tempo and Prometheus are in the compose file
-behind the `observability` profile, so `make up` does not start them. `make up-observability` does,
-with the caveats in the next section.
+**The telemetry stack is not running by default.** Grafana, Loki, Tempo and Prometheus are in the
+compose file behind the `observability` profile, so `make up` does not start them.
+`make up-observability` does, and it comes up joined: Grafana's data sources are provisioned from
+`deploy/grafana/datasources.yaml` rather than added by hand.
+
+With the profile off there is nowhere to forward to, so the collector drops each batch of traces and
+says so once. The queue and the retry are turned off for exactly this reason, so a crew running
+without the profile makes one line per batch instead of holding them and retrying forever.
 
 You can confirm the whole picture in one command. On a stack that has been up and serving:
 
@@ -119,7 +126,19 @@ make up-observability
 ```
 
 That starts Grafana, Loki, Tempo and Prometheus alongside the core stack. Grafana is on
-`http://localhost:3000` with anonymous access as an admin, so there is no login.
+`http://localhost:3000` with anonymous access as an admin, so there is no login, and Prometheus is on
+`http://localhost:9090`.
+
+The shortest way to see it working, from a cold start:
+
+```
+make up-observability
+quay dispatch <workspace>/<project> "remember the number"
+```
+
+Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The turn is one span, named
+`quaycrew.v1.ControlPlaneService/Dispatch`. Take the trace id and grep the control plane's log for it
+and you have every line that call wrote.
 
 All four containers start and stay up. Loki and Tempo are configured from `deploy/loki.yaml` and
 `deploy/tempo.yaml`, kept in this repository rather than left to whatever the image happens to ship,
@@ -129,13 +148,15 @@ stack that names a config file nobody provides.
 
 Two things to know before you spend time in there:
 
-- **Grafana has no data sources provisioned.** It comes up empty and you would add Loki, Tempo and
-  Prometheus by hand.
-- **Nothing reaches any of them yet**, because the collector exports to `debug` only, and nothing
-  upstream of the collector emits anything either. Prometheus scrapes only itself.
+- **Tempo holds traces.** Dispatch a turn, open Grafana, pick the Tempo data source and search. The
+  span is named for the gRPC method the crew served.
+- **Prometheus scrapes the collector and finds an empty set**, because nothing creates a metric
+  instrument. The path is connected and there is nothing on it. That is issue 16.
+- **Loki holds nothing.** The services log structured JSON to their own stdout and no pipeline
+  forwards it, so the data source is provisioned and empty. That is the rest of issue 12.
+- **There are no dashboards.** The data sources are provisioned; what you build on them is not.
 
-So the profile now starts cleanly and has nothing to show you. Both halves of that are worth knowing
-before you go looking.
+So one of the three signals is real end to end, and the document says which.
 
 ## What would task it on
 
@@ -144,10 +165,10 @@ In this order, because each step is pointless without the one above it.
 1. ~~**Create spans (#3).**~~ Done: inbound calls are traced and every log line carries the
    correlation id. What is left of #3 is the audit event carrying the trace id, so a turn in the
    `turns` table joins to the trace that ran it.
-2. **Give the collector somewhere to send it (#12).** Exporters to Loki, Tempo and Prometheus, and
-   Grafana data sources provisioned as code. Prometheus has no configuration file at all today, so
-   it scrapes only itself. Until this lands the spans reach the collector and stop there, which is a
-   real signal in the collector's own log and nothing you can open in Grafana.
+2. **Give the collector somewhere to send it (#12).** Mostly done: traces reach Tempo, Prometheus
+   scrapes the collector, and Grafana's three data sources are provisioned as code. What is left is
+   the logs pipeline, which needs the services' stdout collected into Loki, and the derived field
+   that turns a `correlation_id` in a Loki line into a link to the trace.
 3. **Token, cost and resource metrics (#16).** The number that makes the rest worth having. The
    model runner already calls the command line tool with `--output-format stream-json`, and that
    stream carries the token usage the crew currently reads past.
@@ -162,8 +183,8 @@ docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans"
 ```
 
 Zero after a dispatch means the control plane is not exporting, so check `QC_OTEL_ENDPOINT` reaches
-the collector. A number that grows means the crew is exporting and the question moves downstream, to
-whether the collector has anywhere to put it, which today it does not.
+the collector. A number that grows means the crew is exporting, and the next question is whether the
+collector delivered it, which the same log answers: an export that failed says so on the line after.
 
 The other half is the correlation id. Take one from a log line and you have the trace it belongs to:
 
@@ -178,7 +199,13 @@ observability services have not changed since.
 
 That inbound calls are traced, that a refused call is traced too, and that a log line written inside
 a turn carries the trace id of the dispatch that started it are proved by `features/observability.feature`
-against the real gRPC interface, not by a screenshot. The collector counts in this document were not
-re run when the spans landed: the change was made and gated in an environment with no container
-runtime, so the two `docker logs` commands above are the reproduction steps and not a captured
-result. Run them on a stack with `make up` and at least one dispatch.
+against the real gRPC interface, not by a screenshot.
+
+That the four telemetry containers agree with each other about names and ports is proved by
+`deploy/telemetry_test.go`, which reads the collector, Prometheus, Grafana and compose files and
+refuses a host that is not a service or a scrape port that is not the one the collector publishes on.
+
+Neither of those is the same as having watched it work. Every command in this document that starts
+`docker` is a reproduction step and not a captured result: this change was made and gated in an
+environment with no container runtime. Run `make up-observability`, dispatch a turn, and the Tempo
+search above is the check.
