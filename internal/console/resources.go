@@ -420,7 +420,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10},
 			{Title: "workspace", Width: 16},
 			{Title: "project", Width: 20},
-			{Title: "thread", Width: 10},
+			{Title: "name", Width: 10},
 			{Title: "status", Width: 10},
 			{Title: "mode", Width: 12},
 			{Title: "in", Width: 7, Give: 3},

@@ -956,6 +956,38 @@ func TestRestoreBringsAThreadBack(t *testing.T) {
 	}
 }
 
+// TestTheArchivedViewNamesTheColumnThatHoldsTheName ties the header to what the cell carries. The
+// cell holds what a thread is called, so a header reading "thread" describes it as an identifier and
+// sends the operator looking for hexadecimal that is not there.
+func TestTheArchivedViewNamesTheColumnThatHoldsTheName(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+		Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped",
+		Label:      "the electricity bill",
+		ArchivedAt: timestamppb.Now(),
+	}}}
+
+	view := Archived(client)
+	rows, err := view.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing archived: %v", err)
+	}
+
+	// Found by content rather than by index, so a column added before it does not quietly move what
+	// this is about.
+	at := -1
+	for index, cell := range rows[0].Cells {
+		if cell == "the electricity bill" {
+			at = index
+		}
+	}
+	if at < 0 {
+		t.Fatalf("no cell holds what the thread is called: %v", rows[0].Cells)
+	}
+	if title := view.Columns[at].Title; title != "name" {
+		t.Fatalf("the column holding the name is headed %q, want name", title)
+	}
+}
+
 // TestTheArchivedViewSaysWhenAThreadWasPutAway: its last column is the stamp, not the last touch,
 // because "two hours ago" about a thread nobody has touched since is the useful number.
 func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {

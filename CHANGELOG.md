@@ -8,6 +8,11 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **The archived view names its name column.** The cell holds what a thread is called. The header
+  above it read `thread`, which is what an identifier is called. So an operator read the header,
+  looked for eight characters of hexadecimal, and found a sentence. The live sessions view has said
+  `name` since the name shipped. The archived view kept the old header.
+
 - **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
