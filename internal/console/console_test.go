@@ -922,6 +922,39 @@ func TestAnythingButYesLeavesALiveThreadAlone(t *testing.T) {
 	}
 }
 
+// TestTheQuestionFollowsTheListedState drives the key off rows the crew actually returned. A row
+// built by hand says nothing about which threads get the question: the state comes off the listing,
+// and the listing is what the operator is looking at when they press the key.
+func TestTheQuestionFollowsTheListedState(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Thread{
+		{Id: "s1", Workspace: "acme", Handle: "t1", Status: "stopped"},
+		{Id: "s2", Workspace: "acme", Handle: "t2", Status: "running"},
+	}}
+	rows, err := Sessions(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	model := newTestModel(t, Sessions(client))
+	model, _ = update(t, model, rowsFor(model, rows...))
+
+	if selected, _ := model.selectedRowValue(); selected.ID != "s1" {
+		t.Fatalf("the cursor is on %q, want the stopped thread", selected.ID)
+	}
+	acted, cmd := update(t, model, runes("R"))
+	if acted.mode != modeBrowse || cmd == nil {
+		t.Fatalf("mode = %v, want the stopped thread restarted at once", acted.mode)
+	}
+
+	moved, _ := update(t, model, runes("j"))
+	if selected, _ := moved.selectedRowValue(); selected.ID != "s2" {
+		t.Fatalf("the cursor is on %q, want the running thread", selected.ID)
+	}
+	asked, cmd := update(t, moved, runes("R"))
+	if asked.mode != modeConfirm || cmd != nil {
+		t.Fatalf("mode = %v, want the console asking about the running thread", asked.mode)
+	}
+}
+
 // TestCtrlRRestartsToo: the same key by the other spelling, because that is what a terminal reports
 // for the chord and it is the one somebody reaches for.
 func TestCtrlRRestartsToo(t *testing.T) {
