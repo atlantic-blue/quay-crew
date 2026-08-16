@@ -96,6 +96,11 @@ type recordingRunner struct {
 	// way rather than infer it from how long a step took.
 	started chan struct{}
 	once    sync.Once
+	// usage, cost and usageReported are what each turn reports having spent. The zero value reports
+	// nothing, which is what a backend that does not say looks like.
+	usage         sandbox.Usage
+	cost          float64
+	usageReported bool
 }
 
 // hold makes every turn wait, and returns the func that lets them go.
@@ -149,6 +154,9 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 	return model.Response{
 		Reply:          "you said: " + req.Text,
 		ModelSessionID: fmt.Sprintf("conversation-%d", len(r.requests)),
+		Usage:          r.usage,
+		CostUSD:        r.cost,
+		UsageReported:  r.usageReported,
 	}, nil
 }
 
@@ -487,6 +495,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
 	initializeObservabilitySteps(sc)
+	initializeMetricsSteps(sc)
 	initializeTurnsSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)

@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"path"
 	"sort"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -168,6 +170,9 @@ type Server struct {
 	sandboxImage string
 	events       messaging.EventLog
 	info         Info
+	// turnMetrics publishes what each turn spent. Nil records nothing, which is what a crew with no
+	// telemetry provider installed does.
+	turnMetrics *telemetry.TurnMetrics
 
 	mu        sync.Mutex
 	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
@@ -194,6 +199,14 @@ func NewServer(cfg Config) *Server {
 		sandboxImage:  cfg.SandboxImage,
 		sandboxes:     make(map[string]sandbox.Sandbox),
 	}
+	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
+	// in this file rather than an operator's problem. Say it and carry on unmeasured: a crew that
+	// will not start because a counter would not be made is worse than a crew with no counter.
+	metrics, err := telemetry.NewTurnMetrics()
+	if err != nil {
+		slog.Warn("turns are not being measured", "error", err)
+	}
+	server.turnMetrics = metrics
 	// The engine dispatches through this same server rather than dialing it: it is already inside
 	// the process, and a run is started by a caller the interceptor has already authenticated. It
 	// reaches nothing the caller could not, because these are the same two methods.
@@ -986,6 +999,9 @@ func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text stri
 	})
 	if err != nil {
 		s.recordTurn(ctx, session.GetId(), "", StatusFailed)
+		// A turn that failed still spent what it spent, and a bill that counts only the turns that
+		// worked understates itself in exactly the situation somebody is investigating.
+		s.measureTurn(ctx, session, resp, StatusFailed)
 		// The error itself, not a sentence about turns. Every failure used to read "the model did not
 		// complete the turn", so a deadline, a crash and a refusal were one indistinguishable line and
 		// the operator had nothing to act on.
@@ -995,6 +1011,7 @@ func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text stri
 		return "", status.Errorf(codes.Internal, "run turn: %v", err)
 	}
 	s.recordTurn(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
+	s.measureTurn(ctx, session, resp, StatusIdle)
 	s.recordHistory(ctx, session, &quaycrewv1.TurnEvent{
 		Prompt: text, Reply: resp.Reply, Status: StatusIdle,
 	})
@@ -1009,6 +1026,42 @@ func (s *Server) turn(ctx context.Context, session *quaycrewv1.Thread, text stri
 	}(session.GetId())
 
 	return resp.Reply, nil
+}
+
+// measureTurn publishes what a turn spent and where it was spent.
+//
+// The workspace and the project are on it because the useful question is never "what did the crew
+// cost" but "what did this piece of work cost". The model is on it because a crew that moved from
+// one model to another wants to see the step in the graph.
+func (s *Server) measureTurn(ctx context.Context, session *quaycrewv1.Thread, resp model.Response, status string) {
+	s.turnMetrics.Record(ctx, telemetry.TurnMeasurement{
+		// Names rather than identifiers, the way the audit export already publishes them: nobody
+		// groups a cost dashboard by a uuid. A lookup that fails falls back to the identifier, so a
+		// measurement is never lost to a naming problem.
+		Workspace: s.workspaceName(ctx, session.GetWorkspace()),
+		Project:   s.projectName(ctx, session.GetProject()),
+		Model:     s.info.Model,
+		Status:    status,
+		Usage:     resp.Usage,
+		CostUSD:   resp.CostUSD,
+		Reported:  resp.UsageReported,
+	})
+}
+
+func (s *Server) workspaceName(ctx context.Context, id string) string {
+	workspace, err := s.store.GetWorkspace(ctx, id)
+	if err != nil || workspace.GetName() == "" {
+		return id
+	}
+	return workspace.GetName()
+}
+
+func (s *Server) projectName(ctx context.Context, id string) string {
+	project, err := s.store.GetProject(ctx, id)
+	if err != nil || project.GetName() == "" {
+		return id
+	}
+	return project.GetName()
 }
 
 // turnFailure is what the operator is told a failed turn failed of.

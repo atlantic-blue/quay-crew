@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A turn says what it cost.** Three instruments now leave the crew after every turn: turns run,
+  tokens spent split into input, output, cache read and cache written, and what those tokens would
+  cost at published prices. Each carries the workspace, the project, the model and the status, by
+  name rather than by identifier, because nobody groups a cost dashboard by a uuid.
+
+  The numbers were already arriving and being thrown away. The model runner calls the command line
+  tool with `--output-format stream-json`, and the result event on that stream carries both the usage
+  and the cost. The struct that reads the stream did not have the fields, so the one number that says
+  whether a crew of agents is affordable was discarded at the point it was known.
+
+  The cost is not a charge anybody receives. The crew runs under a subscription, so this is the
+  model's own tooling pricing the turn at published rates, which is exactly the figure worth
+  watching.
+
+  A turn whose backend reported nothing is counted as a turn and contributes to neither of the other
+  two, so an unknown never reads as a zero. A turn that failed is counted with `status="failed"` and
+  contributes no tokens, because a failed turn returns nothing to read them from; what it spent
+  before it failed is still invisible.
+
+  Reusing `sandbox.Usage` rather than inventing a second set of names for the same four numbers: the
+  crew already reads that shape off a conversation's transcript for "what has this thread cost". This
+  is the per turn figure, which is what a counter wants.
+  ([#16](https://github.com/atlantic-blue/quay-crew/issues/16))
+
 - **Logs reach Loki, and a log line and its trace link to each other.** The crew's log lines now go to
   the collector as well as to stdout, so Loki holds them. A line carrying a correlation id has a link
   on it that opens the trace, and a span offers the lines that call wrote. That link is the whole
@@ -1744,13 +1768,11 @@ read, or run with `make features`.
 Things the documentation has claimed and the code does not do yet, listed here so nobody plans
 around them:
 
-- **Nothing creates a metric instrument.** The meter provider is wired and never used, so no token
-  count, no cost and no resource number leaves the crew.
-  ([#16](https://github.com/atlantic-blue/quay-crew/issues/16))
-- **The telemetry stack is not connected.** Grafana, Loki, Tempo and Prometheus are in the compose file
-  with nothing joining them up. Spans now reach the collector and stop there, because its only
-  exporter is `debug`, and Grafana comes up with no data source.
-  ([#12](https://github.com/atlantic-blue/quay-crew/issues/12))
 - **Only the crew's own handling of a message is traced.** There is no span around a turn, a sandbox
   or the model, and the command line tool starts no trace, so a trace stops at the edge of the
   control plane. ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
+- **A turn in the `turns` table carries no trace id**, so history and traces cannot be joined the way
+  logs and traces now can. ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
+- **There are no dashboards and no alerts**, so there is no cost ceiling that fires. Nothing measures
+  the host, a session's processes, or a GPU.
+  ([#16](https://github.com/atlantic-blue/quay-crew/issues/16))
