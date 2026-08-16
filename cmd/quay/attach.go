@@ -68,14 +68,39 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if typed == "" {
 		return "", fmt.Errorf("a session is required: its id, its handle, or its address")
 	}
-	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+	live, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 	if err != nil {
 		return "", err
 	}
-	if strings.Contains(typed, workspace.Separator) {
-		return sessionAtAddress(ctx, client, typed, resp.GetSessions())
+	id, refused := sessionIn(ctx, client, typed, live.GetSessions())
+	if refused == nil {
+		return id, nil
 	}
-	return sessionWithIdentifier(typed, resp.GetSessions())
+	// The archived listing second. A flow run puts its own session away when it finishes, and that
+	// session's history is the first thing somebody investigating the run asks for, so which listing
+	// this happens to read must not decide whether a session can be named at all. Nothing about
+	// reading a history needs the session to be live, and a command that does need it live refuses
+	// on its own terms: attach says to restore it first.
+	//
+	// Asked for second rather than merged in, so an identifier that names a live session today names
+	// the same one tomorrow.
+	putAway, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Archived: true})
+	if err != nil {
+		return "", refused
+	}
+	if found, missing := sessionIn(ctx, client, typed, putAway.GetSessions()); missing == nil {
+		return found, nil
+	}
+	return "", refused
+}
+
+// sessionIn reads what the operator typed against one listing: an address, or one of the two
+// identifiers that listing prints.
+func sessionIn(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string, sessions []*quaycrewv1.Session) (string, error) {
+	if strings.Contains(typed, workspace.Separator) {
+		return sessionAtAddress(ctx, client, typed, sessions)
+	}
+	return sessionWithIdentifier(typed, sessions)
 }
 
 // sessionAtAddress reads an address the way dispatch does, then turns the handle it lands on into the

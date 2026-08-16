@@ -168,6 +168,12 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	for _, key := range keys {
 		fmt.Fprintf(out, "  %-16s %s\n", key, truncateLine(run.GetState()[key]))
 	}
+	// What the run actually did is in its session, and the summary above is the model's own account
+	// of it. The two can disagree, so the way to read the tasks is printed rather than left to be
+	// worked out from an identifier in the state.
+	if session := run.GetState()[flow.SessionKey]; session != "" {
+		fmt.Fprintf(out, "read what it did with quay tasks %s\n", display.ShortID(session))
+	}
 	return nil
 }
 

@@ -8,29 +8,96 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
-- **An archived thread runs nothing.** Archiving stops a thread and takes its container away. The
+- **A graph can tell work that was done from work that was explained away.** The first flow run
+  against a real crew finished at `done`, reported four transitions and 669,649 tokens, and read back
+  as a success. None of the work happened. The repository was not in the run's session, every task
+  said so in its own words, and the run took the success edge anyway, because the only signal a
+  `choice` node had was `result.failed`, and `result.failed` says the model did not error. A task
+  that could not do the work is not a failed task. The more capable the model, the worse it reads: it
+  answers plausibly rather than stopping, and that plausible answer is what the run ends up carrying
+  as its summary.
+
+  A dispatch node now says what will show it worked, and the crew checks it rather than reading the
+  model's account of itself. `expect: { file: package.json }` is a path that must be in the run's
+  session after the task, read from the working directory the crew already keeps, so nothing the model
+  says can satisfy it. `expect: { contains: "all green" }` is a string the reply must carry, weaker
+  because it is still prose, and there for work that leaves no file behind.
+
+  An expectation that does not hold stops the run, naming the node and what was not there. It stops
+  rather than branching, because the crew knows the work did not happen and does not know why, and
+  because a run that halts is read correctly while a run that finishes is believed. The session is
+  left alone rather than archived: that is where the evidence is. An expectation nothing could check
+  stops the run too, since a check that quietly passes when nobody could look is the same false green
+  as no check at all. A graph that declares nothing behaves exactly as it did.
+
+  Left out on purpose: a command the crew runs and requires to exit zero. That makes an imported
+  graph a way to run arbitrary commands through the control plane, which is a decision to take on its
+  own. ([#263](https://github.com/atlantic-blue/quay-crew/issues/263))
+
+- **A graph says what its runs may do, and the documents say what a run starts with.** A run owns its
+  own session, and that session is made by the run's first dispatch. So there was nothing to set a mode
+  on before the run started, `quay mode` had nothing to point at, and every automation ran in the
+  mode a session is born in. A graph whose first step is "clone this" could not take that step:
+  cloning needs the network, and a task nobody is watching has nobody to approve it.
+
+  A graph now declares `mode: dangerous` beside its name and its version, and every dispatch of the
+  run carries it. The word is checked at import, against the same table the command line and the
+  console read, so a mode nobody has is refused with the three there are rather than failing on the
+  run's first task. A graph that declares nothing is unchanged.
+
+  The other half is a document. Nothing said what a run's session starts with, which is exactly the
+  assumption a graph author makes without noticing: it starts empty. `docs/ARCHITECTURE.md` now says
+  so, and says which of the two mounted directories survives the run. The workspace's volume at
+  `/home/agent/shared` is the one that does, so a graph that needs a repository puts it there.
+  Cloning into the working directory pays for the clone on every run.
+
+  What this is not is the clone that serves every session, which is
+  [#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is still open. A run can fill its
+  own room now; it does not yet find one already filled.
+  ([#264](https://github.com/atlantic-blue/quay-crew/issues/264))
+
+- **What a finished flow run did can be read again.** A run archives its own session when it ends,
+  which is right: otherwise every run leaves a container behind. Archiving is also what put the run's
+  record out of reach. `quay flow show` printed the session identifier, and `quay tasks` refused that
+  exact identifier, because every command that reads a session asked the live listing and nothing
+  else. The tasks were in the store the whole time. Reading them took `psql`.
+
+  That mattered more than a missing convenience. The run's summary is the model's own account of what
+  happened, and the tasks are the record of it. The two can disagree: the first run against a real
+  crew reported four transitions and a tidy summary while every task under it said the working
+  directory was empty.
+
+  So a session is resolved against the archived listing when the live one does not name it. The live
+  listing is asked first, so an identifier that names a live session still names the same one. Nothing
+  about reading a history needs the session to be live, and `quay attach`, which does need it, still
+  refuses on its own terms and says to restore it first. `quay flow show` now prints the command that
+  reads the run's tasks rather than an identifier to work it out from, and the console's archived
+  view takes `l` for a history, the same key the live view takes.
+  ([#265](https://github.com/atlantic-blue/quay-crew/issues/265))
+
+- **An archived session runs nothing.** Archiving stops a session and takes its container away. The
   task that was running in it landed a moment later, and the crew wrote down what that task came to,
-  so the row went back to idle or to failed. The archived listing then showed a thread that is
+  so the row went back to idle or to failed. The archived listing then showed a session that is
   working, and nobody can reach it.
 
-  An archived thread keeps its status now. It still keeps its conversation handle, so restoring it
+  An archived session keeps its status now. It still keeps its conversation handle, so restoring it
   comes back to the conversation it was in.
 
-  A dispatch to an archived thread is refused too, and says to restore it first. A handle is matched
-  whether the thread is put away or not, so `quay dispatch` to an archived thread started a container
-  for a thread that is not in the listing.
+  A dispatch to an archived session is refused too, and says to restore it first. A handle is matched
+  whether the session is put away or not, so `quay dispatch` to an archived session started a container
+  for a session that is not in the listing.
 
-- **Restart works on a live thread, and asks first.** The crew refused to restart a thread unless it
+- **Restart works on a live session, and asks first.** The crew refused to restart a session unless it
   was already stopped. So the key you press when a container is wrong did nothing, and you had to
-  stop the thread yourself before the key would work.
+  stop the session yourself before the key would work.
 
-  Restart stops the thread now, removes the container, and starts a new one. In the console it is `R`
-  or ctrl+r. It asks before it acts on a thread that is not stopped, because the task in that thread
-  and the conversation attached to it go with the old container. A stopped thread has neither, so
+  Restart stops the session now, removes the container, and starts a new one. In the console it is `R`
+  or ctrl+r. It asks before it acts on a session that is not stopped, because the task in that session
+  and the conversation attached to it go with the old container. A stopped session has neither, so
   that one acts at once.
 
-  An archived thread is refused, and says to restore it first. An archived row says stopped, so a
-  restart that read only the status started a container for a thread nobody can see.
+  An archived session is refused, and says to restore it first. An archived row says stopped, so a
+  restart that read only the status started a container for a session nobody can see.
 
 - **Every view in the console is coloured cell by cell.** A row carries a state, and the state was
   drawn over the whole line, so a row's workspace, project, name and mode all arrived on screen in
@@ -72,23 +139,23 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
-- **A task is called a task.** "Task" is a word from conversation analysis, where it means one party
+- **A turn is called a task.** "Turn" is a word from conversation analysis, where it means one party
   holding the floor. It arrived in this product the way it arrived in every model provider's
-  documentation, already meaning something, and it never fitted: a task in conversation is short, and
+  documentation, already meaning something, and it never fitted: a turn in conversation is short, and
   here holding the floor means reading a repository for ten minutes. The word implied an exchange and
   the thing is a piece of work.
 
-  The glossary made it worse. It defined five words and then defined `session` with a sixth it never
-  defined anywhere: "one conversation. A task runs in a project." The one place that exists to teach
+  The glossary made it worse. It defined five words and then defined `thread` with a sixth it never
+  defined anywhere: "one conversation. A turn runs in a project." The one place that exists to teach
   the vocabulary used the undefined term to explain a defined one.
 
-  So `quay tasks` is `quay tasks`, the console's history view is `tasks`, and the glossary gains the
-  entry it never had, including the part nobody was told: minutes is normal. `quay tasks` is refused
+  So `quay turns` is `quay tasks`, the console's history view is `tasks`, and the glossary gains the
+  entry it never had, including the part nobody was told: minutes is normal. `quay turns` is refused
   by name and says what to type instead, rather than becoming an unknown command, because it is in
-  fingers, in scripts and in notes. The console keeps `tasks` as an alias, since muscle memory
+  fingers, in scripts and in notes. The console keeps `turns` as an alias, since muscle memory
   outlives a rename and answering to it costs nothing.
 
-  The protocol, the store and its table still say task. That is the next change, and it is invisible
+  The protocol, the store and its table still say turn. That is the next change, and it is invisible
   from outside.
 
 ## 15 August 2026

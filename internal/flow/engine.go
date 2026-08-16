@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -110,13 +111,28 @@ type ControlPlane interface {
 	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
 }
 
+// Prover answers what a dispatch node said would show its task did the work.
+//
+// Deliberately not one of the control plane's own calls. Reading a session's files is not something
+// a caller may ask the crew to do, and a graph is written by whoever may import one, so a graph must
+// not become a road to it. This asks one question, about one session, with a path the parser has
+// already refused if it climbs anywhere.
+//
+// An implementation that cannot answer says so, and the run stops. A check that quietly passes when
+// it could not be run is the same false green as no check at all.
+type Prover interface {
+	// SessionHolds says whether path exists in the session's own working directory.
+	SessionHolds(ctx context.Context, session, path string) (bool, error)
+}
+
 // Engine drives runs: it loads the graph, calls the pure reducer, persists every transition, and
 // carries out the commands the reducer returned. It blocks for the tasks it dispatches, one at a
 // time per run, which is the shape the graph forces anyway: a run has one current node.
 type Engine struct {
-	store Store
-	plane ControlPlane
-	spend Spend
+	store  Store
+	plane  ControlPlane
+	spend  Spend
+	prover Prover
 	// clock is where the engine reads the time, so a test can put a wait's due time in the past
 	// rather than waiting out a real one. Nil means the wall clock.
 	clock func() time.Time
@@ -138,9 +154,10 @@ func (e *Engine) WithClock(clock func() time.Time) *Engine {
 }
 
 // NewEngine builds one. A nil spend reader means the token ceiling has nothing to read, so a graph
-// declaring one is bounded by its transition cap alone; the crew wires the real reader in.
-func NewEngine(store Store, plane ControlPlane, spend Spend) *Engine {
-	return &Engine{store: store, plane: plane, spend: spend}
+// declaring one is bounded by its transition cap alone; the crew wires the real reader in. A nil
+// prover means a graph that says a file proves its work stops rather than being believed.
+func NewEngine(store Store, plane ControlPlane, spend Spend, prover Prover) *Engine {
+	return &Engine{store: store, plane: plane, spend: spend, prover: prover}
 }
 
 // Start begins a run of the newest version of a graph and drives it to a standstill before
@@ -267,39 +284,80 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			return run, nil
 		}
 
+		// The mode travels with every dispatch, not only the first. The control plane applies it
+		// before the sandbox is built, and a run's session is made by its first dispatch, so this is
+		// the only moment anything can say what an automation's tasks are allowed to do.
 		resp, err := e.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-			Project: run.Project,
-			Handle:  run.SessionHandle(),
-			Text:    dispatch.Prompt,
+			Project:        run.Project,
+			Handle:         run.SessionHandle(),
+			Text:           dispatch.Prompt,
+			PermissionMode: graph.Mode,
 		})
 		if err != nil {
 			event = Event{Kind: EventTaskFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
 			continue
 		}
-		run.State[sessionKey] = resp.GetId()
-		event = Event{Kind: EventTaskFinished, Node: dispatch.Node, Reply: resp.GetReply()}
+		run.State[SessionKey] = resp.GetId()
+		event = Event{
+			Kind:  EventTaskFinished,
+			Node:  dispatch.Node,
+			Reply: resp.GetReply(),
+			Unmet: e.unmet(ctx, graph.Nodes[dispatch.Node], run, resp.GetReply()),
+		}
 	}
+}
+
+// unmet is what the node said would show its task did the work, where that is not there. Empty means
+// the node claimed nothing, or the claim held.
+//
+// Checked here rather than in the reducer because it reads the world, and read after the task rather
+// than described by it: the model reporting on its own work is the thing this exists to stop.
+func (e *Engine) unmet(ctx context.Context, node Node, run Run, reply string) string {
+	if node.Expect == nil {
+		return ""
+	}
+	if carries := node.Expect.Contains; carries != "" && !strings.Contains(reply, carries) {
+		return fmt.Sprintf("the reply does not carry %q", carries)
+	}
+	path := node.Expect.File
+	if path == "" {
+		return ""
+	}
+	if e.prover == nil {
+		return fmt.Sprintf("%s could not be checked: this crew cannot read a session's files", path)
+	}
+	held, err := e.prover.SessionHolds(ctx, run.State[SessionKey], path)
+	if err != nil {
+		return fmt.Sprintf("%s could not be checked: %v", path, err)
+	}
+	if !held {
+		return fmt.Sprintf("%s is not in the run's session", path)
+	}
+	return ""
 }
 
 // spentBy is what the run's session has cost. It keeps the last known number when there is no reader
 // wired or no session yet: a cost that cannot be read must not silently reset a run's spend to zero
 // and hand it a fresh ceiling.
 func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
-	if e.spend == nil || run.State[sessionKey] == "" {
+	if e.spend == nil || run.State[SessionKey] == "" {
 		return run.Spent
 	}
-	return e.spend.SessionTokens(ctx, run.State[sessionKey])
+	return e.spend.SessionTokens(ctx, run.State[SessionKey])
 }
 
-// sessionKey is where the run remembers its session's identifier, learned from the first dispatch.
+// SessionKey is where the run remembers its session's identifier, learned from the first dispatch.
 // The handle is the run's own by construction; the identifier is what archiving needs.
-const sessionKey = "session.id"
+//
+// Exported because a run outlives the reading of it: the session is archived when the run ends, and
+// whoever reads the run afterwards has to be told where its history is.
+const SessionKey = "session.id"
 
 // archive puts the run's session away. A run that never dispatched has no session, and a session that
 // cannot be archived is logged by the control plane's side of the call; neither is a reason to call
 // a finished run anything else.
 func (e *Engine) archive(ctx context.Context, run Run) {
-	id := run.State[sessionKey]
+	id := run.State[SessionKey]
 	if id == "" {
 		return
 	}

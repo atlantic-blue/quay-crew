@@ -74,6 +74,17 @@ func (f *FakeProvider) Remove(_ context.Context, sessionID string) error {
 	return nil
 }
 
+// Configurations is what this provider was asked to make, in order.
+//
+// The same list as Created, read under the provider's own lock, for a test watching from another
+// goroutine: a scenario about what a session's own directory holds runs while a turn is in flight,
+// and reading the slice directly there is a race.
+func (f *FakeProvider) Configurations() []Config {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]Config(nil), f.Created...)
+}
+
 // Stranded lists the sessions whose sandboxes are still open, the way the Docker provider lists the
 // containers the daemon holds.
 func (f *FakeProvider) Stranded(context.Context) ([]string, error) {

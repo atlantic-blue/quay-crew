@@ -111,6 +111,16 @@ Feature: The operator sees the crew from the console
     And the archived view lists 1 session
     And the archived session still holds its conversation
 
+  # A flow run puts its own thread away when it ends, so the history of an automation is always read
+  # from the archived view. Reaching it must not need the thread restored first: nothing about
+  # reading what happened needs a container.
+  Scenario: An archived session's history is reachable without restoring it
+    Given a session started by dispatching "read the package file"
+    When the operator opens the console and archives the session
+    And the operator asks for the archived session's history
+    Then the console is showing tasks
+    And the history lists 1 task saying "read the package file"
+
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console

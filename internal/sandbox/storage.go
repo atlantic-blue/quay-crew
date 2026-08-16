@@ -100,6 +100,31 @@ func memoryDirs(cfg Config) []dir {
 	return out
 }
 
+// WorkingDir is a session's own working directory as this process sees it, and false where this
+// storage keeps nothing or the configuration names a directory it could not make.
+//
+// Read from the same layout the mounts come from, so the two cannot drift into describing different
+// directories. It is this process's view rather than the host's, because the caller is reading the
+// directory rather than mounting it.
+func (s Storage) WorkingDir(cfg Config) (string, bool) {
+	if s.Dir == "" {
+		return "", false
+	}
+	for _, part := range []struct{ kind, value string }{
+		{"workspace", cfg.Workspace}, {"project", cfg.Project}, {"session", cfg.ID},
+	} {
+		if usableAsPath(part.kind, part.value) != nil {
+			return "", false
+		}
+	}
+	for _, one := range layout(cfg) {
+		if one.target == WorkingPath {
+			return filepath.Join(append([]string{s.Dir}, one.parts...)...), true
+		}
+	}
+	return "", false
+}
+
 // VolumeDir is the workspace's shared volume as this process sees it, and VolumeHost as the host daemon
 // does, which is what a bind mount source has to be.
 func (s Storage) VolumeDir(workspace string) (string, bool) {

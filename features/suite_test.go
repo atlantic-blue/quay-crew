@@ -95,6 +95,9 @@ type recordingRunner struct {
 	// way rather than infer it from how long a step took.
 	started chan struct{}
 	once    sync.Once
+	// onTask runs before the double answers, so a scenario can be a model that did the work rather
+	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
+	onTask func()
 }
 
 // hold makes every task wait, and returns the func that lets them go.
@@ -127,8 +130,12 @@ var _ model.Runner = (*recordingRunner)(nil)
 
 func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, started := r.takes, r.gate, r.started
+	takes, gate, started, work := r.takes, r.gate, r.started, r.onTask
 	r.mu.Unlock()
+	// Outside the lock: what the model does may ask the crew something.
+	if work != nil {
+		work()
+	}
 	if started != nil {
 		r.once.Do(func() { close(started) })
 	}
