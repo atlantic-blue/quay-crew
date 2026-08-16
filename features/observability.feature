@@ -1,6 +1,6 @@
 Feature: A call can be followed after it happened
 
-  When a turn hangs or fails, the question is which of the tool, the crew, the sandbox and the model
+  When a task hangs or fails, the question is which of the tool, the crew, the sandbox and the model
   it is sitting in. A log line in each cannot answer that, so every call the crew serves runs inside
   a span, and every log line written while it runs carries that call's correlation id. The id is the
   trace id rather than a second identifier beside it, because an id you have to join to the trace id
@@ -22,7 +22,7 @@ Feature: A call can be followed after it happened
   Scenario: A log line written while a call runs carries that call's correlation id
     Given an event log that refuses what it is given
     When the operator dispatches "remember the number" to the project
-    Then the crew says the turn could not be exported
+    Then the crew says the task could not be exported
     And that line carries the correlation id of the call it happened under
 
   Scenario: A line written before any call arrived carries no correlation id

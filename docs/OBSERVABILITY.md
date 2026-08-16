@@ -27,8 +27,8 @@ by it and opening the trace are the same question asked twice.
 
 Two things about the shape are worth knowing. A line only carries the id when the call site logs
 with a context, so `slog.WarnContext(ctx, ...)` rather than `slog.Warn(...)`. And the id survives
-`context.WithoutCancel`, which is what a turn and a flow run detach with, so the interesting half of
-a turn is correlated to the dispatch that started it rather than orphaned.
+`context.WithoutCancel`, which is what a task detaches with, so the interesting half of
+a task is correlated to the dispatch that started it rather than orphaned.
 
 **Traces exist for inbound calls.** `telemetry.ServerOptions` puts an OpenTelemetry stats handler on
 the control plane's gRPC server, so every message it serves runs in a span and the exporter has
@@ -36,7 +36,7 @@ something to export. It is a stats handler rather than an interceptor because a 
 first: a call refused by the crew's token guard is traced too, which is the call somebody is most
 likely to come looking for.
 
-Nothing else is traced yet. There is no span around a turn, a sandbox or the model, and the command
+Nothing else is traced yet. There is no span around a task, a sandbox or the model, and the command
 line tool starts no trace of its own, so a trace today covers the crew's own handling of one message
 and stops there.
 
@@ -159,7 +159,7 @@ make up-observability
 quay dispatch <workspace>/<project> "remember the number"
 ```
 
-Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The turn is one span, named
+Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The task is one span, named
 `quaycrew.v1.ControlPlaneService/Dispatch`. Open it and Grafana offers the log lines that call wrote.
 
 Going the other way, pick Loki and query `{service_name="controlplane"}`. Any line carrying a
@@ -173,7 +173,7 @@ stack that names a config file nobody provides.
 
 Two things to know before you spend time in there:
 
-- **Tempo holds traces.** Dispatch a turn, open Grafana, pick the Tempo data source and search. The
+- **Tempo holds traces.** Dispatch a task, open Grafana, pick the Tempo data source and search. The
   span is named for the gRPC method the crew served.
 - **Prometheus holds what tasks cost.** `sum by (workspace) (quaycrew_cost_usd_total)` is what each
   piece of work has cost, and `sum by (kind) (quaycrew_tokens_total)` is where the tokens went. The
@@ -191,8 +191,8 @@ So all three signals are real end to end, and what is left is what you make of t
 In this order, because each step is pointless without the one above it.
 
 1. ~~**Create spans (#3).**~~ Done: inbound calls are traced and every log line carries the
-   correlation id. What is left of #3 is the audit event carrying the trace id, so a turn in the
-   `turns` table joins to the trace that ran it.
+   correlation id. What is left of #3 is the audit event carrying the trace id, so a task in the
+   `tasks` table joins to the trace that ran it.
 2. ~~**Give the collector somewhere to send it (#12).**~~ Done: traces reach Tempo, logs reach Loki,
    Prometheus scrapes the collector, Grafana's three data sources are provisioned as code, and a log
    line and its trace link to each other. What is left of #12 is dashboards and alerts as code, which
@@ -230,7 +230,7 @@ The health endpoint results above were captured from a running stack on 4 August
 observability services have not changed since.
 
 That inbound calls are traced, that a refused call is traced too, and that a log line written inside
-a turn carries the trace id of the dispatch that started it are proved by `features/observability.feature`
+a task carries the trace id of the dispatch that started it are proved by `features/observability.feature`
 against the real gRPC interface, not by a screenshot.
 
 That the four telemetry containers agree with each other about names and ports is proved by
@@ -239,5 +239,5 @@ refuses a host that is not a service or a scrape port that is not the one the co
 
 Neither of those is the same as having watched it work. Every command in this document that starts
 `docker` is a reproduction step and not a captured result: this change was made and gated in an
-environment with no container runtime. Run `make up-observability`, dispatch a turn, and the Tempo
+environment with no container runtime. Run `make up-observability`, dispatch a task, and the Tempo
 search above is the check.

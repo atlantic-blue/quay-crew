@@ -44,7 +44,7 @@ func TestALineUnderACallCarriesTheTraceIDAsItsCorrelationID(t *testing.T) {
 	logger := logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(ctx, "a turn could not be exported")
+	logger.WarnContext(ctx, "a task could not be exported")
 
 	read := lines(t, &out)
 	if len(read) != 1 {
@@ -79,14 +79,14 @@ func TestThePackageLevelSlogIsTheCrewsLogger(t *testing.T) {
 	}
 }
 
-// Turn and flow work is detached from the request that started it, so the id has to survive the
-// detaching or the interesting half of a turn is uncorrelated.
+// Task and flow work is detached from the request that started it, so the id has to survive the
+// detaching or the interesting half of a task is uncorrelated.
 func TestTheCorrelationIDSurvivesADetachedContext(t *testing.T) {
 	var out bytes.Buffer
 	logger := logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(context.WithoutCancel(ctx), "a turn could not be written to history")
+	logger.WarnContext(context.WithoutCancel(ctx), "a task could not be written to history")
 
 	read := lines(t, &out)
 	if got := read[0][logging.CorrelationKey]; got != traceID {
@@ -101,14 +101,14 @@ func TestWithKeepsTheCorrelationID(t *testing.T) {
 	logger := logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.With("thread", "3cb04bf5").WarnContext(ctx, "a thread could not be described")
+	logger.With("session", "3cb04bf5").WarnContext(ctx, "a session could not be described")
 
 	read := lines(t, &out)
 	if got := read[0][logging.CorrelationKey]; got != traceID {
 		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
 	}
-	if got := read[0]["thread"]; got != "3cb04bf5" {
-		t.Errorf("thread is %v, wanted 3cb04bf5", got)
+	if got := read[0]["session"]; got != "3cb04bf5" {
+		t.Errorf("session is %v, wanted 3cb04bf5", got)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestExportingKeepsWritingToStdout(t *testing.T) {
 	logger := logging.AlsoExport("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(ctx, "a turn could not be exported", "thread", "3cb04bf5")
+	logger.WarnContext(ctx, "a task could not be exported", "session", "3cb04bf5")
 
 	read := lines(t, &out)
 	if len(read) != 1 {
@@ -143,8 +143,8 @@ func TestExportingKeepsWritingToStdout(t *testing.T) {
 	if got := read[0][logging.CorrelationKey]; got != traceID {
 		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
 	}
-	if got := read[0]["thread"]; got != "3cb04bf5" {
-		t.Errorf("thread is %v, wanted 3cb04bf5", got)
+	if got := read[0]["session"]; got != "3cb04bf5" {
+		t.Errorf("session is %v, wanted 3cb04bf5", got)
 	}
 	if got := read[0][logging.ServiceKey]; got != "controlplane" {
 		t.Errorf("service is %v, wanted controlplane", got)
