@@ -102,7 +102,7 @@ func TestStoragePrepareSeparatesProjectsAndWorkspaces(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 
-	// Two projects in one workspace share the conversation store, so a thread started in either can
+	// Two projects in one workspace share the conversation store, so a session started in either can
 	// be resumed, and keep their working directories apart.
 	if first[0] != sameWorkspace[0] {
 		t.Errorf("projects in one workspace got different conversation stores: %q and %q", first[0].Source, sameWorkspace[0].Source)

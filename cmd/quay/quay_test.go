@@ -99,8 +99,8 @@ func TestCreateMovesYouAndDispatchFollows(t *testing.T) {
 	if !strings.Contains(replied, "ok") {
 		t.Fatalf("dispatch with no address did not run: %q", replied)
 	}
-	if !strings.Contains(replied, "thread ") || !strings.Contains(replied, "handle ") {
-		t.Fatalf("dispatch did not show the thread and its handle: %q", replied)
+	if !strings.Contains(replied, "session ") || !strings.Contains(replied, "handle ") {
+		t.Fatalf("dispatch did not show the session and its handle: %q", replied)
 	}
 
 	// And the listing names things rather than printing identifiers.
@@ -128,30 +128,30 @@ func TestAddressOnTheCommandLineDoesNotMoveYou(t *testing.T) {
 	}
 }
 
-// TestUseAThreadContinuesThatConversation is the third level: a thread is somewhere you can stand.
-func TestUseAThreadContinuesThatConversation(t *testing.T) {
+// TestUseASessionContinuesThatConversation is the third level: a session is somewhere you can stand.
+func TestUseASessionContinuesThatConversation(t *testing.T) {
 	client := testClient(t)
 
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 	first := mustRun(t, client, "dispatch", "hello")
-	thread := threadFrom(t, first)
+	session := sessionFrom(t, first)
 
 	// The shortened identifier is what a listing prints, so typing that back has to work.
-	moved := mustRun(t, client, "use", "me/house-bills/"+thread[:8])
-	if !strings.Contains(moved, "now in me/house-bills/"+thread[:8]) {
-		t.Fatalf("use of a thread said %q", moved)
+	moved := mustRun(t, client, "use", "me/house-bills/"+session[:8])
+	if !strings.Contains(moved, "now in me/house-bills/"+session[:8]) {
+		t.Fatalf("use of a session said %q", moved)
 	}
 
 	second := mustRun(t, client, "dispatch", "and again")
-	if got := threadFrom(t, second); got != thread {
-		t.Fatalf("the second turn ran in thread %s, want the one the context named, %s", got, thread)
+	if got := sessionFrom(t, second); got != session {
+		t.Fatalf("the second task ran in session %s, want the one the context named, %s", got, session)
 	}
 }
 
-// threadFrom digs the thread's handle out of what a dispatch printed, because the handle is what
+// sessionFrom digs the session's handle out of what a dispatch printed, because the handle is what
 // an address carries.
-func threadFrom(t *testing.T, output string) string {
+func sessionFrom(t *testing.T, output string) string {
 	t.Helper()
 	_, after, found := strings.Cut(output, "handle ")
 	if !found {
@@ -290,7 +290,7 @@ func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
 		{"dispatch", "--project", "default", "remember the number"},
 		{"dispatch", "--project=default", "remember the number"},
 		{"sessions", "--workspace", "demo"},
-		{"dispatch", "--thread", "abc123", "hello"},
+		{"dispatch", "--session", "abc123", "hello"},
 		{"secret", "set", "--workspace", "demo", "KEY", "value"},
 	} {
 		err := run(context.Background(), client, invocation, io.Discard, "")

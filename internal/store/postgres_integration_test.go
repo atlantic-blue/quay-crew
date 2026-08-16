@@ -152,11 +152,11 @@ func truncate(t *testing.T) {
 	// than a reference, so nothing cascades to them, and one test's token was still set for "acme"
 	// when the next one listed what that workspace held.
 	if _, err := pool.Exec(ctx,
-		// Turns are named here for the same reason as skills. A turn is keyed by its own id and
-		// survived a truncate that claimed to leave nothing behind, so one subtest's turn-0 was still
-		// there when the next one wrote its own, and AppendTurn's "on conflict do nothing" dropped it
-		// silently. What that looked like was a case reading zero turns it had just written.
-		`truncate sessions, turns, channels, workspaces, skills, hooks, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		// Tasks are named here for the same reason as skills. A task is keyed by its own id and
+		// survived a truncate that claimed to leave nothing behind, so one subtest's task-0 was still
+		// there when the next one wrote its own, and AppendTask's "on conflict do nothing" dropped it
+		// silently. What that looked like was a case reading zero tasks it had just written.
+		`truncate sessions, tasks, channels, workspaces, skills, hooks, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -203,8 +203,8 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		t.Fatalf("seed the project: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		insert into sessions (id, project, thread_id, status, model_session_id)
-		values ('sess-1', 'ws-1', 'thread-1', 'idle', 'conversation-1')`); err != nil {
+		insert into sessions (id, project, handle, status, model_session_id)
+		values ('sess-1', 'ws-1', 'session-1', 'idle', 'conversation-1')`); err != nil {
 		pool.Close()
 		t.Fatalf("seed the session: %v", err)
 	}
@@ -249,13 +249,13 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		t.Fatalf("the session belongs to project %q, want the adopting project %q", session.GetProject(), adopted[0].GetId())
 	}
 
-	// The thread must still resolve to the same session, or the next turn starts a new conversation.
-	same, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "thread-1", "")
+	// The session must still resolve to the same session, or the next task starts a new conversation.
+	same, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "session-1", "")
 	if err != nil {
 		t.Fatalf("FindOrCreateSession after the rename: %v", err)
 	}
 	if same.GetId() != "sess-1" {
-		t.Fatalf("the thread made a new session after the rename: %q", same.GetId())
+		t.Fatalf("the session made a new session after the rename: %q", same.GetId())
 	}
 	if same.GetModelSessionId() != "conversation-1" {
 		t.Fatalf("the adopted session lost its conversation handle: %q", same.GetModelSessionId())
@@ -278,7 +278,7 @@ func dropEverything(t *testing.T) {
 
 // TestTheSubscriptionTokenSurvivesARestart is the whole point of keeping secrets in the database.
 //
-// Every restart of the stack lost the token, so the next turn failed with nothing useful to say and
+// Every restart of the stack lost the token, so the next task failed with nothing useful to say and
 // the operator had to mint and set one again before anything worked. This closes a second store over
 // the same database, which is what a restarted control plane is from the outside.
 func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {

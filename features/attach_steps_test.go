@@ -15,7 +15,7 @@ import (
 )
 
 type attachWorld struct {
-	spec *quaycrewv1.AttachThreadResponse
+	spec *quaycrewv1.AttachSessionResponse
 	err  error
 	// named is the conversation each attach was told to open, in order, so a scenario can say that
 	// opening twice lands in one conversation rather than orphaning the first.
@@ -29,7 +29,7 @@ func attachFrom(ctx context.Context) *attachWorld {
 	return a
 }
 
-// initializeAttachSteps registers the steps for reaching a thread's conversation.
+// initializeAttachSteps registers the steps for reaching a session's conversation.
 func initializeAttachSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, attachKey{}, &attachWorld{}), nil
@@ -37,11 +37,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator asks how to attach to the session$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: current.sessionID})
+		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: current.sessionID})
 		return nil
 	})
 
@@ -50,7 +50,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) == 0 {
 			return fmt.Errorf("no driver was opened")
 		}
-		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: w.drivers[0].GetId()})
+		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: w.drivers[0].GetId()})
 		a.named = append(a.named, conversationIn(a.spec))
 		return a.err
 	})
@@ -59,11 +59,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	// says the crew knows it rather than only that it passed something down.
 	sc.Step(`^the driver has a conversation the crew can name$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: w.drivers[0].GetId()})
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: w.drivers[0].GetId()})
 		if err != nil {
 			return err
 		}
-		if resp.GetThread().GetModelSessionId() == "" {
+		if resp.GetSession().GetModelSessionId() == "" {
 			return fmt.Errorf("the driver's conversation has no name, so nothing can be attributed to it")
 		}
 		return nil
@@ -77,19 +77,19 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) > 0 {
 			id = w.drivers[0].GetId()
 		} else {
-			current, err := w.lastTurn()
+			current, err := w.lastTask()
 			if err != nil {
 				return err
 			}
 			id = current.sessionID
 		}
-		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: id})
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: id})
 		if err != nil {
 			return err
 		}
-		held := resp.GetThread().GetModelSessionId()
+		held := resp.GetSession().GetModelSessionId()
 		if held == "" {
-			return fmt.Errorf("the crew holds no conversation for this thread")
+			return fmt.Errorf("the crew holds no conversation for this session")
 		}
 		if got := conversationIn(a.spec); got != held {
 			return fmt.Errorf("the sandbox is told to open %q and the crew holds %q", got, held)
@@ -112,20 +112,20 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator asks how to attach to a session that has never had a turn$`, func(ctx context.Context) error {
+	sc.Step(`^the operator asks how to attach to a session that has never had a task$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
-		// A session exists only once a turn creates it, so a failing runner gives us one with no
+		// A session exists only once a task creates it, so a failing runner gives us one with no
 		// conversation behind it, which is exactly the state this refusal is about.
 		w.runner.failNext = true
-		_ = w.dispatch(ctx, w.projectID, "", "this turn fails")
-		sessions, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: w.projectID})
+		_ = w.dispatch(ctx, w.projectID, "", "this task fails")
+		sessions, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
 		if err != nil {
 			return err
 		}
-		if len(sessions.GetThreads()) != 1 {
-			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetThreads()))
+		if len(sessions.GetSessions()) != 1 {
+			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetSessions()))
 		}
-		a.spec, a.err = w.client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessions.GetThreads()[0].GetId()})
+		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessions.GetSessions()[0].GetId()})
 		return nil
 	})
 
@@ -134,7 +134,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -144,20 +144,20 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the command resumes the conversation the turn started$`, func(ctx context.Context) error {
+	sc.Step(`^the command resumes the conversation the task started$`, func(ctx context.Context) error {
 		a := attachFrom(ctx)
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
 		line := strings.Join(a.spec.GetArgv(), " ")
-		// conversation-1 is what the recording runner hands back for a first turn.
+		// conversation-1 is what the recording runner hands back for a first task.
 		if !strings.Contains(line, "conversation-1") {
-			return fmt.Errorf("the command is %q, want it to resume the turn's conversation", line)
+			return fmt.Errorf("the command is %q, want it to resume the task's conversation", line)
 		}
 		return nil
 	})
 
-	// Ending the conversation was the only way back to the console, so an open thread runs inside a
+	// Ending the conversation was the only way back to the console, so an open session runs inside a
 	// terminal multiplexer in its sandbox: detaching leaves the model running and returns the
 	// operator to the list. Opening it again attaches to the one already there rather than starting a
 	// second beside it, which is what -A is for.
@@ -179,8 +179,8 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// An attached session that ignored the thread's mode would stop and ask the moment it was opened,
-	// on a thread the operator had deliberately armed, which reads as the toggle not working.
+	// An attached session that ignored the session's mode would stop and ask the moment it was opened,
+	// on a session the operator had deliberately armed, which reads as the toggle not working.
 	sc.Step(`^the command runs in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
 		a := attachFrom(ctx)
 		if a.err != nil {
@@ -229,15 +229,15 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	// exactly what happened to every conversation from a sandbox built before those mounts existed.
 	sc.Step(`^the conversation the model kept is lost$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
-		session := resp.GetThread()
+		session := resp.GetSession()
 		path := filepath.Join(w.conversationDir(session.GetWorkspace()),
 			session.GetModelSessionId()+sandbox.ConversationFile)
 		if err := os.Remove(path); err != nil {
@@ -251,7 +251,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if a.err == nil {
 			return fmt.Errorf("attaching was allowed, expected a refusal")
 		}
-		// A refusal that only says no leaves the operator staring at a thread they cannot open, and one
+		// A refusal that only says no leaves the operator staring at a session they cannot open, and one
 		// written in the crew's own vocabulary leaves them asking what it means. It says what to do
 		// instead, in words that appear on their screen.
 		for _, want := range []string{"no conversation left", "quay dispatch"} {
@@ -336,7 +336,7 @@ func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
 
 // conversationIn is the conversation the sandbox is told to open, which is the argument after the
 // command that opens one.
-func conversationIn(spec *quaycrewv1.AttachThreadResponse) string {
+func conversationIn(spec *quaycrewv1.AttachSessionResponse) string {
 	argv := spec.GetArgv()
 	for index, arg := range argv {
 		if arg == sandbox.OpenConversation && index+1 < len(argv) {

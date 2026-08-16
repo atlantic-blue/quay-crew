@@ -16,7 +16,7 @@ import (
 )
 
 // The flow scenarios drive the engine the way the running crew will: against the store and against
-// the control plane's real authenticated interface, so a dispatch here is a turn through the same
+// the control plane's real authenticated interface, so a dispatch here is a task through the same
 // road every other caller takes.
 
 // planeClient adapts the gRPC client to the two calls the engine is allowed.
@@ -28,8 +28,8 @@ func (p planeClient) Dispatch(ctx context.Context, req *quaycrewv1.DispatchReque
 	return p.client.Dispatch(ctx, req)
 }
 
-func (p planeClient) ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThreadRequest) (*quaycrewv1.ArchiveThreadResponse, error) {
-	return p.client.ArchiveThread(ctx, req)
+func (p planeClient) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
+	return p.client.ArchiveSession(ctx, req)
 }
 
 func initializeFlowSteps(sc *godog.ScenarioContext) {
@@ -210,40 +210,40 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's thread was asked "([^"]*)" and then "([^"]*)"$`, func(ctx context.Context, first, second string) error {
-		turns, err := flowRunTurns(ctx, worldFrom(ctx))
+	sc.Step(`^the run's session was asked "([^"]*)" and then "([^"]*)"$`, func(ctx context.Context, first, second string) error {
+		tasks, err := flowRunTasks(ctx, worldFrom(ctx))
 		if err != nil {
 			return err
 		}
-		if len(turns) != 2 {
-			return fmt.Errorf("the run's thread holds %d turns, want 2", len(turns))
+		if len(tasks) != 2 {
+			return fmt.Errorf("the run's session holds %d tasks, want 2", len(tasks))
 		}
-		if turns[0].GetPrompt() != first || turns[1].GetPrompt() != second {
-			return fmt.Errorf("the thread was asked %q then %q, want %q then %q",
-				turns[0].GetPrompt(), turns[1].GetPrompt(), first, second)
+		if tasks[0].GetPrompt() != first || tasks[1].GetPrompt() != second {
+			return fmt.Errorf("the session was asked %q then %q, want %q then %q",
+				tasks[0].GetPrompt(), tasks[1].GetPrompt(), first, second)
 		}
 		return nil
 	})
 
-	sc.Step(`^the run's thread was asked (\d+) turns?$`, func(ctx context.Context, want int) error {
-		turns, err := flowRunTurns(ctx, worldFrom(ctx))
+	sc.Step(`^the run's session was asked (\d+) tasks?$`, func(ctx context.Context, want int) error {
+		tasks, err := flowRunTasks(ctx, worldFrom(ctx))
 		if err != nil {
 			return err
 		}
-		if len(turns) != want {
-			return fmt.Errorf("the run's thread holds %d turns, want %d", len(turns), want)
+		if len(tasks) != want {
+			return fmt.Errorf("the run's session holds %d tasks, want %d", len(tasks), want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the run's thread is archived$`, func(ctx context.Context) error {
+	sc.Step(`^the run's session is archived$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		thread, err := flowRunThread(ctx, w, true)
+		session, err := flowRunSession(ctx, w, true)
 		if err != nil {
 			return err
 		}
-		if thread.GetArchivedAt() == nil {
-			return fmt.Errorf("the run's thread is not archived, so a finished run left a container behind")
+		if session.GetArchivedAt() == nil {
+			return fmt.Errorf("the run's session is not archived, so a finished run left a container behind")
 		}
 		return nil
 	})
@@ -309,32 +309,32 @@ func flowRunsOf(ctx context.Context, graph string) ([]*quaycrewv1.FlowRun, error
 	return out, nil
 }
 
-// flowRunThread finds the run's own thread by its handle, among the live or the archived.
-func flowRunThread(ctx context.Context, w *world, archived bool) (*quaycrewv1.Thread, error) {
-	listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Archived: archived})
+// flowRunSession finds the run's own session by its handle, among the live or the archived.
+func flowRunSession(ctx context.Context, w *world, archived bool) (*quaycrewv1.Session, error) {
+	listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Archived: archived})
 	if err != nil {
 		return nil, err
 	}
-	for _, thread := range listed.GetThreads() {
-		if thread.GetHandle() == w.flowRun.ThreadHandle() {
-			return thread, nil
+	for _, session := range listed.GetSessions() {
+		if session.GetHandle() == w.flowRun.SessionHandle() {
+			return session, nil
 		}
 	}
-	return nil, fmt.Errorf("no thread carries the run's handle %q (archived=%t)", w.flowRun.ThreadHandle(), archived)
+	return nil, fmt.Errorf("no session carries the run's handle %q (archived=%t)", w.flowRun.SessionHandle(), archived)
 }
 
-// flowRunTurns is the history of the run's own thread, wherever the thread now lives.
-func flowRunTurns(ctx context.Context, w *world) ([]*quaycrewv1.Turn, error) {
-	thread, err := flowRunThread(ctx, w, true)
+// flowRunTasks is the history of the run's own session, wherever the session now lives.
+func flowRunTasks(ctx context.Context, w *world) ([]*quaycrewv1.Task, error) {
+	session, err := flowRunSession(ctx, w, true)
 	if err != nil {
-		thread, err = flowRunThread(ctx, w, false)
+		session, err = flowRunSession(ctx, w, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	resp, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: thread.GetId()})
+	resp, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
 	if err != nil {
 		return nil, err
 	}
-	return resp.GetTurns(), nil
+	return resp.GetTasks(), nil
 }

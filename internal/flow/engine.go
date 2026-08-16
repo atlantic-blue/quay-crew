@@ -56,7 +56,7 @@ type Store interface {
 }
 
 // ErrRunHalted is what AdvanceFlowRun answers when the run it was asked to move is no longer
-// running: somebody stopped it while the engine was waiting on a turn.
+// running: somebody stopped it while the engine was waiting on a task.
 var ErrRunHalted = errors.New("flow: the run is no longer running")
 
 // Schedule is a graph the crew starts on its own, in one project, every so often.
@@ -77,8 +77,8 @@ type DueAt = *time.Time
 type Transition struct {
 	Event string
 	Node  string
-	// Dispatch is set when the transition asked for a turn, and its key of run, node and attempt
-	// is what makes sending the same turn twice impossible.
+	// Dispatch is set when the transition asked for a task, and its key of run, node and attempt
+	// is what makes sending the same task twice impossible.
 	Dispatch *Command
 	// Due is when the run should be looked at again, set only when this movement reached a wait.
 	Due DueAt
@@ -92,26 +92,26 @@ type RecordedTransition struct {
 	Node  string
 }
 
-// Spend is what a run's own thread has cost so far, in tokens. The engine reads it before each
-// movement and hands it to the reducer, which is the only way a ceiling can stop a turn before it
+// Spend is what a run's own session has cost so far, in tokens. The engine reads it before each
+// movement and hands it to the reducer, which is the only way a ceiling can stop a task before it
 // is paid for rather than after.
 //
-// It takes the thread rather than a conversation because resolving one to the other is the crew's
-// job, not the engine's: the thread row knows which conversation it is having and which workspace
+// It takes the session rather than a conversation because resolving one to the other is the crew's
+// job, not the engine's: the session row knows which conversation it is having and which workspace
 // keeps the transcript. An implementation that cannot tell answers zero.
 type Spend interface {
-	ThreadTokens(ctx context.Context, thread string) int64
+	SessionTokens(ctx context.Context, session string) int64
 }
 
 // ControlPlane is what the engine may do on a run's behalf. It is the same service every other
 // caller speaks to, deliberately: the engine holds no privileged road into anything.
 type ControlPlane interface {
 	Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error)
-	ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThreadRequest) (*quaycrewv1.ArchiveThreadResponse, error)
+	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
 }
 
 // Engine drives runs: it loads the graph, calls the pure reducer, persists every transition, and
-// carries out the commands the reducer returned. It blocks for the turns it dispatches, one at a
+// carries out the commands the reducer returned. It blocks for the tasks it dispatches, one at a
 // time per run, which is the shape the graph forces anyway: a run has one current node.
 type Engine struct {
 	store Store
@@ -156,7 +156,7 @@ func (e *Engine) Start(ctx context.Context, graphName, workspace, project string
 
 // Begin makes the run, answers with it, and drives it behind that answer.
 //
-// A run dispatches turns and a turn takes as long as the model takes, so whoever asked for the run
+// A run dispatches tasks and a task takes as long as the model takes, so whoever asked for the run
 // gets its identifier now and reads its position back later. The driving context is detached from
 // the caller's: a command line that has printed the run's identifier and exited must not take the
 // run down with it.
@@ -245,7 +245,7 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 		if err := e.store.AdvanceFlowRun(ctx, &next, Transition{
 			Event: event.Kind, Node: next.Node, Dispatch: dispatch, Due: due,
 		}); err != nil {
-			// Somebody stopped the run while this was waiting on a turn. That is not a failure:
+			// Somebody stopped the run while this was waiting on a task. That is not a failure:
 			// the stop is the answer, and the run keeps the reason it was stopped with.
 			if errors.Is(err, ErrRunHalted) {
 				slog.Info("a flow run was stopped while it was working", "run", next.ID)
@@ -269,41 +269,41 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 
 		resp, err := e.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 			Project: run.Project,
-			Handle:  run.ThreadHandle(),
+			Handle:  run.SessionHandle(),
 			Text:    dispatch.Prompt,
 		})
 		if err != nil {
-			event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
+			event = Event{Kind: EventTaskFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
 			continue
 		}
-		run.State[threadKey] = resp.GetId()
-		event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Reply: resp.GetReply()}
+		run.State[sessionKey] = resp.GetId()
+		event = Event{Kind: EventTaskFinished, Node: dispatch.Node, Reply: resp.GetReply()}
 	}
 }
 
-// spentBy is what the run's thread has cost. It keeps the last known number when there is no reader
-// wired or no thread yet: a cost that cannot be read must not silently reset a run's spend to zero
+// spentBy is what the run's session has cost. It keeps the last known number when there is no reader
+// wired or no session yet: a cost that cannot be read must not silently reset a run's spend to zero
 // and hand it a fresh ceiling.
 func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
-	if e.spend == nil || run.State[threadKey] == "" {
+	if e.spend == nil || run.State[sessionKey] == "" {
 		return run.Spent
 	}
-	return e.spend.ThreadTokens(ctx, run.State[threadKey])
+	return e.spend.SessionTokens(ctx, run.State[sessionKey])
 }
 
-// threadKey is where the run remembers its thread's identifier, learned from the first dispatch.
+// sessionKey is where the run remembers its session's identifier, learned from the first dispatch.
 // The handle is the run's own by construction; the identifier is what archiving needs.
-const threadKey = "thread.id"
+const sessionKey = "session.id"
 
-// archive puts the run's thread away. A run that never dispatched has no thread, and a thread that
+// archive puts the run's session away. A run that never dispatched has no session, and a session that
 // cannot be archived is logged by the control plane's side of the call; neither is a reason to call
 // a finished run anything else.
 func (e *Engine) archive(ctx context.Context, run Run) {
-	id := run.State[threadKey]
+	id := run.State[sessionKey]
 	if id == "" {
 		return
 	}
-	_, _ = e.plane.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: id})
+	_, _ = e.plane.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: id})
 }
 
 // copy is a run that shares nothing writable with the one it came from.
@@ -324,10 +324,10 @@ func (r Run) copy() Run {
 	return copied
 }
 
-// ThreadHandle names the run's own thread: the graph and a short run identifier, so a listing reads
-// as what the run is doing. The thread is created by the first dispatch and continued by every one
+// SessionHandle names the run's own session: the graph and a short run identifier, so a listing reads
+// as what the run is doing. The session is created by the first dispatch and continued by every one
 // after, which is what lets a restarted run land back in its own conversation.
-func (r Run) ThreadHandle() string {
+func (r Run) SessionHandle() string {
 	short := r.ID
 	if len(short) > 8 {
 		short = short[:8]

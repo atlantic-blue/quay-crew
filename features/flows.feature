@@ -6,8 +6,8 @@ Feature: A flow runs a graph across sessions
   starts, moving one node at a time with every movement recorded in the same transaction as the
   position it describes.
 
-  A run owns its own thread, named after the graph and the run, so the console reads as what the
-  run is doing and a turn on that thread is unambiguously the run's. When a run ends its thread is
+  A run owns its own session, named after the graph and the run, so the console reads as what the
+  run is doing and a task on that session is unambiguously the run's. When a run ends its session is
   put away, because a finished run must not leave a container behind.
 
   Background:
@@ -29,21 +29,21 @@ Feature: A flow runs a graph across sessions
         - [push, done]
       """
 
-  Scenario: A run moves through its graph and puts its thread away
+  Scenario: A run moves through its graph and puts its session away
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And the run's thread was asked "fix the build" and then "push the fix"
-    And the run's thread is archived
+    And the run's session was asked "fix the build" and then "push the fix"
+    And the run's session is archived
 
   Scenario: Every movement of the run is recorded, in order
     When the operator starts the flow "fix-red" in the project
     Then the run's transitions read back as "fix", "push", "done"
 
-  Scenario: A failed turn takes the other edge
-    Given the next turn will fail
+  Scenario: A failed task takes the other edge
+    Given the next task will fail
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
 
   # A wait is a row rather than a timer somebody is holding, which is the whole reason it survives
   # the crew being restarted underneath it.
@@ -63,10 +63,10 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "patient" in the project
     Then the flow run is waiting
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
     When ten minutes pass and the crew looks for waits that are due
     Then the flow run is done
-    And the run's thread was asked "start the build" and then "is it done"
+    And the run's session was asked "start the build" and then "is it done"
 
   Scenario: A wait that is not yet due is left alone
     Given the crew holds this flow graph:
@@ -85,7 +85,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "patient" in the project
     And the crew looks for waits that are due
     Then the flow run is waiting
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
 
   # Editing a graph must not change an automation that is halfway through it, which is the whole
   # reason a run pins a version. A wait is where that gets tested, because it is the only moment a
@@ -121,7 +121,7 @@ Feature: A flow runs a graph across sessions
       """
     When ten minutes pass and the crew looks for waits that are due
     Then the flow run is done
-    And the run's thread was asked "start the build" and then "is it done"
+    And the run's session was asked "start the build" and then "is it done"
 
   # The whole difference between an automation and a shell script: a person decides whether it goes
   # further. Delivered through the command line, so it needs no chat channel and no bot token.
@@ -144,10 +144,10 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "careful" in the project
     Then the flow run is asking "fixed it locally. push?"
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
     When the operator answers the run with "yes"
     Then the flow run is done
-    And the run's thread was asked "fix the build" and then "push it"
+    And the run's session was asked "fix the build" and then "push it"
 
   Scenario: A run told no does not do the thing it asked about
     Given the crew holds this flow graph:
@@ -169,7 +169,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "careful" in the project
     And the operator answers the run with "no"
     Then the flow run is done
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
 
   # A question nobody answered must never answer itself, or an automation asking permission would
   # take silence for a yes.
@@ -190,7 +190,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "careful" in the project
     And ten minutes pass and the crew looks for waits that are due
     Then the flow run is asking "push?"
-    And the run's thread was asked 1 turn
+    And the run's session was asked 1 task
 
   # The crew acting on its own, which is the point of the whole thing: without a trigger, an
   # automation is a script somebody still has to remember to run.

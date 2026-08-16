@@ -73,7 +73,7 @@ edges:
 		State: map[string]string{"what": "the build"}, Attempts: map[string]int{},
 	}
 
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "fix", Reply: "done"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "fix", Reply: "done"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestAnyOtherAnswerTakesTheOtherEdge(t *testing.T) {
 	}
 }
 
-// An answer for a question the run is not asking is refused, the same way a stale turn result and a
+// An answer for a question the run is not asking is refused, the same way a stale task result and a
 // duplicate due event are: two answers to one question must not move a run twice.
 func TestAnAnswerToAQuestionNobodyAskedIsRefused(t *testing.T) {
 	graph, err := Parse([]byte(askingGraph))

@@ -1,7 +1,7 @@
 Feature: An operator's git configuration reaches a session
 
   A session commits as the operator, and until now it had no way to know who that was. Identity was
-  four environment variables set on the turn's own process, so a commit made from an attached
+  four environment variables set on the task's own process, so a commit made from an attached
   terminal, or by anything the session started for itself, had none. Git refused those commits.
 
   So the image reads the operator's own configuration. It ships a git configuration holding one

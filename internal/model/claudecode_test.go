@@ -67,20 +67,20 @@ func TestBuildArgsResumeAndMode(t *testing.T) {
 	}
 }
 
-// A turn says which model it wants, and a turn that has not been told says nothing rather than
+// A task says which model it wants, and a task that has not been told says nothing rather than
 // guessing. The command line tool picks Sonnet when nobody says, which is how every session came to
 // run Sonnet while the crew was configured for Claude Code and nothing anywhere was wrong.
 func TestBuildArgsNamesTheModel(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "do a thing"}, "claude-opus-5"), " ")
 	if !strings.Contains(got, "--model claude-opus-5") {
-		t.Fatalf("the turn does not name the model: %q", got)
+		t.Fatalf("the task does not name the model: %q", got)
 	}
 }
 
 func TestBuildArgsLeavesTheModelToTheToolWhenUnset(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "do a thing"}, ""), " ")
 	if strings.Contains(got, "--model") {
-		t.Fatalf("the turn names a model nobody chose: %q", got)
+		t.Fatalf("the task names a model nobody chose: %q", got)
 	}
 }
 
@@ -181,15 +181,15 @@ func (s failingSandbox) Exec(context.Context, sandbox.Spec) (sandbox.Process, er
 }
 func (failingSandbox) Close(context.Context) error { return nil }
 
-// realRefusal is the result event a turn actually produced against a rejected subscription token,
+// realRefusal is the result event a task actually produced against a rejected subscription token,
 // captured from a sandbox on 5 August 2026 and trimmed to the fields this reads. It is here rather
 // than invented because the whole defect was that nobody had looked at what the model says.
 const realRefusal = `{"type":"result","is_error":true,"api_error_status":401,` +
 	`"result":"Failed to authenticate. API Error: 401 Invalid bearer token","session_id":"b47db557"}`
 
-// TestAFailedTurnSaysWhy: every model failure read "run exited: exit status 1", which is the same
+// TestAFailedTaskSaysWhy: every model failure read "run exited: exit status 1", which is the same
 // sentence for an expired token, a network failure, a missing binary and the model refusing.
-func TestAFailedTurnSaysWhy(t *testing.T) {
+func TestAFailedTaskSaysWhy(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		proc   failingProcess
@@ -207,7 +207,7 @@ func TestAFailedTurnSaysWhy(t *testing.T) {
 			wants: []string{"claude: command not found", "exit status 127"},
 		},
 		{
-			// Captured on 6 August 2026 by dispatching a turn at a sandbox with no model in its
+			// Captured on 6 August 2026 by dispatching a task at a sandbox with no model in its
 			// image. The Docker command line puts this on standard output, not on the error stream,
 			// so it arrived where a stream event was expected and was discarded as noise.
 			name: "what the daemon said on standard output, when the model never ran at all",
@@ -228,7 +228,7 @@ func TestAFailedTurnSaysWhy(t *testing.T) {
 			runner := NewClaudeCodeRunner()
 			_, err := runner.Run(context.Background(), failingSandbox{proc: test.proc}, Request{Text: "hello"})
 			if err == nil {
-				t.Fatal("the turn reported success")
+				t.Fatal("the task reported success")
 			}
 			for _, want := range test.wants {
 				if !strings.Contains(err.Error(), want) {
@@ -239,9 +239,9 @@ func TestAFailedTurnSaysWhy(t *testing.T) {
 	}
 }
 
-// TestAFailedTurnNeverCarriesTheToken. The turn runs with the subscription token in its environment,
-// so every place a failure can quote is a place the token turns up. An error is a thing people paste.
-func TestAFailedTurnNeverCarriesTheToken(t *testing.T) {
+// TestAFailedTaskNeverCarriesTheToken. The task runs with the subscription token in its environment,
+// so every place a failure can quote is a place the token tasks up. An error is a thing people paste.
+func TestAFailedTaskNeverCarriesTheToken(t *testing.T) {
 	const token = "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
 	for _, test := range []struct {
 		name string
@@ -263,7 +263,7 @@ func TestAFailedTurnNeverCarriesTheToken(t *testing.T) {
 				Env:  map[string]string{ClaudeCodeOAuthTokenEnv: token},
 			})
 			if err == nil {
-				t.Fatal("the turn reported success")
+				t.Fatal("the task reported success")
 			}
 			if strings.Contains(err.Error(), token) {
 				t.Fatalf("the failure carries the token: %q", err)

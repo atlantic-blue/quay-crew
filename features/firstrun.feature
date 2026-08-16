@@ -2,7 +2,7 @@ Feature: The first run is guided
 
   A crew that opens empty showed an empty console, and nothing suggested what to do next. The wizard
   behind n makes one thing at a time, which is right for a crew in use and wrong for a first run:
-  getting from nothing to a working thread took four passes and prior knowledge of the order.
+  getting from nothing to a working session took four passes and prior knowledge of the order.
 
   When the console opens with no workspaces it offers a guided setup, chaining the wizard's own
   stages in the order the crew needs them: a workspace, a project in it, the model token, context

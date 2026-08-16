@@ -98,7 +98,7 @@ echo READY`)
 }
 
 // aSessionWhoseWorkspaceMounts makes a crew, mounts the given configuration unless it is empty,
-// dispatches a turn, and returns the name of the container the crew built for it.
+// dispatches a task, and returns the name of the container the crew built for it.
 func aSessionWhoseWorkspaceMounts(ctx context.Context, t *testing.T, image, configuration string) string {
 	t.Helper()
 

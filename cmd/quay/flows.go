@@ -89,7 +89,7 @@ func runFlowStart(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	run := resp.GetRun()
 	fmt.Fprintf(out, "started %s version %d as run %s\n", run.GetGraphName(), run.GetGraphVersion(), display.ShortID(run.GetId()))
-	fmt.Fprintf(out, "it dispatches turns of its own; watch it with quay flow show %s\n", display.ShortID(run.GetId()))
+	fmt.Fprintf(out, "it dispatches tasks of its own; watch it with quay flow show %s\n", display.ShortID(run.GetId()))
 	return nil
 }
 
@@ -192,8 +192,8 @@ func runFlowStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	stopped := resp.GetRun()
 	fmt.Fprintf(out, "stopped run %s at node %s\n", display.ShortID(stopped.GetId()), stopped.GetNode())
 	fmt.Fprintf(out, "%s\n", stopped.GetReason())
-	// The turn already running finishes: the model is mid sentence and abandoning it gains nothing.
-	fmt.Fprintf(out, "a turn already under way finishes; the run takes no further step\n")
+	// The task already running finishes: the model is mid sentence and abandoning it gains nothing.
+	fmt.Fprintf(out, "a task already under way finishes; the run takes no further step\n")
 	return nil
 }
 

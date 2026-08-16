@@ -1,5 +1,5 @@
 // Package sandbox provides isolated execution environments for agent sessions. Each session runs in
-// its own Sandbox, created by a Provider and reused across the session's turns, then closed when the
+// its own Sandbox, created by a Provider and reused across the session's tasks, then closed when the
 // session ends.
 package sandbox
 
@@ -58,11 +58,11 @@ type Provider interface {
 	Create(ctx context.Context, cfg Config) (Sandbox, error)
 	// Remove tears down the session's sandbox whether or not this process holds a handle to it. The
 	// handles are a process map and the containers are not, so after a restart the map is empty while
-	// every container runs on; removing by name is what makes stopping a thread mean something then.
+	// every container runs on; removing by name is what makes stopping a session mean something then.
 	// A sandbox that is not there is a remove that already happened, not an error.
 	Remove(ctx context.Context, sessionID string) error
 	// Stranded lists the sessions whose sandboxes this provider still holds, so the crew can reap the
-	// ones whose threads no longer want one.
+	// ones whose sessions no longer want one.
 	Stranded(ctx context.Context) ([]string, error)
 }
 
@@ -101,7 +101,7 @@ const (
 	// the mount has to name that user.
 	UserID = 1001
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
-	// opening a thread twice lands in the one already running.
+	// opening a session twice lands in the one already running.
 	AttachedSessionName = "quay"
 	// MemoryFile is the model's own convention, not ours.
 	MemoryFile = "CLAUDE.md"
@@ -110,7 +110,7 @@ const (
 	OpenConversation = "open-conversation"
 	// GitConfigSecret is the workspace secret an operator mounts to give every session their own git
 	// configuration. The image's own configuration includes the file it lands in, so identity,
-	// aliases and settings reach a session from any shell rather than only the process a turn runs.
+	// aliases and settings reach a session from any shell rather than only the process a task runs.
 	GitConfigSecret = "gitconfig"
 	// GitConfigPath is the sandbox user's git configuration, the file git reads as global. Shipped by
 	// the image holding the include, and written to by the crew at sandbox birth.

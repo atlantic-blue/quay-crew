@@ -64,7 +64,7 @@ func inAContainer() bool {
 	return err == nil
 }
 
-// unreachable turns "connection refused" inside a sandbox into the thing that is actually wrong.
+// unreachable tasks "connection refused" inside a sandbox into the thing that is actually wrong.
 //
 // A session that was never told where the crew is falls back to localhost, and localhost inside a
 // container is the container: there is nothing there and there never will be. The dial error names an
@@ -81,7 +81,7 @@ func unreachable(err error, told string, sandboxed bool) error {
 	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
 		"address it fell back to. It reaches the control plane only when the crew is set up for it: "+
 		"QC_SANDBOX_NETWORK and QC_SANDBOX_CONTROL_PLANE on the control plane, which is the crew's "+
-		"configuration file, ~/.quay/env on a compose stack. Then start this thread again, because a sandbox "+
+		"configuration file, ~/.quay/env on a compose stack. Then start this session again, because a sandbox "+
 		"keeps the configuration it was made with. (%w)", err)
 }
 

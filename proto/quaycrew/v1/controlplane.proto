@@ -18,7 +18,7 @@ message Channel {
   string kind = 3;
 }
 
-// A project is a body of work inside a workspace. Threads happen inside a project, and share the
+// A project is a body of work inside a workspace. Sessions happen inside a project, and share the
 // context the project carries.
 message Project {
   string id = 1;
@@ -27,18 +27,18 @@ message Project {
   google.protobuf.Timestamp created_at = 4;
 }
 
-// A thread is one conversation inside a project: the operator's word for what the control plane
+// A session is one conversation inside a project: the operator's word for what the control plane
 // runs as a session in a sandbox. It carries its workspace too, denormalised from the project so a
 // listing does not need a join; a project never moves workspace.
-message Thread {
-  // id is the crew's own identifier for this thread. It names the thread's sandbox container.
+message Session {
+  // id is the crew's own identifier for this session. It names the session's sandbox container.
   string id = 1;
   string workspace = 2;
   // handle is the name a channel dispatches to: dispatch to the same handle and the conversation
-  // continues. It is chosen by whoever starts the thread, or minted when nobody did.
+  // continues. It is chosen by whoever starts the session, or minted when nobody did.
   string handle = 3;
-  // status is where the thread is: "idle" when it is waiting for you, "running" while a turn is under
-  // way, "failed" when the last turn did not land, and "stopped" when the thread was put down.
+  // status is where the session is: "idle" when it is waiting for you, "running" while a task is under
+  // way, "failed" when the last task did not land, and "stopped" when the session was put down.
   string status = 4;
   // model_session_id is the model's own identifier for the conversation, in the model's own word,
   // used to resume it.
@@ -46,40 +46,40 @@ message Thread {
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
   string project = 8;
-  // archived_at is when the thread was put away. Unset means it is live. Archiving hides a thread
+  // archived_at is when the session was put away. Unset means it is live. Archiving hides a session
   // from the default listing and deletes nothing, so this is reversible by clearing it.
   google.protobuf.Timestamp archived_at = 9;
-  // permission_mode is what the model is allowed to do without asking, for this thread's turns:
-  // "plan", "acceptEdits" or "bypassPermissions". It belongs to the thread rather than to a turn, so
-  // a thread started to plan something keeps planning.
+  // permission_mode is what the model is allowed to do without asking, for this session's tasks:
+  // "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to a task, so
+  // a session started to plan something keeps planning.
   string permission_mode = 10;
-  // driver says this thread drives the crew rather than doing work inside it. It reaches the
+  // driver says this session drives the crew rather than doing work inside it. It reaches the
   // control plane's own interface, and whatever host paths the operator handed it, which an
-  // ordinary thread does not.
+  // ordinary session does not.
   bool driver = 11;
-  // usage is what this thread's conversation has cost so far, read from the transcript the model
-  // keeps. Unset for a thread nobody has spoken in.
+  // usage is what this session's conversation has cost so far, read from the transcript the model
+  // keeps. Unset for a session nobody has spoken in.
   Usage usage = 12;
-  // stale says this thread's live sandbox was born before the workspace's current skill set, so it
+  // stale says this session's live sandbox was born before the workspace's current skill set, so it
   // does not hold what a fresh one would. A sandbox is born with its capabilities and never
-  // drifts; restarting the thread builds a new one, born current. A stopped thread is never
+  // drifts; restarting the session builds a new one, born current. A stopped session is never
   // stale, because its next sandbox is born with the current set.
   bool stale = 13;
   // label is what the operator calls this conversation, empty until they say. Nothing automatic ever
   // writes it: a name somebody picked is the one thing in a listing that is certainly right.
   string label = 14;
   // description is what the crew observed the conversation to be, one line, written by the model that
-  // had the turn. Empty until a turn has happened. A listing prefers the label when there is one.
+  // had the task. Empty until a task has happened. A listing prefers the label when there is one.
   string description = 15;
-  // described_at_turn is how many turns the thread had when its description was written, so a
+  // described_at_task is how many tasks the session had when its description was written, so a
   // conversation that has moved on can be described again. Zero means never described.
-  int32 described_at_turn = 16;
+  int32 described_at_task = 16;
 }
 
 // Usage is what a conversation has cost, in tokens.
 //
 // Four numbers rather than two. On a real conversation the input was 52 tokens and the cache read was
-// 1,723,404, because almost everything sent is the context being read again on every turn: reporting
+// 1,723,404, because almost everything sent is the context being read again on every task: reporting
 // only what was sent and what came back would show the 52 and hide the rest.
 message Usage {
   // input is what was sent and charged as new, not counting anything served from the cache.
@@ -88,7 +88,7 @@ message Usage {
   int64 output = 2;
   // cache_read is context the model read from its cache rather than being sent again.
   int64 cache_read = 3;
-  // cache_written is context put into the cache to be read on later turns.
+  // cache_written is context put into the cache to be read on later tasks.
   int64 cache_written = 4;
 }
 
@@ -134,7 +134,7 @@ message ListProjectsResponse {
   repeated Project projects = 1;
 }
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
-// time. Its thread is named after the graph and the run, so a listing reads as what the run is
+// time. Its session is named after the graph and the run, so a listing reads as what the run is
 // doing.
 message FlowRun {
   string id = 1;
@@ -145,7 +145,7 @@ message FlowRun {
   // node is where the run sits, and status is running, done or failed.
   string node = 6;
   string status = 7;
-  // state is the run's own small memory: what the trigger carried, and what the last turn replied.
+  // state is the run's own small memory: what the trigger carried, and what the last task replied.
   map<string, string> state = 8;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
@@ -171,7 +171,7 @@ message ImportFlowResponse {
 }
 
 // StartFlowRequest begins a run of the newest version of a graph, in one project. It answers with
-// the run rather than waiting for it: a run dispatches turns, and those take as long as the model
+// the run rather than waiting for it: a run dispatches tasks, and those take as long as the model
 // takes.
 message StartFlowRequest {
   string graph = 1;
@@ -273,96 +273,96 @@ message SetSecretRequest {
 }
 message SetSecretResponse {}
 
-// DispatchRequest starts a new thread (handle empty) or continues an existing one.
+// DispatchRequest starts a new session (handle empty) or continues an existing one.
 message DispatchRequest {
   string project = 1;
   string handle = 2;
   string text = 3;
-  // permission_mode is what the thread's turns may do without asking, and it applies from this turn
-  // on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the thread as it is, which is what
+  // permission_mode is what the session's tasks may do without asking, and it applies from this task
+  // on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the session as it is, which is what
   // every caller that does not care sends.
   //
-  // It travels with the dispatch that starts a thread because a sandbox is born with its
-  // capabilities and never drifts. Starting a thread and then changing its mode costs a restart.
+  // It travels with the dispatch that starts a session because a sandbox is born with its
+  // capabilities and never drifts. Starting a session and then changing its mode costs a restart.
   string permission_mode = 4;
-  // detach answers as soon as the thread exists and runs the turn behind the answer. The reply comes
-  // back empty, because there is not one yet: the thread reads "running" until the turn lands, and
-  // its turns say what came back.
+  // detach answers as soon as the session exists and runs the task behind the answer. The reply comes
+  // back empty, because there is not one yet: the session reads "running" until the task lands, and
+  // its tasks say what came back.
   //
-  // It is what a surface that draws a screen needs. A turn takes as long as the work takes, which is
+  // It is what a surface that draws a screen needs. A task takes as long as the work takes, which is
   // minutes, and a caller that waits for one is a caller that is not drawing anything. The console
-  // waited, gave up at thirty seconds, and left a thread whose conversation never happened.
+  // waited, gave up at thirty seconds, and left a session whose conversation never happened.
   bool detach = 5;
 }
 message DispatchResponse {
   string id = 1;
   string handle = 2;
-  // reply is what the model said, and is empty when the request detached: the turn is still running,
+  // reply is what the model said, and is empty when the request detached: the task is still running,
   // so there is nothing to say yet.
   string reply = 3;
 }
 
-// ListThreadsRequest filters by project when set, else by workspace when set, else lists all.
+// ListSessionsRequest filters by project when set, else by workspace when set, else lists all.
 // OpenDriverRequest asks for a project's driver, the session that drives the crew.
 message OpenDriverRequest {
   string project = 1;
 }
 message OpenDriverResponse {
-  Thread thread = 1;
+  Session session = 1;
 }
 
-message ListThreadsRequest {
+message ListSessionsRequest {
   string workspace = 1;
   string project = 2;
-  // archived lists the threads that have been put away instead of the live ones. The two are never
-  // mixed: a listing is one or the other, because the default view must not quietly grow the threads
+  // archived lists the sessions that have been put away instead of the live ones. The two are never
+  // mixed: a listing is one or the other, because the default view must not quietly grow the sessions
   // somebody deliberately hid.
   bool archived = 3;
 }
-message ListThreadsResponse {
-  repeated Thread threads = 1;
+message ListSessionsResponse {
+  repeated Session sessions = 1;
 }
-message GetThreadRequest {
+message GetSessionRequest {
   string id = 1;
 }
-message GetThreadResponse {
-  Thread thread = 1;
+message GetSessionResponse {
+  Session session = 1;
 }
-// AttachThreadRequest asks how to get inside a session's conversation.
-message AttachThreadRequest {
+// AttachSessionRequest asks how to get inside a session's conversation.
+message AttachSessionRequest {
   string id = 1;
 }
-// AttachThreadResponse describes the command that opens the conversation, and deliberately carries
+// AttachSessionResponse describes the command that opens the conversation, and deliberately carries
 // no credential: the operator's own environment supplies that.
-message AttachThreadResponse {
+message AttachSessionResponse {
   // sandbox is the container the session runs in.
   string sandbox = 1;
   // argv is the command to run inside it, for example ["claude", "--resume", "<conversation id>"].
   repeated string argv = 2;
 }
 
-message StopThreadRequest {
+message StopSessionRequest {
   string id = 1;
 }
-message StopThreadResponse {}
+message StopSessionResponse {}
 
-// RestartThreadRequest brings a stopped session back.
-message RestartThreadRequest {
+// RestartSessionRequest brings a stopped session back.
+message RestartSessionRequest {
   string id = 1;
 }
-// RestartThreadResponse carries the session as it now is, idle and with a sandbox running, so the
+// RestartSessionResponse carries the session as it now is, idle and with a sandbox running, so the
 // caller does not have to read it back to find out what happened.
-message RestartThreadResponse {
-  Thread thread = 1;
+message RestartSessionResponse {
+  Session session = 1;
 }
 
-// ArchiveThreadRequest puts a thread away: stops it if it is running, hides it from the default
+// ArchiveSessionRequest puts a session away: stops it if it is running, hides it from the default
 // listing, and keeps everything.
-message ArchiveThreadRequest {
+message ArchiveSessionRequest {
   string id = 1;
 }
-message ArchiveThreadResponse {
-  Thread thread = 1;
+message ArchiveSessionResponse {
+  Session session = 1;
 }
 
 // ContextDir is a directory of files the model reads, kept on the host and mounted into every sandbox
@@ -403,7 +403,7 @@ message SetContextResponse {
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
-// reader is the crew itself, at the moment a turn needs it.
+// reader is the crew itself, at the moment a task needs it.
 message SecretRef {
   string workspace = 1;
   // workspace_name is what to call that workspace where a human reads it.
@@ -435,7 +435,7 @@ message Skill {
   // summary says when to reach for this skill, in a sentence. It is the line a session is told.
   string summary = 3;
   // binaries are the commands the skill needs in the sandbox image. A session missing one is refused
-  // before a turn runs.
+  // before a task runs.
   repeated string binaries = 4;
   repeated SkillSecret secrets = 5;
   google.protobuf.Timestamp imported_at = 6;
@@ -443,7 +443,7 @@ message Skill {
   bool crew = 8;
   // left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
   // is given. A skill naming a secret the workspace has not set is held and not given, rather than
-  // refusing the turn, so one unusable skill cannot stop every conversation in the workspace.
+  // refusing the task, so one unusable skill cannot stop every conversation in the workspace.
   string left_out = 7;
 }
 
@@ -478,12 +478,12 @@ message ImportSkillResponse {
 }
 
 // ListSkillsRequest lists what the crew has imported, what one workspace holds when workspace is
-// set, or what one thread actually holds when thread is set: the same answer the thread's sandbox
+// set, or what one session actually holds when session is set: the same answer the session's sandbox
 // is built from, both the crew's own skills and the workspace's, the workspace winning a name
 // collision.
 message ListSkillsRequest {
   string workspace = 1;
-  string thread = 2;
+  string session = 2;
 }
 message ListSkillsResponse {
   repeated Skill skills = 1;
@@ -519,14 +519,14 @@ message DetachSkillResponse {}
 message Hook {
   string name = 1;
   int32 version = 2;
-  // summary is the line a listing shows. Nothing pays for it per turn, because a hook is invisible
+  // summary is the line a listing shows. Nothing pays for it per task, because a hook is invisible
   // to the model until it fires.
   string summary = 3;
   // events are what this hook fires on, in the order they were written, which is the order they are
   // rendered into a session's settings.
   repeated HookBinding events = 4;
   // binaries are the commands the hook needs in the sandbox image. A session missing one is refused
-  // before a turn runs.
+  // before a task runs.
   repeated string binaries = 5;
   repeated SkillSecret secrets = 6;
   google.protobuf.Timestamp imported_at = 7;
@@ -573,10 +573,10 @@ message ImportHookResponse {
 }
 
 // ListHooksRequest lists what the crew has imported, what one workspace holds when workspace is set,
-// or what one thread actually holds when thread is set.
+// or what one session actually holds when session is set.
 message ListHooksRequest {
   string workspace = 1;
-  string thread = 2;
+  string session = 2;
 }
 message ListHooksResponse {
   repeated Hook hooks = 1;
@@ -612,42 +612,42 @@ message ListContextsResponse {
   repeated ContextDir dirs = 1;
 }
 
-// SetThreadPermissionModeRequest changes what a thread's turns may do without asking.
-message SetThreadPermissionModeRequest {
+// SetSessionPermissionModeRequest changes what a session's tasks may do without asking.
+message SetSessionPermissionModeRequest {
   string id = 1;
   // mode is "plan", "acceptEdits" or "bypassPermissions". An unknown one is refused rather than
   // passed to the model, which would take it as far as its own argument parser and no further.
   string mode = 2;
 }
-message SetThreadPermissionModeResponse {
-  Thread thread = 1;
+message SetSessionPermissionModeResponse {
+  Session session = 1;
 }
-message SetThreadLabelRequest {
+message SetSessionLabelRequest {
   string id = 1;
   // label is what to call this conversation. Empty clears it, which is the only way back to the
   // identifier, so it is a value rather than an absence.
   string label = 2;
 }
-message SetThreadLabelResponse {
-  Thread thread = 1;
+message SetSessionLabelResponse {
+  Session session = 1;
 }
 
-// RestoreThreadRequest brings an archived thread back into the default listing.
-message RestoreThreadRequest {
+// RestoreSessionRequest brings an archived session back into the default listing.
+message RestoreSessionRequest {
   string id = 1;
 }
-message RestoreThreadResponse {
-  Thread thread = 1;
+message RestoreSessionResponse {
+  Session session = 1;
 }
 
 // GetInfoRequest asks what this control plane is running.
 message GetInfoRequest {}
-// GetInfoResponse says what a turn dispatched here would actually do.
+// GetInfoResponse says what a task dispatched here would actually do.
 //
 // It carries configuration, never a secret and never a health verdict. The console shows it so the
 // operator can see which crew they are about to act on, the way a cluster name does.
 message GetInfoResponse {
-  // model is the backend a turn runs against, for example "claude-code" or "echo".
+  // model is the backend a task runs against, for example "claude-code" or "echo".
   string model = 1;
   // sandbox is the isolation a session runs in, for example "docker" or "local".
   string sandbox = 2;
@@ -660,14 +660,14 @@ message GetInfoResponse {
   string state = 4;
   // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
-  // wondering why a turn stopped working.
-  // events is the event log a turn is recorded on, for example "redpanda". Empty means nothing is
+  // wondering why a task stopped working.
+  // events is the event log a task is recorded on, for example "redpanda". Empty means nothing is
   // connected to it, which is the truth today: the log is in the compose stack and no service reads
   // from or writes to it.
   string events = 5;
   // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
-  // wondering why a turn stopped working.
+  // wondering why a task stopped working.
   string secrets = 6;
   // sandbox_build is the build of the crew the sandbox image was made from, for example "37b070b".
   // Sessions run whatever that image holds, so an image older than the tool means the crew moved on
@@ -682,35 +682,35 @@ message GetUsageRequest {}
 // GetUsageResponse is every conversation the crew holds, added up.
 message GetUsageResponse {
   Usage total = 1;
-  // threads is how many conversations went into the total, so a number with nothing behind it can be
+  // sessions is how many conversations went into the total, so a number with nothing behind it can be
   // told from a crew that has genuinely spent nothing.
-  int64 threads = 2;
+  int64 sessions = 2;
 }
 
-// Turn is one exchange with the model, read back from the projection of the event log.
-message Turn {
+// Task is one exchange with the model, read back from the projection of the event log.
+message Task {
   string id = 1;
-  string thread = 2;
-  // prompt is what was asked, reply is what came back, empty when the turn failed.
+  string session = 2;
+  // prompt is what was asked, reply is what came back, empty when the task failed.
   string prompt = 3;
   string reply = 4;
-  // status is the thread's status after the turn: "idle" when it worked, "failed" when it did not.
+  // status is the session's status after the task: "idle" when it worked, "failed" when it did not.
   string status = 5;
-  // failure says what went wrong, empty on a turn that worked.
+  // failure says what went wrong, empty on a task that worked.
   string failure = 6;
   google.protobuf.Timestamp occurred_at = 7;
 }
 
-// ListTurnsRequest asks for one thread's history, most recent last, so a conversation reads the way
+// ListTasksRequest asks for one session's history, most recent last, so a conversation reads the way
 // it happened.
-message ListTurnsRequest {
-  string thread = 1;
+message ListTasksRequest {
+  string session = 1;
   // limit caps how many come back. Zero means a sensible default rather than everything, because a
-  // long running thread's history is unbounded and a terminal is not.
+  // long running session's history is unbounded and a terminal is not.
   int32 limit = 2;
 }
-message ListTurnsResponse {
-  repeated Turn turns = 1;
+message ListTasksResponse {
+  repeated Task tasks = 1;
 }
 
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.
@@ -740,15 +740,15 @@ service ControlPlaneService {
 
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
   rpc OpenDriver(OpenDriverRequest) returns (OpenDriverResponse);
-  rpc ListThreads(ListThreadsRequest) returns (ListThreadsResponse);
-  rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
-  rpc AttachThread(AttachThreadRequest) returns (AttachThreadResponse);
-  rpc StopThread(StopThreadRequest) returns (StopThreadResponse);
-  rpc RestartThread(RestartThreadRequest) returns (RestartThreadResponse);
-  rpc ArchiveThread(ArchiveThreadRequest) returns (ArchiveThreadResponse);
-  rpc RestoreThread(RestoreThreadRequest) returns (RestoreThreadResponse);
-  rpc SetThreadPermissionMode(SetThreadPermissionModeRequest) returns (SetThreadPermissionModeResponse);
-  rpc SetThreadLabel(SetThreadLabelRequest) returns (SetThreadLabelResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
+  rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
+  rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
+  rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
+  rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
+  rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
+  rpc SetSessionLabel(SetSessionLabelRequest) returns (SetSessionLabelResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
 
@@ -762,7 +762,7 @@ service ControlPlaneService {
   rpc AttachHook(AttachHookRequest) returns (AttachHookResponse);
   rpc DetachHook(DetachHookRequest) returns (DetachHookResponse);
 
-  rpc ListTurns(ListTurnsRequest) returns (ListTurnsResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
   // GetUsage adds up what every conversation in the crew has cost. It is a running total rather than

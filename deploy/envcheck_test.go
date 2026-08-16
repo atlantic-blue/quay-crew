@@ -9,7 +9,7 @@ import (
 // TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave.
 //
 // An upgrade adds configuration and nobody's own file grows with it. Compose fills a key that is
-// not there with an empty string, so whatever it turns on is simply off, and nothing anywhere says
+// not there with an empty string, so whatever it tasks on is simply off, and nothing anywhere says
 // why: a driver whose crew had no address reported that the control plane was refusing connections
 // for an evening, while the control plane was up the whole time.
 //

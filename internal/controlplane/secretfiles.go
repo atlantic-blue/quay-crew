@@ -13,7 +13,7 @@ import (
 
 // secretFileEnv is the name the value is carried under for the length of one write. The script reads
 // it from there rather than taking it as an argument, because an argument is visible to every process
-// on the host that can list them, and it would reach the turn record.
+// on the host that can list them, and it would reach the task record.
 const secretFileEnv = "QC_SECRET_FILE_VALUE"
 
 // readySecretFiles writes the workspace's file projected secrets into the sandbox.
@@ -27,10 +27,10 @@ const secretFileEnv = "QC_SECRET_FILE_VALUE"
 // environment variable for a credential: a container's environment is readable through docker inspect
 // for the life of the container, and this is not.
 //
-// Nothing here fails a turn. A workspace that has mounted nothing has nothing to do, and a write that
+// Nothing here fails a task. A workspace that has mounted nothing has nothing to do, and a write that
 // fails leaves a session that cannot read one credential rather than a conversation that will not
 // start at all.
-func (s *Server) readySecretFiles(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
+func (s *Server) readySecretFiles(ctx context.Context, session *quaycrewv1.Session, box sandbox.Sandbox) error {
 	refs, err := s.secrets.List(ctx, session.GetWorkspace())
 	if err != nil {
 		slog.Warn("the workspace's secrets could not be listed, so none were mounted",
@@ -58,7 +58,7 @@ func (s *Server) readySecretFiles(ctx context.Context, session *quaycrewv1.Threa
 //
 // `umask 077` before the write rather than a change of mode after it, so the file is never on disk
 // readable even for the moment between the two. Every line is idempotent, because a sandbox is
-// adopted across turns and this runs again on the replacement.
+// adopted across tasks and this runs again on the replacement.
 func writeSecretFile(ctx context.Context, box sandbox.Sandbox, name, value string) error {
 	proc, err := box.Exec(ctx, sandbox.Spec{
 		Argv: []string{"sh", "-c", secretFileScript(name)},

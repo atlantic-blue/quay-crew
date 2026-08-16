@@ -35,7 +35,7 @@ Feature: A secret can reach a session as a file
     Then the sandbox carries nothing called "gitconfig"
 
   # An argument is visible to every process on the host that can list them, and it would reach the
-  # turn record.
+  # task record.
   Scenario: A mounted value is never an argument
     Given the workspace mounts the secret "gitconfig" holding "[user] name = operator"
     When the operator dispatches "hello" to the project

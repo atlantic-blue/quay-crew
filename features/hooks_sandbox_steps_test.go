@@ -70,17 +70,17 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("nothing binds %s to %s:\n%s", name, event, body)
 		})
 
-	sc.Step(`^the turn loaded the hooks settings$`, func(ctx context.Context) error {
+	sc.Step(`^the task loaded the hooks settings$`, func(ctx context.Context) error {
 		last := worldFrom(ctx).runner.lastRequest()
 		want := sandbox.HooksPath + "/" + hook.SettingsFile
 		if last.Settings != want {
-			return fmt.Errorf("the turn was told to load %q, want %q", last.Settings, want)
+			return fmt.Errorf("the task was told to load %q, want %q", last.Settings, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the turn was not told to load any settings$`, func(ctx context.Context) error {
-		// Pointing the runtime at a file that is not there fails the turn before it starts.
+	sc.Step(`^the task was not told to load any settings$`, func(ctx context.Context) error {
+		// Pointing the runtime at a file that is not there fails the task before it starts.
 		if last := worldFrom(ctx).runner.lastRequest(); last.Settings != "" {
 			return fmt.Errorf("a session under no hooks was told to load %q", last.Settings)
 		}

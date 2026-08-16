@@ -38,7 +38,7 @@ func (s *Server) ImportFlow(ctx context.Context, req *quaycrewv1.ImportFlowReque
 // StartFlow begins a run of the newest version of a graph and answers with the run, rather than
 // waiting for it.
 //
-// A run dispatches turns, and a turn takes as long as the model takes, so a call that blocked until
+// A run dispatches tasks, and a task takes as long as the model takes, so a call that blocked until
 // the run ended would be a command line that hangs for ten minutes. The run advances behind this
 // answer, and GetFlowRun says where it got to.
 func (s *Server) StartFlow(ctx context.Context, req *quaycrewv1.StartFlowRequest) (*quaycrewv1.StartFlowResponse, error) {
@@ -110,7 +110,7 @@ func asFlowRun(run *flow.Run) *quaycrewv1.FlowRun {
 // StopFlowRun halts a run in flight, keeping the reason so a run somebody stopped and a run that
 // went quiet never read the same.
 //
-// The stop is cooperative rather than a kill: a run waiting on a turn finishes that turn, because
+// The stop is cooperative rather than a kill: a run waiting on a task finishes that task, because
 // the model is already working and abandoning it would leave a sandbox mid sentence for no gain.
 // What it cannot do is take another step, which is what stops the spending.
 func (s *Server) StopFlowRun(ctx context.Context, req *quaycrewv1.StopFlowRunRequest) (*quaycrewv1.StopFlowRunResponse, error) {
@@ -211,11 +211,11 @@ func (s *Server) RunFlowPoller(ctx context.Context) {
 	s.flowPoller.Run(ctx)
 }
 
-// ThreadTokens is what one thread's conversation has cost, which is what a run's ceiling is checked
-// against. Zero for a thread that is gone, has no conversation yet, or whose transcript cannot be
+// SessionTokens is what one session's conversation has cost, which is what a run's ceiling is checked
+// against. Zero for a session that is gone, has no conversation yet, or whose transcript cannot be
 // read: a cost that cannot be read is not a reason to stop work that is already under way.
-func (s *Server) ThreadTokens(ctx context.Context, thread string) int64 {
-	session, err := s.store.GetSession(ctx, thread)
+func (s *Server) SessionTokens(ctx context.Context, id string) int64 {
+	session, err := s.store.GetSession(ctx, id)
 	if err != nil {
 		return 0
 	}

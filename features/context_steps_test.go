@@ -39,7 +39,7 @@ func (c *contextWorld) scoped(scope string) []*quaycrewv1.ContextDir {
 // sessionWorkingDir is the current session's own working directory on disk.
 func sessionWorkingDir(ctx context.Context) (string, error) {
 	w := worldFrom(ctx)
-	current, err := w.lastTurn()
+	current, err := w.lastTask()
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +81,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("%d project directories, want 1", len(projects))
 		}
 		body := projects[0].GetBody()
-		for _, word := range []string{"workspace", "project", "thread", "session", "sandbox"} {
+		for _, word := range []string{"workspace", "project", "session", "session", "sandbox"} {
 			if !strings.Contains(body, word) {
 				return fmt.Errorf("the context never says %q, so a session would be guessing", word)
 			}
@@ -198,7 +198,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator sets the session's context to "([^"]*)"$`, func(ctx context.Context, body string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -290,7 +290,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 	// conversation and the listing is about a project.
 	sc.Step(`^the session's context reads "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}

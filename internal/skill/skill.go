@@ -34,7 +34,7 @@ const ManifestFile = "skill.yaml"
 // files beside it.
 const BriefFile = "SKILL.md"
 
-// SetupFile is run inside the sandbox, once, before the first turn. A skill without one is a skill
+// SetupFile is run inside the sandbox, once, before the first task. A skill without one is a skill
 // that needs nothing done to be usable.
 const SetupFile = "bin/setup"
 
@@ -75,7 +75,7 @@ type Skill struct {
 	// Dir is where the skill is, as this process sees it. Empty for a skill that arrived over the wire,
 	// which has no directory anywhere until the crew writes one.
 	Dir string
-	// HasSetup says whether there is anything to run inside the sandbox before the first turn.
+	// HasSetup says whether there is anything to run inside the sandbox before the first task.
 	HasSetup bool
 	// Files is every file of the skill's directory, by path relative to it, the manifest and the brief
 	// among them.
@@ -318,7 +318,7 @@ func BriefPathIn(root, name string) string { return path.Join(DirIn(root, name),
 
 // check refuses a manifest that cannot mean what it says.
 //
-// Named rather than guessed at every turn: a skill whose name does not match its directory is the
+// Named rather than guessed at every task: a skill whose name does not match its directory is the
 // same skill under two names as soon as anybody attaches it, and a secret name that is not a name is
 // something the crew would have to quote into an environment.
 func (s Skill) check(directory string) error {

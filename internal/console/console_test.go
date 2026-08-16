@@ -29,7 +29,7 @@ type fakeClient struct {
 
 	workspaces []*quaycrewv1.Workspace
 	projects   []*quaycrewv1.Project
-	sessions   []*quaycrewv1.Thread
+	sessions   []*quaycrewv1.Session
 
 	attachErr        error
 	restartErr       error
@@ -62,11 +62,11 @@ func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesR
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
 }
 
-func (f *fakeClient) AttachThread(context.Context, *quaycrewv1.AttachThreadRequest, ...grpc.CallOption) (*quaycrewv1.AttachThreadResponse, error) {
+func (f *fakeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionRequest, ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
 	if f.attachErr != nil {
 		return nil, f.attachErr
 	}
-	return &quaycrewv1.AttachThreadResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
+	return &quaycrewv1.AttachSessionResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
 }
 
 func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProjectsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
@@ -85,13 +85,13 @@ func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProject
 	return &quaycrewv1.ListProjectsResponse{Projects: matched}, nil
 }
 
-func (f *fakeClient) ListThreads(_ context.Context, req *quaycrewv1.ListThreadsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListThreadsResponse, error) {
+func (f *fakeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
 	f.listSessionsFor, f.listArchivedOnly = req.GetProject(), req.GetArchived()
 
-	matched := make([]*quaycrewv1.Thread, 0, len(f.sessions))
+	matched := make([]*quaycrewv1.Session, 0, len(f.sessions))
 	for _, session := range f.sessions {
 		if (session.GetArchivedAt() != nil) != req.GetArchived() {
 			continue
@@ -101,12 +101,12 @@ func (f *fakeClient) ListThreads(_ context.Context, req *quaycrewv1.ListThreadsR
 		}
 		matched = append(matched, session)
 	}
-	return &quaycrewv1.ListThreadsResponse{Threads: matched}, nil
+	return &quaycrewv1.ListSessionsResponse{Sessions: matched}, nil
 }
 
-func (f *fakeClient) ArchiveThread(_ context.Context, req *quaycrewv1.ArchiveThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveThreadResponse, error) {
+func (f *fakeClient) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.ArchiveSessionResponse, error) {
 	f.archived = append(f.archived, req.GetId())
-	return &quaycrewv1.ArchiveThreadResponse{}, nil
+	return &quaycrewv1.ArchiveSessionResponse{}, nil
 }
 
 func (f *fakeClient) ListSecrets(_ context.Context, _ *quaycrewv1.ListSecretsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSecretsResponse, error) {
@@ -123,32 +123,32 @@ func (f *fakeClient) ListContexts(_ context.Context, _ *quaycrewv1.ListContextsR
 	return &quaycrewv1.ListContextsResponse{Dirs: f.contexts}, nil
 }
 
-func (f *fakeClient) SetThreadLabel(_ context.Context, req *quaycrewv1.SetThreadLabelRequest, _ ...grpc.CallOption) (*quaycrewv1.SetThreadLabelResponse, error) {
+func (f *fakeClient) SetSessionLabel(_ context.Context, req *quaycrewv1.SetSessionLabelRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSessionLabelResponse, error) {
 	f.labelsSet = append(f.labelsSet, req.GetLabel())
-	return &quaycrewv1.SetThreadLabelResponse{}, nil
+	return &quaycrewv1.SetSessionLabelResponse{}, nil
 }
 
-func (f *fakeClient) SetThreadPermissionMode(_ context.Context, req *quaycrewv1.SetThreadPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetThreadPermissionModeResponse, error) {
+func (f *fakeClient) SetSessionPermissionMode(_ context.Context, req *quaycrewv1.SetSessionPermissionModeRequest, _ ...grpc.CallOption) (*quaycrewv1.SetSessionPermissionModeResponse, error) {
 	f.modesSet = append(f.modesSet, req.GetMode())
-	return &quaycrewv1.SetThreadPermissionModeResponse{}, nil
+	return &quaycrewv1.SetSessionPermissionModeResponse{}, nil
 }
 
-func (f *fakeClient) RestoreThread(_ context.Context, req *quaycrewv1.RestoreThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreThreadResponse, error) {
+func (f *fakeClient) RestoreSession(_ context.Context, req *quaycrewv1.RestoreSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestoreSessionResponse, error) {
 	f.restored = append(f.restored, req.GetId())
-	return &quaycrewv1.RestoreThreadResponse{}, nil
+	return &quaycrewv1.RestoreSessionResponse{}, nil
 }
 
-func (f *fakeClient) StopThread(_ context.Context, req *quaycrewv1.StopThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.StopThreadResponse, error) {
+func (f *fakeClient) StopSession(_ context.Context, req *quaycrewv1.StopSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.StopSessionResponse, error) {
 	f.stopped = append(f.stopped, req.GetId())
-	return &quaycrewv1.StopThreadResponse{}, nil
+	return &quaycrewv1.StopSessionResponse{}, nil
 }
 
-func (f *fakeClient) RestartThread(_ context.Context, req *quaycrewv1.RestartThreadRequest, _ ...grpc.CallOption) (*quaycrewv1.RestartThreadResponse, error) {
+func (f *fakeClient) RestartSession(_ context.Context, req *quaycrewv1.RestartSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.RestartSessionResponse, error) {
 	if f.restartErr != nil {
 		return nil, f.restartErr
 	}
 	f.restarted = append(f.restarted, req.GetId())
-	return &quaycrewv1.RestartThreadResponse{}, nil
+	return &quaycrewv1.RestartSessionResponse{}, nil
 }
 
 // ---------- helpers ----------
@@ -469,7 +469,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 			{Id: "p1", Workspace: "acme", Name: "house bills"},
 			{Id: "p2", Workspace: "other", Name: "gardening"},
 		},
-		sessions: []*quaycrewv1.Thread{
+		sessions: []*quaycrewv1.Session{
 			{Id: "s1", Workspace: "acme", Project: "p1", Status: "idle"},
 			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
@@ -545,7 +545,7 @@ func TestSwitchingResourceByNameResetsTheBreadcrumb(t *testing.T) {
 // ---------- actions ----------
 
 func TestStopActionStopsTheSelectedSession(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "", "idle", "1m"}}))
 
@@ -593,10 +593,10 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 
 // TestAttachTellsTheOperatorWhyItCannot covers the thing that made this worthless before: the console
 // swallowed the control plane's reason and said "nothing to run", which is not something anyone can
-// act on. A session with no conversation yet is fixed by dispatching a turn, and the operator has to
+// act on. A session with no conversation yet is fixed by dispatching a task, and the operator has to
 // be told that.
 func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
-	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
 	attach := actionBoundTo(t, Sessions(client), "a")
 
 	_, err := attach.Shell(Row{ID: "s1"})
@@ -621,19 +621,19 @@ func TestAnActionOnAnEmptyViewDoesNothing(t *testing.T) {
 	}
 }
 
-// TestEnterAttachesToTheSelectedThread is the point of the key: a thread has nothing to drill into,
+// TestEnterAttachesToTheSelectedSession is the point of the key: a session has nothing to drill into,
 // so enter did nothing at all, on the one view where the obvious key has an obvious meaning.
-func TestEnterAttachesToTheSelectedThread(t *testing.T) {
+func TestEnterAttachesToTheSelectedSession(t *testing.T) {
 	client := &fakeClient{}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
 
 	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("enter on a thread produced no command")
+		t.Fatal("enter on a session produced no command")
 	}
 	if msg, isErr := cmd().(errMsg); isErr {
-		t.Fatalf("enter on a thread failed: %v", msg.err)
+		t.Fatalf("enter on a session failed: %v", msg.err)
 	}
 }
 
@@ -658,10 +658,10 @@ func TestEnterAndAOpenTheSameConversation(t *testing.T) {
 	}
 }
 
-// TestEnterOnAThreadWithNoConversationSaysWhy: opening something that errors is worse than being
-// told to dispatch a turn first.
-func TestEnterOnAThreadWithNoConversationSaysWhy(t *testing.T) {
-	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a turn to it first")}
+// TestEnterOnASessionWithNoConversationSaysWhy: opening something that errors is worse than being
+// told to dispatch a task first.
+func TestEnterOnASessionWithNoConversationSaysWhy(t *testing.T) {
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
 
@@ -693,8 +693,8 @@ func TestEnterStillDrillsWhereThereIsSomewhereToGo(t *testing.T) {
 	}
 }
 
-// threadsAt builds a threads view with one thread listed and the cursor on it.
-func threadsAt(t *testing.T, client *fakeClient) Model {
+// sessionsAt builds a sessions view with one session listed and the cursor on it.
+func sessionsAt(t *testing.T, client *fakeClient) Model {
 	t.Helper()
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model,
@@ -706,7 +706,7 @@ func threadsAt(t *testing.T, client *fakeClient) Model {
 // conversations and there is no way back from stopping the wrong one.
 func TestBackspaceAsksBeforeItStops(t *testing.T) {
 	client := &fakeClient{}
-	model, cmd := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+	model, cmd := update(t, sessionsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
 
 	if model.mode != modeConfirm {
 		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
@@ -722,9 +722,9 @@ func TestBackspaceAsksBeforeItStops(t *testing.T) {
 	}
 }
 
-func TestYesStopsTheThreadItNamed(t *testing.T) {
+func TestYesStopsTheSessionItNamed(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+	model, _ := update(t, sessionsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
 	model, cmd := update(t, model, runes("y"))
 
 	if model.mode != modeBrowse {
@@ -752,7 +752,7 @@ func TestAnythingOtherThanYesCancels(t *testing.T) {
 	} {
 		t.Run(key.String(), func(t *testing.T) {
 			client := &fakeClient{}
-			model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+			model, _ := update(t, sessionsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
 			model, cmd := update(t, model, key)
 
 			if model.mode != modeBrowse {
@@ -771,7 +771,7 @@ func TestAnythingOtherThanYesCancels(t *testing.T) {
 // TestXStopsThroughTheSameConfirmation: the old key is not a way around the question.
 func TestXStopsThroughTheSameConfirmation(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, threadsAt(t, client), runes("x"))
+	model, _ := update(t, sessionsAt(t, client), runes("x"))
 
 	if model.mode != modeConfirm {
 		t.Fatalf("mode = %v, want x to ask too", model.mode)
@@ -783,7 +783,7 @@ func TestXStopsThroughTheSameConfirmation(t *testing.T) {
 
 // TestAnUnconfirmedActionStillActsAtOnce: attaching is not destructive and must not grow a question.
 func TestAnUnconfirmedActionStillActsAtOnce(t *testing.T) {
-	model, cmd := update(t, threadsAt(t, &fakeClient{}), tea.KeyMsg{Type: tea.KeyEnter})
+	model, cmd := update(t, sessionsAt(t, &fakeClient{}), tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.mode != modeBrowse {
 		t.Fatalf("mode = %v, want attaching to act at once", model.mode)
@@ -794,10 +794,10 @@ func TestAnUnconfirmedActionStillActsAtOnce(t *testing.T) {
 }
 
 // TestTheConfirmationSurvivesARefreshUnderneathIt: a listing arriving between the question and the
-// answer must not turn a yes into a yes to a different conversation.
+// answer must not task a yes into a yes to a different conversation.
 func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, threadsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
+	model, _ := update(t, sessionsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
 
 	model, _ = update(t, model, rowsFor(model,
 		Row{ID: "s2", Label: "aaaa1111", Cells: []string{"other", "acme", "bills", "aaaa1111", "idle", "1m"}},
@@ -808,7 +808,7 @@ func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	}
 
 	if len(client.stopped) != 1 || client.stopped[0] != "s1" {
-		t.Fatalf("stopped = %v, want the thread the console named, [s1]", client.stopped)
+		t.Fatalf("stopped = %v, want the session the console named, [s1]", client.stopped)
 	}
 }
 
@@ -818,7 +818,7 @@ func TestRefreshIsBoundToRAndG(t *testing.T) {
 	for _, key := range []string{"r", "g"} {
 		t.Run(key, func(t *testing.T) {
 			client := &fakeClient{}
-			_, cmd := update(t, threadsAt(t, client), runes(key))
+			_, cmd := update(t, sessionsAt(t, client), runes(key))
 			if cmd == nil {
 				t.Fatalf("%s produced no command, want a listing", key)
 			}
@@ -833,7 +833,7 @@ func TestRefreshIsBoundToRAndG(t *testing.T) {
 // keeps restarting, which is how a key that moved carries on doing the old thing.
 func TestRNoLongerRestarts(t *testing.T) {
 	client := &fakeClient{}
-	_, cmd := update(t, threadsAt(t, client), runes("r"))
+	_, cmd := update(t, sessionsAt(t, client), runes("r"))
 	if cmd != nil {
 		cmd()
 	}
@@ -842,10 +842,10 @@ func TestRNoLongerRestarts(t *testing.T) {
 	}
 }
 
-// TestRestartBringsAThreadBackWithoutAsking: restarting is not destructive, so it acts at once.
-func TestRestartBringsAThreadBackWithoutAsking(t *testing.T) {
+// TestRestartBringsASessionBackWithoutAsking: restarting is not destructive, so it acts at once.
+func TestRestartBringsASessionBackWithoutAsking(t *testing.T) {
 	client := &fakeClient{}
-	model, cmd := update(t, threadsAt(t, client), runes("R"))
+	model, cmd := update(t, sessionsAt(t, client), runes("R"))
 
 	if model.mode != modeBrowse {
 		t.Fatalf("mode = %v, want restarting to act at once", model.mode)
@@ -861,11 +861,11 @@ func TestRestartBringsAThreadBackWithoutAsking(t *testing.T) {
 	}
 }
 
-// TestRestartingARunningThreadShowsTheRefusal: the control plane decides whether there is anything to
+// TestRestartingARunningSessionShowsTheRefusal: the control plane decides whether there is anything to
 // restart, and its reason is what the operator has to see.
-func TestRestartingARunningThreadShowsTheRefusal(t *testing.T) {
+func TestRestartingARunningSessionShowsTheRefusal(t *testing.T) {
 	client := &fakeClient{restartErr: fmt.Errorf("session s1 is idle, not stopped, so there is nothing to restart")}
-	_, cmd := update(t, threadsAt(t, client), runes("R"))
+	_, cmd := update(t, sessionsAt(t, client), runes("R"))
 	if cmd == nil {
 		t.Fatal("restart produced no command")
 	}
@@ -878,11 +878,11 @@ func TestRestartingARunningThreadShowsTheRefusal(t *testing.T) {
 	}
 }
 
-// TestArchiveAsksBeforePuttingAThreadAway: a thread that vanishes from the list under an accidental
+// TestArchiveAsksBeforePuttingASessionAway: a session that vanishes from the list under an accidental
 // keypress reads exactly like one that was deleted, and this one is not.
-func TestArchiveAsksBeforePuttingAThreadAway(t *testing.T) {
+func TestArchiveAsksBeforePuttingASessionAway(t *testing.T) {
 	client := &fakeClient{}
-	model, _ := update(t, threadsAt(t, client), runes("A"))
+	model, _ := update(t, sessionsAt(t, client), runes("A"))
 
 	if model.mode != modeConfirm {
 		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
@@ -906,23 +906,23 @@ func TestArchiveAsksBeforePuttingAThreadAway(t *testing.T) {
 	}
 }
 
-// TestTheTwoListingsNeverMix is what makes archiving worth having: a thread the operator put away
+// TestTheTwoListingsNeverMix is what makes archiving worth having: a session the operator put away
 // must not come back into the view they put it away from.
 func TestTheTwoListingsNeverMix(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{
+	client := &fakeClient{sessions: []*quaycrewv1.Session{
 		{Id: "live", Workspace: "acme", Handle: "t1", Status: "idle"},
 		{Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped", ArchivedAt: timestamppb.Now()},
 	}}
 
-	threads, err := Sessions(client).List(context.Background(), "")
+	sessions, err := Sessions(client).List(context.Background(), "")
 	if err != nil {
-		t.Fatalf("listing threads: %v", err)
+		t.Fatalf("listing sessions: %v", err)
 	}
-	if len(threads) != 1 || threads[0].ID != "live" {
-		t.Fatalf("the threads view lists %v, want only the live one", rowIDs(threads))
+	if len(sessions) != 1 || sessions[0].ID != "live" {
+		t.Fatalf("the sessions view lists %v, want only the live one", rowIDs(sessions))
 	}
 	if client.listArchivedOnly {
-		t.Fatal("the threads view asked the control plane for archived threads")
+		t.Fatal("the sessions view asked the control plane for archived sessions")
 	}
 
 	archived, err := Archived(client).List(context.Background(), "")
@@ -933,12 +933,12 @@ func TestTheTwoListingsNeverMix(t *testing.T) {
 		t.Fatalf("the archived view lists %v, want only the one put away", rowIDs(archived))
 	}
 	if !client.listArchivedOnly {
-		t.Fatal("the archived view asked the control plane for live threads")
+		t.Fatal("the archived view asked the control plane for live sessions")
 	}
 }
 
-// TestRestoreBringsAThreadBack: nothing was deleted, so the only thing to do in there is undo it.
-func TestRestoreBringsAThreadBack(t *testing.T) {
+// TestRestoreBringsASessionBack: nothing was deleted, so the only thing to do in there is undo it.
+func TestRestoreBringsASessionBack(t *testing.T) {
 	client := &fakeClient{}
 	model := newTestModel(t, Archived(client))
 	model, _ = update(t, model, rowsFor(model,
@@ -956,10 +956,10 @@ func TestRestoreBringsAThreadBack(t *testing.T) {
 	}
 }
 
-// TestTheArchivedViewSaysWhenAThreadWasPutAway: its last column is the stamp, not the last touch,
-// because "two hours ago" about a thread nobody has touched since is the useful number.
-func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+// TestTheArchivedViewSaysWhenASessionWasPutAway: its last column is the stamp, not the last touch,
+// because "two hours ago" about a session nobody has touched since is the useful number.
+func TestTheArchivedViewSaysWhenASessionWasPutAway(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
 		Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped",
 		UpdatedAt:  timestamppb.New(time.Now().Add(-72 * time.Hour)),
 		ArchivedAt: timestamppb.New(time.Now().Add(-2 * time.Hour)),
@@ -984,24 +984,24 @@ func rowIDs(rows []Row) []string {
 	return out
 }
 
-// TestTheModeIsInTheListing: a thread that skips every permission must not look like one that asks.
+// TestTheModeIsInTheListing: a session that skips every permission must not look like one that asks.
 func TestTheModeIsInTheListing(t *testing.T) {
 	tests := map[string]string{
 		"bypassPermissions": "dangerous",
 		"plan":              "plan",
 		"acceptEdits":       "edits",
-		// A thread from before the mode was written down has none, and every one of those runs
+		// A session from before the mode was written down has none, and every one of those runs
 		// acceptEdits. An empty cell here would read as "asks first", which is the opposite.
 		"": "edits",
 	}
 	for mode, want := range tests {
 		t.Run(mode, func(t *testing.T) {
-			client := &fakeClient{sessions: []*quaycrewv1.Thread{
+			client := &fakeClient{sessions: []*quaycrewv1.Session{
 				{Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle", PermissionMode: mode},
 			}}
 			rows, err := Sessions(client).List(context.Background(), "")
 			if err != nil {
-				t.Fatalf("listing threads: %v", err)
+				t.Fatalf("listing sessions: %v", err)
 			}
 			if got := rows[0].Cells[permissionColumn]; got != want {
 				t.Fatalf("mode %q reads as %q, want %q", mode, got, want)
@@ -1044,7 +1044,7 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 }
 
 // TestEditingContextOpensTheOperatorsEditor: the console suspends itself to run a command, which is
-// how opening a thread works, so an editor is the same mechanism. The file is created by the editor
+// how opening a session works, so an editor is the same mechanism. The file is created by the editor
 // saving it, but the directory has to be there first or an editor writing into a sandbox that has
 // never run fails on a path nobody made.
 func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
@@ -1225,28 +1225,44 @@ func TestTheConsoleCallsThemSessions(t *testing.T) {
 	if !strings.Contains(view, "<sessions>") {
 		t.Fatalf("the breadcrumb does not say sessions:\n%s", view)
 	}
-	// The old name is something to type and nothing the chrome says, or the console is translating
-	// between two words for one thing.
-	if strings.Contains(view, "threads") {
-		t.Fatalf("the console still says threads somewhere:\n%s", view)
+	// The crew has one word for a conversation. The chrome saying the other one means the console is
+	// translating between two words for one thing.
+	if strings.Contains(view, "thread") {
+		t.Fatalf("the console still says thread somewhere:\n%s", view)
 	}
 }
 
-// TestThreadsStillOpensTheSessionsView keeps the muscle memory working, in both directions: this view
-// has been called both things inside a day.
-func TestThreadsStillOpensTheSessionsView(t *testing.T) {
+// TestEveryWordForTheSessionsViewOpensIt keeps the muscle memory working for the words the crew
+// still uses.
+func TestEveryWordForTheSessionsViewOpensIt(t *testing.T) {
 	client := &fakeClient{}
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry: %v", err)
 	}
-	for _, token := range []string{"sessions", "session", "sess", "s", "threads", "thread", "t"} {
+	for _, token := range []string{"sessions", "session", "sess", "s"} {
 		resource, found := registry.Resolve(token)
 		if !found {
 			t.Fatalf("Resolve(%q): not found", token)
 		}
 		if resource.Name != "sessions" {
 			t.Fatalf("Resolve(%q) = %q, want sessions", token, resource.Name)
+		}
+	}
+}
+
+// The words the crew dropped resolve to nothing, so the console cannot quietly teach one of them
+// back. A refusal in the command bar is the console's way off, the way a named error is the command
+// line's.
+func TestTheDroppedWordsResolveToNothing(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, token := range []string{"threads", "thread", "turns", "turn"} {
+		if resource, found := registry.Resolve(token); found {
+			t.Fatalf("Resolve(%q) still opens %q, and that word is gone", token, resource.Name)
 		}
 	}
 }
@@ -1323,7 +1339,7 @@ func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
 }
 
 func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
 
 	var out strings.Builder
 	if err := Plain(context.Background(), client, &out); err != nil {
@@ -1678,7 +1694,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	client := &fakeClient{
 		workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "me"}},
 		projects:   []*quaycrewv1.Project{{Id: "p1", Workspace: "w1", Name: "house-bills"}},
-		sessions:   []*quaycrewv1.Thread{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
+		sessions:   []*quaycrewv1.Session{{Id: "s1", Workspace: "w1", Project: "p1", Status: "idle"}},
 	}
 	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "w1", Label: "me", Cells: []string{"w1", "me", "1m"}}))
@@ -2167,7 +2183,7 @@ func TestEveryWizardQuestionIsNeeded(t *testing.T) {
 }
 
 // TestTheWizardNeverShowsTheToken: a value on a screen is a value in that terminal's scrollback, and
-// this one runs every turn the crew makes.
+// this one runs every task the crew makes.
 func TestTheWizardNeverShowsTheToken(t *testing.T) {
 	client := &wizardClient{}
 	model := wizardAt(t, client)
@@ -2778,17 +2794,17 @@ func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T
 
 	// And the shell says which one it is, on every line, without being asked.
 	if !strings.Contains(firstArgs, "PS1=c9964dc2 juliantellez-com") {
-		t.Fatalf("the prompt does not name the thread and its project:\n%s", firstArgs)
+		t.Fatalf("the prompt does not name the session and its project:\n%s", firstArgs)
 	}
 	if !strings.Contains(secondArgs, "PS1=4b7de057 juliantellez-com") {
-		t.Fatalf("the prompt does not name the thread and its project:\n%s", secondArgs)
+		t.Fatalf("the prompt does not name the session and its project:\n%s", secondArgs)
 	}
 }
 
-// TestAThreadsCostIsInTheListing, in the three numbers that matter, formatted for a column seven
+// TestASessionsCostIsInTheListing, in the three numbers that matter, formatted for a column seven
 // characters wide.
-func TestAThreadsCostIsInTheListing(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+func TestASessionsCostIsInTheListing(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
 		Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 		Usage: &quaycrewv1.Usage{
@@ -2808,10 +2824,10 @@ func TestAThreadsCostIsInTheListing(t *testing.T) {
 	}
 }
 
-// TestAThreadThatHasSpentNothingSaysNothing. A conversation nobody has had has not cost zero, it has
+// TestASessionThatHasSpentNothingSaysNothing. A conversation nobody has had has not cost zero, it has
 // no cost, and a column of zeroes reads as a crew that is free.
-func TestAThreadThatHasSpentNothingSaysNothing(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+func TestASessionThatHasSpentNothingSaysNothing(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
 		Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 	}}}
@@ -2822,7 +2838,7 @@ func TestAThreadThatHasSpentNothingSaysNothing(t *testing.T) {
 	}
 	for _, cell := range rows[0].Cells {
 		if cell == "0" {
-			t.Fatalf("a thread that has spent nothing reports a zero:\n%v", rows[0].Cells)
+			t.Fatalf("a session that has spent nothing reports a zero:\n%v", rows[0].Cells)
 		}
 	}
 }
@@ -2854,7 +2870,7 @@ func TestTokensReadAsNumbersAPersonCanCompare(t *testing.T) {
 // TestTheCacheColumnGivesWayFirstOnANarrowWindow.
 //
 // A panel puts the console in half the window, and a line too long is cut at whatever happens to be
-// at the end rather than at whatever matters least. At half a window the age of a thread is worth
+// at the end rather than at whatever matters least. At half a window the age of a session is worth
 // more than what it read from a cache.
 //
 // The order is the rule, not any particular width: the width a column goes at is arithmetic and will
@@ -2883,7 +2899,7 @@ func TestTheCacheColumnGivesWayFirstOnANarrowWindow(t *testing.T) {
 	if got := strings.Join(went[:3], " then "); got != "cache then out then in" {
 		t.Fatalf("the columns gave way %s, want cache then out then in", got)
 	}
-	// Everything a thread is stays. A listing that has given up its identifier to keep a token count
+	// Everything a session is stays. A listing that has given up its identifier to keep a token count
 	// has the priority backwards.
 	for _, keep := range []string{"id", "status", "age"} {
 		for _, gone := range went {
@@ -2895,10 +2911,10 @@ func TestTheCacheColumnGivesWayFirstOnANarrowWindow(t *testing.T) {
 }
 
 // TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway. Dropping the seventh column and then reading
-// the seventh cell into it puts a thread's age under a heading that says something else, which is
+// the seventh cell into it puts a session's age under a heading that says something else, which is
 // worse than not drawing the column at all.
 func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Thread{{
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
 		Id: "s1", Workspace: "acme", Project: "p1", Handle: "t1", Status: "idle",
 		UpdatedAt: timestamppb.New(time.Now()),
 		Usage:     &quaycrewv1.Usage{Input: 52, Output: 6917, CacheRead: 1723404},

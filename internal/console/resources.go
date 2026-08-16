@@ -124,7 +124,7 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		SortBy: 1,
 		Actions: []Action{
 			{
-				// The console already suspends itself to run a command, which is how opening a thread
+				// The console already suspends itself to run a command, which is how opening a session
 				// and shelling in work, so an editor is the same mechanism. It creates the file when
 				// it saves, which is why nothing here has to write one first.
 				Key:   "enter",
@@ -310,12 +310,12 @@ func Features() Resource {
 // one and shell into its container.
 //
 // The database calls these sessions and so does the API, and one name across the whole system beats a
-// console that translates. Thread stays as an alias, because the command bar should not punish muscle
+// console that translates. Session stays as an alias, because the command bar should not punish muscle
 // memory either way.
 func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "sessions",
-		Aliases: []string{"s", "sess", "session", "threads", "thread", "t"},
+		Aliases: []string{"s", "sess", "session"},
 		// The colours are the sessions tool's, because that is the listing the operator already reads
 		// all day: a name carries its own colour so the eye finds its rows without reading them,
 		// identifiers and counts are dim so they stop competing, and the mode is coloured by how much
@@ -330,7 +330,7 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
-			// the first to give way, because at half a window the age of a thread is worth more than
+			// the first to give way, because at half a window the age of a session is worth more than
 			// what it read from a cache.
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
@@ -339,7 +339,7 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// name, so it takes that column's three bands rather than being dimmed with the counts.
 			{Title: "age", Width: 6, Colour: colourOfAge},
 		},
-		// Ordered by thread, so a session keeps its place in the list as its age and status change
+		// Ordered by session, so a session keeps its place in the list as its age and status change
 		// under it.
 		SortBy:  3,
 		List:    sessionLister(client, live),
@@ -347,16 +347,16 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Tasks is one thread's history, read from the tasks the dispatch path writes, so it
+// Tasks is one session's history, read from the tasks the dispatch path writes, so it
 // answers without starting a container and keeps answering once the sandbox is gone. It has no tool
 // calls and no thinking: opening the conversation is for that.
 //
-// turns and turn stay as aliases. The word changed and the muscle memory did not, and a view that
+// tasks and task stay as aliases. The word changed and the muscle memory did not, and a view that
 // answers to what somebody already types costs nothing.
 func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "tasks",
-		Aliases: []string{"task", "turns", "turn", "history", "h"},
+		Aliases: []string{"task", "history", "h"},
 		Columns: []Column{
 			{Title: "when", Width: 10, Colour: dim},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
@@ -369,40 +369,40 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if session == "" {
 				return nil, fmt.Errorf("open a session's history from the sessions view: there is no history without one")
 			}
-			resp, err := client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{Thread: session})
+			resp, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
 			if err != nil {
 				return nil, err
 			}
-			rows := make([]Row, 0, len(resp.GetTurns()))
-			for _, turn := range resp.GetTurns() {
-				rows = append(rows, turnRow(turn))
+			rows := make([]Row, 0, len(resp.GetTasks()))
+			for _, task := range resp.GetTasks() {
+				rows = append(rows, taskRow(task))
 			}
 			return rows, nil
 		},
 	}
 }
 
-// turnRow is one exchange as a listing row. A failed turn shows why it failed where the reply would
+// taskRow is one exchange as a listing row. A failed task shows why it failed where the reply would
 // have been, because that is the answer to what happened.
-func turnRow(turn *quaycrewv1.Turn) Row {
-	answered := oneLine(turn.GetReply())
+func taskRow(task *quaycrewv1.Task) Row {
+	answered := oneLine(task.GetReply())
 	state := StateReady
-	if turn.GetStatus() == "failed" {
-		answered, state = oneLine(turn.GetFailure()), StateFailed
+	if task.GetStatus() == "failed" {
+		answered, state = oneLine(task.GetFailure()), StateFailed
 	}
 	return Row{
-		ID:     turn.GetId(),
-		Parent: turn.GetThread(),
+		ID:     task.GetId(),
+		Parent: task.GetSession(),
 		State:  state,
-		Label:  display.ShortID(turn.GetId()),
+		Label:  display.ShortID(task.GetId()),
 		Cells: []string{
-			turn.GetOccurredAt().AsTime().Local().Format("15:04:05"),
-			turn.GetStatus(),
-			oneLine(turn.GetPrompt()),
+			task.GetOccurredAt().AsTime().Local().Format("15:04:05"),
+			task.GetStatus(),
+			oneLine(task.GetPrompt()),
 			answered,
 		},
 		// The whole of what was said, for a view that can show more than a row.
-		Detail: turn.GetPrompt(),
+		Detail: task.GetPrompt(),
 	}
 }
 
@@ -412,21 +412,21 @@ func oneLine(text string) string {
 }
 
 // Archived is its own view rather than a filter, because a listing that quietly grows back the
-// threads somebody hid is worse than no archive at all. Nothing was deleted, so the only action is
+// sessions somebody hid is worse than no archive at all. Nothing was deleted, so the only action is
 // bringing one back.
 func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "archived",
 		Aliases: []string{"arch", "archive"},
 		// The same shape as the live view, because both are drawn from the same row. An archived
-		// thread's cost is still worth seeing: it is what that piece of work came to.
-		// The same colours as the live listing, because it is the same listing: a thread that was put
+		// session's cost is still worth seeing: it is what that piece of work came to.
+		// The same colours as the live listing, because it is the same listing: a session that was put
 		// away should not have to be read differently from one that was not.
 		Columns: []Column{
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "workspace", Width: 16, Colour: colourOfName},
 			{Title: "project", Width: 20, Colour: colourOfName},
-			{Title: "thread", Width: 10, Colour: colourOfName},
+			{Title: "session", Width: 10, Colour: colourOfName},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
@@ -444,7 +444,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					if row.ID == "" {
 						return fmt.Errorf("no session selected")
 					}
-					_, err := client.RestoreThread(ctx, &quaycrewv1.RestoreThreadRequest{Id: row.ID})
+					_, err := client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: row.ID})
 					return err
 				},
 			},
@@ -464,7 +464,7 @@ const (
 func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) Lister {
 	// parent is a project id when drilled into from one, and empty at the top level.
 	return func(ctx context.Context, parent string) ([]Row, error) {
-		resp, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{
+		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
 			Project:  parent,
 			Archived: bool(from),
 		})
@@ -472,13 +472,13 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) List
 			return nil, err
 		}
 		// A session carries its workspace id, and an id says nothing to the operator reading the
-		// list. One extra call turns every one of them into a name. If it fails the rows still
+		// list. One extra call tasks every one of them into a name. If it fails the rows still
 		// render, with the id as the fallback, because a listing that refuses to draw because the
 		// names could not be looked up is worse than one that shows ids.
 		workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
 
-		rows := make([]Row, 0, len(resp.GetThreads()))
-		for _, session := range resp.GetThreads() {
+		rows := make([]Row, 0, len(resp.GetSessions()))
+		for _, session := range resp.GetSessions() {
 			rows = append(rows, sessionRow(session, workspaces[session.GetWorkspace()], projects[session.GetProject()]))
 		}
 		return rows, nil
@@ -498,29 +498,29 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return names
 }
 
-func sessionRow(session *quaycrewv1.Thread, workspaceName, projectName string) Row {
+func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) Row {
 	// ID and Parent stay whole: they are what actions and scoping use. Only the cells shorten.
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
 		// What to call it: the name the operator gave it, then the crew's own, then the identifier. The
-		// breadcrumb reads this, so drilling into a named thread says what it is about rather than
+		// breadcrumb reads this, so drilling into a named session says what it is about rather than
 		// eight characters of hexadecimal.
-		Label: display.ThreadName(session),
+		Label: display.SessionName(session),
 		// Detail is the name alone, which is what naming it starts from. Label falls back to the
 		// identifier, and starting an edit from the identifier would have the operator delete it
 		// before typing.
 		Detail: session.GetLabel(),
-		Cells:  display.ThreadCells(session, workspaceName, projectName),
+		Cells:  display.SessionCells(session, workspaceName, projectName),
 		State:  stateFromStatus(session.GetStatus()),
 	}
 }
 
-// projectColumn is where a thread's project sits in its row, which the shell prompt names so the
+// projectColumn is where a session's project sits in its row, which the shell prompt names so the
 // operator can see where they are rather than which twenty four characters they typed.
 const projectColumn = 2
 
-// shellPrompt is what a shell in a sandbox says on every line: the thread, shortened the way every
+// shellPrompt is what a shell in a sandbox says on every line: the session, shortened the way every
 // listing shortens it, and the project it belongs to.
 func shellPrompt(row Row) string {
 	where := display.ShortID(row.ID)
@@ -530,7 +530,7 @@ func shellPrompt(row Row) string {
 	return where + " $ "
 }
 
-// permissionColumn is where the mode sits in a thread row, which is what the toggle reads to know
+// permissionColumn is where the mode sits in a session row, which is what the toggle reads to know
 // which way it is going.
 const permissionColumn = 5
 
@@ -540,9 +540,9 @@ func offeredModes() []string {
 	return model.PermissionModesOffered()
 }
 
-// modeOfRow is what the selected thread may do now, read out of the listing rather than fetched,
+// modeOfRow is what the selected session may do now, read out of the listing rather than fetched,
 // because the listing is what the operator is looking at when they press the key. A row from before
-// the mode was written down has an empty cell, and those threads run acceptEdits.
+// the mode was written down has an empty cell, and those sessions run acceptEdits.
 func modeOfRow(row Row) string {
 	if len(row.Cells) <= permissionColumn {
 		return model.PermissionAcceptEdits
@@ -558,7 +558,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 	return []Action{
 		{
 			// Enter is the primary key, so the obvious key does the obvious thing on a conversation.
-			// It used to do nothing at all here, because a thread has nothing to drill into.
+			// It used to do nothing at all here, because a session has nothing to drill into.
 			Key:   "enter",
 			Also:  []string{"a"},
 			Label: "Open",
@@ -596,10 +596,10 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			// Not destructive, so no question. Restarting a thread that is not stopped is refused by
+			// Not destructive, so no question. Restarting a session that is not stopped is refused by
 			// the control plane, and that refusal is what the operator sees.
 			//
-			// Uppercase, beside Archive: the uppercase letters act on the thread, and `r` refreshes
+			// Uppercase, beside Archive: the uppercase letters act on the session, and `r` refreshes
 			// the view, which is the key anybody reaches for far more often.
 			Key:   "R",
 			Label: "Restart",
@@ -607,12 +607,12 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: row.ID})
+				_, err := client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: row.ID})
 				return err
 			},
 		},
 		{
-			// Naming a thread. Not r, which the sessions tool uses and which #84 asked for: r is
+			// Naming a session. Not r, which the sessions tool uses and which #84 asked for: r is
 			// refresh here, and refreshing is the thing an operator presses constantly while naming
 			// is rare, so the cheap key stays with the frequent action.
 			Key:   "L",
@@ -623,14 +623,14 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.SetThreadLabel(ctx, &quaycrewv1.SetThreadLabelRequest{
+				_, err := client.SetSessionLabel(ctx, &quaycrewv1.SetSessionLabelRequest{
 					Id: row.ID, Label: typed,
 				})
 				return err
 			},
 		},
 		{
-			// What a thread may do, picked rather than cycled. This used to flip between two of the
+			// What a session may do, picked rather than cycled. This used to flip between two of the
 			// three, so planning was reachable from the command line and from the wizard and not from
 			// the surface an operator lives in.
 			//
@@ -656,7 +656,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if !known {
 					return fmt.Errorf("%q is not a mode", chosen)
 				}
-				_, err := client.SetThreadPermissionMode(ctx, &quaycrewv1.SetThreadPermissionModeRequest{
+				_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{
 					Id: row.ID, Mode: picked,
 				})
 				return err
@@ -664,7 +664,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		},
 		{
 			// Uppercase, because `a` already attaches and archiving is the rarer of the two. It asks
-			// first: a thread that disappears from the list under an accidental keypress reads
+			// first: a session that disappears from the list under an accidental keypress reads
 			// exactly like one that was deleted.
 			Key:     "A",
 			Label:   "Archive",
@@ -673,7 +673,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: row.ID})
+				_, err := client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: row.ID})
 				return err
 			},
 		},
@@ -687,7 +687,7 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
 				}
-				_, err := client.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: row.ID})
+				_, err := client.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: row.ID})
 				return err
 			},
 		},
@@ -703,7 +703,7 @@ func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	spec, err := client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessionID})
+	spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
 	if err != nil {
 		return nil, fmt.Errorf("attach: %w", err)
 	}
@@ -752,7 +752,7 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
-			// In the order they matter when something is wrong: what runs a turn, where it runs,
+			// In the order they matter when something is wrong: what runs a task, where it runs,
 			// what survives a restart, then what is watching.
 			stats := []struct{ what, running string }{
 				{"Model", described.GetModel()},

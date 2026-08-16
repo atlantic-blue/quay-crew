@@ -11,7 +11,7 @@
 set -u
 
 # ^Q and ^S are flow control on a terminal by default, which means the line discipline swallows them
-# and no application ever sees one. Turning that off is what lets ctrl-q be a key rather than a
+# and no application ever sees one. Tasking that off is what lets ctrl-q be a key rather than a
 # character the terminal keeps for itself.
 stty -ixon 2>/dev/null || true
 
@@ -22,8 +22,8 @@ mode="$2"
 # only, so its presence is the whole question: a session with no hooks has no directory at all.
 #
 # Checked here rather than passed in, so opening a conversation is under the same constraints a
-# dispatched turn is. A gate that only runs on dispatched turns is one the operator walks around by
-# opening the thread, which is the easiest thing in the product to do.
+# dispatched task is. A gate that only runs on dispatched tasks is one the operator walks around by
+# opening the session, which is the easiest thing in the product to do.
 settings=""
 if [ -f /home/agent/hooks/settings.json ]; then
     settings="--settings /home/agent/hooks/settings.json"

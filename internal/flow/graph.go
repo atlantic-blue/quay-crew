@@ -23,8 +23,8 @@ import (
 // because every graph ends and making each author write the same node out teaches nothing.
 const DoneNode = "done"
 
-// Node types. Slice one ships the three that need no external event source: dispatch sends a turn
-// to the run's own thread, choice branches on state without a side effect, and done ends the run.
+// Node types. Slice one ships the three that need no external event source: dispatch sends a task
+// to the run's own session, choice branches on state without a side effect, and done ends the run.
 // wait and ask arrive with their delivery mechanisms.
 const (
 	NodeDispatch = "dispatch"
@@ -36,7 +36,7 @@ const (
 
 // DefaultTransitions is how many movements a run may take when its graph declares no cap.
 //
-// A number rather than no limit, because an automation dispatches turns with nobody watching and a
+// A number rather than no limit, because an automation dispatches tasks with nobody watching and a
 // cycling edge is a spend loop. Generous enough that no reasonable graph meets it by accident, and
 // small enough that a runaway is a bill somebody shrugs at rather than one that ruins the week.
 const DefaultTransitions = 100
@@ -78,7 +78,7 @@ type Graph struct {
 // Node is one step.
 type Node struct {
 	Type string
-	// Prompt is what a dispatch node says to the run's thread, with {{key}} rendered from the
+	// Prompt is what a dispatch node says to the run's session, with {{key}} rendered from the
 	// run's state.
 	Prompt string
 	// On is a choice node's condition: every named state key must equal its value for the choice

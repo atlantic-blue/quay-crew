@@ -70,11 +70,11 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		typed = args[0]
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay skill list [<workspace, or workspace/project/thread>]")
+		return fmt.Errorf("usage: quay skill list [<workspace, or workspace/project/session>]")
 	}
 
 	// With no address, this is what the crew holds. With a workspace, what that workspace holds.
-	// With a thread, what that thread actually holds: the same answer its sandbox is built from,
+	// With a session, what that session actually holds: the same answer its sandbox is built from,
 	// crew skills included, which no attachment row records.
 	request := &quaycrewv1.ListSkillsRequest{}
 	where := "the crew"
@@ -85,22 +85,22 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		}
 		request.Workspace = located.WorkspaceID
 		where = located.Path.Workspace
-		if located.ThreadID != "" {
-			// The address resolves to the thread's handle; holdings hang off the thread itself,
+		if located.SessionID != "" {
+			// The address resolves to the session's handle; holdings hang off the session itself,
 			// so find its row by the handle.
-			threads, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: located.ProjectID})
+			sessions, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: located.ProjectID})
 			if err != nil {
 				return err
 			}
-			for _, thread := range threads.GetThreads() {
-				if thread.GetHandle() == located.ThreadID {
-					request = &quaycrewv1.ListSkillsRequest{Thread: thread.GetId()}
-					where = "thread " + located.ThreadID
+			for _, session := range sessions.GetSessions() {
+				if session.GetHandle() == located.SessionID {
+					request = &quaycrewv1.ListSkillsRequest{Session: session.GetId()}
+					where = "session " + located.SessionID
 					break
 				}
 			}
-			if request.GetThread() == "" {
-				return fmt.Errorf("thread %q is not in %s/%s", located.ThreadID, located.Path.Workspace, located.Path.Project)
+			if request.GetSession() == "" {
+				return fmt.Errorf("session %q is not in %s/%s", located.SessionID, located.Path.Workspace, located.Path.Project)
 			}
 		}
 	}
@@ -153,7 +153,7 @@ func runSkillAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 			fmt.Fprintf(out, "it needs %s in each workspace that is to use it: %s\n",
 				secret.GetName(), secret.GetPurpose())
 		}
-		fmt.Fprintln(out, "a workspace without those secrets set is left out of this one skill, and its turns still run")
+		fmt.Fprintln(out, "a workspace without those secrets set is left out of this one skill, and its tasks still run")
 		return nil
 	}
 	located, err := locate(ctx, client, typed)
@@ -171,7 +171,7 @@ func runSkillAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	for _, secret := range resp.GetSkill().GetSecrets() {
 		fmt.Fprintf(out, "it needs %s: %s\n", secret.GetName(), secret.GetPurpose())
 	}
-	fmt.Fprintln(out, "threads already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
+	fmt.Fprintln(out, "sessions already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
 	return nil
 }
 
@@ -200,7 +200,7 @@ func runSkillDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return err
 	}
 	fmt.Fprintf(out, "%s no longer holds %s\n", located.Path.Workspace, name)
-	fmt.Fprintln(out, "threads already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
+	fmt.Fprintln(out, "sessions already running keep what their sandbox was born with; they show as stale in the listing until stopped and restarted")
 	return nil
 }
 

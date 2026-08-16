@@ -92,7 +92,7 @@ func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run) error {
 
 // AdvanceFlowRun moves a run, appends the transition, and claims the dispatch key, in one
 // transaction: either the run moved and the record and the claim exist, or nothing happened. A
-// dispatch key already claimed refuses the whole movement, which is what keeps the same turn from
+// dispatch key already claimed refuses the whole movement, which is what keeps the same task from
 // ever being sent twice.
 func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error {
 	state, attempts, err := runJSON(run)
@@ -139,7 +139,7 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 			insert into flow_dispatches (run, node, attempt) values ($1, $2, $3)`,
 			run.ID, transition.Dispatch.Node, transition.Dispatch.Attempt); err != nil {
 			if isUniqueViolation(err) {
-				return fmt.Errorf("store: run %s already dispatched node %s attempt %d, and the same turn is never sent twice",
+				return fmt.Errorf("store: run %s already dispatched node %s attempt %d, and the same task is never sent twice",
 					run.ID, transition.Dispatch.Node, transition.Dispatch.Attempt)
 			}
 			return fmt.Errorf("claim flow dispatch: %w", err)

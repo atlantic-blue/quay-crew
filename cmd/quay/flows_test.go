@@ -75,7 +75,7 @@ func TestQuayFlowImportsStartsAndShows(t *testing.T) {
 		t.Fatalf("showing the run said %q, want the graph and where it ended", shown)
 	}
 	if !strings.Contains(shown, "result.reply") {
-		t.Fatalf("showing the run does not carry what the turn replied: %q", shown)
+		t.Fatalf("showing the run does not carry what the task replied: %q", shown)
 	}
 }
 
@@ -126,7 +126,7 @@ edges:
 	}
 }
 
-// Stopping a run from the command line: it says what it stopped, why, and what happens to the turn
+// Stopping a run from the command line: it says what it stopped, why, and what happens to the task
 // already under way, because that last part is the thing an operator will wonder about.
 func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
 	// A model that takes a moment, so the run is genuinely still working when the stop lands.
@@ -167,7 +167,7 @@ edges:
 		t.Fatalf("stopping said %q, want the reason it was given", stopped)
 	}
 	if !strings.Contains(stopped, "already under way finishes") {
-		t.Fatalf("stopping said %q, want it to say what happens to the turn in flight", stopped)
+		t.Fatalf("stopping said %q, want it to say what happens to the task in flight", stopped)
 	}
 
 	shown := mustRun(t, client, "flow", "show", fields[0])
