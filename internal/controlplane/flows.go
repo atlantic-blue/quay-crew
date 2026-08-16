@@ -3,11 +3,15 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -220,6 +224,41 @@ func (s *Server) ThreadTokens(ctx context.Context, thread string) int64 {
 		return 0
 	}
 	return s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId()).Total()
+}
+
+// ThreadHolds says whether a path is in a thread's own working directory, which is how a graph's
+// claim about what its turn would leave behind is checked by the crew rather than by the model.
+//
+// It reads the directory rather than the sandbox. The working directory is state the crew keeps on
+// the host and mounts in, so this is the same files the model was looking at, answered without
+// starting a container and without a road into one.
+//
+// A path that cannot be reached is an error rather than a false: a crew that keeps no state on disk,
+// or a thread it does not have, must stop the run rather than quietly satisfy the check.
+func (s *Server) ThreadHolds(ctx context.Context, thread, path string) (bool, error) {
+	if thread == "" {
+		return false, fmt.Errorf("the run has no thread yet")
+	}
+	session, err := s.store.GetSession(ctx, thread)
+	if err != nil {
+		return false, fmt.Errorf("the run's thread could not be read: %w", err)
+	}
+	dir, kept := s.storage.WorkingDir(sandbox.Config{
+		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
+	})
+	if !kept {
+		return false, fmt.Errorf("this crew keeps no working directory on disk to look in")
+	}
+	// Cleaned and held inside the thread's own directory. The parser refuses a path that climbs, and
+	// this is the second of the two, because the graph and the crew are edited by different hands.
+	inside := filepath.Join(dir, filepath.Clean("/"+path))
+	if _, err := os.Stat(inside); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("%s could not be read: %w", path, err)
+	}
+	return true, nil
 }
 
 // flowRunner is what the server needs to begin a run. The engine implements it; the indirection is

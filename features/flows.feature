@@ -272,6 +272,65 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "fix-red" in the project
     Then the flow run is pinned to version 2
 
+  # The first flow ever run against a real crew finished at done, reported four transitions and read
+  # back as a success. None of the work happened: the repository was not there, every turn said so,
+  # and the run took the success edge anyway, because `result.failed` says the model did not error
+  # and nothing else. A turn that could not do the work is not a failed turn.
+  #
+  # So a dispatch node says what will show it worked, and the crew checks that rather than reading
+  # the model's account of itself.
+  Scenario: A run stops when the work a node said it would do did not happen
+    Given the crew holds this flow graph:
+      """
+      name: site-check
+      version: 1
+      nodes:
+        read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
+        tell: { type: dispatch, prompt: "summarise the project" }
+      edges:
+        - [read, tell]
+        - [tell, done]
+      """
+    When the operator starts the flow "site-check" in the project
+    Then the flow run is stopped
+    And reading the run back says it stopped over "package.json"
+    And the run's thread was asked 1 turn
+
+  # The other direction. A check that stops every run would satisfy the scenario above and be worth
+  # nothing, so this one is the same graph against a model that does the work.
+  Scenario: A run carries on when the work did happen
+    Given the model writes "package.json" while it works
+    And the crew holds this flow graph:
+      """
+      name: site-check
+      version: 1
+      nodes:
+        read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
+        tell: { type: dispatch, prompt: "summarise the project" }
+      edges:
+        - [read, tell]
+        - [tell, done]
+      """
+    When the operator starts the flow "site-check" in the project
+    Then the flow run is done
+    And the run's thread was asked 2 turns
+
+  # The weaker check, for work that leaves no file behind. It is still the model's own prose, and it
+  # is here because a graph that runs a command and reads its answer has nothing else to point at.
+  Scenario: A run stops when the reply does not carry what the node said it would
+    Given the crew holds this flow graph:
+      """
+      name: test-run
+      version: 1
+      nodes:
+        run: { type: dispatch, prompt: "run the tests and say how they went", expect: { contains: "all green" } }
+      edges:
+        - [run, done]
+      """
+    When the operator starts the flow "test-run" in the project
+    Then the flow run is stopped
+    And reading the run back says it stopped over "all green"
+
   # A run's thread is made by its first dispatch, so there is nothing to set a mode on before the run
   # starts and `quay mode` has nothing to point at. Every automation therefore ran in the mode a
   # thread is born in, and a graph whose first step is "clone this" could not take it: cloning needs

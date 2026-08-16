@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A graph can tell work that was done from work that was explained away.** The first flow run
+  against a real crew finished at `done`, reported four transitions and 669,649 tokens, and read back
+  as a success. None of the work happened. The repository was not in the run's thread, every turn
+  said so in its own words, and the run took the success edge anyway, because the only signal a
+  `choice` node had was `result.failed`, and `result.failed` says the model did not error. A turn
+  that could not do the work is not a failed turn. The more capable the model, the worse it reads: it
+  answers plausibly rather than stopping, and that plausible answer is what the run ends up carrying
+  as its summary.
+
+  A dispatch node now says what will show it worked, and the crew checks it rather than reading the
+  model's account of itself. `expect: { file: package.json }` is a path that must be in the run's
+  thread after the turn, read from the working directory the crew already keeps, so nothing the model
+  says can satisfy it. `expect: { contains: "all green" }` is a string the reply must carry, weaker
+  because it is still prose, and there for work that leaves no file behind.
+
+  An expectation that does not hold stops the run, naming the node and what was not there. It stops
+  rather than branching, because the crew knows the work did not happen and does not know why, and
+  because a run that halts is read correctly while a run that finishes is believed. The thread is
+  left alone rather than archived: that is where the evidence is. An expectation nothing could check
+  stops the run too, since a check that quietly passes when nobody could look is the same false green
+  as no check at all. A graph that declares nothing behaves exactly as it did.
+
+  Left out on purpose: a command the crew runs and requires to exit zero. That makes an imported
+  graph a way to run arbitrary commands through the control plane, which is a decision to take on its
+  own. ([#263](https://github.com/atlantic-blue/quay-crew/issues/263))
+
 - **A graph says what its runs may do, and the documents say what a run starts with.** A run owns its
   own thread, and that thread is made by the run's first dispatch. So there was nothing to set a mode
   on before the run started, `quay mode` had nothing to point at, and every automation ran in the

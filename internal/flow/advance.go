@@ -90,6 +90,10 @@ type Event struct {
 	Failed bool
 	// Answer is what the operator said to an ask node.
 	Answer string
+	// Unmet says what the node claimed would prove the turn worked, and did not. Empty when the node
+	// claimed nothing or the claim held. The engine fills it in, because checking it touches the
+	// world; what to do about it is here, where it can be read.
+	Unmet string
 }
 
 // Command is one thing the engine must do on the run's behalf. The reducer never does it: it
@@ -170,6 +174,18 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 		}
 		run.State["result.reply"] = event.Reply
 		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed)
+		// A step that did not do what the graph said would show it worked stops the run, rather than
+		// carrying on down the edge a reply happens to be sitting on. There is no recovery the crew
+		// could pick: it knows the work did not happen and it does not know why. A run that walks its
+		// success path through work that never happened is worse than one that halts, because the
+		// summary it ends with is the model's plausible account of it.
+		if event.Unmet != "" {
+			run.State["result.expected"] = event.Unmet
+			run.Status = StatusStopped
+			run.Reason = fmt.Sprintf("stopped at %s, which did not do what the graph says proves it worked: %s",
+				run.Node, event.Unmet)
+			return run, nil, nil
+		}
 		next, err := follow(graph, run.Node, "")
 		if err != nil {
 			return run, nil, err
