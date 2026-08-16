@@ -8,6 +8,31 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **The telemetry stack carries traces, and Grafana comes up joined.** `make up-observability` started
+  four containers that had nothing to do with each other. The collector's only exporter was `debug`,
+  which prints a summary and drops what it was given. Prometheus had no configuration file at all, so
+  it fell back to the image default and scraped only itself. Grafana had no data source, so it opened
+  onto nothing. Every part was up and the picture was empty.
+
+  Traces now go to Tempo, the collector republishes metrics for Prometheus to scrape, and Grafana's
+  three data sources are provisioned from a file in this repository rather than added by hand on each
+  machine. Dispatch a turn, open Explore, pick Tempo, and the turn is there as one span.
+
+  The observability profile is still a profile, so a plain `make up` runs the collector with nowhere
+  to forward to. The queue and the retry on the Tempo exporter are off for that reason: an
+  undeliverable batch is dropped with one line rather than held and retried forever.
+
+  Loki is provisioned and empty, because the services log to their own stdout and nothing forwards it
+  yet. Prometheus scrapes a real endpoint that publishes an empty set, because nothing creates a
+  metric instrument. Both are said out loud in `docs/OBSERVABILITY.md` rather than left to be
+  discovered.
+
+  `deploy/telemetry_test.go` holds the halves together: a host that is not a service in the compose
+  file, a pipeline that reaches nothing but `debug`, a Grafana data source pointed at a store that is
+  not there, or a scrape port that is not the one the collector publishes on all fail here rather
+  than as an empty dashboard.
+  ([#12](https://github.com/atlantic-blue/quay-crew/issues/12))
+
 - **A call can be followed after it happened.** Every message the control plane serves now runs in a
   span, and every log line written while it runs carries a `correlation_id` equal to that span's
   trace id. Take an id off a log line and you have the trace; open the trace and you can filter the
