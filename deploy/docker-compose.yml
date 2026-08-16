@@ -1,11 +1,10 @@
 name: quaycrew
 
 services:
-  # The audit export's broker. Started only with: docker compose --profile export up. History lives
-  # in Postgres either way; this exists for a second consumer (a dashboard, a pipeline, another
-  # machine), and a crew that has none needs no broker at all.
+  # The audit export's broker. History lives in Postgres either way; this is the copy a second
+  # consumer reads, and it starts with everything else so the export is on rather than waiting to be
+  # switched on.
   redpanda:
-    profiles: ["export"]
     image: redpandadata/redpanda:v24.2.7
     command:
       - redpanda
@@ -119,10 +118,10 @@ services:
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
       QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quay/data}
-      # The audit export. History is written to Postgres in the same breath as each task either
-      # way; set this (redpanda:9092 with the export profile up) and every task is also exported to
-      # <workspace>.tasks for a second consumer. Unset, nothing is exported and nothing is lost.
-      QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS:-}
+      # The audit export. History is written to Postgres in the same breath as each task either way;
+      # this also puts every task on <workspace>.tasks for a second consumer. Set it to empty in your
+      # own configuration to turn the export off, which loses nothing.
+      QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS-redpanda:9092}
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
@@ -138,10 +137,11 @@ services:
       postgres:
         condition: service_healthy
 
-  # Observability stack. Started only with: make up-observability
+  # Where the three signals are kept and read. These start with everything else: a crew whose traces
+  # go nowhere and whose dashboard is not running is a crew you cannot see, and remembering a second
+  # command is not a job for a person.
   grafana:
     image: grafana/grafana:11.2.0
-    profiles: ["observability"]
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
@@ -153,7 +153,6 @@ services:
 
   loki:
     image: grafana/loki:3.2.0
-    profiles: ["observability"]
     command: ["-config.file=/etc/loki/local-config.yaml"]
     volumes:
       - ./loki.yaml:/etc/loki/local-config.yaml:ro
@@ -161,7 +160,6 @@ services:
 
   tempo:
     image: grafana/tempo:2.6.0
-    profiles: ["observability"]
     command: ["-config.file=/etc/tempo.yaml"]
     # The image ships no default config, so without this mount the container exits on startup and the
     # profile comes up one service short.
@@ -171,7 +169,6 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    profiles: ["observability"]
     # Without this it falls back to the image default and scrapes only itself, which looks like a
     # working Prometheus and holds none of the crew's numbers.
     command: ["--config.file=/etc/prometheus/prometheus.yml"]

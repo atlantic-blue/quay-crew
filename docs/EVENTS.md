@@ -1,9 +1,8 @@
 # The event log
 
-Quay Crew can run a Kafka compatible event log, served locally by Redpanda behind the compose
-stack's `export` profile. It is an audit export, not the road anything travels by: history lives in
-Postgres, written in the same breath as each task, and a crew with no broker loses nothing but the
-export.
+Quay Crew runs a Kafka compatible event log, served locally by Redpanda, which starts with the rest
+of the stack. It is an audit export, not the road anything travels by: history lives in Postgres,
+written in the same breath as each task, and a crew with no broker loses nothing but the export.
 
 Read the next section before you go looking for messages in it.
 
@@ -79,8 +78,9 @@ flowchart LR
 
 ## How it runs
 
-`docker compose --profile export up` starts it; a plain `make up` does not, because a crew with no
-second consumer needs no broker. From `deploy/docker-compose.yml`:
+`make up` starts it, like everything else. It used to sit behind an `export` profile, on the argument
+that a crew with no second consumer needs no broker; the cost of that was an export nobody had
+switched on and a second command to know about. From `deploy/docker-compose.yml`:
 
 - image `redpandadata/redpanda:v24.2.7`, started in `dev-container` mode with a single core
 - two listeners: `redpanda:9092` inside the compose network, and `localhost:19092` published to your
@@ -88,7 +88,9 @@ second consumer needs no broker. From `deploy/docker-compose.yml`:
 - a healthcheck that waits for the cluster to report healthy
 - data in the named volume `redpanda-data`
 
-The control plane exports only when `QC_KAFKA_SEEDS` is set (`redpanda:9092` inside the network).
+The control plane exports when `QC_KAFKA_SEEDS` is set, and the compose file now defaults it to
+`redpanda:9092`. Set it to empty in your own configuration to turn the export off, which loses
+nothing: the store is the source of truth and the log only ever carried a copy.
 
 ## Inspect it
 

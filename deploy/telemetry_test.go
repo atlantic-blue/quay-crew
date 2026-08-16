@@ -78,6 +78,39 @@ func composeServices(t *testing.T) map[string]bool {
 	return names
 }
 
+// TestNoServiceHidesBehindAProfile refuses the whole class rather than the four services that were
+// behind one.
+//
+// Grafana, Loki, Tempo and Prometheus sat behind an "observability" profile and the broker behind an
+// "export" one, so `make up` brought up a crew you could not see and an export nobody received. Each
+// was a deliberate decision to keep a laptop light, and each cost more than it saved: the operator
+// had to know a second command existed, and a signal nobody starts is a signal nobody has.
+//
+// A profile is how that comes back, so this refuses any of them.
+func TestNoServiceHidesBehindAProfile(t *testing.T) {
+	contents, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatalf("reading the compose file: %v", err)
+	}
+	var compose struct {
+		Services map[string]struct {
+			Profiles []string `yaml:"profiles"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(contents, &compose); err != nil {
+		t.Fatalf("parsing the compose file: %v", err)
+	}
+	if len(compose.Services) == 0 {
+		t.Fatal("no services found in the compose file, so this test proves nothing")
+	}
+	for name, service := range compose.Services {
+		if len(service.Profiles) > 0 {
+			t.Errorf("service %s is behind the profile(s) %v, so a plain `make up` does not start it",
+				name, service.Profiles)
+		}
+	}
+}
+
 // TestEveryExporterAPipelineNamesIsDefined catches the typo that stops the collector booting at all.
 func TestEveryExporterAPipelineNamesIsDefined(t *testing.T) {
 	config := readYAML[collectorConfig](t, "otel-collector.yaml")
