@@ -295,6 +295,19 @@ Feature: The operator sees the crew from the console
     Then the crew has 1 session
     And that thread's mode is "plan"
 
+  # Tab is the other way to answer a question like this one: cycling to a candidate rather than
+  # spelling it out. The wizard offers what a step can be answered with everywhere it asks one of a
+  # fixed set of things, not only here, but the mode is where it matters most, an operator choosing
+  # what a session may do without asking rather than typing "dangerous" correctly.
+  Scenario: Tab fills in the mode without typing it
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+    And the operator presses tab 3 times to choose the mode, then sends "hello"
+    Then the crew has 1 session
+    And that thread's mode is "bypassPermissions"
+
   Scenario: The wizard refuses a mode that is not one of the three
     When the operator answers the wizard with:
       | session     |

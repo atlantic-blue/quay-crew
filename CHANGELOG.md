@@ -8,6 +8,13 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
+- **Tab cycles the wizard's options.** Every question the wizard asks that has a fixed set of
+  answers, what to make, which workspace, which mode a session may start in, took the answer as
+  typed text and offered the choices only as a hint beside it. Naming a session's mode meant
+  spelling "dangerous" correctly. Tab now fills in one candidate at a time, in the order they are
+  offered, and shift tab goes back; enter accepts whatever tab last landed on the same way it
+  accepts anything typed by hand. Typing still narrows the list the way it always has, and tab
+  cycles inside whatever is left.
 - **Go, in the sandbox image.** A session working on this repository could read the Go source and
   never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
   carried none. Copied from the stage that already builds `quay` rather than downloaded again, so
