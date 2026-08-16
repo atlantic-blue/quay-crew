@@ -53,7 +53,7 @@ commands:
   flow answer <run> <answer>              tell a run waiting on you what you decided
   dispatch [<address>] <text>             start or continue a thread
   sessions [<address>]                    list threads, which thread and threads also do
-  turns <thread>                          what a thread was asked, and what came back
+  tasks <thread>                          what a thread was asked to do, and what came back
   label <thread> [<text>]                 what you call a conversation, so a listing reads as
                                           conversations rather than identifiers. No text reads it,
                                           and "" clears it
@@ -129,7 +129,9 @@ The ` + "`quay`" + ` command drives it. If it is on your path, you can use it.
 
   workspace   who you are, for example "me" or an organisation. Secrets attach here.
   project     a body of work inside a workspace, for example "house bills" or a ticket.
-  thread      one conversation. A turn runs in a project.
+  thread      one conversation. A task runs in a project.
+  task        one instruction and the work it caused. You ask for something, the crew works
+              until it has an answer, and the whole of that is one task. Minutes is normal.
   session     a thread that is running, inside its own sandbox container.
   sandbox     the isolated container a session runs in. A session runs IN a sandbox.
 

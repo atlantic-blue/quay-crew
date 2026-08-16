@@ -6,6 +6,51 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 16 August 2026
+
+- **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
+  choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
+  was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
+
+  `QC_CLAUDE_MODEL` in `~/.quay/env` now, defaulting to `claude-opus-5`. The default sits in the
+  compose file rather than in the code, so a configuration written before the key existed gets it
+  anyway; `make env-check` still names it, so you can put it in your own file and change it. A full
+  name rather than the `opus` alias, for the same reason the tool itself is pinned below: an alias
+  moves to the next generation on its own and nothing records that it did.
+
+  `QC_MODEL` is unchanged and is a different decision: it picks the backend, `claude-code` or `echo`.
+
+- **The sandbox image pins Claude Code.** It was installed at whatever the registry called latest on
+  the day the image was built, so two builds of the same commit produced two different images and
+  nothing recorded which one a session ran. `gh`, terraform and the AWS command line were already
+  pinned; the model runtime, the one thing a session cannot work without, was not.
+
+  It is `CLAUDE_CODE_VERSION` now, and raising it is a deliberate change with a commit behind it.
+  Two checks: one refuses any global install in this image that does not name a version, so the next
+  tool added unpinned fails here rather than months later, and one asks the built image what it runs,
+  because a pin the registry quietly ignores reads exactly like a pin that works.
+
+## 16 August 2026
+
+- **A turn is called a task.** "Turn" is a word from conversation analysis, where it means one party
+  holding the floor. It arrived in this product the way it arrived in every model provider's
+  documentation, already meaning something, and it never fitted: a turn in conversation is short, and
+  here holding the floor means reading a repository for ten minutes. The word implied an exchange and
+  the thing is a piece of work.
+
+  The glossary made it worse. It defined five words and then defined `thread` with a sixth it never
+  defined anywhere: "one conversation. A turn runs in a project." The one place that exists to teach
+  the vocabulary used the undefined term to explain a defined one.
+
+  So `quay turns` is `quay tasks`, the console's history view is `tasks`, and the glossary gains the
+  entry it never had, including the part nobody was told: minutes is normal. `quay turns` is refused
+  by name and says what to type instead, rather than becoming an unknown command, because it is in
+  fingers, in scripts and in notes. The console keeps `turns` as an alias, since muscle memory
+  outlives a rename and answering to it costs nothing.
+
+  The protocol, the store and its table still say turn. That is the next change, and it is invisible
+  from outside.
+
 ## 15 August 2026
 
 - **Tab cycles the wizard's options.** Every question the wizard asks that has a fixed set of

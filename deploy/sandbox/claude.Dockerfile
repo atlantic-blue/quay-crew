@@ -76,7 +76,11 @@ RUN arch="$(uname -m)" \
 COPY --from=tool /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-RUN npm install -g @anthropic-ai/claude-code
+# The model runtime a session runs in, pinned like gh, terraform and the AWS command line are. It was
+# the one thing here taken at whatever npm called latest on the day, so two builds of the same commit
+# produced two different images and nothing recorded which. Raise this deliberately.
+ARG CLAUDE_CODE_VERSION=2.1.233
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
 # Reaching the control plane is a separate decision, made once in configuration: without a network
 # that can reach it and an address to dial, this is a command that says it cannot connect.
