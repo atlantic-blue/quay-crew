@@ -185,7 +185,7 @@ func runHookDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 // A hook reaches a container at creation and never after, so a session that is already running is not
 // under the constraint that was just attached. Somebody who believes a gate is on when it is not is
 // worse off than somebody who knows there is no gate.
-const staleWarning = "sessions already running are not under it: a hook reaches a sandbox when the sandbox is built, so stop and restart a session to put it under this one"
+const staleWarning = "sessions already running are not under it: a hook reaches a sandbox when the sandbox is built, so restart a session to put it under this one"
 
 // firesOn says what a hook fires on, in a line, which is the whole of what a listing is asked.
 func firesOn(one *quaycrewv1.Hook) string {

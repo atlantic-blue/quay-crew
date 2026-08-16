@@ -21,6 +21,22 @@ func initializeDetachSteps(sc *godog.ScenarioContext) {
 		return worldFrom(ctx).runner.waitForTask()
 	})
 
+	// Dispatched the way the console dispatches: the caller gets the session back straight away and the
+	// task runs behind it. A scenario about what the operator does *while* a task runs needs this,
+	// because the waited dispatch does not return until the task has landed.
+	sc.Step(`^a task dispatched without waiting for it$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: w.projectID, Text: "read the repository", Detach: true,
+		})
+		w.lastErr = err
+		if err != nil {
+			return err
+		}
+		w.tasks = append(w.tasks, task{sessionID: resp.GetId(), handle: resp.GetHandle()})
+		return nil
+	})
+
 	sc.Step(`^the model finishes the task$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.release == nil {
