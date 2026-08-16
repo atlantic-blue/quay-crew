@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -28,9 +29,11 @@ const (
 const (
 	dimCode        = "\x1b[2m"
 	offCode        = "\x1b[0m"
+	boldCode       = "\x1b[1m"
 	ansiRedCode    = "\x1b[31m"
 	ansiGreenCode  = "\x1b[32m"
 	ansiYellowCode = "\x1b[33m"
+	ansiCyanCode   = "\x1b[36m"
 )
 
 var (
@@ -140,6 +143,85 @@ func colourOfTokens(cell string) string {
 		return ansiYellowCode
 	}
 	return dimCode
+}
+
+// colourOfStatus puts a row's state in the one cell that names it, rather than over the whole line.
+// A line drawn in a single colour cannot carry any of the others, so colouring every row by its state
+// costs the workspace, the project and the mode their colours, and a listing of thirty rows comes out
+// in two.
+//
+// The words are the control plane's, so this and stateFromStatus read the same set and a status
+// neither of them knows stays uncoloured rather than being guessed at. The stale mark rides on the
+// same cell, and it is the state before it that decides the colour.
+func colourOfStatus(cell string) string {
+	status := cell
+	if before, _, marked := strings.Cut(cell, " "); marked {
+		status = before
+	}
+	switch stateFromStatus(status) {
+	case StateFailed:
+		return ansiRedCode
+	case StateBusy:
+		return ansiYellowCode
+	case StateReady:
+		return ansiGreenCode
+	case StateStopped:
+		return dimCode
+	default:
+		return ""
+	}
+}
+
+// colourOfAge is how long ago a thread was touched, coloured by how long that is: the sessions tool's
+// three bands, so a fresh thread, a thread from this morning and a thread from last week are told
+// apart without reading the number.
+//
+// It reads the suffix compactDuration writes rather than a duration, because a column holds the text
+// that was already laid out and cutting it back into a time would be inventing one.
+func colourOfAge(cell string) string {
+	if len(cell) < 2 {
+		return dimCode
+	}
+	number, unit := cell[:len(cell)-1], cell[len(cell)-1]
+	switch unit {
+	case 's':
+		return ansiGreenCode
+	case 'm':
+		// Fifteen minutes is the sessions tool's line between working and left alone.
+		if minutes, err := strconv.Atoi(number); err == nil && minutes < 15 {
+			return ansiGreenCode
+		}
+		return ansiYellowCode
+	case 'h':
+		return ansiYellowCode
+	case 'd':
+		return ansiRedCode
+	default:
+		return dimCode
+	}
+}
+
+// colourOfWritten says whether a level of context exists, which is the only question that view is
+// asked. Green for a level that says something, dim for one that says nothing yet.
+func colourOfWritten(cell string) string {
+	if cell == "written" {
+		return ansiGreenCode
+	}
+	return dimCode
+}
+
+// place is a path, a repository or an engine: somewhere rather than something. Cyan is where the
+// sessions tool puts a repository, and this is the same cell in a different listing.
+func place(string) string { return ansiCyanCode }
+
+// heading is the cell a row is about, when the row's own name is what carries it: the feature a
+// scenario proves, the key a binding is on. Bold rather than coloured, because it sits next to cells
+// that are already carrying colour of their own.
+func heading(cell string) string {
+	if strings.TrimSpace(cell) == "" {
+		return ""
+	}
+	return boldCode
 }
 
 // dim is anything secondary: an identifier, an age, a count that is only there for completeness.

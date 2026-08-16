@@ -407,6 +407,32 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^a session's row carries more than one colour$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		if colouredRow(view) != "" {
+			return nil
+		}
+		return fmt.Errorf("no row on the screen carries more than one colour, so the whole listing has "+
+			"to be read one row at a time:\n%s", view)
+	})
+
+	sc.Step(`^the row says how the session is doing in its status cell$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		row := colouredRow(view)
+		if row == "" {
+			return fmt.Errorf("no coloured row to read a status from:\n%s", view)
+		}
+		// Whichever of them the turn left behind. What is being said is that the word carries the
+		// colour, not which word it is.
+		for _, coloured := range []string{"\x1b[32midle", "\x1b[33mrunning", "\x1b[33mdispatching"} {
+			if strings.Contains(row, coloured) {
+				return nil
+			}
+		}
+		return fmt.Errorf("the status cell carries no colour, so the row says nothing about how the "+
+			"session is doing:\n%q", row)
+	})
+
 	sc.Step(`^the operator stops the selected session from the console$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		row, err := onlyRow(c)
@@ -424,6 +450,28 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		}
 		return fmt.Errorf("the sessions view has no Stop action")
 	})
+}
+
+// colouredRow is the first drawn line carrying two different cell colours, or empty when there is
+// none. Two rather than one, because a line drawn entirely in its state has exactly one and would
+// pass a case looking for any colour at all.
+//
+// The cursor line is skipped by this without being asked to: colour comes off the selected row on
+// purpose, so it carries none.
+func colouredRow(view string) string {
+	for _, line := range strings.Split(view, "\n") {
+		seen := map[string]bool{}
+		for _, part := range strings.Split(line, "\x1b[38;5;")[1:] {
+			code, _, found := strings.Cut(part, "m")
+			if found {
+				seen[code] = true
+			}
+		}
+		if len(seen) > 1 {
+			return line
+		}
+	}
+	return ""
 }
 
 // drive runs a console command and feeds everything it produces back into the model, which is what
