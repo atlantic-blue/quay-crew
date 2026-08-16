@@ -74,11 +74,25 @@ Feature: Sessions run in isolated sandboxes
     And the operator asks how to attach to the session
     And the control plane names the session's sandbox
 
-  Scenario: A thread that is not stopped has nothing to restart
+  # Restarting is what the operator reaches for when the container is wrong, and a container that is
+  # wrong is usually one that is still running. Refusing until the thread was stopped made that two
+  # keys, so the live thread is stopped here and comes back in a new container.
+  Scenario: A live thread restarts into a new container rather than being refused
     Given a session started by dispatching "hello"
     When the operator restarts the session
+    Then the session is reported as idle
+    And the session's sandbox has been closed
+    And a second sandbox has been created for that session
+    And the session still holds the conversation the first turn started
+
+  # An archived thread's row says stopped, so a restart that only asked about the status started a
+  # container for a thread nobody can see.
+  Scenario: An archived thread cannot be restarted
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator restarts the session
     Then the control plane refuses it as the wrong state
-    And the session is reported as idle
+    And the workspace has 1 archived sessions
 
   Scenario: Restarting a thread that does not exist is refused
     When the operator restarts a session that does not exist

@@ -590,13 +590,18 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			// Not destructive, so no question. Restarting a thread that is not stopped is refused by
-			// the control plane, and that refusal is what the operator sees.
+			// Restarting replaces the container the thread is in, whatever state it is in. It asks on
+			// a thread that is not stopped, because the task it is in and the conversation attached to
+			// it go with the old container. A stopped thread has neither, so that one acts at once.
 			//
 			// Uppercase, beside Archive: the uppercase letters act on the thread, and `r` refreshes
-			// the view, which is the key anybody reaches for far more often.
-			Key:   "R",
-			Label: "Restart",
+			// the view, which is the key anybody reaches for far more often. ctrl+r does the same, for
+			// the fingers that reach for it.
+			Key:     "R",
+			Also:    []string{"ctrl+r"},
+			Label:   "Restart",
+			Confirm: true,
+			Costs:   func(row Row) bool { return row.State != StateStopped },
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")

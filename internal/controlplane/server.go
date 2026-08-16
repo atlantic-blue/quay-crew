@@ -1614,23 +1614,35 @@ func (s *Server) AttachThread(ctx context.Context, req *quaycrewv1.AttachThreadR
 	}, nil
 }
 
-// RestartSession brings a stopped session back to idle, with its sandbox running.
+// RestartSession gives a thread a fresh sandbox and leaves it idle, whatever state it was in.
 //
 // The sandbox is started here rather than on the next turn, so the operator can attach into the
 // conversation straight away instead of having to dispatch a turn to make the container exist. That
 // is only safe because a session's state lives on the host now: the sandbox this creates is a new
 // container over the same conversation store and the same project files.
 //
-// The sandbox comes first: one that will not start leaves the session stopped rather than idle and
-// unreachable.
+// A thread that is already live is stopped first rather than refused. Restarting is what the operator
+// reaches for when the container is wrong: a wedged turn, a shell that will not answer, a credential
+// the sandbox was born without. Refusing until it was stopped made that two keys, and the second was
+// the one that did the work, so the first key read as broken.
+//
+// An archived thread is refused. It is put away, and bringing one back is what restore is for.
 func (s *Server) RestartThread(ctx context.Context, req *quaycrewv1.RestartThreadRequest) (*quaycrewv1.RestartThreadResponse, error) {
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	if session.GetStatus() != StatusStopped {
+	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is %s, not stopped, so there is nothing to restart", req.GetId(), session.GetStatus())
+			"thread %s is archived: restore it first", display.ShortID(session.GetHandle()))
+	}
+	// The old container goes before the new one is asked for, so the thread never holds two, and a
+	// turn running in the old one loses the room it was working in, which is the point of the key.
+	if session.GetStatus() != StatusStopped {
+		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
+			return nil, storeError(err, "session")
+		}
+		s.closeSandbox(ctx, req.GetId())
 	}
 	if _, err := s.sandboxFor(ctx, session); err != nil {
 		return nil, sandboxError(err, "create sandbox")

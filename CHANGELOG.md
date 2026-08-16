@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **Restart works on a live thread, and asks first.** The crew refused to restart a thread unless it
+  was already stopped. So the key you press when a container is wrong did nothing, and you had to
+  stop the thread yourself before the key would work.
+
+  Restart stops the thread now, removes the container, and starts a new one. In the console it is `R`
+  or ctrl+r. It asks before it acts on a thread that is not stopped, because the task in that thread
+  and the conversation attached to it go with the old container. A stopped thread has neither, so
+  that one acts at once.
+
+  An archived thread is refused, and says to restore it first. An archived row says stopped, so a
+  restart that read only the status started a container for a thread nobody can see.
+
 - **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
