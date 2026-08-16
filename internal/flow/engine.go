@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -110,13 +111,28 @@ type ControlPlane interface {
 	ArchiveThread(ctx context.Context, req *quaycrewv1.ArchiveThreadRequest) (*quaycrewv1.ArchiveThreadResponse, error)
 }
 
+// Prover answers what a dispatch node said would show its turn did the work.
+//
+// Deliberately not one of the control plane's own calls. Reading a thread's files is not something a
+// caller may ask the crew to do, and a graph is written by whoever may import one, so a graph must
+// not become a road to it. This asks one question, about one thread, with a path the parser has
+// already refused if it climbs anywhere.
+//
+// An implementation that cannot answer says so, and the run stops. A check that quietly passes when
+// it could not be run is the same false green as no check at all.
+type Prover interface {
+	// ThreadHolds says whether path exists in the thread's own working directory.
+	ThreadHolds(ctx context.Context, thread, path string) (bool, error)
+}
+
 // Engine drives runs: it loads the graph, calls the pure reducer, persists every transition, and
 // carries out the commands the reducer returned. It blocks for the turns it dispatches, one at a
 // time per run, which is the shape the graph forces anyway: a run has one current node.
 type Engine struct {
-	store Store
-	plane ControlPlane
-	spend Spend
+	store  Store
+	plane  ControlPlane
+	spend  Spend
+	prover Prover
 	// clock is where the engine reads the time, so a test can put a wait's due time in the past
 	// rather than waiting out a real one. Nil means the wall clock.
 	clock func() time.Time
@@ -138,9 +154,10 @@ func (e *Engine) WithClock(clock func() time.Time) *Engine {
 }
 
 // NewEngine builds one. A nil spend reader means the token ceiling has nothing to read, so a graph
-// declaring one is bounded by its transition cap alone; the crew wires the real reader in.
-func NewEngine(store Store, plane ControlPlane, spend Spend) *Engine {
-	return &Engine{store: store, plane: plane, spend: spend}
+// declaring one is bounded by its transition cap alone; the crew wires the real reader in. A nil
+// prover means a graph that says a file proves its work stops rather than being believed.
+func NewEngine(store Store, plane ControlPlane, spend Spend, prover Prover) *Engine {
+	return &Engine{store: store, plane: plane, spend: spend, prover: prover}
 }
 
 // Start begins a run of the newest version of a graph and drives it to a standstill before
@@ -267,39 +284,80 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			return run, nil
 		}
 
+		// The mode travels with every dispatch, not only the first. The control plane applies it
+		// before the sandbox is built, and a run's thread is made by its first dispatch, so this is
+		// the only moment anything can say what an automation's turns are allowed to do.
 		resp, err := e.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-			Project: run.Project,
-			Handle:  run.ThreadHandle(),
-			Text:    dispatch.Prompt,
+			Project:        run.Project,
+			Handle:         run.ThreadHandle(),
+			Text:           dispatch.Prompt,
+			PermissionMode: graph.Mode,
 		})
 		if err != nil {
 			event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
 			continue
 		}
-		run.State[threadKey] = resp.GetId()
-		event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Reply: resp.GetReply()}
+		run.State[ThreadKey] = resp.GetId()
+		event = Event{
+			Kind:  EventTurnFinished,
+			Node:  dispatch.Node,
+			Reply: resp.GetReply(),
+			Unmet: e.unmet(ctx, graph.Nodes[dispatch.Node], run, resp.GetReply()),
+		}
 	}
+}
+
+// unmet is what the node said would show its turn did the work, where that is not there. Empty means
+// the node claimed nothing, or the claim held.
+//
+// Checked here rather than in the reducer because it reads the world, and read after the turn rather
+// than described by it: the model reporting on its own work is the thing this exists to stop.
+func (e *Engine) unmet(ctx context.Context, node Node, run Run, reply string) string {
+	if node.Expect == nil {
+		return ""
+	}
+	if carries := node.Expect.Contains; carries != "" && !strings.Contains(reply, carries) {
+		return fmt.Sprintf("the reply does not carry %q", carries)
+	}
+	path := node.Expect.File
+	if path == "" {
+		return ""
+	}
+	if e.prover == nil {
+		return fmt.Sprintf("%s could not be checked: this crew cannot read a thread's files", path)
+	}
+	held, err := e.prover.ThreadHolds(ctx, run.State[ThreadKey], path)
+	if err != nil {
+		return fmt.Sprintf("%s could not be checked: %v", path, err)
+	}
+	if !held {
+		return fmt.Sprintf("%s is not in the run's thread", path)
+	}
+	return ""
 }
 
 // spentBy is what the run's thread has cost. It keeps the last known number when there is no reader
 // wired or no thread yet: a cost that cannot be read must not silently reset a run's spend to zero
 // and hand it a fresh ceiling.
 func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
-	if e.spend == nil || run.State[threadKey] == "" {
+	if e.spend == nil || run.State[ThreadKey] == "" {
 		return run.Spent
 	}
-	return e.spend.ThreadTokens(ctx, run.State[threadKey])
+	return e.spend.ThreadTokens(ctx, run.State[ThreadKey])
 }
 
-// threadKey is where the run remembers its thread's identifier, learned from the first dispatch.
+// ThreadKey is where the run remembers its thread's identifier, learned from the first dispatch.
 // The handle is the run's own by construction; the identifier is what archiving needs.
-const threadKey = "thread.id"
+//
+// Exported because a run outlives the reading of it: the thread is archived when the run ends, and
+// whoever reads the run afterwards has to be told where its history is.
+const ThreadKey = "thread.id"
 
 // archive puts the run's thread away. A run that never dispatched has no thread, and a thread that
 // cannot be archived is logged by the control plane's side of the call; neither is a reason to call
 // a finished run anything else.
 func (e *Engine) archive(ctx context.Context, run Run) {
-	id := run.State[threadKey]
+	id := run.State[ThreadKey]
 	if id == "" {
 		return
 	}

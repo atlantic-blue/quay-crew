@@ -365,6 +365,36 @@ edges:
   - [ask, push, "yes"]
 ```
 
+### What a run finishing actually means
+
+**`result.failed` says the model did not error. It says nothing about whether anything was
+achieved.** A turn that could not do the work is not a failed turn: asked to read a file that is not
+there, a capable model answers plausibly instead of stopping, and a graph branching on
+`result.failed` then walks its success path through work that never happened. The first flow run
+against a real crew did exactly that. It finished at `done`, reported four transitions, and its
+summary was the model's account of a repository it never found.
+
+**So a dispatch node may declare what will show it worked, and the crew checks it.** `expect: { file:
+package.json }` is a path that must be in the run's thread after the turn, read from the working
+directory the crew keeps rather than asked of the model. `expect: { contains: "all green" }` is a
+string the reply must carry, which is weaker because it is still the model's own prose, and is there
+for work that leaves no file behind. Whichever is declared is checked.
+
+**An expectation that does not hold stops the run**, with the reason naming the node and what was
+not there, and `result.expected` in the run's state. It stops rather than branching because the crew
+knows the work did not happen and does not know why, and because a run that halts is read correctly
+while a run that finishes is believed. Its thread is left alone rather than archived, since that is
+where the evidence is. A graph that declares nothing behaves exactly as it did.
+
+An expectation nothing can check stops the run too. A crew that keeps no working directory on disk
+cannot answer the question, and a check that quietly passes when it could not be run is the same
+false green as no check at all.
+
+Left out on purpose: a command the crew runs and requires to exit zero. It is the obvious third
+form, and it makes an imported graph a way to run arbitrary commands through the control plane,
+which is a decision to take on its own rather than in passing. A file covers the case that was
+found.
+
 ### A run owns its thread
 
 **The thread identifier is the run identifier.** `Dispatch` resolves a thread through
@@ -388,6 +418,33 @@ A thread identifier is free form and unique within its project, so a run names i
 graph and a short run identifier, `fix-red-pull-request-a1b2c3d4`. The console then reads as what the
 run is doing without waiting for labels; labels become the thing that groups runs rather than the
 thing that names them.
+
+### What a run's thread starts with
+
+A run's thread is new, so its working directory is empty. Nothing another thread did is in it, and
+nothing a previous run of the same graph did is either. This is the assumption a graph author makes
+without noticing, so it is written down here: a run starts in an empty room.
+
+Two directories are mounted into it, and only one of them survives the run:
+
+- `/home/agent/workspace` is this thread's own working directory. It is empty on the run's first
+  turn and it goes away with the thread.
+- `/home/agent/shared` is the workspace's volume, shared by every session in the workspace. What a
+  run writes there is there for the next run, and for every thread beside it.
+
+So a graph that needs a repository puts it in the shared volume. A graph that clones into the
+working directory clones on every run, pays for the clone every run, and cannot be relied on to hold
+the same state twice. The convention that makes one clone serve every session, a clone in the volume
+and a worktree per session, is
+[#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is not built.
+
+**A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version, and
+a graph that declares nothing leaves its runs in the mode a thread is born in. The mode belongs to
+the graph for the same reason the schedule does: what an automation is allowed to do is versioned and
+reviewable beside what it does. There is nowhere else to put it either, because the run's thread is
+made by the run's first dispatch, so `quay mode` has nothing to point at until it is too late. Before
+this, a graph whose first step is "clone this" could not take that step: cloning needs the network,
+and a turn nobody is watching has nobody to approve it.
 
 ### Where it sits
 
