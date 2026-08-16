@@ -295,6 +295,19 @@ Feature: The operator sees the crew from the console
     Then the crew has 1 session
     And that thread's mode is "plan"
 
+  # Tab is the other way to answer a question like this one: cycling to a candidate rather than
+  # spelling it out. The wizard offers what a step can be answered with everywhere it asks one of a
+  # fixed set of things, not only here, but the mode is where it matters most, an operator choosing
+  # what a session may do without asking rather than typing "dangerous" correctly.
+  Scenario: Tab fills in the mode without typing it
+    When the operator answers the wizard with:
+      | session     |
+      | acme        |
+      | house-bills |
+    And the operator presses tab 3 times to choose the mode, then sends "hello"
+    Then the crew has 1 session
+    And that thread's mode is "bypassPermissions"
+
   Scenario: The wizard refuses a mode that is not one of the three
     When the operator answers the wizard with:
       | session     |
@@ -302,3 +315,16 @@ Feature: The operator sees the crew from the console
       | house-bills |
       | whatever    |
     Then the console says "not one of them"
+
+  # A listing where every row is one colour has to be read one row at a time, which is what a listing
+  # is for avoiding. Every row in every view carries a state, and a state was being drawn over the
+  # whole line, so the workspace, the project and the mode all arrived on screen in the same green.
+  #
+  # The state moved onto the status cell, which is where the sessions tool keeps it. This drives the
+  # real console over the real control plane, so what is asserted is the screen the operator has.
+  Scenario: A session's row is coloured cell by cell rather than all in its state
+    When the operator dispatches "hello" to the project
+    And the operator dispatches "a different subject" to a new thread
+    And the operator looks at the console
+    Then a session's row carries more than one colour
+    And the row says how the session is doing in its status cell

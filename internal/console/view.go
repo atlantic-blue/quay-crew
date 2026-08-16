@@ -595,9 +595,15 @@ func (m Model) rowLine(row Row, isSelected bool) string {
 	if isSelected {
 		return selectedRow.Render(m.fit(m.renderCells(row.Cells)))
 	}
-	// A row with a state of its own keeps it: a failed thread reads as failed before it reads as
-	// anything else, and that beats colouring its workspace.
-	if row.State != StateUnknown {
+	// A failed row is the one state loud enough to take the whole line: it wants attention, and it has
+	// to read as wanting it before it reads as anything else.
+	//
+	// Every other state goes in the status cell instead. Drawing a whole row in its state was costing
+	// the row every other colour it had, because a line rendered in one colour cannot carry any of the
+	// others: nine of the ten views set a state on every row, so nine listings came out flat and the
+	// tenth came out in two colours. The states that were doing that work are green, yellow and dim on
+	// one cell now, which is where the sessions tool puts them.
+	if row.State == StateFailed {
 		return styleFor(row.State).Render(m.fit(m.renderCells(row.Cells)))
 	}
 	return m.fit(m.renderColouredCells(row.Cells))
@@ -748,17 +754,41 @@ func (m Model) wizardPrompt() string {
 		return prompt.Render(" making ") + faint.Render(m.making.summary())
 	}
 	line := prompt.Render(" "+m.making.prompt()+": ") + m.making.shown() + prompt.Render("_")
-	if offers := m.making.offers(); len(offers) > 0 {
-		line += faint.Render("   " + strings.Join(offers, "  "))
+	offers := m.making.currentOffers()
+	if len(offers) > 0 {
+		line += "   " + m.wizardOffers(offers)
 	} else if m.making.picking() && m.making.loaded {
 		line += faint.Render("   nothing here yet")
 	}
+
+	hint := "enter accepts, esc cancels and makes nothing"
 	if m.making.guided {
 		// Honest about both differences: an empty answer moves on, and escape cannot unmake the
 		// stages already made.
-		return line + faint.Render("   enter accepts, empty skips, esc leaves the setup")
+		hint = "enter accepts, empty skips, esc leaves the setup"
 	}
-	return line + faint.Render("   enter accepts, esc cancels and makes nothing")
+	if len(offers) > 0 {
+		hint += ", tab cycles the options"
+	}
+	return line + faint.Render("   "+hint)
+}
+
+// wizardOffers draws what a step offers, with the one tab has landed on marked the way the command
+// bar's own choice picker marks its cursor. Nothing is marked until tab has been pressed once, so a
+// step nobody has cycled through still reads as a plain list of what is possible.
+func (m Model) wizardOffers(offers []string) string {
+	if !m.making.cycling {
+		return faint.Render(strings.Join(offers, "  "))
+	}
+	shown := make([]string, 0, len(offers))
+	for at, offer := range offers {
+		if at == m.making.cycleAt {
+			shown = append(shown, selectedRow.Render(" "+offer+" "))
+			continue
+		}
+		shown = append(shown, faint.Render(" "+offer+" "))
+	}
+	return strings.Join(shown, "")
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"

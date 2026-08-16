@@ -49,6 +49,26 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.KeyMsg{Type: tea.KeyEsc})
 	})
 
+	// Tab is the way onto an option without spelling it out. Three presses land on "dangerous" because
+	// the modes are offered narrowest first, so counting presses in the scenario is naming the same
+	// thing an operator would see land under the cursor.
+	sc.Step(`^the operator presses tab (\d+) times? to choose the mode, then sends "([^"]*)"$`,
+		func(ctx context.Context, times int, message string) error {
+			c := consoleFrom(ctx)
+			for i := 0; i < times; i++ {
+				if err := c.press(tea.KeyMsg{Type: tea.KeyTab}); err != nil {
+					return err
+				}
+			}
+			if err := c.press(tea.KeyMsg{Type: tea.KeyEnter}); err != nil {
+				return err
+			}
+			if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(message)}); err != nil {
+				return err
+			}
+			return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+		})
+
 	sc.Step(`^the crew has (\d+) workspaces?$`, func(ctx context.Context, want int) error {
 		listed, err := worldFrom(ctx).client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 		if err != nil {
