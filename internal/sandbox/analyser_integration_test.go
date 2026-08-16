@@ -26,12 +26,18 @@ import (
 // mount was right. It failed on the first message, inside a container, with nothing outside saying so.
 //
 // The image is the crew's own sandbox image rather than busybox, because what is being proved is that
-// this image can run this hook. QC_SANDBOX_IMAGE names it; without one there is nothing to prove
+// this image can run this hook. QC_TEST_SANDBOX_IMAGE names it; without one there is nothing to prove
 // against and the test says so rather than passing.
+//
+// Both tests in this file read QC_SANDBOX_IMAGE until 16 August 2026. Nothing sets that: it is the
+// control plane's own variable, and every other integration test here reads QC_TEST_SANDBOX_IMAGE,
+// which is the one the pipeline sets. So both skipped on every pipeline run since they were written,
+// and a skipped test reads exactly like a passing one. These two are the only check that the hook a
+// sandbox mounts actually runs inside it.
 func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
-	image := os.Getenv("QC_SANDBOX_IMAGE")
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
@@ -109,9 +115,9 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 // A stub on the path stands in for the model, so this needs no subscription and still proves the
 // variable arrives.
 func TestTheAnalysersChildKeepsTheSubscriptionToken(t *testing.T) {
-	image := os.Getenv("QC_SANDBOX_IMAGE")
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
