@@ -8,6 +8,12 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **The archived view shows a whole name.** The column was ten characters wide, from when it held
+  the first eight of an identifier. A name is a sentence, so "the electricity bill" read as "the
+  elect…". It takes what is left of the row now, as the live sessions view does, and the stamp beside
+  it is a fixed eight. Two columns that both take what is left are each given the whole of it, which
+  draws a row wider than the panel, so a test now holds every view to one flexible column.
+
 - **The archived view names its name column.** The cell holds what a thread is called. The header
   above it read `thread`, which is what an identifier is called. So an operator read the header,
   looked for eight characters of hexadecimal, and found a sentence. The live sessions view has said
