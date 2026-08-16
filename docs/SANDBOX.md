@@ -216,6 +216,34 @@ mounting exists to avoid, and the key is the most sensitive thing this crew carr
 half on the account you push to as a signing key, alongside the one your own machine signs with: a
 commit signed in a sandbox is signed by a different key from one signed on your laptop.
 
+### Signing with your own gpg key instead
+
+An ssh key in a sandbox signs your history under a second identity. If you already sign with gpg,
+mount that key and a session signs as you do everywhere else. Export it first:
+
+```
+gpg --armor --export-secret-keys <key id> > /tmp/signing-key.asc
+quay secret mount <workspace> GPG_SIGNING_KEY /tmp/signing-key.asc
+rm /tmp/signing-key.asc
+```
+
+The sandbox imports it at birth into a keyring in `/dev/shm`, which is memory, per container, and
+gone with the container. Nothing of the key reaches the disk.
+
+If the key has a passphrase, and most do, mount that too. Without it gpg has nothing to unlock the
+key with, and the commit fails saying so:
+
+```
+quay secret mount <workspace> GPG_SIGNING_KEY_PASSPHRASE ~/.quay/passphrase
+```
+
+gpg in a sandbox runs in batch, with no terminal to ask on. That is deliberate: a passphrase prompt
+in a task nobody is watching waits forever, and a failure with a message does not. The passphrase is
+mounted rather than set, on the same terms as the key, because it is worth what the key is worth.
+
+A workspace mounting both kinds of key signs with the gpg one. A workspace mounting neither does not
+sign, and nothing fails: signing is available in every workspace and required in none.
+
 ## Where a session's state lives
 
 A sandbox is a container, and a container's filesystem is thrown away with it. So the two directories

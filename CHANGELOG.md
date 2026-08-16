@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A session can sign with your own gpg key.** Signing worked and signed as somebody else. The crew
+  took one key, an ssh one, so a commit made in a sandbox carried a second identity on the same
+  history as the commits made on the operator's laptop, and the account had to know both.
+
+  A workspace can mount `GPG_SIGNING_KEY` now, the armoured export of the key you already sign with,
+  and the session signs as you do everywhere else. `GPG_SIGNING_KEY_PASSPHRASE` goes beside it for a
+  key that has one, which is most of them. Both are mounted, never set, on the same terms as the ssh
+  key: a private key in a container's environment is readable through `docker inspect` for the life
+  of that container, and the passphrase that unlocks the key is worth what the key is worth.
+
+  What ssh avoided and this brings back is the keyring and the passphrase prompt. The keyring is made
+  at sandbox birth in `/dev/shm`, which is memory, per container, and gone with it, so an imported key
+  never reaches the writable layer the daemon keeps on disk. The prompt is answered by not having
+  one: gpg runs in batch with no terminal, so a key whose passphrase the workspace did not mount fails
+  in a second with a message rather than hanging a task nobody is watching.
+
+  Nothing is enforced anywhere. A workspace mounting no key does not sign and nothing fails, which is
+  what it did before. A workspace mounting both kinds signs with the gpg one.
+
+  The image carries `gnupg` for this, because git makes an OpenPGP signature by running gpg, and the
+  earlier measurement of an image without it recorded exactly that: `cannot run gpg`. Two integration
+  tests make a real commit in a container the crew built, one with a passphrase and one without, and
+  check the signature carries the fingerprint of the key the workspace mounted rather than any key.
+
 - **The archived view shows a whole name.** The column was ten characters wide, from when it held
   the first eight of an identifier. A name is a sentence, so "the electricity bill" read as "the
   elect…". It takes what is left of the row now, as the live sessions view does, and the stamp beside
