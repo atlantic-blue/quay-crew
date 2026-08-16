@@ -300,8 +300,10 @@ if the rest waits:
    things that cannot be undone, so they are attached separately.
 7. A skills view in the console.
 8. Signing forwarded into the sandbox, per workspace, off by default. Done. A workspace that mounts
-   `GIT_SSH_SIGNING_KEY` gets sandboxes that sign, and one that does not is told not to. An ssh key
-   rather than a gpg one: one private key file, no agent, no keyring and no pinentry prompt to hang a
-   task nobody is watching. Mounted rather than set, so the key is a file in a memory backed directory
-   and never reaches the container's environment, where `docker inspect` would read it.
+   `GIT_SSH_SIGNING_KEY` or `GPG_SIGNING_KEY` gets sandboxes that sign, and one that mounts neither is
+   told not to. Mounted rather than set, so a key is a file in a memory backed directory and never
+   reaches the container's environment, where `docker inspect` would read it. The ssh key needs
+   nothing but the file. The gpg key buys one identity across the laptop and the sandbox, and costs a
+   keyring, which is made in memory, and a passphrase, which is mounted beside it because gpg in a
+   sandbox runs in batch and has no terminal to ask on.
 9. Propose and approve, so an agent can offer a skill and nothing it offers applies itself.
