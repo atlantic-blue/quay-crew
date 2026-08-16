@@ -31,12 +31,17 @@ import (
 // for the right machine. That is what this test now proves.
 //
 // The image is the crew's own sandbox image rather than busybox, because what is being proved is that
-// this image can run this hook. QC_SANDBOX_IMAGE names it; without one there is nothing to prove
+// this image can run this hook. QC_TEST_SANDBOX_IMAGE names it, which is the variable every other
+// integration test here reads and the one the pipeline sets; without one there is nothing to prove
 // against and the test says so rather than passing.
+//
+// It read QC_SANDBOX_IMAGE until 16 August 2026, which nothing sets, so both tests in this file
+// skipped on every pipeline run since they were written. A skipped test reads exactly like a passing
+// one, and these two are the only check that the hook a sandbox mounts actually runs in it.
 func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
-	image := os.Getenv("QC_SANDBOX_IMAGE")
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
@@ -91,9 +96,15 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 		t.Fatalf("the shipped analyser did not run inside the sandbox image: %v\nstderr: %s\nstdout: %s",
 			err, proc.Stderr(), out)
 	}
-	// A module or syntax failure prints a stack and exits non zero, which the Wait above catches. This
-	// catches the quieter version: node printing a complaint and still exiting 0.
-	for _, broken := range []string{"SyntaxError", "Cannot find module", "ERR_MODULE_NOT_FOUND"} {
+	// The hook exits 0 by design, so the exit code alone proves very little here. These are what a
+	// binary that cannot run says on the way out, and the first is the one that matters now: the entry
+	// point is built rather than committed, so a build for the wrong processor lands here and nowhere
+	// else. The node errors stay because they are what the same failure looked like before, and a hook
+	// written in something else would land on them again.
+	for _, broken := range []string{
+		"exec format error", "cannot execute binary file", "Permission denied",
+		"SyntaxError", "Cannot find module", "ERR_MODULE_NOT_FOUND",
+	} {
 		if strings.Contains(proc.Stderr(), broken) || strings.Contains(string(out), broken) {
 			t.Fatalf("the analyser failed to load inside the sandbox image: %s\n%s", proc.Stderr(), out)
 		}
@@ -114,9 +125,9 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 // A stub on the path stands in for the model, so this needs no subscription and still proves the
 // variable arrives.
 func TestTheAnalysersChildKeepsTheSubscriptionToken(t *testing.T) {
-	image := os.Getenv("QC_SANDBOX_IMAGE")
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
@@ -151,7 +162,7 @@ echo "goal: something"
 SH
 chmod +x /tmp/stub/claude
 echo '{"prompt":"fix the flaky test","cwd":"/home/agent/workspace"}' | PATH=/tmp/stub:$PATH ` +
-		sandbox.HooksPath + `/prompt-analyser/bin/hook.ts
+		sandbox.HooksPath + `/prompt-analyser/bin/hook
 echo "---seen---"
 cat /tmp/stub/seen`
 
