@@ -18,10 +18,9 @@ const makefile = "../Makefile"
 // carried on in a container from the build before, with a `quay` inside it that was older than the
 // crew or was not in the image at all. Nothing said so.
 //
-// This holds the target to naming every image the repository builds, so the next image added cannot
-// be left out of an upgrade the same way.
 // The list lives in one place, rebuild, so an operator has one command to type and this has one
-// place to check. Upgrade has to reach it, and it has to name everything.
+// place to check. Upgrade has to reach it, and rebuild has to name everything, so the next thing the
+// repository builds cannot be left out of an upgrade the same way.
 func TestUpgradeBuildsEverythingASessionRuns(t *testing.T) {
 	recipe := target(t, "upgrade")
 	if !strings.Contains(recipe, "rebuild") {
