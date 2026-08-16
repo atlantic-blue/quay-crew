@@ -1,0 +1,127 @@
+package controlplane_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
+)
+
+// What a graph's claim about its own work is checked against: the thread's working directory as the
+// crew keeps it, read without starting a container.
+func aCrewWithAThread(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
+	t.Helper()
+	dir := t.TempDir()
+	storage := sandbox.Storage{Dir: dir, Host: dir}
+	server := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(), Storage: storage,
+	})
+	ctx := context.Background()
+	workspace, err := server.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
+	if err != nil {
+		t.Fatalf("create the workspace: %v", err)
+	}
+	project, err := server.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
+	})
+	if err != nil {
+		t.Fatalf("create the project: %v", err)
+	}
+	dispatched, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: project.GetProject().GetId(), Text: "hello",
+	})
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	return server, storage, dispatched.GetId()
+}
+
+func TestAThreadHoldsWhatTheTurnLeftInIt(t *testing.T) {
+	server, storage, thread := aCrewWithAThread(t)
+	ctx := context.Background()
+
+	held, err := server.ThreadHolds(ctx, thread, "package.json")
+	if err != nil {
+		t.Fatalf("looking for a file that is not there: %v", err)
+	}
+	if held {
+		t.Fatal("a file nobody wrote was found")
+	}
+
+	room, err := server.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: thread})
+	if err != nil {
+		t.Fatalf("read the thread: %v", err)
+	}
+	dir, kept := storage.WorkingDir(sandbox.Config{
+		ID: thread, Workspace: room.GetThread().GetWorkspace(), Project: room.GetThread().GetProject(),
+	})
+	if !kept {
+		t.Fatal("the crew keeps no working directory for a thread it just ran a turn in")
+	}
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		t.Fatalf("make the working directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatalf("write the file: %v", err)
+	}
+
+	held, err = server.ThreadHolds(ctx, thread, "package.json")
+	if err != nil {
+		t.Fatalf("looking for a file that is there: %v", err)
+	}
+	if !held {
+		t.Fatal("a file in the thread's own working directory was not found")
+	}
+}
+
+// A question that cannot be answered is an error rather than a false, because the run stops on an
+// error and carries on past a false. A check that quietly passes when nothing could look is the same
+// false green as no check at all.
+func TestAThreadNobodyHasCannotSatisfyACheck(t *testing.T) {
+	server, _, _ := aCrewWithAThread(t)
+
+	if _, err := server.ThreadHolds(context.Background(), "no-such-thread", "package.json"); err == nil {
+		t.Fatal("a thread the crew does not have answered a question about its files")
+	}
+}
+
+func TestACrewKeepingNothingOnDiskSaysSoRatherThanAnsweringNo(t *testing.T) {
+	server := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+	ctx := context.Background()
+	workspace, err := server.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
+	if err != nil {
+		t.Fatalf("create the workspace: %v", err)
+	}
+	project, err := server.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
+	})
+	if err != nil {
+		t.Fatalf("create the project: %v", err)
+	}
+	dispatched, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: project.GetProject().GetId(), Text: "hello",
+	})
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+
+	_, err = server.ThreadHolds(ctx, dispatched.GetId(), "package.json")
+	if err == nil {
+		t.Fatal("a crew with nowhere to look answered a question about a thread's files")
+	}
+	if !strings.Contains(err.Error(), "working directory") {
+		t.Errorf("it says %q, want it to say there is nowhere to look", err)
+	}
+}
