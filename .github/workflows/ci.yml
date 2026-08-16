@@ -76,10 +76,14 @@ jobs:
 
       # testcontainers spins up Redpanda in Docker (available on the runner) to test the
       # messaging client and networking against a real broker.
+      # Verbose, so the log names every test that ran and every test that skipped. Without it a
+      # package reports one ok line, and a test that skipped itself because a variable was not set is
+      # indistinguishable from one that did the work. That is exactly how the two analyser tests in
+      # internal/sandbox went unrun for their whole life.
       - name: Integration tests
         env:
           QC_TEST_SANDBOX_IMAGE: quaycrew-sandbox-claude:local
-        run: go test -tags=integration -count=1 ./...
+        run: go test -tags=integration -count=1 -v ./...
 
   containers:
     runs-on: ubuntu-latest
