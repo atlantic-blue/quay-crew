@@ -96,6 +96,11 @@ type recordingRunner struct {
 	// way rather than infer it from how long a step took.
 	started chan struct{}
 	once    sync.Once
+	// usage, cost and usageReported are what each task reports having spent. The zero value reports
+	// nothing, which is what a backend that does not say looks like.
+	usage         sandbox.Usage
+	cost          float64
+	usageReported bool
 	// onTask runs before the double answers, so a scenario can be a model that did the work rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
 	onTask func()
@@ -156,6 +161,9 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 	return model.Response{
 		Reply:          "you said: " + req.Text,
 		ModelSessionID: fmt.Sprintf("conversation-%d", len(r.requests)),
+		Usage:          r.usage,
+		CostUSD:        r.cost,
+		UsageReported:  r.usageReported,
 	}, nil
 }
 
@@ -494,6 +502,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
 	initializeObservabilitySteps(sc)
+	initializeMetricsSteps(sc)
 	initializeTasksSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)

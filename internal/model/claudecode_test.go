@@ -121,6 +121,50 @@ func TestParseStream(t *testing.T) {
 	}
 }
 
+// The stream has carried these numbers the whole time and the crew read past them, so a turn's cost
+// was thrown away at the point it was known.
+func TestParseStreamKeepsWhatTheTurnSpent(t *testing.T) {
+	stream := strings.Join([]string{
+		`{"type":"system","session_id":"abc-123"}`,
+		`{"type":"result","result":"all done","session_id":"abc-123","total_cost_usd":0.0241,` +
+			`"usage":{"input_tokens":1200,"output_tokens":340,"cache_read_input_tokens":9000,` +
+			`"cache_creation_input_tokens":500}}`,
+	}, "\n")
+
+	resp, _, _, err := parseStream(strings.NewReader(stream))
+	if err != nil {
+		t.Fatalf("parseStream: %v", err)
+	}
+	if !resp.UsageReported {
+		t.Fatal("usage was not reported, so the turn reads as having spent nothing")
+	}
+	if resp.Usage.Input != 1200 || resp.Usage.Output != 340 {
+		t.Errorf("input and output are %d and %d, want 1200 and 340",
+			resp.Usage.Input, resp.Usage.Output)
+	}
+	if resp.Usage.CacheRead != 9000 || resp.Usage.CacheWritten != 500 {
+		t.Errorf("cache read and cache creation are %d and %d, want 9000 and 500",
+			resp.Usage.CacheRead, resp.Usage.CacheWritten)
+	}
+	if resp.CostUSD != 0.0241 {
+		t.Errorf("cost is %v, want 0.0241", resp.CostUSD)
+	}
+}
+
+// A stream that says nothing about usage must leave Reported false, so a caller can tell "spent
+// nothing" from "was never told".
+func TestParseStreamSaysWhenTheTurnNeverReportedWhatItSpent(t *testing.T) {
+	stream := `{"type":"result","result":"all done","session_id":"abc-123"}`
+
+	resp, _, _, err := parseStream(strings.NewReader(stream))
+	if err != nil {
+		t.Fatalf("parseStream: %v", err)
+	}
+	if resp.UsageReported {
+		t.Error("usage reads as reported on a stream that carried none, so an unknown becomes a zero")
+	}
+}
+
 func TestParseStreamFallsBackToAssistantText(t *testing.T) {
 	stream := strings.Join([]string{
 		`{"type":"system","session_id":"s1"}`,
