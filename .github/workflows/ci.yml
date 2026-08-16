@@ -257,13 +257,24 @@ jobs:
       - name: The tasks that just ran produced telemetry
         run: |
           set -euo pipefail
+          # The debug exporter spells its summary differently by verbosity: "ResourceSpans" only at
+          # detailed, "TracesExporter" and "resource spans" at normal. Match any of them rather than
+          # pinning the check to one verbosity setting.
+          marker='ResourceSpans|TracesExporter|resource spans'
           for i in $(seq 1 20); do
-            spans=$(docker compose -f deploy/docker-compose.yml logs otel-collector 2>&1 | grep -c "ResourceSpans" || true)
+            spans=$(docker compose -f deploy/docker-compose.yml logs otel-collector 2>&1 | grep -cE "$marker" || true)
             [ "$spans" -gt 0 ] && break
             sleep 3
           done
-          echo "collector received $spans span batches"
-          test "$spans" -gt 0
+          echo "collector logged $spans lines matching $marker"
+          if [ "$spans" -eq 0 ]; then
+            # Print what it did say, so the next person diagnoses this from one run rather than two.
+            echo "--- the collector's whole log ---"
+            docker compose -f deploy/docker-compose.yml logs otel-collector 2>&1 | tail -100
+            echo "--- what the control plane says about its endpoint ---"
+            docker compose -f deploy/docker-compose.yml logs controlplane 2>&1 | grep -iE "otel|telemetry|export" | tail -20 || true
+            exit 1
+          fi
 
       # Grafana reaching a store is the difference between a provisioned data source and a working
       # one, and the two look identical in the configuration file. Asked through Grafana's own proxy,
