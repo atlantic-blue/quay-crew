@@ -53,17 +53,18 @@ read, or run with `make features`.
 
 ## 15 August 2026
 
-- **The prompt analyser is Go, and it has tests.** It was about 690 lines of TypeScript across two
-  files with no test of any kind behind them, run by node through a shebang that stripped types at
-  load. Every rule it applied, which lines of a model's answer survive, what a half written config
-  file falls back to, which variables the child inherits, was readable only by reading the hook and
+- **The prompt analyser is Go, and it has tests.** It was 672 lines of TypeScript across two files
+  with no test of any kind behind them, run by node through a shebang that stripped types at load.
+  Every rule it applied, which lines of a model's answer survive, what a half written config file
+  falls back to, which variables the child inherits, was readable only by reading the hook and
   hoping.
 
-  It is one Go module now, its own, because a hook is a plugin rather than part of the crew: it does
-  not share the crew's dependencies and cannot import its internals. The standard library is all it
-  needs. 47 tests cover the parts that were bare before, and the two that carry the most weight were
-  mutation checked: dropping the guard from the child environment, and keeping every line of the
-  model's answer instead of the known fields, each turn the suite red.
+  It is 746 lines of Go across two files, so the hook itself is the same size, and it is its own
+  module because a hook is a plugin rather than part of the crew: it does not share the crew's
+  dependencies and cannot import its internals. The standard library is all it needs. 47 tests cover
+  the parts that were bare before, and the two that carry the most weight were mutation checked:
+  dropping the guard from the child environment, and keeping every line of the model's answer
+  instead of the known fields, each turn the suite red.
 
   The entry point is `bin/hook`, built by `make hooks` and by the image build rather than committed.
   A hook is an executable, an executable is a build artifact, and one committed binary runs on one
@@ -76,6 +77,13 @@ read, or run with `make features`.
   dropped, and a missing model, an unreadable payload and an empty message each end in exit 0 with
   the message still getting through.
 
+- **Tab cycles the wizard's options.** Every question the wizard asks that has a fixed set of
+  answers, what to make, which workspace, which mode a session may start in, took the answer as
+  typed text and offered the choices only as a hint beside it. Naming a session's mode meant
+  spelling "dangerous" correctly. Tab now fills in one candidate at a time, in the order they are
+  offered, and shift tab goes back; enter accepts whatever tab last landed on the same way it
+  accepts anything typed by hand. Typing still narrows the list the way it always has, and tab
+  cycles inside whatever is left.
 - **Go, in the sandbox image.** A session working on this repository could read the Go source and
   never run it: `make fmt`, `make lint` and `go test` all need the toolchain, and the sandbox
   carried none. Copied from the stage that already builds `quay` rather than downloaded again, so

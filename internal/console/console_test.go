@@ -2237,6 +2237,179 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 	}
 }
 
+// TestTabCyclesTheWizardsOptions: at a step that offers a fixed list, tab fills in one candidate at
+// a time in the order they are offered, and wraps back to the first after the last.
+func TestTabCyclesTheWizardsOptions(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	want := []string{"workspace", "project", "secret", "context", "session", "skill", "workspace"}
+	for i, next := range want {
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+		if model.making.typed != next {
+			t.Fatalf("tab press %d filled in %q, want %q", i+1, model.making.typed, next)
+		}
+	}
+}
+
+// TestShiftTabCyclesBackward: the reverse of tab, landing on the last candidate first so both keys
+// reach every option without one of them needing an extra press to get there.
+func TestShiftTabCyclesBackward(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	want := []string{"skill", "session", "context"}
+	for i, next := range want {
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyShiftTab})
+		if model.making.typed != next {
+			t.Fatalf("shift+tab press %d filled in %q, want %q", i+1, model.making.typed, next)
+		}
+	}
+}
+
+// TestTabAfterAPrefixOnlyCyclesWhatMatches: typing narrows the field the way it always has, and tab
+// cycles inside what is left, not the whole list.
+func TestTabAfterAPrefixOnlyCyclesWhatMatches(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	model = typeAll(t, model, "s")
+
+	want := []string{"secret", "session", "skill", "secret"}
+	for i, next := range want {
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+		if model.making.typed != next {
+			t.Fatalf("tab press %d after \"s\" filled in %q, want %q", i+1, model.making.typed, next)
+		}
+	}
+}
+
+// TestTypingAfterTabStopsCycling: tab fills in a whole candidate, but the field is still a typed
+// field underneath, and the next tab has to filter from what was actually typed by hand rather than
+// what the previous press left behind, otherwise one candidate is all any later press can ever offer.
+func TestTypingAfterTabStopsCycling(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	if model.making.typed != "workspace" {
+		t.Fatalf("the first tab filled in %q, want %q", model.making.typed, "workspace")
+	}
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyBackspace})
+	if model.making.typed != "workspac" || model.making.cycling {
+		t.Fatalf("backspace left typed %q, cycling %v, want the trimmed text and cycling stopped",
+			model.making.typed, model.making.cycling)
+	}
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	if model.making.typed != "workspace" {
+		t.Fatalf("tab after backspace filled in %q, want %q", model.making.typed, "workspace")
+	}
+}
+
+// TestTabPicksTheHighlightedCandidateOnEnter: tab is a way to answer without typing the whole word,
+// so what it lands on is what enter sends onward, the same as if it had been typed by hand.
+func TestTabPicksTheHighlightedCandidateOnEnter(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+
+	for i := 0; i < 5; i++ {
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	}
+	if model.making.typed != "session" {
+		t.Fatalf("five tab presses landed on %q, want %q", model.making.typed, "session")
+	}
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.err != nil {
+		t.Fatalf("accepting the highlighted candidate was refused: %v", model.err)
+	}
+	if model.making.kind != kindSession {
+		t.Fatalf("the wizard is making %v, want a session", model.making.kind)
+	}
+}
+
+// TestTabCyclesTheModeAskedForASession: the mode step is exactly where tab matters most, an operator
+// choosing what a session may do without asking rather than spelling out "dangerous" by hand.
+func TestTabCyclesTheModeAskedForASession(t *testing.T) {
+	client := &wizardClient{}
+	model, _ := answerAll(t, wizardAt(t, client), "session", "acme", "house-bills")
+	if model.making.step() != stepMode {
+		t.Fatalf("the wizard is at step %v, want it asking for a mode", model.making.step())
+	}
+
+	want := []string{"plan", "edits", "dangerous"}
+	for i, next := range want {
+		model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+		if model.making.typed != next {
+			t.Fatalf("tab press %d filled in %q, want %q", i+1, model.making.typed, next)
+		}
+	}
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.err != nil {
+		t.Fatalf("accepting the highlighted mode was refused: %v", model.err)
+	}
+	// The protocol's own spelling, not the word typed: PermissionBypass in internal/model/runner.go.
+	if model.making.mode != "bypassPermissions" {
+		t.Fatalf("the wizard carried mode %q, want %q", model.making.mode, "bypassPermissions")
+	}
+}
+
+// TestTabDoesNothingOnAFreeTextStep: a name, a secret, a message, and the like take whatever is
+// typed, and there is nothing to offer, so tab leaves the field exactly as it was rather than
+// swallowing the keystroke or inserting a literal tab character.
+func TestTabDoesNothingOnAFreeTextStep(t *testing.T) {
+	client := &wizardClient{}
+	model, _ := answer(t, wizardAt(t, client), "workspace")
+	if model.making.step() != stepName {
+		t.Fatalf("the wizard is at step %v, want it asking for a name", model.making.step())
+	}
+	model = typeAll(t, model, "acme-two")
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	if model.making.typed != "acme-two" {
+		t.Fatalf("tab on a free text step changed it to %q", model.making.typed)
+	}
+}
+
+// TestTheWizardStillOffersEveryCandidateAfterTab: tab fills the field with the candidate under the
+// cursor, but the cursor has to keep moving through every candidate afterwards, not just the one it
+// last landed on, so the view has the whole list to draw with that one marked.
+func TestTheWizardStillOffersEveryCandidateAfterTab(t *testing.T) {
+	client := &wizardClient{}
+	model := wizardAt(t, client)
+	// Six candidates plus both hints run past the console's usual test width, and truncating that
+	// line is a display concern of its own, not what this test is about.
+	model.width = 250
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+
+	offers := model.making.currentOffers()
+	want := []string{"workspace", "project", "secret", "context", "session", "skill"}
+	if !reflect.DeepEqual(offers, want) {
+		t.Fatalf("currentOffers() after one tab is %v, want the whole list %v", offers, want)
+	}
+	if !model.making.cycling || model.making.cycleAt != 0 {
+		t.Fatalf("cycling = %v, cycleAt = %d, want it cycling at the first candidate",
+			model.making.cycling, model.making.cycleAt)
+	}
+
+	view := model.View()
+	if !strings.Contains(view, "tab cycles the options") {
+		t.Fatalf("the view does not hint that tab cycles the options:\n%s", view)
+	}
+}
+
+// TestTheHintOnlyAppearsWhereThereIsSomethingToCycle: a free text step has nothing for tab to
+// offer, so the hint that names it stays off the line rather than promising a key that does nothing.
+func TestTheHintOnlyAppearsWhereThereIsSomethingToCycle(t *testing.T) {
+	client := &wizardClient{}
+	model, _ := answer(t, wizardAt(t, client), "workspace")
+	if model.making.step() != stepName {
+		t.Fatalf("the wizard is at step %v, want it asking for a name", model.making.step())
+	}
+
+	if view := model.View(); strings.Contains(view, "tab cycles the options") {
+		t.Fatalf("a free text step still hints that tab cycles the options:\n%s", view)
+	}
+}
+
 // TestTheHelpPanelScrollsRatherThanDroppingItsEnd. Everything the header used to carry is in there
 // now, so on a short window there is more of it than there is room. Cutting the end silently is how a
 // panel missing half its keys looks exactly like a complete one.
