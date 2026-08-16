@@ -108,12 +108,8 @@ func TestEveryExporterAPipelineNamesIsDefined(t *testing.T) {
 // what it was given. Every signal looked wired and none of it was stored anywhere.
 func TestEveryPipelineReachesSomethingThatKeepsIt(t *testing.T) {
 	config := readYAML[collectorConfig](t, "otel-collector.yaml")
-
-	// The logs pipeline is knowingly still debug only: the services log to their own stdout and
-	// nothing forwards it. Naming it here rather than skipping the check keeps the exception
-	// deliberate, so the day it is wired this test asks to be updated.
-	discardOnly := map[string]string{
-		"logs": "logs are structured JSON on each service's own stdout and nothing forwards them yet, see issue 12",
+	if len(config.Service.Pipelines) == 0 {
+		t.Fatal("the collector defines no pipelines, so this test proves nothing")
 	}
 
 	for pipeline, spec := range config.Service.Pipelines {
@@ -123,15 +119,97 @@ func TestEveryPipelineReachesSomethingThatKeepsIt(t *testing.T) {
 				keeps = true
 			}
 		}
-		if keeps {
-			continue
+		if !keeps {
+			t.Errorf("the %s pipeline exports to debug only, so what it receives is summarised into the collector's log and dropped",
+				pipeline)
 		}
-		if _, known := discardOnly[pipeline]; known {
-			continue
-		}
-		t.Errorf("the %s pipeline exports to debug only, so what it receives is summarised into the collector's log and dropped",
-			pipeline)
 	}
+}
+
+// TestEverySignalHasAStoreAndGrafanaCanOpenIt walks the whole path for each of the three signals,
+// because each hop is in a different file and no one of them shows the break. A signal that reaches
+// a store nothing is provisioned against is a signal nobody can look at.
+func TestEverySignalHasAStoreAndGrafanaCanOpenIt(t *testing.T) {
+	collector := readYAML[collectorConfig](t, "otel-collector.yaml")
+	grafana := readYAML[grafanaConfig](t, "grafana/datasources.yaml")
+
+	opens := map[string]bool{}
+	for _, datasource := range grafana.Datasources {
+		opens[hostOf(datasource.URL)] = true
+	}
+
+	// Metrics are the exception in shape rather than in coverage: the collector republishes them
+	// and Prometheus pulls, so the pipeline names no Prometheus host to walk to.
+	// TestPrometheusScrapesWhereTheCollectorPublishes covers that hop instead.
+	stores := map[string]string{"traces": "tempo", "logs": "loki"}
+	for signal, store := range stores {
+		pipeline, defined := collector.Service.Pipelines[signal]
+		if !defined {
+			t.Errorf("the collector has no %s pipeline at all", signal)
+			continue
+		}
+		var reaches bool
+		for _, name := range pipeline.Exporters {
+			if hostOf(collector.Exporters[name].Endpoint) == store {
+				reaches = true
+			}
+		}
+		if !reaches {
+			t.Errorf("the %s pipeline reaches no exporter pointed at %s, so %s are exported and never stored",
+				signal, store, signal)
+		}
+		if !opens[store] {
+			t.Errorf("grafana has no data source pointed at %s, so the %s it stores cannot be opened", store, signal)
+		}
+	}
+}
+
+// TestALogLineInLokiLinksToItsTrace is the whole reason the correlation id exists. Without the
+// derived field the id is a string an operator copies by hand, which is the same as not having it.
+func TestALogLineInLokiLinksToItsTrace(t *testing.T) {
+	contents, err := os.ReadFile("grafana/datasources.yaml")
+	if err != nil {
+		t.Fatalf("reading the grafana data sources: %v", err)
+	}
+	var grafana struct {
+		Datasources []struct {
+			Name     string `yaml:"name"`
+			UID      string `yaml:"uid"`
+			JSONData struct {
+				DerivedFields []struct {
+					MatcherRegex  string `yaml:"matcherRegex"`
+					DatasourceUID string `yaml:"datasourceUid"`
+				} `yaml:"derivedFields"`
+			} `yaml:"jsonData"`
+		} `yaml:"datasources"`
+	}
+	if err := yaml.Unmarshal(contents, &grafana); err != nil {
+		t.Fatalf("parsing the grafana data sources: %v", err)
+	}
+
+	uids := map[string]bool{}
+	for _, datasource := range grafana.Datasources {
+		uids[datasource.UID] = true
+	}
+
+	for _, datasource := range grafana.Datasources {
+		if datasource.UID != "loki" {
+			continue
+		}
+		for _, field := range datasource.JSONData.DerivedFields {
+			if field.MatcherRegex != "correlation_id" {
+				continue
+			}
+			if !uids[field.DatasourceUID] {
+				t.Errorf("the loki derived field links to the data source %q and nothing by that uid is provisioned",
+					field.DatasourceUID)
+			}
+			return
+		}
+		t.Error("the loki data source has no derived field on correlation_id, so a log line does not link to its trace")
+		return
+	}
+	t.Error("no loki data source is provisioned")
 }
 
 // TestEveryHostTheStackNamesIsAServiceInIt sweeps the three files that name another container by
@@ -232,27 +310,31 @@ func TestTheStackMountsEveryConfigFileItNames(t *testing.T) {
 	}
 }
 
-// hostOf is the host part of an endpoint, which the stack spells as host:port or as a url.
-func hostOf(endpoint string) string {
+// authorityOf is the host and port of an endpoint, which the stack spells three ways: bare
+// host:port, a url, and a url with a path on the end.
+func authorityOf(endpoint string) string {
 	trimmed := endpoint
 	if index := strings.Index(trimmed, "://"); index >= 0 {
 		trimmed = trimmed[index+3:]
 	}
-	trimmed = strings.TrimSuffix(trimmed, "/")
-	if host, _, err := net.SplitHostPort(trimmed); err == nil {
-		return host
+	if index := strings.Index(trimmed, "/"); index >= 0 {
+		trimmed = trimmed[:index]
 	}
 	return trimmed
 }
 
+// hostOf is the host part, or the whole authority when it names no port.
+func hostOf(endpoint string) string {
+	authority := authorityOf(endpoint)
+	if host, _, err := net.SplitHostPort(authority); err == nil {
+		return host
+	}
+	return authority
+}
+
 // portOf is the port part, or empty when the endpoint names none.
 func portOf(endpoint string) string {
-	trimmed := endpoint
-	if index := strings.Index(trimmed, "://"); index >= 0 {
-		trimmed = trimmed[index+3:]
-	}
-	trimmed = strings.TrimSuffix(trimmed, "/")
-	if _, port, err := net.SplitHostPort(trimmed); err == nil {
+	if _, port, err := net.SplitHostPort(authorityOf(endpoint)); err == nil {
 		return port
 	}
 	return ""

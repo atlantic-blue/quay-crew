@@ -127,6 +127,47 @@ func TestALineOutsideAnyCallCarriesNoCorrelationID(t *testing.T) {
 	}
 }
 
+// Exporting is a copy, not a move. A container's stdout is what an operator reads when the collector
+// is the broken thing, so it has to keep carrying every line after the export is switched on.
+func TestExportingKeepsWritingToStdout(t *testing.T) {
+	var out bytes.Buffer
+	logger := logging.AlsoExport("controlplane", &out)
+	ctx, traceID := underACall(t)
+
+	logger.WarnContext(ctx, "a turn could not be exported", "thread", "3cb04bf5")
+
+	read := lines(t, &out)
+	if len(read) != 1 {
+		t.Fatalf("wanted one line on stdout, got %d", len(read))
+	}
+	if got := read[0][logging.CorrelationKey]; got != traceID {
+		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
+	}
+	if got := read[0]["thread"]; got != "3cb04bf5" {
+		t.Errorf("thread is %v, wanted 3cb04bf5", got)
+	}
+	if got := read[0][logging.ServiceKey]; got != "controlplane" {
+		t.Errorf("service is %v, wanted controlplane", got)
+	}
+}
+
+// The exporting logger is the default one too, since almost everything the crew logs goes through
+// the package level slog rather than through a logger it was handed.
+func TestExportingLoggerBecomesTheDefault(t *testing.T) {
+	var out bytes.Buffer
+	logging.AlsoExport("gateway", &out)
+
+	slog.Info("service started")
+
+	read := lines(t, &out)
+	if len(read) != 1 {
+		t.Fatalf("wanted one line, got %d", len(read))
+	}
+	if got := read[0][logging.ServiceKey]; got != "gateway" {
+		t.Errorf("service is %v, wanted gateway", got)
+	}
+}
+
 func TestCorrelationIDIsEmptyWithoutASpan(t *testing.T) {
 	if got := logging.CorrelationID(context.Background()); got != "" {
 		t.Errorf("correlation id is %q on a bare context, wanted empty", got)

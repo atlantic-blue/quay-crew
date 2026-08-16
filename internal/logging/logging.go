@@ -17,9 +17,11 @@ package logging
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -32,10 +34,53 @@ const (
 
 // Init builds the crew's logger, writing JSON to out, and makes it the default.
 func Init(service string, out io.Writer) *slog.Logger {
-	handler := correlated{slog.NewJSONHandler(out, nil)}
+	return install(service, correlated{slog.NewJSONHandler(out, nil)})
+}
+
+// AlsoExport sends every line to the OpenTelemetry log pipeline as well as to out, and returns the
+// new default logger.
+//
+// A copy rather than a move. A container's stdout is the signal that works when everything else is
+// broken, including the collector, so it keeps carrying every line whatever happens downstream. Call
+// this after telemetry.Init, because the bridge reads the global logger provider that call installs.
+func AlsoExport(service string, out io.Writer) *slog.Logger {
+	return install(service, both{
+		correlated{slog.NewJSONHandler(out, nil)},
+		// The bridge stamps the trace id onto the record itself from the context, so a line in Loki
+		// carries the correlation twice: once as our own field and once where Grafana looks for it.
+		otelslog.NewHandler(service),
+	})
+}
+
+func install(service string, handler slog.Handler) *slog.Logger {
 	logger := slog.New(handler).With(ServiceKey, service)
 	slog.SetDefault(logger)
 	return logger
+}
+
+// both writes each record to two handlers. A failure in one is returned and does not stop the other,
+// because the whole point of keeping stdout is that it survives the exporter being unreachable.
+type both struct {
+	first  slog.Handler
+	second slog.Handler
+}
+
+func (b both) Enabled(ctx context.Context, level slog.Level) bool {
+	return b.first.Enabled(ctx, level) || b.second.Enabled(ctx, level)
+}
+
+func (b both) Handle(ctx context.Context, record slog.Record) error {
+	firstErr := b.first.Handle(ctx, record.Clone())
+	secondErr := b.second.Handle(ctx, record)
+	return errors.Join(firstErr, secondErr)
+}
+
+func (b both) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return both{b.first.WithAttrs(attrs), b.second.WithAttrs(attrs)}
+}
+
+func (b both) WithGroup(name string) slog.Handler {
+	return both{b.first.WithGroup(name), b.second.WithGroup(name)}
 }
 
 // CorrelationID is the id of the call ctx is under, or empty when ctx is under no recorded call.

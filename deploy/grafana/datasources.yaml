@@ -15,6 +15,13 @@ datasources:
     access: proxy
     url: http://tempo:3200
     isDefault: true
+    jsonData:
+      # The other direction of the same join: from a span, every log line that call wrote.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
 
   - name: Prometheus
     type: prometheus
@@ -22,11 +29,19 @@ datasources:
     access: proxy
     url: http://prometheus:9090
 
-  # Nothing reaches Loki yet: the services log structured JSON to their own stdout and no collector
-  # pipeline forwards it. The data source is provisioned anyway so the join is one piece of work
-  # rather than two, and so an empty Loki reads as empty rather than as missing.
   - name: Loki
     type: loki
     uid: loki
     access: proxy
     url: http://loki:3100
+    jsonData:
+      # Every line the crew writes under a call carries the trace id, so a line in Loki becomes a
+      # link to the trace that produced it. This is what the correlation id was for: without the
+      # link the id is a string somebody copies by hand.
+      derivedFields:
+        - name: TraceID
+          matcherType: label
+          matcherRegex: correlation_id
+          datasourceUid: tempo
+          url: "${__value.raw}"
+          urlDisplayLabel: "Open the trace"

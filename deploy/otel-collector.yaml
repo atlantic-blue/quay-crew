@@ -2,12 +2,12 @@
 # to the service that stores it, keeping the debug exporter beside them so the collector's own log
 # stays the fastest way to tell whether anything is arriving at all.
 #
-# Tempo and Prometheus are in the compose file's "observability" profile and the collector is not, so
-# a plain `make up` runs this with nowhere to forward to. That is deliberate: the crew is usable
-# without four extra containers on a laptop. The queue and the retry are therefore turned off on the
-# Tempo exporter, so a batch that cannot be delivered is dropped with one line rather than being held
-# and retried forever. Start the profile with `make up-observability` and delivery starts working
-# with no change here.
+# Tempo, Loki and Prometheus are in the compose file's "observability" profile and the collector is
+# not, so a plain `make up` runs this with nowhere to forward to. That is deliberate: the crew is
+# usable without four extra containers on a laptop. The queue and the retry are therefore turned off
+# on the exporters that leave this machine, so a batch that cannot be delivered is dropped with one
+# line rather than being held and retried forever. Start the profile with `make up-observability` and
+# delivery starts working with no change here.
 receivers:
   otlp:
     protocols:
@@ -32,6 +32,15 @@ exporters:
   # address it listens on. deploy/prometheus.yaml is the other half.
   prometheus:
     endpoint: 0.0.0.0:8889
+  # Loki takes OTLP directly on this path, so there is no Loki specific exporter and no second
+  # format to keep working. Dropped rather than retried for the same reason as Tempo above: with the
+  # observability profile off there is nothing here to deliver to.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    retry_on_failure:
+      enabled: false
+    sending_queue:
+      enabled: false
 
 service:
   pipelines:
@@ -43,9 +52,7 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [prometheus, debug]
-    # Logs are structured JSON on each service's own stdout and do not travel this way yet, so this
-    # pipeline carries nothing. Getting them into Loki is the next piece of #12.
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [otlphttp/loki, debug]
