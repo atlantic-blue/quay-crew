@@ -696,17 +696,9 @@ func TestEnterStillDrillsWhereThereIsSomewhereToGo(t *testing.T) {
 // sessionsAt builds a sessions view with one session listed and the cursor on it.
 func sessionsAt(t *testing.T, client *fakeClient) Model {
 	t.Helper()
-	return sessionsAtState(t, client, StateReady, "idle")
-}
-
-// sessionsAtState is the same view with the session in a named state, for the keys that act one way on
-// a live session and another on a stopped one.
-func sessionsAtState(t *testing.T, client *fakeClient, state State, status string) Model {
-	t.Helper()
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model,
-		Row{ID: "s1", Label: "d754610f", State: state,
-			Cells: []string{"5d013d07", "acme", "bills", "d754610f", status, "1m"}}))
+		Row{ID: "s1", Label: "d754610f", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "1m"}}))
 	return model
 }
 
@@ -850,14 +842,13 @@ func TestRNoLongerRestarts(t *testing.T) {
 	}
 }
 
-// TestRestartingAStoppedSessionActsAtOnce: a stopped session has no task and nothing attached to it, so
-// there is nothing to be careful about and the question would only be in the way.
-func TestRestartingAStoppedSessionActsAtOnce(t *testing.T) {
+// TestRestartBringsASessionBackWithoutAsking: restarting is not destructive, so it acts at once.
+func TestRestartBringsASessionBackWithoutAsking(t *testing.T) {
 	client := &fakeClient{}
-	model, cmd := update(t, sessionsAtState(t, client, StateStopped, "stopped"), runes("R"))
+	model, cmd := update(t, sessionsAt(t, client), runes("R"))
 
 	if model.mode != modeBrowse {
-		t.Fatalf("mode = %v, want restarting a stopped session to act at once", model.mode)
+		t.Fatalf("mode = %v, want restarting to act at once", model.mode)
 	}
 	if cmd == nil {
 		t.Fatal("restart produced no command")
@@ -870,112 +861,11 @@ func TestRestartingAStoppedSessionActsAtOnce(t *testing.T) {
 	}
 }
 
-// TestRestartingALiveSessionAsksFirst: the container goes, and with it the task the session is in and
-// the conversation attached to it, so this one is worth a question.
-func TestRestartingALiveSessionAsksFirst(t *testing.T) {
-	client := &fakeClient{}
-	model, cmd := update(t, sessionsAtState(t, client, StateBusy, "running"), runes("R"))
-
-	if model.mode != modeConfirm {
-		t.Fatalf("mode = %v, want the console waiting for a yes", model.mode)
-	}
-	if cmd != nil {
-		t.Fatal("restart produced a command, want nothing to happen until yes")
-	}
-	if len(client.restarted) != 0 {
-		t.Fatalf("restarted = %v, want nothing restarted yet", client.restarted)
-	}
-	if view := model.View(); !strings.Contains(view, "restart session d754610f?") {
-		t.Fatalf("the console does not name what it is about to restart:\n%s", view)
-	}
-
-	model, cmd = update(t, model, runes("y"))
-	if model.mode != modeBrowse {
-		t.Fatalf("mode = %v, want the console back on the list", model.mode)
-	}
-	if cmd == nil {
-		t.Fatal("yes produced no command")
-	}
-	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
-		t.Fatalf("restart returned %#v, want a clean actionDoneMsg", cmd())
-	}
-	if len(client.restarted) != 1 || client.restarted[0] != "s1" {
-		t.Fatalf("restarted = %v, want [s1]", client.restarted)
-	}
-}
-
-// TestAnythingButYesLeavesALiveSessionAlone: the cost of an accidental cancel is one more keypress, and
-// the cost of an accidental yes is the task the session is in.
-func TestAnythingButYesLeavesALiveSessionAlone(t *testing.T) {
-	client := &fakeClient{}
-	model, _ := update(t, sessionsAtState(t, client, StateBusy, "running"), runes("R"))
-	model, cmd := update(t, model, runes("n"))
-
-	if model.mode != modeBrowse {
-		t.Fatalf("mode = %v, want the console back on the list", model.mode)
-	}
-	if cmd != nil {
-		t.Fatal("cancelling produced a command, want nothing to have happened")
-	}
-	if len(client.restarted) != 0 {
-		t.Fatalf("restarted = %v, want nothing restarted", client.restarted)
-	}
-}
-
-// TestTheQuestionFollowsTheListedState drives the key off rows the crew actually returned. A row
-// built by hand says nothing about which sessions get the question: the state comes off the listing,
-// and the listing is what the operator is looking at when they press the key.
-func TestTheQuestionFollowsTheListedState(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{
-		{Id: "s1", Workspace: "acme", Handle: "t1", Status: "stopped"},
-		{Id: "s2", Workspace: "acme", Handle: "t2", Status: "running"},
-	}}
-	rows, err := Sessions(client).List(context.Background(), "")
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	model := newTestModel(t, Sessions(client))
-	model, _ = update(t, model, rowsFor(model, rows...))
-
-	if selected, _ := model.selectedRowValue(); selected.ID != "s1" {
-		t.Fatalf("the cursor is on %q, want the stopped session", selected.ID)
-	}
-	acted, cmd := update(t, model, runes("R"))
-	if acted.mode != modeBrowse || cmd == nil {
-		t.Fatalf("mode = %v, want the stopped session restarted at once", acted.mode)
-	}
-
-	moved, _ := update(t, model, runes("j"))
-	if selected, _ := moved.selectedRowValue(); selected.ID != "s2" {
-		t.Fatalf("the cursor is on %q, want the running session", selected.ID)
-	}
-	asked, cmd := update(t, moved, runes("R"))
-	if asked.mode != modeConfirm || cmd != nil {
-		t.Fatalf("mode = %v, want the console asking about the running session", asked.mode)
-	}
-}
-
-// TestCtrlRRestartsToo: the same key by the other spelling, because that is what a terminal reports
-// for the chord and it is the one somebody reaches for.
-func TestCtrlRRestartsToo(t *testing.T) {
-	client := &fakeClient{}
-	_, cmd := update(t, sessionsAtState(t, client, StateStopped, "stopped"), tea.KeyMsg{Type: tea.KeyCtrlR})
-	if cmd == nil {
-		t.Fatal("ctrl+r produced no command")
-	}
-	if msg, isDone := cmd().(actionDoneMsg); !isDone || msg.err != nil {
-		t.Fatalf("restart returned %#v, want a clean actionDoneMsg", cmd())
-	}
-	if len(client.restarted) != 1 || client.restarted[0] != "s1" {
-		t.Fatalf("restarted = %v, want [s1]", client.restarted)
-	}
-}
-
-// TestRestartShowsWhatTheCrewRefused: the control plane still refuses an archived session, and its
-// reason is what the operator has to see.
-func TestRestartShowsWhatTheCrewRefused(t *testing.T) {
-	client := &fakeClient{restartErr: fmt.Errorf("session d754610f is archived: restore it first")}
-	_, cmd := update(t, sessionsAtState(t, client, StateStopped, "stopped"), runes("R"))
+// TestRestartingARunningSessionShowsTheRefusal: the control plane decides whether there is anything to
+// restart, and its reason is what the operator has to see.
+func TestRestartingARunningSessionShowsTheRefusal(t *testing.T) {
+	client := &fakeClient{restartErr: fmt.Errorf("session s1 is idle, not stopped, so there is nothing to restart")}
+	_, cmd := update(t, sessionsAt(t, client), runes("R"))
 	if cmd == nil {
 		t.Fatal("restart produced no command")
 	}
@@ -983,7 +873,7 @@ func TestRestartShowsWhatTheCrewRefused(t *testing.T) {
 	if !isDone || msg.err == nil {
 		t.Fatalf("restart returned %#v, want the refusal", cmd())
 	}
-	if !strings.Contains(msg.err.Error(), "restore it first") {
+	if !strings.Contains(msg.err.Error(), "nothing to restart") {
 		t.Fatalf("the reason did not reach the operator: %v", msg.err)
 	}
 }
@@ -1063,6 +953,78 @@ func TestRestoreBringsASessionBack(t *testing.T) {
 	}
 	if len(client.restored) != 1 || client.restored[0] != "s1" {
 		t.Fatalf("restored = %v, want [s1]", client.restored)
+	}
+}
+
+// TestTheArchivedViewNamesTheColumnThatHoldsTheName ties the header to what the cell carries. The
+// cell holds what a session is called, so a header reading "session" describes it as an identifier and
+// sends the operator looking for hexadecimal that is not there.
+func TestTheArchivedViewNamesTheColumnThatHoldsTheName(t *testing.T) {
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{
+		Id: "away", Workspace: "acme", Handle: "t2", Status: "stopped",
+		Label:      "the electricity bill",
+		ArchivedAt: timestamppb.Now(),
+	}}}
+
+	view := Archived(client)
+	rows, err := view.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing archived: %v", err)
+	}
+
+	// Found by content rather than by index, so a column added before it does not quietly move what
+	// this is about.
+	at := -1
+	for index, cell := range rows[0].Cells {
+		if cell == "the electricity bill" {
+			at = index
+		}
+	}
+	if at < 0 {
+		t.Fatalf("no cell holds what the session is called: %v", rows[0].Cells)
+	}
+	if title := view.Columns[at].Title; title != "name" {
+		t.Fatalf("the column holding the name is headed %q, want name", title)
+	}
+}
+
+// TestTheArchivedViewShowsAWholeName: the column was ten characters wide, from when it held the
+// first eight of an identifier. A name is a sentence, and ten characters of one is not a name.
+func TestTheArchivedViewShowsAWholeName(t *testing.T) {
+	model := newTestModel(t, Archived(&fakeClient{}))
+	// Wider than the default window, so what is being measured is the column rather than the room.
+	model.width = 200
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Label: "the electricity bill", Cells: []string{
+		"5d013d07", "acme", "bills", "the electricity bill", "stopped", "edits", "", "", "", "2h"}}))
+
+	line := visibleText(lineWith(t, model.View(), "5d013d07"))
+	if !strings.Contains(line, "the electricity bill") {
+		t.Fatalf("the archived row cuts the name it is showing:\n%q", line)
+	}
+}
+
+// TestEveryViewHasOneFlexibleColumn guards the whole class rather than the one view that broke it.
+// A width of zero takes what is left over, and the layout gives that whole amount to each column
+// that asks for it, so a second one draws a row wider than the panel it sits in.
+func TestEveryViewHasOneFlexibleColumn(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, name := range registry.Names() {
+		view, found := registry.Get(name)
+		if !found {
+			t.Fatalf("the registry lists %q and cannot get it", name)
+		}
+		flexible := make([]string, 0, 1)
+		for _, column := range view.Columns {
+			if column.Width == 0 {
+				flexible = append(flexible, column.Title)
+			}
+		}
+		if len(flexible) > 1 {
+			t.Errorf("the %s view flexes %v, and each is given the whole of what is left", name, flexible)
+		}
 	}
 }
 

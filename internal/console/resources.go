@@ -375,16 +375,16 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			}
 			rows := make([]Row, 0, len(resp.GetTasks()))
 			for _, task := range resp.GetTasks() {
-				rows = append(rows, taskRow(task))
+				rows = append(rows, turnRow(task))
 			}
 			return rows, nil
 		},
 	}
 }
 
-// taskRow is one exchange as a listing row. A failed task shows why it failed where the reply would
+// turnRow is one exchange as a listing row. A failed task shows why it failed where the reply would
 // have been, because that is the answer to what happened.
-func taskRow(task *quaycrewv1.Task) Row {
+func turnRow(task *quaycrewv1.Task) Row {
 	answered := oneLine(task.GetReply())
 	state := StateReady
 	if task.GetStatus() == "failed" {
@@ -426,13 +426,16 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "workspace", Width: 16, Colour: colourOfName},
 			{Title: "project", Width: 20, Colour: colourOfName},
-			{Title: "session", Width: 10, Colour: colourOfName},
+			// The flexible column, as it is in the live view: it holds a name, and a name cut to ten
+			// characters is not a name. The stamp beside it is fixed instead, because two columns
+			// that both flex are each given the whole of what is left and the row runs past the panel.
+			{Title: "name", Width: 0, Colour: colourOfName},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
-			{Title: "archived", Width: 0, Colour: dim},
+			{Title: "archived", Width: 8, Colour: dim},
 		},
 		SortBy: 3,
 		List:   sessionLister(client, putAway),
@@ -449,8 +452,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				},
 			},
 			{
-				// The same key the live view uses, because an archived thread is the one whose
-				// history somebody actually comes looking for: a flow run archives its own thread
+				// The same key the live view uses, because an archived session is the one whose
+				// history somebody actually comes looking for: a flow run archives its own session
 				// when it ends, and what the run did is in there. The history is read from the
 				// store, so it needs no container and no restore.
 				Key:     "l",
@@ -606,18 +609,13 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			},
 		},
 		{
-			// Restarting replaces the container the session is in, whatever state it is in. It asks on
-			// a session that is not stopped, because the task it is in and the conversation attached to
-			// it go with the old container. A stopped session has neither, so that one acts at once.
+			// Not destructive, so no question. Restarting a session that is not stopped is refused by
+			// the control plane, and that refusal is what the operator sees.
 			//
 			// Uppercase, beside Archive: the uppercase letters act on the session, and `r` refreshes
-			// the view, which is the key anybody reaches for far more often. ctrl+r does the same, for
-			// the fingers that reach for it.
-			Key:     "R",
-			Also:    []string{"ctrl+r"},
-			Label:   "Restart",
-			Confirm: true,
-			Costs:   func(row Row) bool { return row.State != StateStopped },
+			// the view, which is the key anybody reaches for far more often.
+			Key:   "R",
+			Label: "Restart",
 			Run: func(ctx context.Context, row Row) error {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")
