@@ -113,10 +113,10 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		return fmt.Errorf("no span named %q was recorded; the crew recorded %v", name, endedSpanNames())
 	})
 
-	sc.Step(`^the crew says the turn could not be exported$`, func(ctx context.Context) error {
+	sc.Step(`^the crew says the task could not be exported$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		// The export happens inside a turn, which runs detached from the call that started it, so
-		// asserting before the turn lands would assert on a line not written yet.
+		// The export happens inside a task, which runs detached from the call that started it, so
+		// asserting before the task lands would assert on a line not written yet.
 		if err := w.settled(ctx); err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 				return nil
 			}
 		}
-		return fmt.Errorf("the crew never said the turn could not be exported; it wrote %d lines", len(lines))
+		return fmt.Errorf("the crew never said the task could not be exported; it wrote %d lines", len(lines))
 	})
 
 	sc.Step(`^that line carries the correlation id of the call it happened under$`, func(ctx context.Context) error {
