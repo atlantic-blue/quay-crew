@@ -113,6 +113,30 @@ Feature: Sessions run in isolated sandboxes
     Then the session is reported as stopped
     And the session's sandbox has been closed
 
+  # Archiving takes the container away while the task is still in it, so the task lands on a thread
+  # that is already put away. Recording what it came to brought the row back to idle, or marked it
+  # failed, and the archived listing then said a thread nobody can reach is working.
+  #
+  # The task is held open here rather than timed, because what is being specified is what happens
+  # while one runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: A task that lands after its thread was archived leaves it stopped
+    Given the model takes longer over a turn than anybody will wait
+    And a task dispatched without waiting for it
+    And a turn is under way
+    When the operator archives the session
+    And the model finishes the turn
+    Then the session is reported as stopped
+    And the workspace has 1 archived sessions
+
+  # A handle is matched whether the thread is put away or not, so this used to start a container for
+  # a thread that is not in the listing.
+  Scenario: An archived thread cannot be dispatched to
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator dispatches "carry on" to the same thread
+    Then the control plane refuses it as the wrong state
+    And the session is reported as stopped
+
   Scenario: A restored thread is back in the default listing with its conversation
     Given a session started by dispatching "remember this"
     When the operator archives the session

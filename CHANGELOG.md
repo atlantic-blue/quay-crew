@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **An archived thread runs nothing.** Archiving stops a thread and takes its container away. The
+  task that was running in it landed a moment later, and the crew wrote down what that task came to,
+  so the row went back to idle or to failed. The archived listing then showed a thread that is
+  working, and nobody can reach it.
+
+  An archived thread keeps its status now. It still keeps its conversation handle, so restoring it
+  comes back to the conversation it was in.
+
+  A dispatch to an archived thread is refused too, and says to restore it first. A handle is matched
+  whether the thread is put away or not, so `quay dispatch` to an archived thread started a container
+  for a thread that is not in the listing.
+
 - **Restart works on a live thread, and asks first.** The crew refused to restart a thread unless it
   was already stopped. So the key you press when a container is wrong did nothing, and you had to
   stop the thread yourself before the key would work.
