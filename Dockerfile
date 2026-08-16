@@ -14,6 +14,16 @@ COPY . .
 ARG SERVICE=gateway
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/service ./cmd/${SERVICE}
 
+# The hooks this build ships, built here so /hooks below carries an executable.
+#
+# A hook reaches a sandbox as files and the runtime runs one of them by path, so the entry point has
+# to exist before anything reads the directory. Each hook is its own module, which is what makes it a
+# plugin rather than part of the crew, so this builds each one where it stands. Static, because the
+# result is mounted into whatever image a session runs rather than into this one.
+RUN for dir in $(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \
+        CGO_ENABLED=0 GOOS=linux go build -C "$dir" -trimpath -o bin/hook . || exit 1; \
+    done
+
 # The Docker client is a static binary, so it runs as is on distroless static.
 FROM docker:28-cli AS dockercli
 
