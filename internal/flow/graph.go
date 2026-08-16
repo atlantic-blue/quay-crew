@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -66,7 +67,15 @@ type Graph struct {
 	Version int
 	// Every is how often the crew starts a run of this graph on its own. Zero means never: the
 	// graph runs when a person asks for it, which is every graph until one says otherwise.
-	Every  time.Duration
+	Every time.Duration
+	// Mode is what the run's turns may do, as the model spells it. Empty leaves the run in the mode
+	// every thread is born in.
+	//
+	// It belongs to the graph rather than to the operator starting the run, for the same reason the
+	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
+	// does. There is nowhere else to put it either, because the run's thread does not exist until
+	// the run starts, so `quay mode` has nothing to point at.
+	Mode   string
 	Limits Limits
 	Nodes  map[string]Node
 	Edges  []Edge
@@ -103,6 +112,7 @@ type Edge struct {
 type graphFile struct {
 	Name    string `yaml:"name"`
 	Version int    `yaml:"version"`
+	Mode    string `yaml:"mode"`
 	Limits  struct {
 		Transitions *int  `yaml:"transitions"`
 		Tokens      int64 `yaml:"tokens"`
@@ -160,7 +170,19 @@ func Parse(source []byte) (Graph, error) {
 		every = parsed
 	}
 
-	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Limits: limits, Nodes: map[string]Node{}}
+	// Refused here rather than at the first dispatch, which is the moment a run has already been
+	// made, has a thread of its own, and is about to spend money to find out the word was wrong.
+	mode := ""
+	if declared := strings.TrimSpace(file.Mode); declared != "" {
+		named, known := model.PermissionModeNamed(declared)
+		if !known {
+			return Graph{}, fmt.Errorf("flow: graph %s runs in mode %q, which is not a mode; use %s",
+				file.Name, declared, strings.Join(model.PermissionModesOffered(), ", "))
+		}
+		mode = named
+	}
+
+	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Mode: mode, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
 		var waitFor time.Duration
 		if name == DoneNode {

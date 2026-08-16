@@ -389,6 +389,33 @@ graph and a short run identifier, `fix-red-pull-request-a1b2c3d4`. The console t
 run is doing without waiting for labels; labels become the thing that groups runs rather than the
 thing that names them.
 
+### What a run's thread starts with
+
+A run's thread is new, so its working directory is empty. Nothing another thread did is in it, and
+nothing a previous run of the same graph did is either. This is the assumption a graph author makes
+without noticing, so it is written down here: a run starts in an empty room.
+
+Two directories are mounted into it, and only one of them survives the run:
+
+- `/home/agent/workspace` is this thread's own working directory. It is empty on the run's first
+  turn and it goes away with the thread.
+- `/home/agent/shared` is the workspace's volume, shared by every session in the workspace. What a
+  run writes there is there for the next run, and for every thread beside it.
+
+So a graph that needs a repository puts it in the shared volume. A graph that clones into the
+working directory clones on every run, pays for the clone every run, and cannot be relied on to hold
+the same state twice. The convention that makes one clone serve every session, a clone in the volume
+and a worktree per session, is
+[#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is not built.
+
+**A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version, and
+a graph that declares nothing leaves its runs in the mode a thread is born in. The mode belongs to
+the graph for the same reason the schedule does: what an automation is allowed to do is versioned and
+reviewable beside what it does. There is nowhere else to put it either, because the run's thread is
+made by the run's first dispatch, so `quay mode` has nothing to point at until it is too late. Before
+this, a graph whose first step is "clone this" could not take that step: cloning needs the network,
+and a turn nobody is watching has nobody to approve it.
+
 ### Where it sits
 
 `internal/flow` is a state machine over its own tables (migration 0014: `flow_graphs`, `flow_runs`,

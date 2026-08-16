@@ -11,6 +11,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 )
@@ -59,6 +60,21 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		}
 		if !strings.Contains(w.lastErr.Error(), "nowhere") {
 			return fmt.Errorf("the refusal says %q, want it to name the undeclared node", w.lastErr)
+		}
+		return nil
+	})
+
+	// A refusal that only says the word is wrong leaves the author guessing. The modes are three
+	// words nobody remembers, so the refusal carries them.
+	sc.Step(`^the refusal names the modes there are$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("nothing was refused")
+		}
+		for _, offered := range model.PermissionModesOffered() {
+			if !strings.Contains(w.lastErr.Error(), offered) {
+				return fmt.Errorf("the refusal says %q, want it to offer %q", w.lastErr, offered)
+			}
 		}
 		return nil
 	})

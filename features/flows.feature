@@ -272,6 +272,43 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "fix-red" in the project
     Then the flow run is pinned to version 2
 
+  # A run's thread is made by its first dispatch, so there is nothing to set a mode on before the run
+  # starts and `quay mode` has nothing to point at. Every automation therefore ran in the mode a
+  # thread is born in, and a graph whose first step is "clone this" could not take it: cloning needs
+  # the network, and a dispatched turn has nobody to ask for permission.
+  Scenario: A graph says what its runs may do, and the turns run in it
+    Given the crew holds this flow graph:
+      """
+      name: clone-first
+      version: 1
+      mode: dangerous
+      nodes:
+        clone: { type: dispatch, prompt: "clone the repository into /home/agent/shared" }
+      edges:
+        - [clone, done]
+      """
+    When the operator starts the flow "clone-first" in the project
+    Then the flow run is done
+    And the turn ran in permission mode "bypassPermissions"
+
+  Scenario: A graph that says nothing about its mode leaves its runs in the one a thread is born in
+    When the operator starts the flow "fix-red" in the project
+    Then the flow run is done
+    And the turn ran in permission mode "acceptEdits"
+
+  Scenario: A graph whose mode is not a mode is refused at import
+    Given the operator imports this flow graph, which is refused:
+      """
+      name: nonsense
+      version: 1
+      mode: whenever
+      nodes:
+        go: { type: dispatch, prompt: "go" }
+      edges:
+        - [go, done]
+      """
+    Then the refusal names the modes there are
+
   Scenario: A graph a run could fall off is refused at import
     Given the operator imports this flow graph, which is refused:
       """
