@@ -18,3 +18,7 @@
 .DS_Store
 .idea/
 .vscode/
+
+# built hook entry points. A hook ships as an executable, and the executable is a build artifact:
+# `make hooks` writes it, the image build writes it, and neither belongs in the history.
+/hooks/*/bin/hook

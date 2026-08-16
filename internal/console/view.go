@@ -595,9 +595,15 @@ func (m Model) rowLine(row Row, isSelected bool) string {
 	if isSelected {
 		return selectedRow.Render(m.fit(m.renderCells(row.Cells)))
 	}
-	// A row with a state of its own keeps it: a failed thread reads as failed before it reads as
-	// anything else, and that beats colouring its workspace.
-	if row.State != StateUnknown {
+	// A failed row is the one state loud enough to take the whole line: it wants attention, and it has
+	// to read as wanting it before it reads as anything else.
+	//
+	// Every other state goes in the status cell instead. Drawing a whole row in its state was costing
+	// the row every other colour it had, because a line rendered in one colour cannot carry any of the
+	// others: nine of the ten views set a state on every row, so nine listings came out flat and the
+	// tenth came out in two colours. The states that were doing that work are green, yellow and dim on
+	// one cell now, which is where the sessions tool puts them.
+	if row.State == StateFailed {
 		return styleFor(row.State).Render(m.fit(m.renderCells(row.Cells)))
 	}
 	return m.fit(m.renderColouredCells(row.Cells))
