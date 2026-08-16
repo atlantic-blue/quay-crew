@@ -149,7 +149,17 @@ type streamEvent struct {
 	// task failed is usually here rather than on the error stream, and it was being parsed past.
 	IsError        bool `json:"is_error"`
 	APIErrorStatus int  `json:"api_error_status"`
-	Message        struct {
+	// TotalCostUSD and Usage arrive on the result event and were being read past. The stream has
+	// carried them the whole time, so the crew was throwing away the only number that says what a
+	// task cost.
+	TotalCostUSD *float64 `json:"total_cost_usd"`
+	Usage        *struct {
+		InputTokens              int64 `json:"input_tokens"`
+		OutputTokens             int64 `json:"output_tokens"`
+		CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+		CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	} `json:"usage"`
+	Message struct {
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -202,6 +212,19 @@ func parseStream(r io.Reader) (Response, string, string, error) {
 		case "result":
 			if event.Result != "" {
 				resp.Reply = event.Result
+			}
+			if event.Usage != nil {
+				resp.Usage = sandbox.Usage{
+					Input:        event.Usage.InputTokens,
+					Output:       event.Usage.OutputTokens,
+					CacheRead:    event.Usage.CacheReadInputTokens,
+					CacheWritten: event.Usage.CacheCreationInputTokens,
+				}
+				resp.UsageReported = true
+			}
+			if event.TotalCostUSD != nil {
+				resp.CostUSD = *event.TotalCostUSD
+				resp.UsageReported = true
 			}
 			if event.IsError {
 				refused = event.Result

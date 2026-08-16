@@ -40,7 +40,24 @@ Nothing else is traced yet. There is no span around a turn, a sandbox or the mod
 line tool starts no trace of its own, so a trace today covers the crew's own handling of one message
 and stops there.
 
-**Metrics do not exist.** A meter provider is set up and no instrument is ever created.
+**Metrics carry what tasks cost.** Three instruments, published by the control plane after every
+task:
+
+- `quaycrew.tasks`, tasks run
+- `quaycrew.tokens`, tokens spent, split by `kind` into input, output, cache read and cache written
+- `quaycrew.cost.usd`, what those tasks would cost at published prices
+
+Each carries `workspace`, `project`, `model` and `status`, by name rather than by identifier, because
+nobody groups a cost dashboard by a uuid.
+
+Two things to read carefully. The cost is not a charge anybody receives: the crew runs under a
+subscription, and this is the model's own tooling pricing the task at published rates, which is the
+number that says whether a crew of agents is affordable. And a task whose backend reported nothing
+contributes to `quaycrew.tasks` and to neither of the others, so an unknown never reads as a zero.
+
+Nothing else is measured. There is no host metric, no per session process usage, no GPU metric, and
+no cost ceiling alert. A task that failed is counted with `status="failed"` and contributes no
+tokens, because a failed task returns nothing to read them from.
 
 **The collector forwards all three signals.** `deploy/otel-collector.yaml` sends traces to Tempo and
 logs to Loki, and republishes metrics for Prometheus to scrape. The `debug` exporter stays beside
@@ -80,8 +97,7 @@ the rest of this exists.
   stdout, which are gone when the container is replaced. This is what the event log is for, and
   `docs/EVENTS.md` covers why it is empty.
 
-The pipeline. Two of the three signals carry data; the dotted one is waiting on an instrument being
-created rather than on any of this plumbing:
+The pipeline. All three signals carry data:
 
 ```mermaid
 flowchart LR
@@ -89,7 +105,7 @@ flowchart LR
     services -->|"JSON on stdout"| docker["docker logs"]
     collector -->|"OTLP"| loki["Loki: logs"]
     collector -->|"OTLP"| tempo["Tempo: traces"]
-    collector -.->|"scraped, no instrument yet"| prometheus["Prometheus: metrics"]
+    collector -->|"scraped on 8889"| prometheus["Prometheus: metrics"]
     loki --> grafana
     tempo --> grafana
     prometheus --> grafana["Grafana"]
@@ -159,14 +175,16 @@ Two things to know before you spend time in there:
 
 - **Tempo holds traces.** Dispatch a turn, open Grafana, pick the Tempo data source and search. The
   span is named for the gRPC method the crew served.
-- **Prometheus scrapes the collector and finds an empty set**, because nothing creates a metric
-  instrument. The path is connected and there is nothing on it. That is issue 16.
+- **Prometheus holds what tasks cost.** `sum by (workspace) (quaycrew_cost_usd_total)` is what each
+  piece of work has cost, and `sum by (kind) (quaycrew_tokens_total)` is where the tokens went. The
+  cache read figure is normally the largest by far.
 - **Loki holds the crew's log lines**, and a line carrying a correlation id has a link on it that
   opens the trace. The link works the other way too: from a span, Grafana offers the log lines that
   call wrote.
-- **There are no dashboards.** The data sources are provisioned; what you build on them is not.
+- **There are no dashboards and no alerts.** The data sources are provisioned; what you build on
+  them is not, and there is no cost ceiling that fires.
 
-So two of the three signals are real end to end, and the document says which.
+So all three signals are real end to end, and what is left is what you make of them.
 
 ## What would task it on
 
@@ -179,9 +197,13 @@ In this order, because each step is pointless without the one above it.
    Prometheus scrapes the collector, Grafana's three data sources are provisioned as code, and a log
    line and its trace link to each other. What is left of #12 is dashboards and alerts as code, which
    is worth doing once there is a metric worth putting on one.
-3. **Token, cost and resource metrics (#16).** The number that makes the rest worth having. The
-   model runner already calls the command line tool with `--output-format stream-json`, and that
-   stream carries the token usage the crew currently reads past.
+3. ~~**Token and cost metrics (#16).**~~ Done: every task publishes its tokens and what they would
+   cost, by workspace, project and model. What is left of #16 is the rest of its list, none of which
+   is built: a cost ceiling alert, host metrics, per session process usage, GPU metrics, and the
+   dashboards to put any of it on.
+
+The one piece of #3 still open is the audit record. A task in the `tasks` table carries no trace id,
+so history and traces cannot be joined the way logs and traces now can.
 
 ## Checking whether it is working
 
