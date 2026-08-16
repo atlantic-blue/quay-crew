@@ -38,6 +38,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -234,6 +235,9 @@ type world struct {
 	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
 	// it. Setting it to nil is how a scenario says the stack has no broker configured.
 	events *messaging.Memory
+	// eventsRefuse makes the log refuse every record it is given, for the scenarios about what the
+	// crew says when an export fails.
+	eventsRefuse bool
 	// storage is a real conversation store on disk, so a scenario can say what the model kept and
 	// what it did not. The scenarios that do not care about it seed every conversation they start.
 	storage sandbox.Storage
@@ -286,6 +290,9 @@ func (w *world) start() error {
 // w.events to nil, and a typed nil pointer handed to an interface is not nil, so it is spelled out
 // here rather than left to the caller to get right.
 func (w *world) eventLog() messaging.EventLog {
+	if w.eventsRefuse {
+		return refusingEventLog{}
+	}
 	if w.events == nil {
 		return nil
 	}
@@ -316,7 +323,12 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
-	w.grpcServer = grpc.NewServer(auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...)
+	// The same options the real main builds the server with, so a scenario about tracing is about
+	// what the crew does and not about what the harness added.
+	w.grpcServer = grpc.NewServer(append(
+		telemetry.ServerOptions(),
+		auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...,
+	)...)
 	w.server = controlplane.NewServer(controlplane.Config{
 		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
@@ -474,6 +486,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
+	initializeObservabilitySteps(sc)
 	initializeTurnsSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)

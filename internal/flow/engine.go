@@ -173,7 +173,7 @@ func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string
 	driven := run.copy()
 	go func() {
 		if _, err := e.advance(driving, graph, driven, Event{Kind: EventStarted}); err != nil {
-			slog.Warn("a flow run stopped moving", "run", driven.ID, "graph", graphName, "error", err)
+			slog.WarnContext(driving, "a flow run stopped moving", "run", driven.ID, "graph", graphName, "error", err)
 		}
 	}()
 	return run, nil
@@ -248,7 +248,7 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			// Somebody stopped the run while this was waiting on a turn. That is not a failure:
 			// the stop is the answer, and the run keeps the reason it was stopped with.
 			if errors.Is(err, ErrRunHalted) {
-				slog.Info("a flow run was stopped while it was working", "run", next.ID)
+				slog.InfoContext(ctx, "a flow run was stopped while it was working", "run", next.ID)
 				if halted, err := e.store.GetFlowRun(ctx, next.ID); err == nil {
 					return *halted, nil
 				}

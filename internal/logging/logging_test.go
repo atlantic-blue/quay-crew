@@ -1,0 +1,134 @@
+package logging_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"log/slog"
+	"testing"
+
+	"github.com/atlantic-blue/quay-crew/internal/logging"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+)
+
+// underACall returns a context inside a recorded span, and the trace id that span was given.
+func underACall(t *testing.T) (context.Context, string) {
+	t.Helper()
+	provider := trace.NewTracerProvider(trace.WithSyncer(tracetest.NewNoopExporter()))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	ctx, span := provider.Tracer("test").Start(context.Background(), "inbound")
+	t.Cleanup(func() { span.End() })
+	return ctx, span.SpanContext().TraceID().String()
+}
+
+// lines reads back what was written as one decoded JSON object per line.
+func lines(t *testing.T, out *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var read []map[string]any
+	for _, raw := range bytes.Split(bytes.TrimSpace(out.Bytes()), []byte("\n")) {
+		if len(raw) == 0 {
+			continue
+		}
+		var line map[string]any
+		if err := json.Unmarshal(raw, &line); err != nil {
+			t.Fatalf("a log line is not JSON: %v: %s", err, raw)
+		}
+		read = append(read, line)
+	}
+	return read
+}
+
+func TestALineUnderACallCarriesTheTraceIDAsItsCorrelationID(t *testing.T) {
+	var out bytes.Buffer
+	logger := logging.Init("controlplane", &out)
+	ctx, traceID := underACall(t)
+
+	logger.WarnContext(ctx, "a turn could not be exported")
+
+	read := lines(t, &out)
+	if len(read) != 1 {
+		t.Fatalf("wanted one line, got %d", len(read))
+	}
+	if got := read[0][logging.CorrelationKey]; got != traceID {
+		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
+	}
+	if got := read[0][logging.ServiceKey]; got != "controlplane" {
+		t.Errorf("service is %v, wanted controlplane", got)
+	}
+}
+
+// The bug this package exists to fix: the crew logs through the package level slog, so a logger that
+// is built and not made the default leaves every line inside internal/ unstructured and uncorrelated.
+func TestThePackageLevelSlogIsTheCrewsLogger(t *testing.T) {
+	var out bytes.Buffer
+	logging.Init("controlplane", &out)
+	ctx, traceID := underACall(t)
+
+	slog.WarnContext(ctx, "a secret could not be mounted", "secret", "GH_TOKEN")
+
+	read := lines(t, &out)
+	if len(read) != 1 {
+		t.Fatalf("wanted one line, got %d", len(read))
+	}
+	if got := read[0][logging.CorrelationKey]; got != traceID {
+		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
+	}
+	if got := read[0]["secret"]; got != "GH_TOKEN" {
+		t.Errorf("the call site's own attributes are lost: secret is %v", got)
+	}
+}
+
+// Turn and flow work is detached from the request that started it, so the id has to survive the
+// detaching or the interesting half of a turn is uncorrelated.
+func TestTheCorrelationIDSurvivesADetachedContext(t *testing.T) {
+	var out bytes.Buffer
+	logger := logging.Init("controlplane", &out)
+	ctx, traceID := underACall(t)
+
+	logger.WarnContext(context.WithoutCancel(ctx), "a turn could not be written to history")
+
+	read := lines(t, &out)
+	if got := read[0][logging.CorrelationKey]; got != traceID {
+		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
+	}
+}
+
+// A handler that forgets to re-wrap itself in WithAttrs loses the correlation id the moment anything
+// calls logger.With, which is the shape most of these wrappers get wrong.
+func TestWithKeepsTheCorrelationID(t *testing.T) {
+	var out bytes.Buffer
+	logger := logging.Init("controlplane", &out)
+	ctx, traceID := underACall(t)
+
+	logger.With("thread", "3cb04bf5").WarnContext(ctx, "a thread could not be described")
+
+	read := lines(t, &out)
+	if got := read[0][logging.CorrelationKey]; got != traceID {
+		t.Errorf("correlation id is %v, wanted the trace id %s", got, traceID)
+	}
+	if got := read[0]["thread"]; got != "3cb04bf5" {
+		t.Errorf("thread is %v, wanted 3cb04bf5", got)
+	}
+}
+
+func TestALineOutsideAnyCallCarriesNoCorrelationID(t *testing.T) {
+	var out bytes.Buffer
+	logger := logging.Init("controlplane", &out)
+
+	logger.Info("control plane serving")
+
+	read := lines(t, &out)
+	if _, present := read[0][logging.CorrelationKey]; present {
+		t.Errorf("a line written before any call arrived carries a correlation id: %v", read[0])
+	}
+	if got := read[0][logging.ServiceKey]; got != "controlplane" {
+		t.Errorf("service is %v, wanted controlplane", got)
+	}
+}
+
+func TestCorrelationIDIsEmptyWithoutASpan(t *testing.T) {
+	if got := logging.CorrelationID(context.Background()); got != "" {
+		t.Errorf("correlation id is %q on a bare context, wanted empty", got)
+	}
+}

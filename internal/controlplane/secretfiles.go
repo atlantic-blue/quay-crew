@@ -33,7 +33,7 @@ const secretFileEnv = "QC_SECRET_FILE_VALUE"
 func (s *Server) readySecretFiles(ctx context.Context, session *quaycrewv1.Thread, box sandbox.Sandbox) error {
 	refs, err := s.secrets.List(ctx, session.GetWorkspace())
 	if err != nil {
-		slog.Warn("the workspace's secrets could not be listed, so none were mounted",
+		slog.WarnContext(ctx, "the workspace's secrets could not be listed, so none were mounted",
 			"session", session.GetId(), "error", err)
 		return nil
 	}
@@ -48,7 +48,7 @@ func (s *Server) readySecretFiles(ctx context.Context, session *quaycrewv1.Threa
 		if err := writeSecretFile(ctx, box, ref.Name, value); err != nil {
 			// Named, because the session will fail at whatever the credential was for and the reason
 			// belongs somewhere the operator can find it.
-			slog.Warn("a secret could not be mounted", "session", session.GetId(), "secret", ref.Name, "error", err)
+			slog.WarnContext(ctx, "a secret could not be mounted", "session", session.GetId(), "secret", ref.Name, "error", err)
 		}
 	}
 	return nil
