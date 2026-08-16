@@ -276,7 +276,7 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
 			continue
 		}
-		run.State[threadKey] = resp.GetId()
+		run.State[ThreadKey] = resp.GetId()
 		event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Reply: resp.GetReply()}
 	}
 }
@@ -285,21 +285,24 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 // wired or no thread yet: a cost that cannot be read must not silently reset a run's spend to zero
 // and hand it a fresh ceiling.
 func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
-	if e.spend == nil || run.State[threadKey] == "" {
+	if e.spend == nil || run.State[ThreadKey] == "" {
 		return run.Spent
 	}
-	return e.spend.ThreadTokens(ctx, run.State[threadKey])
+	return e.spend.ThreadTokens(ctx, run.State[ThreadKey])
 }
 
-// threadKey is where the run remembers its thread's identifier, learned from the first dispatch.
+// ThreadKey is where the run remembers its thread's identifier, learned from the first dispatch.
 // The handle is the run's own by construction; the identifier is what archiving needs.
-const threadKey = "thread.id"
+//
+// Exported because a run outlives the reading of it: the thread is archived when the run ends, and
+// whoever reads the run afterwards has to be told where its history is.
+const ThreadKey = "thread.id"
 
 // archive puts the run's thread away. A run that never dispatched has no thread, and a thread that
 // cannot be archived is logged by the control plane's side of the call; neither is a reason to call
 // a finished run anything else.
 func (e *Engine) archive(ctx context.Context, run Run) {
-	id := run.State[threadKey]
+	id := run.State[ThreadKey]
 	if id == "" {
 		return
 	}

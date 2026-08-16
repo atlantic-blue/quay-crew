@@ -623,26 +623,17 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 // than with the other turns steps because they drive the console's own reducer.
 func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
+		return askForHistory(ctx, consoleFrom(ctx))
+	})
+
+	// The same key, from the view a finished run's thread ends up in. A run archives its own thread,
+	// so this is the view the history of an automation is actually read from.
+	sc.Step(`^the operator asks for the archived session's history$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		row, err := onlyRow(c)
-		if err != nil {
+		if err := c.open(ctx, worldFrom(ctx).client, "archived"); err != nil {
 			return err
 		}
-		for _, action := range c.active.Actions {
-			if !action.Bound("l") {
-				continue
-			}
-			if action.Descend == "" {
-				return fmt.Errorf("the key bound to l on %s descends into nothing", c.active.Name)
-			}
-			resource, found := c.registry.Get(action.Descend)
-			if !found {
-				return fmt.Errorf("%s descends into %q, which is not registered", c.active.Name, action.Descend)
-			}
-			c.active = resource
-			return c.list(ctx, row.ID)
-		}
-		return fmt.Errorf("the %s view has nothing bound to l", c.active.Name)
+		return askForHistory(ctx, c)
 	})
 
 	sc.Step(`^the console is showing tasks$`, func(ctx context.Context) error {
@@ -693,4 +684,28 @@ func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// askForHistory presses the key the current view binds to a history and descends into whatever it
+// names, which is how an operator reaches the tasks of the row they are sitting on.
+func askForHistory(ctx context.Context, c *consoleWorld) error {
+	row, err := onlyRow(c)
+	if err != nil {
+		return err
+	}
+	for _, action := range c.active.Actions {
+		if !action.Bound("l") {
+			continue
+		}
+		if action.Descend == "" {
+			return fmt.Errorf("the key bound to l on %s descends into nothing", c.active.Name)
+		}
+		resource, found := c.registry.Get(action.Descend)
+		if !found {
+			return fmt.Errorf("%s descends into %q, which is not registered", c.active.Name, action.Descend)
+		}
+		c.active = resource
+		return c.list(ctx, row.ID)
+	}
+	return fmt.Errorf("the %s view has nothing bound to l", c.active.Name)
 }
