@@ -28,6 +28,10 @@ func main() {
 		logger.Error("telemetry init failed", "error", err)
 		os.Exit(1)
 	}
+	// Every line goes to the collector as well as to stdout, now that there is a pipeline to take
+	// it. Stdout keeps carrying all of it: it is the signal that still works when the collector does
+	// not.
+	logger = logging.AlsoExport(serviceName, os.Stdout)
 	logger.Info("service started", "otel_endpoint", otelEndpoint)
 
 	<-ctx.Done()

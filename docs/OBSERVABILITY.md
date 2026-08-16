@@ -16,6 +16,11 @@ JSON to its own stdout through `internal/logging`, from the first line. `make lo
 them and `docker logs quaycrew-controlplane-1` gives you one. This is the signal that actually
 works, and it is the one worth reaching for when something is wrong.
 
+Each line also goes to the collector, and from there to Loki. That is a copy and not a move: stdout
+keeps carrying every line, because stdout is what you read when the collector is the broken thing.
+The first line each service writes goes to stdout only, because it is written before the exporter
+exists.
+
 Each line carries `service`, and a line written while a call is being served also carries
 `correlation_id`. That id is the trace id, not a second identifier beside it, so filtering the logs
 by it and opening the trace are the same question asked twice.
@@ -37,11 +42,10 @@ and stops there.
 
 **Metrics do not exist.** A meter provider is set up and no instrument is ever created.
 
-**The collector forwards traces and metrics, and still discards logs.** `deploy/otel-collector.yaml`
-sends traces to Tempo and republishes metrics for Prometheus to scrape, keeping the `debug` exporter
-beside both so the collector's own log stays the fastest way to see whether anything is arriving. The
-logs pipeline is still `debug` only, because the services log to their own stdout and nothing
-forwards it.
+**The collector forwards all three signals.** `deploy/otel-collector.yaml` sends traces to Tempo and
+logs to Loki, and republishes metrics for Prometheus to scrape. The `debug` exporter stays beside
+each of them, so the collector's own log is still the fastest way to see whether anything is arriving
+at all.
 
 **The telemetry stack is not running by default.** Grafana, Loki, Tempo and Prometheus are in the
 compose file behind the `observability` profile, so `make up` does not start them.
@@ -76,17 +80,20 @@ the rest of this exists.
   stdout, which are gone when the container is replaced. This is what the event log is for, and
   `docs/EVENTS.md` covers why it is empty.
 
-The intended pipeline, none of which carries data yet:
+The pipeline. Two of the three signals carry data; the dotted one is waiting on an instrument being
+created rather than on any of this plumbing:
 
 ```mermaid
 flowchart LR
     services["control plane and gateway"] -->|"OTLP on 4317"| collector["OpenTelemetry collector"]
-    collector --> loki["Loki: logs"]
-    collector --> tempo["Tempo: traces"]
-    collector --> prometheus["Prometheus: metrics"]
+    services -->|"JSON on stdout"| docker["docker logs"]
+    collector -->|"OTLP"| loki["Loki: logs"]
+    collector -->|"OTLP"| tempo["Tempo: traces"]
+    collector -.->|"scraped, no instrument yet"| prometheus["Prometheus: metrics"]
     loki --> grafana
     tempo --> grafana
     prometheus --> grafana["Grafana"]
+    loki <-->|"correlation id"| tempo
 ```
 
 ## What you can actually look at today
@@ -137,8 +144,10 @@ quay dispatch <workspace>/<project> "remember the number"
 ```
 
 Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The turn is one span, named
-`quaycrew.v1.ControlPlaneService/Dispatch`. Take the trace id and grep the control plane's log for it
-and you have every line that call wrote.
+`quaycrew.v1.ControlPlaneService/Dispatch`. Open it and Grafana offers the log lines that call wrote.
+
+Going the other way, pick Loki and query `{service_name="controlplane"}`. Any line carrying a
+correlation id has an Open the trace link on it.
 
 All four containers start and stay up. Loki and Tempo are configured from `deploy/loki.yaml` and
 `deploy/tempo.yaml`, kept in this repository rather than left to whatever the image happens to ship,
@@ -152,11 +161,12 @@ Two things to know before you spend time in there:
   span is named for the gRPC method the crew served.
 - **Prometheus scrapes the collector and finds an empty set**, because nothing creates a metric
   instrument. The path is connected and there is nothing on it. That is issue 16.
-- **Loki holds nothing.** The services log structured JSON to their own stdout and no pipeline
-  forwards it, so the data source is provisioned and empty. That is the rest of issue 12.
+- **Loki holds the crew's log lines**, and a line carrying a correlation id has a link on it that
+  opens the trace. The link works the other way too: from a span, Grafana offers the log lines that
+  call wrote.
 - **There are no dashboards.** The data sources are provisioned; what you build on them is not.
 
-So one of the three signals is real end to end, and the document says which.
+So two of the three signals are real end to end, and the document says which.
 
 ## What would turn it on
 
@@ -165,10 +175,10 @@ In this order, because each step is pointless without the one above it.
 1. ~~**Create spans (#3).**~~ Done: inbound calls are traced and every log line carries the
    correlation id. What is left of #3 is the audit event carrying the trace id, so a turn in the
    `turns` table joins to the trace that ran it.
-2. **Give the collector somewhere to send it (#12).** Mostly done: traces reach Tempo, Prometheus
-   scrapes the collector, and Grafana's three data sources are provisioned as code. What is left is
-   the logs pipeline, which needs the services' stdout collected into Loki, and the derived field
-   that turns a `correlation_id` in a Loki line into a link to the trace.
+2. ~~**Give the collector somewhere to send it (#12).**~~ Done: traces reach Tempo, logs reach Loki,
+   Prometheus scrapes the collector, Grafana's three data sources are provisioned as code, and a log
+   line and its trace link to each other. What is left of #12 is dashboards and alerts as code, which
+   is worth doing once there is a metric worth putting on one.
 3. **Token, cost and resource metrics (#16).** The number that makes the rest worth having. The
    model runner already calls the command line tool with `--output-format stream-json`, and that
    stream carries the token usage the crew currently reads past.

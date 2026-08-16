@@ -8,6 +8,20 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **Logs reach Loki, and a log line and its trace link to each other.** The crew's log lines now go to
+  the collector as well as to stdout, so Loki holds them. A line carrying a correlation id has a link
+  on it that opens the trace, and a span offers the lines that call wrote. That link is the whole
+  point of the correlation id: without it the id is a string somebody copies by hand, which is the
+  same as not having it.
+
+  It is a copy and not a move. A container's stdout is what you read when the collector is the broken
+  thing, so it keeps carrying every line whatever happens downstream. The first line each service
+  writes goes to stdout only, because it is written before the exporter exists.
+
+  Loki takes OTLP directly, so there is no Loki specific format to keep working, and no log shipper
+  reading the host's Docker directory.
+  ([#12](https://github.com/atlantic-blue/quay-crew/issues/12))
+
 - **The telemetry stack carries traces, and Grafana comes up joined.** `make up-observability` started
   four containers that had nothing to do with each other. The collector's only exporter was `debug`,
   which prints a summary and drops what it was given. Prometheus had no configuration file at all, so

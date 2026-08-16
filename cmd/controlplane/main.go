@@ -48,6 +48,10 @@ func main() {
 		logger.Error("telemetry init failed", "error", err)
 		os.Exit(1)
 	}
+	// Every line goes to the collector as well as to stdout, now that there is a pipeline to take
+	// it. Stdout keeps carrying all of it: it is the signal that still works when the collector does
+	// not.
+	logger = logging.AlsoExport(serviceName, os.Stdout)
 
 	// QC_MODEL is the backend; QC_CLAUDE_MODEL is which model that backend runs against. Two keys
 	// because they are two decisions: a crew can run the echo backend, which has no model at all.
