@@ -925,6 +925,13 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
+	// A handle is matched whether the thread is put away or not, so a dispatch to one the operator
+	// archived used to start a container for a thread nobody can see. Archiving stops the thread, and
+	// stopped has to mean nothing runs here again until somebody brings it back.
+	if session.GetArchivedAt() != nil {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"thread %s is archived: restore it first", display.ShortID(session.GetHandle()))
+	}
 
 	// A mode given here applies before the sandbox is built, because a sandbox is born with its
 	// capabilities and never drifts: setting it afterwards costs a restart, and a thread born unable
@@ -1390,7 +1397,16 @@ func tidyLabel(label string) string {
 // recordTurn stores the outcome of a turn. A store failure here must not replace the turn's own
 // result, which the operator already has, so it is not returned; a later read shows a stale status
 // rather than the turn appearing to have failed when it did not.
+//
+// An archived thread keeps its conversation handle and its status. Archiving stops a thread and takes
+// its container away, and the turn that was running in it lands afterwards: recording what that turn
+// came to put the thread back to idle, or marked it failed, so a thread the operator had just put
+// away read as one still working. The handle is still written, because restoring the thread has to
+// come back to the conversation it was in.
 func (s *Server) recordTurn(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
+	if session, err := s.store.GetSession(ctx, sessionID); err == nil && session.GetArchivedAt() != nil {
+		sessionStatus = session.GetStatus()
+	}
 	_ = s.store.RecordTurn(ctx, sessionID, modelSessionID, sessionStatus)
 }
 
