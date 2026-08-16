@@ -8,6 +8,22 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **Every view in the console is coloured cell by cell.** A row carries a state, and the state was
+  drawn over the whole line, so a row's workspace, project, name and mode all arrived on screen in
+  the same colour. Nine of the ten views set a state on every row they list, so nine listings came
+  out flat and the tenth came out in two colours. The cell colours were there the whole time and
+  nothing could reach them.
+
+  The state lives on the status cell now, which is where the sessions tool keeps it: green for idle,
+  yellow for running, red for failed, dim for stopped. A failed row is the one exception and still
+  takes the whole line, because it has to read as failed before it reads as anything else.
+
+  Age takes the same three bands as that tool's idle column, so a thread touched a moment ago, one
+  from this morning and one from last week are told apart without reading the number. The views that
+  had no cell colour at all have one now: names carry their own colour, identifiers and counts are
+  dim, a key is cyan wherever it is read. A case sweeps every registered view, so the next one added
+  cannot be the flat one.
+
 - **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
