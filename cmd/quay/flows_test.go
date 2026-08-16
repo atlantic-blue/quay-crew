@@ -200,13 +200,24 @@ edges:
 `))
 	mustRun(t, client, "flow", "start", "careful")
 
-	fields := strings.Fields(mustRun(t, client, "flow", "list"))
-	if len(fields) == 0 {
-		t.Fatal("the listing is empty")
-	}
-	shown := mustRun(t, client, "flow", "show", fields[0])
-	if !strings.Contains(shown, "fixed it locally. push?") {
-		t.Fatalf("showing an asking run said %q, want the question it is waiting on", shown)
+	// A run reaches its question behind the answer that started it, so this is polled rather than
+	// read once. Read once, it passes on a machine where the first dispatch lands instantly and fails
+	// on a loaded one, which is a test that reports the machine rather than the code.
+	var fields []string
+	var shown string
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		fields = strings.Fields(mustRun(t, client, "flow", "list"))
+		if len(fields) > 0 {
+			shown = mustRun(t, client, "flow", "show", fields[0])
+			if strings.Contains(shown, "fixed it locally. push?") {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("showing an asking run said %q, want the question it is waiting on", shown)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !strings.Contains(shown, "quay flow answer") {
 		t.Fatalf("showing an asking run said %q, want how to answer it", shown)

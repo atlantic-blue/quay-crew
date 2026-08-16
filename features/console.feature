@@ -8,9 +8,8 @@ Feature: The operator sees the crew from the console
   internal/console, where it belongs. What cannot be said there is this: that the rows are the
   control plane's actual sessions and workspaces.
 
-  The console, the API and the database all say session. It was called sessions for a day; that word is
-  still accepted in the command bar and appears nowhere else, because one name across the whole system
-  beats a console that translates.
+  The console, the API and the database all say session. It was called threads for a while, and that
+  word now opens nothing, because one name across the whole system beats a console that translates.
 
   Background:
     Given a running control plane
@@ -104,7 +103,7 @@ Feature: The operator sees the crew from the console
     Then the session is reported as idle
 
   # Archiving from the console, driven through its own reducer: the session leaves the view it was put
-  # away from and tasks up in the archived one, with its conversation intact.
+  # away from and turns up in the archived one, with its conversation intact.
   Scenario: An archived session leaves the sessions view for the archived one
     Given a session started by dispatching "remember this"
     When the operator opens the console and archives the session

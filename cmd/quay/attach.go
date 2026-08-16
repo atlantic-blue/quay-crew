@@ -55,7 +55,7 @@ func attachCommand(spec *quaycrewv1.AttachSessionResponse) (*exec.Cmd, error) {
 	return exec.Command("docker", args...), nil
 }
 
-// resolveSession tasks what the operator typed into a session id.
+// resolveSession turns what the operator typed into a session id.
 //
 // A listing prints two identifiers for every session, the id and the handle, and dispatch takes an
 // address on top of those. All three are on the operator's screen, so all three get typed back, and
@@ -78,7 +78,7 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	return sessionWithIdentifier(typed, resp.GetSessions())
 }
 
-// sessionAtAddress reads an address the way dispatch does, then tasks the handle it lands on into the
+// sessionAtAddress reads an address the way dispatch does, then turns the handle it lands on into the
 // session id every other command works in.
 func sessionAtAddress(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string, sessions []*quaycrewv1.Session) (string, error) {
 	path, err := workspace.ParsePath(typed)

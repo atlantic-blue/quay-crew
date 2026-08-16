@@ -335,7 +335,7 @@ Feature: Sessions run in isolated sandboxes
     Then the refusal says "401 Invalid bearer token"
 
   # The task runs with the subscription token in its environment, so every place a failure can quote
-  # is a place the token tasks up. A tool that prints one because a task failed is a worse defect
+  # is a place the token turns up. A tool that prints one because a task failed is a worse defect
   # than the one it is explaining.
   Scenario: A failed task never carries the subscription token
     Given the workspace has the subscription token "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"

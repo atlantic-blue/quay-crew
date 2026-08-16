@@ -75,7 +75,7 @@ type Run struct {
 	// DueAt is when a waiting run should be looked at again, as the store holds it. The poller
 	// reads it; the reducer never does, because a pure function has no clock.
 	DueAt *time.Time
-	// DueIn is how long the wait the run just reached lasts. The engine tasks it into a due time
+	// DueIn is how long the wait the run just reached lasts. The engine turns it into a due time
 	// on the row; the reducer stays pure and never reads a clock.
 	DueIn time.Duration
 }

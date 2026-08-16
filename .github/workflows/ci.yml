@@ -59,7 +59,7 @@ jobs:
           done
 
       # -count=1 so a run always executes. Go's build cache will happily report ok for a package it
-      # has seen before, which tasks a check that proves something into a check that proves it once.
+      # has seen before, which turns a check that proves something into a check that proves it once.
       - name: Unit tests
         run: go test -count=1 ./...
 
@@ -204,9 +204,9 @@ jobs:
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
 
           # A second task on the same session reuses that one sandbox.
-          session=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
-          test -n "$session"
-          go run ./cmd/quay dispatch "smoke/bills/$session" "second task" >/dev/null
+          handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
+          test -n "$handle"
+          go run ./cmd/quay dispatch "smoke/bills/$handle" "second task" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
 
       # The point of this step: prove a session is really durable. Restarting the control plane
@@ -221,8 +221,8 @@ jobs:
           test -n "$workspace"
           go run ./cmd/quay project create bills
           out=$(go run ./cmd/quay dispatch "remember this")
-          session=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
-          test -n "$session"
+          handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
+          test -n "$handle"
 
           docker compose -f deploy/docker-compose.yml restart controlplane
           for i in $(seq 1 30); do
@@ -243,7 +243,7 @@ jobs:
           # identifiers for a human, so match the prefix it prints rather than the whole session id.
           # By column rather than by substring: the listing has a header row and ten columns, and a
           # shortened identifier is eight hex characters that could appear in more than one of them.
-          test "$(printf '%s\n' "$sessions" | awk -v want="${session:0:8}" 'NR > 1 && $4 == want' | wc -l)" -eq 1
+          test "$(printf '%s\n' "$sessions" | awk -v want="${handle:0:8}" 'NR > 1 && $4 == want' | wc -l)" -eq 1
 
           # Dispatching a task after the restart is deliberately not asserted here. The control plane
           # forgets which container each session was running in, so it tries to start a second one
@@ -263,8 +263,8 @@ jobs:
           go run ./cmd/quay project create bills
           out=$(go run ./cmd/quay dispatch "first task")
           session=$(printf '%s' "$out" | sed -n 's/.*session \([a-f0-9]*\),.*/\1/p')
-          session=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
-          test -n "$session" && test -n "$session"
+          handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
+          test -n "$session" && test -n "$handle"
 
           # Stand in for what the model writes into its own conversation store, and for a note
           # something inside the sandbox writes into its own memory.
@@ -280,7 +280,7 @@ jobs:
             sleep 2
           done
 
-          go run ./cmd/quay dispatch "durable-state/bills/$session" "second task" >/dev/null
+          go run ./cmd/quay dispatch "durable-state/bills/$handle" "second task" >/dev/null
           kept=$(docker exec "quaycrew-$session" cat /home/agent/.claude/note)
           context=$(docker exec "quaycrew-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"

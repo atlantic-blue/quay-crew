@@ -11,7 +11,7 @@
 set -u
 
 # ^Q and ^S are flow control on a terminal by default, which means the line discipline swallows them
-# and no application ever sees one. Tasking that off is what lets ctrl-q be a key rather than a
+# and no application ever sees one. Turning that off is what lets ctrl-q be a key rather than a
 # character the terminal keeps for itself.
 stty -ixon 2>/dev/null || true
 

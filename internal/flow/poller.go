@@ -67,7 +67,7 @@ func (p *Poller) Tick(ctx context.Context) {
 //
 // The schedule is moved on before the run is started, so a start that fails leaves the schedule
 // pointing at its next time rather than firing again on every tick for as long as the failure
-// lasts, which is the shape that tasks one broken graph into a spend loop.
+// lasts, which is the shape that turns one broken graph into a spend loop.
 func (p *Poller) startScheduled(ctx context.Context) {
 	now := p.engine.now()
 	due, err := p.engine.store.DueFlowSchedules(ctx, now)

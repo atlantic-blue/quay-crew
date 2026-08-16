@@ -241,7 +241,7 @@ func TestOutputLinesFillThePanelWidth(t *testing.T) {
 }
 
 // A line wider than the panel is cut to fit rather than spilling past the border and wrapping the
-// terminal, which is what tasks one long line into a broken frame.
+// terminal, which is what turns one long line into a broken frame.
 func TestALongOutputLineIsCutToFit(t *testing.T) {
 	ran := &ranCommand{output: strings.Repeat("x", 400)}
 	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")

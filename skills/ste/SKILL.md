@@ -23,7 +23,7 @@ pull request description written in somebody's own voice, or anything whose work
 context describes how the writing should sound. Where this skill and a context disagree, the context
 wins and this stays out of the way.
 
-If you cannot tell which kind of text you are looking at, ask. Tasking a paragraph somebody wrote
+If you cannot tell which kind of text you are looking at, ask. Turning a paragraph somebody wrote
 carefully into something correct and dead is worse than leaving it alone.
 
 ## The rules

@@ -1,6 +1,6 @@
 // Package channel defines the contract every Quay Crew channel implements.
 //
-// A channel receives input from somewhere (a CLI, a chat app, a scheduler), tasks it into an
+// A channel receives input from somewhere (a CLI, a chat app, a scheduler), turns it into an
 // InboundMessage, and delivers OutboundMessage replies. The control plane and the rest of the
 // system only ever see this contract, so channels are independent and interchangeable.
 package channel

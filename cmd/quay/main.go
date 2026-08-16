@@ -64,7 +64,7 @@ func inAContainer() bool {
 	return err == nil
 }
 
-// unreachable tasks "connection refused" inside a sandbox into the thing that is actually wrong.
+// unreachable turns "connection refused" inside a sandbox into the thing that is actually wrong.
 //
 // A session that was never told where the crew is falls back to localhost, and localhost inside a
 // container is the container: there is nothing there and there never will be. The dial error names an

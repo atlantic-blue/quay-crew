@@ -105,7 +105,7 @@ image: sandbox-image
 ## env-check: name the configuration in deploy/env.example that your configuration file does not have
 #
 # An upgrade adds configuration, and nobody's configuration grows with it. Compose fills a key that is
-# not there with an empty string, so the feature it tasks on is simply off and nothing says why: a
+# not there with an empty string, so the feature it turns on is simply off and nothing says why: a
 # driver whose crew had no address spent an evening reporting that the control plane was refusing
 # connections, while the control plane was up the whole time.
 env-check:

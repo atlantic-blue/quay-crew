@@ -49,7 +49,7 @@ Feature: A sandbox keeps a session's state outside itself
     Then the sandbox carries "GITHUB_TOKEN" set to "ghp-1234"
     And the sandbox carries "STRIPE_KEY" set to "sk-live-and-wanted"
 
-  # One workspace's secrets are its own. This is the isolation the whole design tasks on, and it is
+  # One workspace's secrets are its own. This is the isolation the whole design turns on, and it is
   # the only boundary left now that naming is gone.
   Scenario: A session is given nothing from another workspace
     Given a workspace named "acme"

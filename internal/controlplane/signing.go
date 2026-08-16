@@ -31,7 +31,7 @@ const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
 // mount anything, and that path put the private key in the container's environment for the life of
 // the container, where docker inspect reads it.
 //
-// Tasking signing off is the other half, and it is not the same as leaving it alone. An operator's
+// Turning signing off is the other half, and it is not the same as leaving it alone. An operator's
 // own git configuration reaches a session, and most operators who sign have signing on for
 // everything, against a key held by their machine and not by a container. Left as it arrives, that
 // configuration fails every commit a session makes, on a key it was never going to have. So a

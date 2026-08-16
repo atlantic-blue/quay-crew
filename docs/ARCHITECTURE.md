@@ -205,15 +205,19 @@ with a model substitute that still execs inside the sandbox.
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
-**Decided 9 August 2026: the operator facing word is session, everywhere. Aligned into the protocol
-the same day.** The wire now says `Session`: the session RPCs (`ListSessions`, `GetSession`,
-`AttachSession` and the rest), a `Task` and a `TaskEvent` that say which session they belong to, and
-a dispatch that returns the session's `id` beside its `handle`. A session carries three identifiers,
-each with one job: `id` is the crew's own row and names the sandbox container, `handle` is the name
-a channel dispatches to (dispatch to the same handle and the conversation continues), and
-`model_session_id` is the model's own word for the conversation it keeps, used to resume it.
-Session survives only where it is the internal runtime word: the store's tables and the control
-plane's internals, which no operator reads.
+**Decided 16 August 2026: the crew has one word for a conversation and one for a piece of work.
+They are session and task.** This reverses the 9 August decision below. The wire says `Session`: the
+session RPCs (`ListSessions`, `GetSession`, `AttachSession` and the rest), a `Task` and a `TaskEvent`
+that say which session they belong to, and a dispatch that returns the session's `id` beside its
+`handle`. A session carries three identifiers, each with one job: `id` is the crew's own row and
+names the sandbox container, `handle` is the name a channel dispatches to (dispatch to the same
+handle and the conversation continues), and `model_session_id` is the model's own word for the
+conversation it keeps, used to resume it. `quay threads` and `quay turns` are refused by name, and
+neither word opens anything in the console.
+
+**Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
+two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
+learn both. `turn` came from conversation analysis and never said how long the work takes.
 
 ```
 workspace  "me"                      who you are; secrets and channels attach here
@@ -499,12 +503,12 @@ sequenceDiagram
 - **No expression language.** Three comparison operators to start. Accepting arbitrary expressions
   means owning a language and a sandbox.
 - **No parallel nodes and no joins in the first version.** A single current node. Joins are where
-  every workflow engine tasks into a product, and which join is needed will not be knowable until two
+  every workflow engine turns into a product, and which join is needed will not be knowable until two
   real automations exist.
 - **No framework.** LangGraph and its peers get durability from a checkpointer that saves a snapshot
   per node. That is a weaker version of the log already here: it keeps the latest state and not the
   history, so a consumer added later cannot read what already happened. A framework also owns the
-  schema, which tasks the store into its cache rather than the source of truth.
+  schema, which turns the store into its cache rather than the source of truth.
 
 The scheduler is an implementation detail of the `wait` node, not an automation system of its own. It
 delivers timer events onto the log and nothing more.

@@ -202,8 +202,10 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		pool.Close()
 		t.Fatalf("seed the project: %v", err)
 	}
+	// thread_id, not handle: this is the schema as migration 0001 wrote it, before the column was
+	// renamed. Seeding it under the new name would prove nothing about the rename surviving.
 	if _, err := pool.Exec(ctx, `
-		insert into sessions (id, project, handle, status, model_session_id)
+		insert into sessions (id, project, thread_id, status, model_session_id)
 		values ('sess-1', 'ws-1', 'session-1', 'idle', 'conversation-1')`); err != nil {
 		pool.Close()
 		t.Fatalf("seed the session: %v", err)
@@ -270,8 +272,18 @@ func dropEverything(t *testing.T) {
 		t.Fatalf("connect to drop: %v", err)
 	}
 	defer pool.Close()
-	if _, err := pool.Exec(context.Background(),
-		`drop table if exists sessions, channels, projects, workspaces, schema_migrations cascade`); err != nil {
+	// Every table, rather than a list. A named list goes stale the moment a migration adds a table,
+	// and what that looks like is a later test failing on a table an earlier one left behind, which
+	// reads as the migration being broken rather than the drop being partial.
+	if _, err := pool.Exec(context.Background(), `
+		do $$
+		declare
+			leftover record;
+		begin
+			for leftover in select tablename from pg_tables where schemaname = 'public' loop
+				execute 'drop table if exists public.' || quote_ident(leftover.tablename) || ' cascade';
+			end loop;
+		end $$`); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
 }

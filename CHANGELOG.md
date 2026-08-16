@@ -1130,7 +1130,7 @@ read, or run with `make features`.
 
 - **`make upgrade` names the configuration your `deploy/.env` does not have.** An upgrade adds
   configuration and nobody's copy grows with it. Compose fills a key that is not there with an empty
-  string, so whatever it tasks on is off and nothing says why, which is exactly how a driver came to
+  string, so whatever it turns on is off and nothing says why, which is exactly how a driver came to
   report the control plane refusing connections for an evening. `make env-check` compares the two and
   names the difference, and an upgrade runs it. It says nothing when there is nothing to say.
   ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
@@ -1262,7 +1262,7 @@ read, or run with `make features`.
   configure. That is what makes the conversation beside the console able to do anything rather than
   just talk about it.
   It is off unless it is turned on: a session that can drive the crew can also stop other sessions.
-  `deploy/env.example` tasks it on for a local stack, and without both the network and the address a
+  `deploy/env.example` turns it on for a local stack, and without both the network and the address a
   sandbox reaches nothing of ours. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **The wordmark is drawn in the panel's header again.** A height check left over from when the
@@ -1351,7 +1351,7 @@ read, or run with `make features`.
   a sandbox with no model in it names the binary it could not find.
   ([#51](https://github.com/atlantic-blue/quay-crew/issues/51))
 - **Nothing a failed task says can carry the subscription token.** A task runs with the token in its
-  environment, so every place a failure can quote is a place it tasks up. Values passed in this task's
+  environment, so every place a failure can quote is a place it turns up. Values passed in this task's
   environment are matched exactly, and the published token shape is matched as well for one this
   process never held.
 

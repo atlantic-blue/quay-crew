@@ -240,7 +240,7 @@ func TestAFailedTaskSaysWhy(t *testing.T) {
 }
 
 // TestAFailedTaskNeverCarriesTheToken. The task runs with the subscription token in its environment,
-// so every place a failure can quote is a place the token tasks up. An error is a thing people paste.
+// so every place a failure can quote is a place the token turns up. An error is a thing people paste.
 func TestAFailedTaskNeverCarriesTheToken(t *testing.T) {
 	const token = "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
 	for _, test := range []struct {
