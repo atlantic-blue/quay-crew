@@ -267,10 +267,14 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 			return run, nil
 		}
 
+		// The mode travels with every dispatch, not only the first. The control plane applies it
+		// before the sandbox is built, and a run's thread is made by its first dispatch, so this is
+		// the only moment anything can say what an automation's turns are allowed to do.
 		resp, err := e.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-			Project: run.Project,
-			Handle:  run.ThreadHandle(),
-			Text:    dispatch.Prompt,
+			Project:        run.Project,
+			Handle:         run.ThreadHandle(),
+			Text:           dispatch.Prompt,
+			PermissionMode: graph.Mode,
 		})
 		if err != nil {
 			event = Event{Kind: EventTurnFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}

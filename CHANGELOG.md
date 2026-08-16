@@ -8,6 +8,28 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **A graph says what its runs may do, and the documents say what a run starts with.** A run owns its
+  own thread, and that thread is made by the run's first dispatch. So there was nothing to set a mode
+  on before the run started, `quay mode` had nothing to point at, and every automation ran in the
+  mode a thread is born in. A graph whose first step is "clone this" could not take that step:
+  cloning needs the network, and a turn nobody is watching has nobody to approve it.
+
+  A graph now declares `mode: dangerous` beside its name and its version, and every dispatch of the
+  run carries it. The word is checked at import, against the same table the command line and the
+  console read, so a mode nobody has is refused with the three there are rather than failing on the
+  run's first turn. A graph that declares nothing is unchanged.
+
+  The other half is a document. Nothing said what a run's thread starts with, which is exactly the
+  assumption a graph author makes without noticing: it starts empty. `docs/ARCHITECTURE.md` now says
+  so, and says which of the two mounted directories survives the run. The workspace's volume at
+  `/home/agent/shared` is the one that does, so a graph that needs a repository puts it there.
+  Cloning into the working directory pays for the clone on every run.
+
+  What this is not is the clone that serves every session, which is
+  [#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is still open. A run can fill its
+  own room now; it does not yet find one already filled.
+  ([#264](https://github.com/atlantic-blue/quay-crew/issues/264))
+
 - **What a finished flow run did can be read again.** A run archives its own thread when it ends,
   which is right: otherwise every run leaves a container behind. Archiving is also what put the run's
   record out of reach. `quay flow show` printed the thread identifier, and `quay tasks` refused that
