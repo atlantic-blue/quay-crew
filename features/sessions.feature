@@ -74,11 +74,25 @@ Feature: Sessions run in isolated sandboxes
     And the operator asks how to attach to the session
     And the control plane names the session's sandbox
 
-  Scenario: A thread that is not stopped has nothing to restart
+  # Restarting is what the operator reaches for when the container is wrong, and a container that is
+  # wrong is usually one that is still running. Refusing until the thread was stopped made that two
+  # keys, so the live thread is stopped here and comes back in a new container.
+  Scenario: A live thread restarts into a new container rather than being refused
     Given a session started by dispatching "hello"
     When the operator restarts the session
+    Then the session is reported as idle
+    And the session's sandbox has been closed
+    And a second sandbox has been created for that session
+    And the session still holds the conversation the first turn started
+
+  # An archived thread's row says stopped, so a restart that only asked about the status started a
+  # container for a thread nobody can see.
+  Scenario: An archived thread cannot be restarted
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator restarts the session
     Then the control plane refuses it as the wrong state
-    And the session is reported as idle
+    And the workspace has 1 archived sessions
 
   Scenario: Restarting a thread that does not exist is refused
     When the operator restarts a session that does not exist
@@ -98,6 +112,30 @@ Feature: Sessions run in isolated sandboxes
     When the operator archives the session
     Then the session is reported as stopped
     And the session's sandbox has been closed
+
+  # Archiving takes the container away while the task is still in it, so the task lands on a thread
+  # that is already put away. Recording what it came to brought the row back to idle, or marked it
+  # failed, and the archived listing then said a thread nobody can reach is working.
+  #
+  # The task is held open here rather than timed, because what is being specified is what happens
+  # while one runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: A task that lands after its thread was archived leaves it stopped
+    Given the model takes longer over a turn than anybody will wait
+    And a task dispatched without waiting for it
+    And a turn is under way
+    When the operator archives the session
+    And the model finishes the turn
+    Then the session is reported as stopped
+    And the workspace has 1 archived sessions
+
+  # A handle is matched whether the thread is put away or not, so this used to start a container for
+  # a thread that is not in the listing.
+  Scenario: An archived thread cannot be dispatched to
+    Given a session started by dispatching "hello"
+    When the operator archives the session
+    And the operator dispatches "carry on" to the same thread
+    Then the control plane refuses it as the wrong state
+    And the session is reported as stopped
 
   Scenario: A restored thread is back in the default listing with its conversation
     Given a session started by dispatching "remember this"
