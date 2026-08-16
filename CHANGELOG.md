@@ -8,6 +8,25 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **What a finished flow run did can be read again.** A run archives its own thread when it ends,
+  which is right: otherwise every run leaves a container behind. Archiving is also what put the run's
+  record out of reach. `quay flow show` printed the thread identifier, and `quay tasks` refused that
+  exact identifier, because every command that reads a thread asked the live listing and nothing
+  else. The turns were in the store the whole time. Reading them took `psql`.
+
+  That mattered more than a missing convenience. The run's summary is the model's own account of what
+  happened, and the turns are the record of it. The two can disagree: the first run against a real
+  crew reported four transitions and a tidy summary while every turn under it said the working
+  directory was empty.
+
+  So a thread is resolved against the archived listing when the live one does not name it. The live
+  listing is asked first, so an identifier that names a live thread still names the same one. Nothing
+  about reading a history needs the thread to be live, and `quay attach`, which does need it, still
+  refuses on its own terms and says to restore it first. `quay flow show` now prints the command that
+  reads the run's tasks rather than an identifier to work it out from, and the console's archived
+  view takes `l` for a history, the same key the live view takes.
+  ([#265](https://github.com/atlantic-blue/quay-crew/issues/265))
+
 - **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.

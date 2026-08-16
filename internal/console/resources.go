@@ -442,6 +442,16 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					return err
 				},
 			},
+			{
+				// The same key the live view uses, because an archived thread is the one whose
+				// history somebody actually comes looking for: a flow run archives its own thread
+				// when it ends, and what the run did is in there. The history is read from the
+				// store, so it needs no container and no restore.
+				Key:     "l",
+				Also:    []string{"h"},
+				Label:   "History",
+				Descend: "tasks",
+			},
 		},
 	}
 }
