@@ -40,24 +40,24 @@ Nothing else is traced yet. There is no span around a turn, a sandbox or the mod
 line tool starts no trace of its own, so a trace today covers the crew's own handling of one message
 and stops there.
 
-**Metrics carry what turns cost.** Three instruments, published by the control plane after every
-turn:
+**Metrics carry what tasks cost.** Three instruments, published by the control plane after every
+task:
 
-- `quaycrew.turns`, turns run
+- `quaycrew.tasks`, tasks run
 - `quaycrew.tokens`, tokens spent, split by `kind` into input, output, cache read and cache written
-- `quaycrew.cost.usd`, what those turns would cost at published prices
+- `quaycrew.cost.usd`, what those tasks would cost at published prices
 
 Each carries `workspace`, `project`, `model` and `status`, by name rather than by identifier, because
 nobody groups a cost dashboard by a uuid.
 
 Two things to read carefully. The cost is not a charge anybody receives: the crew runs under a
-subscription, and this is the model's own tooling pricing the turn at published rates, which is the
-number that says whether a crew of agents is affordable. And a turn whose backend reported nothing
-contributes to `quaycrew.turns` and to neither of the others, so an unknown never reads as a zero.
+subscription, and this is the model's own tooling pricing the task at published rates, which is the
+number that says whether a crew of agents is affordable. And a task whose backend reported nothing
+contributes to `quaycrew.tasks` and to neither of the others, so an unknown never reads as a zero.
 
 Nothing else is measured. There is no host metric, no per session process usage, no GPU metric, and
-no cost ceiling alert. A turn that failed is counted with `status="failed"` and contributes no
-tokens, because a failed turn returns nothing to read them from.
+no cost ceiling alert. A task that failed is counted with `status="failed"` and contributes no
+tokens, because a failed task returns nothing to read them from.
 
 **The collector forwards all three signals.** `deploy/otel-collector.yaml` sends traces to Tempo and
 logs to Loki, and republishes metrics for Prometheus to scrape. The `debug` exporter stays beside
@@ -88,9 +88,9 @@ instrument.
 The logs answer "what did the control plane do". The three things they cannot answer are the reason
 the rest of this exists.
 
-- **What did one turn cost.** Tokens, and money. This is the number that decides whether a crew of
-  agents is a tool or a hobby, and it is per turn, per thread, per workspace. Issue #16.
-- **Where did a request go.** A turn crosses the command line tool, the control plane, a sandbox
+- **What did one task cost.** Tokens, and money. This is the number that decides whether a crew of
+  agents is a tool or a hobby, and it is per task, per session, per workspace. Issue #16.
+- **Where did a request go.** A task crosses the command line tool, the control plane, a sandbox
   container and the model. When it hangs, the interesting question is which of those it is sitting
   in, and a log line in each cannot tell you that. One trace can.
 - **What happened, in order, later.** An audit stream is not the same as logs on a container's
@@ -175,7 +175,7 @@ Two things to know before you spend time in there:
 
 - **Tempo holds traces.** Dispatch a turn, open Grafana, pick the Tempo data source and search. The
   span is named for the gRPC method the crew served.
-- **Prometheus holds what turns cost.** `sum by (workspace) (quaycrew_cost_usd_total)` is what each
+- **Prometheus holds what tasks cost.** `sum by (workspace) (quaycrew_cost_usd_total)` is what each
   piece of work has cost, and `sum by (kind) (quaycrew_tokens_total)` is where the tokens went. The
   cache read figure is normally the largest by far.
 - **Loki holds the crew's log lines**, and a line carrying a correlation id has a link on it that
@@ -186,7 +186,7 @@ Two things to know before you spend time in there:
 
 So all three signals are real end to end, and what is left is what you make of them.
 
-## What would turn it on
+## What would task it on
 
 In this order, because each step is pointless without the one above it.
 
@@ -197,12 +197,12 @@ In this order, because each step is pointless without the one above it.
    Prometheus scrapes the collector, Grafana's three data sources are provisioned as code, and a log
    line and its trace link to each other. What is left of #12 is dashboards and alerts as code, which
    is worth doing once there is a metric worth putting on one.
-3. ~~**Token and cost metrics (#16).**~~ Done: every turn publishes its tokens and what they would
+3. ~~**Token and cost metrics (#16).**~~ Done: every task publishes its tokens and what they would
    cost, by workspace, project and model. What is left of #16 is the rest of its list, none of which
    is built: a cost ceiling alert, host metrics, per session process usage, GPU metrics, and the
    dashboards to put any of it on.
 
-The one piece of #3 still open is the audit record. A turn in the `turns` table carries no trace id,
+The one piece of #3 still open is the audit record. A task in the `tasks` table carries no trace id,
 so history and traces cannot be joined the way logs and traces now can.
 
 ## Checking whether it is working

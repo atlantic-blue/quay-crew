@@ -14,16 +14,16 @@ type FakeRunner struct {
 	SessionID string
 	Err       error
 	LastReq   Request
-	// Takes is how long a turn pretends to take. Zero is instant, which is right for almost every
-	// test and wrong for any test about something happening while a turn is under way: with an
+	// Takes is how long a task pretends to take. Zero is instant, which is right for almost every
+	// test and wrong for any test about something happening while a task is under way: with an
 	// instant model a whole automation finishes before a second command can be typed, and a test
 	// of stopping one would be racing rather than testing.
 	Takes time.Duration
-	// Gate holds a turn open until it is closed. Same purpose as Takes and none of its guesswork: a
+	// Gate holds a task open until it is closed. Same purpose as Takes and none of its guesswork: a
 	// test that waits for a duration is a test that passes on a fast machine, and the thing being
-	// tested here is what is true *while* a turn runs. Nil runs straight through.
+	// tested here is what is true *while* a task runs. Nil runs straight through.
 	Gate chan struct{}
-	// Started is closed once, when the first turn begins, so a test can know a turn is under way
+	// Started is closed once, when the first task begins, so a test can know a task is under way
 	// rather than assume it by the time it took to ask.
 	Started chan struct{}
 

@@ -13,14 +13,14 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// describingRunner answers a turn and a description differently, because a fake that answers both
-// with the same string cannot tell whether the crew described the thread or just stored the turn.
+// describingRunner answers a task and a description differently, because a fake that answers both
+// with the same string cannot tell whether the crew described the session or just stored the task.
 type describingRunner struct {
 	mu sync.Mutex
 	// Described counts the descriptions asked for, which is what proves a crew with it switched off
 	// asks for none rather than asking and throwing the answer away.
 	Described int
-	// DescribeErr fails the describing call alone, leaving ordinary turns working.
+	// DescribeErr fails the describing call alone, leaving ordinary tasks working.
 	DescribeErr error
 	// Says is what a description comes back as, before the crew tidies it.
 	Says string
@@ -30,7 +30,7 @@ type describingRunner struct {
 
 func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	// A description is the call that carries no conversation to resume and asks the question this
-	// crew asks. Matching on the question rather than on the absence alone, so an ordinary first turn
+	// crew asks. Matching on the question rather than on the absence alone, so an ordinary first task
 	// is never counted as one.
 	if strings.Contains(req.Text, "say what this conversation is for") {
 		r.mu.Lock()
@@ -51,15 +51,15 @@ func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.R
 	return model.Response{Reply: "ok", ModelSessionID: "conversation-1"}, nil
 }
 
-// describingCrew is a crew with one thread, and the parts a case needs to look at afterwards.
+// describingCrew is a crew with one session, and the parts a case needs to look at afterwards.
 type describingCrew struct {
-	server   *Server
-	store    store.Store
-	runner   *describingRunner
-	threadID string
+	server    *Server
+	store     store.Store
+	runner    *describingRunner
+	sessionID string
 	// handle is what a dispatch continues a conversation by. Dispatching with the session id instead
-	// silently starts a new thread whose handle happens to be that id, so every turn after the first
-	// lands somewhere else and no thread ever reaches a second turn.
+	// silently starts a new session whose handle happens to be that id, so every task after the first
+	// lands somewhere else and no session ever reaches a second task.
 	handle  string
 	project string
 }
@@ -87,7 +87,7 @@ func describingCrewOf(t *testing.T, every int) *describingCrew {
 	return &describingCrew{server: server, store: memory, runner: runner, project: project.GetProject().GetId()}
 }
 
-// dispatch runs a turn and waits for any describing behind it, so a case reads the result rather than
+// dispatch runs a task and waits for any describing behind it, so a case reads the result rather than
 // racing it. Describing runs behind the answer on purpose, and a test that slept would be slow when
 // it passed and flaky when it failed.
 func (c *describingCrew) dispatch(t *testing.T, text string) string {
@@ -98,12 +98,12 @@ func (c *describingCrew) dispatch(t *testing.T, text string) string {
 	if err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
-	if c.threadID == "" {
-		c.threadID, c.handle = resp.GetId(), resp.GetHandle()
+	if c.sessionID == "" {
+		c.sessionID, c.handle = resp.GetId(), resp.GetHandle()
 	}
-	if resp.GetId() != c.threadID {
-		t.Fatalf("a turn landed on thread %s, not %s: the conversation is not being continued",
-			resp.GetId(), c.threadID)
+	if resp.GetId() != c.sessionID {
+		t.Fatalf("a task landed on session %s, not %s: the conversation is not being continued",
+			resp.GetId(), c.sessionID)
 	}
 	c.server.describing.Wait()
 	return resp.GetReply()
@@ -111,9 +111,9 @@ func (c *describingCrew) dispatch(t *testing.T, text string) string {
 
 func (c *describingCrew) description(t *testing.T) string {
 	t.Helper()
-	thread, err := c.store.GetSession(context.Background(), c.threadID)
+	session, err := c.store.GetSession(context.Background(), c.sessionID)
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	return thread.GetDescription()
+	return session.GetDescription()
 }

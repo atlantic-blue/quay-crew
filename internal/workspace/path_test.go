@@ -10,7 +10,7 @@ func TestParsePathReadsTheLevels(t *testing.T) {
 	cases := map[string]workspace.Path{
 		"me":                      {Workspace: "me"},
 		"me/house-bills":          {Workspace: "me", Project: "house-bills"},
-		"me/house-bills/3cb04bf5": {Workspace: "me", Project: "house-bills", Thread: "3cb04bf5"},
+		"me/house-bills/3cb04bf5": {Workspace: "me", Project: "house-bills", Session: "3cb04bf5"},
 		"  me/house-bills  ":      {Workspace: "me", Project: "house-bills"},
 		// A name from before names were slugs still has to be reachable, quoted.
 		"me/house bills": {Workspace: "me", Project: "house bills"},
@@ -29,12 +29,12 @@ func TestParsePathReadsTheLevels(t *testing.T) {
 
 func TestParsePathRefusesWhatItCannotRead(t *testing.T) {
 	refused := map[string]string{
-		"empty":                "",
-		"only spaces":          "   ",
-		"deeper than a thread": "me/house-bills/thread/deeper",
-		"an empty level":       "me//bills",
-		"a trailing slash":     "me/",
-		"a leading slash":      "/me",
+		"empty":                 "",
+		"only spaces":           "   ",
+		"deeper than a session": "me/house-bills/session/deeper",
+		"an empty level":        "me//bills",
+		"a trailing slash":      "me/",
+		"a leading slash":       "/me",
 	}
 	for reason, input := range refused {
 		if _, err := workspace.ParsePath(input); err == nil {
@@ -58,7 +58,7 @@ func TestPathRoundTripsThroughItsString(t *testing.T) {
 	}
 	// A path with a hole in it renders the part that is real, rather than an address with an empty
 	// level that could never be parsed back.
-	partial := workspace.Path{Workspace: "me", Thread: "3cb04bf5"}
+	partial := workspace.Path{Workspace: "me", Session: "3cb04bf5"}
 	if partial.String() != "me" {
 		t.Errorf("a path with no project renders as %q, want %q", partial.String(), "me")
 	}

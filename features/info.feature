@@ -5,7 +5,7 @@ Feature: The control plane says what it is running
   and forgets every workspace when it restarts. The operator is about to act on one of them, and they
   cannot tell which by looking at a list of sessions.
 
-  So the control plane will say: which model backend a turn runs against, what a session is isolated
+  So the control plane will say: which model backend a task runs against, what a session is isolated
   in, where workspaces and sessions are kept, and whether a conversation outlives its container. It is
   configuration, not a health check, and it never carries a secret.
 

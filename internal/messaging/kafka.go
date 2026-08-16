@@ -28,7 +28,7 @@ var _ EventLog = (*Client)(nil)
 // The producer asks the broker to create a topic it has never seen. A workspace's streams are named
 // after the workspace, so they come into existence when the first record is written rather than
 // being provisioned ahead of time by somebody who has to remember to. Without this, the very first
-// turn in a new workspace is rejected with UNKNOWN_TOPIC_OR_PARTITION and quietly dropped, which is
+// task in a new workspace is rejected with UNKNOWN_TOPIC_OR_PARTITION and quietly dropped, which is
 // exactly the failure this option exists to stop.
 func NewClient(seeds ...string) (*Client, error) {
 	if len(seeds) == 0 {

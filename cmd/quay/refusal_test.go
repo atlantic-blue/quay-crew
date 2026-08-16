@@ -22,7 +22,7 @@ func refused(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...
 	return err
 }
 
-// A crew with two workspaces, one of which has a project and a thread, which is enough shape for
+// A crew with two workspaces, one of which has a project and a session, which is enough shape for
 // every level of an address to be got wrong.
 func aCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
@@ -61,12 +61,12 @@ func TestAMissingWorkspaceSaysWhatTheCrewHas(t *testing.T) {
 	}
 }
 
-func TestAMissingThreadSaysWhatTheProjectHas(t *testing.T) {
+func TestAMissingSessionSaysWhatTheProjectHas(t *testing.T) {
 	client := aCrew(t)
 	mustRun(t, client, "dispatch", "itv/fe-player", "hello")
 
 	err := refused(t, client, "use", "itv/fe-player/ffffffff")
-	for _, want := range []string{"no thread", "ffffffff"} {
+	for _, want := range []string{"no session", "ffffffff"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not mention %q: %s", want, err)
 		}

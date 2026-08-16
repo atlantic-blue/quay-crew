@@ -89,18 +89,18 @@ Feature: A hook is a constraint the crew holds
     And the hooks directory is mounted read only
     And the settings file binds "git-approval" to "PreToolUse"
 
-  Scenario: The turn is told to load the hooks settings
+  Scenario: The task is told to load the hooks settings
     Given a hook "git-approval" imported firing on "PreToolUse"
     And the operator attaches the hook "git-approval" to the workspace
     When the operator dispatches "hello" to the project
-    Then the turn loaded the hooks settings
+    Then the task loaded the hooks settings
 
-  # A settings file pointing at a directory that is not there fails the turn before it starts, so a
+  # A settings file pointing at a directory that is not there fails the task before it starts, so a
   # crew with no hooks says nothing rather than saying something empty.
   Scenario: A session under no hooks is given no hooks directory and no settings
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries no hooks directory
-    And the turn was not told to load any settings
+    And the task was not told to load any settings
 
   # The crew ships the analyser because it only adds context and can never wrongly refuse. Anything
   # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the work.

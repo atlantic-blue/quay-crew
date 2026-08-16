@@ -67,15 +67,15 @@ func TestAFlagThatIsAskingWhereStillGetsTheAddressAdvice(t *testing.T) {
 	}
 }
 
-// The usage teaches the word thread three times over and the command was sessions alone.
-func TestThreadIsACommandBecauseTheToolTeachesTheWord(t *testing.T) {
+// The usage teaches the word session three times over and the command was sessions alone.
+func TestSessionIsACommandBecauseTheToolTeachesTheWord(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "dispatch", "hello")
 
 	listed := mustRun(t, client, "sessions")
-	for _, spelling := range []string{"thread", "threads", "session"} {
+	for _, spelling := range []string{"session", "sessions", "session"} {
 		also, err := asked(t, client, spelling)
 		if err != nil {
 			t.Errorf("quay %s was refused: %v", spelling, err)
@@ -88,14 +88,14 @@ func TestThreadIsACommandBecauseTheToolTeachesTheWord(t *testing.T) {
 }
 
 // The usage is what somebody reads before typing, so it has to name both.
-func TestTheUsageNamesHelpAndThread(t *testing.T) {
+func TestTheUsageNamesHelpAndSession(t *testing.T) {
 	client := testClient(t)
 
 	printed, err := asked(t, client, "help")
 	if err != nil {
 		t.Fatalf("help was refused: %v", err)
 	}
-	for _, want := range []string{"help", "thread"} {
+	for _, want := range []string{"help", "session"} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("the usage does not mention %q", want)
 		}

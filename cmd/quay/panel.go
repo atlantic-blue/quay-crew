@@ -117,13 +117,13 @@ func panelSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	if err != nil {
 		return "", err
 	}
-	return opened.GetThread().GetId(), nil
+	return opened.GetSession().GetId(), nil
 }
 
 // newestSession is the conversation most recently spoken to, which is the one the operator was last
 // working in. A session with no conversation behind it cannot be opened at all, so it is not offered.
-func newestSession(sessions []*quaycrewv1.Thread) (string, bool) {
-	live := make([]*quaycrewv1.Thread, 0, len(sessions))
+func newestSession(sessions []*quaycrewv1.Session) (string, bool) {
+	live := make([]*quaycrewv1.Session, 0, len(sessions))
 	for _, session := range sessions {
 		if session.GetModelSessionId() != "" && session.GetArchivedAt() == nil {
 			live = append(live, session)
@@ -285,7 +285,7 @@ func endConversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneSe
 		if err != nil {
 			return err
 		}
-		spec, err := client.AttachThread(ctx, &quaycrewv1.AttachThreadRequest{Id: sessionID})
+		spec, err := client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessionID})
 		if err != nil {
 			return err
 		}

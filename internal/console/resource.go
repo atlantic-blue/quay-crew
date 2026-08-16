@@ -158,7 +158,7 @@ type Resource struct {
 	SortBy int
 }
 
-// One is what to call a single row of this resource, for a sentence about one of them: "stop thread
+// One is what to call a single row of this resource, for a sentence about one of them: "stop session
 // d754610f?". Every resource here is named as a plural, so trimming it is enough and beats carrying a
 // second name on every declaration.
 func (r Resource) One() string {

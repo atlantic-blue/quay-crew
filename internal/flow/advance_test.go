@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The graph every test here drives: dispatch, then branch on how the turn went, then either a
+// The graph every test here drives: dispatch, then branch on how the task went, then either a
 // second dispatch or the end. Small enough to hold in the head, wide enough to reach every node
 // type slice one ships.
 const fixGraph = `
@@ -93,15 +93,15 @@ func TestStartingARunDispatchesTheFirstNode(t *testing.T) {
 	}
 }
 
-func TestAFinishedTurnBranchesOnItsResult(t *testing.T) {
+func TestAFinishedTaskBranchesOnItsResult(t *testing.T) {
 	graph := parsed(t)
 	run := Run{ID: "r1", Node: "fix", Status: StatusRunning, State: map[string]string{}}
 
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "fix", Reply: "all green"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "fix", Reply: "all green"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
-	// The turn worked, so result.failed is "false", the choice answers true, and the run moves to
+	// The task worked, so result.failed is "false", the choice answers true, and the run moves to
 	// the second dispatch.
 	if next.Node != "push" || next.Status != StatusRunning {
 		t.Fatalf("the run sits on %q as %q, want push, still running", next.Node, next.Status)
@@ -114,15 +114,15 @@ func TestAFinishedTurnBranchesOnItsResult(t *testing.T) {
 	}
 }
 
-func TestAFailedTurnTakesTheOtherEdge(t *testing.T) {
+func TestAFailedTaskTakesTheOtherEdge(t *testing.T) {
 	graph := parsed(t)
 	run := Run{ID: "r1", Node: "fix", Status: StatusRunning, State: map[string]string{}}
 
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "fix", Failed: true})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "fix", Failed: true})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
-	// The turn failed, so the choice answers false and the run ends without pushing anything.
+	// The task failed, so the choice answers false and the run ends without pushing anything.
 	if next.Node != DoneNode || next.Status != StatusDone {
 		t.Fatalf("the run sits on %q as %q, want done", next.Node, next.Status)
 	}
@@ -135,7 +135,7 @@ func TestAResultForANodeTheRunLeftIsRefused(t *testing.T) {
 	graph := parsed(t)
 	run := Run{ID: "r1", Node: "push", Status: StatusRunning, State: map[string]string{}}
 
-	_, _, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "fix", Reply: "late"})
+	_, _, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "fix", Reply: "late"})
 	if err == nil {
 		t.Fatal("a stale result advanced the run, so a delayed duplicate would move it twice")
 	}
@@ -145,7 +145,7 @@ func TestADoneRunRefusesToMove(t *testing.T) {
 	graph := parsed(t)
 	run := Run{ID: "r1", Node: "done", Status: StatusDone, State: map[string]string{}}
 
-	_, _, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "push", Reply: "again"})
+	_, _, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "push", Reply: "again"})
 	if err == nil {
 		t.Fatal("a finished run advanced")
 	}
@@ -155,9 +155,9 @@ func TestTheAttemptCountsPerNode(t *testing.T) {
 	graph := parsed(t)
 	run := Run{ID: "r1", Node: "fix", Status: StatusRunning, State: map[string]string{}}
 
-	// The worked turn routes through the choice to push; the dispatch for push is its first attempt
+	// The worked task routes through the choice to push; the dispatch for push is its first attempt
 	// even though the run has dispatched before.
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "fix", Reply: "green"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "fix", Reply: "green"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}

@@ -26,35 +26,35 @@ func eventsFrom(ctx context.Context) *eventsWorld {
 	return e
 }
 
-// turnsOn decodes every turn event published to a workspace's stream, oldest first.
-func turnsOn(w *world, workspaceName string) ([]*quaycrewv1.TurnEvent, error) {
-	topic, err := messaging.Topic(workspaceName, "turns")
+// tasksOn decodes every task event published to a workspace's stream, oldest first.
+func tasksOn(w *world, workspaceName string) ([]*quaycrewv1.TaskEvent, error) {
+	topic, err := messaging.Topic(workspaceName, "tasks")
 	if err != nil {
 		return nil, err
 	}
 	if w.events == nil {
 		return nil, fmt.Errorf("this scenario has no event log, so nothing can be on it")
 	}
-	events := make([]*quaycrewv1.TurnEvent, 0)
+	events := make([]*quaycrewv1.TaskEvent, 0)
 	for _, record := range w.events.RecordsOn(topic) {
-		event := &quaycrewv1.TurnEvent{}
+		event := &quaycrewv1.TaskEvent{}
 		if err := proto.Unmarshal(record.Value, event); err != nil {
-			return nil, fmt.Errorf("a record on %s is not a turn event: %w", topic, err)
+			return nil, fmt.Errorf("a record on %s is not a task event: %w", topic, err)
 		}
 		events = append(events, event)
 	}
 	return events, nil
 }
 
-// onlyTurnOn is the single turn on a workspace's stream, and an error when there is not exactly one,
-// so a step asserting on "the published turn" cannot quietly assert on the first of several.
-func onlyTurnOn(w *world, workspaceName string) (*quaycrewv1.TurnEvent, error) {
-	events, err := turnsOn(w, workspaceName)
+// onlyTaskOn is the single task on a workspace's stream, and an error when there is not exactly one,
+// so a step asserting on "the published task" cannot quietly assert on the first of several.
+func onlyTaskOn(w *world, workspaceName string) (*quaycrewv1.TaskEvent, error) {
+	events, err := tasksOn(w, workspaceName)
 	if err != nil {
 		return nil, err
 	}
 	if len(events) != 1 {
-		return nil, fmt.Errorf("%d turns are on the log for %q, want exactly one", len(events), workspaceName)
+		return nil, fmt.Errorf("%d tasks are on the log for %q, want exactly one", len(events), workspaceName)
 	}
 	return events[0], nil
 }
@@ -65,7 +65,7 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, eventsKey{}, &eventsWorld{}), nil
 	})
 
-	sc.Step(`^the next turn will fail$`, func(ctx context.Context) error {
+	sc.Step(`^the next task will fail$`, func(ctx context.Context) error {
 		worldFrom(ctx).runner.failNext = true
 		return nil
 	})
@@ -104,20 +104,20 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		return w.dispatch(ctx, e.secondProject, "", text)
 	})
 
-	sc.Step(`^(\d+) turns? (?:is|are) on the log for "([^"]*)"$`, func(ctx context.Context, want int, workspaceName string) error {
-		events, err := turnsOn(worldFrom(ctx), workspaceName)
+	sc.Step(`^(\d+) tasks? (?:is|are) on the log for "([^"]*)"$`, func(ctx context.Context, want int, workspaceName string) error {
+		events, err := tasksOn(worldFrom(ctx), workspaceName)
 		if err != nil {
 			return err
 		}
 		if len(events) != want {
-			return fmt.Errorf("%d turns are on the log for %q, want %d", len(events), workspaceName, want)
+			return fmt.Errorf("%d tasks are on the log for %q, want %d", len(events), workspaceName, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the published turn says "([^"]*)" was asked and "([^"]*)" came back$`,
+	sc.Step(`^the published task says "([^"]*)" was asked and "([^"]*)" came back$`,
 		func(ctx context.Context, prompt, reply string) error {
-			event, err := onlyTurnOn(worldFrom(ctx), "acme")
+			event, err := onlyTaskOn(worldFrom(ctx), "acme")
 			if err != nil {
 				return err
 			}
@@ -133,9 +133,9 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the published turn is keyed by its session$`, func(ctx context.Context) error {
+	sc.Step(`^the published task is keyed by its session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		topic, err := messaging.Topic("acme", "turns")
+		topic, err := messaging.Topic("acme", "tasks")
 		if err != nil {
 			return err
 		}
@@ -143,18 +143,18 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		if len(records) != 1 {
 			return fmt.Errorf("%d records are on %s, want exactly one", len(records), topic)
 		}
-		if len(w.turns) != 1 {
-			return fmt.Errorf("%d turns ran, want exactly one", len(w.turns))
+		if len(w.tasks) != 1 {
+			return fmt.Errorf("%d tasks ran, want exactly one", len(w.tasks))
 		}
-		if got, want := string(records[0].Key), w.turns[0].sessionID; got != want {
+		if got, want := string(records[0].Key), w.tasks[0].sessionID; got != want {
 			return fmt.Errorf("the record is keyed %q, want the session %q", got, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the published turn carries the workspace, the project and the thread$`, func(ctx context.Context) error {
+	sc.Step(`^the published task carries the workspace, the project and the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		event, err := onlyTurnOn(w, "acme")
+		event, err := onlyTaskOn(w, "acme")
 		if err != nil {
 			return err
 		}
@@ -164,23 +164,23 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		if event.GetProject() != w.projectID {
 			return fmt.Errorf("the record names project %q, want %q", event.GetProject(), w.projectID)
 		}
-		if len(w.turns) != 1 {
-			return fmt.Errorf("%d turns ran, want exactly one", len(w.turns))
+		if len(w.tasks) != 1 {
+			return fmt.Errorf("%d tasks ran, want exactly one", len(w.tasks))
 		}
-		if event.GetHandle() != w.turns[0].threadID {
-			return fmt.Errorf("the record names thread %q, want %q", event.GetHandle(), w.turns[0].threadID)
+		if event.GetHandle() != w.tasks[0].handle {
+			return fmt.Errorf("the record names session %q, want %q", event.GetHandle(), w.tasks[0].handle)
 		}
-		if event.GetThread() != w.turns[0].sessionID {
-			return fmt.Errorf("the record names session %q, want %q", event.GetThread(), w.turns[0].sessionID)
+		if event.GetSession() != w.tasks[0].sessionID {
+			return fmt.Errorf("the record names session %q, want %q", event.GetSession(), w.tasks[0].sessionID)
 		}
 		if event.GetOccurredAt() == nil {
-			return fmt.Errorf("the record does not say when the turn happened")
+			return fmt.Errorf("the record does not say when the task happened")
 		}
 		return nil
 	})
 
-	sc.Step(`^the published turn failed and says why$`, func(ctx context.Context) error {
-		event, err := onlyTurnOn(worldFrom(ctx), "acme")
+	sc.Step(`^the published task failed and says why$`, func(ctx context.Context) error {
+		event, err := onlyTaskOn(worldFrom(ctx), "acme")
 		if err != nil {
 			return err
 		}
@@ -191,26 +191,26 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the record does not say what went wrong")
 		}
 		if event.GetReply() != "" {
-			return fmt.Errorf("the record carries a reply %q for a turn that failed", event.GetReply())
+			return fmt.Errorf("the record carries a reply %q for a task that failed", event.GetReply())
 		}
 		return nil
 	})
 
-	sc.Step(`^nothing on the published turn says "([^"]*)"$`, func(ctx context.Context, secret string) error {
-		event, err := onlyTurnOn(worldFrom(ctx), "acme")
+	sc.Step(`^nothing on the published task says "([^"]*)"$`, func(ctx context.Context, secret string) error {
+		event, err := onlyTaskOn(worldFrom(ctx), "acme")
 		if err != nil {
 			return err
 		}
 		// The whole record rather than the fields this step happens to know about, so a field added
 		// later cannot quietly start carrying the value.
 		if rendered := prototext.Format(event); strings.Contains(rendered, secret) {
-			return fmt.Errorf("the published turn carries %q: %s", secret, rendered)
+			return fmt.Errorf("the published task carries %q: %s", secret, rendered)
 		}
 		return nil
 	})
 
-	sc.Step(`^the published turn names "([^"]*)" as redacted$`, func(ctx context.Context, name string) error {
-		event, err := onlyTurnOn(worldFrom(ctx), "acme")
+	sc.Step(`^the published task names "([^"]*)" as redacted$`, func(ctx context.Context, name string) error {
+		event, err := onlyTaskOn(worldFrom(ctx), "acme")
 		if err != nil {
 			return err
 		}
@@ -222,40 +222,40 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the session's history carries no "([^"]*)"$`, func(ctx context.Context, secret string) error {
 		w := worldFrom(ctx)
-		last, err := w.lastTurn()
+		last, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		turns, err := listTurns(ctx, w, last.sessionID)
+		tasks, err := listTasks(ctx, w, last.sessionID)
 		if err != nil {
 			return err
 		}
-		if len(turns) == 0 {
+		if len(tasks) == 0 {
 			return fmt.Errorf("the session has no history, so this proves nothing")
 		}
-		for _, turn := range turns {
-			if rendered := prototext.Format(turn); strings.Contains(rendered, secret) {
+		for _, task := range tasks {
+			if rendered := prototext.Format(task); strings.Contains(rendered, secret) {
 				return fmt.Errorf("the history carries %q: %s", secret, rendered)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the turns on the log are in the order they were asked$`, func(ctx context.Context) error {
+	sc.Step(`^the tasks on the log are in the order they were asked$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		events, err := turnsOn(w, "acme")
+		events, err := tasksOn(w, "acme")
 		if err != nil {
 			return err
 		}
-		if len(events) != len(w.turns) {
-			return fmt.Errorf("%d turns are on the log and %d turns ran", len(events), len(w.turns))
+		if len(events) != len(w.tasks) {
+			return fmt.Errorf("%d tasks are on the log and %d tasks ran", len(events), len(w.tasks))
 		}
 		for i, event := range events {
-			if event.GetThread() != w.turns[i].sessionID {
-				return fmt.Errorf("record %d names session %q, want %q", i, event.GetThread(), w.turns[i].sessionID)
+			if event.GetSession() != w.tasks[i].sessionID {
+				return fmt.Errorf("record %d names session %q, want %q", i, event.GetSession(), w.tasks[i].sessionID)
 			}
-			if event.GetReply() != w.turns[i].reply {
-				return fmt.Errorf("record %d carries reply %q, want %q", i, event.GetReply(), w.turns[i].reply)
+			if event.GetReply() != w.tasks[i].reply {
+				return fmt.Errorf("record %d carries reply %q, want %q", i, event.GetReply(), w.tasks[i].reply)
 			}
 		}
 		return nil

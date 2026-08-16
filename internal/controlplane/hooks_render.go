@@ -16,10 +16,10 @@ import (
 // them sits beside them and has to travel too. Read only: a session that can edit the file binding
 // its own constraints is a session with no constraints.
 //
-// A failure writing is a session with fewer hooks, not a failed turn, and that is a deliberate and
+// A failure writing is a session with fewer hooks, not a failed task, and that is a deliberate and
 // uncomfortable trade. The alternative is a crew where one unwritable directory stops every
-// conversation. The listing is where an operator finds out which hooks a thread actually holds.
-func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Thread) (sandbox.Mount, bool) {
+// conversation. The listing is where an operator finds out which hooks a session actually holds.
+func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Session) (sandbox.Mount, bool) {
 	held := s.hooksFor(ctx, session.GetWorkspace())
 	dir, canWrite := s.storage.WorkspaceHooksDir(session.GetWorkspace())
 	if !canWrite {
@@ -44,11 +44,11 @@ func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Thread) (s
 	return sandbox.Mount{Source: host, Target: sandbox.HooksPath, ReadOnly: true}, true
 }
 
-// settingsFor is the settings file a turn should load, and empty when the session is under no hooks.
+// settingsFor is the settings file a task should load, and empty when the session is under no hooks.
 //
-// Read again rather than remembered from sandbox creation, because a sandbox is adopted across turns
+// Read again rather than remembered from sandbox creation, because a sandbox is adopted across tasks
 // and this process may not be the one that built it.
-func (s *Server) settingsFor(ctx context.Context, session *quaycrewv1.Thread) string {
+func (s *Server) settingsFor(ctx context.Context, session *quaycrewv1.Session) string {
 	if len(s.hooksFor(ctx, session.GetWorkspace())) == 0 {
 		return ""
 	}

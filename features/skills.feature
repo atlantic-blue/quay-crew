@@ -44,13 +44,13 @@ Feature: A session is given the skills the crew has
     When the operator dispatches "hello" to the project
     Then the sandbox mounts the git skill read only
 
-  # The index is rendered from what the session holds, every turn. Taken into the crew's context it
+  # The index is rendered from what the session holds, every task. Taken into the crew's context it
   # would be stored, then rendered beside itself, then again, which is exactly what happens to unmarked
   # text in a memory file and is by design. It is marked so it cannot be mistaken for that.
   Scenario: The index is never taken into the crew's own context
     Given the crew has a skill "git" that says "Branch first."
     When the operator dispatches "hello" to the project
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then no context the crew holds mentions the git skill
     And the memory file names the "git" skill exactly once
 
@@ -59,10 +59,10 @@ Feature: A session is given the skills the crew has
   # secret the workspace has not set is left out of the session entirely, and the listing carries the
   # reason for a person to read.
   #
-  # Refusing the whole turn was the earlier answer. It made one unusable skill enough to stop every
+  # Refusing the whole task was the earlier answer. It made one unusable skill enough to stop every
   # conversation in the workspace, which is the wrong trade the moment a skill is held crew wide
   # rather than attached one workspace at a time.
-  Scenario: A skill needing a secret the workspace has not set is left out, and the turn still runs
+  Scenario: A skill needing a secret the workspace has not set is left out, and the task still runs
     Given the crew has a skill "github" needing the secret "GH_TOKEN"
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
@@ -72,7 +72,7 @@ Feature: A session is given the skills the crew has
   Scenario: The listing says which secret left a skill out
     Given the crew has a skill "github" needing the secret "GH_TOKEN"
     When the operator dispatches "hello" to the project
-    And the operator lists the thread's skills
+    And the operator lists the session's skills
     Then the listing says the "github" skill was left out, needing "GH_TOKEN"
 
   # Setting the secret is the whole of it, and a sandbox is born with its capabilities, so it is the
@@ -81,7 +81,7 @@ Feature: A session is given the skills the crew has
     Given the crew has a skill "github" needing the secret "GH_TOKEN"
     When the operator dispatches "hello" to the project
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
-    And the operator dispatches "a different subject" to a new thread
+    And the operator dispatches "a different subject" to a new session
     Then the newest sandbox mounts the crew's github skill read only
 
   Scenario: A skill needing a binary the image does not carry is refused, and names the image
@@ -93,7 +93,7 @@ Feature: A session is given the skills the crew has
 
   # A skill needs a secret set on the workspace, and that is the whole of it. There was once a
   # second list naming which secrets were allowed to reach a sandbox at all, which meant a secret
-  # could be set, and its skill attached, and the turn still refused for a reason that lived in a
+  # could be set, and its skill attached, and the task still refused for a reason that lived in a
   # file on the host. Setting the secret is the operator saying yes.
   Scenario: A skill's secret reaches the sandbox with nothing else to set
     Given the crew has a skill "github" needing the secret "GH_TOKEN"
@@ -108,49 +108,49 @@ Feature: A session is given the skills the crew has
 
   # A sandbox is born with its capabilities and never drifts: the mount, the secrets and the setup
   # only ever happen at container creation. So attaching or detaching a skill changes what future
-  # sandboxes are born with, and a thread whose live sandbox predates the current set is marked
+  # sandboxes are born with, and a session whose live sandbox predates the current set is marked
   # stale rather than lied to. Restarting it builds a new sandbox, born with the current skills.
-  Scenario: A thread whose sandbox predates a new skill is marked stale
+  Scenario: A session whose sandbox predates a new skill is marked stale
     Given the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And a session started by dispatching "hello"
     When the operator attaches the "github" skill to the workspace
-    Then the listing marks that thread stale
+    Then the listing marks that session stale
 
-  Scenario: A thread whose sandbox holds the current set is not stale
+  Scenario: A session whose sandbox holds the current set is not stale
     Given the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And the operator attached the "github" skill to the workspace
     When the operator dispatches "hello" to the project
-    Then the listing does not mark that thread stale
+    Then the listing does not mark that session stale
 
-  Scenario: Stopping and restarting a stale thread is born with the current skills
+  Scenario: Stopping and restarting a stale session is born with the current skills
     Given the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And a session started by dispatching "hello"
     And the operator attaches the "github" skill to the workspace
     When the operator stops the session
     And the operator restarts the session
-    Then the listing does not mark that thread stale
+    Then the listing does not mark that session stale
     And the newest sandbox mounts the workspace's github skill read only
 
-  Scenario: A stopped thread is never stale
+  Scenario: A stopped session is never stale
     Given the operator imported the "github" skill
     And the workspace has the secret "GH_TOKEN" set to "ghp-1234"
     And a session started by dispatching "hello"
     And the operator stops the session
     When the operator attaches the "github" skill to the workspace
-    Then the listing does not mark that thread stale
+    Then the listing does not mark that session stale
 
-  # What a thread holds is one question with one answer: the same resolver that builds its sandbox
+  # What a session holds is one question with one answer: the same resolver that builds its sandbox
   # answers its listing, so the listing cannot say one thing while the sandbox does another.
-  Scenario: The listing for a thread says what it actually holds
+  Scenario: The listing for a session says what it actually holds
     Given the crew has a skill "git" that says "Branch first."
     And the operator imported the "notes" skill
     And the operator attached the "notes" skill to the workspace
     And a session started by dispatching "hello"
-    When the operator lists the thread's skills
-    Then the thread holds the "git" and "notes" skills
+    When the operator lists the session's skills
+    Then the session holds the "git" and "notes" skills
 
   # The crew's skills directory is one way in and reaches every session. The other is importing a skill
   # into the store and attaching it to a workspace, which is where a credential belongs: a token for one
@@ -323,7 +323,7 @@ Feature: A session is given the skills the crew has
     And the operator attached the "github" skill to the workspace
     And a session started by dispatching "hello"
     When something rewrites the "github" brief where the session reads it
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the "github" brief reads what the crew holds
 
   # A name can be held by both: the crew's directory and a workspace that imported one. Two mounts on one
@@ -340,23 +340,23 @@ Feature: A session is given the skills the crew has
 
   # A build before the index moved wrote it into the session's own memory file. Read back by a build
   # that only knew the mark in the outer file, the whole index was swept into session context, stored
-  # as though the operator had typed it, and rendered again on every turn from then on. The mark is
+  # as though the operator had typed it, and rendered again on every task from then on. The mark is
   # recognised in every file now, and what sits under it is dropped rather than swept.
   Scenario: A skills index left in the session's own memory file by an earlier build is dropped
     Given the crew has a skill "git" that says "Branch first."
     When the operator dispatches "hello" to the project
     And an earlier build left a skills index in the session's own memory file
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the session's context does not mention the git skill
     And the session's own memory file does not carry a skills index
 
   # Where the sweep already happened, the stored context is the index and nothing else, so the read
   # back has nothing to save and the store has to be put right where it renders.
-  Scenario: A skills index already swept into session context is cleaned on the next turn
+  Scenario: A skills index already swept into session context is cleaned on the next task
     Given the crew has a skill "git" that says "Branch first."
     When the operator dispatches "hello" to the project
     And the session's stored context is only a swept skills index
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the session's context does not mention the git skill
 
   # The mark is recognised without becoming the default. The last scope in the read back is where
@@ -365,7 +365,7 @@ Feature: A session is given the skills the crew has
   Scenario: A note appended to the workspace memory file is kept as workspace context
     When the operator dispatches "hello" to the project
     And something appends "the vendor prefers invoices on Fridays" to the workspace memory file
-    And the operator dispatches "and again" to the same thread
+    And the operator dispatches "and again" to the same session
     Then the workspace context carries "the vendor prefers invoices on Fridays"
 
   # A session commits as the operator, and on a repository that requires verified signatures a commit
@@ -373,7 +373,7 @@ Feature: A session is given the skills the crew has
   # sandbox as a file and the crew never handles the value at all.
   #
   # An ssh key rather than a gpg one: signing with ssh needs one private key file and no agent, no
-  # keyring and no pinentry prompt to hang a turn nobody is watching.
+  # keyring and no pinentry prompt to hang a task nobody is watching.
   Scenario: A workspace mounting a signing key gets sandboxes that sign
     Given the workspace mounts the secret "GIT_SSH_SIGNING_KEY" holding "-----BEGIN OPENSSH PRIVATE KEY-----"
     When the operator dispatches "hello" to the project

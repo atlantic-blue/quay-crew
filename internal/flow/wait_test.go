@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// A graph that waits between two turns, which is the shape most real automations have: do a thing,
+// A graph that waits between two tasks, which is the shape most real automations have: do a thing,
 // leave it a while, look again.
 const waitingGraph = `
 name: patient
@@ -76,7 +76,7 @@ func TestReachingAWaitPutsTheRunDown(t *testing.T) {
 	}
 	run := Run{ID: "r1", Node: "ask", Status: StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
 
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "ask", Reply: "started"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "ask", Reply: "started"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestAWaitThatIsDueCarriesOn(t *testing.T) {
 	}
 }
 
-// A due event for a wait the run is not sitting on is refused, the same way a stale turn result is:
+// A due event for a wait the run is not sitting on is refused, the same way a stale task result is:
 // a poller that fired twice must not move a run twice.
 func TestADueEventForAnotherNodeIsRefused(t *testing.T) {
 	graph, err := Parse([]byte(waitingGraph))
@@ -165,7 +165,7 @@ edges:
 	for range 20 {
 		switch next.Status {
 		case StatusRunning:
-			next, _, err = Advance(graph, next, Event{Kind: EventTurnFinished, Node: next.Node, Reply: "ok"})
+			next, _, err = Advance(graph, next, Event{Kind: EventTaskFinished, Node: next.Node, Reply: "ok"})
 		case StatusWaiting:
 			next, _, err = Advance(graph, next, Event{Kind: EventDue, Node: next.Node})
 		default:

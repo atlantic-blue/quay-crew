@@ -108,7 +108,7 @@ func (m *Memory) StopFlowRun(_ context.Context, id, reason string) (*flow.Run, e
 
 // AdvanceFlowRun moves a run, appends the transition, and claims the dispatch key, all together the
 // way the Postgres store does in one transaction. A claimed key refuses the whole movement, and a
-// run somebody has stopped is refused too, so a stop that lands mid turn is not written back over.
+// run somebody has stopped is refused too, so a stop that lands mid task is not written back over.
 func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flow.Transition) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -128,7 +128,7 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 		}
 		key := fmt.Sprintf("%s|%s|%d", run.ID, transition.Dispatch.Node, transition.Dispatch.Attempt)
 		if m.flowDispatches[key] {
-			return fmt.Errorf("store: run %s already dispatched node %s attempt %d, and the same turn is never sent twice", run.ID, transition.Dispatch.Node, transition.Dispatch.Attempt)
+			return fmt.Errorf("store: run %s already dispatched node %s attempt %d, and the same task is never sent twice", run.ID, transition.Dispatch.Node, transition.Dispatch.Attempt)
 		}
 		m.flowDispatches[key] = true
 	}

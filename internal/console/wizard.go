@@ -71,7 +71,7 @@ const (
 	// stepName names the new workspace or project.
 	stepName
 	// stepSecret takes the subscription token, which is what a workspace needs before it can run a
-	// turn.
+	// task.
 	stepSecret
 	// stepContext takes what the model should be told about a project.
 	stepContext
@@ -79,9 +79,9 @@ const (
 	stepMessage
 	// stepPickSkill chooses a skill the crew holds in its store, to attach to the workspace.
 	stepPickSkill
-	// stepMode chooses what the thread's turns may do without asking. It is asked rather than
-	// defaulted, because a sandbox is born with its capabilities: a thread started in the wrong mode
-	// costs a restart, and one that cannot act is a thread that apologises instead of working.
+	// stepMode chooses what the session's tasks may do without asking. It is asked rather than
+	// defaulted, because a sandbox is born with its capabilities: a session started in the wrong mode
+	// costs a restart, and one that cannot act is a session that apologises instead of working.
 	stepMode
 	// stepWorking is the crew being asked to make it.
 	stepWorking
@@ -141,8 +141,8 @@ type wizard struct {
 	secret  string
 	context string
 	message string
-	// mode is what the thread's turns may do without asking, in the protocol's words rather than the
-	// operator's, because it travels straight into the dispatch that starts the thread.
+	// mode is what the session's tasks may do without asking, in the protocol's words rather than the
+	// operator's, because it travels straight into the dispatch that starts the session.
 	mode  string
 	skill wizardChoice
 
@@ -208,7 +208,7 @@ func (w wizard) step() wizardStep {
 	}
 	steps := w.kind.steps()
 	// The guided setup does not ask. It is the first run of an empty crew, walking somebody through
-	// six questions already, and a thread it starts keeps the crew's default the way every thread did
+	// six questions already, and a session it starts keeps the crew's default the way every session did
 	// before this step existed. Asking is for the wizard the operator opens deliberately.
 	if w.guided {
 		steps = without(steps, stepMode)
@@ -254,12 +254,12 @@ func (w wizard) prompt() string {
 	case stepMessage:
 		return "first message to " + w.where()
 	case stepPickSkill:
-		// The reminder rides on the question, because a skill whose secret is unset refuses the turn
+		// The reminder rides on the question, because a skill whose secret is unset refuses the task
 		// rather than the attach, and attaching is the moment somebody can still act on it.
 		return "which skill for " + w.workspace.name + " (set the secrets it names on this workspace)"
 	case stepMode:
 		// What it may do rather than what the mode is called: an operator picking this is deciding
-		// how much room the thread gets, not naming a setting.
+		// how much room the session gets, not naming a setting.
 		return "what may it do without asking (plan, edits, dangerous)"
 	default:
 		return "making it"
@@ -346,7 +346,7 @@ func mod(a, n int) int {
 }
 
 // shown is what the operator sees of what they have typed. A secret is never echoed: a value on a
-// screen is a value in that terminal's scrollback, and this one runs every turn the crew makes.
+// screen is a value in that terminal's scrollback, and this one runs every task the crew makes.
 func (w wizard) shown() string {
 	if w.step() == stepSecret {
 		return strings.Repeat("*", len([]rune(w.typed)))
@@ -698,9 +698,9 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the context for %s: %w", plan.where(), err)}
 			}
 		case kindSession:
-			// Detached, because a turn takes as long as the work takes and the console has a screen to
+			// Detached, because a task takes as long as the work takes and the console has a screen to
 			// draw. Waiting for one meant the wizard held every key until the thirty second deadline
-			// below killed the turn, and the thread it left had a container, a row, and no
+			// below killed the task, and the session it left had a container, a row, and no
 			// conversation. The row says running until it lands.
 			if _, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 				Project: plan.project.id, Text: plan.message, PermissionMode: plan.mode, Detach: true,

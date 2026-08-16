@@ -21,7 +21,7 @@ import (
 // already imported is not refused, because a run is dispatch, which the driver already has: it can
 // reach nothing through a flow that it could not reach by dispatching directly.
 //
-// Everything the driver exists to do stays open: workspaces, projects, threads, dispatch, starting
+// Everything the driver exists to do stays open: workspaces, projects, sessions, dispatch, starting
 // a flow, and context at the workspace and project scopes.
 func DeniedToDriver(fullMethod string, request any) error {
 	switch fullMethod {
@@ -30,7 +30,7 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_ImportSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_AttachSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_DetachSkill_FullMethodName,
-		quaycrewv1.ControlPlaneService_SetThreadPermissionMode_FullMethodName,
+		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName,
 		quaycrewv1.ControlPlaneService_ImportFlow_FullMethodName:
 		return refusedToDriver(fullMethod)
 	case quaycrewv1.ControlPlaneService_SetContext_FullMethodName:

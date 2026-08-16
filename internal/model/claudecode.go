@@ -14,19 +14,19 @@ import (
 
 // ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived
 // subscription token from (minted by `claude setup-token`). The control plane stores this per workspace
-// as a secret and injects it into the sandbox at turn time.
+// as a secret and injects it into the sandbox at task time.
 const ClaudeCodeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 
-// ClaudeCodeRunner runs turns by driving the Claude Code CLI, under your subscription (no API cost).
+// ClaudeCodeRunner runs tasks by driving the Claude Code CLI, under your subscription (no API cost).
 // It runs the CLI inside the session's sandbox it is handed, so the run is isolated and the CLI's
-// state persists across the session's turns. It streams JSON events, captures the session id so the
-// thread can be resumed, and returns the result text.
+// state persists across the session's tasks. It streams JSON events, captures the session id so the
+// session can be resumed, and returns the result text.
 type ClaudeCodeRunner struct {
 	// Bin is the CLI binary; empty defaults to "claude".
 	Bin string
 	// DefaultWorkdir is used when a Request does not set Workdir.
 	DefaultWorkdir string
-	// Model is which model a turn runs against, as an alias for the newest of a tier ("opus") or a
+	// Model is which model a task runs against, as an alias for the newest of a tier ("opus") or a
 	// full name ("claude-opus-5"). Empty passes no --model, which leaves the choice to the CLI, and
 	// the CLI chooses Sonnet.
 	Model string
@@ -38,7 +38,7 @@ func NewClaudeCodeRunner() *ClaudeCodeRunner { return &ClaudeCodeRunner{Bin: "cl
 // compile time check.
 var _ Runner = (*ClaudeCodeRunner)(nil)
 
-// envList turns the request env into the "KEY=value" form the sandbox expects, sorted so the exec is
+// envList tasks the request env into the "KEY=value" form the sandbox expects, sorted so the exec is
 // deterministic.
 func envList(env map[string]string) []string {
 	if len(env) == 0 {
@@ -64,7 +64,7 @@ func buildArgs(req Request, model string) []string {
 	args := []string{"-p", req.Text, "--output-format", "stream-json", "--verbose", "--permission-mode", mode}
 	// Which model, when the crew has been told. Left off when it has not, so a crew can always fall
 	// back to whatever the CLI picks for itself: a name the CLI stops accepting would otherwise fail
-	// every turn with no way to configure around it.
+	// every task with no way to configure around it.
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -73,14 +73,14 @@ func buildArgs(req Request, model string) []string {
 	}
 	// Additional settings, so the operator's own file inside the sandbox still applies and the crew's
 	// hooks are added to it rather than replacing it. Left off when there are none, because a path to
-	// a file that is not there is a turn that fails before it starts.
+	// a file that is not there is a task that fails before it starts.
 	if req.Settings != "" {
 		args = append(args, "--settings", req.Settings)
 	}
 	return args
 }
 
-// Run runs one turn inside the session's sandbox and parses its streamed output.
+// Run runs one task inside the session's sandbox and parses its streamed output.
 func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error) {
 	if box == nil {
 		return Response{}, fmt.Errorf("model: no sandbox provided")
@@ -111,7 +111,7 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 	return resp, nil
 }
 
-// why explains a turn that failed, in the order the explanations are worth anything.
+// why explains a task that failed, in the order the explanations are worth anything.
 //
 // Every model failure used to read "run exited: exit status 1", which is the same sentence for an
 // expired token, a network failure, a missing binary and the model refusing the request. The reason
@@ -144,14 +144,14 @@ type streamEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"session_id"`
 	Result    string `json:"result"`
-	// IsError and APIErrorStatus are how the model says the turn did not do what was asked. They
+	// IsError and APIErrorStatus are how the model says the task did not do what was asked. They
 	// arrive on the result event, on standard output, in the same stream as a reply: the reason a
-	// turn failed is usually here rather than on the error stream, and it was being parsed past.
+	// task failed is usually here rather than on the error stream, and it was being parsed past.
 	IsError        bool `json:"is_error"`
 	APIErrorStatus int  `json:"api_error_status"`
 	// TotalCostUSD and Usage arrive on the result event and were being read past. The stream has
 	// carried them the whole time, so the crew was throwing away the only number that says what a
-	// turn cost.
+	// task cost.
 	TotalCostUSD *float64 `json:"total_cost_usd"`
 	Usage        *struct {
 		InputTokens              int64 `json:"input_tokens"`
@@ -168,12 +168,12 @@ type streamEvent struct {
 }
 
 // parseStream reads streamed JSON events and extracts the session id, the final reply, and the
-// model's own account of refusing the turn. It prefers the "result" event's text and falls back to
+// model's own account of refusing the task. It prefers the "result" event's text and falls back to
 // the concatenated assistant text.
 // It also keeps whatever arrived on that stream and was not a stream event at all. Something running
 // in place of the model writes there too, and it is the only account of the failure there is: the
 // Docker command line reports "executable file not found" on standard output rather than on the error
-// stream, so a turn against an image with no model in it explained itself as an exit status until
+// stream, so a task against an image with no model in it explained itself as an exit status until
 // this was kept. Found by running it, not by reading it.
 func parseStream(r io.Reader) (Response, string, string, error) {
 	var resp Response
@@ -229,7 +229,7 @@ func parseStream(r io.Reader) (Response, string, string, error) {
 			if event.IsError {
 				refused = event.Result
 				if refused == "" {
-					refused = "the model refused the turn and gave no reason"
+					refused = "the model refused the task and gave no reason"
 				}
 				if event.APIErrorStatus != 0 {
 					refused = fmt.Sprintf("%s (status %d)", refused, event.APIErrorStatus)
