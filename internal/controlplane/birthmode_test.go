@@ -12,11 +12,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// What a thread may do when it is born was a constant in this file. Every thread that did not come
+// What a session may do when it is born was a constant in this file. Every session that did not come
 // through the console's wizard arrived in acceptEdits, and the only way to change that was to edit
 // the binary. It comes from the crew's configuration now.
 
-// aCrewBornIn is a crew whose configuration says what a thread may do, and the runner it dispatches
+// aCrewBornIn is a crew whose configuration says what a session may do, and the runner it dispatches
 // to, because what the store recorded is not the question: what the model was run with is.
 func aCrewBornIn(t *testing.T, mode string) (quaycrewv1.ControlPlaneServiceServer, *model.FakeRunner) {
 	t.Helper()
@@ -29,7 +29,7 @@ func aCrewBornIn(t *testing.T, mode string) (quaycrewv1.ControlPlaneServiceServe
 	return server, runner
 }
 
-// dispatched starts a thread the ordinary way, which is the path the wizard does not touch.
+// dispatched starts a session the ordinary way, which is the path the wizard does not touch.
 func dispatched(t *testing.T, server quaycrewv1.ControlPlaneServiceServer) {
 	t.Helper()
 	ctx := context.Background()
@@ -50,10 +50,10 @@ func dispatched(t *testing.T, server quaycrewv1.ControlPlaneServiceServer) {
 	}
 }
 
-// The one that matters. A crew that recorded the mode on the thread and ran the turn in something
+// The one that matters. A crew that recorded the mode on the session and ran the task in something
 // else would pass any assertion made against the listing, and the operator would find out when the
 // model asked for an approval nobody was there to give.
-func TestATurnRunsInTheModeTheCrewIsConfiguredToBornThreadsIn(t *testing.T) {
+func TestATaskRunsInTheModeTheCrewIsConfiguredToBornSessionsIn(t *testing.T) {
 	for _, mode := range []string{model.PermissionPlan, model.PermissionBypass, model.PermissionAcceptEdits} {
 		t.Run(mode, func(t *testing.T) {
 			server, runner := aCrewBornIn(t, mode)
@@ -61,20 +61,20 @@ func TestATurnRunsInTheModeTheCrewIsConfiguredToBornThreadsIn(t *testing.T) {
 			dispatched(t, server)
 
 			if was := runner.LastReq.PermissionMode; was != mode {
-				t.Fatalf("the first turn ran in %q, want %q, which is what the crew is configured for", was, mode)
+				t.Fatalf("the first task ran in %q, want %q, which is what the crew is configured for", was, mode)
 			}
 		})
 	}
 }
 
 // A crew that says nothing keeps what every crew has had until now, because an upgrade that quietly
-// widens what a thread may do is the worst way to find out this setting exists.
+// widens what a session may do is the worst way to find out this setting exists.
 func TestACrewThatSaysNothingKeepsTheModeItAlwaysHad(t *testing.T) {
 	server, runner := aCrewBornIn(t, "")
 
 	dispatched(t, server)
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionAcceptEdits {
-		t.Fatalf("a crew with nothing configured ran its first turn in %q, want %q", was, model.PermissionAcceptEdits)
+		t.Fatalf("a crew with nothing configured ran its first task in %q, want %q", was, model.PermissionAcceptEdits)
 	}
 }

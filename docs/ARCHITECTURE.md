@@ -75,7 +75,7 @@ Each is its own Go service in its own container.
 - **Control plane.** Consumes inbound messages and routes them. It holds the controllers: a sessions
   controller (start or resume the right session), a tools controller, a skills controller, and a model
   controller. It also exposes the **Workspaces API** over gRPC for creating and configuring workspaces.
-- **Agent sessions.** Worker services that run a model thread, capture the session id so a thread can
+- **Agent sessions.** Worker services that run a model session, capture the session id so a session can
   be resumed, and execute tools. Many run in parallel, isolated per workspace. Tool execution happens in
   a sandbox tier.
 - **Workspaceor.** Consumes the event log and materialises the read model. The read model is derived, so
@@ -83,7 +83,7 @@ Each is its own Go service in its own container.
 - **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list workspaces, see
   every session, tail a conversation, start or stop work.
 - **Flow engine.** Advances automation runs against a graph, over its own Postgres tables,
-  dispatching turns into each run's own thread. It is where control flow across sessions is written
+  dispatching tasks into each run's own session. It is where control flow across sessions is written
   down. Built as of 9 August 2026: `internal/flow`, with `quay flow import|start|list|show` in
   front of it. See Automation graphs below.
 
@@ -95,7 +95,7 @@ Each is its own Go service in its own container.
 - **Why an event log, and what it is not.** It decouples the services (each publishes and subscribes
   on its own) and it lets a consumer added later read what already happened. It is **not the source
   of truth**: the store is, and publishing is deliberately lossy, because a broker that cannot be
-  reached must never fail a turn that already happened ([`EVENTS.md`](EVENTS.md) is the honest
+  reached must never fail a task that already happened ([`EVENTS.md`](EVENTS.md) is the honest
   account). Decided 9 August 2026: anything the crew cannot afford to lose is written to the store
   in the same transaction as the thing it describes, and the log carries the same record outward as
   an export for whatever wants a stream. Unset seeds then mean no export, never lost history.
@@ -143,7 +143,7 @@ flowchart TB
 ## Sandboxes
 
 A **session** is the conversation. A **sandbox** is the isolated environment that session runs in. A
-session runs in exactly one sandbox, created on its first turn, reused across turns so the model's own
+session runs in exactly one sandbox, created on its first task, reused across tasks so the model's own
 state survives between them, and closed when the session ends.
 
 The default provider gives each session its own container. The control plane runs as a service in the
@@ -175,7 +175,7 @@ The levels are not an invention. The model's command line tool already reads mem
 in the home directory and `CLAUDE.md` in the working directory, and already keeps its transcripts
 under the home directory. So a workspace's directory carries who you are plus every conversation in
 it, and a project's directory carries that body of work and its files. Context reaches the model with
-no prompt assembly, no token cost on a turn that does not need it, and no second mechanism: editing
+no prompt assembly, no token cost on a task that does not need it, and no second mechanism: editing
 context is editing files.
 
 They are bind mounts rather than named volumes so the operator can drop a file into a project with an
@@ -189,37 +189,41 @@ the path the host daemon sees (`QC_DATA_HOST`), because those containers are sib
 With neither set, state stays in the container and dies with it. Where the directories live is
 configuration, so a Kubernetes provider can back the same two levels with a volume instead.
 
-The default sandbox image carries the Claude Code CLI, and a turn runs `claude` inside it under the
+The default sandbox image carries the Claude Code CLI, and a task runs `claude` inside it under the
 operator's subscription. The image holds no credentials: the subscription token is stored per workspace
-as a secret and injected into the sandbox as an environment variable at turn time, so the same image
+as a secret and injected into the sandbox as an environment variable at task time, so the same image
 runs unchanged on a laptop or in the cloud. See `docs/SANDBOX.md` for how to build the image, set the
-token, and run a real turn.
+token, and run a real task.
 
-Verifying this end to end is a requirement, not a nicety. A turn that cannot exec inside its sandbox
+Verifying this end to end is a requirement, not a nicety. A task that cannot exec inside its sandbox
 is a stack that cannot do anything at all, and a smoke test that only checks the services are running
-will not notice. Continuous integration therefore dispatches a real turn against the composed stack
+will not notice. Continuous integration therefore dispatches a real task against the composed stack
 with a model substitute that still execs inside the sandbox.
 
-## Workspaces, projects and threads
+## Workspaces, projects and sessions
 
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
-**Decided 9 August 2026: the operator facing word is thread, everywhere. Aligned into the protocol
-the same day.** The wire now says `Thread`: the thread RPCs (`ListThreads`, `GetThread`,
-`AttachThread` and the rest), a `Turn` and a `TurnEvent` that say which thread they belong to, and
-a dispatch that returns the thread's `id` beside its `handle`. A thread carries three identifiers,
-each with one job: `id` is the crew's own row and names the sandbox container, `handle` is the name
-a channel dispatches to (dispatch to the same handle and the conversation continues), and
-`model_session_id` is the model's own word for the conversation it keeps, used to resume it.
-Session survives only where it is the internal runtime word: the store's tables and the control
-plane's internals, which no operator reads.
+**Decided 16 August 2026: the crew has one word for a conversation and one for a piece of work.
+They are session and task.** This reverses the 9 August decision below. The wire says `Session`: the
+session RPCs (`ListSessions`, `GetSession`, `AttachSession` and the rest), a `Task` and a `TaskEvent`
+that say which session they belong to, and a dispatch that returns the session's `id` beside its
+`handle`. A session carries three identifiers, each with one job: `id` is the crew's own row and
+names the sandbox container, `handle` is the name a channel dispatches to (dispatch to the same
+handle and the conversation continues), and `model_session_id` is the model's own word for the
+conversation it keeps, used to resume it. `quay threads` and `quay turns` are refused by name, and
+neither word opens anything in the console.
+
+**Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
+two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
+learn both. `turn` came from conversation analysis and never said how long the work takes.
 
 ```
 workspace  "me"                      who you are; secrets and channels attach here
   └── project  "house-bills"         a body of work, with its own shared context
-        ├── thread  "energy supplier"
-        └── thread  "council tax"
+        ├── session  "energy supplier"
+        └── session  "council tax"
 ```
 
 A workspace and a project are named in lowercase with hyphens, because a name is half of an address:
@@ -228,16 +232,16 @@ disk. The control plane refuses a name that could not be part of one, and says w
 
 The three levels are addressed as a path, and the operator stands in one of them at a time. `quay use
 me/house-bills` records that in `~/.quay/context`, the way kubectl keeps a current context, and
-every command after it acts there until an address typed on the command line says otherwise. A thread
+every command after it acts there until an address typed on the command line says otherwise. A session
 is the third level, so standing in one continues that conversation rather than starting another.
 
-A **workspace** is the unit of tenancy. A **project** is a body of work inside it. A **thread** is one
-conversation, and a session is that thread running: it belongs to a project, and it carries its
+A **workspace** is the unit of tenancy. A **project** is a body of work inside it. A **session** is one
+conversation, and a session is that session running: it belongs to a project, and it carries its
 workspace too, denormalised so a listing needs no join. A project never moves workspace, so that
 cannot drift.
 
-A thread identifier is unique within its project, not within the workspace. Two bodies of work in one
-workspace can both have a thread a channel calls "general" without colliding, which is the whole
+A session identifier is unique within its project, not within the workspace. Two bodies of work in one
+workspace can both have a session a channel calls "general" without colliding, which is the whole
 reason the level exists.
 
 Deleting a workspace hides its projects, and deleting a project hides it from every read while its
@@ -260,8 +264,8 @@ pointer orphans a conversation that still exists and cannot be reached again.
   ships a matching down file for an operator to run deliberately; nothing rolls back automatically.
 - **Every table carries `id`, `created_at` and `updated_at`.** Workspaces are soft deleted through
   `deleted_at` and disappear from every read, while their sessions keep their history.
-- **A failed turn never erases the conversation handle.** Recording a turn with no handle leaves the
-  stored one alone, so a model call that fails cannot cost you the thread.
+- **A failed task never erases the conversation handle.** Recording a task with no handle leaves the
+  stored one alone, so a model call that fails cannot cost you the session.
 
 Set `QC_DATABASE_URL` to use Postgres. Leave it unset and the store is in memory, which is only
 appropriate for a throwaway stack.
@@ -284,7 +288,7 @@ Three rules keep the layer worth having.
   confirming it goes red. A scenario that passes against a broken system is worse than no scenario.
 - **They state their own limits.** The model runner and the sandbox provider are doubles here, so
   these scenarios prove routing, session identity, sandbox lifecycle and refusals. They deliberately
-  do not prove a real turn executes; the dispatch smoke does that against the composed stack.
+  do not prove a real task executes; the dispatch smoke does that against the composed stack.
 
 The suite fails if it finds no feature files, because a run with nothing to run reports success.
 
@@ -320,7 +324,7 @@ returns the next state plus commands to emit.
 
 **A run lives in Postgres, and each transition is published to the log as the audit record.** That is
 the same split the rest of the system already makes, and it is the split the log forces: publishing a
-turn is deliberately lossy, because a broker that cannot be reached must never fail a turn that
+task is deliberately lossy, because a broker that cannot be reached must never fail a task that
 already happened, and with `QC_KAFKA_SEEDS` unset nothing is published at all. A run whose next
 transition depended on an event that was dropped would sit on that node forever with nothing to say
 so, which is why the log cannot be the place a run's position is kept.
@@ -335,7 +339,7 @@ Power is not what is wanted at this layer, legibility is.
 
 Five node types, and a sixth needs an argument:
 
-- `dispatch` sends a turn to the run's own thread and waits for the result.
+- `dispatch` sends a task to the run's own session and waits for the result.
 - `wait` waits for an external event, a timer or a webhook or a channel message.
 - `ask` puts a question to the operator through the gated outbound and waits for the reply.
 - `choice` branches on state, pure, no side effect.
@@ -365,29 +369,86 @@ edges:
   - [ask, push, "yes"]
 ```
 
-### A run owns its thread
+### What a run finishing actually means
 
-**The thread identifier is the run identifier.** `Dispatch` resolves a thread through
-`FindOrCreateSession(project, thread)`, so a thread identifier that does not exist yet is created and
+**`result.failed` says the model did not error. It says nothing about whether anything was
+achieved.** A task that could not do the work is not a failed task: asked to read a file that is not
+there, a capable model answers plausibly instead of stopping, and a graph branching on
+`result.failed` then walks its success path through work that never happened. The first flow run
+against a real crew did exactly that. It finished at `done`, reported four transitions, and its
+summary was the model's account of a repository it never found.
+
+**So a dispatch node may declare what will show it worked, and the crew checks it.** `expect: { file:
+package.json }` is a path that must be in the run's session after the task, read from the working
+directory the crew keeps rather than asked of the model. `expect: { contains: "all green" }` is a
+string the reply must carry, which is weaker because it is still the model's own prose, and is there
+for work that leaves no file behind. Whichever is declared is checked.
+
+**An expectation that does not hold stops the run**, with the reason naming the node and what was
+not there, and `result.expected` in the run's state. It stops rather than branching because the crew
+knows the work did not happen and does not know why, and because a run that halts is read correctly
+while a run that finishes is believed. Its session is left alone rather than archived, since that is
+where the evidence is. A graph that declares nothing behaves exactly as it did.
+
+An expectation nothing can check stops the run too. A crew that keeps no working directory on disk
+cannot answer the question, and a check that quietly passes when it could not be run is the same
+false green as no check at all.
+
+Left out on purpose: a command the crew runs and requires to exit zero. It is the obvious third
+form, and it makes an imported graph a way to run arbitrary commands through the control plane,
+which is a decision to take on its own rather than in passing. A file covers the case that was
+found.
+
+### A run owns its session
+
+**The session identifier is the run identifier.** `Dispatch` resolves a session through
+`FindOrCreateSession(project, session)`, so a session identifier that does not exist yet is created and
 the same one later continues the conversation. A dispatch node therefore passes the run's own
 identifier every time, and four things follow:
 
 - **The reducer keeps no session handle.** The address is derived from the run it already holds, so
   there is nothing to store and nothing to go stale.
-- **A restart mid run resumes.** The next dispatch lands in the same thread and the same sandbox, so
+- **A restart mid run resumes.** The next dispatch lands in the same session and the same sandbox, so
   the model's own state across the run survives it.
-- **Correlation stops being a heuristic.** Turn events are keyed by session, and the session belongs
-  to the run, so a turn event on it is unambiguously this run's, even when the operator types into
-  that thread by hand. `TurnEvent` needs no run identifier for this, which is why the first version
+- **Correlation stops being a heuristic.** Task events are keyed by session, and the session belongs
+  to the run, so a task event on it is unambiguously this run's, even when the operator types into
+  that session by hand. `TaskEvent` needs no run identifier for this, which is why the first version
   changes nothing in `proto/`.
 - **The run owns the sandbox lifetime.** `done` archives the session, otherwise every run leaves a
-  container behind. Archived threads are listed apart from live ones, so a finished run takes itself
+  container behind. Archived sessions are listed apart from live ones, so a finished run takes itself
   out of the way.
 
-A thread identifier is free form and unique within its project, so a run names its thread after the
+A session identifier is free form and unique within its project, so a run names its session after the
 graph and a short run identifier, `fix-red-pull-request-a1b2c3d4`. The console then reads as what the
 run is doing without waiting for labels; labels become the thing that groups runs rather than the
 thing that names them.
+
+### What a run's session starts with
+
+A run's session is new, so its working directory is empty. Nothing another session did is in it, and
+nothing a previous run of the same graph did is either. This is the assumption a graph author makes
+without noticing, so it is written down here: a run starts in an empty room.
+
+Two directories are mounted into it, and only one of them survives the run:
+
+- `/home/agent/workspace` is this session's own working directory. It is empty on the run's first
+  task and it goes away with the session.
+- `/home/agent/shared` is the workspace's volume, shared by every session in the workspace. What a
+  run writes there is there for the next run, and for every session beside it.
+
+So a graph that needs a repository puts it in the shared volume. A graph that clones into the
+working directory clones on every run, pays for the clone every run, and cannot be relied on to hold
+the same state twice. The convention that makes one clone serve every session, a clone in the volume
+and a worktree per session, is
+[#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is not built.
+
+**A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version, and
+a graph that declares nothing leaves its runs in the mode a session is born in. The mode belongs to
+the graph for the same reason the schedule does: what an automation is allowed to do is versioned and
+reviewable beside what it does. There is nowhere else to put it either, because the run's session is
+made by the run's first dispatch, so `quay mode` has nothing to point at until it is too late. Before
+this, a graph whose first step is "clone this" could not take that step: cloning needs the network,
+and a task nobody is watching has nobody to approve it.
 
 ### Where it sits
 
@@ -400,9 +461,9 @@ therefore do exactly what the caller who started it could do and nothing more.
 **What is built, as of 9 August 2026.** The graph is authored as a file and imported at the version
 written in it, which a run pins so editing the file cannot change an automation halfway through. A
 movement of a run, the record of that movement, and the claim on its dispatch key all land in one
-transaction, so a run is reconstructable by construction and the same turn can never be dispatched,
+transaction, so a run is reconstructable by construction and the same task can never be dispatched,
 and paid for, twice: the key is run, node and attempt. `dispatch`, `choice` and `done` work end to
-end; `StartFlow` answers with the run and drives it behind that answer, because a turn takes as long
+end; `StartFlow` answers with the run and drives it behind that answer, because a task takes as long
 as the model takes. `quay flow import|start|list|show` is the operator surface, and importing a
 graph is refused to the driver for the same reason importing a skill is, while starting a run is
 not, because a run is dispatch and the driver already has that.
@@ -417,7 +478,7 @@ and a made up number would either stop real work or protect nothing; the transit
 because a cycling graph with nobody watching is the failure that costs money.
 
 **A run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a run in
-flight. The stop is cooperative rather than a kill: a run waiting on a turn finishes that turn,
+flight. The stop is cooperative rather than a kill: a run waiting on a task finishes that task,
 because the model is already working and abandoning it mid sentence gains nothing, and what the run
 cannot do is take another step. That is enforced by the database rather than by the engine noticing:
 a movement only writes where the run is still held as running, so a stop that lands while the engine
@@ -475,17 +536,17 @@ sequenceDiagram
     LOG->>FLOW: event
     Note over FLOW: Advance(run, event)<br/>edge matches, next node is dispatch
     FLOW->>LOG: run advanced, now at node dispatch
-    FLOW->>API: Dispatch into the run's own thread
-    API->>SBX: run the turn
+    FLOW->>API: Dispatch into the run's own session
+    API->>SBX: run the task
     SBX-->>API: result, exit code 0
-    API->>LOG: turn finished
+    API->>LOG: task finished
     LOG->>FLOW: event
     Note over FLOW: node choice is pure,<br/>exit code 0 takes the yes edge
     FLOW->>LOG: outbound, gated, awaiting intent
     LOG->>YOU: fixed it locally, push?
     YOU->>LOG: yes
     LOG->>FLOW: event
-    FLOW->>API: Dispatch the push turn
+    FLOW->>API: Dispatch the push task
 ```
 
 ### Constraints that hold the design together
@@ -512,7 +573,7 @@ delivers timer events onto the log and nothing more.
 ### What a sandbox carries
 
 The control plane sets the workspace's environment on the sandbox when it creates it, not only on
-each turn. That is what lets the operator attach to a session's conversation, or shell in and run the
+each task. That is what lets the operator attach to a session's conversation, or shell in and run the
 model by hand, without any tool carrying a credential to each command.
 
 The cost is stated plainly: those values are readable for the life of the container, for example
@@ -560,7 +621,7 @@ calls apart and a token that leaks out of a driver sandbox grants strictly less 
 holds. The calls that grant capability are refused to it, in `DeniedToDriver`: setting or listing
 secrets, importing, attaching or detaching skills, a session's permission mode, and context at the
 crew scope, which is injected into every session including the driver itself. Everything the
-driver exists to do stays open: workspaces, projects, threads, dispatch, and context at the
+driver exists to do stays open: workspaces, projects, sessions, dispatch, and context at the
 workspace and project scopes.
 
 ## Observability and audit
@@ -610,7 +671,7 @@ Concretely:
   enqueue and consume, each controller decision, session start and resume, every tool and sandbox
   execution (command, exit code, duration), every model call (latency, tokens, cost), the permission
   tier applied, every outbound delivery, and every error. One correlation id per inbound message
-  threads through all of them and equals the trace id, so logs and traces pivot in Grafana.
+  sessions through all of them and equals the trace id, so logs and traces pivot in Grafana.
 - **An audit stream:** the security relevant subset (who initiated, what command, which permission
   tier, what shell or tool ran, which files changed, what was sent and to whom), labelled and retained
   longer than debug logs. Every privileged action is a queryable audit event.
@@ -648,7 +709,7 @@ doubles as the trace id, and token and cost counters land with the first model c
 - **Foundations.** Scaffold the Go monorepo and tooling, resolve the open decisions, and stand up the
   logging and correlation id conventions.
 - **Spine (local and usable).** The channel contract, the event log interface, the control plane with
-  the sessions controller, the thread engine, and a CLI channel end to end.
+  the sessions controller, the session engine, and a CLI channel end to end.
 - **First remote channel.** A chat channel inbound onto the log, outbound gated so nothing sends
   without the operator's intent, plus the telemetry stack in the local compose.
 - **Controllers, sessions, sandbox.** The remaining controllers, parallel sessions with a durable
@@ -669,6 +730,6 @@ Quay Crew learns from three points on the map.
 - **Hermes Agent:** an agent loop that writes its own skills, a built in scheduler, and persistent
   memory. Quay Crew borrows the learning loop and the scheduler but keeps changes reviewed rather than
   self applied.
-- **Remote control features** that turn a phone into a live window onto a local session: the safest way
+- **Remote control features** that task a phone into a live window onto a local session: the safest way
   to steer one session, but not a programmable, multi channel, self hosted hub. Quay Crew is the
   latter.

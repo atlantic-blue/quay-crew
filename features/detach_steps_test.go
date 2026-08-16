@@ -8,67 +8,83 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for the scenarios about a turn running while the operator carries on. They hold a turn open
-// rather than timing one, because the thing being specified is what is true *during* a turn, and a
+// Steps for the scenarios about a task running while the operator carries on. They hold a task open
+// rather than timing one, because the thing being specified is what is true *during* a task, and a
 // scenario that waits a duration for that is a scenario that passes on a slow machine by accident.
 func initializeDetachSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the model takes longer over a turn than anybody will wait$`, func(ctx context.Context) error {
+	sc.Step(`^the model takes longer over a task than anybody will wait$`, func(ctx context.Context) error {
 		worldFrom(ctx).release = worldFrom(ctx).runner.hold()
 		return nil
 	})
 
-	sc.Step(`^a turn is under way$`, func(ctx context.Context) error {
-		return worldFrom(ctx).runner.waitForTurn()
+	sc.Step(`^a task is under way$`, func(ctx context.Context) error {
+		return worldFrom(ctx).runner.waitForTask()
 	})
 
-	sc.Step(`^the model finishes the turn$`, func(ctx context.Context) error {
+	// Dispatched the way the console dispatches: the caller gets the session back straight away and the
+	// task runs behind it. A scenario about what the operator does *while* a task runs needs this,
+	// because the waited dispatch does not return until the task has landed.
+	sc.Step(`^a task dispatched without waiting for it$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: w.projectID, Text: "read the repository", Detach: true,
+		})
+		w.lastErr = err
+		if err != nil {
+			return err
+		}
+		w.tasks = append(w.tasks, task{sessionID: resp.GetId(), handle: resp.GetHandle()})
+		return nil
+	})
+
+	sc.Step(`^the model finishes the task$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.release == nil {
-			return fmt.Errorf("no turn was being held, so there is nothing to finish")
+			return fmt.Errorf("no task was being held, so there is nothing to finish")
 		}
 		w.release()
 		w.release = nil
 		return w.settled(ctx)
 	})
 
-	// Read off the crew rather than off the console, because what matters is what the thread holds.
-	sc.Step(`^the crew's one thread is reported as (\w+)$`, func(ctx context.Context, want string) error {
+	// Read off the crew rather than off the console, because what matters is what the session holds.
+	sc.Step(`^the crew's one session is reported as (\w+)$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetThreads()) != 1 {
-			return fmt.Errorf("the crew has %d threads, so there is no single one to ask about",
-				len(listed.GetThreads()))
+		if len(listed.GetSessions()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, so there is no single one to ask about",
+				len(listed.GetSessions()))
 		}
-		if got := listed.GetThreads()[0].GetStatus(); got != want {
-			return fmt.Errorf("the thread is reported as %q, want %q", got, want)
+		if got := listed.GetSessions()[0].GetStatus(); got != want {
+			return fmt.Errorf("the session is reported as %q, want %q", got, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the thread carries what the model said$`, func(ctx context.Context) error {
+	sc.Step(`^the session carries what the model said$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetThreads()) != 1 {
-			return fmt.Errorf("the crew has %d threads, want exactly 1", len(listed.GetThreads()))
+		if len(listed.GetSessions()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, want exactly 1", len(listed.GetSessions()))
 		}
-		turns, err := w.client.ListTurns(ctx, &quaycrewv1.ListTurnsRequest{
-			Thread: listed.GetThreads()[0].GetId(),
+		tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{
+			Session: listed.GetSessions()[0].GetId(),
 		})
 		if err != nil {
 			return err
 		}
-		if len(turns.GetTurns()) == 0 {
-			return fmt.Errorf("the thread has no turns, so the detached one was lost")
+		if len(tasks.GetTasks()) == 0 {
+			return fmt.Errorf("the session has no tasks, so the detached one was lost")
 		}
-		last := turns.GetTurns()[len(turns.GetTurns())-1]
+		last := tasks.GetTasks()[len(tasks.GetTasks())-1]
 		if last.GetReply() == "" {
-			return fmt.Errorf("the recorded turn carries no reply: %+v", last)
+			return fmt.Errorf("the recorded task carries no reply: %+v", last)
 		}
 		return nil
 	})

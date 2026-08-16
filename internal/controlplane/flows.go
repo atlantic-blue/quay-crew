@@ -3,11 +3,15 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,7 +42,7 @@ func (s *Server) ImportFlow(ctx context.Context, req *quaycrewv1.ImportFlowReque
 // StartFlow begins a run of the newest version of a graph and answers with the run, rather than
 // waiting for it.
 //
-// A run dispatches turns, and a turn takes as long as the model takes, so a call that blocked until
+// A run dispatches tasks, and a task takes as long as the model takes, so a call that blocked until
 // the run ended would be a command line that hangs for ten minutes. The run advances behind this
 // answer, and GetFlowRun says where it got to.
 func (s *Server) StartFlow(ctx context.Context, req *quaycrewv1.StartFlowRequest) (*quaycrewv1.StartFlowResponse, error) {
@@ -110,7 +114,7 @@ func asFlowRun(run *flow.Run) *quaycrewv1.FlowRun {
 // StopFlowRun halts a run in flight, keeping the reason so a run somebody stopped and a run that
 // went quiet never read the same.
 //
-// The stop is cooperative rather than a kill: a run waiting on a turn finishes that turn, because
+// The stop is cooperative rather than a kill: a run waiting on a task finishes that task, because
 // the model is already working and abandoning it would leave a sandbox mid sentence for no gain.
 // What it cannot do is take another step, which is what stops the spending.
 func (s *Server) StopFlowRun(ctx context.Context, req *quaycrewv1.StopFlowRunRequest) (*quaycrewv1.StopFlowRunResponse, error) {
@@ -211,15 +215,50 @@ func (s *Server) RunFlowPoller(ctx context.Context) {
 	s.flowPoller.Run(ctx)
 }
 
-// ThreadTokens is what one thread's conversation has cost, which is what a run's ceiling is checked
-// against. Zero for a thread that is gone, has no conversation yet, or whose transcript cannot be
+// SessionTokens is what one session's conversation has cost, which is what a run's ceiling is checked
+// against. Zero for a session that is gone, has no conversation yet, or whose transcript cannot be
 // read: a cost that cannot be read is not a reason to stop work that is already under way.
-func (s *Server) ThreadTokens(ctx context.Context, thread string) int64 {
-	session, err := s.store.GetSession(ctx, thread)
+func (s *Server) SessionTokens(ctx context.Context, id string) int64 {
+	session, err := s.store.GetSession(ctx, id)
 	if err != nil {
 		return 0
 	}
 	return s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId()).Total()
+}
+
+// SessionHolds says whether a path is in a session's own working directory, which is how a graph's
+// claim about what its task would leave behind is checked by the crew rather than by the model.
+//
+// It reads the directory rather than the sandbox. The working directory is state the crew keeps on
+// the host and mounts in, so this is the same files the model was looking at, answered without
+// starting a container and without a road into one.
+//
+// A path that cannot be reached is an error rather than a false: a crew that keeps no state on disk,
+// or a session it does not have, must stop the run rather than quietly satisfy the check.
+func (s *Server) SessionHolds(ctx context.Context, id, path string) (bool, error) {
+	if id == "" {
+		return false, fmt.Errorf("the run has no session yet")
+	}
+	session, err := s.store.GetSession(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("the run's session could not be read: %w", err)
+	}
+	dir, kept := s.storage.WorkingDir(sandbox.Config{
+		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
+	})
+	if !kept {
+		return false, fmt.Errorf("this crew keeps no working directory on disk to look in")
+	}
+	// Cleaned and held inside the session's own directory. The parser refuses a path that climbs, and
+	// this is the second of the two, because the graph and the crew are edited by different hands.
+	inside := filepath.Join(dir, filepath.Clean("/"+path))
+	if _, err := os.Stat(inside); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("%s could not be read: %w", path, err)
+	}
+	return true, nil
 }
 
 // flowRunner is what the server needs to begin a run. The engine implements it; the indirection is

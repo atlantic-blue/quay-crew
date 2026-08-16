@@ -28,10 +28,10 @@ func TestNothingIsSaidWhenTheAllowlistWasNeverSet(t *testing.T) {
 	}
 }
 
-// What a thread may do when it is born comes from the crew's configuration. These hold the reading of
+// What a session may do when it is born comes from the crew's configuration. These hold the reading of
 // it, and in particular hold it to refusing rather than falling back, because a crew configured for
 // "planning" that quietly ran everything in acceptEdits would look exactly like a crew configured for
-// acceptEdits, and the operator would find out when a turn did something they had asked it not to.
+// acceptEdits, and the operator would find out when a task did something they had asked it not to.
 func TestTheBirthModeIsReadFromTheCrewsConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		configured string
@@ -63,7 +63,7 @@ func TestAConfiguredModeThatIsNotAModeStopsTheCrewStarting(t *testing.T) {
 			_, err := birthPermissionMode(wrong)
 
 			if err == nil {
-				t.Fatalf("QC_PERMISSION_MODE=%q was accepted, and every turn would run in a mode nobody chose", wrong)
+				t.Fatalf("QC_PERMISSION_MODE=%q was accepted, and every task would run in a mode nobody chose", wrong)
 			}
 			for _, name := range []string{"plan", "edits", "dangerous"} {
 				if !strings.Contains(err.Error(), name) {

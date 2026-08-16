@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -75,7 +76,7 @@ func TestQuayFlowImportsStartsAndShows(t *testing.T) {
 		t.Fatalf("showing the run said %q, want the graph and where it ended", shown)
 	}
 	if !strings.Contains(shown, "result.reply") {
-		t.Fatalf("showing the run does not carry what the turn replied: %q", shown)
+		t.Fatalf("showing the run does not carry what the task replied: %q", shown)
 	}
 }
 
@@ -126,7 +127,7 @@ edges:
 	}
 }
 
-// Stopping a run from the command line: it says what it stopped, why, and what happens to the turn
+// Stopping a run from the command line: it says what it stopped, why, and what happens to the task
 // already under way, because that last part is the thing an operator will wonder about.
 func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
 	// A model that takes a moment, so the run is genuinely still working when the stop lands.
@@ -167,7 +168,7 @@ edges:
 		t.Fatalf("stopping said %q, want the reason it was given", stopped)
 	}
 	if !strings.Contains(stopped, "already under way finishes") {
-		t.Fatalf("stopping said %q, want it to say what happens to the turn in flight", stopped)
+		t.Fatalf("stopping said %q, want it to say what happens to the task in flight", stopped)
 	}
 
 	shown := mustRun(t, client, "flow", "show", fields[0])
@@ -204,7 +205,10 @@ edges:
 	if len(fields) == 0 {
 		t.Fatal("the listing is empty")
 	}
-	shown := mustRun(t, client, "flow", "show", fields[0])
+	// Polled, because starting answers before the run has moved: a run is driven on a goroutine, so
+	// reading it straight after starting it reads a run still at its first node. Under load that is
+	// what happens, and the test then reports the product as broken.
+	shown := showWhen(t, client, fields[0], "fixed it locally. push?")
 	if !strings.Contains(shown, "fixed it locally. push?") {
 		t.Fatalf("showing an asking run said %q, want the question it is waiting on", shown)
 	}
@@ -276,4 +280,83 @@ func TestQuayFlowNamesWhatItCanDo(t *testing.T) {
 			}
 		}
 	}
+}
+
+// showWhen shows a run repeatedly until what it says carries want, and fails with what it said last
+// if it never does.
+//
+// A run is driven on a goroutine, so starting one answers before it has moved. Every assertion about
+// where a run got to therefore has to wait for it rather than read it once, or it is a race that
+// passes on an idle machine and fails on a loaded one.
+func showWhen(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, run, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		shown = mustRun(t, client, "flow", "show", run)
+		if strings.Contains(shown, want) {
+			return shown
+		}
+		if time.Now().After(deadline) {
+			return shown
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// The pointer a finished run prints has to be a command that works, which is why this runs it.
+//
+// A run ends by archiving its own session, and the summary `quay flow show` prints is the model's own
+// account of what happened. The tasks are the record of it, and the two can disagree: a run has
+// reported four transitions and a tidy summary while every task under it said the working directory
+// was empty. Showing the run printed a session identifier and the command that reads a session refused
+// that exact identifier, so the record was reachable through the database alone.
+func TestShowingAFinishedRunPrintsAWorkingWayToReadItsTasks(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))
+	mustRun(t, client, "flow", "start", "greet")
+
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		listed := mustRun(t, client, "flow", "list")
+		fields := strings.Fields(listed)
+		if len(fields) > 0 {
+			shown = mustRun(t, client, "flow", "show", fields[0])
+			if strings.Contains(shown, "done") {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the run never finished: %q", shown)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	typed := typedCommandIn(t, shown, "quay tasks ")
+	read, err := runQuay(t, client, typed[1:]...)
+	if err != nil {
+		t.Fatalf("the run said to type %q, and that was refused: %v", strings.Join(typed, " "), err)
+	}
+	// The prompt the graph dispatched. The reply comes from a double, so what proves the history is
+	// the run's own is what the run asked.
+	if !strings.Contains(read, "hello") {
+		t.Fatalf("%q answered %q, want the task the run dispatched", strings.Join(typed, " "), read)
+	}
+}
+
+// typedCommandIn finds the command an output tells the operator to type, so a test can type it.
+func typedCommandIn(t *testing.T, output, starting string) []string {
+	t.Helper()
+	for _, line := range strings.Split(output, "\n") {
+		at := strings.Index(line, starting)
+		if at < 0 {
+			continue
+		}
+		return strings.Fields(line[at:])
+	}
+	t.Fatalf("nothing in %q says to type %q", output, starting)
+	return nil
 }

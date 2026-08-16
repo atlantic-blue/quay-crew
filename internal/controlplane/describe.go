@@ -11,9 +11,9 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 )
 
-// A thread says what it is about, written by the crew rather than by the operator.
+// A session says what it is about, written by the crew rather than by the operator.
 //
-// A listing is a column of hexadecimal, and a label fixes that only for the threads somebody stopped
+// A listing is a column of hexadecimal, and a label fixes that only for the sessions somebody stopped
 // to name. Naming things is work and nobody does it consistently, so the half that actually gets used
 // is the one the crew writes itself.
 //
@@ -21,11 +21,11 @@ import (
 // right, and nothing automatic is allowed to overwrite it.
 
 const (
-	// describeEveryDefault is how many turns past its description a conversation goes before it is
+	// describeEveryDefault is how many tasks past its description a conversation goes before it is
 	// described again.
 	//
 	// Ten is a starting number, not a measured one. Nothing here has been running long enough to say
-	// how far a conversation drifts per turn, so this is set where it can be changed rather than
+	// how far a conversation drifts per task, so this is set where it can be changed rather than
 	// presented as derived: QC_DESCRIBE_EVERY in the crew's configuration. What would replace it is a
 	// count of how often a re-description actually differs from the one before it.
 	describeEveryDefault = 10
@@ -33,18 +33,18 @@ const (
 	// own label, so it is capped at the same kind of length for the same reason: a listing gives the
 	// name one column among ten.
 	descriptionLimit = 60
-	// describeTurns is how much of a conversation is read to describe it. The opening exchange says
+	// describeTasks is how much of a conversation is read to describe it. The opening exchange says
 	// what a conversation is for better than the middle of it does, and reading the whole thing would
-	// cost more than the turn being described.
-	describeTurns = 6
+	// cost more than the task being described.
+	describeTasks = 6
 )
 
-// DescribeEvery reads how often a thread is described from what the crew was configured with.
+// DescribeEvery reads how often a session is described from what the crew was configured with.
 //
-// "off" and zero both turn it off, because a crew running automation makes a thread per run and
+// "off" and zero both task it off, because a crew running automation makes a session per run and
 // should be able to pay for none of this. Anything unreadable keeps the default rather than refusing:
 // the crew starting matters more than this setting being exactly right, which is the opposite of the
-// permission mode, where being wrong changes what a thread may do.
+// permission mode, where being wrong changes what a session may do.
 func DescribeEvery(configured string) int {
 	value := strings.ToLower(strings.TrimSpace(configured))
 	if value == "" {
@@ -60,19 +60,19 @@ func DescribeEvery(configured string) int {
 	return every
 }
 
-// worthDescribing says whether a thread's description has fallen behind its conversation.
+// worthDescribing says whether a session's description has fallen behind its conversation.
 //
-// The first turn is always worth describing, because until then the listing has nothing but an
-// identifier. After that it is turns since, not turns total: a thread described at turn one is
+// The first task is always worth describing, because until then the listing has nothing but an
+// identifier. After that it is tasks since, not tasks total: a session described at task one is
 // described again at eleven, not at ten.
-func worthDescribing(turns, describedAtTurn, every int) bool {
-	if every <= 0 || turns == 0 {
+func worthDescribing(tasks, describedAtTask, every int) bool {
+	if every <= 0 || tasks == 0 {
 		return false
 	}
-	if describedAtTurn == 0 {
+	if describedAtTask == 0 {
 		return true
 	}
-	return turns-describedAtTurn >= every
+	return tasks-describedAtTask >= every
 }
 
 // tidyDescription is what the model said, as a listing can hold it: the first line, unquoted,
@@ -98,11 +98,11 @@ func tidyDescription(said string) string {
 // It says what not to write as firmly as what to write. Asked without that, a model answers with a
 // title in its own voice, and a listing of "an engaging exploration of agent tooling" is worse than a
 // listing of hexadecimal because it takes longer to read and says less.
-func describePrompt(turns []*quaycrewv1.Turn) string {
+func describePrompt(tasks []*quaycrewv1.Task) string {
 	var conversation strings.Builder
-	for _, turn := range turns {
-		fmt.Fprintf(&conversation, "asked: %s\n", oneLine(turn.GetPrompt(), 300))
-		if reply := turn.GetReply(); reply != "" {
+	for _, task := range tasks {
+		fmt.Fprintf(&conversation, "asked: %s\n", oneLine(task.GetPrompt(), 300))
+		if reply := task.GetReply(); reply != "" {
 			fmt.Fprintf(&conversation, "answered: %s\n", oneLine(reply, 300))
 		}
 	}
@@ -113,7 +113,7 @@ func describePrompt(turns []*quaycrewv1.Turn) string {
 		"interesting it is, and nothing but the line itself."
 }
 
-// oneLine flattens text to a single line and caps it, so a long turn does not become most of the
+// oneLine flattens text to a single line and caps it, so a long task does not become most of the
 // prompt that describes it.
 func oneLine(text string, limit int) string {
 	flat := strings.Join(strings.Fields(text), " ")
@@ -123,68 +123,68 @@ func oneLine(text string, limit int) string {
 	return flat
 }
 
-// describeThread writes what a thread is about, if it has fallen behind.
+// describeSession writes what a session is about, if it has fallen behind.
 //
-// It takes the thread's id rather than the thread, and reads everything it needs again, because it
-// runs behind a turn that has already been answered: anything handed to it would be a value somebody
+// It takes the session's id rather than the session, and reads everything it needs again, because it
+// runs behind a task that has already been answered: anything handed to it would be a value somebody
 // else is still reading. That is the same mistake that made `quay flow start` fail one run in six.
 //
-// Every failure is a log line and nothing else. A description is a convenience, and a turn that
+// Every failure is a log line and nothing else. A description is a convenience, and a task that
 // worked must not be reported as failed because the crew could not think of a name for it.
-func (s *Server) describeThread(ctx context.Context, threadID string) {
+func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	if s.describeEvery <= 0 {
 		return
 	}
-	thread, err := s.store.GetSession(ctx, threadID)
+	session, err := s.store.GetSession(ctx, sessionID)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	turns, err := s.store.CountTurns(ctx, threadID)
+	tasks, err := s.store.CountTasks(ctx, sessionID)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	if !worthDescribing(turns, int(thread.GetDescribedAtTurn()), s.describeEvery) {
+	if !worthDescribing(tasks, int(session.GetDescribedAtTask()), s.describeEvery) {
 		return
 	}
 
-	history, err := s.store.ListTurns(ctx, threadID, describeTurns)
+	history, err := s.store.ListTasks(ctx, sessionID, describeTasks)
 	if err != nil || len(history) == 0 {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	box, err := s.sandboxFor(ctx, thread)
+	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	// Its own conversation, not the thread's. Describing inside the thread would put a request the
+	// Its own conversation, not the session's. Describing inside the session would put a request the
 	// operator never made into their history, and would add its tokens to what the listing says the
 	// conversation cost, so the cost column would stop describing the work.
 	prompt := describePrompt(history)
 	said, err := s.runner.Run(ctx, box, model.Request{
 		Text:           prompt,
 		PermissionMode: model.PermissionPlan,
-		Env:            s.turnEnv(ctx, thread),
+		Env:            s.taskEnv(ctx, session),
 	})
 	if err != nil {
-		slog.Debug("a thread could not be described", "thread", threadID, "error", err)
+		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
 	description := tidyDescription(said.Reply)
 	if description == "" || isTheQuestionBack(prompt, description) {
 		return
 	}
-	if err := s.store.SetDescription(ctx, threadID, description, turns); err != nil {
-		slog.Debug("a thread's description could not be kept", "thread", threadID, "error", err)
+	if err := s.store.SetDescription(ctx, sessionID, description, tasks); err != nil {
+		slog.DebugContext(ctx, "a session's description could not be kept", "session", sessionID, "error", err)
 	}
 }
 
 // isTheQuestionBack says whether what came back is the question rather than an answer to it.
 //
 // A backend that echoes is the obvious case, and continuous integration runs one, so without this the
-// crew names every thread "Here is the start of a conversation:". It is worth guarding beyond that
+// crew names every session "Here is the start of a conversation:". It is worth guarding beyond that
 // though: a model that answers badly enough to hand the instruction back would put the instruction in
 // the listing, where it is worse than the identifier it replaced, and nothing else would notice.
 //

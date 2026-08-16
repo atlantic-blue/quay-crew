@@ -112,7 +112,7 @@ var everywhereKeys = [][2]string{
 	{"p", "Show or hide the conversation beside this"},
 	{"N", "Start a fresh conversation beside this"},
 	// The one key here that is not the console's own. An open conversation runs inside tmux in its
-	// sandbox, so this leaves it running and comes back; without it the only way out of a thread is
+	// sandbox, so this leaves it running and comes back; without it the only way out of a session is
 	// ending it, which is what everybody does until somebody tells them otherwise.
 	{"ctrl-q", "Leave a conversation running"},
 	{"?", "This list"},
@@ -158,7 +158,7 @@ func (m Model) withLogo(lines []string) []string {
 	return lines
 }
 
-// statusLines is the crew this console is pointed at: where it is, what a turn would run in, and
+// statusLines is the crew this console is pointed at: where it is, what a task would run in, and
 // whether any of it survives a restart. Anything the control plane did not say is left out rather
 // than guessed at.
 // roomFor says whether the header block would still leave the wordmark somewhere to go once the
@@ -241,7 +241,7 @@ func (m Model) spent() string {
 }
 
 // statePhrase says where a conversation is kept. Empty means nowhere: it lives in the container and
-// dies with it, which is worth saying in red because it is the difference between a thread you can
+// dies with it, which is worth saying in red because it is the difference between a session you can
 // come back to and one you cannot.
 func statePhrase(where string) string {
 	if where == "" {
@@ -251,7 +251,7 @@ func statePhrase(where string) string {
 }
 
 // secretsPhrase says where a workspace's credentials are kept, and says the cost out loud when they
-// are kept nowhere: the subscription token goes with every restart, and the turn that then fails says
+// are kept nowhere: the subscription token goes with every restart, and the task that then fails says
 // nothing about why.
 func secretsPhrase(where string) string {
 	if strings.HasPrefix(where, "memory") {
@@ -702,7 +702,7 @@ func (m Model) confirmPrompt() string {
 		m.active.One()+" "+m.waiting.row.Name()+"?") + faint.Render("  y to confirm, any other key cancels")
 }
 
-// typePrompt draws the line being typed, naming what it is about so a name is typed onto a thread
+// typePrompt draws the line being typed, naming what it is about so a name is typed onto a session
 // rather than into the console.
 func (m Model) typePrompt() string {
 	return prompt.Render(" "+m.typing.action.Asks+" ") + m.typing.row.Name() + "  " +

@@ -92,11 +92,11 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the crew has (\d+) sessions?$`, func(ctx context.Context, want int) error {
-		listed, err := worldFrom(ctx).client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := worldFrom(ctx).client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		if got := len(listed.GetThreads()); got != want {
+		if got := len(listed.GetSessions()); got != want {
 			return fmt.Errorf("the crew has %d sessions, want %d", got, want)
 		}
 		return nil
@@ -117,17 +117,17 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console lists the session the wizard started$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		// Asked of the control plane rather than of the world, because this turn was dispatched by
+		// Asked of the control plane rather than of the world, because this task was dispatched by
 		// the console rather than by a step.
-		listed, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetThreads()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetThreads()))
+		if len(listed.GetSessions()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetSessions()))
 		}
 		view := c.model.View()
-		if !strings.Contains(view, display.ShortID(listed.GetThreads()[0].GetId())) {
+		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
 			return fmt.Errorf("the console does not list the session the wizard made:\n%s", view)
 		}
 		return nil
@@ -188,20 +188,20 @@ func (c *consoleWorld) answerWizard(answers *godog.Table) error {
 	return nil
 }
 
-// The mode a thread was born in, read off the crew rather than off the wizard, because what matters
-// is what the thread holds and not what was typed at it.
+// The mode a session was born in, read off the crew rather than off the wizard, because what matters
+// is what the session holds and not what was typed at it.
 func initializeWizardModeSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^that thread's mode is "([^"]*)"$`, func(ctx context.Context, want string) error {
-		listed, err := worldFrom(ctx).client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+	sc.Step(`^that session's mode is "([^"]*)"$`, func(ctx context.Context, want string) error {
+		listed, err := worldFrom(ctx).client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetThreads()) != 1 {
-			return fmt.Errorf("the crew has %d threads, so there is no single one to ask about",
-				len(listed.GetThreads()))
+		if len(listed.GetSessions()) != 1 {
+			return fmt.Errorf("the crew has %d sessions, so there is no single one to ask about",
+				len(listed.GetSessions()))
 		}
-		if got := listed.GetThreads()[0].GetPermissionMode(); got != want {
-			return fmt.Errorf("the thread was born in %q, want %q", got, want)
+		if got := listed.GetSessions()[0].GetPermissionMode(); got != want {
+			return fmt.Errorf("the session was born in %q, want %q", got, want)
 		}
 		return nil
 	})

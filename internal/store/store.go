@@ -27,17 +27,17 @@ import (
 // A conversation is unbounded and a terminal is not, so asking for everything gets the most recent
 // slice of it.
 const (
-	defaultTurnLimit = 50
-	maxTurnLimit     = 500
+	defaultTaskLimit = 50
+	maxTaskLimit     = 500
 )
 
-// TurnLimit applies the default when nothing was asked for and the ceiling when too much was.
-func TurnLimit(limit int) int {
+// TaskLimit applies the default when nothing was asked for and the ceiling when too much was.
+func TaskLimit(limit int) int {
 	switch {
 	case limit <= 0:
-		return defaultTurnLimit
-	case limit > maxTurnLimit:
-		return maxTurnLimit
+		return defaultTaskLimit
+	case limit > maxTaskLimit:
+		return maxTaskLimit
 	default:
 		return limit
 	}
@@ -77,8 +77,8 @@ type SessionFilter struct {
 	// Project wins over Workspace when both are set, being the narrower.
 	Workspace string
 	Project   string
-	// Archived asks for the threads put away instead of the live ones, never both: the default view
-	// must not quietly grow back the threads somebody hid.
+	// Archived asks for the sessions put away instead of the live ones, never both: the default view
+	// must not quietly grow back the sessions somebody hid.
 	Archived bool
 }
 
@@ -97,48 +97,48 @@ type Store interface {
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
 
-	// FindOrCreateSession creates on first use, so a channel that knows only its own thread id always
+	// FindOrCreateSession creates on first use, so a channel that knows only its own session id always
 	// lands in the same session.
 	//
-	// bornIn is what the thread's turns may do when it is created, which comes from the crew's
-	// configuration. An unknown or empty one is the mode every thread had before this was
+	// bornIn is what the session's tasks may do when it is created, which comes from the crew's
+	// configuration. An unknown or empty one is the mode every session had before this was
 	// configurable, so a crew that says nothing does not change under an upgrade. It is ignored for a
-	// thread that already exists: what a thread may do is its own, and changing configuration must not
+	// session that already exists: what a session may do is its own, and changing configuration must not
 	// widen a conversation already running.
-	FindOrCreateSession(ctx context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error)
+	FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, error)
 	// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears
 	// it. SessionSkills reads it back, empty when no live sandbox is known. Stopping or archiving
 	// a session clears it, because the sandbox goes with it and the next one is born current.
 	SetSessionSkills(ctx context.Context, id, fingerprint string) error
 	SessionSkills(ctx context.Context, id string) (string, error)
 	// FindOrCreateDriver returns the project's driver, one per project, creating it on first open.
-	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Thread, error)
-	// RecordTurn leaves the stored handle alone when modelSessionID is empty, so a failed turn cannot
+	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error)
+	// RecordTask leaves the stored handle alone when modelSessionID is empty, so a failed task cannot
 	// erase it.
-	RecordTurn(ctx context.Context, id, modelSessionID, status string) error
-	GetSession(ctx context.Context, id string) (*quaycrewv1.Thread, error)
-	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error)
+	RecordTask(ctx context.Context, id, modelSessionID, status string) error
+	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
+	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
-	// ArchiveSession only hides a thread from the default listing. The row, the conversation handle
+	// ArchiveSession only hides a session from the default listing. The row, the conversation handle
 	// and the files on the host all stay.
 	ArchiveSession(ctx context.Context, id string) error
-	// RestoreSession brings an archived thread back into the default listing.
+	// RestoreSession brings an archived session back into the default listing.
 	RestoreSession(ctx context.Context, id string) error
-	// SetPermissionMode records what a thread's turns may do without asking. Whether the mode is one
+	// SetPermissionMode records what a session's tasks may do without asking. Whether the mode is one
 	// the model understands is the control plane's question, not the store's.
 	SetPermissionMode(ctx context.Context, id, mode string) error
-	// SetDescription records what the crew observed a thread to be, and how many turns it had when
+	// SetDescription records what the crew observed a session to be, and how many tasks it had when
 	// that was written, so the two can never disagree about how current the description is.
-	SetDescription(ctx context.Context, id, description string, atTurn int) error
-	// CountTurns is how many turns a thread has had, which is what decides whether a description has
+	SetDescription(ctx context.Context, id, description string, atTask int) error
+	// CountTasks is how many tasks a session has had, which is what decides whether a description has
 	// fallen behind the conversation.
-	CountTurns(ctx context.Context, session string) (int, error)
-	// SetLabel records what the operator calls a thread. Empty clears it, which is the only way back
+	CountTasks(ctx context.Context, session string) (int, error)
+	// SetLabel records what the operator calls a session. Empty clears it, which is the only way back
 	// to the identifier, so it is a value rather than an absence.
 	SetLabel(ctx context.Context, id, label string) error
 	// RestartSession marks a stopped session idle again. The conversation is untouched, because it
 	// lives on the host rather than in the sandbox that was torn down, which is the whole reason
-	// bringing a thread back is possible at all. Whether the session was stopped in the first place
+	// bringing a session back is possible at all. Whether the session was stopped in the first place
 	// is the control plane's question, not the store's.
 	RestartSession(ctx context.Context, id string) error
 
@@ -208,10 +208,10 @@ type Store interface {
 	// CrewHooks returns what the crew holds, at the versions it pinned, files included.
 	CrewHooks(ctx context.Context) ([]ImportedHook, error)
 
-	// AppendTurn records one turn of a session's history, and is safe to call twice with the same
-	// turn: a caller retrying a write it is not sure landed must leave one turn, so a record it has
-	// already written must not double it. The turn's Id is what makes that possible.
-	AppendTurn(ctx context.Context, turn *quaycrewv1.Turn, workspace, project, thread string) error
+	// AppendTask records one task of a session's history, and is safe to call twice with the same
+	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has
+	// already written must not double it. The task's Id is what makes that possible.
+	AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error
 
 	// The flow engine's substrate: a run and its transitions are rows written in one transaction,
 	// which is what makes reconstructable a guarantee rather than a sentence. The contract is
@@ -232,9 +232,9 @@ type Store interface {
 	// refused rather than overwritten: the record of how it ended is the useful part.
 	StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error)
 	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
-	// ListTurns returns a session's history oldest first, capped at limit, so a conversation reads
+	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.
-	ListTurns(ctx context.Context, session string, limit int) ([]*quaycrewv1.Turn, error)
+	ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error)
 
 	// Close releases whatever the implementation holds open.
 	Close()

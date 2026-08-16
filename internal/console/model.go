@@ -41,7 +41,7 @@ const (
 	// way. Nothing is made until the last step, so leaving it creates nothing.
 	modeWizard
 	// modeType is a key asking for a line of text about the selected row, drawn where the command bar
-	// draws. Naming a thread is the one so far.
+	// draws. Naming a session is the one so far.
 	modeType
 	// modeChoose is a key offering a few named things and waiting for one to be picked. It draws
 	// where the confirmation draws, because it is the same kind of thing: a question with the answer
@@ -50,7 +50,7 @@ const (
 )
 
 // pending is a destructive action waiting on an answer, and the row it would act on. The row is held
-// rather than looked up again, so a refresh that reorders the list underneath cannot turn a yes into
+// rather than looked up again, so a refresh that reorders the list underneath cannot task a yes into
 // a yes to something else.
 type pending struct {
 	action Action
@@ -62,7 +62,7 @@ type pending struct {
 
 // choice is a key waiting on a pick: the action that opened it, the row it would act on, and where
 // the cursor is. The row is held rather than looked up again, for the same reason a confirmation
-// holds one: a refresh that reorders the list must not turn a pick into a pick of something else.
+// holds one: a refresh that reorders the list must not task a pick into a pick of something else.
 type choice struct {
 	action Action
 	row    Row
@@ -303,7 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tickMsg:
 		// The description is refreshed with the rows now, not only at startup. It carries what the
-		// crew has cost, which changes with every turn, and a total from when the console opened is
+		// crew has cost, which changes with every task, and a total from when the console opened is
 		// worse than none: it looks live and is not.
 		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 	case rowsMsg:

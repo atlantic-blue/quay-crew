@@ -7,7 +7,7 @@ import (
 )
 
 // Run statuses. Failed is a run the graph could not carry any further, which is different from a
-// turn that failed: a graph that branches on result.failed handles the second without ever being
+// task that failed: a graph that branches on result.failed handles the second without ever being
 // the first.
 const (
 	StatusRunning = "running"
@@ -26,18 +26,18 @@ const (
 	StatusStopped = "stopped"
 )
 
-// Event kinds. Started begins a run; a finished turn is the result of the one dispatch the run was
+// Event kinds. Started begins a run; a finished task is the result of the one dispatch the run was
 // waiting on.
 const (
 	EventStarted      = "started"
-	EventTurnFinished = "turn.finished"
+	EventTaskFinished = "task.finished"
 	// EventDue is a wait whose time has come, delivered by the poller.
 	EventDue = "due"
 	// EventAnswered is the operator answering a question the run put to them.
 	EventAnswered = "answered"
 )
 
-// Command kinds. Dispatch sends a turn to the run's own thread; archive puts that thread away when
+// Command kinds. Dispatch sends a task to the run's own session; archive puts that session away when
 // the run ends, because a finished run must not leave a container behind.
 const (
 	CommandDispatch = "dispatch"
@@ -55,7 +55,7 @@ type Run struct {
 	// Node is where the run sits. Empty before the started event places it.
 	Node   string
 	Status string
-	// State is the run's small memory: what turns answered, what the trigger carried, what a
+	// State is the run's small memory: what tasks answered, what the trigger carried, what a
 	// prompt template reads.
 	State map[string]string
 	// Attempts counts dispatches per node, which is one third of the idempotency key run, node and
@@ -90,6 +90,10 @@ type Event struct {
 	Failed bool
 	// Answer is what the operator said to an ask node.
 	Answer string
+	// Unmet says what the node claimed would prove the task worked, and did not. Empty when the node
+	// claimed nothing or the claim held. The engine fills it in, because checking it touches the
+	// world; what to do about it is here, where it can be read.
+	Unmet string
 }
 
 // Command is one thing the engine must do on the run's behalf. The reducer never does it: it
@@ -160,16 +164,28 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 			return run, nil, fmt.Errorf("flow: run %s already started, at node %s", run.ID, run.Node)
 		}
 		return settle(graph, run, graph.Start)
-	case EventTurnFinished:
+	case EventTaskFinished:
 		if event.Node != run.Node {
 			return run, nil, fmt.Errorf("flow: a result arrived for node %s while run %s sits on %s; a late duplicate must not move a run twice", event.Node, run.ID, run.Node)
 		}
 		node, known := graph.Nodes[run.Node]
 		if !known || node.Type != NodeDispatch {
-			return run, nil, fmt.Errorf("flow: run %s sits on %s, which is not a dispatch, so no turn result belongs to it", run.ID, run.Node)
+			return run, nil, fmt.Errorf("flow: run %s sits on %s, which is not a dispatch, so no task result belongs to it", run.ID, run.Node)
 		}
 		run.State["result.reply"] = event.Reply
 		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed)
+		// A step that did not do what the graph said would show it worked stops the run, rather than
+		// carrying on down the edge a reply happens to be sitting on. There is no recovery the crew
+		// could pick: it knows the work did not happen and it does not know why. A run that walks its
+		// success path through work that never happened is worse than one that halts, because the
+		// summary it ends with is the model's plausible account of it.
+		if event.Unmet != "" {
+			run.State["result.expected"] = event.Unmet
+			run.Status = StatusStopped
+			run.Reason = fmt.Sprintf("stopped at %s, which did not do what the graph says proves it worked: %s",
+				run.Node, event.Unmet)
+			return run, nil, nil
+		}
 		next, err := follow(graph, run.Node, "")
 		if err != nil {
 			return run, nil, err
@@ -184,7 +200,7 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 //
 // Both limits are the same idea: an automation runs with nobody watching, so it has to be able to
 // stop itself. The transition cap catches a graph that cycles; the token ceiling catches a graph
-// that does not cycle but whose turns are expensive.
+// that does not cycle but whose tasks are expensive.
 func brake(graph Graph, run Run) (Run, bool) {
 	if run.Transitions >= graph.Limits.Transitions {
 		run.Status = StatusStopped
@@ -265,7 +281,7 @@ func follow(graph Graph, from, when string) (string, error) {
 }
 
 // render fills {{key}} from the run's state. A key the state does not hold stays as typed, so a
-// misspelling is visible in the thread's own transcript rather than silently blank.
+// misspelling is visible in the session's own transcript rather than silently blank.
 func render(prompt string, state map[string]string) string {
 	out := prompt
 	for key, value := range state {

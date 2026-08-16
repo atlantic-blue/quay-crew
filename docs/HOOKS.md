@@ -127,7 +127,7 @@ its event. Every invocation of the model is given `--settings /home/agent/hooks/
 The settings file is a separate file the crew owns entirely, rather than `/home/agent/.claude/settings.json`,
 and that is the one non obvious decision here. `/home/agent/.claude` is the workspace's conversation
 directory, bind mounted from the host, written by the runtime and editable by the operator. Rendering
-the crew's hooks into it would mean merging with whatever else is in there on every turn, and losing
+the crew's hooks into it would mean merging with whatever else is in there on every task, and losing
 an operator's edit the first time the merge is wrong. `--settings` loads additional settings, so the
 operator's own file still applies and the crew's file is never a place anybody else writes.
 
@@ -137,12 +137,12 @@ flowchart TD
     A --> C["&lt;data&gt;/workspaces/&lt;ws&gt;/hooks/settings.json"]
     B -->|"read only mount"| D["/home/agent/hooks/&lt;name&gt;"]
     C -->|"read only mount"| E["/home/agent/hooks/settings.json"]
-    E -->|"--settings"| F["claude, on every turn and every attach"]
+    E -->|"--settings"| F["claude, on every task and every attach"]
     D --> F
 ```
 
-Both the turn and an attached conversation get the flag. A hook that guards commits and only runs on
-dispatched turns is a hook the operator walks around by opening the conversation.
+Both the task and an attached conversation get the flag. A hook that guards commits and only runs on
+dispatched tasks is a hook the operator walks around by opening the conversation.
 
 ## What a hook deliberately does not do
 

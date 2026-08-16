@@ -14,7 +14,7 @@ const SettingsFile = "settings.json"
 //
 // The crew owns this file completely. The alternative was rendering into the conversation directory's
 // own settings, which the runtime writes and the operator edits, and that would mean merging on every
-// turn and losing somebody's edit the first time the merge was wrong.
+// task and losing somebody's edit the first time the merge was wrong.
 type settings struct {
 	Hooks map[string][]matcherGroup `json:"hooks"`
 }
@@ -44,7 +44,7 @@ type action struct {
 // The result is stable for the same input: events come out sorted by name, because Go marshals a map
 // that way, and within an event the matchers and the commands keep the order the hooks were written
 // in. A settings file that reordered itself between renders would be a diff nobody could review, and
-// would rewrite a file on every turn for no reason.
+// would rewrite a file on every task for no reason.
 func Settings(root string, hooks []Hook) ([]byte, error) {
 	if root == "" {
 		return nil, fmt.Errorf("hook: rendering settings needs the path the hooks are mounted at")

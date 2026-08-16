@@ -46,7 +46,7 @@ func runWorkspaceDelete(ctx context.Context, client quaycrewv1.ControlPlaneServi
 	return nil
 }
 
-// runProjectDelete removes a project and the threads inside it.
+// runProjectDelete removes a project and the sessions inside it.
 func runProjectDelete(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: quay project delete [<workspace>/]<project>")
@@ -59,7 +59,7 @@ func runProjectDelete(ctx context.Context, client quaycrewv1.ControlPlaneService
 		return fmt.Errorf("%q names a workspace, not a project: delete a workspace with quay workspace delete", args[0])
 	}
 	name := located.Path.Project
-	holds, err := howManyThreads(ctx, client, located.ProjectID)
+	holds, err := howManySessions(ctx, client, located.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func whatAWorkspaceHolds(ctx context.Context, client quaycrewv1.ControlPlaneServ
 	if err != nil {
 		return "", "", err
 	}
-	threads, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Workspace: id})
+	sessions, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: id})
 	if err != nil {
 		return "", "", err
 	}
@@ -118,16 +118,16 @@ func whatAWorkspaceHolds(ctx context.Context, client quaycrewv1.ControlPlaneServ
 	}
 	return found.GetWorkspace().GetName(), fmt.Sprintf("%s, %s and %s",
 		counted(len(projects.GetProjects()), "project"),
-		counted(len(threads.GetThreads()), "thread"),
+		counted(len(sessions.GetSessions()), "session"),
 		counted(len(secrets.GetSecrets()), "secret")), nil
 }
 
-func howManyThreads(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID string) (string, error) {
-	threads, err := client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Project: projectID})
+func howManySessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID string) (string, error) {
+	sessions, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
 		return "", err
 	}
-	return counted(len(threads.GetThreads()), "thread"), nil
+	return counted(len(sessions.GetSessions()), "session"), nil
 }
 
 // counted says how many of something there are, in words a sentence can hold.

@@ -1,0 +1,47 @@
+# Grafana's data sources, provisioned as code.
+#
+# Grafana came up empty and you added these by hand, which meant every operator did it again and
+# nobody's Grafana was the same as anybody else's. This file is mounted into the provisioning
+# directory, so the four containers come up already joined.
+#
+# The addresses are compose service names, which resolve inside the compose network. Opening Grafana
+# on localhost:3000 works because your browser talks to Grafana and Grafana talks to these.
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: true
+    jsonData:
+      # The other direction of the same join: from a span, every log line that call wrote.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      # Every line the crew writes under a call carries the trace id, so a line in Loki becomes a
+      # link to the trace that produced it. This is what the correlation id was for: without the
+      # link the id is a string somebody copies by hand.
+      derivedFields:
+        - name: TraceID
+          matcherType: label
+          matcherRegex: correlation_id
+          datasourceUid: tempo
+          url: "${__value.raw}"
+          urlDisplayLabel: "Open the trace"

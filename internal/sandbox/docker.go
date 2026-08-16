@@ -9,7 +9,7 @@ import (
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
-// session's turns exec inside it, and it is removed when the session ends.
+// session's tasks exec inside it, and it is removed when the session ends.
 //
 // The state that has to outlive the container comes from Storage, mounted in from the host, so
 // removing a container no longer destroys the conversation the database holds a handle to.
@@ -39,11 +39,11 @@ var _ Provider = DockerProvider{}
 //
 // A container already carrying the session's name is adopted rather than refused, and started if it
 // had stopped. A session's name is deterministic, so the alternative is that a control plane which
-// has forgotten its sandboxes can never start that thread again: the daemon refuses the name and the
-// thread is undispatchable until somebody removes the container by hand.
+// has forgotten its sandboxes can never start that session again: the daemon refuses the name and the
+// session is undispatchable until somebody removes the container by hand.
 //
 // What an adopted container carries is what it was created with. A workspace whose token changed
-// since needs a fresh one, which is what stopping the thread gives you.
+// since needs a fresh one, which is what stopping the session gives you.
 func (d DockerProvider) Create(ctx context.Context, cfg Config) (Sandbox, error) {
 	if d.Image == "" {
 		return nil, fmt.Errorf("sandbox: docker image is required")

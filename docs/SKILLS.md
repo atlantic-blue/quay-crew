@@ -20,7 +20,7 @@ A skill is four things and nothing else:
   configuring a git identity and a credential helper.
 
 A skill has no control flow. It never decides what happens next, it does not run on a schedule, and
-it holds no state between turns. Everything with control flow in it is a workflow, which is a
+it holds no state between tasks. Everything with control flow in it is a workflow, which is a
 different entity with its own design in [`ARCHITECTURE.md`](ARCHITECTURE.md). See
 [Skills and workflows](#skills-and-workflows) below.
 
@@ -130,11 +130,11 @@ the container. One resolver answers what a session holds, and everything else as
 At sandbox creation the control plane resolves the skills that reach this session, and then:
 
 1. Refuses early, with a sentence naming what is wrong, if a binary the skill declares is not in the
-   image. A capability that cannot work should say so before a turn runs, not through the model
+   image. A capability that cannot work should say so before a task runs, not through the model
    discovering `gh: command not found`. A secret the skill names and the workspace has not set is
    answered differently: that skill alone is left out of the session, and the listing carries the
    reason. The image is one thing for the whole crew, while a secret is one workspace's to set, and
-   refusing every turn in a workspace over one skill it has not finished setting up is the wrong
+   refusing every task in a workspace over one skill it has not finished setting up is the wrong
    trade the moment a skill is held crew wide rather than attached one workspace at a time.
 2. Mounts each skill's directory read only, so a session can read its scripts and cannot edit them. A
    skill imported into the store is written onto the host first, under the workspace it belongs to,
@@ -144,7 +144,7 @@ At sandbox creation the control plane resolves the skills that reach this sessio
    it.
 3. Injects only the secrets the attached skills name. A session in a workspace with no github skill
    never sees `GH_TOKEN`.
-4. Runs each `bin/setup` inside the sandbox, once, before the first turn.
+4. Runs each `bin/setup` inside the sandbox, once, before the first task.
 5. Writes an index into the context the session reads, marked `skills` the way each level of context is
    marked by scope: a line per skill giving its name, its summary, and the path to its brief.
 
@@ -193,7 +193,7 @@ So a brief is short by construction, and the mount is what makes that possible:
   unconditionally, and a skill reaches the sessions somebody attached it to.
 
 The rule of thumb that follows: if a brief is long enough that you would skim it, the model is paying
-for it on every turn and reading it no more carefully than you would.
+for it on every task and reading it no more carefully than you would.
 
 ## Binaries
 
@@ -203,8 +203,8 @@ it there.
 The first version does the honest thing rather than the clever one: the image carries the binaries the
 skills in use need, a skill declares what it requires, and the crew checks before the sandbox runs and
 refuses with a message naming the missing binary and the image that has to carry it. A skill that
-installs software at turn time would need network access, a package manager and a trust story, and
-would make every turn slower and less reproducible.
+installs software at task time would need network access, a package manager and a trust story, and
+would make every task slower and less reproducible.
 
 An image per set of skills is the natural next step and is not in this design.
 
@@ -231,7 +231,7 @@ version, both are attached at a level of the crew, and both are reviewed before 
 
 The brief lives in a file and the capability lives in scripts and binaries, so neither is expressed in
 any model's vocabulary. What differs per engine is where the brief has to be written and what the
-sandbox has to hold, which is exactly the seam `model.Runner` already draws for a turn.
+sandbox has to hold, which is exactly the seam `model.Runner` already draws for a task.
 
 The Claude adapter maps a skill onto the shape that command line tool already reads. Another engine's
 adapter maps it onto its own. A skill is not rewritten for either.
@@ -253,8 +253,8 @@ adapter maps it onto its own. A skill is not rewritten for either.
   or does not reach it at all, and what is missing is said in the listing either way.
 - **A brief is short and the detail is on disk.** Everything loaded at conversation start is paid for
   on every session that holds the skill. See [What it costs](#what-it-costs).
-- **No fetching at turn time.** A skill is imported deliberately, not resolved from the network while
-  a turn is waiting.
+- **No fetching at task time.** A skill is imported deliberately, not resolved from the network while
+  a task is waiting.
 
 ## What exists today
 
@@ -266,7 +266,7 @@ Verified against the repository and a running stack, rather than assumed:
 - A workspace's secrets reach that workspace's sandboxes. A session holding the github skill is given
   `GH_TOKEN` because the workspace holds it. A skill naming a secret the workspace has not set is
   left out of the session instead, and `quay skill list` says which secret left it out and how to set
-  it, so the turn still runs and the model is never handed a brief it cannot follow. A manifest
+  it, so the task still runs and the model is never handed a brief it cannot follow. A manifest
   naming a secret
   starting `QC_` or `CLAUDE_` is refused at validation, because those names are the crew's own, and a
   workspace secret starting `QC_` never travels for the same reason.
@@ -293,7 +293,7 @@ if the rest waits:
    session clones in conversation now, following the git skill. What stayed is the invisible plumbing
    a brief can rely on: the git identity environment, and a credential helper in the sandbox image
    reading `GH_TOKEN` at the moment git asks. The stated cost: each session clones its own copy, so
-   first turns on big repositories are slower and disk is spent per session.
+   first tasks on big repositories are slower and disk is spent per session.
 6. The git skill, in `skills/git/` at the root of this repository. Done, with slice 5's rework. Then
    `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does
@@ -302,6 +302,6 @@ if the rest waits:
 8. Signing forwarded into the sandbox, per workspace, off by default. Done. A workspace that mounts
    `GIT_SSH_SIGNING_KEY` gets sandboxes that sign, and one that does not is told not to. An ssh key
    rather than a gpg one: one private key file, no agent, no keyring and no pinentry prompt to hang a
-   turn nobody is watching. Mounted rather than set, so the key is a file in a memory backed directory
+   task nobody is watching. Mounted rather than set, so the key is a file in a memory backed directory
    and never reaches the container's environment, where `docker inspect` would read it.
 9. Propose and approve, so an agent can offer a skill and nothing it offers applies itself.

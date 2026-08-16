@@ -25,8 +25,8 @@ type Memory struct {
 	channels   map[string][]*quaycrewv1.Channel
 	projects   map[string]*quaycrewv1.Project
 	deletedPrj map[string]bool
-	sessions   map[string]*quaycrewv1.Thread
-	byThread   map[string]string
+	sessions   map[string]*quaycrewv1.Session
+	bySession  map[string]string
 	// skillsBorn is what skill set each session's live sandbox was born with. Absent means no live
 	// sandbox is known, so the session can never be stale.
 	skillsBorn map[string]string
@@ -52,10 +52,10 @@ type Memory struct {
 	flowTransitions map[string][]flow.RecordedTransition
 	flowDispatches  map[string]bool
 	flowSchedules   map[string]*schedule
-	// turns is a session's history, oldest first, and turnSeen is what makes writing the
+	// tasks is a session's history, oldest first, and taskSeen is what makes writing the
 	// same record twice harmless.
-	turns    []*quaycrewv1.Turn
-	turnSeen map[string]bool
+	tasks    []*quaycrewv1.Task
+	taskSeen map[string]bool
 }
 
 var _ Store = (*Memory)(nil)
@@ -68,13 +68,13 @@ func NewMemory() *Memory {
 		channels:   make(map[string][]*quaycrewv1.Channel),
 		projects:   make(map[string]*quaycrewv1.Project),
 		deletedPrj: make(map[string]bool),
-		sessions:   make(map[string]*quaycrewv1.Thread),
-		byThread:   make(map[string]string),
+		sessions:   make(map[string]*quaycrewv1.Session),
+		bySession:  make(map[string]string),
 		skillsBorn: make(map[string]string),
 	}
 }
 
-func threadKey(workspace, thread string) string { return workspace + "\x00" + thread }
+func sessionKey(workspace, session string) string { return workspace + "\x00" + session }
 
 // CreateWorkspace stores a new workspace.
 func (m *Memory) CreateWorkspace(_ context.Context, name string) (*quaycrewv1.Workspace, error) {
@@ -195,36 +195,36 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 	return nil
 }
 
-// FindOrCreateSession returns the project's session for a thread, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, thread, bornIn string) (*quaycrewv1.Thread, error) {
+// FindOrCreateSession returns the project's session for a session, creating it on first use.
+func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn string) (*quaycrewv1.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
 	if err != nil {
 		return nil, err
 	}
-	if id, ok := m.byThread[threadKey(project, thread)]; ok {
+	if id, ok := m.bySession[sessionKey(project, session)]; ok {
 		return clone(m.sessions[id]), nil
 	}
 	now := timestamppb.New(time.Now().UTC())
-	session := &quaycrewv1.Thread{
+	made := &quaycrewv1.Session{
 		Id:             NewID(),
 		Workspace:      owner.GetWorkspace(),
 		Project:        project,
-		Handle:         thread,
+		Handle:         session,
 		Status:         "idle",
 		PermissionMode: model.PermissionModeBornIn(bornIn),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	m.sessions[session.GetId()] = session
-	m.byThread[threadKey(project, thread)] = session.GetId()
-	return clone(session), nil
+	m.sessions[made.GetId()] = made
+	m.bySession[sessionKey(project, session)] = made.GetId()
+	return clone(made), nil
 }
 
-// RecordTurn stores the model conversation handle and status after a turn. An empty handle leaves
-// the stored one alone, so a failed turn cannot erase the pointer to a live conversation.
-func (m *Memory) RecordTurn(_ context.Context, id, modelSessionID, status string) error {
+// RecordTask stores the model conversation handle and status after a task. An empty handle leaves
+// the stored one alone, so a failed task cannot erase the pointer to a live conversation.
+func (m *Memory) RecordTask(_ context.Context, id, modelSessionID, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	session, ok := m.sessions[id]
@@ -240,7 +240,7 @@ func (m *Memory) RecordTurn(_ context.Context, id, modelSessionID, status string
 }
 
 // GetSession returns a session by id.
-func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Thread, error) {
+func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	session, ok := m.sessions[id]
@@ -251,10 +251,10 @@ func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Thread, e
 }
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
-func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Thread, error) {
+func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]*quaycrewv1.Thread, 0, len(m.sessions))
+	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
 		if (session.GetArchivedAt() != nil) != filter.Archived {
 			continue
@@ -329,7 +329,7 @@ func (m *Memory) RestartSession(_ context.Context, id string) error {
 	return nil
 }
 
-// SetPermissionMode records what a thread's turns may do without asking.
+// SetPermissionMode records what a session's tasks may do without asking.
 func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -342,7 +342,7 @@ func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
 	return nil
 }
 
-// SetLabel records what the operator calls a thread. Empty clears it.
+// SetLabel records what the operator calls a session. Empty clears it.
 func (m *Memory) SetLabel(_ context.Context, id, label string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -355,8 +355,8 @@ func (m *Memory) SetLabel(_ context.Context, id, label string) error {
 	return nil
 }
 
-// SetDescription records what the crew observed a thread to be.
-func (m *Memory) SetDescription(_ context.Context, id, description string, atTurn int) error {
+// SetDescription records what the crew observed a session to be.
+func (m *Memory) SetDescription(_ context.Context, id, description string, atTask int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	session, ok := m.sessions[id]
@@ -364,18 +364,18 @@ func (m *Memory) SetDescription(_ context.Context, id, description string, atTur
 		return ErrNotFound
 	}
 	session.Description = description
-	session.DescribedAtTurn = int32(atTurn)
+	session.DescribedAtTask = int32(atTask)
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }
 
-// CountTurns is how many turns a thread has had.
-func (m *Memory) CountTurns(_ context.Context, session string) (int, error) {
+// CountTasks is how many tasks a session has had.
+func (m *Memory) CountTasks(_ context.Context, session string) (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	count := 0
-	for _, turn := range m.turns {
-		if turn.GetThread() == session {
+	for _, task := range m.tasks {
+		if task.GetSession() == session {
 			count++
 		}
 	}
@@ -390,7 +390,7 @@ func (m *Memory) ArchiveSession(_ context.Context, id string) error {
 	return m.stampArchived(id, timestamppb.New(time.Now().UTC()))
 }
 
-// RestoreSession clears the stamp, bringing the thread back into the default listing.
+// RestoreSession clears the stamp, bringing the session back into the default listing.
 func (m *Memory) RestoreSession(_ context.Context, id string) error {
 	return m.stampArchived(id, nil)
 }
@@ -598,47 +598,47 @@ func (m *Memory) Close() {}
 // clone copies a message so a caller cannot mutate what the store holds.
 func clone[T proto.Message](message T) T { return proto.Clone(message).(T) }
 
-// AppendTurn records a turn, ignoring one it has already seen.
-func (m *Memory) AppendTurn(_ context.Context, turn *quaycrewv1.Turn, _, _, _ string) error {
-	if turn.GetId() == "" {
-		return errors.New("store: a turn needs an id, so writing the same one twice leaves one turn")
+// AppendTask records a task, ignoring one it has already seen.
+func (m *Memory) AppendTask(_ context.Context, task *quaycrewv1.Task, _, _, _ string) error {
+	if task.GetId() == "" {
+		return errors.New("store: a task needs an id, so writing the same one twice leaves one task")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.turnSeen == nil {
-		m.turnSeen = make(map[string]bool)
+	if m.taskSeen == nil {
+		m.taskSeen = make(map[string]bool)
 	}
-	if m.turnSeen[turn.GetId()] {
+	if m.taskSeen[task.GetId()] {
 		return nil
 	}
-	m.turnSeen[turn.GetId()] = true
-	m.turns = append(m.turns, clone(turn))
+	m.taskSeen[task.GetId()] = true
+	m.tasks = append(m.tasks, clone(task))
 	return nil
 }
 
-// ListTurns returns a session's turns oldest first, capped at limit, keeping the most recent when
+// ListTasks returns a session's tasks oldest first, capped at limit, keeping the most recent when
 // there are more than the cap: the end of a conversation is the part somebody wants.
-func (m *Memory) ListTurns(_ context.Context, session string, limit int) ([]*quaycrewv1.Turn, error) {
+func (m *Memory) ListTasks(_ context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	out := make([]*quaycrewv1.Turn, 0)
-	for _, turn := range m.turns {
-		if turn.GetThread() == session {
-			out = append(out, clone(turn))
+	out := make([]*quaycrewv1.Task, 0)
+	for _, task := range m.tasks {
+		if task.GetSession() == session {
+			out = append(out, clone(task))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].GetOccurredAt().AsTime().Before(out[j].GetOccurredAt().AsTime())
 	})
-	if capped := TurnLimit(limit); len(out) > capped {
+	if capped := TaskLimit(limit); len(out) > capped {
 		out = out[len(out)-capped:]
 	}
 	return out, nil
 }
 
 // FindOrCreateDriver returns the project's driver, creating it the first time somebody opens it.
-func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycrewv1.Thread, error) {
+func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycrewv1.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
@@ -651,7 +651,7 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		}
 	}
 	now := timestamppb.New(time.Now().UTC())
-	session := &quaycrewv1.Thread{
+	session := &quaycrewv1.Session{
 		Id:        NewID(),
 		Workspace: owner.GetWorkspace(),
 		Project:   project,
@@ -666,6 +666,6 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		UpdatedAt:      now,
 	}
 	m.sessions[session.GetId()] = session
-	m.byThread[threadKey(project, session.GetHandle())] = session.GetId()
+	m.bySession[sessionKey(project, session.GetHandle())] = session.GetId()
 	return clone(session), nil
 }

@@ -53,14 +53,14 @@ func (s *Server) ImportHook(ctx context.Context, req *quaycrewv1.ImportHookReque
 	return &quaycrewv1.ImportHookResponse{Hook: asHook(stored)}, nil
 }
 
-// ListHooks says what the crew holds, what one workspace holds, or what one thread runs under.
+// ListHooks says what the crew holds, what one workspace holds, or what one session runs under.
 func (s *Server) ListHooks(ctx context.Context, req *quaycrewv1.ListHooksRequest) (*quaycrewv1.ListHooksResponse, error) {
-	// A thread's listing is the same answer its sandbox is built from, so the listing cannot say one
+	// A session's listing is the same answer its sandbox is built from, so the listing cannot say one
 	// thing while the sandbox does another.
-	if req.GetThread() != "" {
-		session, err := s.store.GetSession(ctx, req.GetThread())
+	if req.GetSession() != "" {
+		session, err := s.store.GetSession(ctx, req.GetSession())
 		if err != nil {
-			return nil, storeError(err, "thread")
+			return nil, storeError(err, "session")
 		}
 		held := s.hooksFor(ctx, session.GetWorkspace())
 		out := make([]*quaycrewv1.Hook, 0, len(held))

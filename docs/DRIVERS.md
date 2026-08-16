@@ -14,12 +14,12 @@ secret it authenticates with, and its own vocabulary for autonomy.
 One property of a driver is worth stating up front because it has to be answered to somebody else. A
 driver does not by itself decide where the model runs: swapping Claude Code for another vendor's
 command line tool sends the code somewhere else rather than nowhere. So the driver declares where its
-model runs, and the crew writes that with the turn, and an operator can read it off the log rather
+model runs, and the crew writes that with the task, and an operator can read it off the log rather
 than reason about a configuration file.
 
 ## What is already true
 
-The headless turn is behind an interface and the interactive conversation is not.
+The headless task is behind an interface and the interactive conversation is not.
 
 `model.Runner` in [`internal/model/model.go`](../internal/model/model.go) takes a `Request` and
 returns a `Response`, and `model.NewRunner` selects an implementation by kind. That seam is real and
@@ -28,11 +28,11 @@ it works. `EchoRunner` proves it by running `echo` in a sandbox instead of a mod
 Everything else leaks. Five places, and the interactive path is the worst of them because it has no
 seam at all.
 
-1. **Turn arguments.** `buildArgs` in [`internal/model/claudecode.go`](../internal/model/claudecode.go)
+1. **Task arguments.** `buildArgs` in [`internal/model/claudecode.go`](../internal/model/claudecode.go)
    writes `-p`, `--output-format stream-json`, `--verbose`, `--permission-mode` and `--resume`.
 2. **Result parsing.** `parseStream` in the same file reads Claude Code's event stream, including
-   where the thread identifier and the cost of a turn come from.
-3. **The interactive conversation.** `AttachThread` in
+   where the session identifier and the cost of a task come from.
+3. **The interactive conversation.** `AttachSession` in
    [`internal/controlplane/server.go`](../internal/controlplane/server.go) builds
    `tmux new-session -A -s quay open-conversation <conversation> <mode>`, and
    [`deploy/sandbox/open-conversation.sh`](../deploy/sandbox/open-conversation.sh) runs `claude` with
@@ -49,7 +49,7 @@ seam at all.
    is the shape the rest of this is aiming at.
 
 A sixth thing is worth noting and does not have to be acted on. `Runner` currently names two
-unrelated interfaces: the one that runs a turn, and the automation graph reducer in
+unrelated interfaces: the one that runs a task, and the automation graph reducer in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) whose method is `Advance`. If a new interface is introduced for
 the first anyway, calling it `Driver` clears the collision as a side effect, with nothing that ships
 having to be renamed.
@@ -65,7 +65,7 @@ flowchart TB
   BOX["The session's sandbox"]
   MODEL["Wherever that driver's model runs"]
 
-  CP -->|"turn, or open a conversation"| REG
+  CP -->|"task, or open a conversation"| REG
   REG --> D1
   REG --> D2
   D1 -->|"argv, env, storage layout"| BOX
@@ -77,8 +77,8 @@ A driver answers seven questions and nothing else. It holds no state, touches no
 no container: it is handed a sandbox and describes what to run in it, which is what makes it a table
 test rather than an integration test.
 
-- **How do I run a turn?** The argument vector for a new thread and for resuming one.
-- **How do I read the answer?** Reply text, the thread identifier to resume with, and what the turn
+- **How do I run a task?** The argument vector for a new session and for resuming one.
+- **How do I read the answer?** Reply text, the session identifier to resume with, and what the task
   cost.
 - **How do I open the conversation for a person?** The argument vector for an interactive terminal,
   which is the half that has no seam today.
@@ -90,7 +90,7 @@ test rather than an integration test.
   crew level mode survives a change of driver.
 - **Where does its model run?** One of: the operator's subscription, a vendor API, the operator's own
   cloud account, or an endpoint the operator controls. Declared, reported, and written to the event
-  log with the turn.
+  log with the task.
 
 That last one is the commercial answer, not an engineering nicety. An operator who has to tell a
 client where their code went can read it off the log rather than reason about a configuration file.
@@ -100,14 +100,14 @@ client where their code went can read it off the log rather than reason about a 
 The sandbox, the event log, the store, the console and the automation graphs are all untouched. A
 driver is a description of a subprocess. The permission mode concept stays exactly as it is at the
 crew's edge; only its values become per driver. `EchoRunner` stays as the driver with no model, which
-is how the smoke test drives a real turn without a subscription and how the first table tests for the
+is how the smoke test drives a real task without a subscription and how the first table tests for the
 registry run.
 
 The image already assumes what this document argues for, and does not enforce it. The Makefile builds
 `deploy/sandbox/claude.Dockerfile` as `quaycrew-sandbox-claude:local`, and `deploy/env.example` pairs
 `QC_SANDBOX_IMAGE` with `QC_MODEL=claude-code`. One image per driver is therefore the existing
 convention rather than an open question; what is missing is that nothing checks the pair. A crew
-configured with one driver and another driver's image starts, runs, and fails at the first turn with
+configured with one driver and another driver's image starts, runs, and fails at the first task with
 whatever the missing binary says.
 
 The skills work also removed the reason to bake driver files in at all. `sandbox.Config` now carries
@@ -133,7 +133,7 @@ Six slices, each a pull request that leaves the tree green, ordered so the risky
 
 1. **Name the concept.** Add the `Driver` interface and a registry beside the existing `Runner`,
    with `claude-code` and `echo` registered. Nothing calls it yet. Behaviour identical.
-2. **Move the turn behind it.** `buildArgs` and `parseStream` become driver methods. The existing
+2. **Move the task behind it.** `buildArgs` and `parseStream` become driver methods. The existing
    tests carry over unchanged, which is the check that this slice changed nothing.
 3. **Move the interactive conversation behind it.** The argument vector leaves
    `server.go` and `open-conversation.sh` stops naming an agent. This is the slice that closes the
@@ -155,11 +155,11 @@ only one that makes principle 6 mean anything to a buyer.
 
 **Whether a driver is a skill.** `internal/skill/skill.go` already declares binaries, names secrets
 and ships a setup script that runs in the sandbox, and a driver needs all three. The overlap is
-uncomfortably close. The difference is that a skill is a capability a turn may use while a driver is
-how a turn happens at all, so a session with no skills still runs and a session with no driver does
+uncomfortably close. The difference is that a skill is a capability a task may use while a driver is
+how a task happens at all, so a session with no skills still runs and a session with no driver does
 not. Deciding they stay separate is defensible; deciding it without writing down why is not.
 
 **Whether a driver and image mismatch is refused.** The pairing exists in configuration and nothing
-checks it, so the failure arrives at the first turn rather than at startup. Refusing it early is
+checks it, so the failure arrives at the first task rather than at startup. Refusing it early is
 cheap, and it is the same shape as `make env-check` naming configuration that the crew's own file does
 not have.

@@ -25,7 +25,7 @@ var seedBroker string
 
 // TestMain starts one real Redpanda for the package.
 //
-// The behaviour scenarios prove a turn is published, against an in memory log. This proves the same
+// The behaviour scenarios prove a task is published, against an in memory log. This proves the same
 // thing survives a real broker: the topic is created, the record is accepted, the key is the session
 // and the bytes decode back into the event that was sent. A double cannot answer any of those.
 func TestMain(m *testing.M) {
@@ -56,7 +56,7 @@ func runWithRedpanda(m *testing.M) (int, error) {
 	return m.Run(), nil
 }
 
-func TestATurnLandsOnARealBroker(t *testing.T) {
+func TestATaskLandsOnARealBroker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -96,7 +96,7 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 		t.Fatalf("dispatch: %v", err)
 	}
 
-	topic, err := messaging.Topic("acme", "turns")
+	topic, err := messaging.Topic("acme", "tasks")
 	if err != nil {
 		t.Fatalf("topic: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 	consumeCtx, stop := context.WithTimeout(ctx, 30*time.Second)
 	defer stop()
 	go func() {
-		_ = log.Consume(consumeCtx, "turn-events-test", []string{topic}, func(_ context.Context, record messaging.Record) error {
+		_ = log.Consume(consumeCtx, "task-events-test", []string{topic}, func(_ context.Context, record messaging.Record) error {
 			select {
 			case received <- record:
 			default:
@@ -120,9 +120,9 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 		if got, want := string(record.Key), dispatched.GetId(); got != want {
 			t.Errorf("the record is keyed %q, want the session %q", got, want)
 		}
-		event := &quaycrewv1.TurnEvent{}
+		event := &quaycrewv1.TaskEvent{}
 		if err := proto.Unmarshal(record.Value, event); err != nil {
-			t.Fatalf("the record on %s does not decode as a turn event: %v", topic, err)
+			t.Fatalf("the record on %s does not decode as a task event: %v", topic, err)
 		}
 		if event.GetPrompt() != "say pong" {
 			t.Errorf("the record says %q was asked, want %q", event.GetPrompt(), "say pong")
@@ -133,10 +133,10 @@ func TestATurnLandsOnARealBroker(t *testing.T) {
 		if event.GetStatus() != "idle" {
 			t.Errorf("the record says the session is %q, want idle", event.GetStatus())
 		}
-		if event.GetThread() != dispatched.GetId() {
-			t.Errorf("the record names session %q, want %q", event.GetThread(), dispatched.GetId())
+		if event.GetSession() != dispatched.GetId() {
+			t.Errorf("the record names session %q, want %q", event.GetSession(), dispatched.GetId())
 		}
 	case <-consumeCtx.Done():
-		t.Fatalf("no turn arrived on %s within the timeout, so nothing was published to the broker", topic)
+		t.Fatalf("no task arrived on %s within the timeout, so nothing was published to the broker", topic)
 	}
 }

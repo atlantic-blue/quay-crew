@@ -23,7 +23,7 @@ type FakeProvider struct {
 	// Created records the configuration of each sandbox actually made, in order, so a test can assert
 	// which session, project and workspace it belongs to and what environment it carries. Adopting an
 	// existing one is not a creation and does not appear here, which is what lets a scenario say a
-	// second turn made no second sandbox.
+	// second task made no second sandbox.
 	Created []Config
 	// Calls records every request, adopted or not, for a test that cares how often it was asked.
 	Calls []Config
@@ -72,6 +72,17 @@ func (f *FakeProvider) Remove(_ context.Context, sessionID string) error {
 		delete(f.live, sessionID)
 	}
 	return nil
+}
+
+// Configurations is what this provider was asked to make, in order.
+//
+// The same list as Created, read under the provider's own lock, for a test watching from another
+// goroutine: a scenario about what a session's own directory holds runs while a turn is in flight,
+// and reading the slice directly there is a race.
+func (f *FakeProvider) Configurations() []Config {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]Config(nil), f.Created...)
 }
 
 // Stranded lists the sessions whose sandboxes are still open, the way the Docker provider lists the

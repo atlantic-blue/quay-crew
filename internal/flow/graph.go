@@ -13,9 +13,11 @@ package flow
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,8 +25,8 @@ import (
 // because every graph ends and making each author write the same node out teaches nothing.
 const DoneNode = "done"
 
-// Node types. Slice one ships the three that need no external event source: dispatch sends a turn
-// to the run's own thread, choice branches on state without a side effect, and done ends the run.
+// Node types. Slice one ships the three that need no external event source: dispatch sends a task
+// to the run's own session, choice branches on state without a side effect, and done ends the run.
 // wait and ask arrive with their delivery mechanisms.
 const (
 	NodeDispatch = "dispatch"
@@ -36,7 +38,7 @@ const (
 
 // DefaultTransitions is how many movements a run may take when its graph declares no cap.
 //
-// A number rather than no limit, because an automation dispatches turns with nobody watching and a
+// A number rather than no limit, because an automation dispatches tasks with nobody watching and a
 // cycling edge is a spend loop. Generous enough that no reasonable graph meets it by accident, and
 // small enough that a runaway is a bill somebody shrugs at rather than one that ruins the week.
 const DefaultTransitions = 100
@@ -66,7 +68,15 @@ type Graph struct {
 	Version int
 	// Every is how often the crew starts a run of this graph on its own. Zero means never: the
 	// graph runs when a person asks for it, which is every graph until one says otherwise.
-	Every  time.Duration
+	Every time.Duration
+	// Mode is what the run's turns may do, as the model spells it. Empty leaves the run in the mode
+	// every session is born in.
+	//
+	// It belongs to the graph rather than to the operator starting the run, for the same reason the
+	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
+	// does. There is nowhere else to put it either, because the run's session does not exist until
+	// the run starts, so `quay mode` has nothing to point at.
+	Mode   string
 	Limits Limits
 	Nodes  map[string]Node
 	Edges  []Edge
@@ -75,12 +85,29 @@ type Graph struct {
 	Start string
 }
 
+// Expect is what a dispatch node declares will show its task did the work.
+//
+// The crew checks it. That is the whole point of it: a task that could not do the work is not a
+// failed task, so `result.failed` says only that the model did not error, and a model asked to read
+// a file that is not there answers plausibly instead of stopping. Whichever of these is declared is
+// checked; declaring neither is refused at import.
+type Expect struct {
+	// File is a path that must exist in the run's session after the task, relative to its working
+	// directory. It is the strong one: nothing the model says can satisfy it.
+	File string
+	// Contains is a string the reply must carry. It is weaker, because it is still the model's own
+	// prose, and it is here because some work has no file to point at.
+	Contains string
+}
+
 // Node is one step.
 type Node struct {
 	Type string
-	// Prompt is what a dispatch node says to the run's thread, with {{key}} rendered from the
+	// Prompt is what a dispatch node says to the run's session, with {{key}} rendered from the
 	// run's state.
 	Prompt string
+	// Expect is what shows this dispatch worked, or nil where the graph claims nothing.
+	Expect *Expect
 	// On is a choice node's condition: every named state key must equal its value for the choice
 	// to answer true. Equality only, deliberately: accepting arbitrary expressions means owning a
 	// language and a sandbox.
@@ -103,6 +130,7 @@ type Edge struct {
 type graphFile struct {
 	Name    string `yaml:"name"`
 	Version int    `yaml:"version"`
+	Mode    string `yaml:"mode"`
 	Limits  struct {
 		Transitions *int  `yaml:"transitions"`
 		Tokens      int64 `yaml:"tokens"`
@@ -116,6 +144,10 @@ type graphFile struct {
 		On     map[string]string `yaml:"on"`
 		For    string            `yaml:"for"`
 		Text   string            `yaml:"text"`
+		Expect *struct {
+			File     string `yaml:"file"`
+			Contains string `yaml:"contains"`
+		} `yaml:"expect"`
 	} `yaml:"nodes"`
 	Edges [][]string `yaml:"edges"`
 }
@@ -160,7 +192,19 @@ func Parse(source []byte) (Graph, error) {
 		every = parsed
 	}
 
-	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Limits: limits, Nodes: map[string]Node{}}
+	// Refused here rather than at the first dispatch, which is the moment a run has already been
+	// made, has a session of its own, and is about to spend money to find out the word was wrong.
+	mode := ""
+	if declared := strings.TrimSpace(file.Mode); declared != "" {
+		named, known := model.PermissionModeNamed(declared)
+		if !known {
+			return Graph{}, fmt.Errorf("flow: graph %s runs in mode %q, which is not a mode; use %s",
+				file.Name, declared, strings.Join(model.PermissionModesOffered(), ", "))
+		}
+		mode = named
+	}
+
+	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Mode: mode, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
 		var waitFor time.Duration
 		if name == DoneNode {
@@ -194,7 +238,22 @@ func Parse(source []byte) (Graph, error) {
 		default:
 			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, DoneNode)
 		}
-		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text}
+
+		var expect *Expect
+		if node.Expect != nil {
+			if node.Type != NodeDispatch {
+				return Graph{}, fmt.Errorf("flow: %s node %s says what proves it worked, and only a %s does work", node.Type, name, NodeDispatch)
+			}
+			path, carries := strings.TrimSpace(node.Expect.File), node.Expect.Contains
+			if path == "" && carries == "" {
+				return Graph{}, fmt.Errorf("flow: dispatch node %s expects nothing; say `file:` for a path the task must leave behind, or `contains:` for something the reply must carry", name)
+			}
+			if err := usableExpectFile(name, path); err != nil {
+				return Graph{}, err
+			}
+			expect = &Expect{File: path, Contains: carries}
+		}
+		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text, Expect: expect}
 	}
 
 	pointedAt := map[string]bool{}
@@ -261,6 +320,26 @@ func usableEdges(graph Graph, name string, node Node) error {
 		}
 		if !answers["true"] || !answers["false"] {
 			return fmt.Errorf("flow: choice node %s needs an edge for %q and an edge for %q", name, "true", "false")
+		}
+	}
+	return nil
+}
+
+// usableExpectFile refuses a path that would be checked somewhere other than the run's own room.
+//
+// The path is read inside the session's working directory, so an absolute one or one that climbs out
+// of it would be asking about a file the run never touched, and a graph is written by whoever may
+// import one rather than by whoever runs the crew.
+func usableExpectFile(node, path string) error {
+	if path == "" {
+		return nil
+	}
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("flow: dispatch node %s expects %q, and the path is read inside the session's working directory; write it relative, as package.json", node, path)
+	}
+	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+		if part == ".." {
+			return fmt.Errorf("flow: dispatch node %s expects %q, which climbs out of the session's working directory", node, path)
 		}
 	}
 	return nil

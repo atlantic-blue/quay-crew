@@ -21,13 +21,13 @@ Feature: A sandbox keeps a session's state outside itself
   Scenario: A replaced sandbox belongs to the same project, so it finds the same state
     Given a session started by dispatching "remember this"
     When the operator stops the session
-    And the operator dispatches "are you still there" to the same thread
+    And the operator dispatches "are you still there" to the same session
     Then 2 sandboxes have been created
     And every sandbox was created for the same workspace and project
 
-  Scenario: Two threads in one project share the project's working directory
+  Scenario: Two sessions in one project share the project's working directory
     When the operator dispatches "hello" to the project
-    And the operator dispatches "a different subject" to a new thread
+    And the operator dispatches "a different subject" to a new session
     Then 2 sandboxes have been created
     And every sandbox was created for the same workspace and project
 
@@ -76,7 +76,7 @@ Feature: A sandbox keeps a session's state outside itself
     When the operator dispatches "hello" to the project
     Then the sandbox carries nothing called "QC_TOKEN"
 
-  # The model's token is how a turn runs at all, so it is carried without being named.
+  # The model's token is how a task runs at all, so it is carried without being named.
   Scenario: The model's own token needs no naming
     Given a workspace named "acme"
     And a project named "house-bills"

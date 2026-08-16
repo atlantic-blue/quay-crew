@@ -9,13 +9,13 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-// echoModelSessionID is the thread id EchoRunner reports, so a resumed turn is distinguishable from
+// echoModelSessionID is the session id EchoRunner reports, so a resumed task is distinguishable from
 // a new one in tests and smoke runs.
 const echoModelSessionID = "echo-session"
 
 // EchoRunner runs `echo` inside the session's sandbox and returns what it printed.
 //
-// It exists so the whole dispatch path can be exercised without a model or a subscription: the turn
+// It exists so the whole dispatch path can be exercised without a model or a subscription: the task
 // really does exec a command inside the session's sandbox and stream its output back, exactly as the
 // Claude Code adapter does. A runner that returned a canned string without execing would not prove
 // the sandbox works, which is the part that has broken before.

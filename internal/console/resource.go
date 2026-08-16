@@ -86,8 +86,13 @@ type Action struct {
 	// destructive key sets it: the list is full of conversations, and there is no way back from
 	// pressing the wrong one.
 	Confirm bool
-	Run     func(ctx context.Context, row Row) error
-	Shell   func(row Row) (*exec.Cmd, error)
+	// Costs says whether this row is the case worth asking about, for a key that takes something away
+	// on some rows and nothing on others. Nil asks about every row, which is what Confirm alone means.
+	// Restarting is the one: a stopped thread has no turn and nothing attached to it, so there is
+	// nothing to be careful about, and asking would only be in the way.
+	Costs func(row Row) bool
+	Run   func(ctx context.Context, row Row) error
+	Shell func(row Row) (*exec.Cmd, error)
 	// After runs once a Shell command has finished, for the part that cannot happen while the
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
 	// this is what tells the crew about it.
@@ -153,7 +158,7 @@ type Resource struct {
 	SortBy int
 }
 
-// One is what to call a single row of this resource, for a sentence about one of them: "stop thread
+// One is what to call a single row of this resource, for a sentence about one of them: "stop session
 // d754610f?". Every resource here is named as a plural, so trimming it is enough and beats carrying a
 // second name on every declaration.
 func (r Resource) One() string {

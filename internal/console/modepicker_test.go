@@ -11,9 +11,9 @@ import (
 // deliberately everywhere except the surface an operator lives in. These cases are the picker that
 // replaced the flip.
 
-// threadIn is the listing showing one thread in a mode, which is what the picker reads to know
-// whether a pick widens what the thread may do or narrows it.
-func threadIn(t *testing.T, client *fakeClient, mode string) Model {
+// sessionIn is the listing showing one session in a mode, which is what the picker reads to know
+// whether a pick widens what the session may do or narrows it.
+func sessionIn(t *testing.T, client *fakeClient, mode string) Model {
 	t.Helper()
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model,
@@ -40,7 +40,7 @@ func pick(t *testing.T, model Model, want string) Model {
 }
 
 func TestThePickerOffersAllThreeModesNarrowestFirst(t *testing.T) {
-	model, _ := update(t, threadIn(t, &fakeClient{}, "edits"), runes("m"))
+	model, _ := update(t, sessionIn(t, &fakeClient{}, "edits"), runes("m"))
 
 	view := model.View()
 	for _, want := range []string{"plan", "edits", "dangerous"} {
@@ -54,10 +54,10 @@ func TestThePickerOffersAllThreeModesNarrowestFirst(t *testing.T) {
 }
 
 // Planning was the mode the console could not reach at all, which is the whole reason this exists.
-func TestAThreadCanBePutIntoPlanning(t *testing.T) {
+func TestASessionCanBePutIntoPlanning(t *testing.T) {
 	client := &fakeClient{}
 
-	model := pick(t, threadIn(t, client, "dangerous"), "plan")
+	model := pick(t, sessionIn(t, client, "dangerous"), "plan")
 	_, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if cmd == nil {
@@ -69,9 +69,9 @@ func TestAThreadCanBePutIntoPlanning(t *testing.T) {
 	}
 }
 
-// Narrowing takes away what a thread may do, so there is nothing to be careful about and asking
+// Narrowing takes away what a session may do, so there is nothing to be careful about and asking
 // would only be in the way.
-func TestNarrowingWhatAThreadMayDoDoesNotAsk(t *testing.T) {
+func TestNarrowingWhatASessionMayDoDoesNotAsk(t *testing.T) {
 	for _, tc := range []struct{ from, to string }{
 		{from: "dangerous", to: "edits"},
 		{from: "dangerous", to: "plan"},
@@ -80,7 +80,7 @@ func TestNarrowingWhatAThreadMayDoDoesNotAsk(t *testing.T) {
 		t.Run(tc.from+" to "+tc.to, func(t *testing.T) {
 			client := &fakeClient{}
 
-			model := pick(t, threadIn(t, client, tc.from), tc.to)
+			model := pick(t, sessionIn(t, client, tc.from), tc.to)
 			after, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 			if after.mode == modeConfirm {
@@ -97,9 +97,9 @@ func TestNarrowingWhatAThreadMayDoDoesNotAsk(t *testing.T) {
 	}
 }
 
-// Widening asks, like every other key that gives a thread more room, and it names the thread so a
+// Widening asks, like every other key that gives a session more room, and it names the session so a
 // yes is a yes to something in particular.
-func TestWideningWhatAThreadMayDoAsksFirst(t *testing.T) {
+func TestWideningWhatASessionMayDoAsksFirst(t *testing.T) {
 	for _, tc := range []struct{ from, to string }{
 		{from: "plan", to: "edits"},
 		{from: "plan", to: "dangerous"},
@@ -108,17 +108,17 @@ func TestWideningWhatAThreadMayDoAsksFirst(t *testing.T) {
 		t.Run(tc.from+" to "+tc.to, func(t *testing.T) {
 			client := &fakeClient{}
 
-			model := pick(t, threadIn(t, client, tc.from), tc.to)
+			model := pick(t, sessionIn(t, client, tc.from), tc.to)
 			asked, _ := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 			if asked.mode != modeConfirm {
-				t.Fatalf("going from %s to %s did not ask, and it gives the thread more room", tc.from, tc.to)
+				t.Fatalf("going from %s to %s did not ask, and it gives the session more room", tc.from, tc.to)
 			}
 			if len(client.modesSet) != 0 {
 				t.Fatalf("modes set = %v, want nothing changed before the yes", client.modesSet)
 			}
 			if view := asked.View(); !strings.Contains(view, "d754610f") {
-				t.Fatalf("the question does not name the thread:\n%s", view)
+				t.Fatalf("the question does not name the session:\n%s", view)
 			}
 
 			_, cmd := update(t, asked, runes("y"))
@@ -133,12 +133,12 @@ func TestWideningWhatAThreadMayDoAsksFirst(t *testing.T) {
 	}
 }
 
-// Escape leaves the thread as it was. A picker that acted on the way out would be a picker nobody
+// Escape leaves the session as it was. A picker that acted on the way out would be a picker nobody
 // could open to see what the modes are.
 func TestLeavingThePickerChangesNothing(t *testing.T) {
 	client := &fakeClient{}
 
-	model := pick(t, threadIn(t, client, "edits"), "dangerous")
+	model := pick(t, sessionIn(t, client, "edits"), "dangerous")
 	after, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
 
 	if after.mode != modeBrowse {
@@ -163,17 +163,17 @@ func TestLeavingThePickerChangesNothing(t *testing.T) {
 
 // The way off the old key. D flipped between two modes for as long as the console has had one, so it
 // is in somebody's fingers. It opens the picker now rather than doing nothing, and rather than
-// quietly arming a thread the way it used to.
+// quietly arming a session the way it used to.
 func TestTheOldDangerousKeyOpensThePickerRatherThanArming(t *testing.T) {
 	client := &fakeClient{}
 
-	model, _ := update(t, threadIn(t, client, "edits"), runes("D"))
+	model, _ := update(t, sessionIn(t, client, "edits"), runes("D"))
 
 	if model.mode != modeChoose {
 		t.Fatalf("D left the console in %v, want the picker", model.mode)
 	}
 	if len(client.modesSet) != 0 {
-		t.Fatalf("D armed the thread on its own: modes set = %v", client.modesSet)
+		t.Fatalf("D armed the session on its own: modes set = %v", client.modesSet)
 	}
 }
 

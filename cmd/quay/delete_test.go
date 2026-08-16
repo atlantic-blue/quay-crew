@@ -17,7 +17,7 @@ func TestAWorkspaceCanBeRemovedWithEverythingUnderIt(t *testing.T) {
 
 	saying(t, "typo\n")
 	removed := mustRun(t, client, "workspace", "delete", "typo")
-	for _, want := range []string{"1 project", "1 thread", "1 secret", "deleted workspace typo"} {
+	for _, want := range []string{"1 project", "1 session", "1 secret", "deleted workspace typo"} {
 		if !strings.Contains(removed, want) {
 			t.Errorf("the removal does not account for %q: %q", want, removed)
 		}
@@ -61,7 +61,7 @@ func TestAProjectCanBeRemovedAndYouStepBackToItsWorkspace(t *testing.T) {
 
 	saying(t, "notes\n")
 	removed := mustRun(t, client, "project", "delete", "me/notes")
-	if !strings.Contains(removed, "deleted project notes") || !strings.Contains(removed, "1 thread") {
+	if !strings.Contains(removed, "deleted project notes") || !strings.Contains(removed, "1 session") {
 		t.Fatalf("the removal did not say what went: %q", removed)
 	}
 	if listed := mustRun(t, client, "project", "list", "me"); strings.Contains(listed, "notes") {

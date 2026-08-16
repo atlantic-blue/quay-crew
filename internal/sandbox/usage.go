@@ -12,7 +12,7 @@ import (
 //
 // Four numbers rather than two, because two would be a lie by omission. On a real conversation the
 // input was 52 tokens and the cache read was 1,723,404: almost everything sent is the context being
-// read again on every turn, and a report of "inbound and outbound" would show the 52 and hide the
+// read again on every task, and a report of "inbound and outbound" would show the 52 and hide the
 // rest.
 type Usage struct {
 	// Input is what was sent and charged as new, not counting anything served from the cache.
@@ -22,7 +22,7 @@ type Usage struct {
 	// CacheRead is context the model read from its cache rather than being sent again. It is the
 	// largest of these by far on any conversation with real context behind it.
 	CacheRead int64
-	// CacheWritten is context put into the cache to be read on later turns.
+	// CacheWritten is context put into the cache to be read on later tasks.
 	CacheWritten int64
 }
 

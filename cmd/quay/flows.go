@@ -89,7 +89,7 @@ func runFlowStart(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	run := resp.GetRun()
 	fmt.Fprintf(out, "started %s version %d as run %s\n", run.GetGraphName(), run.GetGraphVersion(), display.ShortID(run.GetId()))
-	fmt.Fprintf(out, "it dispatches turns of its own; watch it with quay flow show %s\n", display.ShortID(run.GetId()))
+	fmt.Fprintf(out, "it dispatches tasks of its own; watch it with quay flow show %s\n", display.ShortID(run.GetId()))
 	return nil
 }
 
@@ -168,6 +168,12 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	for _, key := range keys {
 		fmt.Fprintf(out, "  %-16s %s\n", key, truncateLine(run.GetState()[key]))
 	}
+	// What the run actually did is in its session, and the summary above is the model's own account
+	// of it. The two can disagree, so the way to read the tasks is printed rather than left to be
+	// worked out from an identifier in the state.
+	if session := run.GetState()[flow.SessionKey]; session != "" {
+		fmt.Fprintf(out, "read what it did with quay tasks %s\n", display.ShortID(session))
+	}
 	return nil
 }
 
@@ -192,8 +198,8 @@ func runFlowStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	stopped := resp.GetRun()
 	fmt.Fprintf(out, "stopped run %s at node %s\n", display.ShortID(stopped.GetId()), stopped.GetNode())
 	fmt.Fprintf(out, "%s\n", stopped.GetReason())
-	// The turn already running finishes: the model is mid sentence and abandoning it gains nothing.
-	fmt.Fprintf(out, "a turn already under way finishes; the run takes no further step\n")
+	// The task already running finishes: the model is mid sentence and abandoning it gains nothing.
+	fmt.Fprintf(out, "a task already under way finishes; the run takes no further step\n")
 	return nil
 }
 

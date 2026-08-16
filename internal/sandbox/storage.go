@@ -27,7 +27,7 @@ type Storage struct {
 }
 
 // Prepare creates the directories this sandbox needs and returns the mounts that carry them into
-// it. The workspace's conversation store is shared by every project in it, so a thread started in
+// it. The workspace's conversation store is shared by every project in it, so a session started in
 // one project can still be resumed; the working directory belongs to a single project.
 func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 	if s.Dir == "" {
@@ -98,6 +98,31 @@ func memoryDirs(cfg Config) []dir {
 		}
 	}
 	return out
+}
+
+// WorkingDir is a session's own working directory as this process sees it, and false where this
+// storage keeps nothing or the configuration names a directory it could not make.
+//
+// Read from the same layout the mounts come from, so the two cannot drift into describing different
+// directories. It is this process's view rather than the host's, because the caller is reading the
+// directory rather than mounting it.
+func (s Storage) WorkingDir(cfg Config) (string, bool) {
+	if s.Dir == "" {
+		return "", false
+	}
+	for _, part := range []struct{ kind, value string }{
+		{"workspace", cfg.Workspace}, {"project", cfg.Project}, {"session", cfg.ID},
+	} {
+		if usableAsPath(part.kind, part.value) != nil {
+			return "", false
+		}
+	}
+	for _, one := range layout(cfg) {
+		if one.target == WorkingPath {
+			return filepath.Join(append([]string{s.Dir}, one.parts...)...), true
+		}
+	}
+	return "", false
 }
 
 // VolumeDir is the workspace's shared volume as this process sees it, and VolumeHost as the host daemon

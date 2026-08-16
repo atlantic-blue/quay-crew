@@ -5,19 +5,19 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/internal/logging"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
 	serviceName := envOr("QC_SERVICE_NAME", "gateway")
+	logger := logging.Init(serviceName, os.Stdout)
+
 	otelEndpoint := envOr("QC_OTEL_ENDPOINT", "localhost:4317")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -28,7 +28,11 @@ func main() {
 		logger.Error("telemetry init failed", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("service started", "service", serviceName, "otel_endpoint", otelEndpoint)
+	// Every line goes to the collector as well as to stdout, now that there is a pipeline to take
+	// it. Stdout keeps carrying all of it: it is the signal that still works when the collector does
+	// not.
+	logger = logging.AlsoExport(serviceName, os.Stdout)
+	logger.Info("service started", "otel_endpoint", otelEndpoint)
 
 	<-ctx.Done()
 	logger.Info("shutting down")

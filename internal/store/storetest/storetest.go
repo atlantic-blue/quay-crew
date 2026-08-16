@@ -116,85 +116,85 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 	// Both implementations, because the memory store writes the mode into a struct and postgres writes
 	// it into a column with a default of its own. A fake that took the crew's choice while the real one
-	// quietly kept the column default would keep the suite green and run every real turn in the wrong
+	// quietly kept the column default would keep the suite green and run every real task in the wrong
 	// mode.
-	t.Run("a thread is born in the mode the crew configured", func(t *testing.T) {
+	t.Run("a session is born in the mode the crew configured", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
 
-		born, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-planning", model.PermissionPlan)
+		born, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionPlan)
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 		if born.GetPermissionMode() != model.PermissionPlan {
-			t.Fatalf("a thread born in a crew configured for plan may do %q", born.GetPermissionMode())
+			t.Fatalf("a session born in a crew configured for plan may do %q", born.GetPermissionMode())
 		}
 
-		// What a thread may do is its own once it exists. A crew whose configuration changed must not
+		// What a session may do is its own once it exists. A crew whose configuration changed must not
 		// widen a conversation that is already running.
-		again, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-planning", model.PermissionBypass)
+		again, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionBypass)
 		if err != nil {
 			t.Fatalf("FindOrCreateSession again: %v", err)
 		}
 		if again.GetPermissionMode() != model.PermissionPlan {
-			t.Fatalf("a thread that already existed was widened to %q by configuration", again.GetPermissionMode())
+			t.Fatalf("a session that already existed was widened to %q by configuration", again.GetPermissionMode())
 		}
 	})
 
-	t.Run("a crew that configured nothing gets the mode every thread used to have", func(t *testing.T) {
+	t.Run("a crew that configured nothing gets the mode every session used to have", func(t *testing.T) {
 		s := newDataset(t)(t)
 		project := newProject(t, s, "acme", "house bills")
 
-		born, err := s.FindOrCreateSession(context.Background(), project.GetId(), "thread-quiet", "")
+		born, err := s.FindOrCreateSession(context.Background(), project.GetId(), "session-quiet", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 		if born.GetPermissionMode() != model.PermissionAcceptEdits {
-			t.Fatalf("a thread in a crew that configured nothing may do %q, want %q",
+			t.Fatalf("a session in a crew that configured nothing may do %q, want %q",
 				born.GetPermissionMode(), model.PermissionAcceptEdits)
 		}
 	})
 
 	// Both implementations, because a listing that shows a label the operator set on one store and an
 	// identifier on the other is worse than no labels at all.
-	t.Run("a thread carries the name the operator gave it", func(t *testing.T) {
+	t.Run("a session carries the name the operator gave it", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if thread.GetLabel() != "" {
-			t.Fatalf("a new thread is already called %q, and nobody has named it", thread.GetLabel())
+		if session.GetLabel() != "" {
+			t.Fatalf("a new session is already called %q, and nobody has named it", session.GetLabel())
 		}
 
-		if err := s.SetLabel(ctx, thread.GetId(), "the electricity bill"); err != nil {
+		if err := s.SetLabel(ctx, session.GetId(), "the electricity bill"); err != nil {
 			t.Fatalf("SetLabel: %v", err)
 		}
-		named, err := s.GetSession(ctx, thread.GetId())
+		named, err := s.GetSession(ctx, session.GetId())
 		if err != nil {
 			t.Fatalf("GetSession: %v", err)
 		}
 		if named.GetLabel() != "the electricity bill" {
-			t.Fatalf("the thread is called %q", named.GetLabel())
+			t.Fatalf("the session is called %q", named.GetLabel())
 		}
 
 		// It is in the listing too, which is the only place anybody reads it.
 		listed, err := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
 		if err != nil || len(listed) != 1 {
-			t.Fatalf("ListSessions: %d threads, %v", len(listed), err)
+			t.Fatalf("ListSessions: %d sessions, %v", len(listed), err)
 		}
 		if listed[0].GetLabel() != "the electricity bill" {
 			t.Fatalf("the listing calls it %q", listed[0].GetLabel())
 		}
 
 		// Clearing it puts the identifier back, which is the only way back and so has to work.
-		if err := s.SetLabel(ctx, thread.GetId(), ""); err != nil {
+		if err := s.SetLabel(ctx, session.GetId(), ""); err != nil {
 			t.Fatalf("clearing the label: %v", err)
 		}
-		cleared, err := s.GetSession(ctx, thread.GetId())
+		cleared, err := s.GetSession(ctx, session.GetId())
 		if err != nil {
 			t.Fatalf("GetSession after clearing: %v", err)
 		}
@@ -203,85 +203,85 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a thread keeps what the crew observed it to be, and when", func(t *testing.T) {
+	t.Run("a session keeps what the crew observed it to be, and when", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 
-		if err := s.SetDescription(ctx, thread.GetId(), "the electricity bill", 3); err != nil {
+		if err := s.SetDescription(ctx, session.GetId(), "the electricity bill", 3); err != nil {
 			t.Fatalf("SetDescription: %v", err)
 		}
 
-		described, err := s.GetSession(ctx, thread.GetId())
+		described, err := s.GetSession(ctx, session.GetId())
 		if err != nil {
 			t.Fatalf("GetSession: %v", err)
 		}
 		if described.GetDescription() != "the electricity bill" {
 			t.Fatalf("the crew describes it as %q", described.GetDescription())
 		}
-		// The turn count travels with the text. Kept apart they drift, and a description that says it
+		// The task count travels with the text. Kept apart they drift, and a description that says it
 		// is current when it is not is worse than one that admits it is old.
-		if described.GetDescribedAtTurn() != 3 {
-			t.Fatalf("it was described at turn %d, want 3", described.GetDescribedAtTurn())
+		if described.GetDescribedAtTask() != 3 {
+			t.Fatalf("it was described at task %d, want 3", described.GetDescribedAtTask())
 		}
 	})
 
-	t.Run("how many turns a thread has had", func(t *testing.T) {
+	t.Run("how many tasks a session has had", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		thread, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		other, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
+		other, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession other: %v", err)
 		}
 
-		count, err := s.CountTurns(ctx, thread.GetId())
+		count, err := s.CountTasks(ctx, session.GetId())
 		if err != nil || count != 0 {
-			t.Fatalf("a thread nobody has spoken in has %d turns (%v)", count, err)
+			t.Fatalf("a session nobody has spoken in has %d tasks (%v)", count, err)
 		}
 
 		for at := range 3 {
-			turn := &quaycrewv1.Turn{
-				Id: fmt.Sprintf("counted-turn-%d", at), Thread: thread.GetId(),
+			task := &quaycrewv1.Task{
+				Id: fmt.Sprintf("counted-task-%d", at), Session: session.GetId(),
 				Prompt: "hello", Reply: "ok", OccurredAt: timestamppb.Now(),
 			}
-			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
-				t.Fatalf("AppendTurn: %v", err)
+			if err := s.AppendTask(ctx, task, project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+				t.Fatalf("AppendTask: %v", err)
 			}
 		}
 
-		count, err = s.CountTurns(ctx, thread.GetId())
+		count, err = s.CountTasks(ctx, session.GetId())
 		if err != nil || count != 3 {
-			t.Fatalf("the thread has %d turns (%v), want 3", count, err)
+			t.Fatalf("the session has %d tasks (%v), want 3", count, err)
 		}
-		// Counted per thread, not per crew: a busy neighbour must not make this one look described.
-		count, err = s.CountTurns(ctx, other.GetId())
+		// Counted per session, not per crew: a busy neighbour must not make this one look described.
+		count, err = s.CountTasks(ctx, other.GetId())
 		if err != nil || count != 0 {
-			t.Fatalf("the other thread has %d turns (%v), want 0", count, err)
+			t.Fatalf("the other session has %d tasks (%v), want 0", count, err)
 		}
 	})
 
-	t.Run("naming a thread that does not exist is refused", func(t *testing.T) {
+	t.Run("naming a session that does not exist is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if err := s.SetLabel(context.Background(), "ghost", "anything"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("SetLabel on a missing thread returned %v, want ErrNotFound", err)
+			t.Fatalf("SetLabel on a missing session returned %v, want ErrNotFound", err)
 		}
 	})
 
-	t.Run("a thread always lands in the same session", func(t *testing.T) {
+	t.Run("a session always lands in the same session", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
 
-		first, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		first, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -289,38 +289,38 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("new session status is %q, want idle", first.GetStatus())
 		}
 
-		again, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		again, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession again: %v", err)
 		}
 		if again.GetId() != first.GetId() {
-			t.Fatalf("the same thread made two sessions: %q and %q", first.GetId(), again.GetId())
+			t.Fatalf("the same session made two sessions: %q and %q", first.GetId(), again.GetId())
 		}
 
-		other, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
+		other, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if err != nil {
-			t.Fatalf("FindOrCreateSession other thread: %v", err)
+			t.Fatalf("FindOrCreateSession other session: %v", err)
 		}
 		if other.GetId() == first.GetId() {
-			t.Fatal("two threads share one session")
+			t.Fatal("two sessions share one session")
 		}
 	})
 
 	t.Run("a session needs a live project", func(t *testing.T) {
 		s := newDataset(t)(t)
-		if _, err := s.FindOrCreateSession(context.Background(), "ghost", "thread-a", ""); !errors.Is(err, store.ErrNotFound) {
+		if _, err := s.FindOrCreateSession(context.Background(), "ghost", "session-a", ""); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("session on a missing project returned %v, want ErrNotFound", err)
 		}
 	})
 
-	t.Run("a turn records the conversation handle", func(t *testing.T) {
+	t.Run("a task records the conversation handle", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
-		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTurn: %v", err)
+		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
 		}
 		got, err := s.GetSession(ctx, session.GetId())
 		if err != nil {
@@ -331,34 +331,34 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a failed turn does not erase the conversation handle", func(t *testing.T) {
+	t.Run("a failed task does not erase the conversation handle", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
-		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTurn: %v", err)
+		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
 		}
-		// A failed turn has no handle to report. The stored one points at a conversation that still
+		// A failed task has no handle to report. The stored one points at a conversation that still
 		// exists, so it must survive.
-		if err := s.RecordTurn(ctx, session.GetId(), "", "failed"); err != nil {
-			t.Fatalf("RecordTurn after failure: %v", err)
+		if err := s.RecordTask(ctx, session.GetId(), "", "failed"); err != nil {
+			t.Fatalf("RecordTask after failure: %v", err)
 		}
 
 		got, _ := s.GetSession(ctx, session.GetId())
 		if got.GetModelSessionId() != "conversation-1" {
-			t.Fatalf("a failed turn erased the handle: it is now %q", got.GetModelSessionId())
+			t.Fatalf("a failed task erased the handle: it is now %q", got.GetModelSessionId())
 		}
 		if got.GetStatus() != "failed" {
 			t.Fatalf("status is %q, want failed", got.GetStatus())
 		}
 	})
 
-	t.Run("a turn on a session that does not exist is not found", func(t *testing.T) {
+	t.Run("a task on a session that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
-		if err := s.RecordTurn(context.Background(), "ghost", "conversation-1", "idle"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("RecordTurn on a missing session returned %v, want ErrNotFound", err)
+		if err := s.RecordTask(context.Background(), "ghost", "conversation-1", "idle"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("RecordTask on a missing session returned %v, want ErrNotFound", err)
 		}
 	})
 
@@ -368,13 +368,13 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		first := newProject(t, s, "acme", "house bills")
 		second := newProject(t, s, "other", "gardening")
 
-		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "thread-a", ""); err != nil {
+		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-a", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "thread-b", ""); err != nil {
+		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-b", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, second.GetId(), "thread-c", ""); err != nil {
+		if _, err := s.FindOrCreateSession(ctx, second.GetId(), "session-c", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 
@@ -404,7 +404,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if err := s.StopSession(ctx, session.GetId()); err != nil {
 			t.Fatalf("StopSession: %v", err)
@@ -422,7 +422,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if fingerprint, err := s.SessionSkills(ctx, session.GetId()); err != nil || fingerprint != "" {
 			t.Fatalf("a fresh session answers %q, %v; want empty and no error", fingerprint, err)
@@ -466,9 +466,9 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
-		if err := s.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTurn: %v", err)
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
 		}
 		if err := s.StopSession(ctx, session.GetId()); err != nil {
 			t.Fatalf("StopSession: %v", err)
@@ -496,10 +496,10 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		kept, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
-		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
-		if err := s.RecordTurn(ctx, kept.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTurn: %v", err)
+		kept, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		if err := s.RecordTask(ctx, kept.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
 		}
 
 		if err := s.ArchiveSession(ctx, kept.GetId()); err != nil {
@@ -508,11 +508,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		live, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
 		if len(live) != 1 || live[0].GetId() != other.GetId() {
-			t.Fatalf("the default listing is %v, want only the live thread", ids(live))
+			t.Fatalf("the default listing is %v, want only the live session", ids(live))
 		}
 		archived, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId(), Archived: true})
 		if len(archived) != 1 || archived[0].GetId() != kept.GetId() {
-			t.Fatalf("the archived listing is %v, want only the archived thread", ids(archived))
+			t.Fatalf("the archived listing is %v, want only the archived session", ids(archived))
 		}
 		if archived[0].GetArchivedAt() == nil {
 			t.Fatal("the archived session carries no archived_at, so nothing can say when it was put away")
@@ -533,7 +533,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the conversation handle is %q, want it untouched", back.GetModelSessionId())
 		}
 		if live, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()}); len(live) != 2 {
-			t.Fatalf("the default listing is %v, want both threads back", ids(live))
+			t.Fatalf("the default listing is %v, want both sessions back", ids(live))
 		}
 
 		for _, err := range []error{s.ArchiveSession(ctx, "ghost"), s.RestoreSession(ctx, "ghost")} {
@@ -543,17 +543,17 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	// The mode belongs to the thread, so it has to survive everything the thread survives. A thread
-	// started to plan something that quietly went back to editing files on the next turn would be
+	// The mode belongs to the session, so it has to survive everything the session survives. A session
+	// started to plan something that quietly went back to editing files on the next task would be
 	// worse than never having the setting.
-	t.Run("a thread keeps the permission mode it was given", func(t *testing.T) {
+	t.Run("a session keeps the permission mode it was given", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if got := session.GetPermissionMode(); got != "acceptEdits" {
-			t.Fatalf("a new thread runs as %q, want acceptEdits, which is what every turn has run as", got)
+			t.Fatalf("a new session runs as %q, want acceptEdits, which is what every task has run as", got)
 		}
 		if err := s.SetPermissionMode(ctx, session.GetId(), "bypassPermissions"); err != nil {
 			t.Fatalf("SetPermissionMode: %v", err)
@@ -561,92 +561,92 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		got, _ := s.GetSession(ctx, session.GetId())
 		if got.GetPermissionMode() != "bypassPermissions" {
-			t.Fatalf("the thread runs as %q, want bypassPermissions", got.GetPermissionMode())
+			t.Fatalf("the session runs as %q, want bypassPermissions", got.GetPermissionMode())
 		}
-		// And the thread it was set on, not every thread in the project.
-		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
+		// And the session it was set on, not every session in the project.
+		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if other.GetPermissionMode() != "acceptEdits" {
-			t.Fatalf("another thread runs as %q, want it untouched", other.GetPermissionMode())
+			t.Fatalf("another session runs as %q, want it untouched", other.GetPermissionMode())
 		}
 		if err := s.SetPermissionMode(ctx, "ghost", "plan"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("setting the mode on a missing session returned %v, want ErrNotFound", err)
 		}
 	})
 
-	t.Run("a session's turns come back in the order they happened", func(t *testing.T) {
+	t.Run("a session's tasks come back in the order they happened", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
 		for i, text := range []string{"first", "second", "third"} {
-			turn := &quaycrewv1.Turn{
-				Id:         fmt.Sprintf("turn-%d", i),
-				Thread:     session.GetId(),
+			task := &quaycrewv1.Task{
+				Id:         fmt.Sprintf("task-%d", i),
+				Session:    session.GetId(),
 				Prompt:     text,
 				Reply:      "you said: " + text,
 				Status:     "idle",
 				OccurredAt: timestamppb.New(start.Add(time.Duration(i) * time.Minute)),
 			}
-			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
-				t.Fatalf("AppendTurn: %v", err)
+			if err := s.AppendTask(ctx, task, project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+				t.Fatalf("AppendTask: %v", err)
 			}
 		}
 
-		turns, err := s.ListTurns(ctx, session.GetId(), 0)
+		tasks, err := s.ListTasks(ctx, session.GetId(), 0)
 		if err != nil {
-			t.Fatalf("ListTurns: %v", err)
+			t.Fatalf("ListTasks: %v", err)
 		}
-		if len(turns) != 3 {
-			t.Fatalf("%d turns came back, want 3", len(turns))
+		if len(tasks) != 3 {
+			t.Fatalf("%d tasks came back, want 3", len(tasks))
 		}
 		for i, want := range []string{"first", "second", "third"} {
-			if turns[i].GetPrompt() != want {
-				t.Fatalf("turn %d says %q, want %q: the history is out of order", i, turns[i].GetPrompt(), want)
+			if tasks[i].GetPrompt() != want {
+				t.Fatalf("task %d says %q, want %q: the history is out of order", i, tasks[i].GetPrompt(), want)
 			}
 		}
-		if turns[0].GetReply() != "you said: first" || turns[0].GetStatus() != "idle" {
-			t.Fatalf("the first turn came back as %+v, losing what it said", turns[0])
+		if tasks[0].GetReply() != "you said: first" || tasks[0].GetStatus() != "idle" {
+			t.Fatalf("the first task came back as %+v, losing what it said", tasks[0])
 		}
 	})
 
-	t.Run("the same turn delivered twice is stored once", func(t *testing.T) {
+	t.Run("the same task delivered twice is stored once", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		// Delivery from the event log is at least once, so this is not a hypothetical.
-		turn := &quaycrewv1.Turn{
-			Id: "turn-once", Thread: session.GetId(), Prompt: "hello",
+		task := &quaycrewv1.Task{
+			Id: "task-once", Session: session.GetId(), Prompt: "hello",
 			Status: "idle", OccurredAt: timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)),
 		}
 		for range 3 {
-			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
-				t.Fatalf("AppendTurn: %v", err)
+			if err := s.AppendTask(ctx, task, project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+				t.Fatalf("AppendTask: %v", err)
 			}
 		}
 
-		turns, err := s.ListTurns(ctx, session.GetId(), 0)
+		tasks, err := s.ListTasks(ctx, session.GetId(), 0)
 		if err != nil {
-			t.Fatalf("ListTurns: %v", err)
+			t.Fatalf("ListTasks: %v", err)
 		}
-		if len(turns) != 1 {
-			t.Fatalf("%d turns came back, want 1: a replayed record was written again", len(turns))
+		if len(tasks) != 1 {
+			t.Fatalf("%d tasks came back, want 1: a replayed record was written again", len(tasks))
 		}
 	})
 
-	t.Run("a turn with no id is refused", func(t *testing.T) {
+	t.Run("a task with no id is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
-		err := s.AppendTurn(ctx, &quaycrewv1.Turn{Thread: session.GetId(), Prompt: "hello"},
-			project.GetWorkspace(), project.GetId(), "thread-a")
+		err := s.AppendTask(ctx, &quaycrewv1.Task{Session: session.GetId(), Prompt: "hello"},
+			project.GetWorkspace(), project.GetId(), "session-a")
 		if err == nil {
-			t.Fatal("a turn with no id was accepted, so nothing can recognise it on a replay")
+			t.Fatal("a task with no id was accepted, so nothing can recognise it on a replay")
 		}
 	})
 
@@ -654,55 +654,55 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
 		for i := range 5 {
-			turn := &quaycrewv1.Turn{
-				Id: fmt.Sprintf("turn-%d", i), Thread: session.GetId(),
+			task := &quaycrewv1.Task{
+				Id: fmt.Sprintf("task-%d", i), Session: session.GetId(),
 				Prompt: fmt.Sprintf("message %d", i), Status: "idle",
 				OccurredAt: timestamppb.New(start.Add(time.Duration(i) * time.Minute)),
 			}
-			if err := s.AppendTurn(ctx, turn, project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
-				t.Fatalf("AppendTurn: %v", err)
+			if err := s.AppendTask(ctx, task, project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+				t.Fatalf("AppendTask: %v", err)
 			}
 		}
 
-		turns, err := s.ListTurns(ctx, session.GetId(), 2)
+		tasks, err := s.ListTasks(ctx, session.GetId(), 2)
 		if err != nil {
-			t.Fatalf("ListTurns: %v", err)
+			t.Fatalf("ListTasks: %v", err)
 		}
-		if len(turns) != 2 {
-			t.Fatalf("%d turns came back, want 2", len(turns))
+		if len(tasks) != 2 {
+			t.Fatalf("%d tasks came back, want 2", len(tasks))
 		}
-		if turns[0].GetPrompt() != "message 3" || turns[1].GetPrompt() != "message 4" {
-			t.Fatalf("the listing kept %q and %q, want the last two: a cap must keep the end", turns[0].GetPrompt(), turns[1].GetPrompt())
+		if tasks[0].GetPrompt() != "message 3" || tasks[1].GetPrompt() != "message 4" {
+			t.Fatalf("the listing kept %q and %q, want the last two: a cap must keep the end", tasks[0].GetPrompt(), tasks[1].GetPrompt())
 		}
 	})
 
-	t.Run("one session's turns are not another's", func(t *testing.T) {
+	t.Run("one session's tasks are not another's", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		first, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
-		second, _ := s.FindOrCreateSession(ctx, project.GetId(), "thread-b", "")
+		first, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		second, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 
 		now := timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC))
-		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "a", Thread: first.GetId(), Prompt: "mine", OccurredAt: now},
-			project.GetWorkspace(), project.GetId(), "thread-a"); err != nil {
-			t.Fatalf("AppendTurn: %v", err)
+		if err := s.AppendTask(ctx, &quaycrewv1.Task{Id: "a", Session: first.GetId(), Prompt: "mine", OccurredAt: now},
+			project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+			t.Fatalf("AppendTask: %v", err)
 		}
-		if err := s.AppendTurn(ctx, &quaycrewv1.Turn{Id: "b", Thread: second.GetId(), Prompt: "theirs", OccurredAt: now},
-			project.GetWorkspace(), project.GetId(), "thread-b"); err != nil {
-			t.Fatalf("AppendTurn: %v", err)
+		if err := s.AppendTask(ctx, &quaycrewv1.Task{Id: "b", Session: second.GetId(), Prompt: "theirs", OccurredAt: now},
+			project.GetWorkspace(), project.GetId(), "session-b"); err != nil {
+			t.Fatalf("AppendTask: %v", err)
 		}
 
-		turns, err := s.ListTurns(ctx, first.GetId(), 0)
+		tasks, err := s.ListTasks(ctx, first.GetId(), 0)
 		if err != nil {
-			t.Fatalf("ListTurns: %v", err)
+			t.Fatalf("ListTasks: %v", err)
 		}
-		if len(turns) != 1 || turns[0].GetPrompt() != "mine" {
-			t.Fatalf("the first session's history came back as %d turns starting %q", len(turns), turns[0].GetPrompt())
+		if len(tasks) != 1 || tasks[0].GetPrompt() != "mine" {
+			t.Fatalf("the first session's history came back as %d tasks starting %q", len(tasks), tasks[0].GetPrompt())
 		}
 	})
 
@@ -802,7 +802,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a deleted project is hidden and takes no new threads", func(t *testing.T) {
+	t.Run("a deleted project is hidden and takes no new sessions", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "me", "house bills")
@@ -813,8 +813,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if _, err := s.GetProject(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("GetProject after delete returned %v, want ErrNotFound", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, project.GetId(), "thread-a", ""); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("a deleted project still took a thread: %v", err)
+		if _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", ""); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("a deleted project still took a session: %v", err)
 		}
 		if err := s.DeleteProject(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("deleting twice returned %v, want ErrNotFound", err)
@@ -843,9 +843,9 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	// A thread identifier only has to be unique inside its project, which is what lets two bodies of
-	// work in one workspace both have a thread the channel calls "general".
-	t.Run("two projects in one workspace can share a thread identifier", func(t *testing.T) {
+	// A session identifier only has to be unique inside its project, which is what lets two bodies of
+	// work in one workspace both have a session the channel calls "general".
+	t.Run("two projects in one workspace can share a session identifier", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
@@ -868,7 +868,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("FindOrCreateSession in the second project: %v", err)
 		}
 		if first.GetId() == second.GetId() {
-			t.Fatal("the same thread identifier in two projects landed in one session")
+			t.Fatal("the same session identifier in two projects landed in one session")
 		}
 	})
 
@@ -886,12 +886,12 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("CreateProject: %v", err)
 		}
-		session, err := before.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		session, err := before.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if err := before.RecordTurn(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTurn: %v", err)
+		if err := before.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
 		}
 		before.Close()
 
@@ -924,14 +924,14 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the conversation handle did not survive: it is %q", sessions[0].GetModelSessionId())
 		}
 
-		// The same thread must still resolve to the same session, which is what lets the next turn
+		// The same session must still resolve to the same session, which is what lets the next task
 		// resume the conversation rather than start a new one.
-		same, err := after.FindOrCreateSession(ctx, project.GetId(), "thread-a", "")
+		same, err := after.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession after reopening: %v", err)
 		}
 		if same.GetId() != session.GetId() {
-			t.Fatalf("the thread made a new session after reopening: %q, want %q", same.GetId(), session.GetId())
+			t.Fatalf("the session made a new session after reopening: %q, want %q", same.GetId(), session.GetId())
 		}
 		if same.GetModelSessionId() != "conversation-1" {
 			t.Fatalf("the resumed session lost its conversation handle: %q", same.GetModelSessionId())
@@ -989,7 +989,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 
 		// The same key again refuses the whole movement: no second claim, no second record, and the
-		// run row stays where it was, because a duplicate dispatch is a turn paid for twice.
+		// run row stays where it was, because a duplicate dispatch is a task paid for twice.
 		moved := *run
 		moved.Node = "somewhere-else"
 		if err := s.AdvanceFlowRun(ctx, &moved, flow.Transition{Event: flow.EventStarted, Node: "somewhere-else", Dispatch: dispatch}); err == nil {
@@ -1036,7 +1036,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		run.Status, run.Reason = flow.StatusStopped, "stopped after 5 transitions"
 		run.Transitions, run.Spent = 5, 1_724_656
-		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTurnFinished, Node: "more"}); err != nil {
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTaskFinished, Node: "more"}); err != nil {
 			t.Fatalf("AdvanceFlowRun: %v", err)
 		}
 
@@ -1093,10 +1093,10 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the stopped run reads %q %q", stopped.Status, stopped.Reason)
 		}
 
-		// The engine was mid turn and writes next. It must be refused rather than setting the run
+		// The engine was mid task and writes next. It must be refused rather than setting the run
 		// back to running, which is the whole of what makes a stop take effect.
 		run.Node = "again"
-		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTurnFinished, Node: "again"}); !errors.Is(err, flow.ErrRunHalted) {
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{Event: flow.EventTaskFinished, Node: "again"}); !errors.Is(err, flow.ErrRunHalted) {
 			t.Fatalf("moving a stopped run answered %v, want it refused as halted", err)
 		}
 		kept, err := s.GetFlowRun(ctx, "run-halt")
@@ -1151,7 +1151,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		due := time.Now().UTC().Add(-time.Minute)
 		run.Node, run.Status = "pause", flow.StatusWaiting
 		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
-			Event: flow.EventTurnFinished, Node: "pause", Due: &due,
+			Event: flow.EventTaskFinished, Node: "pause", Due: &due,
 		}); err != nil {
 			t.Fatalf("AdvanceFlowRun into the wait: %v", err)
 		}
@@ -1220,7 +1220,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		overdue := time.Now().UTC().Add(-time.Hour)
 		run.Node, run.Status, run.Question = "permit", flow.StatusAsking, "push?"
 		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
-			Event: flow.EventTurnFinished, Node: "permit", Due: &overdue,
+			Event: flow.EventTaskFinished, Node: "permit", Due: &overdue,
 		}); err != nil {
 			t.Fatalf("AdvanceFlowRun into the ask: %v", err)
 		}
@@ -1671,7 +1671,7 @@ func aSkill(name string, version int) store.Imported {
 }
 
 // newProject creates a workspace and a project inside it, which is the smallest setup a session
-// needs now that threads live inside a project.
+// needs now that sessions live inside a project.
 func newProject(t *testing.T, s store.Store, workspaceName, projectName string) *quaycrewv1.Project {
 	t.Helper()
 	ctx := context.Background()
@@ -1686,9 +1686,9 @@ func newProject(t *testing.T, s store.Store, workspaceName, projectName string) 
 	return project
 }
 
-// ids names the sessions in a listing, so a failure says which threads came back rather than how
+// ids names the sessions in a listing, so a failure says which sessions came back rather than how
 // many.
-func ids(sessions []*quaycrewv1.Thread) []string {
+func ids(sessions []*quaycrewv1.Session) []string {
 	out := make([]string, 0, len(sessions))
 	for _, session := range sessions {
 		out = append(out, session.GetId())

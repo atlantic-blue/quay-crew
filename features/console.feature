@@ -8,9 +8,8 @@ Feature: The operator sees the crew from the console
   internal/console, where it belongs. What cannot be said there is this: that the rows are the
   control plane's actual sessions and workspaces.
 
-  The console, the API and the database all say session. It was called threads for a day; that word is
-  still accepted in the command bar and appears nowhere else, because one name across the whole system
-  beats a console that translates.
+  The console, the API and the database all say session. It was called threads for a while, and that
+  word now opens nothing, because one name across the whole system beats a console that translates.
 
   Background:
     Given a running control plane
@@ -19,7 +18,7 @@ Feature: The operator sees the crew from the console
 
   Scenario: The console lists the sessions the control plane has
     When the operator dispatches "hello" to the project
-    And the operator dispatches "a different subject" to a new thread
+    And the operator dispatches "a different subject" to a new session
     And the operator opens the console
     Then the console lists 2 sessions
 
@@ -42,10 +41,16 @@ Feature: The operator sees the crew from the console
     And the operator drills into project "house-bills"
     Then the console lists 1 session
 
-  # This view has been called both things inside a day, so both keep working.
-  Scenario: Typing threads still opens the sessions view
-    When the operator opens the console by typing "threads"
+  # The short forms are what an operator's fingers reach for, so each one lands on the same view.
+  Scenario: A short word for the sessions view opens it
+    When the operator opens the console by typing "s"
     Then the console is showing sessions
+
+  # The crew dropped these words, so the console must not quietly teach one back. This is the way off
+  # them, the way a named refusal is the command line's.
+  Scenario: A word the crew dropped opens nothing
+    Then typing "threads" in the console opens nothing
+    And typing "turns" in the console opens nothing
 
   Scenario: An empty crew lists nothing rather than failing
     When the operator opens the console
@@ -64,7 +69,7 @@ Feature: The operator sees the crew from the console
     Then the console shows the session identifier shortened
 
   # Enter is the obvious key on a conversation, and on this view it used to do nothing at all, because
-  # a thread has nothing to drill into.
+  # a session has nothing to drill into.
   Scenario: Enter on a session opens its conversation
     Given a session started by dispatching "hello"
     When the operator opens the console
@@ -72,7 +77,7 @@ Feature: The operator sees the crew from the console
     Then the console opens that session's conversation
 
   Scenario: Enter on a session with no conversation says why rather than opening something that errors
-    Given a session whose first turn failed
+    Given a session whose first task failed
     When the operator opens the console
     And the operator presses enter on the selected session
     Then the console says the session has no conversation yet
@@ -97,7 +102,7 @@ Feature: The operator sees the crew from the console
     And the operator answers "n"
     Then the session is reported as idle
 
-  # Archiving from the console, driven through its own reducer: the thread leaves the view it was put
+  # Archiving from the console, driven through its own reducer: the session leaves the view it was put
   # away from and turns up in the archived one, with its conversation intact.
   Scenario: An archived session leaves the sessions view for the archived one
     Given a session started by dispatching "remember this"
@@ -105,6 +110,16 @@ Feature: The operator sees the crew from the console
     Then the console lists 0 sessions
     And the archived view lists 1 session
     And the archived session still holds its conversation
+
+  # A flow run puts its own thread away when it ends, so the history of an automation is always read
+  # from the archived view. Reaching it must not need the thread restored first: nothing about
+  # reading what happened needs a container.
+  Scenario: An archived session's history is reachable without restoring it
+    Given a session started by dispatching "read the package file"
+    When the operator opens the console and archives the session
+    And the operator asks for the archived session's history
+    Then the console is showing tasks
+    And the history lists 1 task saying "read the package file"
 
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
@@ -177,15 +192,15 @@ Feature: The operator sees the crew from the console
     And the crew has 1 workspace
     And the crew has 1 project
 
-  # A turn takes as long as the work takes, which is minutes, and the console has a screen to draw.
+  # A task takes as long as the work takes, which is minutes, and the console has a screen to draw.
   # The wizard waited for one anyway: it held every key while it waited, gave up at thirty seconds,
-  # and left behind a thread with a container, a row, and no conversation in it. The operator saw a
+  # and left behind a session with a container, a row, and no conversation in it. The operator saw a
   # frozen "making it" and then an error, and read the freeze as the container being slow to start.
   #
-  # The turn is held open here rather than timed, because what is being specified is what is true
-  # while a turn runs, and a scenario that waits a duration for that passes by accident.
-  Scenario: The wizard comes back before the turn it started has finished
-    Given the model takes longer over a turn than anybody will wait
+  # The task is held open here rather than timed, because what is being specified is what is true
+  # while a task runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: The wizard comes back before the task it started has finished
+    Given the model takes longer over a task than anybody will wait
     When the operator answers the wizard with:
       | session     |
       | acme        |
@@ -194,26 +209,26 @@ Feature: The operator sees the crew from the console
       | hello       |
     Then the console is asking nothing
     And the crew has 1 session
-    And a turn is under way
-    And the crew's one thread is reported as running
-    When the model finishes the turn
-    Then the crew's one thread is reported as idle
-    And the thread carries what the model said
+    And a task is under way
+    And the crew's one session is reported as running
+    When the model finishes the task
+    Then the crew's one session is reported as idle
+    And the session carries what the model said
 
-  # A turn runs inside the crew's own process, so nothing of it survives that process going down. A
-  # row still saying running on the way up is a turn that died with the last one, and left alone it
+  # A task runs inside the crew's own process, so nothing of it survives that process going down. A
+  # row still saying running on the way up is a task that died with the last one, and left alone it
   # reads as a conversation that has been thinking since the restart.
-  Scenario: A thread left mid turn by a restart is settled rather than left running
-    Given the model takes longer over a turn than anybody will wait
+  Scenario: A session left mid task by a restart is settled rather than left running
+    Given the model takes longer over a task than anybody will wait
     When the operator answers the wizard with:
       | session     |
       | acme        |
       | house-bills |
       | dangerous   |
       | hello       |
-    And a turn is under way
+    And a task is under way
     And the control plane restarts
-    Then the crew's one thread is reported as failed
+    Then the crew's one session is reported as failed
 
   # Escape at any point makes nothing at all. The last row here is typed and never accepted, so escape
   # lands on a half answered question rather than on a finished one.
@@ -281,11 +296,11 @@ Feature: The operator sees the crew from the console
     And the help panel says what the keys on this view do
     And the help panel never asks a question it has already answered
 
-  # A sandbox is born with its capabilities and never drifts, so the mode is decided when the thread
-  # starts rather than changed afterwards, which costs a restart. A thread born unable to act is a
-  # thread that apologises: on this crew one was asked to clone a repository and answered that it
+  # A sandbox is born with its capabilities and never drifts, so the mode is decided when the session
+  # starts rather than changed afterwards, which costs a restart. A session born unable to act is a
+  # session that apologises: on this crew one was asked to clone a repository and answered that it
   # needed approval from somebody who was not there.
-  Scenario: The wizard asks what a thread may do, and the thread is born in it
+  Scenario: The wizard asks what a session may do, and the session is born in it
     When the operator answers the wizard with:
       | session     |
       | acme        |
@@ -293,7 +308,7 @@ Feature: The operator sees the crew from the console
       | plan        |
       | hello       |
     Then the crew has 1 session
-    And that thread's mode is "plan"
+    And that session's mode is "plan"
 
   # Tab is the other way to answer a question like this one: cycling to a candidate rather than
   # spelling it out. The wizard offers what a step can be answered with everywhere it asks one of a
@@ -306,7 +321,7 @@ Feature: The operator sees the crew from the console
       | house-bills |
     And the operator presses tab 3 times to choose the mode, then sends "hello"
     Then the crew has 1 session
-    And that thread's mode is "bypassPermissions"
+    And that session's mode is "bypassPermissions"
 
   Scenario: The wizard refuses a mode that is not one of the three
     When the operator answers the wizard with:
@@ -324,7 +339,7 @@ Feature: The operator sees the crew from the console
   # real console over the real control plane, so what is asserted is the screen the operator has.
   Scenario: A session's row is coloured cell by cell rather than all in its state
     When the operator dispatches "hello" to the project
-    And the operator dispatches "a different subject" to a new thread
+    And the operator dispatches "a different subject" to a new session
     And the operator looks at the console
     Then a session's row carries more than one colour
     And the row says how the session is doing in its status cell

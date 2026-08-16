@@ -24,54 +24,54 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// TurnEvent is written to the event log every time a turn runs, whether it worked or not.
+// TaskEvent is written to the event log every time a task runs, whether it worked or not.
 //
 // This is the audit record: the store keeps the current state of a session, and the log keeps what
 // happened to it, in order. A projection reads these back into a queryable read model, which is why
 // the event carries enough to rebuild a conversation without reading anything else.
-type TurnEvent struct {
+type TaskEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
 	// record more than once and needs something to recognise it by: the projection writes it as the
 	// primary key and lets a repeat collide harmlessly.
 	Id string `protobuf:"bytes,10,opt,name=id,proto3" json:"id,omitempty"`
-	// thread is the thread the turn ran in, and the key the record is published under, so one
-	// thread's events stay in order on one partition.
-	Thread string `protobuf:"bytes,1,opt,name=thread,proto3" json:"thread,omitempty"`
+	// session is the session the task ran in, and the key the record is published under, so one
+	// session's events stay in order on one partition.
+	Session string `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 	// workspace and project are where the session sits, denormalised deliberately: a consumer must not
 	// have to query the store to know what it is reading.
 	Workspace string `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
 	// handle is the channel's own name for the conversation.
 	Handle string `protobuf:"bytes,4,opt,name=handle,proto3" json:"handle,omitempty"`
-	// prompt is what was asked. reply is what came back, empty when the turn failed.
+	// prompt is what was asked. reply is what came back, empty when the task failed.
 	Prompt string `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Reply  string `protobuf:"bytes,6,opt,name=reply,proto3" json:"reply,omitempty"`
-	// status is the session's status after the turn: "idle" when it worked, "failed" when it did not.
+	// status is the session's status after the task: "idle" when it worked, "failed" when it did not.
 	Status string `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	// failure says what went wrong, empty on a turn that worked. It is the operator's sentence, not a
-	// stack trace, and it never carries the contents of the environment a turn ran with.
+	// failure says what went wrong, empty on a task that worked. It is the operator's sentence, not a
+	// stack trace, and it never carries the contents of the environment a task ran with.
 	Failure string `protobuf:"bytes,8,opt,name=failure,proto3" json:"failure,omitempty"`
-	// occurred_at is when the turn finished.
+	// occurred_at is when the task finished.
 	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TurnEvent) Reset() {
-	*x = TurnEvent{}
+func (x *TaskEvent) Reset() {
+	*x = TaskEvent{}
 	mi := &file_quaycrew_v1_events_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TurnEvent) String() string {
+func (x *TaskEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TurnEvent) ProtoMessage() {}
+func (*TaskEvent) ProtoMessage() {}
 
-func (x *TurnEvent) ProtoReflect() protoreflect.Message {
+func (x *TaskEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_events_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -83,75 +83,75 @@ func (x *TurnEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TurnEvent.ProtoReflect.Descriptor instead.
-func (*TurnEvent) Descriptor() ([]byte, []int) {
+// Deprecated: Use TaskEvent.ProtoReflect.Descriptor instead.
+func (*TaskEvent) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_events_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TurnEvent) GetId() string {
+func (x *TaskEvent) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetThread() string {
+func (x *TaskEvent) GetSession() string {
 	if x != nil {
-		return x.Thread
+		return x.Session
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetWorkspace() string {
+func (x *TaskEvent) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetProject() string {
+func (x *TaskEvent) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetHandle() string {
+func (x *TaskEvent) GetHandle() string {
 	if x != nil {
 		return x.Handle
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetPrompt() string {
+func (x *TaskEvent) GetPrompt() string {
 	if x != nil {
 		return x.Prompt
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetReply() string {
+func (x *TaskEvent) GetReply() string {
 	if x != nil {
 		return x.Reply
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetStatus() string {
+func (x *TaskEvent) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetFailure() string {
+func (x *TaskEvent) GetFailure() string {
 	if x != nil {
 		return x.Failure
 	}
 	return ""
 }
 
-func (x *TurnEvent) GetOccurredAt() *timestamppb.Timestamp {
+func (x *TaskEvent) GetOccurredAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.OccurredAt
 	}
@@ -162,11 +162,11 @@ var File_quaycrew_v1_events_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa0\x02\n" +
-	"\tTurnEvent\x12\x0e\n" +
+	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa2\x02\n" +
+	"\tTaskEvent\x12\x0e\n" +
 	"\x02id\x18\n" +
-	" \x01(\tR\x02id\x12\x16\n" +
-	"\x06thread\x18\x01 \x01(\tR\x06thread\x12\x1c\n" +
+	" \x01(\tR\x02id\x12\x18\n" +
+	"\asession\x18\x01 \x01(\tR\asession\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x03 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x04 \x01(\tR\x06handle\x12\x16\n" +
@@ -192,11 +192,11 @@ func file_quaycrew_v1_events_proto_rawDescGZIP() []byte {
 
 var file_quaycrew_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_quaycrew_v1_events_proto_goTypes = []any{
-	(*TurnEvent)(nil),             // 0: quaycrew.v1.TurnEvent
+	(*TaskEvent)(nil),             // 0: quaycrew.v1.TaskEvent
 	(*timestamppb.Timestamp)(nil), // 1: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_events_proto_depIdxs = []int32{
-	1, // 0: quaycrew.v1.TurnEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	1, // 0: quaycrew.v1.TaskEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

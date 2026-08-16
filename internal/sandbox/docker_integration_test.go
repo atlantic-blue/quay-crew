@@ -114,7 +114,7 @@ func TestDockerProviderKeepsStateAcrossContainers(t *testing.T) {
 	// file under the other, and it leaves no level below the project to say anything at.
 	//
 	// This used to assert the opposite, that siblings shared the working directory. The decision: "give each
-	// thread its own working directory".
+	// session its own working directory".
 	sibling, err := provider.Create(ctx, sandbox.Config{ID: "itest-sibling", Workspace: config.Workspace, Project: config.Project})
 	if err != nil {
 		t.Fatalf("create a sibling session's sandbox: %v", err)
@@ -163,7 +163,7 @@ func TestDockerProviderDeliversEnv(t *testing.T) {
 
 // TestDockerProviderAdoptsAnExistingContainer is what a control plane that has forgotten its
 // sandboxes runs into. A session's container name is deterministic, so creating again after a restart
-// used to hit the daemon's name conflict and leave that thread undispatchable until somebody removed
+// used to hit the daemon's name conflict and leave that session undispatchable until somebody removed
 // the container by hand.
 func TestDockerProviderAdoptsAnExistingContainer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
@@ -316,7 +316,7 @@ func TestGitFindsItsCredentialWithoutArguments(t *testing.T) {
 }
 
 // Every binary a shipped skill declares has to actually be in the image, or the declaration is a
-// promise the sandbox breaks on somebody's first turn. One guard over the whole class, so the next
+// promise the sandbox breaks on somebody's first task. One guard over the whole class, so the next
 // skill cannot repeat the gap: the set of binaries is read from skills/ itself, and each is asked
 // for inside a real container rather than looked for in the Dockerfile.
 func TestTheImageCarriesEveryBinaryAShippedSkillDeclares(t *testing.T) {
@@ -363,7 +363,7 @@ func TestTheImageCarriesEveryBinaryAShippedSkillDeclares(t *testing.T) {
 	}
 }
 
-// TestDockerProviderRemovesByName: stopping a thread has to work from a process that never made the
+// TestDockerProviderRemovesByName: stopping a session has to work from a process that never made the
 // container, so removal goes by name rather than through a held handle. A container that is not
 // there is a remove that already happened, and the exact name shape keeps the compose stack's own
 // services out of the stranded listing.
