@@ -151,6 +151,14 @@ type wizard struct {
 	choices []wizardChoice
 	loaded  bool
 
+	// cycling says tab has landed on a candidate for this step. cycleBase is the prefix typed by hand
+	// before the first tab press, kept apart from typed so a later press still offers every candidate
+	// that matched it, rather than narrowing to whatever the previous press filled in. cycleAt is the
+	// candidate under the cursor.
+	cycling   bool
+	cycleBase string
+	cycleAt   int
+
 	// guided is the first run flow: the stages run as a chain in the order a crew needs them, an
 	// empty answer skips a stage, and escape leaves the setup rather than cancelling, because the
 	// stages behind it are already made.
@@ -291,6 +299,52 @@ func (w wizard) offers() []string {
 	return matched
 }
 
+// cycle moves the tab cursor to the next (or, given a negative direction, the previous) candidate
+// this step offers, and fills it into typed. Pressing tab again keeps offering every candidate that
+// matched what was typed by hand, because filling in a full name would otherwise narrow the next
+// press down to that one candidate alone.
+func (w wizard) cycle(direction int) wizard {
+	base := w.typed
+	if w.cycling {
+		base = w.cycleBase
+	}
+	probe := w
+	probe.typed = base
+	offers := probe.offers()
+	if len(offers) == 0 {
+		return w
+	}
+
+	at := 0
+	switch {
+	case w.cycling:
+		at = mod(w.cycleAt+direction, len(offers))
+	case direction < 0:
+		at = len(offers) - 1
+	}
+	w.cycling, w.cycleBase, w.cycleAt, w.typed = true, base, at, offers[at]
+	return w
+}
+
+// currentOffers is what tab is cycling through: the full list matching what was typed by hand,
+// rather than the one candidate tab has since filled in.
+func (w wizard) currentOffers() []string {
+	if !w.cycling {
+		return w.offers()
+	}
+	probe := w
+	probe.typed = w.cycleBase
+	return probe.offers()
+}
+
+func mod(a, n int) int {
+	a %= n
+	if a < 0 {
+		a += n
+	}
+	return a
+}
+
 // shown is what the operator sees of what they have typed. A secret is never echoed: a value on a
 // screen is a value in that terminal's scrollback, and this one runs every turn the crew makes.
 func (w wizard) shown() string {
@@ -362,6 +416,7 @@ func (w wizard) accept() (wizard, error) {
 
 	w.typed = ""
 	w.choices, w.loaded = nil, false
+	w.cycling, w.cycleBase, w.cycleAt = false, "", 0
 	if current != stepKind {
 		w.at++
 	}
@@ -502,9 +557,17 @@ func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, m.wizardChoicesCmd()
 	case "backspace":
 		m.making.typed = trimLastRune(m.making.typed)
+		m.making.cycling = false
+		return m, nil
+	case "tab":
+		m.making = m.making.cycle(1)
+		return m, nil
+	case "shift+tab":
+		m.making = m.making.cycle(-1)
 		return m, nil
 	}
 	m.making.typed += typedText(msg)
+	m.making.cycling = false
 	return m, nil
 }
 

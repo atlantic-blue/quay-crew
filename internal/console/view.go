@@ -748,17 +748,41 @@ func (m Model) wizardPrompt() string {
 		return prompt.Render(" making ") + faint.Render(m.making.summary())
 	}
 	line := prompt.Render(" "+m.making.prompt()+": ") + m.making.shown() + prompt.Render("_")
-	if offers := m.making.offers(); len(offers) > 0 {
-		line += faint.Render("   " + strings.Join(offers, "  "))
+	offers := m.making.currentOffers()
+	if len(offers) > 0 {
+		line += "   " + m.wizardOffers(offers)
 	} else if m.making.picking() && m.making.loaded {
 		line += faint.Render("   nothing here yet")
 	}
+
+	hint := "enter accepts, esc cancels and makes nothing"
 	if m.making.guided {
 		// Honest about both differences: an empty answer moves on, and escape cannot unmake the
 		// stages already made.
-		return line + faint.Render("   enter accepts, empty skips, esc leaves the setup")
+		hint = "enter accepts, empty skips, esc leaves the setup"
 	}
-	return line + faint.Render("   enter accepts, esc cancels and makes nothing")
+	if len(offers) > 0 {
+		hint += ", tab cycles the options"
+	}
+	return line + faint.Render("   "+hint)
+}
+
+// wizardOffers draws what a step offers, with the one tab has landed on marked the way the command
+// bar's own choice picker marks its cursor. Nothing is marked until tab has been pressed once, so a
+// step nobody has cycled through still reads as a plain list of what is possible.
+func (m Model) wizardOffers(offers []string) string {
+	if !m.making.cycling {
+		return faint.Render(strings.Join(offers, "  "))
+	}
+	shown := make([]string, 0, len(offers))
+	for at, offer := range offers {
+		if at == m.making.cycleAt {
+			shown = append(shown, selectedRow.Render(" "+offer+" "))
+			continue
+		}
+		shown = append(shown, faint.Render(" "+offer+" "))
+	}
+	return strings.Join(shown, "")
 }
 
 // breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
