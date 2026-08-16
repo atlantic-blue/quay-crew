@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -204,7 +205,10 @@ edges:
 	if len(fields) == 0 {
 		t.Fatal("the listing is empty")
 	}
-	shown := mustRun(t, client, "flow", "show", fields[0])
+	// Polled, because starting answers before the run has moved: a run is driven on a goroutine, so
+	// reading it straight after starting it reads a run still at its first node. Under load that is
+	// what happens, and the test then reports the product as broken.
+	shown := showWhen(t, client, fields[0], "fixed it locally. push?")
 	if !strings.Contains(shown, "fixed it locally. push?") {
 		t.Fatalf("showing an asking run said %q, want the question it is waiting on", shown)
 	}
@@ -275,6 +279,28 @@ func TestQuayFlowNamesWhatItCanDo(t *testing.T) {
 				t.Errorf("quay %s says %q, want it to name %s", strings.Join(args, " "), err, verb)
 			}
 		}
+	}
+}
+
+// showWhen shows a run repeatedly until what it says carries want, and fails with what it said last
+// if it never does.
+//
+// A run is driven on a goroutine, so starting one answers before it has moved. Every assertion about
+// where a run got to therefore has to wait for it rather than read it once, or it is a race that
+// passes on an idle machine and fails on a loaded one.
+func showWhen(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, run, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		shown = mustRun(t, client, "flow", "show", run)
+		if strings.Contains(shown, want) {
+			return shown
+		}
+		if time.Now().After(deadline) {
+			return shown
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
