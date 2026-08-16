@@ -325,3 +325,16 @@ Feature: The operator sees the crew from the console
       | house-bills |
       | whatever    |
     Then the console says "not one of them"
+
+  # A listing where every row is one colour has to be read one row at a time, which is what a listing
+  # is for avoiding. Every row in every view carries a state, and a state was being drawn over the
+  # whole line, so the workspace, the project and the mode all arrived on screen in the same green.
+  #
+  # The state moved onto the status cell, which is where the sessions tool keeps it. This drives the
+  # real console over the real control plane, so what is asserted is the screen the operator has.
+  Scenario: A session's row is coloured cell by cell rather than all in its state
+    When the operator dispatches "hello" to the project
+    And the operator dispatches "a different subject" to a new thread
+    And the operator looks at the console
+    Then a session's row carries more than one colour
+    And the row says how the session is doing in its status cell

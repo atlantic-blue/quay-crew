@@ -37,7 +37,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real turns.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image config home-check env-check help
+.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image image rebuild config home-check env-check hooks help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -84,9 +84,23 @@ up: home-check config
 ## start: alias for up
 start: up
 
+## rebuild: build everything this machine runs: the tool, the hooks and the sandbox image
+#
+# One command, because these three go together and remembering the third is not a job for a person.
+# The tool is what you type, the hooks are what every session runs under, and the image is what a
+# session is. Leave one behind and the crew is running a mix of two builds, which looks like a bug in
+# whichever part you happen to be reading.
+#
+# `make upgrade` runs this after fetching. Run it directly while working on a branch, where upgrade
+# refuses because it would build a half finished checkout into the stack.
+rebuild: install hooks sandbox-image
+
 ## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
 sandbox-image:
 	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
+
+## image: alias for sandbox-image
+image: sandbox-image
 
 ## env-check: name the configuration in deploy/env.example that your configuration file does not have
 #
@@ -134,10 +148,10 @@ upgrade:
 	else \
 		echo "moved from $$before to $$after"; \
 	fi
-	@$(MAKE) --no-print-directory install
-	@echo "rebuilding the sandbox image. Sessions run whatever it holds, so leaving it behind means"
-	@echo "upgrading the tool and the stack while every conversation keeps the build from before."
-	@$(MAKE) --no-print-directory sandbox-image
+	@echo "rebuilding the tool, the hooks and the sandbox image. Sessions run whatever the image holds,"
+	@echo "so leaving it behind means upgrading the tool and the stack while every conversation keeps"
+	@echo "the build from before."
+	@$(MAKE) --no-print-directory rebuild
 	@$(MAKE) --no-print-directory home-check
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
@@ -192,18 +206,41 @@ install:
 		echo "         install over that one with: make install BINDIR=$$(dirname "$$found")"; \
 	fi
 
+## hooks: build the entry point of every hook this build ships
+#
+# A hook reaches a sandbox as files and the runtime runs one of them by path, so the entry point has
+# to exist before anything reads the directory. It is a build artifact rather than something in the
+# history: one committed binary runs on one processor type, and this image is built on both arm and
+# amd machines.
+#
+# Each hook is its own module, so this loops rather than building the crew's own packages. Static,
+# because the result is mounted into whatever image a session runs.
+hooks:
+	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \
+		CGO_ENABLED=0 go build -C "$$dir" -o bin/hook . || exit 1; \
+		echo "built $$dir/bin/hook"; \
+	done
+
 ## test: run the tests
-test:
+#
+# The hooks are separate modules, so `go test ./...` does not reach them and they are run by name.
+test: hooks
 	go test ./...
+	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \
+		go test -C "$$dir" -count=1 ./... || exit 1; \
+	done
 
 ## features: run the behaviour specifications and print what the product does
-features:
+features: hooks
 	go test ./features/... -v -count=1
 
 ## lint: run buf and golangci-lint (generated code is not linted)
 lint:
 	buf lint
 	golangci-lint run ./internal/... ./cmd/... ./features/...
+	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \
+		(cd "$$dir" && golangci-lint run ./...) || exit 1; \
+	done
 
 ## fmt: format the Go sources (excluding generated code)
 fmt:

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/cucumber/godog"
 )
 
@@ -237,13 +238,17 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew holds "([^"]*)" at version (\d+)$`,
-		func(ctx context.Context, name string, want int) error {
+	sc.Step(`^the crew holds "([^"]*)" at the version this build ships$`,
+		func(ctx context.Context, name string) error {
+			want, err := shippedVersion(name)
+			if err != nil {
+				return err
+			}
 			got, err := newestHeld(ctx, name)
 			if err != nil {
 				return err
 			}
-			if got != int32(want) {
+			if got != want {
 				// The catalogue is what the crew could run. A fix that never reaches it can never be
 				// taken by anybody.
 				return fmt.Errorf("the newest %s the crew holds is version %d, want %d", name, got, want)
@@ -264,8 +269,12 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^attaching it again moves the workspace to version (\d+)$`,
-		func(ctx context.Context, want int) error {
+	sc.Step(`^attaching it again moves the workspace to the version this build ships$`,
+		func(ctx context.Context) error {
+			want, err := shippedVersion("prompt-analyser")
+			if err != nil {
+				return err
+			}
 			w := worldFrom(ctx)
 			if _, err := w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
 				Scope: "crew", Name: "prompt-analyser",
@@ -276,11 +285,37 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			if got != int32(want) {
+			if got != want {
 				return fmt.Errorf("attaching again left the workspace on version %d, want %d", got, want)
 			}
 			return nil
 		})
+}
+
+// shippedVersion is what version of a hook this build carries, read from the hooks directory the
+// crew seeds from.
+//
+// Read rather than written into the scenario, because the behaviour being described is "newer than
+// what the crew already held", not a particular number. Written down, every one of these scenarios
+// fails the next time somebody edits the hook, which teaches the reader that the number is the point
+// when it never was.
+func shippedVersion(name string) (int32, error) {
+	shipped, err := hook.Load("../hooks")
+	if err != nil {
+		return 0, fmt.Errorf("reading the hooks this build ships: %w", err)
+	}
+	for _, one := range shipped {
+		if one.Name == name {
+			if one.Version < 2 {
+				// The scenario seeds version 1 by hand so the shipped one is genuinely newer. At
+				// version 1 there is nothing to upgrade and the scenario would pass without proving it.
+				return 0, fmt.Errorf("this build ships %s at version %d, so the upgrade scenarios prove nothing",
+					name, one.Version)
+			}
+			return int32(one.Version), nil
+		}
+	}
+	return 0, fmt.Errorf("this build ships no hook called %s", name)
 }
 
 // newestHeld is the newest version of a hook in the crew's catalogue.

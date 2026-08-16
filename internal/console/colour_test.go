@@ -54,11 +54,15 @@ func TestALargeTokenCountStandsOutAndASmallOneDoesNot(t *testing.T) {
 
 // The cursor is a bar across the row, so a cell keeping its own colour inside the bar is unreadable:
 // coloured text on a coloured background. The selected row is the one place colour comes off.
+//
+// The rows carry a state, because every row in every listing does and a case built from rows without
+// one asserts against a path nothing reaches. That is how a whole row being drawn in its state went
+// unnoticed while this case passed.
 func TestTheSelectedRowIsNotColouredCellByCell(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{}))
 	model, _ = update(t, model, rowsFor(model,
-		Row{ID: "s1", Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "", "", "", "1m"}},
-		Row{ID: "s2", Cells: []string{"6e124e18", "itv", "player", "e865721a", "idle", "plan", "", "", "", "2m"}}))
+		Row{ID: "s1", State: StateReady, Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "", "", "", "1m"}},
+		Row{ID: "s2", State: StateReady, Cells: []string{"6e124e18", "itv", "player", "e865721a", "idle", "plan", "", "", "", "2m"}}))
 
 	view := model.View()
 	selected, other := lineWith(t, view, "5d013d07"), lineWith(t, view, "6e124e18")
@@ -94,6 +98,122 @@ func TestColourDoesNotMoveTheColumns(t *testing.T) {
 	if at != also {
 		t.Fatalf("status starts at %d in one row and %d in the other, so the columns do not line up:\n%q\n%q",
 			at, also, first, second)
+	}
+}
+
+// A row that is doing fine is still a row with a workspace, a project, a name and a mode in it, and
+// every one of those was drawn in a single green because the row had a state. This is the case that
+// says a state no longer costs a row its cells.
+func TestARowWithAStateStillCarriesTheColoursOfItsCells(t *testing.T) {
+	for _, state := range []struct {
+		named string
+		is    State
+	}{
+		{"ready", StateReady},
+		{"busy", StateBusy},
+		{"stopped", StateStopped},
+	} {
+		t.Run(state.named, func(t *testing.T) {
+			model := newTestModel(t, Sessions(&fakeClient{}))
+			model, _ = update(t, model, rowsFor(model,
+				Row{ID: "s1", State: StateReady, Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "", "", "", "1m"}},
+				Row{ID: "s2", State: state.is, Cells: []string{"6e124e18", "itv", "player", "e865721a", "idle", "plan", "", "", "", "2m"}}))
+
+			// The second row, so the cursor is not on it: the selected row has no cell colours by
+			// design and would pass this for the wrong reason.
+			line := lineWith(t, model.View(), "6e124e18")
+			if !strings.Contains(line, colourOfName("itv")) {
+				t.Errorf("a %s row does not carry its workspace's colour:\n%q", state.named, line)
+			}
+			if !strings.Contains(line, colourOfName("player")) {
+				t.Errorf("a %s row does not carry its project's colour:\n%q", state.named, line)
+			}
+		})
+	}
+}
+
+// The one state loud enough to keep the whole line. A thread that ended badly has to read as ended
+// badly from across the room, and that is worth more than knowing which workspace it was in.
+func TestAFailedRowIsStillDrawnInOneColour(t *testing.T) {
+	model := newTestModel(t, Sessions(&fakeClient{}))
+	model, _ = update(t, model, rowsFor(model,
+		Row{ID: "s1", State: StateReady, Cells: []string{"5d013d07", "acme", "bills", "d754610f", "idle", "dangerous", "", "", "", "1m"}},
+		Row{ID: "s2", State: StateFailed, Cells: []string{"6e124e18", "itv", "player", "e865721a", "failed", "plan", "", "", "", "2m"}}))
+
+	line := lineWith(t, model.View(), "6e124e18")
+	if strings.Contains(line, colourOfName("itv")) {
+		t.Errorf("a failed row is broken up by its cells' colours instead of reading as failed:\n%q", line)
+	}
+}
+
+// The status cell is where the state went. Four statuses that mean four different things must not
+// arrive on screen looking the same.
+func TestTheStatusCellSaysHowARowIsDoing(t *testing.T) {
+	idle, running := colourOfStatus("idle"), colourOfStatus("running")
+	stopped, failed := colourOfStatus("stopped"), colourOfStatus("failed")
+
+	seen := map[string]string{}
+	for named, colour := range map[string]string{"idle": idle, "running": running, "stopped": stopped, "failed": failed} {
+		if was, taken := seen[colour]; taken {
+			t.Errorf("%q and %q are the same colour, and they mean different things", was, named)
+		}
+		seen[colour] = named
+	}
+
+	// The stale mark rides on the same cell, and a stale thread is still running or still idle.
+	if colourOfStatus("idle stale") != idle {
+		t.Error("a stale thread loses its status colour, so the cell says nothing about how it is doing")
+	}
+	if colourOfStatus("something new") != "" {
+		t.Error("a status nobody has taught this is being coloured, which is a guess presented as a fact")
+	}
+}
+
+// Age is the sessions tool's idle column under another name, and it carries that column's three
+// bands: touched a moment ago, touched today, touched some other week.
+func TestAgeIsColouredByHowLongAgoItWas(t *testing.T) {
+	fresh, recent := colourOfAge("12s"), colourOfAge("2m")
+	waiting, old, ancient := colourOfAge("40m"), colourOfAge("3h"), colourOfAge("6d")
+
+	if fresh != recent {
+		t.Error("a thread touched twelve seconds ago and one touched two minutes ago read differently")
+	}
+	if fresh == waiting {
+		t.Error("a thread touched two minutes ago reads the same as one left forty minutes")
+	}
+	if waiting != old {
+		t.Error("forty minutes and three hours read differently, and both are today")
+	}
+	if old == ancient {
+		t.Error("a thread from this morning reads the same as one from last week")
+	}
+	if colourOfAge("-") != dimCode {
+		t.Error("a thread with no age is being coloured as though it had one")
+	}
+}
+
+// The sweep, so the next view added cannot be the flat one. Nine of the ten views shipped with no
+// cell colour at all, and nothing said so: each of them looked deliberate on its own.
+func TestEveryViewColoursTheCellsInItsRows(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+
+	for _, name := range registry.Names() {
+		resource, found := registry.Get(name)
+		if !found {
+			t.Fatalf("the registry lists %q and cannot produce it", name)
+		}
+		coloured := 0
+		for _, column := range resource.Columns {
+			if column.Colour != nil {
+				coloured++
+			}
+		}
+		if coloured == 0 {
+			t.Errorf("the %q view draws every cell in one colour, so its rows can only be read one at a time", name)
+		}
 	}
 }
 
