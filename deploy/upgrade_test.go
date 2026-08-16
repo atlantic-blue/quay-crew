@@ -20,16 +20,23 @@ const makefile = "../Makefile"
 //
 // This holds the target to naming every image the repository builds, so the next image added cannot
 // be left out of an upgrade the same way.
+// The list lives in one place, rebuild, so an operator has one command to type and this has one
+// place to check. Upgrade has to reach it, and it has to name everything.
 func TestUpgradeBuildsEverythingASessionRuns(t *testing.T) {
 	recipe := target(t, "upgrade")
-	for _, built := range []string{"install", "sandbox-image"} {
-		if !strings.Contains(recipe, built) {
-			t.Errorf("make upgrade never builds %s, so an upgrade leaves it on the build before:\n%s",
-				built, recipe)
-		}
+	if !strings.Contains(recipe, "rebuild") {
+		t.Errorf("make upgrade never runs rebuild, so it builds none of what a session runs:\n%s", recipe)
 	}
 	if !strings.Contains(recipe, "up --build") {
 		t.Errorf("make upgrade never rebuilds the stack:\n%s", recipe)
+	}
+
+	built := prerequisites(t, "rebuild")
+	for _, one := range []string{"install", "hooks", "sandbox-image"} {
+		if !strings.Contains(built, one) {
+			t.Errorf("make rebuild never builds %s, so an upgrade leaves it on the build before:\n%s",
+				one, built)
+		}
 	}
 }
 
@@ -88,4 +95,27 @@ func target(t *testing.T, name string) string {
 		t.Fatalf("the %s target has no recipe", name)
 	}
 	return strings.Join(recipe, "\n")
+}
+
+// prerequisites returns what a target is built from: everything after the colon on its own line.
+// A target that only gathers others has no recipe at all, so reading the recipe would find nothing
+// and report it as a target that builds nothing.
+func prerequisites(t *testing.T, name string) string {
+	t.Helper()
+	contents, err := os.ReadFile(makefile)
+	if err != nil {
+		t.Fatalf("reading the Makefile: %v", err)
+	}
+	for _, line := range strings.Split(string(contents), "\n") {
+		rest, found := strings.CutPrefix(line, name+":")
+		if !found {
+			continue
+		}
+		if strings.TrimSpace(rest) == "" {
+			t.Fatalf("the %s target is built from nothing", name)
+		}
+		return strings.TrimSpace(rest)
+	}
+	t.Fatalf("the Makefile has no %s target at all", name)
+	return ""
 }
