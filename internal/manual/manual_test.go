@@ -11,7 +11,7 @@ import (
 // words here are load bearing: a project is not a workspace, and a sandbox is not a session.
 func TestTheManualNamesTheWords(t *testing.T) {
 	got := Text()
-	for _, word := range []string{"workspace", "project", "thread", "session", "sandbox"} {
+	for _, word := range []string{"workspace", "project", "session", "session", "sandbox"} {
 		if !strings.Contains(got, word) {
 			t.Fatalf("the manual never says %q", word)
 		}
@@ -36,7 +36,7 @@ func TestTheManualCarriesTheRealCommandList(t *testing.T) {
 }
 
 // TestTheManualIsGeneratedFromTheSpecification, not copied from it. Every feature the binary carries
-// has to turn up, or the manual describes a tool that is not the one running.
+// has to task up, or the manual describes a tool that is not the one running.
 func TestTheManualIsGeneratedFromTheSpecification(t *testing.T) {
 	got := Text()
 

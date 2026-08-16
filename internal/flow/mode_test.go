@@ -8,7 +8,7 @@ import (
 )
 
 // A graph that has to clone something before it can read it, which is the shape that found this: a
-// run's thread starts empty, and cloning needs more room than a thread is born with.
+// run's session starts empty, and cloning needs more room than a session is born with.
 const cloningGraph = `
 name: clone-first
 version: 1
@@ -58,7 +58,7 @@ edges:
 }
 
 // Refused at import, which is the whole point of parsing a graph before it runs: the alternative is
-// a run that exists, has a thread of its own, and fails on its first dispatch.
+// a run that exists, has a session of its own, and fails on its first dispatch.
 func TestAGraphWhoseModeIsNotAModeIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: nonsense
@@ -79,7 +79,7 @@ edges:
 	}
 }
 
-// A graph that says nothing keeps saying nothing, so the thread's own birth mode decides and this
+// A graph that says nothing keeps saying nothing, so the session's own birth mode decides and this
 // change moves no automation that already exists.
 func TestAGraphThatDeclaresNoModeCarriesNone(t *testing.T) {
 	graph, err := Parse([]byte(`

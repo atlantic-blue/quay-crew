@@ -213,7 +213,7 @@ func TestOpeningAConsoleInsideTheConsoleIsRefused(t *testing.T) {
 	}
 }
 
-// A command that only prints is still captured, so making the bar the way in did not turn every
+// A command that only prints is still captured, so making the bar the way in did not task every
 // listing into a screen takeover.
 func TestAPrintingCommandIsStillCaptured(t *testing.T) {
 	ran := &ranCommand{output: "acme"}

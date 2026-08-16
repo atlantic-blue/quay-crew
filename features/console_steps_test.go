@@ -227,6 +227,17 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.list(ctx, "")
 	})
 
+	sc.Step(`^typing "([^"]*)" in the console opens nothing$`, func(ctx context.Context, typed string) error {
+		registry, err := console.NewDefaultRegistry(worldFrom(ctx).client)
+		if err != nil {
+			return err
+		}
+		if resource, found := registry.Resolve(typed); found {
+			return fmt.Errorf("typing %q still opens %q, and that word is gone", typed, resource.Name)
+		}
+		return nil
+	})
+
 	sc.Step(`^the console is showing sessions$`, func(ctx context.Context) error {
 		if got := consoleFrom(ctx).active.Name; got != "sessions" {
 			return fmt.Errorf("the console is showing %q, want sessions", got)
@@ -234,12 +245,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// A session exists only once a turn creates it, so a failing runner is how you get one with no
+	// A session exists only once a task creates it, so a failing runner is how you get one with no
 	// conversation behind it.
-	sc.Step(`^a session whose first turn failed$`, func(ctx context.Context) error {
+	sc.Step(`^a session whose first task failed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.runner.failNext = true
-		_ = w.dispatch(ctx, w.projectID, "", "this turn fails")
+		_ = w.dispatch(ctx, w.projectID, "", "this task fails")
 		return nil
 	})
 
@@ -261,7 +272,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if c.opened == nil {
 			return fmt.Errorf("enter produced no command")
 		}
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -288,12 +299,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console asks whether to stop that session$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
 		view := c.model.View()
-		want := "stop session " + display.ShortID(current.threadID) + "?"
+		want := "stop session " + display.ShortID(current.handle) + "?"
 		if !strings.Contains(view, want) {
 			return fmt.Errorf("the console does not ask %q:\n%s", want, view)
 		}
@@ -329,12 +340,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		session, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: row.ID})
+		session, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: row.ID})
 		if err != nil {
 			return err
 		}
-		if session.GetThread().GetModelSessionId() == "" {
-			return fmt.Errorf("the archived thread has no conversation handle left")
+		if session.GetSession().GetModelSessionId() == "" {
+			return fmt.Errorf("the archived session has no conversation handle left")
 		}
 		return nil
 	})
@@ -389,7 +400,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		full, err := w.lastTurn()
+		full, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -422,7 +433,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if row == "" {
 			return fmt.Errorf("no coloured row to read a status from:\n%s", view)
 		}
-		// Whichever of them the turn left behind. What is being said is that the word carries the
+		// Whichever of them the task left behind. What is being said is that the word carries the
 		// colour, not which word it is.
 		for _, coloured := range []string{"\x1b[32midle", "\x1b[33mrunning", "\x1b[33mdispatching"} {
 			if strings.Contains(row, coloured) {
@@ -620,7 +631,7 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 }
 
 // initializeTasksViewSteps registers the steps for the console's history view. They live here rather
-// than with the other turns steps because they drive the console's own reducer.
+// than with the other tasks steps because they drive the console's own reducer.
 func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
 		return askForHistory(ctx, consoleFrom(ctx))
@@ -653,10 +664,10 @@ func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 		}
 		// Column 2 is what was asked; column 3 is what came back.
 		if got := c.rows[0].Cells[2]; got != asked {
-			return fmt.Errorf("the first turn says %q was asked, want %q", got, asked)
+			return fmt.Errorf("the first task says %q was asked, want %q", got, asked)
 		}
 		if c.rows[0].Cells[3] == "" {
-			return fmt.Errorf("the first turn shows nothing as the answer")
+			return fmt.Errorf("the first task shows nothing as the answer")
 		}
 		return nil
 	})

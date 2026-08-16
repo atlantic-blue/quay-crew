@@ -25,8 +25,8 @@ import (
 // because every graph ends and making each author write the same node out teaches nothing.
 const DoneNode = "done"
 
-// Node types. Slice one ships the three that need no external event source: dispatch sends a turn
-// to the run's own thread, choice branches on state without a side effect, and done ends the run.
+// Node types. Slice one ships the three that need no external event source: dispatch sends a task
+// to the run's own session, choice branches on state without a side effect, and done ends the run.
 // wait and ask arrive with their delivery mechanisms.
 const (
 	NodeDispatch = "dispatch"
@@ -38,7 +38,7 @@ const (
 
 // DefaultTransitions is how many movements a run may take when its graph declares no cap.
 //
-// A number rather than no limit, because an automation dispatches turns with nobody watching and a
+// A number rather than no limit, because an automation dispatches tasks with nobody watching and a
 // cycling edge is a spend loop. Generous enough that no reasonable graph meets it by accident, and
 // small enough that a runaway is a bill somebody shrugs at rather than one that ruins the week.
 const DefaultTransitions = 100
@@ -70,11 +70,11 @@ type Graph struct {
 	// graph runs when a person asks for it, which is every graph until one says otherwise.
 	Every time.Duration
 	// Mode is what the run's turns may do, as the model spells it. Empty leaves the run in the mode
-	// every thread is born in.
+	// every session is born in.
 	//
 	// It belongs to the graph rather than to the operator starting the run, for the same reason the
 	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
-	// does. There is nowhere else to put it either, because the run's thread does not exist until
+	// does. There is nowhere else to put it either, because the run's session does not exist until
 	// the run starts, so `quay mode` has nothing to point at.
 	Mode   string
 	Limits Limits
@@ -85,14 +85,14 @@ type Graph struct {
 	Start string
 }
 
-// Expect is what a dispatch node declares will show its turn did the work.
+// Expect is what a dispatch node declares will show its task did the work.
 //
-// The crew checks it. That is the whole point of it: a turn that could not do the work is not a
-// failed turn, so `result.failed` says only that the model did not error, and a model asked to read
+// The crew checks it. That is the whole point of it: a task that could not do the work is not a
+// failed task, so `result.failed` says only that the model did not error, and a model asked to read
 // a file that is not there answers plausibly instead of stopping. Whichever of these is declared is
 // checked; declaring neither is refused at import.
 type Expect struct {
-	// File is a path that must exist in the run's thread after the turn, relative to its working
+	// File is a path that must exist in the run's session after the task, relative to its working
 	// directory. It is the strong one: nothing the model says can satisfy it.
 	File string
 	// Contains is a string the reply must carry. It is weaker, because it is still the model's own
@@ -103,7 +103,7 @@ type Expect struct {
 // Node is one step.
 type Node struct {
 	Type string
-	// Prompt is what a dispatch node says to the run's thread, with {{key}} rendered from the
+	// Prompt is what a dispatch node says to the run's session, with {{key}} rendered from the
 	// run's state.
 	Prompt string
 	// Expect is what shows this dispatch worked, or nil where the graph claims nothing.
@@ -193,7 +193,7 @@ func Parse(source []byte) (Graph, error) {
 	}
 
 	// Refused here rather than at the first dispatch, which is the moment a run has already been
-	// made, has a thread of its own, and is about to spend money to find out the word was wrong.
+	// made, has a session of its own, and is about to spend money to find out the word was wrong.
 	mode := ""
 	if declared := strings.TrimSpace(file.Mode); declared != "" {
 		named, known := model.PermissionModeNamed(declared)
@@ -246,7 +246,7 @@ func Parse(source []byte) (Graph, error) {
 			}
 			path, carries := strings.TrimSpace(node.Expect.File), node.Expect.Contains
 			if path == "" && carries == "" {
-				return Graph{}, fmt.Errorf("flow: dispatch node %s expects nothing; say `file:` for a path the turn must leave behind, or `contains:` for something the reply must carry", name)
+				return Graph{}, fmt.Errorf("flow: dispatch node %s expects nothing; say `file:` for a path the task must leave behind, or `contains:` for something the reply must carry", name)
 			}
 			if err := usableExpectFile(name, path); err != nil {
 				return Graph{}, err
@@ -327,7 +327,7 @@ func usableEdges(graph Graph, name string, node Node) error {
 
 // usableExpectFile refuses a path that would be checked somewhere other than the run's own room.
 //
-// The path is read inside the thread's working directory, so an absolute one or one that climbs out
+// The path is read inside the session's working directory, so an absolute one or one that climbs out
 // of it would be asking about a file the run never touched, and a graph is written by whoever may
 // import one rather than by whoever runs the crew.
 func usableExpectFile(node, path string) error {
@@ -335,11 +335,11 @@ func usableExpectFile(node, path string) error {
 		return nil
 	}
 	if strings.HasPrefix(path, "/") {
-		return fmt.Errorf("flow: dispatch node %s expects %q, and the path is read inside the thread's working directory; write it relative, as package.json", node, path)
+		return fmt.Errorf("flow: dispatch node %s expects %q, and the path is read inside the session's working directory; write it relative, as package.json", node, path)
 	}
 	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
 		if part == ".." {
-			return fmt.Errorf("flow: dispatch node %s expects %q, which climbs out of the thread's working directory", node, path)
+			return fmt.Errorf("flow: dispatch node %s expects %q, which climbs out of the session's working directory", node, path)
 		}
 	}
 	return nil

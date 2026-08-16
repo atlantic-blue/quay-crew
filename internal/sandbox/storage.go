@@ -27,7 +27,7 @@ type Storage struct {
 }
 
 // Prepare creates the directories this sandbox needs and returns the mounts that carry them into
-// it. The workspace's conversation store is shared by every project in it, so a thread started in
+// it. The workspace's conversation store is shared by every project in it, so a session started in
 // one project can still be resumed; the working directory belongs to a single project.
 func (s Storage) Prepare(cfg Config) ([]Mount, error) {
 	if s.Dir == "" {

@@ -1,8 +1,8 @@
 Feature: The crew is addressed by path
 
   You work in one place at a time and say where with an address: workspace, then project, then
-  thread. "me/house-bills" is a body of work; "me/house-bills/3cb04bf5" is one conversation in it.
-  Every level is a name or an id, and a thread may be the shortened identifier a listing prints,
+  session. "me/house-bills" is a body of work; "me/house-bills/3cb04bf5" is one conversation in it.
+  Every level is a name or an id, and a session may be the shortened identifier a listing prints,
   because what is on the operator's screen has to be typeable back.
 
   Background:
@@ -18,10 +18,10 @@ Feature: The crew is addressed by path
     When the operator addresses "me"
     Then the address reaches the workspace but no project
 
-  Scenario: An address reaches a thread by the shortened id a listing prints
+  Scenario: An address reaches a session by the shortened id a listing prints
     Given a session started by dispatching "remember this"
-    When the operator addresses the thread by its first eight characters
-    Then the address reaches that thread
+    When the operator addresses the session by its first eight characters
+    Then the address reaches that session
 
   Scenario: An address naming a project that does not exist is refused
     When the operator addresses "me/ghost"
@@ -31,8 +31,8 @@ Feature: The crew is addressed by path
     When the operator addresses "ghost/house-bills"
     Then the address is refused as not found
 
-  Scenario: An address deeper than a thread is refused
-    When the operator addresses "me/house-bills/thread/deeper"
+  Scenario: An address deeper than a session is refused
+    When the operator addresses "me/house-bills/session/deeper"
     Then the address is refused as malformed
 
   # A project name is only unique inside its workspace, which is what makes short names usable at all.

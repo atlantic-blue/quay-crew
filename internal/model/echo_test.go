@@ -21,7 +21,7 @@ func TestEchoRunnerExecsInsideTheSandbox(t *testing.T) {
 		t.Fatalf("Reply = %q, want %q", resp.Reply, "hello there")
 	}
 	if resp.ModelSessionID == "" {
-		t.Fatal("ModelSessionID is empty, want a thread id so a turn can be resumed")
+		t.Fatal("ModelSessionID is empty, want a session id so a task can be resumed")
 	}
 
 	// The point of this runner is that the command really goes through the sandbox.

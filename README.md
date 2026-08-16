@@ -16,24 +16,24 @@ The name is the picture of the system: a crew you command at the quay where ever
 Everything below runs. Each one is written out as scenarios in [`features/`](features/), which you can
 run with `make features`, or read from the binary itself with `quay features`.
 
-- **A session is a conversation in its own container.** It starts on the first turn, is reused for
-  every turn after it, and runs the Claude Code command line tool on your subscription, so a turn costs
+- **A session is a conversation in its own container.** It starts on the first task, is reused for
+  every task after it, and runs the Claude Code command line tool on your subscription, so a task costs
   no API credit.
 - **You address the crew by path.** `quay use me/house-bills`, then `quay dispatch "..."`. Creating a
   workspace or a project moves you into it. An address typed on a command applies to that command only,
-  and a thread is the third level, so standing in one continues that conversation.
+  and a session is the third level, so standing in one continues that conversation.
 - **A conversation survives its container.** The model's own store and the project's files are mounted
   in from the host, so replacing a sandbox does not destroy the conversation.
 - **Each level carries context.** A workspace and a project own a directory the sandbox mounts, and the
   model reads `CLAUDE.md` from both. Giving a project context is writing a file into it.
-- **Workspaces and sessions survive a restart**, in Postgres, so the thread you were in yesterday is
+- **Workspaces and sessions survive a restart**, in Postgres, so the session you were in yesterday is
   still there.
 - **You can get inside the conversation.** `quay attach <session>` puts you in it with its history;
   shelling in with `s` shows you the room instead.
 - **`quay` with no arguments opens a console**, in the shape of k9s: `:` to switch resource, `/` to
   filter, enter to drill in, `s` to shell in, `x` to stop a session, `?` for every key. It opens with
   a status block naming the build, the crew you are connected to, where you are standing and what a
-  turn there would run in, so you can see which one you are about to act on.
+  task there would run in, so you can see which one you are about to act on.
 - **Secrets are per workspace**, held by a secrets backend and injected into the session's sandbox. The
   event log records a reference, never a value.
 
@@ -47,7 +47,7 @@ wherever you are:
   independent and replaceable.
 - A **control plane** routes work and manages workspaces.
 - **Agent sessions** run the model and execute tools inside sandboxes.
-- Turn history is written to the store in the same breath as each turn; the event log is an optional audit **export** for a second consumer, such as an **admin dashboard**.
+- Task history is written to the store in the same breath as each task; the event log is an optional audit **export** for a second consumer, such as an **admin dashboard**.
 
 It ships with no data of any kind. You create **workspaces** at runtime through the dashboard or the
 control plane API, and each workspace is isolated from the others.
@@ -132,7 +132,7 @@ logs redact them.
 Built spine first, so a usable thing exists early and the rest widens it. Full detail per slice is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); each slice is an issue.
 
-- **Spine:** channel contract, event log, control plane with the sessions controller, thread engine,
+- **Spine:** channel contract, event log, control plane with the sessions controller, session engine,
   and a CLI channel end to end.
 - **First remote channel:** a chat channel, inbound and gated outbound.
 - **Controllers, sessions, sandbox:** the rest of the controllers, parallel sessions, a durable
@@ -144,7 +144,7 @@ Built spine first, so a usable thing exists early and the rest widens it. Full d
 ## Prior art
 
 Quay Crew learns from OpenClaw (a self hosted gateway with files on disk), Hermes Agent (an agent
-loop with a learning loop, a scheduler, and persistent memory), and remote control features that turn
+loop with a learning loop, a scheduler, and persistent memory), and remote control features that task
 a phone into a window onto a local session. The comparison and what Quay Crew borrows or rejects from
 each is in the docs.
 

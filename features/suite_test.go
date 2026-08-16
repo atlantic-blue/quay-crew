@@ -10,9 +10,9 @@
 //
 // The model runner and the sandbox provider are doubles, so these scenarios are fast and need no
 // Docker daemon and no subscription. They therefore prove routing, session identity, sandbox
-// lifecycle and error handling, and they deliberately do not prove that a real turn executes. That
+// lifecycle and error handling, and they deliberately do not prove that a real task executes. That
 // is the job of the dispatch smoke in continuous integration, which boots the composed stack and
-// runs a turn for real, and of the gated test in internal/model that needs a live subscription.
+// runs a task for real, and of the gated test in internal/model that needs a live subscription.
 package features_test
 
 import (
@@ -74,34 +74,34 @@ func TestFeatures(t *testing.T) {
 // scenariosRun counts the scenarios executed, so an empty run cannot pass as a green one.
 var scenariosRun atomic.Int64
 
-// recordingRunner is a model runner double that records every turn it was asked to run and hands
+// recordingRunner is a model runner double that records every task it was asked to run and hands
 // back a distinct conversation id each time, so a scenario can assert which conversation the next
-// turn resumed.
+// task resumed.
 type recordingRunner struct {
 	mu       sync.Mutex
 	requests []model.Request
-	// failNext makes the next turn fail, which is how a scenario gets a session that exists but has
+	// failNext makes the next task fail, which is how a scenario gets a session that exists but has
 	// no conversation behind it.
 	failNext bool
-	// takes is how long a turn pretends to take. Zero is instant, which is right for almost every
-	// scenario and wrong for any scenario about something happening while a turn is under way:
+	// takes is how long a task pretends to take. Zero is instant, which is right for almost every
+	// scenario and wrong for any scenario about something happening while a task is under way:
 	// with an instant model a whole automation finishes before the next step runs, and a scenario
 	// about stopping one would be racing rather than specifying.
 	takes time.Duration
-	// gate holds every turn open until it is closed, which is takes without the guesswork: a scenario
-	// about what is true *while* a turn runs cannot be written against a clock, because the clock is
+	// gate holds every task open until it is closed, which is takes without the guesswork: a scenario
+	// about what is true *while* a task runs cannot be written against a clock, because the clock is
 	// a different length on every machine. Nil runs straight through.
 	gate chan struct{}
-	// started is closed when the first turn begins, so a scenario can know a turn is genuinely under
+	// started is closed when the first task begins, so a scenario can know a task is genuinely under
 	// way rather than infer it from how long a step took.
 	started chan struct{}
 	once    sync.Once
-	// onTurn runs before the double answers, so a scenario can be a model that did the work rather
+	// onTask runs before the double answers, so a scenario can be a model that did the work rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
-	onTurn func()
+	onTask func()
 }
 
-// hold makes every turn wait, and returns the func that lets them go.
+// hold makes every task wait, and returns the func that lets them go.
 func (r *recordingRunner) hold() func() {
 	r.mu.Lock()
 	r.gate, r.started = make(chan struct{}), make(chan struct{})
@@ -110,20 +110,20 @@ func (r *recordingRunner) hold() func() {
 	return func() { close(gate) }
 }
 
-// waitForTurn blocks until a turn has reached the runner, so a scenario never asserts on a thread
-// whose turn has not started yet.
-func (r *recordingRunner) waitForTurn() error {
+// waitForTask blocks until a task has reached the runner, so a scenario never asserts on a session
+// whose task has not started yet.
+func (r *recordingRunner) waitForTask() error {
 	r.mu.Lock()
 	started := r.started
 	r.mu.Unlock()
 	if started == nil {
-		return fmt.Errorf("no turn was held, so there is nothing to wait for")
+		return fmt.Errorf("no task was held, so there is nothing to wait for")
 	}
 	select {
 	case <-started:
 		return nil
 	case <-time.After(10 * time.Second):
-		return fmt.Errorf("no turn reached the model runner")
+		return fmt.Errorf("no task reached the model runner")
 	}
 }
 
@@ -131,7 +131,7 @@ var _ model.Runner = (*recordingRunner)(nil)
 
 func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, started, work := r.takes, r.gate, r.started, r.onTurn
+	takes, gate, started, work := r.takes, r.gate, r.started, r.onTask
 	r.mu.Unlock()
 	// Outside the lock: what the model does may ask the crew something.
 	if work != nil {
@@ -151,7 +151,7 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 	r.requests = append(r.requests, req)
 	if r.failNext {
 		r.failNext = false
-		return model.Response{}, fmt.Errorf("the model refused this turn")
+		return model.Response{}, fmt.Errorf("the model refused this task")
 	}
 	return model.Response{
 		Reply:          "you said: " + req.Text,
@@ -159,7 +159,7 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 	}, nil
 }
 
-func (r *recordingRunner) turn(i int) (model.Request, bool) {
+func (r *recordingRunner) task(i int) (model.Request, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if i < 0 || i >= len(r.requests) {
@@ -168,8 +168,8 @@ func (r *recordingRunner) turn(i int) (model.Request, bool) {
 	return r.requests[i], true
 }
 
-// lastRequest is the turn the model was asked to run most recently, which is what a scenario about
-// what a turn ran as has to look at.
+// lastRequest is the task the model was asked to run most recently, which is what a scenario about
+// what a task ran as has to look at.
 func (r *recordingRunner) lastRequest() model.Request {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -185,10 +185,10 @@ func (r *recordingRunner) count() int {
 	return len(r.requests)
 }
 
-// turn is what the operator saw come back from one dispatch.
-type turn struct {
+// task is what the operator saw come back from one dispatch.
+type task struct {
 	sessionID string
-	threadID  string
+	handle    string
 	reply     string
 }
 
@@ -224,7 +224,7 @@ type world struct {
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
-	// release lets go of a turn a scenario is holding open, and is nil when none is held.
+	// release lets go of a task a scenario is holding open, and is nil when none is held.
 	release func()
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
 	// attachment does and does not reach.
@@ -236,10 +236,10 @@ type world struct {
 	skillsDir string
 	skills    []skill.Skill
 	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
-	drivers []*quaycrewv1.Thread
+	drivers []*quaycrewv1.Session
 	secrets secrets.Store
 	store   store.Store
-	// events is the log the control plane publishes turns to. A scenario asserts on what landed on
+	// events is the log the control plane publishes tasks to. A scenario asserts on what landed on
 	// it. Setting it to nil is how a scenario says the stack has no broker configured.
 	events *messaging.Memory
 	// eventsRefuse makes the log refuse every record it is given, for the scenarios about what the
@@ -257,7 +257,7 @@ type world struct {
 	projectID          string
 	projectName        string
 	secondWorkspaceID  string
-	turns              []turn
+	tasks              []task
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
 	lastSecrets        *quaycrewv1.ListSecretsResponse
@@ -306,14 +306,14 @@ func (w *world) eventLog() messaging.EventLog {
 	return w.events
 }
 
-// settled waits for every detached turn to land, so a scenario asserting on what a turn left behind
-// is never asserting on a turn still running. The same wait the real shutdown does.
+// settled waits for every detached task to land, so a scenario asserting on what a task left behind
+// is never asserting on a task still running. The same wait the real shutdown does.
 func (w *world) settled(ctx context.Context) error {
 	waiting, giveUp := context.WithTimeout(ctx, 10*time.Second)
 	defer giveUp()
-	w.server.WaitForTurns(waiting)
+	w.server.WaitForTasks(waiting)
 	if waiting.Err() != nil {
-		return fmt.Errorf("a detached turn never landed")
+		return fmt.Errorf("a detached task never landed")
 	}
 	return nil
 }
@@ -337,15 +337,15 @@ func (w *world) serve() error {
 		auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...,
 	)...)
 	w.server = controlplane.NewServer(controlplane.Config{
-		Store: w.store, Runner: w.turnRunner(), Provider: w.provider, Secrets: w.secrets,
+		Store: w.store, Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 	})
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
-	// a thread the store still calls running is settled, because its turn died with the last process.
+	// a session the store still calls running is settled, because its task died with the last process.
 	w.server.ReapStrays(context.Background())
-	w.server.SettleTurns(context.Background())
+	w.server.SettleTasks(context.Background())
 	// The way the real main starts, for a scenario about what survives a restart: the shipped hooks
 	// are offered again, and a crew that already holds some is left exactly as it is.
 	if w.seedHooks {
@@ -369,8 +369,8 @@ func (w *world) serve() error {
 	return nil
 }
 
-// turnRunner is what runs a turn: the recording double, unless a scenario asked for the real one.
-func (w *world) turnRunner() model.Runner {
+// taskRunner is what runs a task: the recording double, unless a scenario asked for the real one.
+func (w *world) taskRunner() model.Runner {
 	if w.realRunner != nil {
 		return w.realRunner
 	}
@@ -386,22 +386,22 @@ func (w *world) stop() {
 	}
 }
 
-func (w *world) lastTurn() (turn, error) {
-	if len(w.turns) == 0 {
-		return turn{}, fmt.Errorf("no turn has been dispatched yet")
+func (w *world) lastTask() (task, error) {
+	if len(w.tasks) == 0 {
+		return task{}, fmt.Errorf("no task has been dispatched yet")
 	}
-	return w.turns[len(w.turns)-1], nil
+	return w.tasks[len(w.tasks)-1], nil
 }
 
-// dispatch runs one turn and records either the result or the error, so a Then step can assert on
+// dispatch runs one task and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
-func (w *world) dispatch(ctx context.Context, project, thread, text string) error {
-	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Handle: thread, Text: text})
+func (w *world) dispatch(ctx context.Context, project, session, text string) error {
+	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Handle: session, Text: text})
 	w.lastErr = err
 	if err != nil {
 		return nil
 	}
-	w.turns = append(w.turns, turn{sessionID: resp.GetId(), threadID: resp.GetHandle(), reply: resp.GetReply()})
+	w.tasks = append(w.tasks, task{sessionID: resp.GetId(), handle: resp.GetHandle(), reply: resp.GetReply()})
 	return w.keepConversation(ctx, resp.GetId())
 }
 
@@ -409,11 +409,11 @@ func (w *world) dispatch(ctx context.Context, project, thread, text string) erro
 // id with nothing behind it, and the control plane now looks in the store before it offers to resume
 // one, so the double has to keep what the thing it stands in for keeps.
 func (w *world) keepConversation(ctx context.Context, sessionID string) error {
-	resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: sessionID})
+	resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sessionID})
 	if err != nil {
 		return err
 	}
-	session := resp.GetThread()
+	session := resp.GetSession()
 	if session.GetModelSessionId() == "" {
 		return nil
 	}
@@ -433,7 +433,7 @@ func (w *world) keepConversation(ctx context.Context, sessionID string) error {
 // sandboxesMadeFor counts the sandboxes genuinely made for the current session, which is not the same
 // as the times the provider was asked: adopting one that already exists makes nothing.
 func (w *world) sandboxesMadeFor(want int) error {
-	current, err := w.lastTurn()
+	current, err := w.lastTask()
 	if err != nil {
 		return err
 	}
@@ -494,7 +494,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
 	initializeObservabilitySteps(sc)
-	initializeTurnsSteps(sc)
+	initializeTasksSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
@@ -592,15 +592,15 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		w := worldFrom(ctx)
 		return w.dispatch(ctx, w.projectID, "", text)
 	})
-	sc.Step(`^the operator dispatches "([^"]*)" to the same thread$`, func(ctx context.Context, text string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to the same session$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		previous, err := w.lastTurn()
+		previous, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		return w.dispatch(ctx, w.projectID, previous.threadID, text)
+		return w.dispatch(ctx, w.projectID, previous.handle, text)
 	})
-	sc.Step(`^the operator dispatches "([^"]*)" to a new thread$`, func(ctx context.Context, text string) error {
+	sc.Step(`^the operator dispatches "([^"]*)" to a new session$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
 		return w.dispatch(ctx, w.projectID, "", text)
 	})
@@ -612,62 +612,62 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator stops the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.StopThread(ctx, &quaycrewv1.StopThreadRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.StopSession(ctx, &quaycrewv1.StopSessionRequest{Id: current.sessionID})
 		return w.lastErr
 	})
 	// A refusal is the point of two of these scenarios, so the error is recorded rather than returned.
 	sc.Step(`^the operator restarts the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: current.sessionID})
 		return nil
 	})
-	sc.Step(`^the thread is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
+	sc.Step(`^the session is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.SetThreadPermissionMode(ctx,
-			&quaycrewv1.SetThreadPermissionModeRequest{Id: current.sessionID, Mode: mode})
+		_, w.lastErr = w.client.SetSessionPermissionMode(ctx,
+			&quaycrewv1.SetSessionPermissionModeRequest{Id: current.sessionID, Mode: mode})
 		return nil
 	})
-	sc.Step(`^the turn ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the task ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		got := w.runner.lastRequest().PermissionMode
 		if got != want {
-			return fmt.Errorf("the turn ran as %q, want %q", got, want)
+			return fmt.Errorf("the task ran as %q, want %q", got, want)
 		}
 		return nil
 	})
 	sc.Step(`^the operator archives the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.ArchiveThread(ctx, &quaycrewv1.ArchiveThreadRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: current.sessionID})
 		return nil
 	})
 	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		_, w.lastErr = w.client.RestoreThread(ctx, &quaycrewv1.RestoreThreadRequest{Id: current.sessionID})
+		_, w.lastErr = w.client.RestoreSession(ctx, &quaycrewv1.RestoreSessionRequest{Id: current.sessionID})
 		return nil
 	})
 	sc.Step(`^the operator restarts a session that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.RestartThread(ctx, &quaycrewv1.RestartThreadRequest{Id: "ghost"})
+		_, w.lastErr = w.client.RestartSession(ctx, &quaycrewv1.RestartSessionRequest{Id: "ghost"})
 		return nil
 	})
 	// Restarting starts the container straight away, which is the whole difference between it and
@@ -681,7 +681,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// matters here is that nobody hands out a container name without asking whether it is there.
 	sc.Step(`^the control plane asked for that session's sandbox$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -727,7 +727,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^the session's row says stopped while its container still runs$`,
 		func(ctx context.Context) error {
 			w := worldFrom(ctx)
-			current, err := w.lastTurn()
+			current, err := w.lastTask()
 			if err != nil {
 				return err
 			}
@@ -762,9 +762,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	// Then: turns and replies.
+	// Then: tasks and replies.
 	sc.Step(`^the reply is "([^"]*)"$`, func(ctx context.Context, want string) error {
-		current, err := worldFrom(ctx).lastTurn()
+		current, err := worldFrom(ctx).lastTask()
 		if err != nil {
 			return err
 		}
@@ -773,38 +773,38 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^both turns ran in the same session$`, func(ctx context.Context) error {
+	sc.Step(`^both tasks ran in the same session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		if len(w.turns) != 2 {
-			return fmt.Errorf("expected 2 turns, got %d", len(w.turns))
+		if len(w.tasks) != 2 {
+			return fmt.Errorf("expected 2 tasks, got %d", len(w.tasks))
 		}
-		if w.turns[0].sessionID != w.turns[1].sessionID {
-			return fmt.Errorf("turns ran in different sessions: %q and %q", w.turns[0].sessionID, w.turns[1].sessionID)
+		if w.tasks[0].sessionID != w.tasks[1].sessionID {
+			return fmt.Errorf("tasks ran in different sessions: %q and %q", w.tasks[0].sessionID, w.tasks[1].sessionID)
 		}
 		return nil
 	})
-	sc.Step(`^the turns ran in different sessions$`, func(ctx context.Context) error {
+	sc.Step(`^the tasks ran in different sessions$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		if len(w.turns) != 2 {
-			return fmt.Errorf("expected 2 turns, got %d", len(w.turns))
+		if len(w.tasks) != 2 {
+			return fmt.Errorf("expected 2 tasks, got %d", len(w.tasks))
 		}
-		if w.turns[0].sessionID == w.turns[1].sessionID {
-			return fmt.Errorf("both turns ran in session %q, expected different sessions", w.turns[0].sessionID)
+		if w.tasks[0].sessionID == w.tasks[1].sessionID {
+			return fmt.Errorf("both tasks ran in session %q, expected different sessions", w.tasks[0].sessionID)
 		}
 		return nil
 	})
-	sc.Step(`^the second turn resumed the conversation the first turn started$`, func(ctx context.Context) error {
+	sc.Step(`^the second task resumed the conversation the first task started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.runner.count() != 2 {
-			return fmt.Errorf("expected the runner to have run 2 turns, got %d", w.runner.count())
+			return fmt.Errorf("expected the runner to have run 2 tasks, got %d", w.runner.count())
 		}
-		first, _ := w.runner.turn(0)
-		second, _ := w.runner.turn(1)
+		first, _ := w.runner.task(0)
+		second, _ := w.runner.task(1)
 		if first.ModelSessionID != "" {
-			return fmt.Errorf("the first turn asked to resume %q, expected it to start a new conversation", first.ModelSessionID)
+			return fmt.Errorf("the first task asked to resume %q, expected it to start a new conversation", first.ModelSessionID)
 		}
 		if second.ModelSessionID != "conversation-1" {
-			return fmt.Errorf("the second turn resumed %q, want the first turn's conversation-1", second.ModelSessionID)
+			return fmt.Errorf("the second task resumed %q, want the first task's conversation-1", second.ModelSessionID)
 		}
 		return nil
 	})
@@ -819,7 +819,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the sandbox belongs to the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
@@ -845,58 +845,58 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the session still holds the conversation the first turn started$`, func(ctx context.Context) error {
+	sc.Step(`^the session still holds the conversation the first task started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
 		// The handle points at a conversation the model keeps on its own disk. Lose it and that
 		// conversation still exists but can never be reached again.
-		if got := resp.GetThread().GetModelSessionId(); got != "conversation-1" {
+		if got := resp.GetSession().GetModelSessionId(); got != "conversation-1" {
 			return fmt.Errorf("the session holds conversation %q, want conversation-1", got)
 		}
 		return nil
 	})
 	sc.Step(`^the workspace has (\d+) sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{Workspace: w.workspaceID})
+		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: w.workspaceID})
 		if err != nil {
 			return err
 		}
-		if got := len(resp.GetThreads()); got != want {
+		if got := len(resp.GetSessions()); got != want {
 			return fmt.Errorf("the workspace has %d sessions, want %d", got, want)
 		}
 		return nil
 	})
 	sc.Step(`^the workspace has (\d+) archived sessions$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		resp, err := w.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{
+		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
 			Workspace: w.workspaceID, Archived: true,
 		})
 		if err != nil {
 			return err
 		}
-		if got := len(resp.GetThreads()); got != want {
+		if got := len(resp.GetSessions()); got != want {
 			return fmt.Errorf("the workspace has %d archived sessions, want %d", got, want)
 		}
 		return nil
 	})
 	sc.Step(`^the session is reported as (\w+)$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTurn()
+		current, err := w.lastTask()
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
 		if err != nil {
 			return err
 		}
-		if got := resp.GetThread().GetStatus(); got != want {
+		if got := resp.GetSession().GetStatus(); got != want {
 			return fmt.Errorf("session status is %q, want %q", got, want)
 		}
 		return nil
@@ -912,26 +912,26 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Then: the turn's environment.
-	sc.Step(`^the turn ran with the subscription token "([^"]*)"$`, func(ctx context.Context, want string) error {
+	// Then: the task's environment.
+	sc.Step(`^the task ran with the subscription token "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		last, ok := w.runner.turn(w.runner.count() - 1)
+		last, ok := w.runner.task(w.runner.count() - 1)
 		if !ok {
-			return fmt.Errorf("no turn reached the model runner")
+			return fmt.Errorf("no task reached the model runner")
 		}
 		if got := last.Env[model.ClaudeCodeOAuthTokenEnv]; got != want {
-			return fmt.Errorf("the turn ran with %s=%q, want %q", model.ClaudeCodeOAuthTokenEnv, got, want)
+			return fmt.Errorf("the task ran with %s=%q, want %q", model.ClaudeCodeOAuthTokenEnv, got, want)
 		}
 		return nil
 	})
-	sc.Step(`^the turn ran with no extra environment$`, func(ctx context.Context) error {
+	sc.Step(`^the task ran with no extra environment$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		last, ok := w.runner.turn(w.runner.count() - 1)
+		last, ok := w.runner.task(w.runner.count() - 1)
 		if !ok {
-			return fmt.Errorf("no turn reached the model runner")
+			return fmt.Errorf("no task reached the model runner")
 		}
 		if len(last.Env) != 0 {
-			return fmt.Errorf("the turn ran with %v, want no extra environment", last.Env)
+			return fmt.Errorf("the task ran with %v, want no extra environment", last.Env)
 		}
 		return nil
 	})

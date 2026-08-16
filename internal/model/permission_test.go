@@ -69,9 +69,9 @@ func TestWideningIsMovingTowardsDoingMore(t *testing.T) {
 		{from: model.PermissionBypass, to: model.PermissionAcceptEdits, widens: false},
 		{from: model.PermissionBypass, to: model.PermissionPlan, widens: false},
 		{from: model.PermissionAcceptEdits, to: model.PermissionPlan, widens: false},
-		// Standing still is not widening, so re-picking the mode a thread is already in asks nothing.
+		// Standing still is not widening, so re-picking the mode a session is already in asks nothing.
 		{from: model.PermissionAcceptEdits, to: model.PermissionAcceptEdits, widens: false},
-		// A thread from before the mode was written down has none, and runs acceptEdits, so it
+		// A session from before the mode was written down has none, and runs acceptEdits, so it
 		// compares as one rather than as the narrowest thing there is.
 		{from: "", to: model.PermissionBypass, widens: true},
 		{from: "", to: model.PermissionPlan, widens: false},

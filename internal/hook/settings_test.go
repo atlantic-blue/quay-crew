@@ -139,7 +139,7 @@ func TestAHookFiringOnTwoEventsReachesBoth(t *testing.T) {
 }
 
 // A file that reorders itself between renders is a diff nobody can review, and it rewrites on every
-// turn for no reason.
+// task for no reason.
 func TestTheSameHooksRenderTheSameFileEveryTime(t *testing.T) {
 	hooks := []hook.Hook{
 		one("git-approval", hook.Binding{On: "PreToolUse", Matcher: "Bash", Entry: "bin/hook"}),

@@ -21,7 +21,7 @@ var spokenModes = map[string]string{
 	"bypasspermissions": PermissionBypass,
 }
 
-// PermissionModeNamed turns what somebody typed into the mode the model understands, and says whether
+// PermissionModeNamed tasks what somebody typed into the mode the model understands, and says whether
 // it was a mode at all.
 //
 // It lives here because every surface that takes a mode needs the same answer: the command line, the
@@ -38,8 +38,8 @@ func PermissionModesOffered() []string {
 	return append([]string(nil), modeOrder...)
 }
 
-// PermissionModeBornIn is what a thread's turns may do when it is created: the crew's own choice when
-// it made one, and otherwise the mode every thread had before this was configurable.
+// PermissionModeBornIn is what a session's tasks may do when it is created: the crew's own choice when
+// it made one, and otherwise the mode every session had before this was configurable.
 //
 // The fallback is here rather than at each caller so a store, a server and a test cannot each pick a
 // different one. An unknown value falls back rather than failing, because the place that refuses a
@@ -58,8 +58,8 @@ func PermissionModeBornIn(configured string) string {
 // it widens and not before it narrows needs to know which way a change goes, and computing that from
 // the order rather than listing the pairs means a fourth mode cannot be added without it.
 //
-// An unknown mode counts as the mode a thread with nothing set actually runs in, which is what makes
-// a thread from before the mode was written down compare like every other one.
+// An unknown mode counts as the mode a session with nothing set actually runs in, which is what makes
+// a session from before the mode was written down compare like every other one.
 func PermissionModeWidens(from, to string) bool {
 	return permissionRank(to) > permissionRank(from)
 }

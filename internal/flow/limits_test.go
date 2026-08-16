@@ -33,7 +33,7 @@ func TestAGraphDeclaresItsLimits(t *testing.T) {
 	}
 }
 
-// A graph that declares no cap still gets one. An automation dispatches turns with nobody watching,
+// A graph that declares no cap still gets one. An automation dispatches tasks with nobody watching,
 // so the default has to be a number rather than "unbounded until somebody remembers".
 func TestAGraphWithNoDeclaredCapGetsTheDefault(t *testing.T) {
 	graph, err := Parse([]byte(`
@@ -89,12 +89,12 @@ func TestACyclingRunStopsAtItsCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
-	// Every turn works, so the choice keeps taking the edge back to the dispatch.
+	// Every task works, so the choice keeps taking the edge back to the dispatch.
 	for range 20 {
 		if next.Status != StatusRunning {
 			break
 		}
-		next, _, err = Advance(graph, next, Event{Kind: EventTurnFinished, Node: next.Node, Reply: "ok"})
+		next, _, err = Advance(graph, next, Event{Kind: EventTaskFinished, Node: next.Node, Reply: "ok"})
 		if err != nil {
 			t.Fatalf("Advance: %v", err)
 		}
@@ -124,7 +124,7 @@ func TestAStoppedRunReturnsNoDispatch(t *testing.T) {
 		Transitions: graph.Limits.Transitions,
 	}
 
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "begin", Reply: "ok"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "begin", Reply: "ok"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestAStoppedRunReturnsNoDispatch(t *testing.T) {
 }
 
 // A run under its ceiling carries on; over it, it stops before the dispatch rather than after, so
-// the turn that would have crossed the line is never paid for.
+// the task that would have crossed the line is never paid for.
 func TestARunStopsBeforeTheDispatchThatWouldCrossItsCeiling(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: costly
@@ -165,7 +165,7 @@ edges:
 		State: map[string]string{}, Attempts: map[string]int{},
 		Spent: 1200,
 	}
-	next, commands, err := Advance(graph, run, Event{Kind: EventTurnFinished, Node: "one", Reply: "ok"})
+	next, commands, err := Advance(graph, run, Event{Kind: EventTaskFinished, Node: "one", Reply: "ok"})
 	if err != nil {
 		t.Fatalf("Advance: %v", err)
 	}

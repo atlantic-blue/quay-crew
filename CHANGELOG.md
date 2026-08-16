@@ -73,22 +73,22 @@ read, or run with `make features`.
 
 - **A graph can tell work that was done from work that was explained away.** The first flow run
   against a real crew finished at `done`, reported four transitions and 669,649 tokens, and read back
-  as a success. None of the work happened. The repository was not in the run's thread, every turn
+  as a success. None of the work happened. The repository was not in the run's session, every task
   said so in its own words, and the run took the success edge anyway, because the only signal a
-  `choice` node had was `result.failed`, and `result.failed` says the model did not error. A turn
-  that could not do the work is not a failed turn. The more capable the model, the worse it reads: it
+  `choice` node had was `result.failed`, and `result.failed` says the model did not error. A task
+  that could not do the work is not a failed task. The more capable the model, the worse it reads: it
   answers plausibly rather than stopping, and that plausible answer is what the run ends up carrying
   as its summary.
 
   A dispatch node now says what will show it worked, and the crew checks it rather than reading the
   model's account of itself. `expect: { file: package.json }` is a path that must be in the run's
-  thread after the turn, read from the working directory the crew already keeps, so nothing the model
+  session after the task, read from the working directory the crew already keeps, so nothing the model
   says can satisfy it. `expect: { contains: "all green" }` is a string the reply must carry, weaker
   because it is still prose, and there for work that leaves no file behind.
 
   An expectation that does not hold stops the run, naming the node and what was not there. It stops
   rather than branching, because the crew knows the work did not happen and does not know why, and
-  because a run that halts is read correctly while a run that finishes is believed. The thread is
+  because a run that halts is read correctly while a run that finishes is believed. The session is
   left alone rather than archived: that is where the evidence is. An expectation nothing could check
   stops the run too, since a check that quietly passes when nobody could look is the same false green
   as no check at all. A graph that declares nothing behaves exactly as it did.
@@ -98,17 +98,17 @@ read, or run with `make features`.
   own. ([#263](https://github.com/atlantic-blue/quay-crew/issues/263))
 
 - **A graph says what its runs may do, and the documents say what a run starts with.** A run owns its
-  own thread, and that thread is made by the run's first dispatch. So there was nothing to set a mode
+  own session, and that session is made by the run's first dispatch. So there was nothing to set a mode
   on before the run started, `quay mode` had nothing to point at, and every automation ran in the
-  mode a thread is born in. A graph whose first step is "clone this" could not take that step:
-  cloning needs the network, and a turn nobody is watching has nobody to approve it.
+  mode a session is born in. A graph whose first step is "clone this" could not take that step:
+  cloning needs the network, and a task nobody is watching has nobody to approve it.
 
   A graph now declares `mode: dangerous` beside its name and its version, and every dispatch of the
   run carries it. The word is checked at import, against the same table the command line and the
   console read, so a mode nobody has is refused with the three there are rather than failing on the
-  run's first turn. A graph that declares nothing is unchanged.
+  run's first task. A graph that declares nothing is unchanged.
 
-  The other half is a document. Nothing said what a run's thread starts with, which is exactly the
+  The other half is a document. Nothing said what a run's session starts with, which is exactly the
   assumption a graph author makes without noticing: it starts empty. `docs/ARCHITECTURE.md` now says
   so, and says which of the two mounted directories survives the run. The workspace's volume at
   `/home/agent/shared` is the one that does, so a graph that needs a repository puts it there.
@@ -119,48 +119,48 @@ read, or run with `make features`.
   own room now; it does not yet find one already filled.
   ([#264](https://github.com/atlantic-blue/quay-crew/issues/264))
 
-- **What a finished flow run did can be read again.** A run archives its own thread when it ends,
+- **What a finished flow run did can be read again.** A run archives its own session when it ends,
   which is right: otherwise every run leaves a container behind. Archiving is also what put the run's
-  record out of reach. `quay flow show` printed the thread identifier, and `quay tasks` refused that
-  exact identifier, because every command that reads a thread asked the live listing and nothing
-  else. The turns were in the store the whole time. Reading them took `psql`.
+  record out of reach. `quay flow show` printed the session identifier, and `quay tasks` refused that
+  exact identifier, because every command that reads a session asked the live listing and nothing
+  else. The tasks were in the store the whole time. Reading them took `psql`.
 
   That mattered more than a missing convenience. The run's summary is the model's own account of what
-  happened, and the turns are the record of it. The two can disagree: the first run against a real
-  crew reported four transitions and a tidy summary while every turn under it said the working
+  happened, and the tasks are the record of it. The two can disagree: the first run against a real
+  crew reported four transitions and a tidy summary while every task under it said the working
   directory was empty.
 
-  So a thread is resolved against the archived listing when the live one does not name it. The live
-  listing is asked first, so an identifier that names a live thread still names the same one. Nothing
-  about reading a history needs the thread to be live, and `quay attach`, which does need it, still
+  So a session is resolved against the archived listing when the live one does not name it. The live
+  listing is asked first, so an identifier that names a live session still names the same one. Nothing
+  about reading a history needs the session to be live, and `quay attach`, which does need it, still
   refuses on its own terms and says to restore it first. `quay flow show` now prints the command that
   reads the run's tasks rather than an identifier to work it out from, and the console's archived
   view takes `l` for a history, the same key the live view takes.
   ([#265](https://github.com/atlantic-blue/quay-crew/issues/265))
 
-- **An archived thread runs nothing.** Archiving stops a thread and takes its container away. The
+- **An archived session runs nothing.** Archiving stops a session and takes its container away. The
   task that was running in it landed a moment later, and the crew wrote down what that task came to,
-  so the row went back to idle or to failed. The archived listing then showed a thread that is
+  so the row went back to idle or to failed. The archived listing then showed a session that is
   working, and nobody can reach it.
 
-  An archived thread keeps its status now. It still keeps its conversation handle, so restoring it
+  An archived session keeps its status now. It still keeps its conversation handle, so restoring it
   comes back to the conversation it was in.
 
-  A dispatch to an archived thread is refused too, and says to restore it first. A handle is matched
-  whether the thread is put away or not, so `quay dispatch` to an archived thread started a container
-  for a thread that is not in the listing.
+  A dispatch to an archived session is refused too, and says to restore it first. A handle is matched
+  whether the session is put away or not, so `quay dispatch` to an archived session started a container
+  for a session that is not in the listing.
 
-- **Restart works on a live thread, and asks first.** The crew refused to restart a thread unless it
+- **Restart works on a live session, and asks first.** The crew refused to restart a session unless it
   was already stopped. So the key you press when a container is wrong did nothing, and you had to
-  stop the thread yourself before the key would work.
+  stop the session yourself before the key would work.
 
-  Restart stops the thread now, removes the container, and starts a new one. In the console it is `R`
-  or ctrl+r. It asks before it acts on a thread that is not stopped, because the task in that thread
-  and the conversation attached to it go with the old container. A stopped thread has neither, so
+  Restart stops the session now, removes the container, and starts a new one. In the console it is `R`
+  or ctrl+r. It asks before it acts on a session that is not stopped, because the task in that session
+  and the conversation attached to it go with the old container. A stopped session has neither, so
   that one acts at once.
 
-  An archived thread is refused, and says to restore it first. An archived row says stopped, so a
-  restart that read only the status started a container for a thread nobody can see.
+  An archived session is refused, and says to restore it first. An archived row says stopped, so a
+  restart that read only the status started a container for a session nobody can see.
 
 - **Every view in the console is coloured cell by cell.** A row carries a state, and the state was
   drawn over the whole line, so a row's workspace, project, name and mode all arrived on screen in
@@ -172,13 +172,13 @@ read, or run with `make features`.
   yellow for running, red for failed, dim for stopped. A failed row is the one exception and still
   takes the whole line, because it has to read as failed before it reads as anything else.
 
-  Age takes the same three bands as that tool's idle column, so a thread touched a moment ago, one
+  Age takes the same three bands as that tool's idle column, so a session touched a moment ago, one
   from this morning and one from last week are told apart without reading the number. The views that
   had no cell colour at all have one now: names carry their own colour, identifiers and counts are
   dim, a key is cyan wherever it is read. A case sweeps every registered view, so the next one added
   cannot be the flat one.
 
-- **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
+- **A task says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
 
@@ -234,7 +234,7 @@ read, or run with `make features`.
   dependencies and cannot import its internals. The standard library is all it needs. 47 tests cover
   the parts that were bare before, and the two that carry the most weight were mutation checked:
   dropping the guard from the child environment, and keeping every line of the model's answer
-  instead of the known fields, each turn the suite red.
+  instead of the known fields, each task the suite red.
 
   The entry point is `bin/hook`, built by `make hooks` and by the image build rather than committed.
   A hook is an executable, an executable is a build artifact, and one committed binary runs on one
@@ -273,7 +273,7 @@ read, or run with `make features`.
   nobody had opted into signing at all.
 
 - **An operator's git configuration reaches a session.** A session commits as the operator and had no
-  way to know who that was. Identity was four environment variables set on the turn's own process, so
+  way to know who that was. Identity was four environment variables set on the task's own process, so
   a commit made from an attached terminal, or by anything the session started for itself, had none,
   and git refused it with `Author identity unknown`.
 
@@ -335,7 +335,7 @@ read, or run with `make features`.
 
   Nothing looked wrong. The hook ran in 946 milliseconds, exited 0 and let the message through,
   because it fails open by design. The child exited 1 with an empty standard error, and the only sign
-  anywhere was the word "no answer" in a file in `/tmp`. Found by dispatching a turn on a real crew and
+  anywhere was the word "no answer" in a file in `/tmp`. Found by dispatching a task on a real crew and
   reading what the hook actually wrote, not by any test.
 
   A stub on the path now stands in for the model in an integration test, so the token's arrival is
@@ -383,10 +383,10 @@ read, or run with `make features`.
 
   The files are mounted read only at `/home/agent/hooks`, and a settings file the crew owns outright
   is rendered beside them and loaded with `claude --settings`. Not into the conversation directory's
-  own settings, which the runtime writes and the operator edits: that would mean merging on every turn
-  and losing an edit the first time the merge was wrong. Both the dispatched turn and the attached
-  conversation load it, because a gate that only runs on dispatched turns is one you walk around by
-  opening the thread.
+  own settings, which the runtime writes and the operator edits: that would mean merging on every task
+  and losing an edit the first time the merge was wrong. Both the dispatched task and the attached
+  conversation load it, because a gate that only runs on dispatched tasks is one you walk around by
+  opening the session.
 
   A hook reaches a container when the container is built and never after, so `quay hook attach` says
   so every time. Somebody who believes a gate is on when it is not is worse off than somebody who
@@ -396,64 +396,64 @@ read, or run with `make features`.
   inside the container, by absolute path, and the mount is checked to be read only by trying to
   rewrite the file that binds the hooks. A session that can edit what constrains it is not constrained.
 
-- **Starting a thread from the console no longer waits for its first turn.** Creating a session in
+- **Starting a session from the console no longer waits for its first task.** Creating a session in
   the wizard failed, and the operator read the failure as the container being slow to start. Neither
   half was true. The wizard put a thirty second deadline on the call, and a dispatch runs the whole
-  model turn before it answers, so any first message worth sending was killed by the deadline. What
-  was left behind was a thread with a container, a row, and no conversation in it. Measured on the
+  model task before it answers, so any first message worth sending was killed by the deadline. What
+  was left behind was a session with a container, a row, and no conversation in it. Measured on the
   machine that reported it: a bare `docker run` of the sandbox image takes 0.24 seconds, and a
   command line dispatch that created a fresh container and answered a short prompt took 4.0 seconds.
   The wait was the wizard holding the screen, not the daemon.
 
-  A dispatch can now detach: it answers as soon as the thread exists and runs the turn behind the
-  answer. The console uses it, so the wizard closes at once and the row says `running` until the turn
+  A dispatch can now detach: it answers as soon as the session exists and runs the task behind the
+  answer. The console uses it, so the wizard closes at once and the row says `running` until the task
   lands. The command line and the flow engine still wait, because both want the reply. Driven for
-  real afterwards through the console: the wizard came back in under a second, and the turn ran for
+  real afterwards through the console: the wizard came back in under a second, and the task ran for
   87.56 seconds, nearly three times the deadline that used to kill it, then landed as `idle`.
 
-  Two things fall out of it. A turn runs in the crew's own process, so a thread the store still calls
-  running when the crew starts is one whose turn died with the last process; startup settles those
+  Two things fall out of it. A task runs in the crew's own process, so a session the store still calls
+  running when the crew starts is one whose task died with the last process; startup settles those
   rather than leaving a conversation that appears to have been thinking since the restart. And a
-  graceful stop now waits for turns as well as for calls, because a detached turn is a goroutine and
+  graceful stop now waits for tasks as well as for calls, because a detached task is a goroutine and
   draining requests does not drain it.
 
-- **A failed turn says what actually failed.** Every failure read "the model did not complete the
-  turn", so a deadline, a crash and a refusal were one line with nothing to act on in it. That
+- **A failed task says what actually failed.** Every failure read "the model did not complete the
+  task", so a deadline, a crash and a refusal were one line with nothing to act on in it. That
   sentence is what sent this bug to the wrong place: the record said the model had not finished, when
-  the caller had stopped waiting. The reason is recorded now, and a turn killed by a deadline or a
+  the caller had stopped waiting. The reason is recorded now, and a task killed by a deadline or a
   cancellation is named for what happened to it rather than for the plumbing underneath.
 
-- **A thread says what it is about, written by the crew.** A label fixes a listing only for the
-  threads somebody stopped to name, and naming things is work nobody does consistently. A thread now
-  describes itself after its first turn, and again once the conversation has moved ten turns past that
+- **A session says what it is about, written by the crew.** A label fixes a listing only for the
+  sessions somebody stopped to name, and naming things is work nobody does consistently. A session now
+  describes itself after its first task, and again once the conversation has moved ten tasks past that
   description. A listing prefers your own name when there is one, then the crew's, then the
   identifier, and nothing automatic ever writes the name you chose.
 
-  The describing call is its own conversation, not the thread's, so a request you never made does not
-  land in your history and its tokens do not count towards what the listing says the thread cost. It
-  runs behind the answer, so a turn is never slower for it, and every failure in it is a log line:
-  a turn that worked is not reported as failed because the crew could not think of a name.
+  The describing call is its own conversation, not the session's, so a request you never made does not
+  land in your history and its tokens do not count towards what the listing says the session cost. It
+  runs behind the answer, so a task is never slower for it, and every failure in it is a log line:
+  a task that worked is not reported as failed because the crew could not think of a name.
 
   Ten is a starting number, not a measured one. Nothing has run long enough to say how far a
-  conversation drifts per turn, so it is `QC_DESCRIBE_EVERY` in the crew's configuration rather than a
+  conversation drifts per task, so it is `QC_DESCRIBE_EVERY` in the crew's configuration rather than a
   number presented as derived, and what would replace it is a count of how often a rewrite actually
-  differs from the description before it. `QC_DESCRIBE_EVERY=off` turns it off, which a crew running
-  automation wants, since a flow makes a thread per run.
+  differs from the description before it. `QC_DESCRIBE_EVERY=off` tasks it off, which a crew running
+  automation wants, since a flow makes a session per run.
 
   What comes back is checked against the question that was asked, line for line, and discarded when it
   is the question rather than an answer to it. A backend that echoes hands the instruction straight
-  back, and continuous integration runs one, so without that check every thread in a composed stack
+  back, and continuous integration runs one, so without that check every session in a composed stack
   was named "Here is the start of a conversation:". The check matches whole lines rather than any
   occurrence, because the question carries examples of a good answer and a model that produced one of
   those examples exactly would otherwise have it thrown away.
   ([#271](https://github.com/atlantic-blue/quay-crew/issues/271))
 
 
-- **A thread carries a name you chose.** A listing was a column of hexadecimal, so working out which
-  conversation was the one about the electricity bill meant opening them. `quay label <thread>
+- **A session carries a name you chose.** A listing was a column of hexadecimal, so working out which
+  conversation was the one about the electricity bill meant opening them. `quay label <session>
   "the electricity bill"` names one, no text reads it back, and `""` clears it. `L` in the console
-  names the selected thread, starting from the name it already has so changing one word does not mean
-  retyping it. The listing shows the name where the thread identifier was, falling back to the
+  names the selected session, starting from the name it already has so changing one word does not mean
+  retyping it. The listing shows the name where the session identifier was, falling back to the
   identifier when there is none, and the breadcrumb reads it too, so drilling in says
   `me > house-bills > the electricity bill`.
 
@@ -479,10 +479,10 @@ read, or run with `make features`.
   after, and twelve runs of the package that was failing all pass.
 
 
-- **The threads listing is readable in colour.** Thirty rows in one colour meant reading every
+- **The sessions listing is readable in colour.** Thirty rows in one colour meant reading every
   character of every row to find the conversation you wanted. Each cell is now coloured the way the
   `sessions` tool colours its own, because that is the listing already read all day: a workspace,
-  project and thread name each carry a colour of their own so the eye finds their rows without reading
+  project and session name each carry a colour of their own so the eye finds their rows without reading
   them, identifiers and ages and counts are dim so they stop competing, a token count in the millions
   is marked, and the mode is coloured by how much it allows, since that is the cell that costs most to
   misread. The selected row drops cell colour entirely, because the cursor is a bar across the row and
@@ -497,13 +497,13 @@ read, or run with `make features`.
 
 ## 14 August 2026
 
-- **A thread's mode is picked in the console, not cycled.** `D` flipped between edits and dangerous,
+- **A session's mode is picked in the console, not cycled.** `D` flipped between edits and dangerous,
   so planning was reachable from the command line and from the wizard and not from the surface an
   operator actually lives in. `m` now offers all three, narrowest first, and takes a pick. `D` opens
   the same picker, because it was the flip for as long as the console has had one and a key that
   silently stopped working is worse than one that changed shape.
 
-  Widening what a thread may do asks first, the way every key that gives a thread more room does.
+  Widening what a session may do asks first, the way every key that gives a session more room does.
   Narrowing does not: it takes capability away, so there is nothing to be careful about and asking
   would only be in the way. Which way a pick goes is computed from the order the modes sit in rather
   than from a list of pairs, so a fourth mode cannot be added without it.
@@ -515,22 +515,22 @@ read, or run with `make features`.
   Rendered from a table test, not captured from a running console.
   ([#270](https://github.com/atlantic-blue/quay-crew/issues/270))
 
-- **What a thread may do when it is born comes from the crew's configuration.** It was a constant in
-  the control plane and another in the store, so every thread that did not come through the console's
+- **What a session may do when it is born comes from the crew's configuration.** It was a constant in
+  the control plane and another in the store, so every session that did not come through the console's
   wizard arrived in `acceptEdits`, and the only way to change that was to edit the binary. A
-  dispatched turn has nobody to approve anything, so a crew whose work needs more than that had a
-  thread stopping to ask somebody who was not there, every time, from birth. `QC_PERMISSION_MODE` in
+  dispatched task has nobody to approve anything, so a crew whose work needs more than that had a
+  session stopping to ask somebody who was not there, every time, from birth. `QC_PERMISSION_MODE` in
   `~/.quay/env` takes `plan`, `edits` or `dangerous`.
 
   A value that is not a mode stops the crew starting and names the three. Falling back would be
-  silent, and a crew configured for `planning` would run every turn in `acceptEdits` while looking
+  silent, and a crew configured for `planning` would run every task in `acceptEdits` while looking
   exactly like a crew configured for `acceptEdits`. Unset is not a refusal: it keeps `edits`, which is
-  what every thread has had since the control plane was written, so an upgrade cannot quietly widen
-  what a thread may do.
+  what every session has had since the control plane was written, so an upgrade cannot quietly widen
+  what a session may do.
 
-  Configuration reaches a thread when it is created and never after. A thread that already exists
+  Configuration reaches a session when it is created and never after. A session that already exists
   keeps what it was born in, because changing a file must not widen a conversation already running.
-  `quay mode <thread>` still changes one thread after the fact.
+  `quay mode <session>` still changes one session after the fact.
 
   The words for a mode were written out three times, in the command line tool, in the wizard, and
   nearly a fourth time here. They live with the model now, and all three read the same table.
@@ -578,24 +578,24 @@ read, or run with `make features`.
 ## 13 August 2026
 
 - **A command takes the identifier the listing shows you.** A listing prints two identifiers for
-  every thread, the id and the handle, and dispatch takes an address on top of those. `attach`,
-  `mode`, `panel` and `turns` took only the id. So an operator read `300979a5` off the thread column,
+  every session, the id and the handle, and dispatch takes an address on top of those. `attach`,
+  `mode`, `panel` and `tasks` took only the id. So an operator read `300979a5` off the session column,
   typed it back, and got `no session with id or prefix "300979a5"` from all four. The mode of a new
-  thread was the case that hurt: you could see the thread and you could not give it room to work.
+  session was the case that hurt: you could see the session and you could not give it room to work.
   All four now take the id, the handle, a prefix of either, and an address, which is every form on
-  the screen. A refusal names the threads that exist and both of their identifiers, rather than only
+  the screen. A refusal names the sessions that exist and both of their identifiers, rather than only
   repeating what was typed.
   ([#265](https://github.com/atlantic-blue/quay-crew/issues/265))
 
-- **The wizard asks what a thread may do, and the thread is born in it.** `n` then `session` started a
-  thread and never asked, so every one arrived in the crew's default. That is the one decision worth
+- **The wizard asks what a session may do, and the session is born in it.** `n` then `session` started a
+  session and never asked, so every one arrived in the crew's default. That is the one decision worth
   making at birth: a sandbox is born with its capabilities and never drifts, so changing the mode
-  afterwards costs a restart, and a thread born unable to act is a thread that apologises. On this
+  afterwards costs a restart, and a session born unable to act is a session that apologises. On this
   crew one was asked to clone a repository and answered that it needed approval from somebody who was
   not there. The wizard now offers plan, edits and dangerous, in the words `quay mode` already takes,
   and refuses anything else. `DispatchRequest` carries the mode so it applies before the sandbox is
   built rather than after. The guided first run does not ask: it is already six questions long, and a
-  thread it starts keeps the default exactly as it did.
+  session it starts keeps the default exactly as it did.
   ([#270](https://github.com/atlantic-blue/quay-crew/issues/270))
 
 - **A session can sign its commits.** A session commits as the operator and had no way to sign, so on
@@ -605,10 +605,10 @@ read, or run with `make features`.
   workspace holding `GIT_SSH_SIGNING_KEY` gets sandboxes that sign: the key is written once when the
   sandbox is born, under `umask 077`, and git is pointed at it. An ssh key rather than a gpg one,
   because signing with ssh needs one private key file and no agent, no keyring and no pinentry prompt
-  to hang a turn nobody is watching. A workspace without the key is untouched, because a private key
+  to hang a task nobody is watching. A workspace without the key is untouched, because a private key
   is the most sensitive thing this crew carries and silence is the right default. The key is read
   from the container's own environment rather than passed as an argument, where every process could
-  read it and the turn record would keep it.
+  read it and the task record would keep it.
   ([#279](https://github.com/atlantic-blue/quay-crew/issues/279))
 
 - **`quay` opens the crew. It no longer refuses to.** `quay use atlantic-blue` printed "now in
@@ -648,17 +648,17 @@ read, or run with `make features`.
   leaves a workspace that attached it for itself holding it. `quay skill list` says which ones came
   from the crew. Proved against real Postgres as well as the memory store, through the conformance
   suite both answer. ([#273](https://github.com/atlantic-blue/quay-crew/issues/273))
-- **A skill whose secret is not set is left out of the session, rather than stopping the turn.** One
+- **A skill whose secret is not set is left out of the session, rather than stopping the task.** One
   skill the workspace had not finished setting up refused every conversation in it: the github skill
   names `GH_TOKEN`, and without it a dispatch came back `FailedPrecondition` before a sandbox was
-  built, whatever the turn was actually about. Now that skill alone is left out. It is not mounted,
+  built, whatever the task was actually about. Now that skill alone is left out. It is not mounted,
   the model is never told it exists, and `quay skill list` carries the line `left out: needs the
   secret GH_TOKEN ...` against it with the command that sets it. The reasoning that produced the
   refusal has not changed and is why the skill is withheld whole rather than half given: a
   capability that silently does not work is worse than one that is absent, because the model
   improvises around it and the operator reads the improvisation as the answer. What changed is the
   blast radius, and it changes now because a skill held by the whole crew cannot take every
-  workspace down with it. A missing binary still refuses the turn: the image is one thing for the
+  workspace down with it. A missing binary still refuses the task: the image is one thing for the
   whole crew, while a secret is one workspace's to set.
   ([#273](https://github.com/atlantic-blue/quay-crew/issues/273))
 - **A skill that asks for nothing can be imported.** The Simplified Technical English skill declares
@@ -683,11 +683,11 @@ read, or run with `make features`.
 
 ## 11 August 2026
 
-- **One listing of threads, in both surfaces.** The console showed ten columns and the command line
-  four, from two separate pieces of code, so a thread's mode, its tokens in and out, its cache spend
+- **One listing of sessions, in both surfaces.** The console showed ten columns and the command line
+  four, from two separate pieces of code, so a session's mode, its tokens in and out, its cache spend
   and how long ago it was touched were visible in one place and invisible in the other. Neither
-  printed a header, and reading `102` as a turn count when it is input tokens is what happens without
-  one. Both now render from `display.ThreadCells`, so the two cannot drift again, and the command
+  printed a header, and reading `102` as a task count when it is input tokens is what happens without
+  one. Both now render from `display.SessionCells`, so the two cannot drift again, and the command
   line prints a header with columns as wide as their widest value, since it has the whole terminal.
   A listing narrowed to where you are standing says so and how to widen it, because a narrowed
   listing and a smaller crew look identical. ([#244](https://github.com/atlantic-blue/quay-crew/issues/244))
@@ -697,7 +697,7 @@ read, or run with `make features`.
   there for good, and starting again meant going around the tool entirely, into Docker and the data
   directory, which is what wiping a live crew actually took today. Both calls already existed on the
   control plane and were reachable only by writing a throwaway program against the API. Deleting
-  names what goes with it, a workspace's projects, threads and secrets counted out, and asks for the
+  names what goes with it, a workspace's projects, sessions and secrets counted out, and asks for the
   name to be typed back before anything happens, which is the only guard a tool with no flags can
   offer. Piping the name in makes it scriptable without making it silent. Deleting where you are
   standing steps you back out, rather than leaving the tool pointing at something gone.
@@ -731,7 +731,7 @@ read, or run with `make features`.
   `workspace: no workspace with that id or name: project "nope"`, which blames the only part of the
   address that was correct and sends the operator to check their workspace. Now `quay use itv/nope`
   says `itv has no project "nope". it has: fe-player`, and the same shape covers a missing workspace
-  and a missing thread. A level with nothing in it says how to make one rather than listing nothing.
+  and a missing session. A level with nothing in it says how to make one rather than listing nothing.
   And where you are standing lives on this machine while the crew's state does not, so a wiped crew,
   a fresh install or a different crew left every defaulting command refusing with a sentence about a
   missing workspace: it now says `you are standing in ghost/gone, which this crew does not have`, and
@@ -739,31 +739,31 @@ read, or run with `make features`.
   ([#242](https://github.com/atlantic-blue/quay-crew/issues/242),
   [#251](https://github.com/atlantic-blue/quay-crew/issues/251))
 
-- **Asking for help is answered, and `thread` is a command.** The first thing anybody types was
+- **Asking for help is answered, and `session` is a command.** The first thing anybody types was
   refused four ways: `help` and `-h` came back as unknown commands, and `--help` and `--version` were
   told the tool takes no flags and to say where with an address instead, which is not what either was
   asking. Now `help`, `-h`, `--help`, `-help` and `?` all print the usage and succeed, `--version`
   names `quay version`, and a flag that really is somebody trying to say where they are still gets
-  the address advice. Separately the tool taught the word thread three times on the same screen and
-  then refused it as a command: `quay thread list` and `quay threads` now answer exactly as
+  the address advice. Separately the tool taught the word session three times on the same screen and
+  then refused it as a command: `quay session list` and `quay sessions` now answer exactly as
   `quay sessions` does. ([#240](https://github.com/atlantic-blue/quay-crew/issues/240),
   [#241](https://github.com/atlantic-blue/quay-crew/issues/241))
 
-- **`quay mode <thread> [<mode>]`, so a turn can be given room to work without a terminal.** A thread
-  is born in `edits`, and a dispatched turn has nobody at a keyboard, so every approval the model
+- **`quay mode <session> [<mode>]`, so a task can be given room to work without a terminal.** A session
+  is born in `edits`, and a dispatched task has nobody at a keyboard, so every approval the model
   asked for was denied by nobody and came back as a polite refusal. A session asked to clone a
   repository answered that it needed explicit approval for network access, with the token sitting
   right there in its environment. The mode could only be changed by pressing `D` in the full screen
-  console, so a turn from a script, a flow or the driver was stuck with what it was born in. Now it
+  console, so a task from a script, a flow or the driver was stuck with what it was born in. Now it
   reads the mode with one argument and sets it with two, taking the words the listing prints
   (`plan`, `edits`, `dangerous`) as well as the model's own spellings, and refusing anything else by
-  naming the three. It takes effect on the next turn with nothing restarted, because the mode travels
-  with the turn rather than with the container.
+  naming the three. It takes effect on the next task with nothing restarted, because the mode travels
+  with the task rather than with the container.
   ([#254](https://github.com/atlantic-blue/quay-crew/issues/254))
 
 - **A workspace's secrets reach that workspace's sandboxes.** Setting a secret is now the whole of
   the decision. There used to be a second list, `QC_SANDBOX_SECRETS` in `deploy/.env`, naming which
-  secrets were allowed to leave the store at all, and a name missing from it meant the turn was
+  secrets were allowed to leave the store at all, and a name missing from it meant the task was
   refused however carefully the operator had set the secret and attached the skill. Nothing in
   `quay secret list` said so, the refusal only arrived at dispatch, and the fix lived in a file
   inside a repository that somebody who installed the tool does not have. It is deleted rather than
@@ -787,7 +787,7 @@ read, or run with `make features`.
   you are already looking at the crew.
   ([#236](https://github.com/atlantic-blue/quay-crew/pull/236))
 - **The command bar is the one way in.** The commands that take over the screen used to be refused
-  there, which left it a reading tool: `:attach <thread>` now suspends the console, hands over the
+  there, which left it a reading tool: `:attach <session>` now suspends the console, hands over the
   real terminal, and comes back when you leave the conversation, the same handover pressing enter on
   a row already made. Everything that only prints is still captured into the output panel. The one
   thing refused is opening a console inside the console, because that is recursion rather than a
@@ -831,12 +831,12 @@ read, or run with `make features`.
 - **A flow run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a
   run in flight. Before this the only lever over a running automation was taking the crew down,
   which takes every other conversation with it. The stop is cooperative rather than a kill: a run
-  waiting on a turn finishes that turn, because the model is already working and abandoning it mid
+  waiting on a task finishes that task, because the model is already working and abandoning it mid
   sentence gains nothing, and what it cannot do is take another step. The database enforces that
   rather than the engine noticing, so a stop landing while the engine waits is never written back
   over. A run that already ended is not stopped again, because how it ended is the useful part.
   ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
-- **A flow run cannot spend without bound.** An automation dispatches turns with nobody watching, so
+- **A flow run cannot spend without bound.** An automation dispatches tasks with nobody watching, so
   a graph with a cycle was bounded only by its own shape. Every graph now has a transition cap,
   declared as `limits.transitions` or defaulted to 100, and may declare `limits.tokens` as a ceiling
   on what its own conversation costs. Both are checked before a movement rather than after it, so
@@ -850,26 +850,26 @@ read, or run with `make features`.
   `start [<address>] <graph>`, `list` and `show <run>` in front of those. Importing parses the
   graph on both sides, so a graph a run could fall off is refused at the moment somebody writes it
   rather than hours later inside a run. Starting answers with the run and drives it behind that
-  answer, because a turn takes as long as the model takes; `show` says where it got to and what it
+  answer, because a task takes as long as the model takes; `show` says where it got to and what it
   knows. The driver may start a run, because a run is dispatch and it already has that, and may not
   import a graph, because writing an automation down is the operator deciding what the crew may do
   on its own. ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
 - **The flow engine: a graph runs across sessions, every movement a row.** `internal/flow` is the
   automation substrate the review decided on: a graph of dispatches and choices authored as a file,
   imported at a version a run is pinned to, and a pure reducer a table test can hold. A run owns
-  its own thread, named after the graph and the run; a movement, its record and its dispatch claim
+  its own session, named after the graph and the run; a movement, its record and its dispatch claim
   land in one Postgres transaction (migration 0014), so a run is reconstructable by construction
-  and the same turn can never be sent, and paid for, twice: the claim is keyed by run, node and
-  attempt. A finished run archives its thread, because a finished run must not leave a container
+  and the same task can never be sent, and paid for, twice: the claim is keyed by run, node and
+  attempt. A finished run archives its session, because a finished run must not leave a container
   behind. Slice one ships dispatch, choice and done with the engine driven directly; wait, ask,
   ceilings, stop and the operator surface follow. Phase 3 of the architecture review, second
   slice. ([#182](https://github.com/atlantic-blue/quay-crew/issues/182))
-- **History is written in the same breath as the turn, and the broker became optional.** A turn
-  used to reach the `turns` table only by going out to Redpanda and back through a projection, so
-  every turn that ran while the broker was down or `QC_KAFKA_SEEDS` was unset was silently and
-  permanently absent from history. The dispatch path now writes the redacted turn to the store
+- **History is written in the same breath as the task, and the broker became optional.** A task
+  used to reach the `tasks` table only by going out to Redpanda and back through a projection, so
+  every task that ran while the broker was down or `QC_KAFKA_SEEDS` was unset was silently and
+  permanently absent from history. The dispatch path now writes the redacted task to the store
   synchronously, on a context detached from the request's, so a client hanging up after a long
-  turn cannot lose the record either. The projection is retired. Publishing to the log became an
+  task cannot lose the record either. The projection is retired. Publishing to the log became an
   audit export for a second consumer that does not exist yet: Redpanda moved behind the compose
   `export` profile, and a plain `make up` needs Postgres and Docker and nothing else. Phase 3 of
   the architecture review, first slice.
@@ -910,10 +910,10 @@ read, or run with `make features`.
   ([#214](https://github.com/atlantic-blue/quay-crew/issues/214))
 - **A crew that opens empty walks you through its own setup.** The console opening with no
   workspaces used to show an empty listing and nothing suggesting what to do next; getting to a
-  working thread took four passes of the wizard and prior knowledge of the order. It now offers a
+  working session took four passes of the wizard and prior knowledge of the order. It now offers a
   guided setup chaining the wizard's own stages in the order the crew needs them: a workspace, a
   project, the model token, context for the project (pasted, or a file path the crew reads), a
-  skill from what the store holds, and a first message that becomes the first thread. An empty
+  skill from what the store holds, and a first message that becomes the first session. An empty
   answer skips a stage, a skipped project takes the stages that need one with it, a crew holding
   no skills is never asked about them, and escape leaves the setup keeping whatever was already
   made. Once a workspace exists it is never offered. The wizard also learned `skill` as a kind of
@@ -929,42 +929,42 @@ read, or run with `make features`.
   sandbox image that answers git from GH_TOKEN at the moment it asks, proven against a real
   container. The git skill itself ships in `skills/git/`, the first real one: clone it yourself,
   branch first, stage named files, commit as the operator. The stated cost: each session clones its
-  own copy, so first turns on big repositories are slower and disk is spent per session.
+  own copy, so first tasks on big repositories are slower and disk is spent per session.
   ([#210](https://github.com/atlantic-blue/quay-crew/issues/210))
-- **A thread whose sandbox predates the workspace's skills says so, instead of being lied to.** A
+- **A session whose sandbox predates the workspace's skills says so, instead of being lied to.** A
   sandbox is born with its capabilities and never drifts: the mount, the secrets and the setup only
   happen at container creation. What each live sandbox was born holding is now recorded, and a
-  thread whose birth set differs from the workspace's current skills is marked stale, over the API
+  session whose birth set differs from the workspace's current skills is marked stale, over the API
   and beside its status in the console. Stopping and restarting it builds a sandbox born current,
   and the conversation is bind mounted so nothing is lost. Attach and detach say this out loud. A
-  stopped thread is never stale, because its next sandbox is born with the current set.
+  stopped session is never stale, because its next sandbox is born with the current set.
   ([#208](https://github.com/atlantic-blue/quay-crew/issues/208))
 - **One resolver answers what a session holds, and the listing asks it.** What a session holds used
   to be answered four separate times per sandbox creation, four store round trips that could
   disagree, and the only honest answer was exposed to nobody. One resolver now answers holdings,
   mounts and which skills need their files written out, in one round trip, and
-  `quay skill list <workspace>/<project>/<thread>` reports what that thread actually holds: the
+  `quay skill list <workspace>/<project>/<session>` reports what that session actually holds: the
   crew's own skills and the workspace's, the workspace winning a name collision, exactly what its
   sandbox is built from. ([#206](https://github.com/atlantic-blue/quay-crew/issues/206))
 - **A skill can no longer select secrets the operator did not hand out.** A held skill's declared
-  secret travels only when the operator also names it in QC_SANDBOX_SECRETS; a turn whose skill
+  secret travels only when the operator also names it in QC_SANDBOX_SECRETS; a task whose skill
   secret is set but not handed out is refused naming exactly what to add and where. A manifest
   naming a secret starting QC_ or CLAUDE_ is refused at validation on both roads in, because those
   names are the crew's own configuration and the model's token, and one stored by an earlier build
   is filtered at the sandbox boundary. Before this a manifest was an arbitrary secret selector over
   whatever the workspace held, bypassing the allowlist entirely.
   ([#204](https://github.com/atlantic-blue/quay-crew/issues/204))
-- **The protocol says thread, the way every surface already does.** `message Session` is now
-  `Thread`, the session RPCs are thread RPCs, and a dispatch returns the thread's `id` beside its
-  `handle` instead of a `session_id` beside a `thread_id`. The three identifiers a thread carries
+- **The protocol says session, the way every surface already does.** `message Session` is now
+  `Session`, the session RPCs are session RPCs, and a dispatch returns the session's `id` beside its
+  `handle` instead of a `session_id` beside a `handle`. The three identifiers a session carries
   each have one job: `id` is the crew's row and names the sandbox container, `handle` is what a
   channel dispatches to, and `model_session_id` stays in the model's own word because it is the
   model's conversation. The store keeps the word session internally. Done now because the
   repository is going public with `v1` in the package name, where the same rename becomes a
   breaking change. ([#202](https://github.com/atlantic-blue/quay-crew/issues/202))
-- **A secret pasted into a conversation is not persisted in the clear.** Every published turn
+- **A secret pasted into a conversation is not persisted in the clear.** Every published task
   payload, the prompt, the reply and the failure, goes through the crew's redactor before it
-  reaches the log, and therefore before the projection writes it to the `turns` table: every value
+  reaches the log, and therefore before the projection writes it to the `tasks` table: every value
   the workspace keeps sealed is replaced with the secret's name, the driver's token is caught for a
   driver session, and anything shaped like a subscription token is caught even when the crew never
   held the value. What the crew cannot recognise is stored as typed, and `docs/EVENTS.md` says so.
@@ -974,7 +974,7 @@ read, or run with `make features`.
   the calls that grant capability are refused to it: setting or listing secrets, importing,
   attaching or detaching skills, a session's permission mode, and context at the crew scope. The
   refusal says the call is the operator's to make. Everything the driver exists to do stays open:
-  workspaces, projects, threads, dispatch, and context at the workspace and project scopes. Before
+  workspaces, projects, sessions, dispatch, and context at the workspace and project scopes. Before
   this the driver held the operator's own token, so a session that could drive the crew could also
   widen itself. ([#198](https://github.com/atlantic-blue/quay-crew/issues/198))
 - **The crew refuses a caller it cannot recognise.** The control plane mints a token the first time
@@ -990,7 +990,7 @@ read, or run with `make features`.
   stopped calling the log the source of truth, which the code decided against long ago; the store is
   the truth and the log is the export. It also now records four decisions from the 9 August
   architectural review: automation runs live in Postgres with the log as export, what a session
-  holds is fixed when its sandbox is born, the operator facing word is thread and the protocol
+  holds is fixed when its sandbox is born, the operator facing word is session and the protocol
   aligns before going public, and authentication is a bearer token per crew with the listener on
   loopback by default. The skills document stopped reading as though its whole delivery had shipped:
   slices one to five are done, the git and github skills and everything after them are open.
@@ -998,16 +998,16 @@ read, or run with `make features`.
 - **Sandboxes stop leaking.** Four ways a container outlived what it belonged to, all closed.
   Deleting a workspace or a project now stops the sessions it hides and closes their sandboxes,
   where before every container kept running with the workspace's secrets in its environment.
-  Stopping or archiving a thread now removes its container even after a control plane restart,
+  Stopping or archiving a session now removes its container even after a control plane restart,
   because the close asks the daemon by name rather than a process map that a restart empties. A
   sandbox whose clone or skill setup fails is closed rather than left running and untracked, one
-  per attempt. And starting up reaps what earlier builds left behind: a container whose thread is
+  per attempt. And starting up reaps what earlier builds left behind: a container whose session is
   stopped, archived or gone belongs to nobody and is removed on the way up.
   ([#191](https://github.com/atlantic-blue/quay-crew/issues/191))
 - **A skills index left behind by an earlier build stops becoming session context.** A build before
   the index moved wrote it into the session's own memory file. Read back by a later build that only
   knew the mark in the outer file, the whole index was swept into session context, stored as though
-  the operator had typed it, and rendered again on every turn from then on. The mark is recognised
+  the operator had typed it, and rendered again on every task from then on. The mark is recognised
   in every file now, what sits under it is dropped rather than swept, and a level whose stored
   context already carries a swept index is cleaned the next time it renders. The read back also
   stops filing a note appended to the workspace memory file under the index's own mark, which was
@@ -1057,7 +1057,7 @@ read, or run with `make features`.
   obvious way fails. Everything else is gone rather than reworded.
 
 ## 8 August 2026
-- **A project names the repository its sessions work in, and the first turn clones it.** A session's
+- **A project names the repository its sessions work in, and the first task clones it.** A session's
   working directory started empty, so the skills work had built the way to describe git and there was
   nowhere to run it: `quay project create <name> --remote <url>`, or `quay project remote set <url>` on a
   project that already exists. The remote sits on the project rather than the workspace, because a body of
@@ -1066,8 +1066,8 @@ read, or run with `make features`.
   reads is written there before the container exists and git refuses to clone into somewhere that is not
   empty.
   Three things about the command, and each is the reason it is built rather than formatted. It clones only
-  when there is no checkout yet, because a sandbox is adopted across turns and a second clone either fails
-  or throws away what the first turn did. The remote is a positional argument and never part of the
+  when there is no checkout yet, because a sandbox is adopted across tasks and a second clone either fails
+  or throws away what the first task did. The remote is a positional argument and never part of the
   script, because it comes from a person and a remote inside a command can end that command and start
   another. The credential is read from `GH_TOKEN` in the environment by a helper at the moment git asks, so
   no token is ever in an argument list, which anything that can inspect the container could read.
@@ -1130,7 +1130,7 @@ read, or run with `make features`.
   to. A capability that silently does nothing is worse than one that is absent, because the model
   improvises around it and the improvisation reads as the answer.
   Read only, because a session that can rewrite its own instructions can give itself a capability
-  nobody approved. `bin/setup` runs once per container rather than once per turn. A brief is marked in
+  nobody approved. `bin/setup` runs once per container rather than once per task. A brief is marked in
   the memory file like every other section, so it is never read back into the crew's context and
   rendered beside itself from then on.
   First of the pull requests in issue #143's skills plan. Attaching a skill at a level rather than to
@@ -1160,7 +1160,7 @@ read, or run with `make features`.
   can read it, which is the point of giving it one, so the crew hands over what a session needs and
   not everything the workspace happens to hold. `QC_SANDBOX_SECRETS` is the list; the model's token is
   always carried and needs no naming; a name with nothing set against it is skipped rather than
-  refused, because a crew configured for a skill nobody has set up yet should still run its turns.
+  refused, because a crew configured for a skill nobody has set up yet should still run its tasks.
   First slice of [`docs/SKILLS.md`](docs/SKILLS.md). When skills exist they contribute the names, and
   this is the path they will use.
 
@@ -1169,35 +1169,35 @@ read, or run with `make features`.
 - **What the crew has cost is in the header.** Beside the build, so it is in front of you while you
   work rather than only when you go and look at a listing: what came back, what was sent, what was
   read from the cache. Its own call rather than part of `GetInfo`, because that one answers what a
-  turn dispatched here would do and is fetched once, and this changes with every turn. The console
+  task dispatched here would do and is fetched once, and this changes with every task. The console
   refreshes it with the rows now instead of at startup, since a total from when the console opened
   looks live and is not.
   It gives way before the wordmark, deliberately: the number is also in the listing, and the wordmark
-  is what makes the panel look like something. Archived threads are counted, because what a piece of
-  work came to does not stop being true when the thread is put away, and a total that shrinks when
+  is what makes the panel look like something. Archived sessions are counted, because what a piece of
+  work came to does not stop being true when the session is put away, and a total that shrinks when
   somebody tidies up is worse than no total.
 
 ## 8 August 2026
 
-- **What a thread has cost is in the listing.** Three columns, `in`, `out` and `cache`, read from the
-  transcript the model keeps, in numbers a person can compare at a glance: 52, 6.9k, 1.7M. A thread
+- **What a session has cost is in the listing.** Three columns, `in`, `out` and `cache`, read from the
+  transcript the model keeps, in numbers a person can compare at a glance: 52, 6.9k, 1.7M. A session
   that has spent nothing shows nothing, because a conversation nobody has had has not cost zero.
 - **A column can give way when the window is too narrow to hold them all.** A line too long was cut at
   whatever happened to be at the end rather than at whatever mattered least, which in a panel is most
   of the time, since the console has half the window. A resource now says which columns may go and in
-  what order: the cache first, then what came back, then what was sent, and never a thread's
+  what order: the cache first, then what came back, then what was sent, and never a session's
   identifier, status or age.
 
 ## 8 August 2026
 
-- **A thread reports what its conversation has cost.** Four numbers, read from the transcript the
+- **A session reports what its conversation has cost.** Four numbers, read from the transcript the
   model keeps: what was sent, what came back, what was read from the cache and what was written to it.
   It has to come from there, because the conversations worth counting are the ones held in the panel
   and those never pass through the control plane at all.
   Four rather than two, because two would be a lie by omission. On a real conversation the input was
   52 tokens and the cache read was 1,723,404: almost everything sent is the context being read again
-  every turn, so inbound and outbound alone would show the 52 and hide the rest.
-  A thread nobody has spoken in reports nothing rather than a cost of nothing, a torn last line is
+  every task, so inbound and outbound alone would show the 52 and hide the rest.
+  A session nobody has spoken in reports nothing rather than a cost of nothing, a torn last line is
   skipped rather than failing the whole file, since the tool appends as it goes, and each transcript
   is counted once until it changes, so a console refreshing every few seconds does not reparse every
   conversation in the crew.
@@ -1208,12 +1208,12 @@ read, or run with `make features`.
   inside a sandbox picked its own identifier and told nobody, so every conversation opened from the
   panel was one the crew could not name: no history to read back, nothing to attribute a cost to, and
   no way to tell one transcript in a workspace from another. One machine held eleven transcripts for
-  two threads it knew about. The control plane now chooses the identifier when a conversation is
-  opened, records it on the thread, and hands it down, so what the crew holds and what the model
+  two sessions it knew about. The control plane now chooses the identifier when a conversation is
+  opened, records it on the session, and hands it down, so what the crew holds and what the model
   writes are the same name.
   The sandbox decides how to open it, because it is the only place that can see whether the transcript
   is there: it resumes one that exists and starts one under the given name when it does not. That
-  replaces a refusal. A thread whose conversation had been lost with its container used to be turned
+  replaces a refusal. A session whose conversation had been lost with its container used to be turned
   away, and could not be told apart from a conversation the crew had just named and nobody had spoken
   in yet. Both now open, which is what the operator wanted in either case.
 
@@ -1223,7 +1223,7 @@ read, or run with `make features`.
   working directory over the same image, so shelling into two of them gave two screens that were
   identical in every visible respect: same prompt, same empty listing. It read as `s` opening the same
   shell whichever session you chose. It was always the right container, and nothing on the screen said
-  so. The prompt now carries the thread and its project, on every line.
+  so. The prompt now carries the session and its project, on every line.
 
 ## 8 August 2026
 
@@ -1270,7 +1270,7 @@ read, or run with `make features`.
   printed `dial tcp [::1]:50051: connect: connection refused` while the control plane was up the whole
   time. That reads as the crew being down and it is not: this session was not given the two pieces of
   configuration that let it reach the crew, and neither can be set from in there. It now says which
-  ones, and that a sandbox keeps the configuration it was made with, so the thread has to be started
+  ones, and that a sandbox keeps the configuration it was made with, so the session has to be started
   again. Only inside a container, only when nothing was given, only on a refusal to connect: on the
   operator's own machine localhost is where their stack runs and the dial error is the right answer.
   ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
@@ -1294,10 +1294,10 @@ read, or run with `make features`.
   about it. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **The driver is made able to act rather than to ask.** It was created in the same mode as any other
-  thread, so the one session whose whole job is to drive the crew stopped and asked before every step:
+  session, so the one session whose whole job is to drive the crew stopped and asked before every step:
   asked to make a project, it described how you would go about making one. It is created able to act
   now. What bounds it is the sandbox, which is the same boundary it had in either mode, and `D` in the
-  console still sets it back to asking like any other thread. A driver made before this keeps the mode
+  console still sets it back to asking like any other session. A driver made before this keeps the mode
   it has; `D` moves it.
   The rule went into the store conformance suite rather than into one of the two stores, because the
   driver is created separately in each and only one of them said which mode it starts in.
@@ -1315,13 +1315,13 @@ read, or run with `make features`.
   calling a good image old. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **A context change reaches a session that is already running.** Context only travelled to a sandbox
-  when that sandbox was made, so telling a running thread something did nothing you could see until it
+  when that sandbox was made, so telling a running session something did nothing you could see until it
   was replaced, and nobody replaces a container to deliver a note. `quay context set` writes out to
   every live session that reads the level it changed. The level just set wins over the file for that
   one write, because a set that hands you back the body you were replacing is not a set; every other
   level is still read back and kept.
   A model already running does not see it mid conversation. The command line tool reads its memory
-  when a conversation starts, so it lands on the next turn or the next time the conversation is
+  when a conversation starts, so it lands on the next task or the next time the conversation is
   opened. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **A memory file the crew never wrote no longer replaces what the store holds.** A `CLAUDE.md` with
@@ -1370,7 +1370,7 @@ read, or run with `make features`.
   That last part is what makes it the glue: without host paths it can reach the crew and has nothing
   to bring to it. Hand it your hub read only and it can load a ticket folder as a project's context.
   Opening a driver that has never spoken starts a conversation rather than refusing, because it is
-  made the moment you open the crew and telling you to dispatch a turn to the thing you just opened is
+  made the moment you open the crew and telling you to dispatch a task to the thing you just opened is
   a loop. ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **The logo is the logo again.** It had been replaced with the name written out in text, which is not
@@ -1465,7 +1465,7 @@ read, or run with `make features`.
   ([#143](https://github.com/atlantic-blue/quay-crew/issues/143))
 
 - **`quay panel`: the console and a conversation, side by side, half the width each.** The console
-  shows the crew and a conversation shows one thread, and using both meant losing sight of one. tmux
+  shows the crew and a conversation shows one session, and using both meant losing sight of one. tmux
   does the splitting, the same tmux that already keeps an open conversation alive behind `ctrl-q`.
   Named a session it opens that one; named nothing it opens the conversation you were last in, and
   refuses rather than opening half a panel when there is none.
@@ -1473,15 +1473,15 @@ read, or run with `make features`.
 
 ## 6 August 2026
 
-- **A failed turn says why.** Every model failure read `run turn: model: run exited: exit status 1`,
+- **A failed task says why.** Every model failure read `run task: model: run exited: exit status 1`,
   which is the same sentence for an expired token, a network failure, a missing model in the sandbox
   image and the model refusing outright. It now carries the reason: the model's own words where it got
   far enough to say anything, and what came back from the sandbox where it did not. A rejected token
   now reads `Failed to authenticate. API Error: 401 OAuth access token is invalid. (status 401)`, and
   a sandbox with no model in it names the binary it could not find.
   ([#51](https://github.com/atlantic-blue/quay-crew/issues/51))
-- **Nothing a failed turn says can carry the subscription token.** A turn runs with the token in its
-  environment, so every place a failure can quote is a place it turns up. Values passed in this turn's
+- **Nothing a failed task says can carry the subscription token.** A task runs with the token in its
+  environment, so every place a failure can quote is a place it turns up. Values passed in this task's
   environment are matched exactly, and the published token shape is matched as well for one this
   process never held.
 
@@ -1510,7 +1510,7 @@ read, or run with `make features`.
   runs through a wrapper that keeps its terminal alive: pressing ctrl-d twice used to end the tmux
   session and everything the model was in the middle of, and now it says the conversation is closed and
   waits, with enter to open it again. The status line says how to leave, because it was off and there
-  was nothing on screen telling anybody. ctrl-q works because the wrapper turns off flow control first,
+  was nothing on screen telling anybody. ctrl-q works because the wrapper tasks off flow control first,
   which is the only reason that key can be a key.
   ([#137](https://github.com/atlantic-blue/quay-crew/pull/137))
 
@@ -1520,24 +1520,24 @@ read, or run with `make features`.
   the workspace and the secret and saying `set, and not shown anywhere` where a value would be. There is
   no call that returns a value and no field for one, so this cannot leak by mistake rather than by
   policy. ([#136](https://github.com/atlantic-blue/quay-crew/pull/136))
-- **The console shows a session's history.** `l` on a session opens a `turns` view of what it was
+- **The console shows a session's history.** `l` on a session opens a `tasks` view of what it was
   asked and what came back, read from the projection, so it answers without starting a container and
-  keeps answering long after the sandbox is gone. A failed turn shows why it failed where the reply
+  keeps answering long after the sandbox is gone. A failed task shows why it failed where the reply
   would be. Enter still opens the conversation: that is the thing an operator does most on that row,
   so it keeps the cheapest key, and there is a scenario that fails if anything bound to enter starts
   descending instead. ([#134](https://github.com/atlantic-blue/quay-crew/issues/134))
 - **The subscription token survives a restart.** Secrets were held in memory, so every `make up` lost
-  the token and the next turn failed saying nothing useful. They are kept in Postgres now, sealed with
+  the token and the next task failed saying nothing useful. They are kept in Postgres now, sealed with
   a key made once and kept on the host at `~/.quaycrew/data/secrets.key`, so holding the database is
   not enough to read one. The status block says `Secrets: postgres, sealed`, and says it in red when
   they are still in memory. ([#133](https://github.com/atlantic-blue/quay-crew/pull/133))
-- **A session's history can be read back.** Turns went onto the event log and nothing read them, so a
-  conversation was write only from the outside. A projection now consumes every workspace's turn
+- **A session's history can be read back.** Tasks went onto the event log and nothing read them, so a
+  conversation was write only from the outside. A projection now consumes every workspace's task
   stream, by pattern rather than by a list fixed at startup so a workspace created while the crew is
-  running is read too, and materialises it into a `turns` table. `quay turns <session>` prints what a
+  running is read too, and materialises it into a `tasks` table. `quay tasks <session>` prints what a
   session was asked and what came back, in the order it happened, without starting a container and
   long after the sandbox is gone. Delivery from a log is at least once, so each event carries an id
-  and writing the same one twice leaves one turn: there is a conformance test for that against both
+  and writing the same one twice leaves one task: there is a conformance test for that against both
   stores, and an integration test that runs it against a real broker.
   ([#130](https://github.com/atlantic-blue/quay-crew/issues/130))
 - **Every level of context is visible and settable, from both surfaces.** The crew's own level is in
@@ -1546,13 +1546,13 @@ read, or run with `make features`.
   level is rendered into every session that reads it and there is no single file to open. That is the
   path for moving what you already have into the crew.
   ([#131](https://github.com/atlantic-blue/quay-crew/pull/131))
-- **Every turn is written to the event log.** The broker had run in the stack for weeks holding zero
+- **Every task is written to the event log.** The broker had run in the stack for weeks holding zero
   topics, because the boundary was built and nothing on either end of it was. The control plane now
-  publishes a turn to `<workspace>.turns` whenever one runs, keyed by session so a conversation stays
+  publishes a task to `<workspace>.tasks` whenever one runs, keyed by session so a conversation stays
   in order, carrying the prompt, the reply, the status and where the session sits, so a consumer never
-  has to query the store to know what it is reading. A turn that failed is published too, because that
-  is the one somebody comes looking for. Publishing never fails a turn: the turn already happened, and
-  a broker that is unreachable is logged and dropped. A stack with no `QC_KAFKA_SEEDS` runs turns and
+  has to query the store to know what it is reading. A task that failed is published too, because that
+  is the one somebody comes looking for. Publishing never fails a task: the task already happened, and
+  a broker that is unreachable is logged and dropped. A stack with no `QC_KAFKA_SEEDS` runs tasks and
   says out loud that nothing records them. The topic is created on first use, which an integration
   test against a real Redpanda caught: the very first record to a new workspace was being rejected and
   quietly dropped. ([#128](https://github.com/atlantic-blue/quay-crew/issues/128))
@@ -1571,7 +1571,7 @@ read, or run with `make features`.
   ([#126](https://github.com/atlantic-blue/quay-crew/issues/126))
 - **The database doc covers the `contexts` table, and says session throughout.** It was written hours
   before context moved into the store and before the console went back to the word the database uses,
-  so it described five tables and called a session a thread. Six tables now, with what `scope` and
+  so it described five tables and called a session a session. Six tables now, with what `scope` and
   `owner` mean and why that table has no foreign key, plus a query for what the model has been told.
   ([#123](https://github.com/atlantic-blue/quay-crew/issues/123))
 - **Observability is documented, including the part that does not work.**
@@ -1582,18 +1582,18 @@ read, or run with `make features`.
   start, and that Grafana has no data sources provisioned. What to read when something is wrong, and
   the order the three open issues have to land in.
   ([#121](https://github.com/atlantic-blue/quay-crew/issues/121))
-- **The console says sessions again.** It was threads for a day. The database and the API both say
-  session, and one name across the whole system beats a console that translates. `threads`, `thread`
-  and `t` still open the view, the way `sessions` did while it was called threads.
+- **The console says sessions again.** It was sessions for a day. The database and the API both say
+  session, and one name across the whole system beats a console that translates. `sessions`, `session`
+  and `t` still open the view, the way `sessions` did while it was called sessions.
   ([#120](https://github.com/atlantic-blue/quay-crew/pull/120))
 - **Context lives in the database, and the file in a sandbox is a rendering of it.** It was only ever
   files on one machine, which works nowhere else: a pod has no host directory to bind mount and an API
   cannot edit a file on somebody's laptop. Setting it writes the file too, so a running sandbox picks it
-  up on its next turn, and **what an agent writes into its own memory is read back into the store**
+  up on its next task, and **what an agent writes into its own memory is read back into the store**
   rather than overwritten, because an agent that cannot write down what it learned is the problem this
   project exists to solve. ([#119](https://github.com/atlantic-blue/quay-crew/pull/119))
 - **The database and the event log are documented.** [`docs/DATABASE.md`](docs/DATABASE.md) covers why
-  a thread survives a restart at all, how to shell in with psql, what every table and column means, the
+  a session survives a restart at all, how to shell in with psql, what every table and column means, the
   queries worth knowing, and why reading from the prompt is safe while writing from it is not.
   [`docs/EVENTS.md`](docs/EVENTS.md) covers what the log is for, how to inspect Redpanda with `rpk`,
   how topics are named, and the state it is actually in: the boundary and its client exist, nothing
@@ -1622,72 +1622,72 @@ read, or run with `make features`.
   on your machine, where it appears inside a sandbox, and whether `CLAUDE.md` has been written yet. The
   mounts have existed for a while and nothing said where they were, so the feature worked and nobody
   could find it. ([#111](https://github.com/atlantic-blue/quay-crew/pull/111))
-- **You can leave an open thread without ending it.** Opening a conversation handed the terminal to
+- **You can leave an open session without ending it.** Opening a conversation handed the terminal to
   `claude --resume` and the only way back to the list was to end it. It now runs inside tmux in the
-  thread's own sandbox, so `ctrl-b d` leaves the model running and returns you to the console, and
-  opening the thread again lands in the same live conversation. The sandbox image carries tmux, with
+  session's own sandbox, so `ctrl-b d` leaves the model running and returns you to the console, and
+  opening the session again lands in the same live conversation. The sandbox image carries tmux, with
   `ctrl-o` as its prefix so it still works when you opened the console from inside your own tmux, and
   `ctrl-b` as a second prefix for when nothing is nested.
   ([#109](https://github.com/atlantic-blue/quay-crew/pull/109))
 - **The key list stops silently dropping keys.** It folded into two columns and then cut whatever did
   not fit, so adding a binding pushed the last one off the bottom with nothing to say so. It folds into
   as many columns as it takes.
-- **Opening a thread runs in the mode that thread is set to.** The attached session carried no mode at
-  all, so a thread armed to skip permissions stopped and asked the moment you opened it, which reads as
+- **Opening a session runs in the mode that session is set to.** The attached session carried no mode at
+  all, so a session armed to skip permissions stopped and asked the moment you opened it, which reads as
   the toggle not working. ([#107](https://github.com/atlantic-blue/quay-crew/pull/107))
 - **The daemon is the source of truth about containers, not a map in the control plane.** It remembered
   every sandbox it had made and trusted that memory forever, so anything that removed a container
   behind its back left a handle pointing at nothing and handed the operator a name Docker had never
-  heard of: `No such container: quaycrew-1edc8349315233e36bf4fd53`, over and over. Every turn and every
+  heard of: `No such container: quaycrew-1edc8349315233e36bf4fd53`, over and over. Every task and every
   attach now asks the provider, which adopts the container already carrying that name or makes one.
   ([#106](https://github.com/atlantic-blue/quay-crew/pull/106))
-- **A thread's permission mode, shown and toggled.** Every turn ran `acceptEdits`, hardcoded, and no
-  operator could see it or change it. The mode now belongs to the thread and survives a restart, the
+- **A session's permission mode, shown and toggled.** Every task ran `acceptEdits`, hardcoded, and no
+  operator could see it or change it. The mode now belongs to the session and survives a restart, the
   listing has a `MODE` column reading `edits`, `plan` or `dangerous`, and `D` in the console flips the
-  selected thread between asking and skipping every permission, through the same confirmation as the
-  other keys that change what a thread is. A mode the model does not understand is refused rather than
-  handed to it, and `bypassPermissions` is refused outright when turns run on the host instead of in a
+  selected session between asking and skipping every permission, through the same confirmation as the
+  other keys that change what a session is. A mode the model does not understand is refused rather than
+  handed to it, and `bypassPermissions` is refused outright when tasks run on the host instead of in a
   container. ([#105](https://github.com/atlantic-blue/quay-crew/pull/105))
 
 ## 3 August 2026
 
-- **The refusals are in the operator's words, and name the thread on their screen.** "Its conversation
+- **The refusals are in the operator's words, and name the session on their screen.** "Its conversation
   is gone, it predates state on the host" is a sentence only somebody who worked on this understands,
   and it named a twenty four character identifier that appears nowhere in the list. Attach now says
-  what happened and what to do, about `thread 34e1a6c7` rather than `session 134c2c6dbf1e907413753cc5`.
+  what happened and what to do, about `session 34e1a6c7` rather than `session 134c2c6dbf1e907413753cc5`.
   ([#103](https://github.com/atlantic-blue/quay-crew/pull/103))
-- **A thread whose conversation is gone says so.** A session's handle points into a store the crew does
+- **A session whose conversation is gone says so.** A session's handle points into a store the crew does
   not own, so it can outlive what it points at: every conversation from a sandbox built before state
   was kept on the host died with that container while the row kept the handle. Resuming one printed
   `No conversation found` inside the container and exited, which from the console looked like nothing
-  happening. Attaching now checks the workspace's store first and says to dispatch a turn instead.
+  happening. Attaching now checks the workspace's store first and says to dispatch a task instead.
   ([#102](https://github.com/atlantic-blue/quay-crew/pull/102))
-- **Opening an idle thread works again.** Attaching answered from the database row alone, so after the
+- **Opening an idle session works again.** Attaching answered from the database row alone, so after the
   control plane restarted it handed back a container name the daemon had never heard of:
-  `No such container: quaycrew-134c2c6d...`. Attaching now starts the thread's sandbox when there is
+  `No such container: quaycrew-134c2c6d...`. Attaching now starts the session's sandbox when there is
   not one, and creating a sandbox adopts the container already carrying that name instead of colliding
   with it. ([#101](https://github.com/atlantic-blue/quay-crew/pull/101))
-- **`r` refreshes the view.** It restarted a thread for one afternoon. Refreshing is the key you reach
+- **`r` refreshes the view.** It restarted a session for one afternoon. Refreshing is the key you reach
   for constantly, so it holds the short obvious letter; restart moved to `R`, beside `A` for archive,
   and `g` still refreshes too. ([#99](https://github.com/atlantic-blue/quay-crew/pull/99))
-- **A thread can be put away, and brought back.** `A` archives one through the same confirmation, and an
-  `archived` view lists what was put away with `u` to restore it. Archiving stops the thread, closes its
+- **A session can be put away, and brought back.** `A` archives one through the same confirmation, and an
+  `archived` view lists what was put away with `u` to restore it. Archiving stops the session, closes its
   sandbox and hides it from the default listing. Nothing is deleted: the row, the conversation and the
   project files all stay. ([#97](https://github.com/atlantic-blue/quay-crew/pull/97))
-- **A stopped thread can be restarted, with its container.** `r` in the console, `RestartSession` on the
+- **A stopped session can be restarted, with its container.** `r` in the console, `RestartSession` on the
   control plane: back to idle with the sandbox already running, so you can attach into the conversation
-  instead of dispatching a turn to make the container exist. Only safe because a session's state lives
+  instead of dispatching a task to make the container exist. Only safe because a session's state lives
   on the host. ([#96](https://github.com/atlantic-blue/quay-crew/pull/96))
-- **A destructive key asks first, and backspace stops a thread.** `stop thread d754610f?`, drawn where
+- **A destructive key asks first, and backspace stops a session.** `stop session d754610f?`, drawn where
   the command bar draws. Yes acts, and every other key cancels, because an accidental cancel costs one
   keypress and an accidental yes costs a conversation. `x` still stops, through the same question.
   ([#95](https://github.com/atlantic-blue/quay-crew/pull/95))
-- **Enter opens a thread's conversation.** A thread has nothing to drill into, so enter did nothing
+- **Enter opens a session's conversation.** A session has nothing to drill into, so enter did nothing
   at all on the one view where the obvious key has an obvious meaning. `a` still works, and the
   question mark now lists every key an action answers to.
   ([#93](https://github.com/atlantic-blue/quay-crew/pull/93))
-- **The console calls them threads.** The view, its panel title and the breadcrumb say threads, because
-  a row in that list is one conversation. The control plane still calls the running thread a session,
+- **The console calls them sessions.** The view, its panel title and the breadcrumb say sessions, because
+  a row in that list is one conversation. The control plane still calls the running session a session,
   which is a real distinction inside it and means nothing to somebody reading a list of fourteen rows.
   `sessions`, `session`, `sess` and `s` all still open the view.
   ([#90](https://github.com/atlantic-blue/quay-crew/pull/90))
@@ -1704,7 +1704,7 @@ read, or run with `make features`.
 - **`make upgrade` brings the stack back the way you configured it**, and clears the sandboxes from
   before the upgrade. Two bugs: it restarted compose with the defaults, so a stack started with
   `QC_MODEL=claude-code` came back running `echo`, and it left every old sandbox running, which blocks
-  those threads from ever starting again because the control plane has forgotten them and their names
+  those sessions from ever starting again because the control plane has forgotten them and their names
   are taken. Configuration now lives in `deploy/.env`, which compose reads on every command.
   ([#86](https://github.com/atlantic-blue/quay-crew/pull/86))
 - **The console says when the control plane is older than the tool**, rather than quietly showing four
@@ -1723,8 +1723,8 @@ read, or run with `make features`.
   rebuilding the stack from something else.
   ([#80](https://github.com/atlantic-blue/quay-crew/pull/80))
 - **The console header reads like k9s**: the status block says which build, which control plane, where
-  you are standing, and what a turn would run in; this view's own commands sit beside it as
-  `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `THREAD↑`;
+  you are standing, and what a task would run in; this view's own commands sit beside it as
+  `<a> Attach`; `?` lists every key; the panel title is centred; the sorted column is marked `SESSION↑`;
   and the wordmark sits on the right when there is room for it.
   ([#77](https://github.com/atlantic-blue/quay-crew/pull/77))
 - **`quay version`**, and every build stamped with the commit it came from, marked dirty when the
@@ -1739,7 +1739,7 @@ read, or run with `make features`.
   count, `sessions(house-bills)[3]`, ordered by a column marked with an arrow, and the breadcrumb at
   the bottom reads `me > house-bills > sessions` so it is clear what escape goes back to.
   ([#72](https://github.com/atlantic-blue/quay-crew/pull/72))
-- **The control plane says what it is running**: the model backend a turn runs against, what a session
+- **The control plane says what it is running**: the model backend a task runs against, what a session
   is isolated in, where workspaces and sessions are kept, and whether a conversation outlives its
   container. Two stacks look identical from a list of sessions and behave nothing alike.
   ([#71](https://github.com/atlantic-blue/quay-crew/pull/71))
@@ -1754,32 +1754,32 @@ read, or run with `make features`.
   them. ([#66](https://github.com/atlantic-blue/quay-crew/pull/66))
 - **The crew is addressed by path, from a current context.** `quay use me/house-bills` and then
   `quay dispatch "..."`, with the place kept in `~/.config/quay/context`. Creating something moves you
-  into it. An address typed on a command applies to that command only, and a thread is the third level,
-  so standing in one continues that conversation. Replaces `--workspace`, `--project` and `--thread`.
+  into it. An address typed on a command applies to that command only, and a session is the third level,
+  so standing in one continues that conversation. Replaces `--workspace`, `--project` and `--session`.
   ([#69](https://github.com/atlantic-blue/quay-crew/pull/69))
 - **Names have to be addressable.** A workspace or project name is lowercase letters, digits and
   hyphens, refused otherwise with a suggestion that would work. A name is half of an address, so it has
   to survive being typed without quoting. ([#68](https://github.com/atlantic-blue/quay-crew/pull/68))
-- **Attach to a thread's conversation, not just a shell in its sandbox.** `quay attach <session>`, or
+- **Attach to a session's conversation, not just a shell in its sandbox.** `quay attach <session>`, or
   `a` in the console, runs the model's own resume inside that session's container, so you land in the
   conversation with its history. Shelling in shows you the room; this shows you the conversation.
   ([#61](https://github.com/atlantic-blue/quay-crew/pull/61))
 - **The sandbox carries the workspace's environment from the moment it is created**, so attaching needs
   no credential from your shell and no tool has to carry a token around.
   ([#62](https://github.com/atlantic-blue/quay-crew/pull/62))
-- **Projects, between a workspace and its threads.** A workspace is who you are, a project is a body of
-  work, a thread is one conversation. A thread identifier is unique inside its project, which is the
+- **Projects, between a workspace and its sessions.** A workspace is who you are, a project is a body of
+  work, a session is one conversation. A session identifier is unique inside its project, which is the
   reason the level exists. ([#59](https://github.com/atlantic-blue/quay-crew/pull/59))
 - **`project` renamed to `workspace`** throughout, because the level that already existed was the
   tenancy one, and the word for a body of work inside it was needed.
   ([#58](https://github.com/atlantic-blue/quay-crew/pull/58))
-- **Names and short identifiers everywhere a listing prints.** `5d013d07  me/house-bills  thread
+- **Names and short identifiers everywhere a listing prints.** `5d013d07  me/house-bills  session
   d754610f  idle` rather than three lines of hexadecimal.
   ([#53](https://github.com/atlantic-blue/quay-crew/pull/53))
 - **A project can be addressed by its name**, not only by the identifier printed once at creation. An
   id still wins, and an ambiguous name is refused with the candidates rather than guessed.
   ([#50](https://github.com/atlantic-blue/quay-crew/pull/50))
-- **Attaching says why it cannot proceed** when a session has never had a turn, or has been stopped,
+- **Attaching says why it cannot proceed** when a session has never had a task, or has been stopped,
   instead of opening something that immediately errors.
   ([#63](https://github.com/atlantic-blue/quay-crew/pull/63))
 - **The sandbox image ships past the model's first run.** Onboarding and the trust prompt are already
@@ -1793,7 +1793,7 @@ read, or run with `make features`.
   stop it. Adding a view is declaring a resource, which is the deliverable rather than the two views it
   ships with. ([#48](https://github.com/atlantic-blue/quay-crew/pull/48))
 - **Workspaces and sessions survive a restart**, in Postgres, behind one store interface with an in
-  memory implementation held to the same conformance suite. A failed turn never erases the conversation
+  memory implementation held to the same conformance suite. A failed task never erases the conversation
   handle, because that handle is the only pointer to a conversation the model keeps on its own disk.
   ([#44](https://github.com/atlantic-blue/quay-crew/pull/44))
 - **Behaviour specifications.** [`features/`](features/) states what the product does, driven against
@@ -1807,12 +1807,12 @@ read, or run with `make features`.
 
 ## 11 July 2026
 
-- **Real Claude turns, on your subscription, inside the sandbox.** The image carries the Claude Code
+- **Real Claude tasks, on your subscription, inside the sandbox.** The image carries the Claude Code
   command line tool and no credentials; the token is a workspace secret, injected into the session's
   sandbox. No API cost. ([#38](https://github.com/atlantic-blue/quay-crew/pull/38))
-- **A turn runs in a Docker sandbox**, one long lived container per session, proved by continuous
-  integration dispatching a real turn against the composed stack. Asserting the services were merely
-  running had let a stack ship that could not execute a single turn.
+- **A task runs in a Docker sandbox**, one long lived container per session, proved by continuous
+  integration dispatching a real task against the composed stack. Asserting the services were merely
+  running had let a stack ship that could not execute a single task.
   ([#37](https://github.com/atlantic-blue/quay-crew/pull/37))
 
 ## 8 to 10 July 2026

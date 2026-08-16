@@ -106,11 +106,11 @@ services:
       # reason the command line tool itself is pinned: an alias moves on its own and nothing records
       # that it did.
       QC_CLAUDE_MODEL: ${QC_CLAUDE_MODEL:-claude-opus-5}
-      # What a thread's turns may do when it is born: plan, edits or dangerous. Unset keeps edits,
-      # which is what every thread had before this was configurable.
+      # What a session's tasks may do when it is born: plan, edits or dangerous. Unset keeps edits,
+      # which is what every session had before this was configurable.
       QC_PERMISSION_MODE: ${QC_PERMISSION_MODE:-}
-      # How many turns past its description a conversation goes before the crew writes it again.
-      # "off" turns it off, which a crew paying for automation runs wants.
+      # How many tasks past its description a conversation goes before the crew writes it again.
+      # "off" tasks it off, which a crew paying for automation runs wants.
       QC_DESCRIBE_EVERY: ${QC_DESCRIBE_EVERY:-}
       # A workspace's conversation store and a project's files live here, on the host, rather than
       # inside the sandbox container, so replacing a container does not destroy the conversation the
@@ -119,9 +119,9 @@ services:
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
       QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quay/data}
-      # The audit export. History is written to Postgres in the same breath as each turn either
-      # way; set this (redpanda:9092 with the export profile up) and every turn is also exported to
-      # <workspace>.turns for a second consumer. Unset, nothing is exported and nothing is lost.
+      # The audit export. History is written to Postgres in the same breath as each task either
+      # way; set this (redpanda:9092 with the export profile up) and every task is also exported to
+      # <workspace>.tasks for a second consumer. Unset, nothing is exported and nothing is lost.
       QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS:-}
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent

@@ -14,7 +14,7 @@ import (
 // What a conversation cost, which the crew reads from the transcript the model keeps rather than from
 // anything it recorded itself.
 type usageWorld struct {
-	listed []*quaycrewv1.Thread
+	listed []*quaycrewv1.Session
 }
 
 type usageKey struct{}
@@ -34,35 +34,35 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the model has written (\d+) in, (\d+) out and (\d+) read from cache$`,
 		func(ctx context.Context, in, out, cached int) error {
 			world := worldFrom(ctx)
-			current, err := world.lastTurn()
+			current, err := world.lastTask()
 			if err != nil {
 				return err
 			}
-			session, err := world.client.GetThread(ctx, &quaycrewv1.GetThreadRequest{Id: current.sessionID})
+			session, err := world.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
 			if err != nil {
 				return err
 			}
-			return writeTranscript(world.storage.Dir, session.GetThread().GetWorkspace(),
-				session.GetThread().GetModelSessionId(), in, out, cached)
+			return writeTranscript(world.storage.Dir, session.GetSession().GetWorkspace(),
+				session.GetSession().GetModelSessionId(), in, out, cached)
 		})
 
 	sc.Step(`^the operator lists the sessions$`, func(ctx context.Context) error {
 		world, u := worldFrom(ctx), usageFrom(ctx)
-		listed, err := world.client.ListThreads(ctx, &quaycrewv1.ListThreadsRequest{})
+		listed, err := world.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
-		u.listed = listed.GetThreads()
+		u.listed = listed.GetSessions()
 		return nil
 	})
 
-	sc.Step(`^the thread reports (\d+) tokens in and (\d+) out$`, func(ctx context.Context, in, out int) error {
+	sc.Step(`^the session reports (\d+) tokens in and (\d+) out$`, func(ctx context.Context, in, out int) error {
 		spent, err := onlySpender(ctx)
 		if err != nil {
 			return err
 		}
 		if spent.GetInput() != int64(in) || spent.GetOutput() != int64(out) {
-			return fmt.Errorf("the thread reports %d in and %d out, want %d and %d",
+			return fmt.Errorf("the session reports %d in and %d out, want %d and %d",
 				spent.GetInput(), spent.GetOutput(), in, out)
 		}
 		return nil
@@ -70,13 +70,13 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 
 	// The number that would be missing from a report of inbound and outbound alone, and the largest of
 	// them by three orders of magnitude on any conversation with context behind it.
-	sc.Step(`^the thread reports (\d+) read from the cache$`, func(ctx context.Context, cached int) error {
+	sc.Step(`^the session reports (\d+) read from the cache$`, func(ctx context.Context, cached int) error {
 		spent, err := onlySpender(ctx)
 		if err != nil {
 			return err
 		}
 		if spent.GetCacheRead() != int64(cached) {
-			return fmt.Errorf("the thread reports %d read from the cache, want %d",
+			return fmt.Errorf("the session reports %d read from the cache, want %d",
 				spent.GetCacheRead(), cached)
 		}
 		return nil
@@ -100,7 +100,7 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// onlySpender is the one thread in the listing that has cost anything.
+// onlySpender is the one session in the listing that has cost anything.
 func onlySpender(ctx context.Context) (*quaycrewv1.Usage, error) {
 	u := usageFrom(ctx)
 	var found *quaycrewv1.Usage
@@ -110,7 +110,7 @@ func onlySpender(ctx context.Context) (*quaycrewv1.Usage, error) {
 		}
 	}
 	if found == nil {
-		return nil, fmt.Errorf("no thread in the listing reports a cost")
+		return nil, fmt.Errorf("no session in the listing reports a cost")
 	}
 	return found, nil
 }
@@ -119,7 +119,7 @@ func onlySpender(ctx context.Context) (*quaycrewv1.Usage, error) {
 // with the usage on the assistant's messages.
 func writeTranscript(dir, workspace, conversation string, in, out, cached int) error {
 	if conversation == "" {
-		return fmt.Errorf("the crew holds no conversation for this thread, so there is nowhere to write")
+		return fmt.Errorf("the crew holds no conversation for this session, so there is nowhere to write")
 	}
 	at := filepath.Join(dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
 	if err := os.MkdirAll(at, 0o777); err != nil {

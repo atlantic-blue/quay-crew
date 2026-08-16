@@ -25,7 +25,7 @@ const Commands = `usage: quay [command]
 with no command, quay opens the console: a full screen view of every resource the crew has.
 press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
 
-you work in one place at a time, and say where with an address: workspace/project/thread.
+you work in one place at a time, and say where with an address: workspace/project/session.
 
   quay use me/house-bills
   quay dispatch "when is the electricity bill due"
@@ -38,11 +38,11 @@ commands:
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
-  workspace delete <workspace>            remove it, its projects, threads and secrets. Type its
+  workspace delete <workspace>            remove it, its projects, sessions and secrets. Type its
                                           name to confirm, or pipe the name in to script it
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
-  project delete [<workspace>/]<project>  remove it and the threads inside it, confirmed the same way
+  project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
   flow schedule [<address>] <graph>       let it run on its own, as often as it says
@@ -51,14 +51,14 @@ commands:
   flow show <run>                         where one run got to, what it cost, why it stopped
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
-  dispatch [<address>] <text>             start or continue a thread
-  sessions [<address>]                    list threads, which thread and threads also do
-  tasks <thread>                          what a thread was asked to do, and what came back
-  label <thread> [<text>]                 what you call a conversation, so a listing reads as
+  dispatch [<address>] <text>             start or continue a session
+  sessions [<address>]                    list sessions, which session and sessions also do
+  tasks <session>                          what a session was asked to do, and what came back
+  label <session> [<text>]                 what you call a conversation, so a listing reads as
                                           conversations rather than identifiers. No text reads it,
                                           and "" clears it
-  mode <thread> [<mode>]                  what a thread's turns may do without asking: plan, edits
-                                          or dangerous. A dispatched turn has nobody to approve
+  mode <session> [<mode>]                  what a session's tasks may do without asking: plan, edits
+                                          or dangerous. A dispatched task has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
   context set [<address>] < file          write what a level says, from standard input. Say crew
@@ -66,7 +66,7 @@ commands:
                                           crew does, which skill attach takes too
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
-  attach <thread>                         open a thread's conversation, with its history
+  attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works
@@ -83,11 +83,11 @@ commands:
   hook list [<workspace>]                 what the crew enforces, or what one workspace runs under
   hook attach [<workspace>] <name>        put a workspace's sessions under a hook. Say crew where
                                           the workspace goes and every workspace is under it. A
-                                          thread already running is not: a hook reaches a sandbox
+                                          session already running is not: a hook reaches a sandbox
                                           when the sandbox is built
   hook detach [<workspace>] <name>        take a hook away from a workspace, or from the crew
 
-a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a thread
+a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a session
 may be the shortened id a listing prints. An address typed on the command line applies to that
 command only and does not move you.
 `
@@ -129,13 +129,13 @@ The ` + "`quay`" + ` command drives it. If it is on your path, you can use it.
 
   workspace   who you are, for example "me" or an organisation. Secrets attach here.
   project     a body of work inside a workspace, for example "house bills" or a ticket.
-  thread      one conversation. A task runs in a project.
+  session      one conversation. A task runs in a project.
   task        one instruction and the work it caused. You ask for something, the crew works
               until it has an answer, and the whole of that is one task. Minutes is normal.
-  session     a thread that is running, inside its own sandbox container.
+  session     a session that is running, inside its own sandbox container.
   sandbox     the isolated container a session runs in. A session runs IN a sandbox.
 
-They nest: workspace, then project, then thread. An address is written the way a path is,
+They nest: workspace, then project, then session. An address is written the way a path is,
 ` + "`me/house-bills`" + `, and each level is a name or an identifier. ` + "`quay use me/house-bills`" + ` moves you
 there; an address typed on a command applies to that command only.
 
@@ -153,7 +153,7 @@ model reads CLAUDE.md and the working directory natively. There is no second mec
 ## What this is for
 
 The operator may ask you to do things to the crew itself: make a workspace, add a project, set a
-subscription token, load a folder as a project's context, start a thread. Everything below is what
+subscription token, load a folder as a project's context, start a session. Everything below is what
 the tool can actually do. Prefer running ` + "`quay`" + ` to guessing, and if a command refuses, read what it
 says: refusals here name what would have worked.
 `

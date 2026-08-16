@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// A turn runs with the subscription token in its environment, so anything a failing turn says about
-// itself is a place that token can turn up: the model's own error text, the tail of what it wrote to
+// A task runs with the subscription token in its environment, so anything a failing task says about
+// itself is a place that token can task up: the model's own error text, the tail of what it wrote to
 // its error stream, a shell echoing the command it could not run. A tool that prints a subscription
-// token into a terminal or a log because a turn failed would be a worse defect than the one it was
+// token into a terminal or a log because a task failed would be a worse defect than the one it was
 // explaining, so nothing reaches an operator without going through here first.
 
 // tokenShaped matches a subscription token by its published shape, as a second line of defence for a
@@ -21,7 +21,7 @@ var tokenShaped = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{8,}`)
 // are matched exactly, which is precise and cannot mistake something innocent for a secret, and the
 // published token shape is matched as well for the ones that were never passed through here. It is
 // used on anything that leaves the crew or is written down: a failure an operator reads, and every
-// turn payload before it is persisted.
+// task payload before it is persisted.
 func Redact(text string, env map[string]string) string {
 	if text == "" {
 		return ""
@@ -44,5 +44,5 @@ func Redact(text string, env map[string]string) string {
 
 // shortestSecret is the length below which an environment value is not treated as a secret. A short
 // value is far more likely to be a setting than a credential, and replacing every occurrence of, say,
-// "1" would turn an explanation into nonsense.
+// "1" would task an explanation into nonsense.
 const shortestSecret = 12
