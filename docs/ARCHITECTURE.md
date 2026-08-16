@@ -365,6 +365,36 @@ edges:
   - [ask, push, "yes"]
 ```
 
+### What a run finishing actually means
+
+**`result.failed` says the model did not error. It says nothing about whether anything was
+achieved.** A turn that could not do the work is not a failed turn: asked to read a file that is not
+there, a capable model answers plausibly instead of stopping, and a graph branching on
+`result.failed` then walks its success path through work that never happened. The first flow run
+against a real crew did exactly that. It finished at `done`, reported four transitions, and its
+summary was the model's account of a repository it never found.
+
+**So a dispatch node may declare what will show it worked, and the crew checks it.** `expect: { file:
+package.json }` is a path that must be in the run's thread after the turn, read from the working
+directory the crew keeps rather than asked of the model. `expect: { contains: "all green" }` is a
+string the reply must carry, which is weaker because it is still the model's own prose, and is there
+for work that leaves no file behind. Whichever is declared is checked.
+
+**An expectation that does not hold stops the run**, with the reason naming the node and what was
+not there, and `result.expected` in the run's state. It stops rather than branching because the crew
+knows the work did not happen and does not know why, and because a run that halts is read correctly
+while a run that finishes is believed. Its thread is left alone rather than archived, since that is
+where the evidence is. A graph that declares nothing behaves exactly as it did.
+
+An expectation nothing can check stops the run too. A crew that keeps no working directory on disk
+cannot answer the question, and a check that quietly passes when it could not be run is the same
+false green as no check at all.
+
+Left out on purpose: a command the crew runs and requires to exit zero. It is the obvious third
+form, and it makes an imported graph a way to run arbitrary commands through the control plane,
+which is a decision to take on its own rather than in passing. A file covers the case that was
+found.
+
 ### A run owns its thread
 
 **The thread identifier is the run identifier.** `Dispatch` resolves a thread through

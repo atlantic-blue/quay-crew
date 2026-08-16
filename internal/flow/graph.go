@@ -13,6 +13,7 @@ package flow
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -84,12 +85,29 @@ type Graph struct {
 	Start string
 }
 
+// Expect is what a dispatch node declares will show its turn did the work.
+//
+// The crew checks it. That is the whole point of it: a turn that could not do the work is not a
+// failed turn, so `result.failed` says only that the model did not error, and a model asked to read
+// a file that is not there answers plausibly instead of stopping. Whichever of these is declared is
+// checked; declaring neither is refused at import.
+type Expect struct {
+	// File is a path that must exist in the run's thread after the turn, relative to its working
+	// directory. It is the strong one: nothing the model says can satisfy it.
+	File string
+	// Contains is a string the reply must carry. It is weaker, because it is still the model's own
+	// prose, and it is here because some work has no file to point at.
+	Contains string
+}
+
 // Node is one step.
 type Node struct {
 	Type string
 	// Prompt is what a dispatch node says to the run's thread, with {{key}} rendered from the
 	// run's state.
 	Prompt string
+	// Expect is what shows this dispatch worked, or nil where the graph claims nothing.
+	Expect *Expect
 	// On is a choice node's condition: every named state key must equal its value for the choice
 	// to answer true. Equality only, deliberately: accepting arbitrary expressions means owning a
 	// language and a sandbox.
@@ -126,6 +144,10 @@ type graphFile struct {
 		On     map[string]string `yaml:"on"`
 		For    string            `yaml:"for"`
 		Text   string            `yaml:"text"`
+		Expect *struct {
+			File     string `yaml:"file"`
+			Contains string `yaml:"contains"`
+		} `yaml:"expect"`
 	} `yaml:"nodes"`
 	Edges [][]string `yaml:"edges"`
 }
@@ -216,7 +238,22 @@ func Parse(source []byte) (Graph, error) {
 		default:
 			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, DoneNode)
 		}
-		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text}
+
+		var expect *Expect
+		if node.Expect != nil {
+			if node.Type != NodeDispatch {
+				return Graph{}, fmt.Errorf("flow: %s node %s says what proves it worked, and only a %s does work", node.Type, name, NodeDispatch)
+			}
+			path, carries := strings.TrimSpace(node.Expect.File), node.Expect.Contains
+			if path == "" && carries == "" {
+				return Graph{}, fmt.Errorf("flow: dispatch node %s expects nothing; say `file:` for a path the turn must leave behind, or `contains:` for something the reply must carry", name)
+			}
+			if err := usableExpectFile(name, path); err != nil {
+				return Graph{}, err
+			}
+			expect = &Expect{File: path, Contains: carries}
+		}
+		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text, Expect: expect}
 	}
 
 	pointedAt := map[string]bool{}
@@ -283,6 +320,26 @@ func usableEdges(graph Graph, name string, node Node) error {
 		}
 		if !answers["true"] || !answers["false"] {
 			return fmt.Errorf("flow: choice node %s needs an edge for %q and an edge for %q", name, "true", "false")
+		}
+	}
+	return nil
+}
+
+// usableExpectFile refuses a path that would be checked somewhere other than the run's own room.
+//
+// The path is read inside the thread's working directory, so an absolute one or one that climbs out
+// of it would be asking about a file the run never touched, and a graph is written by whoever may
+// import one rather than by whoever runs the crew.
+func usableExpectFile(node, path string) error {
+	if path == "" {
+		return nil
+	}
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("flow: dispatch node %s expects %q, and the path is read inside the thread's working directory; write it relative, as package.json", node, path)
+	}
+	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+		if part == ".." {
+			return fmt.Errorf("flow: dispatch node %s expects %q, which climbs out of the thread's working directory", node, path)
 		}
 	}
 	return nil

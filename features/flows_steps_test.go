@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -81,7 +83,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator starts the flow "([^"]*)" in the project$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
-		engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil)
+		engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server)
 		run, err := engine.Start(ctx, name, w.workspaceID, w.projectID, nil)
 		w.flowRun, w.lastErr = run, err
 		return nil
@@ -252,6 +254,58 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the flow run is stopped$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("the run did not start: %v", w.lastErr)
+		}
+		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+		if err != nil {
+			return err
+		}
+		if kept.Status != flow.StatusStopped {
+			return fmt.Errorf("the run reads back as %q on node %q, want it stopped", kept.Status, kept.Node)
+		}
+		return nil
+	})
+
+	sc.Step(`^reading the run back says it stopped over "([^"]*)"$`, func(ctx context.Context, named string) error {
+		w := worldFrom(ctx)
+		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+		if err != nil {
+			return err
+		}
+		// The reason, not only the state: a run somebody reads tomorrow has the reason on its own
+		// line, and "stopped" with nothing beside it reads the same as a run that went quiet.
+		if !strings.Contains(kept.Reason, named) {
+			return fmt.Errorf("the run stopped saying %q, want it to name %q", kept.Reason, named)
+		}
+		if kept.State["result.expected"] == "" {
+			return fmt.Errorf("the run carries nothing about what it expected")
+		}
+		return nil
+	})
+
+	// A model that does the work rather than describing it. The file lands in the session's own
+	// working directory, which is the same directory the crew checks, so this proves the whole road
+	// rather than a double agreeing with itself.
+	sc.Step(`^the model writes "([^"]*)" while it works$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		w.runner.onTurn = func() {
+			for _, cfg := range w.provider.Configurations() {
+				dir, kept := w.storage.WorkingDir(cfg)
+				if !kept {
+					continue
+				}
+				if err := os.MkdirAll(dir, 0o777); err != nil {
+					continue
+				}
+				_ = os.WriteFile(filepath.Join(dir, name), []byte("written by the turn\n"), 0o600)
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^the run's thread is archived$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		thread, err := flowRunThread(ctx, w, true)
@@ -304,7 +358,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 func tickFlowPoller(ctx context.Context, forward time.Duration) error {
 	w := worldFrom(ctx)
 	at := time.Now().UTC().Add(forward)
-	engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil).
+	engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server).
 		WithClock(func() time.Time { return at })
 	flow.NewPoller(engine, 0, slog.New(slog.NewTextHandler(io.Discard, nil))).Tick(ctx)
 	return nil
