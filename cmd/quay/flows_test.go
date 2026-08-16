@@ -303,3 +303,60 @@ func showWhen(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, run, wa
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// The pointer a finished run prints has to be a command that works, which is why this runs it.
+//
+// A run ends by archiving its own thread, and the summary `quay flow show` prints is the model's own
+// account of what happened. The turns are the record of it, and the two can disagree: a run has
+// reported four transitions and a tidy summary while every turn under it said the working directory
+// was empty. Showing the run printed a thread identifier and the command that reads a thread refused
+// that exact identifier, so the record was reachable through the database alone.
+func TestShowingAFinishedRunPrintsAWorkingWayToReadItsTasks(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))
+	mustRun(t, client, "flow", "start", "greet")
+
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		listed := mustRun(t, client, "flow", "list")
+		fields := strings.Fields(listed)
+		if len(fields) > 0 {
+			shown = mustRun(t, client, "flow", "show", fields[0])
+			if strings.Contains(shown, "done") {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the run never finished: %q", shown)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	typed := typedCommandIn(t, shown, "quay tasks ")
+	read, err := runQuay(t, client, typed[1:]...)
+	if err != nil {
+		t.Fatalf("the run said to type %q, and that was refused: %v", strings.Join(typed, " "), err)
+	}
+	// The prompt the graph dispatched. The reply comes from a double, so what proves the history is
+	// the run's own is what the run asked.
+	if !strings.Contains(read, "hello") {
+		t.Fatalf("%q answered %q, want the task the run dispatched", strings.Join(typed, " "), read)
+	}
+}
+
+// typedCommandIn finds the command an output tells the operator to type, so a test can type it.
+func typedCommandIn(t *testing.T, output, starting string) []string {
+	t.Helper()
+	for _, line := range strings.Split(output, "\n") {
+		at := strings.Index(line, starting)
+		if at < 0 {
+			continue
+		}
+		return strings.Fields(line[at:])
+	}
+	t.Fatalf("nothing in %q says to type %q", output, starting)
+	return nil
+}
