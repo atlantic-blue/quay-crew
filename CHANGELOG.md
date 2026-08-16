@@ -8,6 +8,18 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **Restart works on a live thread, and asks first.** The crew refused to restart a thread unless it
+  was already stopped. So the key you press when a container is wrong did nothing, and you had to
+  stop the thread yourself before the key would work.
+
+  Restart stops the thread now, removes the container, and starts a new one. In the console it is `R`
+  or ctrl+r. It asks before it acts on a thread that is not stopped, because the task in that thread
+  and the conversation attached to it go with the old container. A stopped thread has neither, so
+  that one acts at once.
+
+  An archived thread is refused, and says to restore it first. An archived row says stopped, so a
+  restart that read only the status started a container for a thread nobody can see.
+
 - **Every view in the console is coloured cell by cell.** A row carries a state, and the state was
   drawn over the whole line, so a row's workspace, project, name and mode all arrived on screen in
   the same colour. Nine of the ten views set a state on every row they list, so nine listings came

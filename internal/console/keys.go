@@ -175,7 +175,7 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 			m.mode, m.choosing = modeChoose, choice{action: action, row: row, at: 0}
 			return m, nil
 		}
-		if action.Confirm {
+		if action.Confirm && (action.Costs == nil || action.Costs(row)) {
 			m.mode, m.waiting = modeConfirm, pending{action: action, row: row}
 			return m, nil
 		}
