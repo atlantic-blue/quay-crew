@@ -420,13 +420,16 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10},
 			{Title: "workspace", Width: 16},
 			{Title: "project", Width: 20},
-			{Title: "name", Width: 10},
+			// The flexible column, as it is in the live view: it holds a name, and a name cut to ten
+			// characters is not a name. The stamp beside it is fixed instead, because two columns
+			// that both flex are each given the whole of what is left and the row runs past the panel.
+			{Title: "name", Width: 0},
 			{Title: "status", Width: 10},
 			{Title: "mode", Width: 12},
 			{Title: "in", Width: 7, Give: 3},
 			{Title: "out", Width: 7, Give: 2},
 			{Title: "cache", Width: 7, Give: 1},
-			{Title: "archived", Width: 0},
+			{Title: "archived", Width: 8},
 		},
 		SortBy: 3,
 		List:   sessionLister(client, putAway),

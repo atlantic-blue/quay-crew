@@ -988,6 +988,46 @@ func TestTheArchivedViewNamesTheColumnThatHoldsTheName(t *testing.T) {
 	}
 }
 
+// TestTheArchivedViewShowsAWholeName: the column was ten characters wide, from when it held the
+// first eight of an identifier. A name is a sentence, and ten characters of one is not a name.
+func TestTheArchivedViewShowsAWholeName(t *testing.T) {
+	model := newTestModel(t, Archived(&fakeClient{}))
+	// Wider than the default window, so what is being measured is the column rather than the room.
+	model.width = 200
+	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Label: "the electricity bill", Cells: []string{
+		"5d013d07", "acme", "bills", "the electricity bill", "stopped", "edits", "", "", "", "2h"}}))
+
+	line := visibleText(lineWith(t, model.View(), "5d013d07"))
+	if !strings.Contains(line, "the electricity bill") {
+		t.Fatalf("the archived row cuts the name it is showing:\n%q", line)
+	}
+}
+
+// TestEveryViewHasOneFlexibleColumn guards the whole class rather than the one view that broke it.
+// A width of zero takes what is left over, and the layout gives that whole amount to each column
+// that asks for it, so a second one draws a row wider than the panel it sits in.
+func TestEveryViewHasOneFlexibleColumn(t *testing.T) {
+	registry, err := NewDefaultRegistry(&fakeClient{})
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, name := range registry.Names() {
+		view, found := registry.Get(name)
+		if !found {
+			t.Fatalf("the registry lists %q and cannot get it", name)
+		}
+		flexible := make([]string, 0, 1)
+		for _, column := range view.Columns {
+			if column.Width == 0 {
+				flexible = append(flexible, column.Title)
+			}
+		}
+		if len(flexible) > 1 {
+			t.Errorf("the %s view flexes %v, and each is given the whole of what is left", name, flexible)
+		}
+	}
+}
+
 // TestTheArchivedViewSaysWhenAThreadWasPutAway: its last column is the stamp, not the last touch,
 // because "two hours ago" about a thread nobody has touched since is the useful number.
 func TestTheArchivedViewSaysWhenAThreadWasPutAway(t *testing.T) {
