@@ -1,0 +1,19 @@
+{{define "body"}}
+{{if .Sessions}}
+<ul class="sessions">
+  {{range .Sessions}}
+  <li class="session">
+    <a href="/session/{{.ID}}">
+      <span class="dot {{.Status}}"></span>
+      <span class="name">{{.Name}}</span>
+      <span class="address">{{.Address}}</span>
+      <span class="status">{{.Status}}</span>
+      <span class="age">{{.Age}}</span>
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="empty">This crew has no live conversations. Start one with <code>quay dispatch</code>.</p>
+{{end}}
+{{end}}

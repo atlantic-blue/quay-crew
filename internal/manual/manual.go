@@ -67,6 +67,8 @@ commands:
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
   attach <session>                         open a session's conversation, with its history
+  web [<address>]                          read the crew in a browser on this machine. Read only,
+                                           and it serves 127.0.0.1:8080 unless told another port
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works

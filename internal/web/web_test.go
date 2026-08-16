@@ -1,0 +1,233 @@
+package web
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
+)
+
+// TestTheViewCanOnlyRead is the read only rule, held by the compiler and checked here as a class
+// rather than call by call. Anything that changes the crew is spelled Create, Set, Delete, Dispatch,
+// Attach, Stop, Restart, Archive, Import or Answer, so a Reader that names only List and Get cannot
+// hold one. Adding a write call to the interface fails this before it reaches a handler.
+func TestTheViewCanOnlyRead(t *testing.T) {
+	reader := reflect.TypeOf((*Reader)(nil)).Elem()
+	if reader.NumMethod() == 0 {
+		t.Fatal("Reader names no calls at all, so this test proves nothing")
+	}
+	for index := range reader.NumMethod() {
+		name := reader.Method(index).Name
+		if !strings.HasPrefix(name, "List") && !strings.HasPrefix(name, "Get") {
+			t.Errorf("Reader names %s, which is not a call that reads: the web view may not change the crew", name)
+		}
+	}
+}
+
+func TestItServesThisMachineAndRefusesEverywhereElse(t *testing.T) {
+	for _, tc := range []struct {
+		addr    string
+		refused bool
+	}{
+		{addr: "127.0.0.1:8080"},
+		{addr: "localhost:8080"},
+		{addr: "127.0.0.1:0"},
+		{addr: "[::1]:8080"},
+		// Every one of these is reachable from another machine, which is the decision this refuses
+		// to make by accident.
+		{addr: ":8080", refused: true},
+		{addr: "0.0.0.0:8080", refused: true},
+		{addr: "192.168.1.5:8080", refused: true},
+		{addr: "[::]:8080", refused: true},
+		{addr: "not-a-host-and-port", refused: true},
+	} {
+		t.Run(tc.addr, func(t *testing.T) {
+			err := loopbackOnly(tc.addr)
+			if tc.refused && err == nil {
+				t.Fatalf("%s was allowed, and it is reachable from another machine", tc.addr)
+			}
+			if !tc.refused && err != nil {
+				t.Fatalf("%s is on this machine and was refused: %v", tc.addr, err)
+			}
+		})
+	}
+}
+
+func TestTheListingShowsEveryLiveConversation(t *testing.T) {
+	client := aCrew(t)
+	dispatch(t, client, projectOf(t, client), "", "when is the electricity bill due")
+
+	body, status := get(t, client, "/")
+
+	if status != http.StatusOK {
+		t.Fatalf("the listing answered %d", status)
+	}
+	for _, want := range []string{"me/house-bills/", "idle"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the listing does not say %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestAConversationReadsBackInTheOrderItHappened(t *testing.T) {
+	client := aCrew(t)
+	project := projectOf(t, client)
+	first := dispatch(t, client, project, "", "hello")
+	dispatch(t, client, project, first.GetHandle(), "and again")
+
+	body, status := get(t, client, "/session/"+first.GetId())
+
+	if status != http.StatusOK {
+		t.Fatalf("the conversation answered %d", status)
+	}
+	hello, again := strings.Index(body, "hello"), strings.Index(body, "and again")
+	if hello < 0 || again < 0 {
+		t.Fatalf("both prompts should be on the page:\n%s", body)
+	}
+	if hello > again {
+		t.Error("the conversation reads backwards: the second prompt is above the first")
+	}
+}
+
+// TestACrewWithNoConversationsSaysSo keeps an empty crew from rendering an empty page. A blank
+// listing and a crew nobody has spoken to look identical, and one of them is a bug.
+func TestACrewWithNoConversationsSaysSo(t *testing.T) {
+	client := aCrew(t)
+
+	body, status := get(t, client, "/")
+
+	if status != http.StatusOK {
+		t.Fatalf("the listing answered %d", status)
+	}
+	if !strings.Contains(body, "no live conversations") {
+		t.Errorf("an empty crew should say it is empty:\n%s", body)
+	}
+}
+
+func TestASessionTheCrewDoesNotHaveIsNotFound(t *testing.T) {
+	client := aCrew(t)
+
+	body, status := get(t, client, "/session/nothing-by-this-name")
+
+	if status != http.StatusNotFound {
+		t.Fatalf("want 404 for a session that is not there, got %d", status)
+	}
+	if strings.Contains(body, "goroutine") {
+		t.Error("a missing session printed a stack trace at the operator")
+	}
+}
+
+// TestAFailedTaskSaysWhatWentWrong holds the difference between a task that answered with nothing and
+// a task that was refused. They must never render the same.
+func TestAFailedTaskSaysWhatWentWrong(t *testing.T) {
+	runner := &model.FakeRunner{Err: errors.New("the model refused")}
+	client := crewWith(t, runner)
+	project := projectOf(t, client)
+	_, _ = client.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{Project: project, Text: "hello"})
+
+	listed, err := client.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
+	if err != nil || len(listed.GetSessions()) != 1 {
+		t.Fatalf("want one thread, got %d (%v)", len(listed.GetSessions()), err)
+	}
+
+	body, _ := get(t, client, "/session/"+listed.GetSessions()[0].GetId())
+	if !strings.Contains(body, "failure") {
+		t.Errorf("a refused task should render as a failure:\n%s", body)
+	}
+}
+
+// get drives the real handler over the real routes and hands back what a browser would receive.
+func get(t *testing.T, reader Reader, path string) (string, int) {
+	t.Helper()
+	handler, err := Handler(reader)
+	if err != nil {
+		t.Fatalf("build the handler: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+	return recorder.Body.String(), recorder.Code
+}
+
+func aCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	return crewWith(t, &model.FakeRunner{Reply: "ok"})
+}
+
+// crewWith is a whole control plane in memory, reached over a real connection, so these tests drive
+// the thing the operator drives rather than a double of it.
+func crewWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	lis := bufconn.Listen(1 << 20)
+	server := grpc.NewServer()
+	quaycrewv1.RegisterControlPlaneServiceServer(server, controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner,
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	}))
+	go func() { _ = server.Serve(lis) }()
+	t.Cleanup(server.Stop)
+
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	client := quaycrewv1.NewControlPlaneServiceClient(conn)
+	mustCreate(t, client)
+	return client
+}
+
+func mustCreate(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) {
+	t.Helper()
+	workspace, err := client.CreateWorkspace(context.Background(), &quaycrewv1.CreateWorkspaceRequest{Name: "me"})
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if _, err := client.CreateProject(context.Background(), &quaycrewv1.CreateProjectRequest{
+		Workspace: workspace.GetWorkspace().GetId(), Name: "house-bills",
+	}); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+}
+
+func projectOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) string {
+	t.Helper()
+	listed, err := client.ListProjects(context.Background(), &quaycrewv1.ListProjectsRequest{})
+	if err != nil || len(listed.GetProjects()) != 1 {
+		t.Fatalf("want one project, got %d (%v)", len(listed.GetProjects()), err)
+	}
+	return listed.GetProjects()[0].GetId()
+}
+
+func dispatch(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, project, handle, text string) *quaycrewv1.Session {
+	t.Helper()
+	resp, err := client.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
+		Project: project, Handle: handle, Text: text,
+	})
+	if err != nil {
+		t.Fatalf("dispatch %q: %v", text, err)
+	}
+	got, err := client.GetSession(context.Background(), &quaycrewv1.GetSessionRequest{Id: resp.GetId()})
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	return got.GetSession()
+}

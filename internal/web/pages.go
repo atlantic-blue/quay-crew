@@ -1,0 +1,160 @@
+package web
+
+import (
+	"context"
+	"net/http"
+	"sort"
+	"strings"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
+)
+
+// shell is what every page carries: what the tab says, and where the operator is.
+type shell struct {
+	Title string
+	Where string
+}
+
+// sessionRow is one conversation in the listing.
+type sessionRow struct {
+	ID      string
+	Short   string
+	Address string
+	Name    string
+	Status  string
+	Age     string
+}
+
+type sessionsPage struct {
+	shell
+	Sessions []sessionRow
+}
+
+// taskRow is one exchange. A task that failed carries its failure instead of a reply, and says so,
+// because a blank reply and a refused task must never read the same.
+type taskRow struct {
+	When    string
+	Prompt  string
+	Reply   string
+	Failed  bool
+	Failure string
+}
+
+type sessionPage struct {
+	shell
+	Session sessionRow
+	Tasks   []taskRow
+}
+
+func (v *view) sessions(w http.ResponseWriter, r *http.Request) {
+	listed, err := v.reader.ListSessions(r.Context(), &quaycrewv1.ListSessionsRequest{})
+	if err != nil {
+		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	names, err := v.names(r.Context())
+	if err != nil {
+		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	rows := make([]sessionRow, 0, len(listed.GetSessions()))
+	for _, session := range listed.GetSessions() {
+		rows = append(rows, row(session, names))
+	}
+	// By address, so the listing groups by workspace and project and holds still between loads.
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Address < rows[j].Address })
+
+	v.render(w, "sessions.html", sessionsPage{
+		shell:    shell{Title: "sessions", Where: "every live conversation"},
+		Sessions: rows,
+	})
+}
+
+func (v *view) session(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	got, err := v.reader.GetSession(r.Context(), &quaycrewv1.GetSessionRequest{Id: id})
+	if err != nil || got.GetSession() == nil {
+		http.Error(w, "no session here", http.StatusNotFound)
+		return
+	}
+	names, err := v.names(r.Context())
+	if err != nil {
+		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	turns, err := v.reader.ListTasks(r.Context(), &quaycrewv1.ListTasksRequest{Session: got.GetSession().GetId()})
+	if err != nil {
+		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	tasks := make([]taskRow, 0, len(turns.GetTasks()))
+	for _, turn := range turns.GetTasks() {
+		tasks = append(tasks, task(turn))
+	}
+	head := row(got.GetSession(), names)
+
+	v.render(w, "session.html", sessionPage{
+		shell:   shell{Title: head.Name, Where: head.Address},
+		Session: head,
+		Tasks:   tasks,
+	})
+}
+
+func task(turn *quaycrewv1.Task) taskRow {
+	failed := turn.GetStatus() == "failed"
+	return taskRow{
+		When:    turn.GetOccurredAt().AsTime().Local().Format("15:04:05"),
+		Prompt:  turn.GetPrompt(),
+		Reply:   turn.GetReply(),
+		Failed:  failed,
+		Failure: turn.GetFailure(),
+	}
+}
+
+func row(session *quaycrewv1.Session, names map[string]string) sessionRow {
+	return sessionRow{
+		ID:      session.GetId(),
+		Short:   display.ShortID(session.GetId()),
+		Address: address(session, names),
+		Name:    display.SessionName(session),
+		Status:  display.StatusLabel(session),
+		Age:     display.Age(display.LastMoved(session)),
+	}
+}
+
+// address is the session written the way the operator says it, workspace/project/session. It falls
+// back to the identifier for either level, so a session whose workspace was renamed under it still
+// reads as something rather than as a gap.
+func address(session *quaycrewv1.Session, names map[string]string) string {
+	parts := []string{
+		display.Name(names[session.GetWorkspace()], session.GetWorkspace()),
+		display.Name(names[session.GetProject()], session.GetProject()),
+		display.ShortID(session.GetHandle()),
+	}
+	return strings.Join(parts, "/")
+}
+
+// names is every workspace and project identifier against what it is called, so a listing reads as
+// places rather than as identifiers. One map for both, because the identifiers do not collide and
+// the caller only ever asks "what is this one called".
+func (v *view) names(ctx context.Context) (map[string]string, error) {
+	named := map[string]string{}
+	workspaces, err := v.reader.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
+	if err != nil {
+		return nil, err
+	}
+	for _, workspace := range workspaces.GetWorkspaces() {
+		named[workspace.GetId()] = workspace.GetName()
+	}
+	projects, err := v.reader.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	for _, project := range projects.GetProjects() {
+		named[project.GetId()] = project.GetName()
+	}
+	return named, nil
+}
