@@ -177,6 +177,35 @@ read, or run with `make features`.
   had no cell colour at all have one now: names carry their own colour, identifiers and counts are
   dim, a key is cyan wherever it is read. A case sweeps every registered view, so the next one added
   cannot be the flat one.
+- **`quay web`: the crew reads in a browser, on this machine only.** A terminal pane is a poor place
+  to read a long reply with code in it, which is the one gap
+  [#302](https://github.com/atlantic-blue/quay-crew/issues/302) found that the console cannot close
+  and no other plan already claims. The command serves `127.0.0.1:8080`, lists every live
+  conversation, and opens one to read its tasks in the order they happened.
+
+  It reads and cannot do anything else. The server holds an interface naming five calls, all of them
+  `List` or `Get`, so a handler here cannot dispatch a task or delete a workspace: there is no method
+  to call. A test walks that interface and fails on any name that is not a read, which makes it a
+  rule about the whole class rather than about the five calls that exist today.
+
+  It refuses to bind anywhere but this machine, `:8080` and `0.0.0.0` included, because the control
+  plane behind it is a local only port guarded by one shared token and this server holds that token.
+  Reaching the crew from another device needs a token for each device, a way to withdraw one, and a
+  rule about encryption. The crew has none of the three, and a chat channel is the road planned for
+  that need, so this refuses rather than deciding it by accident.
+
+  The pages are Go templates and one stylesheet, embedded. No package manager, no build step and
+  nothing fetched from the internet, so the binary stays one static file and the page works with no
+  network. The design tool's export loads Tailwind and a web font from a content delivery network;
+  its tokens were copied and its dependencies were not.
+
+  This slice is plain on purpose. The design system, replies rendered as formatted text with coloured
+  code, what a task cost, and following a session as it works are
+  [#331](https://github.com/atlantic-blue/quay-crew/issues/331),
+  [#332](https://github.com/atlantic-blue/quay-crew/issues/332),
+  [#333](https://github.com/atlantic-blue/quay-crew/issues/333) and
+  [#334](https://github.com/atlantic-blue/quay-crew/issues/334). Every action that writes is out of
+  all of them. ([#330](https://github.com/atlantic-blue/quay-crew/issues/330))
 
 - **A task says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
