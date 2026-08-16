@@ -16,9 +16,10 @@ import (
 
 // The shipped analyser, run inside the real sandbox image, the way the runtime runs it.
 //
-// This is the test that would have caught the defect it was written after. The entry point was named
-// bin/hook, node decides whether to strip types by the file extension rather than by the flag, so it
-// was read as plain JavaScript and died on its own type imports:
+// This is the test that would have caught the defect it was written after. Back when the hook was
+// TypeScript the entry point was named bin/hook, and node decides whether to strip types by the file
+// extension rather than by the flag, so it was read as plain JavaScript and died on its own type
+// imports:
 //
 //	SyntaxError: Unexpected identifier 'AnalysisFacts'
 //
@@ -92,9 +93,14 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 		t.Fatalf("the shipped analyser did not run inside the sandbox image: %v\nstderr: %s\nstdout: %s",
 			err, proc.Stderr(), out)
 	}
-	// A module or syntax failure prints a stack and exits non zero, which the Wait above catches. This
-	// catches the quieter version: node printing a complaint and still exiting 0.
-	for _, broken := range []string{"SyntaxError", "Cannot find module", "ERR_MODULE_NOT_FOUND"} {
+	// The hook exits 0 by design, so the exit code alone proves little. These are what a binary that
+	// cannot run says on the way out, and the first matters most now: the entry point is built rather
+	// than committed, so a build for the wrong processor lands here and nowhere else. The node errors
+	// stay because a hook written in something else would land on them again.
+	for _, broken := range []string{
+		"exec format error", "cannot execute binary file", "Permission denied",
+		"SyntaxError", "Cannot find module", "ERR_MODULE_NOT_FOUND",
+	} {
 		if strings.Contains(proc.Stderr(), broken) || strings.Contains(string(out), broken) {
 			t.Fatalf("the analyser failed to load inside the sandbox image: %s\n%s", proc.Stderr(), out)
 		}
@@ -152,7 +158,7 @@ echo "goal: something"
 SH
 chmod +x /tmp/stub/claude
 echo '{"prompt":"fix the flaky test","cwd":"/home/agent/workspace"}' | PATH=/tmp/stub:$PATH ` +
-		sandbox.HooksPath + `/prompt-analyser/bin/hook.ts
+		sandbox.HooksPath + `/prompt-analyser/bin/hook
 echo "---seen---"
 cat /tmp/stub/seen`
 
