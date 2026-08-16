@@ -22,9 +22,9 @@ func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "workspaces",
 		Aliases: []string{"w", "ws", "workspace"},
 		Columns: []Column{
-			{Title: "id", Width: 10},
-			{Title: "name", Width: 0},
-			{Title: "age", Width: 10},
+			{Title: "id", Width: 10, Colour: dim},
+			{Title: "name", Width: 0, Colour: colourOfName},
+			{Title: "age", Width: 10, Colour: dim},
 		},
 		DrillTo: "projects",
 		SortBy:  1,
@@ -58,10 +58,10 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "projects",
 		Aliases: []string{"p", "proj", "project"},
 		Columns: []Column{
-			{Title: "id", Width: 10},
-			{Title: "name", Width: 24},
-			{Title: "workspace", Width: 18},
-			{Title: "age", Width: 0},
+			{Title: "id", Width: 10, Colour: dim},
+			{Title: "name", Width: 24, Colour: colourOfName},
+			{Title: "workspace", Width: 18, Colour: colourOfName},
+			{Title: "age", Width: 0, Colour: dim},
 		},
 		DrillTo: "sessions",
 		SortBy:  1,
@@ -116,10 +116,10 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "context",
 		Aliases: []string{"c", "contexts", "ctx"},
 		Columns: []Column{
-			{Title: "scope", Width: 10},
-			{Title: "name", Width: 18},
-			{Title: "written", Width: 16},
-			{Title: "what it says", Width: 0},
+			{Title: "scope", Width: 10, Colour: colourOfName},
+			{Title: "name", Width: 18, Colour: colourOfName},
+			{Title: "written", Width: 16, Colour: colourOfWritten},
+			{Title: "what it says", Width: 0, Colour: dim},
 		},
 		SortBy: 1,
 		Actions: []Action{
@@ -241,9 +241,9 @@ func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "secrets",
 		Aliases: []string{"secret"},
 		Columns: []Column{
-			{Title: "workspace", Width: 20},
-			{Title: "name", Width: 32},
-			{Title: "value", Width: 0},
+			{Title: "workspace", Width: 20, Colour: colourOfName},
+			{Title: "name", Width: 32, Colour: colourOfName},
+			{Title: "value", Width: 0, Colour: dim},
 		},
 		SortBy: 0,
 		List: func(ctx context.Context, _ string) ([]Row, error) {
@@ -279,9 +279,11 @@ func Features() Resource {
 	return Resource{
 		Name:    "features",
 		Aliases: []string{"f", "feature", "capabilities"},
+		// A feature's title sits on the first of its scenarios and the rest of the group leaves it
+		// blank, so bold on that cell is what separates one group from the next.
 		Columns: []Column{
-			{Title: "feature", Width: 44},
-			{Title: "proved by", Width: 0},
+			{Title: "feature", Width: 44, Colour: heading},
+			{Title: "proved by", Width: 0, Colour: dim},
 		},
 		List: func(context.Context, string) ([]Row, error) {
 			rows := make([]Row, 0, 32)
@@ -325,7 +327,7 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// Wider than the identifier it replaced, because it holds a name now and a name cut to
 			// ten characters is not a name. It is the flexible column, so it takes what is left.
 			{Title: "name", Width: 0, Colour: colourOfName},
-			{Title: "status", Width: 10},
+			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
 			// the first to give way, because at half a window the age of a thread is worth more than
@@ -333,7 +335,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
-			{Title: "age", Width: 6, Colour: dim},
+			// How long ago it was touched, which is the sessions tool's idle column under another
+			// name, so it takes that column's three bands rather than being dimmed with the counts.
+			{Title: "age", Width: 6, Colour: colourOfAge},
 		},
 		// Ordered by thread, so a session keeps its place in the list as its age and status change
 		// under it.
@@ -354,10 +358,10 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "tasks",
 		Aliases: []string{"task", "turns", "turn", "history", "h"},
 		Columns: []Column{
-			{Title: "when", Width: 10},
-			{Title: "status", Width: 10},
+			{Title: "when", Width: 10, Colour: dim},
+			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "asked", Width: 34},
-			{Title: "answered", Width: 0},
+			{Title: "answered", Width: 0, Colour: dim},
 		},
 		// Oldest first, the order it happened in, which is the only order a conversation reads in.
 		SortBy: 0,
@@ -416,17 +420,19 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Aliases: []string{"arch", "archive"},
 		// The same shape as the live view, because both are drawn from the same row. An archived
 		// thread's cost is still worth seeing: it is what that piece of work came to.
+		// The same colours as the live listing, because it is the same listing: a thread that was put
+		// away should not have to be read differently from one that was not.
 		Columns: []Column{
-			{Title: "id", Width: 10},
-			{Title: "workspace", Width: 16},
-			{Title: "project", Width: 20},
-			{Title: "thread", Width: 10},
-			{Title: "status", Width: 10},
-			{Title: "mode", Width: 12},
-			{Title: "in", Width: 7, Give: 3},
-			{Title: "out", Width: 7, Give: 2},
-			{Title: "cache", Width: 7, Give: 1},
-			{Title: "archived", Width: 0},
+			{Title: "id", Width: 10, Colour: dim},
+			{Title: "workspace", Width: 16, Colour: colourOfName},
+			{Title: "project", Width: 20, Colour: colourOfName},
+			{Title: "thread", Width: 10, Colour: colourOfName},
+			{Title: "status", Width: 10, Colour: colourOfStatus},
+			{Title: "mode", Width: 12, Colour: colourOfMode},
+			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
+			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
+			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
+			{Title: "archived", Width: 0, Colour: dim},
 		},
 		SortBy: 3,
 		List:   sessionLister(client, putAway),
@@ -744,8 +750,10 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "stats",
 		Aliases: []string{"stat", "engines", "status"},
+		// A key and its value, the way the status block writes one: cyan on the left, plain on the
+		// right.
 		Columns: []Column{
-			{Title: "what", Width: 22},
+			{Title: "what", Width: 22, Colour: place},
 			{Title: "running", Width: 0},
 		},
 		SortBy: -1,
@@ -789,10 +797,12 @@ func Keys(registry *Registry) Resource {
 	return Resource{
 		Name:    "keys",
 		Aliases: []string{"key", "hotkeys", "bindings"},
+		// The key itself is cyan, which is the colour a key is in the header hints and in the footer,
+		// so the same thing looks the same wherever it is read.
 		Columns: []Column{
-			{Title: "view", Width: 14},
-			{Title: "key", Width: 16},
-			{Title: "does", Width: 0},
+			{Title: "view", Width: 14, Colour: colourOfName},
+			{Title: "key", Width: 16, Colour: place},
+			{Title: "does", Width: 0, Colour: dim},
 		},
 		SortBy: -1,
 		List: func(context.Context, string) ([]Row, error) {

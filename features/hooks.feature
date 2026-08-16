@@ -123,7 +123,7 @@ Feature: A hook is a constraint the crew holds
   Scenario: A newer version of a shipped hook reaches a crew that already holds an older one
     Given a crew already under version 1 of "prompt-analyser"
     When the control plane restarts
-    Then the crew holds "prompt-analyser" at version 2
+    Then the crew holds "prompt-analyser" at the version this build ships
 
   # Importing offers it. Being under it is a separate decision, because a hook is pinned so it cannot
   # change under a session already running with it.
@@ -131,4 +131,4 @@ Feature: A hook is a constraint the crew holds
     Given a crew already under version 1 of "prompt-analyser"
     When the control plane restarts
     Then the workspace is still under "prompt-analyser" at version 1
-    And attaching it again moves the workspace to version 2
+    And attaching it again moves the workspace to the version this build ships
