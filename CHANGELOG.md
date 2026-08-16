@@ -32,6 +32,22 @@ read, or run with `make features`.
   traced beyond the crew's own handling of one message.
   ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
 
+- **Every view in the console is coloured cell by cell.** A row carries a state, and the state was
+  drawn over the whole line, so a row's workspace, project, name and mode all arrived on screen in
+  the same colour. Nine of the ten views set a state on every row they list, so nine listings came
+  out flat and the tenth came out in two colours. The cell colours were there the whole time and
+  nothing could reach them.
+
+  The state lives on the status cell now, which is where the sessions tool keeps it: green for idle,
+  yellow for running, red for failed, dim for stopped. A failed row is the one exception and still
+  takes the whole line, because it has to read as failed before it reads as anything else.
+
+  Age takes the same three bands as that tool's idle column, so a thread touched a moment ago, one
+  from this morning and one from last week are told apart without reading the number. The views that
+  had no cell colour at all have one now: names carry their own colour, identifiers and counts are
+  dim, a key is cyan wherever it is read. A case sweeps every registered view, so the next one added
+  cannot be the flat one.
+
 - **A turn says which model to run, and it runs Opus.** The crew never passed `--model`, so the
   choice belonged to the command line tool, and the tool chooses Sonnet. Every session on this crew
   was running Sonnet 5 against an Opus subscription, and nothing anywhere said so.
@@ -76,6 +92,30 @@ read, or run with `make features`.
   from outside.
 
 ## 15 August 2026
+
+- **The prompt analyser is Go, and it has tests.** It was 672 lines of TypeScript across two files
+  with no test of any kind behind them, run by node through a shebang that stripped types at load.
+  Every rule it applied, which lines of a model's answer survive, what a half written config file
+  falls back to, which variables the child inherits, was readable only by reading the hook and
+  hoping.
+
+  It is 746 lines of Go across two files, so the hook itself is the same size, and it is its own
+  module because a hook is a plugin rather than part of the crew: it does not share the crew's
+  dependencies and cannot import its internals. The standard library is all it needs. 47 tests cover
+  the parts that were bare before, and the two that carry the most weight were mutation checked:
+  dropping the guard from the child environment, and keeping every line of the model's answer
+  instead of the known fields, each turn the suite red.
+
+  The entry point is `bin/hook`, built by `make hooks` and by the image build rather than committed.
+  A hook is an executable, an executable is a build artifact, and one committed binary runs on one
+  processor type while this image is built on both arm and amd machines. `node` is off the hook's
+  list of what it needs, leaving `claude` alone.
+
+  Behaviour is unchanged, and it was checked by running the built binary the way the runtime does:
+  the message as typed and the analysis both reach the session, the guard and the zero thinking
+  budget reach the child, the subscription token survives while the session's own variables are
+  dropped, and a missing model, an unreadable payload and an empty message each end in exit 0 with
+  the message still getting through.
 
 - **Tab cycles the wizard's options.** Every question the wizard asks that has a fixed set of
   answers, what to make, which workspace, which mode a session may start in, took the answer as
