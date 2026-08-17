@@ -22,6 +22,11 @@ read, or run with `make features`.
   A role's brief may be four pages where a skill's may be one, and the reason is who pays: a skill's
   line reaches every session on every conversation, and a role's brief reaches one session once.
 
+  Importing, attaching and detaching a role are refused to the driver's token, on the same line as a
+  skill. A role carries a brief, a model and the material a session receives, so a session that could
+  attach one could write itself a way of working nobody approved and then be run as it. Reading what
+  the crew holds stays open, because choosing from what the operator attached is the point.
+
   Nothing runs as a role yet. Attaching one changes what the crew may be asked for and changes
   nothing about a session already open. The design is in [`docs/ROLES.md`](docs/ROLES.md) and the
   rest of it is [issue 354](https://github.com/atlantic-blue/quay-crew/issues/354).

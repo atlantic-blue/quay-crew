@@ -89,6 +89,17 @@ has. Skills stop in the same place, and nothing has wanted the inner two yet.
 `quay role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
 off the crew leaves a workspace's own attachment alone.
 
+## Who may attach one
+
+The operator, and not a session. Importing, attaching and detaching are refused to the driver's
+token, the way importing a skill is. A role carries a brief, a model and the material a session
+receives, so a session that could attach one could write itself a way of working nobody approved and
+then be run as it. That is design principle 5 in [`ARCHITECTURE.md`](ARCHITECTURE.md): an agent can
+propose, and nothing self applies.
+
+Reading stays open. Choosing from the roles the operator already attached is the point of having
+them.
+
 ## What is not built
 
 - No session runs as a role. Nothing reads `receives` at dispatch yet.
