@@ -100,6 +100,10 @@ for, how to inspect it with `rpk`, and why it is empty today.
 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) is the third: which signals are real, which are
 wired but carry nothing, and what to read when something goes wrong.
 
+[`docs/TASKS.md`](docs/TASKS.md) joins those two up. It follows one task from the moment you dispatch
+it to the records it leaves behind, and it names the words that get used for each other: the store,
+the broker, a seed, a topic and the key.
+
 Common targets:
 
 ```sh

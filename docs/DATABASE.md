@@ -108,11 +108,16 @@ shows it and `quay context edit` changes it.
 **`channels`** is where an attached chat channel would be recorded: `id`, `workspace`, `kind`. It is
 empty today, and it stays empty until the first chat channel lands. See `docs/EVENTS.md`.
 
-**`tasks`** is the read model: one row per task, carrying what was asked, what came back, the status
-and when. It is written by the projection that consumes `<workspace>.tasks` off the event log, not by
-the control plane directly, and it is the one table here that can be thrown away without losing
-anything, because the log can rebuild it. Its `id` comes from the event rather than from the
-database, which is what makes an at least once delivery safe to replay. See `docs/EVENTS.md`.
+**`tasks`** is the history: one row per task, carrying what was asked, what came back, the status and
+when. The dispatch path writes it in the same breath as the task itself, on a context detached from
+the request, so a caller that hangs up cannot lose the record of the task it was waiting on. The
+projection that used to write it from the event log is retired, and this paragraph said so for
+longer than it was true.
+
+It is not disposable. It is the only copy of what a session has done, and the export to
+`<workspace>.tasks` is a copy going outward rather than a source it could be rebuilt from. Its `id`
+is minted where the row is written, so the same identifier travels outward on the export. See
+`docs/TASKS.md` for the whole path and `docs/EVENTS.md` for the export.
 
 **`schema_migrations`** is one row per applied migration, with the timestamp it was applied.
 
