@@ -106,8 +106,9 @@ Each is its own Go service in its own container.
   Each message carries a `workspace` and a `correlation_id` (which is also the trace id).
 
 `docs/EVENTS.md` is the operator's version of this: how Redpanda runs, how to inspect it with `rpk`,
-how topics are named, and the honest state of the log today, which is that the boundary and its
-client exist while nothing publishes to it or consumes it yet.
+how topics are named, and the honest state of the log today, which is that a finished task is
+exported to it and nothing reads it back. `docs/TASKS.md` follows one task the whole way, from the
+moment it is dispatched to the records it leaves in the store and on the log.
 
 ## Workspaces and isolation
 

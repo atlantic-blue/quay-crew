@@ -90,8 +90,11 @@ quay dispatch "say pong"
 The stack reads `~/.quay/env` on every command, so the model and image you chose survive a restart
 and an upgrade. It sits outside this checkout, because a crew that was installed rather than cloned has no
 checkout to keep configuration in. Creating something moves you into it, so nothing above says where twice, and `quay use` tells
-you where you are. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version, including what runs without a
-subscription. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
+you where you are. [`docs/WORKSPACE.md`](docs/WORKSPACE.md) takes one workspace from nothing to
+working: secrets as variables and as files, who a session commits as, context, shared files,
+repositories, skills and hooks. [`docs/SANDBOX.md`](docs/SANDBOX.md) has the long version of the
+sandbox itself, including what runs without a subscription. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture.
 
 Two of the services in that stack are worth knowing on their own.
 [`docs/DATABASE.md`](docs/DATABASE.md) is Postgres: why a session survives a restart, how to shell in
@@ -99,6 +102,10 @@ with psql, and what each table means. [`docs/EVENTS.md`](docs/EVENTS.md) is the 
 for, how to inspect it with `rpk`, and why it is empty today.
 [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) is the third: which signals are real, which are
 wired but carry nothing, and what to read when something goes wrong.
+
+[`docs/TASKS.md`](docs/TASKS.md) joins those two up. It follows one task from the moment you dispatch
+it to the records it leaves behind, and it names the words that get used for each other: the store,
+the broker, a seed, a topic and the key.
 
 Common targets:
 
@@ -122,10 +129,11 @@ one running stack (logical isolation) or run as fully separate stacks when you w
 
 ## Secrets
 
-Secrets are never stored in the repository. You set a workspace's credentials through the dashboard or
-the API; they go straight to a pluggable secrets backend (an encrypted local store for development,
-a managed secrets service in the cloud). The event log records only a reference, never the value, and
-logs redact them.
+Secrets are never stored in the repository. You set a workspace's credentials with `quay secret set`,
+or `quay secret mount` for a credential that is a file, and they go straight to a pluggable secrets
+backend (an encrypted local store for development, a managed secrets service in the cloud). The event
+log records only a reference, never the value, and logs redact them.
+[`docs/WORKSPACE.md`](docs/WORKSPACE.md) covers which of the two to choose and why.
 
 ## Roadmap
 

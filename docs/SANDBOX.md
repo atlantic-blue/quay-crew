@@ -246,19 +246,22 @@ sign, and nothing fails: signing is available in every workspace and required in
 
 ## Where a session's state lives
 
-A sandbox is a container, and a container's filesystem is thrown away with it. So the directories
-that matter are mounted in from the host:
+A sandbox is a container, and a container's filesystem is thrown away with it. So the three
+directories that matter are mounted in from the host:
 
 ```
-~/.quay/data/workspaces/<workspace>/claude                                     ->  /home/agent/.claude
-~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace  ->  /home/agent/workspace
-~/.quay/data/workspaces/<workspace>/volume                                     ->  /home/agent/shared
+~/.quay/data/workspaces/<workspace>/claude    ->  /home/agent/.claude
+~/.quay/data/workspaces/<workspace>/volume    ->  /home/agent/shared
+~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
+                                              ->  /home/agent/workspace
 ```
 
 The first is the model's own store: its settings, the transcripts `--resume` reads, and the
-workspace's `CLAUDE.md`, shared by every project in that workspace. The second is one session's own
-working directory: its files and its own `CLAUDE.md`. The third is the workspace's volume, which every
-session in the workspace sees. All three are read write, and all three survive the container being
+`CLAUDE.md` every session in that workspace reads. The second is the workspace's volume, shared by
+every session in it, which is where something one session writes is there for the next one. The
+third is one session's own working directory: its files and its own `CLAUDE.md`. A working directory
+belongs to a session rather than to a project, because two conversations sharing one would each be
+changing files under the other. All three are read write, and all three survive the container being
 replaced.
 
 That is also how you give a session context. Write it with an editor:
@@ -267,10 +270,12 @@ That is also how you give a session context. Write it with an editor:
 echo "Supplier is Octopus, account 123." >> ~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace/CLAUDE.md
 ```
 
-That session reads it on the next task, because the model already looks for `CLAUDE.md` in its working
-directory. Nothing is prepended to your message and nothing is charged for a task that does not need
-it. An agent can also write these files, which is the trade for keeping the conversation in the same
-place.
+That session reads it on the next task, because the model already looks for `CLAUDE.md` in its
+working directory. Nothing is prepended to your message and nothing is charged for a task that does
+not need it. An agent can also write these files, which is the trade for keeping the conversation in
+the same place. `quay context set` is the same thing said as a command, and it holds what it writes
+in the store, so a level survives a session being replaced. See
+[`docs/WORKSPACE.md`](WORKSPACE.md).
 
 ### A repository goes in the volume
 
