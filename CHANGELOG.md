@@ -8,6 +8,24 @@ read, or run with `make features`.
 
 ## 17 August 2026
 
+- **A role is imported, pinned to a version, and attached at a level.** A role is a named way of
+  working a session is given: a brief the model reads, the model it runs on, and the material it is
+  allowed to receive. `quay role import`, `quay role list`, `quay role attach` and `quay role detach`,
+  which is the shape a skill and a hook already have, at the same two levels.
+
+  The point of it is the boundary rather than the persona. A flow sends work to one session today, so
+  the session that writes the code has already read everything the session that planned it said, and
+  a second opinion that read the first one is not a second opinion. So a role declares what it
+  receives, from three words the crew actually assembles: `work`, `context` and `skills`. A fourth is
+  refused at import by name, because a boundary that means nothing looks exactly like one that holds.
+
+  A role's brief may be four pages where a skill's may be one, and the reason is who pays: a skill's
+  line reaches every session on every conversation, and a role's brief reaches one session once.
+
+  Nothing runs as a role yet. Attaching one changes what the crew may be asked for and changes
+  nothing about a session already open. The design is in [`docs/ROLES.md`](docs/ROLES.md) and the
+  rest of it is [issue 354](https://github.com/atlantic-blue/quay-crew/issues/354).
+
 - **A repository is cloned once for the workspace, and each session works in a tree of its own.** The
   git brief said to clone into your working directory, and that directory belongs to one session, so a
   workspace working in one repository across four sessions held four clones of it. Driving a live crew

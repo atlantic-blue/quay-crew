@@ -59,6 +59,10 @@ const (
 	ControlPlaneService_ListHooks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListHooks"
 	ControlPlaneService_AttachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachHook"
 	ControlPlaneService_DetachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachHook"
+	ControlPlaneService_ImportRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ImportRole"
+	ControlPlaneService_ListRoles_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListRoles"
+	ControlPlaneService_AttachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachRole"
+	ControlPlaneService_DetachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachRole"
 	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
@@ -110,6 +114,10 @@ type ControlPlaneServiceClient interface {
 	ListHooks(ctx context.Context, in *ListHooksRequest, opts ...grpc.CallOption) (*ListHooksResponse, error)
 	AttachHook(ctx context.Context, in *AttachHookRequest, opts ...grpc.CallOption) (*AttachHookResponse, error)
 	DetachHook(ctx context.Context, in *DetachHookRequest, opts ...grpc.CallOption) (*DetachHookResponse, error)
+	ImportRole(ctx context.Context, in *ImportRoleRequest, opts ...grpc.CallOption) (*ImportRoleResponse, error)
+	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
+	AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error)
+	DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -525,6 +533,46 @@ func (c *controlPlaneServiceClient) DetachHook(ctx context.Context, in *DetachHo
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ImportRole(ctx context.Context, in *ImportRoleRequest, opts ...grpc.CallOption) (*ImportRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportRoleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ImportRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRolesResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachRoleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AttachRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachRoleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_DetachRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListTasksResponse)
@@ -601,6 +649,10 @@ type ControlPlaneServiceServer interface {
 	ListHooks(context.Context, *ListHooksRequest) (*ListHooksResponse, error)
 	AttachHook(context.Context, *AttachHookRequest) (*AttachHookResponse, error)
 	DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error)
+	ImportRole(context.Context, *ImportRoleRequest) (*ImportRoleResponse, error)
+	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
+	AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error)
+	DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -735,6 +787,18 @@ func (UnimplementedControlPlaneServiceServer) AttachHook(context.Context, *Attac
 }
 func (UnimplementedControlPlaneServiceServer) DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DetachHook not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ImportRole(context.Context, *ImportRoleRequest) (*ImportRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportRole not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoles not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachRole not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachRole not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
@@ -1486,6 +1550,78 @@ func _ControlPlaneService_DetachHook_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ImportRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ImportRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ImportRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ImportRole(ctx, req.(*ImportRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListRoles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListRoles(ctx, req.(*ListRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AttachRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AttachRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AttachRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AttachRole(ctx, req.(*AttachRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_DetachRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).DetachRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_DetachRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).DetachRole(ctx, req.(*DetachRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListTasksRequest)
 	if err := dec(in); err != nil {
@@ -1706,6 +1842,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DetachHook",
 			Handler:    _ControlPlaneService_DetachHook_Handler,
+		},
+		{
+			MethodName: "ImportRole",
+			Handler:    _ControlPlaneService_ImportRole_Handler,
+		},
+		{
+			MethodName: "ListRoles",
+			Handler:    _ControlPlaneService_ListRoles_Handler,
+		},
+		{
+			MethodName: "AttachRole",
+			Handler:    _ControlPlaneService_AttachRole_Handler,
+		},
+		{
+			MethodName: "DetachRole",
+			Handler:    _ControlPlaneService_DetachRole_Handler,
 		},
 		{
 			MethodName: "ListTasks",
