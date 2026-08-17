@@ -120,15 +120,36 @@ mounts a signing key signs. A workspace that mounts none is told `commit.gpgsign
 reads. Without this half, an operator configuration that signs everything fails every commit a
 session makes, on a key the container was never going to have.
 
+Mount the gpg key you already sign with, and a session signs under your own identity:
+
+```sh
+gpg --armor --export-secret-keys <key id> > /tmp/signing-key.asc
+quay secret mount acme GPG_SIGNING_KEY < /tmp/signing-key.asc
+rm /tmp/signing-key.asc
+quay secret mount acme GPG_SIGNING_KEY_PASSPHRASE < ~/.quay/passphrase
+```
+
+Mount the passphrase whenever the key has one, which is most of them. gpg in a sandbox runs in
+batch, with no terminal to ask on, so a key it cannot unlock fails in a second with a message
+instead of hanging a task nobody is watching.
+
+An ssh key is the other option, and it signs under a second identity:
+
 ```sh
 quay secret mount acme GIT_SSH_SIGNING_KEY < ~/.ssh/id_ed25519
 ```
 
-Three things about the key. It must be in ssh format, because signing with ssh needs one file and no
-agent, no keyring and no interactive prompt. It must end with a newline, or git reports
-`Couldn't load public key`, which does not point at the cause. Put the public half on the account
-you push to, beside the key your own machine signs with, because a commit signed in a sandbox is
-signed by a different key.
+Put its public half on the account you push to, beside the key your own machine signs with, because
+a commit signed in a sandbox is then signed by a different key. The file must also end with a
+newline. Measured on this machine: `ssh-keygen -Y sign` with the same key one byte shorter exits 255
+and reports `Couldn't load public key <path>: No such file or directory`, which does not point at
+the cause. `quay secret mount` stores bytes exactly, so a key redirected from a file is fine, and a
+key passed through a shell substitution is not.
+
+Every signing secret is mounted, never set. Setting one is refused, and the refusal names the mount
+command. A workspace that mounts both kinds of key signs with the gpg one. A workspace that mounts
+neither does not sign, and nothing fails. [`docs/SANDBOX.md`](SANDBOX.md) has the long version,
+including where the keyring lives.
 
 A private clone needs `GH_TOKEN`. The image carries a credential helper that answers git from that
 variable at the moment git asks, so no token ever reaches a remote address or a file.

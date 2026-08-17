@@ -32,9 +32,25 @@ LABEL com.quaycrew.build=$QC_VERSION
 # openssh-client is here for ssh-keygen, not for ssh. Git signs an ssh format signature by running
 # ssh-keygen, so without this package a session with a signing key configured cannot commit at all:
 # git fails with "cannot run ssh-keygen" before it reads the key.
+#
+# gnupg is the same thing for the other signature format. Git makes an OpenPGP signature by running
+# gpg, so a workspace that mounts a gpg key gets "cannot run gpg" without it, which is the failure
+# an earlier measurement recorded.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git openssh-client ripgrep tmux \
+    && apt-get install -y --no-install-recommends ca-certificates curl git gnupg openssh-client ripgrep tmux \
     && rm -rf /var/lib/apt/lists/*
+
+# Where gpg keeps its keyring, which is a memory backed directory rather than the home one.
+#
+# A mounted key never reaches the disk: it lands in a memory backed /run/secrets and the container's
+# writable layer never sees it. Importing it into the default keyring would undo that, because
+# ~/.gnupg is on the writable layer and the daemon keeps that until the container is removed. /dev/shm
+# is memory, per container, and gone with it.
+#
+# Set here rather than at sandbox birth because git runs gpg itself, in whatever environment the
+# container gives it, and an attached terminal is a third process again. One value every process in
+# the sandbox reads is the only shape that holds.
+ENV GNUPGHOME=/dev/shm/gnupg
 
 # gh, for the github skill. A pinned release rather than an apt repository, so the image builds the
 # same binary everywhere and needs no keyring; the architecture is asked of dpkg because this image
