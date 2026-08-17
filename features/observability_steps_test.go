@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/logging"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
@@ -104,13 +105,24 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		return w.restart()
 	})
 
+	// The span is ended by a gRPC stats handler on the server, and a stats handler sees the end of a
+	// call after the status has gone back to the caller. So a client that has its answer is not
+	// evidence that the span has landed, and reading once asserts on a set that may still be filling.
+	// The same shape as the exported task below, which waits for the same reason.
 	sc.Step(`^the crew records a span named "([^"]*)"$`, func(ctx context.Context, name string) error {
-		for _, ended := range endedSpanNames() {
-			if ended == name {
-				return nil
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			ended := endedSpanNames()
+			for _, one := range ended {
+				if one == name {
+					return nil
+				}
 			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("no span named %q was recorded; the crew recorded %v", name, ended)
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-		return fmt.Errorf("no span named %q was recorded; the crew recorded %v", name, endedSpanNames())
 	})
 
 	sc.Step(`^the crew says the task could not be exported$`, func(ctx context.Context) error {

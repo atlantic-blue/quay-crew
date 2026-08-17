@@ -148,6 +148,11 @@ func truncate(t *testing.T) {
 	// fresh map and passed, while against real Postgres the first attach in a subtest came back at
 	// version 2 from rows the previous subtest had left behind.
 	//
+	// Roles are the same shape again, and they arrived with the same symptom: a role attached at
+	// version 1 read back as version 2, and attaching a role nobody had imported was accepted. Any
+	// table keyed by its own name rather than by a workspace belongs in this list, because the
+	// cascade cannot reach it.
+	//
 	// Secrets are the third. They are keyed by a workspace identifier that is a plain string rather
 	// than a reference, so nothing cascades to them, and one test's token was still set for "acme"
 	// when the next one listed what that workspace held.
@@ -156,7 +161,7 @@ func truncate(t *testing.T) {
 		// survived a truncate that claimed to leave nothing behind, so one subtest's task-0 was still
 		// there when the next one wrote its own, and AppendTask's "on conflict do nothing" dropped it
 		// silently. What that looked like was a case reading zero tasks it had just written.
-		`truncate sessions, tasks, channels, workspaces, skills, hooks, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, tasks, channels, workspaces, skills, hooks, roles, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
