@@ -8,6 +8,23 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **Setting up a workspace is written down in one page.** The knowledge was there and it was
+  scattered. The README made a workspace in four commands, `docs/SANDBOX.md` covered the image and
+  the two credentials that are files, `docs/SKILLS.md` and `docs/HOOKS.md` each covered their own
+  subsystem, and `quay manual` listed every command. Nothing took an operator from nothing to a
+  workspace whose sessions can read a repository and commit as them.
+  [`docs/WORKSPACE.md`](docs/WORKSPACE.md) does that: the two ways a secret reaches a session and
+  which to choose, who a session commits as, the four levels of context and the two files they land
+  in, the shared volume, what happens about repositories, skills, hooks, and which changes need a new
+  sandbox.
+
+  Two corrections came out of writing it. `docs/SANDBOX.md` named two mounted directories where the
+  code mounts three, so the workspace volume at `/home/agent/shared` was documented nowhere, and it
+  printed a working directory of `projects/<project>/workspace`, which moved under
+  `sessions/<session>/` when a working directory became a session's rather than a project's. The
+  README said credentials are set through the dashboard or the API, which is not how anybody sets
+  one.
+
 - **A session can sign with your own gpg key.** Signing worked and signed as somebody else. The crew
   took one key, an ssh one, so a commit made in a sandbox carried a second identity on the same
   history as the commits made on the operator's laptop, and the account had to know both.
