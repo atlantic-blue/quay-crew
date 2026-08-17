@@ -691,9 +691,10 @@ Concretely:
 
 ## Deployment
 
-- **Everything in Docker.** Each component is a container; a compose file wires them locally, and
-  `make up` (alias `make start`) is the front door. The heavy observability stack sits behind a compose
-  profile so the day to day loop stays light.
+- **Everything in Docker, and everything starts.** Each component is a container; a compose file
+  wires them locally, and `make up` (alias `make start`) is the front door. There are no compose
+  profiles: the observability stack and the broker used to sit behind one to keep the day to day loop
+  light, and the cost was a crew you could not see and an export nobody had switched on.
 - **Local and cloud from one build.** The event log, storage, sandbox, and secrets are each behind an
   interface with a local implementation (Redpanda, files or a local database, local docker, an
   encrypted local store) and a cloud implementation (managed Kafka or Redpanda, object store, remote

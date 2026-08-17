@@ -164,13 +164,18 @@ upgrade:
 	@echo "rebuilding and restarting the stack. Secrets are held in memory, so set the model token again afterwards."
 	$(COMPOSE) up --build -d
 
-## up-observability: also start Grafana, Loki, Tempo, Prometheus
-up-observability: config
-	$(COMPOSE) --profile observability up --build -d
+## up-observability: retired alias for up, which now starts everything
+#
+# Kept because it is in fingers, in scripts and in notes. It does what it always did, and says why it
+# is no longer a separate command, rather than becoming an unknown target somebody has to go and read
+# the Makefile to explain.
+up-observability: up
+	@echo "note: up-observability is now the same as make up. Grafana, Loki, Tempo and Prometheus"
+	@echo "      start with the rest of the stack, so there is no second command to remember."
 
 ## down: stop and remove everything
 down: config
-	$(COMPOSE) --profile observability down
+	$(COMPOSE) down
 
 ## logs: follow all service logs
 logs: config

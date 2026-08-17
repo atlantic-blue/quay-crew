@@ -132,8 +132,10 @@ jobs:
       - name: Build images
         run: docker compose -f deploy/docker-compose.yml build
 
-      - name: Start the core stack
-        run: docker compose -f deploy/docker-compose.yml up -d redpanda postgres otel-collector gateway controlplane
+      # The whole stack, not a list of services. Naming them meant the observability containers were
+      # never started here, so a change to them passed continuous integration without being run once.
+      - name: Start the stack
+        run: docker compose -f deploy/docker-compose.yml up -d
 
       - name: Wait for Redpanda to be healthy
         run: |
@@ -155,6 +157,46 @@ jobs:
           # both services must still be running (they reached the collector, and Redpanda, over the network)
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q gateway)")" = "true"
           test "$(docker inspect -f '{{.State.Running}}' "$(docker compose -f deploy/docker-compose.yml ps -q controlplane)")" = "true"
+
+      # Every service the compose file defines has to be running, read from the file rather than from
+      # a list written here: a list goes stale the moment somebody adds a service, and a service that
+      # was never started looks exactly like one that started fine.
+      - name: Every service in the compose file is running
+        run: |
+          set -euo pipefail
+          services=$(docker compose -f deploy/docker-compose.yml config --services | sort)
+          test -n "$services"
+          echo "$services"
+          for service in $services; do
+            cid=$(docker compose -f deploy/docker-compose.yml ps -q "$service")
+            if [ -z "$cid" ]; then
+              echo "$service: never started"
+              docker compose -f deploy/docker-compose.yml logs "$service" || true
+              exit 1
+            fi
+            running=$(docker inspect -f '{{.State.Running}}' "$cid")
+            echo "$service: running=$running"
+            if [ "$running" != "true" ]; then
+              docker compose -f deploy/docker-compose.yml logs "$service"
+              exit 1
+            fi
+          done
+
+      # Grafana comes up joined or it comes up empty, and the two look identical from outside. Ask it
+      # what it holds, and require the three the repository provisions.
+      - name: Grafana holds the data sources this repository provisions
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            found=$(curl -fsS http://localhost:3000/api/datasources 2>/dev/null || echo "")
+            [ -n "$found" ] && break
+            sleep 5
+          done
+          test -n "$found"
+          echo "$found"
+          for name in Tempo Prometheus Loki; do
+            echo "$found" | grep -q "\"name\":\"$name\"" || { echo "grafana has no $name data source"; exit 1; }
+          done
 
       - uses: actions/setup-go@v5
         with:
@@ -208,6 +250,57 @@ jobs:
           test -n "$handle"
           go run ./cmd/quay dispatch "smoke/bills/$handle" "second task" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+
+      # Tasks have now run, so the signals have to have moved. This is the check docs/OBSERVABILITY.md
+      # tells an operator to run, and it is the one that was never automated: the stack could ship
+      # emitting nothing and every other step here would still pass.
+      - name: The tasks that just ran produced telemetry
+        run: |
+          set -euo pipefail
+          # The debug exporter spells its summary differently by verbosity: "ResourceSpans" only at
+          # detailed, "TracesExporter" and "resource spans" at normal. Match any of them rather than
+          # pinning the check to one verbosity setting.
+          marker='ResourceSpans|TracesExporter|resource spans'
+          for i in $(seq 1 20); do
+            spans=$(docker compose -f deploy/docker-compose.yml logs otel-collector 2>&1 | grep -cE "$marker" || true)
+            [ "$spans" -gt 0 ] && break
+            sleep 3
+          done
+          echo "collector logged $spans lines matching $marker"
+          if [ "$spans" -eq 0 ]; then
+            # Print what it did say, so the next person diagnoses this from one run rather than two.
+            echo "--- the collector's whole log ---"
+            docker compose -f deploy/docker-compose.yml logs otel-collector 2>&1 | tail -100
+            echo "--- what the control plane says about its endpoint ---"
+            docker compose -f deploy/docker-compose.yml logs controlplane 2>&1 | grep -iE "otel|telemetry|export" | tail -20 || true
+            exit 1
+          fi
+
+      # Grafana reaching a store is the difference between a provisioned data source and a working
+      # one, and the two look identical in the configuration file. Asked through Grafana's own proxy,
+      # so this fails if either end is wrong.
+      - name: Grafana can reach Tempo and Loki
+        run: |
+          set -euo pipefail
+          # Loki answers /ready with 503 until its ingester has been ready for fifteen seconds, so one
+          # request here fails against a store that is coming up correctly. Retry rather than ask
+          # once. A store that never answers still fails the job, and brings its log with it.
+          reach() {
+            what=$1; url=$2; service=$3; body=""
+            for i in $(seq 1 40); do
+              if body=$(curl -fsS "$url" 2>&1); then
+                echo "$what: $body"
+                return 0
+              fi
+              sleep 3
+            done
+            echo "$what never answered: $body"
+            docker compose -f deploy/docker-compose.yml logs "$service" 2>&1 | tail -50
+            return 1
+          }
+          reach tempo "http://localhost:3000/api/datasources/proxy/uid/tempo/api/echo" tempo
+          reach loki "http://localhost:3000/api/datasources/proxy/uid/loki/ready" loki
+          reach prometheus "http://localhost:9090/-/ready" prometheus
 
       # The point of this step: prove a session is really durable. Restarting the control plane
       # throws away everything the process held, so anything still visible afterwards came back from

@@ -8,6 +8,26 @@ read, or run with `make features`.
 
 ## 16 August 2026
 
+- **`make up` starts everything. There are no compose profiles left.** Grafana, Loki, Tempo and
+  Prometheus sat behind an `observability` profile and Redpanda behind an `export` one, each to keep
+  a laptop light. What that bought was a crew you could not see and an audit export nobody had
+  switched on, plus two more commands to know exist. A signal nobody starts is a signal nobody has.
+
+  `QC_KAFKA_SEEDS` now defaults to `redpanda:9092`, so the export is on rather than merely possible.
+  Set it to empty in your own configuration to turn it off, which loses nothing: the store is the
+  source of truth and the log only ever carried a copy.
+
+  The collector keeps its queue and its retry again. They were off because the stores behind them
+  might not be running; now they always are, so a batch that arrives while one is still coming up is
+  held and delivered rather than dropped.
+
+  `make up-observability` still works and says it is now the same as `make up`, because it is in
+  fingers and in notes. `deploy/telemetry_test.go` refuses any service that goes back behind a
+  profile, so this cannot return one service at a time.
+
+  The cost is four more containers on every `make up`. That is the trade, stated here rather than
+  discovered.
+
 - **Setting up a workspace is written down in one page.** The knowledge was there and it was
   scattered. The README made a workspace in four commands, `docs/SANDBOX.md` covered the image and
   the two credentials that are files, `docs/SKILLS.md` and `docs/HOOKS.md` each covered their own

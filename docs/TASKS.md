@@ -17,8 +17,8 @@ set the crew uses an in memory store instead, which is what the tests run agains
 everything on restart.
 
 **The broker** is a separate server that keeps named streams of records and hands them to whoever
-asks for them. Locally it is Redpanda, which speaks the Kafka protocol. It is its own container and
-it starts only with `docker compose --profile export up`.
+asks for them. Locally it is Redpanda, which speaks the Kafka protocol. It is its own container, and
+`make up` starts it with everything else.
 
 **A seed** is an address the client dials first. A cluster can hold many brokers, and you do not list
 them all: you give one or two seed addresses, the client connects, asks the cluster who else is
@@ -121,7 +121,8 @@ Read the store, which always works:
 quay tasks <session>
 ```
 
-Read the log, which needs the export profile up and `QC_KAFKA_SEEDS` set:
+Read the log, which needs `QC_KAFKA_SEEDS` set. The compose file defaults it to `redpanda:9092`, so
+it is set unless your own configuration empties it:
 
 ```
 docker exec -it quaycrew-redpanda-1 rpk topic list

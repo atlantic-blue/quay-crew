@@ -64,14 +64,18 @@ logs to Loki, and republishes metrics for Prometheus to scrape. The `debug` expo
 each of them, so the collector's own log is still the fastest way to see whether anything is arriving
 at all.
 
-**The telemetry stack is not running by default.** Grafana, Loki, Tempo and Prometheus are in the
-compose file behind the `observability` profile, so `make up` does not start them.
-`make up-observability` does, and it comes up joined: Grafana's data sources are provisioned from
-`deploy/grafana/datasources.yaml` rather than added by hand.
+**The telemetry stack starts with everything else.** `make up` brings up Grafana, Loki, Tempo and
+Prometheus alongside the services, and it comes up joined: Grafana's data sources are provisioned
+from `deploy/grafana/datasources.yaml` rather than added by hand.
 
-With the profile off there is nowhere to forward to, so the collector drops each batch of traces and
-says so once. The queue and the retry are turned off for exactly this reason, so a crew running
-without the profile makes one line per batch instead of holding them and retrying forever.
+These four used to sit behind an `observability` profile, so a plain `make up` gave you a crew you
+could not see and a second command to remember. A signal nobody starts is a signal nobody has, so
+there is no second command now. `make up-observability` still works and says it is the same thing.
+`deploy/telemetry_test.go` refuses any service that goes back behind a profile.
+
+The collector keeps its queue and its retry, so a batch that arrives while a store is still coming up
+is held and delivered rather than dropped. Those were off while the four were behind a profile,
+because there was nothing to deliver to.
 
 You can confirm the whole picture in one command. On a stack that has been up and serving:
 
@@ -145,17 +149,17 @@ queries.
 ## Running the telemetry stack
 
 ```
-make up-observability
+make up
 ```
 
-That starts Grafana, Loki, Tempo and Prometheus alongside the core stack. Grafana is on
+That starts Grafana, Loki, Tempo and Prometheus with everything else. Grafana is on
 `http://localhost:3000` with anonymous access as an admin, so there is no login, and Prometheus is on
 `http://localhost:9090`.
 
 The shortest way to see it working, from a cold start:
 
 ```
-make up-observability
+make up
 quay dispatch <workspace>/<project> "remember the number"
 ```
 
@@ -239,5 +243,5 @@ refuses a host that is not a service or a scrape port that is not the one the co
 
 Neither of those is the same as having watched it work. Every command in this document that starts
 `docker` is a reproduction step and not a captured result: this change was made and gated in an
-environment with no container runtime. Run `make up-observability`, dispatch a task, and the Tempo
+environment with no container runtime. Run `make up`, dispatch a task, and the Tempo
 search above is the check.
