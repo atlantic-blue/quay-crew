@@ -216,31 +216,66 @@ mounting exists to avoid, and the key is the most sensitive thing this crew carr
 half on the account you push to as a signing key, alongside the one your own machine signs with: a
 commit signed in a sandbox is signed by a different key from one signed on your laptop.
 
-## Where a session's state lives
+### Signing with your own gpg key instead
 
-A sandbox is a container, and a container's filesystem is thrown away with it. So the two directories
-that matter are mounted in from the host:
+An ssh key in a sandbox signs your history under a second identity. If you already sign with gpg,
+mount that key and a session signs as you do everywhere else. Export it first:
 
 ```
-~/.quay/data/workspaces/<workspace>/claude                       ->  /home/agent/.claude
-~/.quay/data/workspaces/<workspace>/projects/<project>/workspace  ->  /home/agent/workspace
+gpg --armor --export-secret-keys <key id> > /tmp/signing-key.asc
+quay secret mount <workspace> GPG_SIGNING_KEY /tmp/signing-key.asc
+rm /tmp/signing-key.asc
+```
+
+The sandbox imports it at birth into a keyring in `/dev/shm`, which is memory, per container, and
+gone with the container. Nothing of the key reaches the disk.
+
+If the key has a passphrase, and most do, mount that too. Without it gpg has nothing to unlock the
+key with, and the commit fails saying so:
+
+```
+quay secret mount <workspace> GPG_SIGNING_KEY_PASSPHRASE ~/.quay/passphrase
+```
+
+gpg in a sandbox runs in batch, with no terminal to ask on. That is deliberate: a passphrase prompt
+in a task nobody is watching waits forever, and a failure with a message does not. The passphrase is
+mounted rather than set, on the same terms as the key, because it is worth what the key is worth.
+
+A workspace mounting both kinds of key signs with the gpg one. A workspace mounting neither does not
+sign, and nothing fails: signing is available in every workspace and required in none.
+
+## Where a session's state lives
+
+A sandbox is a container, and a container's filesystem is thrown away with it. So the three
+directories that matter are mounted in from the host:
+
+```
+~/.quay/data/workspaces/<workspace>/claude    ->  /home/agent/.claude
+~/.quay/data/workspaces/<workspace>/volume    ->  /home/agent/shared
+~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
+                                              ->  /home/agent/workspace
 ```
 
 The first is the model's own store: its settings, the transcripts `--resume` reads, and the
-workspace's `CLAUDE.md`, shared by every project in that workspace. The second is one project's
-working directory: its files and its own `CLAUDE.md`. Both are read write, and both survive the
-container being replaced.
+`CLAUDE.md` every session in that workspace reads. The second is the workspace's volume, shared by
+every session in it, which is where something one session writes is there for the next one. The
+third is one session's own working directory: its files and its own `CLAUDE.md`. A working directory
+belongs to a session rather than to a project, because two conversations sharing one would each be
+changing files under the other. All three are read write, and all three survive the container being
+replaced.
 
-That is also how you give a project context. Write it with an editor:
+That is also how you give a session context. Write it with an editor:
 
 ```
-echo "Supplier is Octopus, account 123." >> ~/.quay/data/workspaces/<workspace>/projects/<project>/workspace/CLAUDE.md
+echo "Supplier is Octopus, account 123." >> ~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace/CLAUDE.md
 ```
 
-Every session in that project reads it on the next task, because the model already looks for
-`CLAUDE.md` in its working directory. Nothing is prepended to your message and nothing is charged for
-a task that does not need it. An agent can also write these files, which is the trade for keeping the
-conversation in the same place.
+That session reads it on the next task, because the model already looks for `CLAUDE.md` in its
+working directory. Nothing is prepended to your message and nothing is charged for a task that does
+not need it. An agent can also write these files, which is the trade for keeping the conversation in
+the same place. `quay context set` is the same thing said as a command, and it holds what it writes
+in the store, so a level survives a session being replaced. See
+[`docs/WORKSPACE.md`](WORKSPACE.md).
 
 `QC_DATA_HOST` moves the directory somewhere else, for example a disk with more room:
 

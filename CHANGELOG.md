@@ -28,6 +28,47 @@ read, or run with `make features`.
   The cost is four more containers on every `make up`. That is the trade, stated here rather than
   discovered.
 
+- **Setting up a workspace is written down in one page.** The knowledge was there and it was
+  scattered. The README made a workspace in four commands, `docs/SANDBOX.md` covered the image and
+  the two credentials that are files, `docs/SKILLS.md` and `docs/HOOKS.md` each covered their own
+  subsystem, and `quay manual` listed every command. Nothing took an operator from nothing to a
+  workspace whose sessions can read a repository and commit as them.
+  [`docs/WORKSPACE.md`](docs/WORKSPACE.md) does that: the two ways a secret reaches a session and
+  which to choose, who a session commits as, the four levels of context and the two files they land
+  in, the shared volume, what happens about repositories, skills, hooks, and which changes need a new
+  sandbox.
+
+  Two corrections came out of writing it. `docs/SANDBOX.md` named two mounted directories where the
+  code mounts three, so the workspace volume at `/home/agent/shared` was documented nowhere, and it
+  printed a working directory of `projects/<project>/workspace`, which moved under
+  `sessions/<session>/` when a working directory became a session's rather than a project's. The
+  README said credentials are set through the dashboard or the API, which is not how anybody sets
+  one.
+
+- **A session can sign with your own gpg key.** Signing worked and signed as somebody else. The crew
+  took one key, an ssh one, so a commit made in a sandbox carried a second identity on the same
+  history as the commits made on the operator's laptop, and the account had to know both.
+
+  A workspace can mount `GPG_SIGNING_KEY` now, the armoured export of the key you already sign with,
+  and the session signs as you do everywhere else. `GPG_SIGNING_KEY_PASSPHRASE` goes beside it for a
+  key that has one, which is most of them. Both are mounted, never set, on the same terms as the ssh
+  key: a private key in a container's environment is readable through `docker inspect` for the life
+  of that container, and the passphrase that unlocks the key is worth what the key is worth.
+
+  What ssh avoided and this brings back is the keyring and the passphrase prompt. The keyring is made
+  at sandbox birth in `/dev/shm`, which is memory, per container, and gone with it, so an imported key
+  never reaches the writable layer the daemon keeps on disk. The prompt is answered by not having
+  one: gpg runs in batch with no terminal, so a key whose passphrase the workspace did not mount fails
+  in a second with a message rather than hanging a task nobody is watching.
+
+  Nothing is enforced anywhere. A workspace mounting no key does not sign and nothing fails, which is
+  what it did before. A workspace mounting both kinds signs with the gpg one.
+
+  The image carries `gnupg` for this, because git makes an OpenPGP signature by running gpg, and the
+  earlier measurement of an image without it recorded exactly that: `cannot run gpg`. Two integration
+  tests make a real commit in a container the crew built, one with a passphrase and one without, and
+  check the signature carries the fingerprint of the key the workspace mounted rather than any key.
+
 - **The archived view shows a whole name.** The column was ten characters wide, from when it held
   the first eight of an identifier. A name is a sentence, so "the electricity bill" read as "the
   elect…". It takes what is left of the row now, as the live sessions view does, and the stamp beside

@@ -162,7 +162,7 @@ services:
     image: grafana/tempo:2.6.0
     command: ["-config.file=/etc/tempo.yaml"]
     # The image ships no default config, so without this mount the container exits on startup and the
-    # profile comes up one service short.
+    # stack comes up one service short.
     volumes:
       - ./tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo

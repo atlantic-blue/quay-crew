@@ -396,3 +396,12 @@ Feature: A session is given the skills the crew has
     When the operator tries to set the secret "GIT_SSH_SIGNING_KEY" to "-----BEGIN OPENSSH PRIVATE KEY-----"
     Then the crew refuses it, saying to mount the key instead
 
+  Scenario: Setting a gpg key, rather than mounting it, is refused
+    When the operator tries to set the secret "GPG_SIGNING_KEY" to "-----BEGIN PGP PRIVATE KEY BLOCK-----"
+    Then the crew refuses it, saying to mount the key instead
+
+  # A passphrase in the environment unlocks the key beside it, so it is worth what the key is worth.
+  Scenario: Setting a gpg key's passphrase, rather than mounting it, is refused
+    When the operator tries to set the secret "GPG_SIGNING_KEY_PASSPHRASE" to "open sesame"
+    Then the crew refuses it, saying to mount the key instead
+

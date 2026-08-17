@@ -4,7 +4,9 @@ Quay Crew runs a Kafka compatible event log, served locally by Redpanda, which s
 of the stack. It is an audit export, not the road anything travels by: history lives in Postgres,
 written in the same breath as each task, and a crew with no broker loses nothing but the export.
 
-Read the next section before you go looking for messages in it.
+Read the next section before you go looking for messages in it. The path one task takes, from the
+moment it is dispatched to the records it leaves in the store and on the log, is in
+[`TASKS.md`](TASKS.md).
 
 ## What state it is in today
 

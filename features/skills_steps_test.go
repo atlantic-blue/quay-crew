@@ -884,18 +884,8 @@ func importedNames(resp *quaycrewv1.ListSkillsResponse) []string {
 // What the sandbox was told to do about signing. The assertion is on the commands the sandbox ran,
 // because that is the whole of it: the control plane writes no key itself and holds no git state.
 func initializeSigningSteps(sc *godog.ScenarioContext) {
-	ran := func(ctx context.Context) string {
-		var all []string
-		for _, box := range worldFrom(ctx).provider.Boxes {
-			for _, spec := range box.Ran {
-				all = append(all, strings.Join(spec.Argv, " "))
-			}
-		}
-		return strings.Join(all, "\n")
-	}
-
 	sc.Step(`^the sandbox was set up to sign commits$`, func(ctx context.Context) error {
-		did := ran(ctx)
+		did := scripts(ctx)
 		pointedAt := "user.signingkey " + sandbox.SecretFilePath(controlplane.SigningKeySecret)
 		for _, want := range []string{"gpg.format ssh", pointedAt, "commit.gpgsign true"} {
 			if !strings.Contains(did, want) {
@@ -906,7 +896,7 @@ func initializeSigningSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^no signing key reaches the sandbox$`, func(ctx context.Context) error {
-		did := ran(ctx)
+		did := scripts(ctx)
 		for _, unwanted := range []string{"user.signingkey", "gpg.format"} {
 			if strings.Contains(did, unwanted) {
 				return fmt.Errorf("a workspace with no signing key was given %q anyway:\n%s", unwanted, did)

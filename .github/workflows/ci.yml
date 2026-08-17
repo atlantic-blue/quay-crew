@@ -282,12 +282,25 @@ jobs:
       - name: Grafana can reach Tempo and Loki
         run: |
           set -euo pipefail
-          curl -fsS "http://localhost:3000/api/datasources/proxy/uid/tempo/api/echo"
-          echo
-          curl -fsS "http://localhost:3000/api/datasources/proxy/uid/loki/ready"
-          echo
-          curl -fsS "http://localhost:9090/-/ready"
-          echo
+          # Loki answers /ready with 503 until its ingester has been ready for fifteen seconds, so one
+          # request here fails against a store that is coming up correctly. Retry rather than ask
+          # once. A store that never answers still fails the job, and brings its log with it.
+          reach() {
+            what=$1; url=$2; service=$3; body=""
+            for i in $(seq 1 40); do
+              if body=$(curl -fsS "$url" 2>&1); then
+                echo "$what: $body"
+                return 0
+              fi
+              sleep 3
+            done
+            echo "$what never answered: $body"
+            docker compose -f deploy/docker-compose.yml logs "$service" 2>&1 | tail -50
+            return 1
+          }
+          reach tempo "http://localhost:3000/api/datasources/proxy/uid/tempo/api/echo" tempo
+          reach loki "http://localhost:3000/api/datasources/proxy/uid/loki/ready" loki
+          reach prometheus "http://localhost:9090/-/ready" prometheus
 
       # The point of this step: prove a session is really durable. Restarting the control plane
       # throws away everything the process held, so anything still visible afterwards came back from

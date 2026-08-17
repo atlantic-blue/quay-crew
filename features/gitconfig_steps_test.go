@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/cucumber/godog"
 )
@@ -49,6 +50,56 @@ func initializeGitConfigSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	// A gpg key is not usable where it lands, which is the difference between the two formats: git
+	// reads an ssh key as a file and reads a gpg key out of a keyring, so a sandbox that never
+	// imports the mounted key is pointed at nothing.
+	sc.Step(`^the sandbox imports the mounted gpg key$`, func(ctx context.Context) error {
+		return sandboxRan(ctx, "gpg --quiet --import "+sandbox.SecretFilePath(controlplane.OpenPGPKeySecret))
+	})
+
+	sc.Step(`^the sandbox tells gpg to work in batch$`, func(ctx context.Context) error {
+		if err := sandboxRan(ctx, "batch"); err != nil {
+			return err
+		}
+		return sandboxRan(ctx, "no-tty")
+	})
+
+	sc.Step(`^the sandbox points gpg at the passphrase file "([^"]*)"$`,
+		func(ctx context.Context, at string) error {
+			if err := sandboxRan(ctx, "passphrase-file "+at); err != nil {
+				return err
+			}
+			return sandboxRan(ctx, "pinentry-mode loopback")
+		})
+
+	sc.Step(`^the sandbox does not point gpg at a passphrase file$`, func(ctx context.Context) error {
+		if err := sandboxRan(ctx, "passphrase-file"); err == nil {
+			return fmt.Errorf("a workspace that mounted no passphrase was pointed at one anyway:\n%s", scripts(ctx))
+		}
+		return nil
+	})
+}
+
+// sandboxRan answers whether the crew asked the session's sandbox to do something, by reading the
+// commands it was actually given. What the crew meant to run and never sent cannot pass.
+func sandboxRan(ctx context.Context, want string) error {
+	did := scripts(ctx)
+	if !strings.Contains(did, want) {
+		return fmt.Errorf("the sandbox was never told %q. It ran:\n%s", want, did)
+	}
+	return nil
+}
+
+// scripts is every shell script the crew ran in the session's sandbox, in order.
+func scripts(ctx context.Context) string {
+	var all []string
+	for _, box := range worldFrom(ctx).provider.Boxes {
+		for _, spec := range box.Ran {
+			all = append(all, strings.Join(spec.Argv, " "))
+		}
+	}
+	return strings.Join(all, "\n")
 }
 
 // gitConfigured reads back every global git setting the crew asked the session's sandbox to write,
