@@ -102,3 +102,17 @@ Feature: A sandbox keeps a session's state outside itself
     And a project named "house-bills"
     When the operator dispatches "hello" to the project
     Then the sandbox carries no part of an identity
+
+  # The workspace's volume is one directory shared by every session in it, and that is what makes one
+  # clone of a repository serve all of them. Sharing a directory means naming what you put in it, so a
+  # session is told which session it is: the git skill names a working tree and a branch after this.
+  Scenario: A session is told which session it is
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries its own session identifier
+
+  # The collision this exists to avoid. Two sessions see the same paths, so two working trees named
+  # the same are one path as far as the clone is concerned, and the second takes the first away.
+  Scenario: Two sessions in one workspace are told different identifiers
+    When the operator dispatches "hello" to the project
+    And the operator dispatches "a different subject" to a new session
+    Then the two sandboxes carry different session identifiers

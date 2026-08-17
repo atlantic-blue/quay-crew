@@ -934,14 +934,23 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the task ran with no extra environment$`, func(ctx context.Context) error {
+	// Its own identifier is not extra: every session is told which session it is, so it can name what
+	// it puts in the volume it shares with the sessions beside it. Anything else here is a credential
+	// or an address nobody asked for.
+	sc.Step(`^the task ran with nothing but the session's own identifier$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		last, ok := w.runner.task(w.runner.count() - 1)
 		if !ok {
 			return fmt.Errorf("no task reached the model runner")
 		}
-		if len(last.Env) != 0 {
-			return fmt.Errorf("the task ran with %v, want no extra environment", last.Env)
+		for key, value := range last.Env {
+			if key == sandbox.SessionIDEnv && value != "" {
+				continue
+			}
+			return fmt.Errorf("the task ran with %s=%q, which it was not given", key, value)
+		}
+		if last.Env[sandbox.SessionIDEnv] == "" {
+			return fmt.Errorf("the task ran without %s, so it cannot name a working tree of its own", sandbox.SessionIDEnv)
 		}
 		return nil
 	})

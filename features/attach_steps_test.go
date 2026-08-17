@@ -322,13 +322,17 @@ func initializeSandboxEnvSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the sandbox was created with %v, want it to carry %s", created.Env, entry)
 		})
 
-	sc.Step(`^the session's sandbox was created with no environment$`, func(ctx context.Context) error {
+	// A session is told which session it is whatever else the workspace holds, so this is what a
+	// sandbox with no credential on it carries: that one line and nothing else.
+	sc.Step(`^the session's sandbox was created with nothing but its own identifier$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.provider.Created) != 1 {
 			return fmt.Errorf("%d sandboxes were created, want 1", len(w.provider.Created))
 		}
-		if len(w.provider.Created[0].Env) != 0 {
-			return fmt.Errorf("the sandbox was created with %v, want nothing", w.provider.Created[0].Env)
+		created := w.provider.Created[0]
+		want := sandbox.SessionIDEnv + "=" + created.ID
+		if len(created.Env) != 1 || created.Env[0] != want {
+			return fmt.Errorf("the sandbox was created with %v, want only %s", created.Env, want)
 		}
 		return nil
 	})

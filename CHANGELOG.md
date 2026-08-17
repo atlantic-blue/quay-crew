@@ -6,6 +6,30 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 17 August 2026
+
+- **A repository is cloned once for the workspace, and each session works in a tree of its own.** The
+  git brief said to clone into your working directory, and that directory belongs to one session, so a
+  workspace working in one repository across four sessions held four clones of it. Driving a live crew
+  found it the plain way: one session cloned, and the session beside it saw an empty room. The volume
+  every session in the workspace shares sat empty, because no brief had ever mentioned it.
+
+  The clone goes in `/home/agent/shared/repos/<name>` now, and each session takes a working tree at
+  `/home/agent/shared/worktrees/$QC_SESSION_ID/<name>` on a branch of its own. `QC_SESSION_ID` is new:
+  every sandbox carries the identifier of the session it is, which is what a session names anything of
+  its own in a shared directory after.
+
+  The tree has to sit under the session identifier, and that is the part that is not obvious. A clone
+  records where its working trees are, every sandbox sees the same paths, so two sessions adding a tree
+  at one path register one path between them and the second takes the first away. A test runs real git
+  over the layout and proves both halves: two trees out of one clone, and the collision that happens
+  when the path is shared.
+
+  The stated cost: nothing removes a working tree when a session ends, so the volume keeps a directory
+  per session that ever worked in a repository. That half of
+  [#255](https://github.com/atlantic-blue/quay-crew/issues/255) is still open. This is a convention in
+  a brief rather than machinery, so a session that ignores the brief still clones wherever it likes.
+
 ## 16 August 2026
 
 - **A session can sign with your own gpg key.** Signing worked and signed as somebody else. The crew
