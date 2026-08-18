@@ -439,9 +439,15 @@ Two directories are mounted into it, and only one of them survives the run:
 
 So a graph that needs a repository puts it in the shared volume. A graph that clones into the
 working directory clones on every run, pays for the clone every run, and cannot be relied on to hold
-the same state twice. The convention that makes one clone serve every session, a clone in the volume
-and a worktree per session, is
-[#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is not built.
+the same state twice. The convention that makes one clone serve every session is in the git skill's
+brief: the clone goes in `/home/agent/shared/repos/<name>`, and each session takes a working tree of
+its own at `/home/agent/shared/worktrees/$QC_SESSION_ID/<name>`, on a branch of its own. `QC_SESSION_ID`
+is set on every sandbox, and the tree carries it because a clone records where its working trees are
+and every session sees the same paths.
+
+Nothing removes a working tree when its session ends yet, so the volume keeps one directory per
+session that ever worked in a repository. That half is
+[#255](https://github.com/atlantic-blue/quay-crew/issues/255).
 
 **A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version, and
 a graph that declares nothing leaves its runs in the mode a session is born in. The mode belongs to

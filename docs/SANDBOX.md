@@ -277,6 +277,25 @@ the same place. `quay context set` is the same thing said as a command, and it h
 in the store, so a level survives a session being replaced. See
 [`docs/WORKSPACE.md`](WORKSPACE.md).
 
+### A repository goes in the volume
+
+The working directory belongs to one session, so a repository cloned there is cloned again by the next
+session, and a workspace working in one repository across four sessions holds four copies of it. The
+volume is the answer: one clone, and a working tree per session.
+
+```
+/home/agent/shared/repos/<name>                    the one clone
+/home/agent/shared/worktrees/$QC_SESSION_ID/<name>  this session's working tree, on branch quay/$QC_SESSION_ID
+```
+
+`QC_SESSION_ID` is on every sandbox, and it is the identifier the crew shows for the session. The
+working tree carries it because a clone records where its working trees are and every session sees the
+same paths: two sessions adding a tree at one path take each other's away.
+
+This is a convention, written down in the git skill's brief, rather than something the crew does for
+you. Nothing removes a working tree when a session ends yet, so the volume keeps one directory per
+session that ever worked in a repository.
+
 `QC_DATA_HOST` moves the directory somewhere else, for example a disk with more room:
 
 ```

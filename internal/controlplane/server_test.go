@@ -114,6 +114,9 @@ func TestDispatchInjectsTheWorkspaceSubscriptionToken(t *testing.T) {
 	}
 }
 
+// A session is told which session it is whatever the workspace holds, because it names its own
+// working tree in the shared volume after that. Everything else here comes from a secret, so this is
+// what a task with none carries.
 func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "ok"}
 	s := newServer(runner)
@@ -124,8 +127,8 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
-	if len(runner.LastReq.Env) != 0 {
-		t.Fatalf("task env = %v, want empty when no secret is set", runner.LastReq.Env)
+	if len(runner.LastReq.Env) != 1 || runner.LastReq.Env[sandbox.SessionIDEnv] == "" {
+		t.Fatalf("task env = %v, want only %s when no secret is set", runner.LastReq.Env, sandbox.SessionIDEnv)
 	}
 }
 

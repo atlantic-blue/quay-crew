@@ -162,6 +162,46 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// A session's own name for whatever it puts in the volume it shares with every other session in
+	// the workspace. It is the identifier the crew shows, so what the console names and what a working
+	// tree in the volume is called are the same string.
+	sc.Step(`^the sandbox carries its own session identifier$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		env, err := onlySandboxEnv(w)
+		if err != nil {
+			return err
+		}
+		if got := env[sandbox.SessionIDEnv]; got != w.provider.Created[0].ID {
+			return fmt.Errorf("the sandbox carries %s=%q, want its own identifier %q",
+				sandbox.SessionIDEnv, got, w.provider.Created[0].ID)
+		}
+		return nil
+	})
+
+	sc.Step(`^the two sandboxes carry different session identifiers$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.provider.Created) != 2 {
+			return fmt.Errorf("%d sandboxes were made, want exactly 2", len(w.provider.Created))
+		}
+		told := make([]string, 0, 2)
+		for _, made := range w.provider.Created {
+			value := ""
+			for _, entry := range made.Env {
+				if key, found := strings.CutPrefix(entry, sandbox.SessionIDEnv+"="); found {
+					value = key
+				}
+			}
+			if value != made.ID {
+				return fmt.Errorf("a sandbox for session %q carries %s=%q", made.ID, sandbox.SessionIDEnv, value)
+			}
+			told = append(told, value)
+		}
+		if told[0] == told[1] {
+			return fmt.Errorf("both sandboxes were told they are %q, so both would take the same working tree", told[0])
+		}
+		return nil
+	})
+
 	// Saying nothing would pass the check above too, so the session still has to have been given the
 	// things it is meant to have.
 	sc.Step(`^the sandbox carries no address it was not given$`, func(ctx context.Context) error {

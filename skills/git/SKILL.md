@@ -1,19 +1,46 @@
 # git: how work is done in a repository here
 
-You clone what you work on. Nothing is cloned for you, and your working directory starts empty, so
-the first step of any work in a repository is to put it there yourself:
+You clone what you work on. Nothing is cloned for you, so the first step of any work in a repository
+is to put it there yourself. It goes in the workspace's volume, not in your own directory:
+`/home/agent/shared` is shared by every session in this workspace, and `/home/agent/workspace` is
+yours alone. One clone serves all of you, and each session works in a working tree of its own.
 
-    git clone https://github.com/<owner>/<name>.git
+## Clone once, then take a working tree
 
-Clone into your working directory. Authentication is already handled: the image carries a credential
-helper that reads GH_TOKEN from the environment when git asks. Never put a token in a remote address,
-an argument, or a file, and never ask for one; if a private clone fails, say the workspace needs
-GH_TOKEN set with `quay secret set <workspace> GH_TOKEN <value>` rather than working around it.
+Look for the repository before you clone it:
+
+    ls /home/agent/shared/repos/<name>
+
+Clone it there if it is not:
+
+    git clone https://github.com/<owner>/<name>.git /home/agent/shared/repos/<name>
+
+Then take a working tree of your own and work in it:
+
+    git -C /home/agent/shared/repos/<name> fetch origin
+    git -C /home/agent/shared/repos/<name> worktree add \
+        /home/agent/shared/worktrees/$QC_SESSION_ID/<name> -b quay/$QC_SESSION_ID origin/HEAD
+    ln -s /home/agent/shared/worktrees/$QC_SESSION_ID/<name> /home/agent/workspace/<name>
+    cd /home/agent/workspace/<name>
+
+QC_SESSION_ID is this session's own identifier, set for you. The tree has to sit under it: a clone
+records where its working trees are, every session sees the same paths, and two sessions adding a
+tree at one path take each other's away. The branch is your own for the same reason, because git
+refuses to check out one branch in two trees.
+
+Your tree is already there on a later task, so use it rather than adding it again. If
+`/home/agent/shared` does not exist, this crew keeps no volume: clone into your working directory
+instead and everything below is unchanged.
+
+Authentication is already handled: the image carries a credential helper that reads GH_TOKEN from the
+environment when git asks. Never put a token in a remote address, an argument, or a file, and never
+ask for one; if a private clone fails, say the workspace needs GH_TOKEN set with
+`quay secret set <workspace> GH_TOKEN <value>` rather than working around it.
 
 ## Branch first
 
-Never commit to the default branch. Before changing anything, cut a branch from the latest remote
-state and work there:
+Never commit to the default branch. Your tree is born on a branch of its own, so you are not on it.
+Before changing anything, name a branch after the work and cut it from the latest remote state:
 
     git fetch origin
     git switch -c <branch> origin/HEAD

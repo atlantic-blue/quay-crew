@@ -190,15 +190,22 @@ Then name the path in the workspace's context, because nothing tells a session t
 
 ## 7. Repositories
 
-Nothing is cloned for you. A session clones what it works on, following the git skill, into its own
-working directory at `/home/agent/workspace`.
+Nothing is cloned for you. A session clones what it works on, following the git skill, and the clone
+goes in the volume so the workspace holds one copy of it rather than one per conversation:
 
-The cost is stated. Each session clones its own copy, so a first task on a large repository is slow,
-and disk is spent per conversation. The convention that would make one clone serve every session, a
-clone in the volume and a working tree per session, is
-[#255](https://github.com/atlantic-blue/quay-crew/issues/255) and is not built. Until it is, an
-operator who wants one copy clones into the volume by hand and names the path in the workspace's
-context.
+```
+/home/agent/shared/repos/<name>                    the one clone, by whichever session needs it first
+/home/agent/shared/worktrees/$QC_SESSION_ID/<name>  a working tree per session, on a branch of its own
+```
+
+`QC_SESSION_ID` is the session's own identifier, set on every sandbox. The working tree carries it
+because a clone records where its working trees are and every session sees the same paths, so two
+sessions taking a tree at one path take each other's away.
+
+The cost is stated. This is a convention in a brief rather than machinery, so a session that does not
+follow it clones wherever it likes. Nothing removes a working tree when a session ends either, so the
+volume keeps a directory per session that ever worked in a repository. That half of
+[#255](https://github.com/atlantic-blue/quay-crew/issues/255) is open.
 
 ## 8. Skills
 

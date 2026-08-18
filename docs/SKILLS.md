@@ -292,8 +292,9 @@ if the rest waits:
    follows, and that machinery was hard to explain, which is the sign it was the wrong shape. A
    session clones in conversation now, following the git skill. What stayed is the invisible plumbing
    a brief can rely on: the git identity environment, and a credential helper in the sandbox image
-   reading `GH_TOKEN` at the moment git asks. The stated cost: each session clones its own copy, so
-   first tasks on big repositories are slower and disk is spent per session.
+   reading `GH_TOKEN` at the moment git asks. One clone per workspace came back as part of the brief in
+   [#255](https://github.com/atlantic-blue/quay-crew/issues/255): the clone goes in the volume and each
+   session takes a working tree of its own, named after the session identifier the sandbox now carries.
 6. The git skill, in `skills/git/` at the root of this repository. Done, with slice 5's rework. Then
    `gh` in the image with `GH_TOKEN`, and then the github skill. Two skills rather
    than one: git needs a repository and nothing else, github needs a credential, the network, and it does

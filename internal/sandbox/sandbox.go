@@ -90,6 +90,19 @@ const (
 	// repositories a workspace works in are cloned here once and shared; anything else a workspace
 	// accumulates and wants its sessions to see can live here too.
 	SharedPath = "/home/agent/shared"
+	// ReposPath is where the one clone of a repository goes, named after the repository. A session
+	// that finds it there does not clone again, so a workspace working in one repository across four
+	// sessions holds one copy of it rather than four.
+	ReposPath = SharedPath + "/repos"
+	// WorktreesPath holds a working tree per session, under the session's own identifier. It is in
+	// the volume rather than in the session's own directory because a clone records where its working
+	// trees are, and every sandbox sees the same paths: two sessions adding a tree at the same path
+	// would register one path between them, and the second would prune the first.
+	WorktreesPath = SharedPath + "/worktrees"
+	// SessionIDEnv is how a session reads its own identifier. It is what a session names anything of
+	// its own in the shared volume after, a working tree among them, and it is an identifier the crew
+	// already shows rather than a credential.
+	SessionIDEnv = "QC_SESSION_ID"
 	// SecretsPath is where a file projected secret lands, one file per secret, named after it. The
 	// path is Docker's own default for a secret and the conventional mount point for one in
 	// Kubernetes, so a session that has met either already knows where to look.

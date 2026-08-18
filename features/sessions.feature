@@ -204,7 +204,7 @@ Feature: Sessions run in isolated sandboxes
 
   Scenario: A workspace with no token creates a sandbox with no credential on it
     When the operator dispatches "hello" to the project
-    Then the session's sandbox was created with no environment
+    Then the session's sandbox was created with nothing but its own identifier
 
   Scenario: A task carries the workspace's subscription token into the sandbox
     Given the workspace has the subscription token "tok-xyz"
@@ -214,7 +214,7 @@ Feature: Sessions run in isolated sandboxes
   Scenario: A workspace with no subscription token still runs a task
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
-    And the task ran with no extra environment
+    And the task ran with nothing but the session's own identifier
 
   # Shelling in opens the room the conversation happens in. This opens the conversation.
   Scenario: The operator can attach to a session's conversation

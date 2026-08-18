@@ -1487,6 +1487,13 @@ func environ(values map[string]string) []string {
 // task, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
 func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session) map[string]string {
 	env := map[string]string{}
+	// Who this session is. The volume is shared by every session in the workspace, so anything a
+	// session puts there needs a name of its own to avoid the session beside it: the git brief names
+	// a working tree and a branch after this. It is an identifier the crew already shows and never a
+	// credential, so every session is told it rather than the driver alone.
+	if id := session.GetId(); id != "" {
+		env[sandbox.SessionIDEnv] = id
+	}
 	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
 	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
 	// not on a network that could reach it anyway.
