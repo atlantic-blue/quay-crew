@@ -44,6 +44,7 @@ const (
 	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
 	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
 	ControlPlaneService_StopSession_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopSession"
+	ControlPlaneService_DrainSessions_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DrainSessions"
 	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
 	ControlPlaneService_ArchiveSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
 	ControlPlaneService_RestoreSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreSession"
@@ -99,6 +100,7 @@ type ControlPlaneServiceClient interface {
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
 	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
 	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
+	DrainSessions(ctx context.Context, in *DrainSessionsRequest, opts ...grpc.CallOption) (*DrainSessionsResponse, error)
 	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
 	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
 	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
@@ -383,6 +385,16 @@ func (c *controlPlaneServiceClient) StopSession(ctx context.Context, in *StopSes
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) DrainSessions(ctx context.Context, in *DrainSessionsRequest, opts ...grpc.CallOption) (*DrainSessionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DrainSessionsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_DrainSessions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RestartSessionResponse)
@@ -634,6 +646,7 @@ type ControlPlaneServiceServer interface {
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
 	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
 	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
+	DrainSessions(context.Context, *DrainSessionsRequest) (*DrainSessionsResponse, error)
 	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
 	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
 	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
@@ -742,6 +755,9 @@ func (UnimplementedControlPlaneServiceServer) AttachSession(context.Context, *At
 }
 func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) DrainSessions(context.Context, *DrainSessionsRequest) (*DrainSessionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DrainSessions not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestartSession not implemented")
@@ -1280,6 +1296,24 @@ func _ControlPlaneService_StopSession_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_DrainSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DrainSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).DrainSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_DrainSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).DrainSessions(ctx, req.(*DrainSessionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RestartSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RestartSessionRequest)
 	if err := dec(in); err != nil {
@@ -1782,6 +1816,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopSession",
 			Handler:    _ControlPlaneService_StopSession_Handler,
+		},
+		{
+			MethodName: "DrainSessions",
+			Handler:    _ControlPlaneService_DrainSessions_Handler,
 		},
 		{
 			MethodName: "RestartSession",

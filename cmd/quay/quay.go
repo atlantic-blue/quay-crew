@@ -157,6 +157,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSessions(ctx, client, args[1:], out)
 	case "tasks", "task":
 		return runTasks(ctx, client, args[1:], out)
+	case "drain":
+		return runDrain(ctx, client, args[1:], out)
 	// The way off the old words. Refused by name rather than treated as an unknown command, because
 	// they are still in fingers, in scripts and in notes, and a command that silently stops existing
 	// reads as the tool being broken.

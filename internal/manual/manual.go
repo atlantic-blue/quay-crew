@@ -54,6 +54,9 @@ commands:
   dispatch [<address>] <text>             start or continue a session
   sessions [<address>]                    list sessions, which session and sessions also do
   tasks <session>                          what a session was asked to do, and what came back
+  drain [anyway]                          put every live session down, so an upgrade does not take
+                                          their containers away underneath them. Refuses while a
+                                          task is working, and anyway drains over it
   label <session> [<text>]                 what you call a conversation, so a listing reads as
                                           conversations rather than identifiers. No text reads it,
                                           and "" clears it

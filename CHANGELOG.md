@@ -8,6 +8,21 @@ read, or run with `make features`.
 
 ## 18 August 2026
 
+- **Upgrading no longer takes a task away from under a session.** `make upgrade` removes every
+  sandbox container by name, because a container built from the old image is a session a build behind
+  and its name blocks the new one. Done from the daemon that removal took whatever was working with
+  it: the operator read `model: run exited: exit status 137, and it said nothing about why` against a
+  conversation they had been watching, and nothing anywhere said an upgrade had done it.
+
+  The upgrade now asks the crew to put its sessions down first. Each one is stopped properly, so the
+  row says stopped, which is true, and the sandbox is closed rather than ripped out. A task still
+  working refuses the whole upgrade and names the session it belongs to, so you can wait for it. Say
+  `make upgrade FORCE=1` to go over it, and the drain says whose task went.
+
+  It is a command of its own too: `quay drain`, and `quay drain anyway` over a task in flight. A crew
+  that is not up, and a crew from before this existed, both say so and let the upgrade carry on
+  rather than blocking it.
+
 - **A secret every workspace needs is held once by the crew.** Say `crew` where a workspace goes:
   `gh auth token | quay secret set crew GH_TOKEN`, `quay secret mount crew gitconfig < ~/.gitconfig`.
   Every workspace then reads it, including the ones made afterwards, which is the difference between

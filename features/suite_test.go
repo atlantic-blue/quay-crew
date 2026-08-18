@@ -232,6 +232,9 @@ type world struct {
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
+	// lastDrain is what the last drain put down, kept so a scenario can ask what went rather than
+	// counting sandboxes.
+	lastDrain *quaycrewv1.DrainSessionsResponse
 	// release lets go of a task a scenario is holding open, and is nil when none is held.
 	release func()
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
@@ -524,6 +527,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
+	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)

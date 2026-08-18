@@ -23,7 +23,9 @@ const makefile = "../Makefile"
 // repository builds cannot be left out of an upgrade the same way.
 func TestUpgradeBuildsEverythingASessionRuns(t *testing.T) {
 	recipe := target(t, "upgrade")
-	if !strings.Contains(recipe, "rebuild") {
+	// The line that runs it, not the word. The recipe also says "rebuilding" out loud, so a match on
+	// the word alone passed on an upgrade that had stopped calling it and listed the parts itself.
+	if !strings.Contains(recipe, "$(MAKE) --no-print-directory rebuild") {
 		t.Errorf("make upgrade never runs rebuild, so it builds none of what a session runs:\n%s", recipe)
 	}
 	if !strings.Contains(recipe, "up --build") {
@@ -117,4 +119,54 @@ func prerequisites(t *testing.T, name string) string {
 	}
 	t.Fatalf("the Makefile has no %s target at all", name)
 	return ""
+}
+
+// TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers.
+//
+// The upgrade removes every sandbox container by name from the daemon. A container removed that way
+// takes the task in flight with it, and the operator reads "model: run exited: exit status 137, and
+// it said nothing about why" against a conversation they were watching. Draining first asks the crew
+// to stop each session, so the row says stopped and the sandbox is closed rather than ripped out.
+//
+// The order is the whole of it: a drain after the containers are gone is a drain of nothing.
+func TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers(t *testing.T) {
+	recipe := target(t, "upgrade")
+
+	drain := strings.Index(recipe, "--no-print-directory drain")
+	if drain < 0 {
+		t.Fatalf("make upgrade never drains, so it takes tasks away from under sessions:\n%s", recipe)
+	}
+	sweep := strings.Index(recipe, "docker rm -f")
+	if sweep < 0 {
+		t.Fatalf("make upgrade no longer clears sandbox containers at all:\n%s", recipe)
+	}
+	if drain > sweep {
+		t.Errorf("make upgrade drains after removing the containers, so there is nothing left to put "+
+			"down cleanly:\n%s", recipe)
+	}
+	// The tool has to be the one that knows how to drain. Draining with the copy from before the
+	// upgrade asks an older binary for a command it may not have.
+	install := strings.Index(recipe, "--no-print-directory install")
+	if install < 0 || install > drain {
+		t.Errorf("make upgrade drains before it builds the tool, so it drains with the build from "+
+			"before:\n%s", recipe)
+	}
+}
+
+// TestDrainingRefusesTheUpgradeAndSaysHowToGoOverIt. A refusal an operator cannot act on is a
+// refusal they work around by hand, and by hand is the raw removal this exists to replace.
+func TestDrainingRefusesTheUpgradeAndSaysHowToGoOverIt(t *testing.T) {
+	recipe := target(t, "drain")
+
+	if !strings.Contains(recipe, "quay drain") {
+		t.Fatalf("the drain target does not ask the crew to put anything down:\n%s", recipe)
+	}
+	if !strings.Contains(recipe, "FORCE") {
+		t.Errorf("a refused drain does not say how to upgrade over a task in flight:\n%s", recipe)
+	}
+	// A machine with no quay on its path cannot drain, and stopping the upgrade over that would leave
+	// it with no way to upgrade at all.
+	if !strings.Contains(recipe, "command -v quay") {
+		t.Errorf("the drain target assumes quay is on the path, so an upgrade without it fails:\n%s", recipe)
+	}
 }
