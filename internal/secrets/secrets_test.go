@@ -129,3 +129,119 @@ func TestAMountedNameCannotEscapeItsDirectory(t *testing.T) {
 		t.Fatalf("Set a/b into the environment: %v", err)
 	}
 }
+
+// The crew's level is a level, not a workspace: what is set on it is read by every workspace, and
+// what is set on a workspace stays that workspace's own.
+func TestTheCrewsSecretsReachEveryWorkspace(t *testing.T) {
+	levels := secrets.Levels{Store: secrets.NewMemory()}
+	ctx := context.Background()
+
+	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetCrew: %v", err)
+	}
+	for _, workspace := range []string{"me", "acme", "one-made-later"} {
+		got, err := levels.Get(ctx, workspace, "GITHUB_TOKEN")
+		if err != nil {
+			t.Fatalf("Get for %s: %v", workspace, err)
+		}
+		if got != "ghp-shared" {
+			t.Fatalf("%s reads GITHUB_TOKEN as %q, want ghp-shared", workspace, got)
+		}
+	}
+}
+
+// Without this the crew's level would be a floor rather than a default, and the one workspace that
+// needs a different token could not have one.
+func TestAWorkspaceWinsOnAName(t *testing.T) {
+	levels := secrets.Levels{Store: secrets.NewMemory()}
+	ctx := context.Background()
+	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetCrew: %v", err)
+	}
+	if err := levels.Set(ctx, "me", secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-mine"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	if got, _ := levels.Get(ctx, "me", "GITHUB_TOKEN"); got != "ghp-mine" {
+		t.Fatalf("me reads GITHUB_TOKEN as %q, want its own ghp-mine", got)
+	}
+	if got, _ := levels.Get(ctx, "acme", "GITHUB_TOKEN"); got != "ghp-shared" {
+		t.Fatalf("acme reads GITHUB_TOKEN as %q, want the crew's ghp-shared", got)
+	}
+
+	// And one name appears once, held by the workspace, rather than twice with the crew's shadowing
+	// it further down the listing.
+	refs, err := levels.List(ctx, "me")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("me holds %d secrets, want 1: %+v", len(refs), refs)
+	}
+	if refs[0].Crew {
+		t.Fatalf("the listing says GITHUB_TOKEN is the crew's, and this workspace set its own")
+	}
+}
+
+// A workspace that attached nothing and reads three secrets is a puzzle, so a listing says where
+// each one came from.
+func TestAListingSaysWhichLevelHoldsEachSecret(t *testing.T) {
+	levels := secrets.Levels{Store: secrets.NewMemory()}
+	ctx := context.Background()
+	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetCrew: %v", err)
+	}
+	if err := levels.Set(ctx, "me", secrets.Secret{Name: "STRIPE_KEY", Value: "sk-mine"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	refs, err := levels.List(ctx, "me")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	// Sorted by name, so two levels read as one listing.
+	want := []secrets.Ref{
+		{Name: "GITHUB_TOKEN", Projection: secrets.Env, Crew: true},
+		{Name: "STRIPE_KEY", Projection: secrets.Env},
+	}
+	if len(refs) != len(want) {
+		t.Fatalf("me reads %d secrets, want %d: %+v", len(refs), len(want), refs)
+	}
+	for i, ref := range refs {
+		if ref != want[i] {
+			t.Fatalf("secret %d is %+v, want %+v", i, ref, want[i])
+		}
+	}
+}
+
+// A credential that is a file is the case that hurts most to repeat, so the crew's level carries the
+// projection as well as the bytes.
+func TestTheCrewCanHoldAMountedCredential(t *testing.T) {
+	levels := secrets.Levels{Store: secrets.NewMemory()}
+	ctx := context.Background()
+	if err := levels.SetCrew(ctx, secrets.Secret{
+		Name: "gitconfig", Value: "[user] name = operator", Projection: secrets.File,
+	}); err != nil {
+		t.Fatalf("SetCrew: %v", err)
+	}
+
+	refs, err := levels.List(ctx, "me")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(refs) != 1 || refs[0].Projection != secrets.File {
+		t.Fatalf("me reads %+v, want gitconfig mounted as a file", refs)
+	}
+}
+
+// A name that would escape its directory is refused at the crew's level too. One reader of the rule
+// was the reason it lives on the secret; a second entry point must not be a second chance to skip it.
+func TestTheCrewRefusesAMountedNameThatWouldEscape(t *testing.T) {
+	levels := secrets.Levels{Store: secrets.NewMemory()}
+	err := levels.SetCrew(context.Background(), secrets.Secret{
+		Name: "../../etc/passwd", Value: "root", Projection: secrets.File,
+	})
+	if err == nil {
+		t.Fatal("SetCrew accepted a name that would have become a path")
+	}
+}

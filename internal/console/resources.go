@@ -13,6 +13,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
@@ -253,12 +254,19 @@ func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			}
 			rows := make([]Row, 0, len(resp.GetSecrets()))
 			for _, secret := range resp.GetSecrets() {
+				// The crew's own belong to no workspace, so the column says the level. A row reading
+				// "crew" is how the console says every workspace has this one.
+				where := display.Name(secret.GetWorkspaceName(), secret.GetWorkspace())
+				parent := secret.GetWorkspace()
+				if secret.GetCrew() {
+					where, parent = name.Crew, name.Crew
+				}
 				rows = append(rows, Row{
-					ID:     secret.GetWorkspace() + "/" + secret.GetName(),
-					Parent: secret.GetWorkspace(),
+					ID:     parent + "/" + secret.GetName(),
+					Parent: parent,
 					Label:  secret.GetName(),
 					Cells: []string{
-						display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()),
+						where,
 						secret.GetName(),
 						// Said out loud rather than left blank, so nobody wonders whether the column
 						// is empty because the value is empty.

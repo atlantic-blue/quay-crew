@@ -89,6 +89,26 @@ nothing. The bytes stored are the bytes of your file.
 
 `quay secret list` never prints a value.
 
+### A secret every workspace needs
+
+Say `crew` where a workspace goes. The secret is then held by the crew, and every workspace reads
+it, including the ones you make tomorrow.
+
+```sh
+claude setup-token | quay secret set crew CLAUDE_CODE_OAUTH_TOKEN
+gh auth token | quay secret set crew GH_TOKEN
+quay secret mount crew gitconfig < ~/.gitconfig
+quay secret list crew
+```
+
+A workspace wins on a name. Set `GH_TOKEN` on the crew and on one workspace, and that workspace
+reads its own while every other workspace reads the crew's. `quay secret list` says which level
+holds each one, so a workspace you set nothing on says where its secrets came from.
+
+`crew` is the same word `quay skill attach`, `quay hook attach` and `quay context set` already take.
+No workspace may be called `crew`, because a workspace with that name would take what every
+workspace reads.
+
 ### Mounting from a script
 
 The path form needs a terminal:

@@ -116,10 +116,18 @@ func whatAWorkspaceHolds(ctx context.Context, client quaycrewv1.ControlPlaneServ
 	if err != nil {
 		return "", "", err
 	}
+	// Only what this workspace set itself. The crew's own reach it and survive it, so counting them
+	// here would say a removal takes credentials with it that every other workspace still has.
+	own := 0
+	for _, secret := range secrets.GetSecrets() {
+		if !secret.GetCrew() {
+			own++
+		}
+	}
 	return found.GetWorkspace().GetName(), fmt.Sprintf("%s, %s and %s",
 		counted(len(projects.GetProjects()), "project"),
 		counted(len(sessions.GetSessions()), "session"),
-		counted(len(secrets.GetSecrets()), "secret")), nil
+		counted(own, "secret")), nil
 }
 
 func howManySessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID string) (string, error) {

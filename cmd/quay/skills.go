@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 )
 
@@ -208,7 +209,7 @@ func runSkillDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 // operator already is, or a workspace and a skill name.
 // crewScope is the word an address takes to mean the whole crew rather than one workspace, the same
 // one quay context set already takes.
-const crewScope = "crew"
+const crewScope = name.Crew
 
 func skillAndAddress(args []string, verb string) (name, typed string, err error) {
 	switch len(args) {

@@ -58,6 +58,13 @@ type Secret struct {
 type Ref struct {
 	Name       string
 	Projection Projection
+	// Crew says this one came from the crew's level rather than from the workspace, so a listing can
+	// say where it came from. A workspace that set nothing and has three is otherwise a puzzle.
+	//
+	// A backend never sets it. Levels sets it when it merges the two levels, and a caller reading one
+	// level knows which it asked for, so there is one place that decides and it is the place that can
+	// be wrong.
+	Crew bool
 }
 
 // Validate refuses a secret the store should not hold.
@@ -78,27 +85,102 @@ func (s Secret) Validate() error {
 	return nil
 }
 
-// Store sets and reads workspace scoped secrets. Set is called from the API; Get is called by
-// services that need the value at runtime.
+// Store sets and reads secrets at two levels: one workspace's own, and the crew's. Set is called
+// from the API; Get is called by services that need the value at runtime.
+//
+// The crew's level is what a token every workspace needs belongs to. A subscription token, a forge
+// token, a credential file: set once, read by every workspace, including the ones made after it. It
+// is a separate set of calls rather than a reserved workspace identifier because the crew is not a
+// workspace: it holds no projects, no sessions and no channels. That is the shape the crew's skills,
+// hooks and roles already have.
+//
+// Neither Get nor List merges the two levels. Levels does that, once, so there is one answer to
+// which level wins.
 type Store interface {
 	Set(ctx context.Context, workspace string, secret Secret) error
 	Get(ctx context.Context, workspace, name string) (string, error)
 	// List says what a workspace has set and how each one reaches a sandbox, sorted by name, and
 	// never what any of it says.
 	List(ctx context.Context, workspace string) ([]Ref, error)
+
+	// SetCrew stores a secret at the crew's level, where every workspace reads it.
+	SetCrew(ctx context.Context, secret Secret) error
+	// GetCrew reads a value the crew holds.
+	GetCrew(ctx context.Context, name string) (string, error)
+	// ListCrew says what the crew holds, sorted by name, and never what any of it says.
+	ListCrew(ctx context.Context) ([]Ref, error)
+}
+
+// Levels reads a workspace's secrets over the crew's.
+//
+// A workspace wins on a name, which is the rule the crew's skills already use: the crew's level is
+// what every workspace gets, and a workspace that says something different about a name means it.
+// Without that, a shared token could not be overridden for the one workspace that needs a different
+// one, and the crew's level would be a floor rather than a default.
+//
+// The merge lives here, in one place, rather than in each backend. A second reader is a second
+// chance to get the rule wrong, and the two backends would then disagree about which level wins
+// while both passing their own tests.
+type Levels struct{ Store }
+
+// compile time check: a merged reader is still a Store, so nothing downstream knows about this.
+var _ Store = Levels{}
+
+// Get reads what the workspace holds, and what the crew holds when the workspace holds nothing under
+// that name.
+func (l Levels) Get(ctx context.Context, workspace, name string) (string, error) {
+	value, err := l.Store.Get(ctx, workspace, name)
+	if err == nil {
+		return value, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return "", err
+	}
+	return l.GetCrew(ctx, name)
+}
+
+// List says everything that reaches this workspace's sandboxes: what it set itself, and what the
+// crew holds under a name it did not set. Sorted by name, so a caller reading two levels reads one
+// listing.
+func (l Levels) List(ctx context.Context, workspace string) ([]Ref, error) {
+	own, err := l.Store.List(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	crew, err := l.ListCrew(ctx)
+	if err != nil {
+		return nil, err
+	}
+	held := make(map[string]bool, len(own))
+	for _, ref := range own {
+		held[ref.Name] = true
+	}
+	merged := own
+	for _, ref := range crew {
+		if held[ref.Name] {
+			continue
+		}
+		ref.Crew = true
+		merged = append(merged, ref)
+	}
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Name < merged[j].Name })
+	return merged, nil
 }
 
 // Memory is an in memory Store for development and tests.
 type Memory struct {
 	mu   sync.RWMutex
 	data map[string]Secret
+	crew map[string]Secret
 }
 
 // compile time check.
 var _ Store = (*Memory)(nil)
 
 // NewMemory returns an empty in memory store.
-func NewMemory() *Memory { return &Memory{data: make(map[string]Secret)} }
+func NewMemory() *Memory {
+	return &Memory{data: make(map[string]Secret), crew: make(map[string]Secret)}
+}
 
 func key(workspace, name string) string { return workspace + "\x00" + name }
 
@@ -143,4 +225,39 @@ func (m *Memory) Get(_ context.Context, workspace, name string) (string, error) 
 		return "", ErrNotFound
 	}
 	return secret.Value, nil
+}
+
+// SetCrew stores a secret at the crew's level.
+func (m *Memory) SetCrew(_ context.Context, secret Secret) error {
+	if err := secret.Validate(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	secret.Projection = secret.Projection.Or()
+	m.crew[secret.Name] = secret
+	return nil
+}
+
+// GetCrew reads a value the crew holds.
+func (m *Memory) GetCrew(_ context.Context, name string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	secret, ok := m.crew[name]
+	if !ok {
+		return "", ErrNotFound
+	}
+	return secret.Value, nil
+}
+
+// ListCrew says what the crew holds, sorted, and never what any of it says.
+func (m *Memory) ListCrew(_ context.Context) ([]Ref, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	refs := make([]Ref, 0, len(m.crew))
+	for _, secret := range m.crew {
+		refs = append(refs, Ref{Name: secret.Name, Projection: secret.Projection.Or()})
+	}
+	sort.Slice(refs, func(i, j int) bool { return refs[i].Name < refs[j].Name })
+	return refs, nil
 }

@@ -135,8 +135,12 @@ func (i Identity) Complete() bool {
 // Server implements quaycrewv1.ControlPlaneServiceServer.
 type Server struct {
 	quaycrewv1.UnimplementedControlPlaneServiceServer
-	store    store.Store
-	secrets  secrets.Store
+	store store.Store
+	// secrets reads a workspace's own over the crew's, so every path that asks a workspace what it
+	// holds gets the crew's too and none of them has to remember to ask twice. The unmerged levels
+	// are still reachable through it, for the one caller that wants them apart: an operator's
+	// listing, which says where each secret came from.
+	secrets  secrets.Levels
 	runner   model.Runner
 	provider sandbox.Provider
 	storage  sandbox.Storage
@@ -183,7 +187,7 @@ type Server struct {
 func NewServer(cfg Config) *Server {
 	server := &Server{
 		store:         cfg.Store,
-		secrets:       cfg.Secrets,
+		secrets:       secrets.Levels{Store: cfg.Secrets},
 		runner:        cfg.Runner,
 		provider:      cfg.Provider,
 		storage:       cfg.Storage,
@@ -748,7 +752,7 @@ func (s *Server) SettleTasks(ctx context.Context) {
 
 // CreateWorkspace creates a workspace at runtime.
 func (s *Server) CreateWorkspace(ctx context.Context, req *quaycrewv1.CreateWorkspaceRequest) (*quaycrewv1.CreateWorkspaceResponse, error) {
-	if err := name.Validate("workspace", req.GetName()); err != nil {
+	if err := name.ValidateWorkspace(req.GetName()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	workspace, err := s.store.CreateWorkspace(ctx, req.GetName())
@@ -797,13 +801,20 @@ func (s *Server) AttachChannel(ctx context.Context, req *quaycrewv1.AttachChanne
 	return &quaycrewv1.AttachChannelResponse{Channel: channel}, nil
 }
 
-// SetSecret stores a workspace secret in the secrets backend. The value is never returned.
+// SetSecret stores a secret in the secrets backend, on one workspace or on the crew. The value is
+// never returned.
 func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest) (*quaycrewv1.SetSecretResponse, error) {
-	if req.GetWorkspace() == "" || req.GetKey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "workspace and key are required")
+	crew := req.GetScope() == crewScope
+	if req.GetKey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	if _, err := s.store.GetWorkspace(ctx, req.GetWorkspace()); err != nil {
-		return nil, storeError(err, "workspace")
+	if !crew {
+		if req.GetWorkspace() == "" {
+			return nil, status.Error(codes.InvalidArgument, "workspace and key are required")
+		}
+		if _, err := s.store.GetWorkspace(ctx, req.GetWorkspace()); err != nil {
+			return nil, storeError(err, "workspace")
+		}
 	}
 	secret := secrets.Secret{
 		Name:       req.GetKey(),
@@ -821,9 +832,19 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	// worse than one that was never accepted. A key's passphrase is worth what the key is worth, so
 	// it is held to the same rule.
 	if mountedOnly[secret.Name] && secret.Projection.Or() != secrets.File {
+		where := req.GetWorkspace()
+		if crew {
+			where = crewScope
+		}
 		return nil, status.Errorf(codes.InvalidArgument,
 			"a signing key is mounted, not set: quay secret mount %s %s <path to the file holding it>",
-			req.GetWorkspace(), secret.Name)
+			where, secret.Name)
+	}
+	if crew {
+		if err := s.secrets.SetCrew(ctx, secret); err != nil {
+			return nil, status.Errorf(codes.Internal, "set secret: %v", err)
+		}
+		return &quaycrewv1.SetSecretResponse{}, nil
 	}
 	if err := s.secrets.Set(ctx, req.GetWorkspace(), secret); err != nil {
 		return nil, status.Errorf(codes.Internal, "set secret: %v", err)
@@ -859,12 +880,28 @@ func (s *Server) ListSecrets(ctx context.Context, req *quaycrewv1.ListSecretsReq
 		return nil, storeError(err, "list workspaces")
 	}
 
-	out := make([]*quaycrewv1.SecretRef, 0, len(workspaces))
+	// The crew's own first and once, rather than repeated under every workspace that reads them. They
+	// are in the answer even when one workspace was asked for, because they reach that workspace too
+	// and a listing that hid them would say a token is missing that is already there.
+	crew, err := s.secrets.ListCrew(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
+	}
+	out := make([]*quaycrewv1.SecretRef, 0, len(crew)+len(workspaces))
+	for _, ref := range crew {
+		out = append(out, &quaycrewv1.SecretRef{
+			Name:       ref.Name,
+			Projection: wireProjection(ref.Projection),
+			Crew:       true,
+		})
+	}
 	for _, workspace := range workspaces {
 		if req.GetWorkspace() != "" && workspace.GetId() != req.GetWorkspace() {
 			continue
 		}
-		refs, err := s.secrets.List(ctx, workspace.GetId())
+		// What this workspace set itself, unmerged: a workspace that overrode a crew secret shows as
+		// having its own, and the crew's row above says the crew holds one under that name too.
+		refs, err := s.secrets.Store.List(ctx, workspace.GetId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
 		}

@@ -266,10 +266,16 @@ enum SecretProjection {
 
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 message SetSecretRequest {
+  // workspace is the workspace it belongs to, and is ignored when scope is "crew".
   string workspace = 1;
   string key = 2;
   string value = 3;
   SecretProjection projection = 4;
+  // scope is "workspace", which is what an empty value means, or "crew". A secret set on the crew
+  // reaches every workspace, including the ones made after it, which is the difference between
+  // setting a shared token once and setting it again for each workspace. A workspace that sets the
+  // same name keeps its own value.
+  string scope = 5;
 }
 message SetSecretResponse {}
 
@@ -413,9 +419,13 @@ message SecretRef {
   // projection is how this one reaches a sandbox. Where it lands is not carried, because it is
   // derived from the name and every reader would derive the same path.
   SecretProjection projection = 5;
+  // crew says the crew holds this one, so every workspace reads it without setting anything. Its
+  // workspace is then empty, because it belongs to no single workspace.
+  bool crew = 6;
 }
 
-// ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty.
+// ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty. The
+// crew's own are in both answers, marked, because they reach every workspace either way.
 message ListSecretsRequest {
   string workspace = 1;
 }

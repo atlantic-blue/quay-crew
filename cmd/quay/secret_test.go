@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -146,4 +147,99 @@ func TestTheUsageOffersThePipedForm(t *testing.T) {
 	if !strings.Contains(printed, "standard input") {
 		t.Errorf("the usage does not offer the piped form: %q", printed)
 	}
+}
+
+// The command every workspace stops repeating. "crew" where a workspace goes, the same word a skill,
+// a hook and a piece of context already take.
+func TestASecretSetOnTheCrewReachesAWorkspaceMadeAfterwards(t *testing.T) {
+	boxes := &sandbox.FakeProvider{}
+	client := testClientWith(t, controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: boxes, Secrets: secrets.NewMemory(),
+	})
+
+	saying(t, "ghp-shared")
+	said := mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+	if !strings.Contains(said, "every workspace") {
+		t.Fatalf("setting on the crew did not say who gets it: %q", said)
+	}
+
+	// Made after the secret was set, which is the case that used to cost a round of setting up.
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "dispatch", "hello")
+
+	got, given := carried(boxes, "GH_TOKEN")
+	if !given {
+		t.Fatal("the session was not given GH_TOKEN, and the crew holds it")
+	}
+	if got != "ghp-shared" {
+		t.Fatalf("the session was given %q, want ghp-shared", got)
+	}
+}
+
+// A listing that showed the crew's secrets under a workspace name would say a workspace set
+// something it never set, and one that hid them would say a token is missing that is already there.
+func TestAListingSaysWhichSecretsTheCrewHolds(t *testing.T) {
+	client, _ := aCrewWatchingItsSandboxes(t)
+
+	saying(t, "ghp-shared")
+	mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+	saying(t, "sk-mine")
+	mustRun(t, client, "secret", "set", "STRIPE_KEY")
+
+	listed := mustRun(t, client, "secret", "list")
+	if !strings.Contains(listed, "crew") {
+		t.Fatalf("the listing does not say the crew holds one: %q", listed)
+	}
+	for _, want := range []string{"GH_TOKEN", "STRIPE_KEY"} {
+		if !strings.Contains(listed, want) {
+			t.Fatalf("the listing does not name %s: %q", want, listed)
+		}
+	}
+
+	// Narrowed to the crew, only the crew's.
+	only := mustRun(t, client, "secret", "list", "crew")
+	if !strings.Contains(only, "GH_TOKEN") {
+		t.Fatalf("quay secret list crew does not name the crew's own: %q", only)
+	}
+	if strings.Contains(only, "STRIPE_KEY") {
+		t.Fatalf("quay secret list crew named a workspace's own: %q", only)
+	}
+}
+
+// A crew secret belongs to no workspace and survives every one of them, so a removal that counted it
+// would say a shared token is about to be lost with the workspace.
+func TestRemovingAWorkspaceDoesNotClaimTheCrewsSecrets(t *testing.T) {
+	client, _ := aCrewWatchingItsSandboxes(t)
+
+	saying(t, "ghp-shared")
+	mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+
+	name, holds, err := whatAWorkspaceHolds(context.Background(), client, workspaceIDOf(t, client, "me"))
+	if err != nil {
+		t.Fatalf("whatAWorkspaceHolds: %v", err)
+	}
+	if name != "me" {
+		t.Fatalf("it names %q, want me", name)
+	}
+	if !strings.Contains(holds, "0 secrets") {
+		t.Fatalf("removing the workspace says it holds %q, and the crew's secret is not its to lose", holds)
+	}
+}
+
+// workspaceIDOf is the identifier behind a name, which the removal call needs and a listing has.
+func workspaceIDOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, want string) string {
+	t.Helper()
+	resp, err := client.ListWorkspaces(context.Background(), &quaycrewv1.ListWorkspacesRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, workspace := range resp.GetWorkspaces() {
+		if workspace.GetName() == want {
+			return workspace.GetId()
+		}
+	}
+	t.Fatalf("there is no workspace called %s", want)
+	return ""
 }

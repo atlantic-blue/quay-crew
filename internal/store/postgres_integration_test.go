@@ -155,13 +155,14 @@ func truncate(t *testing.T) {
 	//
 	// Secrets are the third. They are keyed by a workspace identifier that is a plain string rather
 	// than a reference, so nothing cascades to them, and one test's token was still set for "acme"
-	// when the next one listed what that workspace held.
+	// when the next one listed what that workspace held. The crew's own are keyed by name alone, so
+	// they belong here for the same reason as skills.
 	if _, err := pool.Exec(ctx,
 		// Tasks are named here for the same reason as skills. A task is keyed by its own id and
 		// survived a truncate that claimed to leave nothing behind, so one subtest's task-0 was still
 		// there when the next one wrote its own, and AppendTask's "on conflict do nothing" dropped it
 		// silently. What that looked like was a case reading zero tasks it had just written.
-		`truncate sessions, tasks, channels, workspaces, skills, hooks, roles, secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, tasks, channels, workspaces, skills, hooks, roles, secrets, crew_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -524,4 +525,85 @@ func applyThrough(t *testing.T, ctx context.Context, pool *pgxpool.Pool, last st
 		}
 	}
 	t.Fatalf("no migration called %s", last)
+}
+
+// A token every workspace needs is set once, and a restart that lost it would put the operator back
+// to setting it again for each workspace, which is the whole thing this level exists to stop.
+func TestTheCrewsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
+	ctx := context.Background()
+	truncate(t)
+
+	key, err := secrets.KeyAt(filepath.Join(t.TempDir(), "secrets.key"))
+	if err != nil {
+		t.Fatalf("KeyAt: %v", err)
+	}
+	before, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	kept, err := secrets.NewPostgres(before.Pool(), key)
+	if err != nil {
+		t.Fatalf("open secrets: %v", err)
+	}
+	const token = "ghp-shared-not-a-real-one"
+	if err := kept.SetCrew(ctx, secrets.Secret{Name: "GH_TOKEN", Value: token}); err != nil {
+		t.Fatalf("SetCrew: %v", err)
+	}
+	if err := kept.SetCrew(ctx, secrets.Secret{
+		Name: "gitconfig", Value: "[user]\n\tname = operator\n", Projection: secrets.File,
+	}); err != nil {
+		t.Fatalf("SetCrew mounted: %v", err)
+	}
+	before.Close()
+
+	after, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("reopen postgres: %v", err)
+	}
+	t.Cleanup(after.Close)
+	reopened, err := secrets.NewPostgres(after.Pool(), key)
+	if err != nil {
+		t.Fatalf("reopen secrets: %v", err)
+	}
+	levels := secrets.Levels{Store: reopened}
+
+	// A workspace that set nothing, and one that set its own under the same name.
+	if err := levels.Set(ctx, "acme", secrets.Secret{Name: "GH_TOKEN", Value: "ghp-its-own"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got, err := levels.Get(ctx, "me", "GH_TOKEN"); err != nil || got != token {
+		t.Fatalf("a workspace that set nothing reads GH_TOKEN as %q (%v), want the crew's", got, err)
+	}
+	if got, _ := levels.Get(ctx, "acme", "GH_TOKEN"); got != "ghp-its-own" {
+		t.Fatalf("a workspace that set its own reads GH_TOKEN as %q, want ghp-its-own", got)
+	}
+
+	// How it reaches a sandbox survives too, or a mounted credential goes back into the environment
+	// of every container.
+	refs, err := levels.List(ctx, "me")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	want := map[string]secrets.Projection{"GH_TOKEN": secrets.Env, "gitconfig": secrets.File}
+	if len(refs) != len(want) {
+		t.Fatalf("a workspace that set nothing reads %+v, want %d from the crew", refs, len(want))
+	}
+	for _, ref := range refs {
+		if ref.Projection != want[ref.Name] {
+			t.Fatalf("%s reaches a sandbox as %q, want %q", ref.Name, ref.Projection, want[ref.Name])
+		}
+		if !ref.Crew {
+			t.Fatalf("%s does not say the crew holds it", ref.Name)
+		}
+	}
+
+	// And it is not sitting in the clear in a table anybody might dump.
+	var sealed []byte
+	if err := after.Pool().QueryRow(ctx,
+		`select sealed from crew_secrets where name = 'GH_TOKEN'`).Scan(&sealed); err != nil {
+		t.Fatalf("reading the row: %v", err)
+	}
+	if strings.Contains(string(sealed), token) {
+		t.Fatal("the token is in the database in the clear")
+	}
 }

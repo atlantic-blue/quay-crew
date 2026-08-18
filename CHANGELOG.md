@@ -6,6 +6,29 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 18 August 2026
+
+- **A secret every workspace needs is held once by the crew.** Say `crew` where a workspace goes:
+  `gh auth token | quay secret set crew GH_TOKEN`, `quay secret mount crew gitconfig < ~/.gitconfig`.
+  Every workspace then reads it, including the ones made afterwards, which is the difference between
+  setting a crew up once and setting each workspace up again. Both projections work, so a shared
+  token and a shared credential file both come from one place.
+
+  A workspace wins on a name. The crew's level is what every workspace gets by default, not a floor,
+  so the one workspace that needs a different token sets its own and no other workspace loses the
+  shared one. The merge happens in one place rather than in each backend, because two readers of the
+  rule are two chances to disagree about which level wins.
+
+  `quay secret list` says which level holds each one, and `quay secret list crew` asks for the
+  crew's alone. Removing a workspace no longer counts the crew's secrets among what it takes with it:
+  they belong to no workspace and survive every one of them.
+
+  No workspace may be called `crew` any more. That word is what every address takes for the level
+  above a workspace, so a workspace with that name would take the secrets, skills, hooks and roles
+  meant for all of them, and nothing else would ever read them.
+
+  Removing a secret is still not possible, at either level, the same as before this.
+
 ## 17 August 2026
 
 - **A role is imported, pinned to a version, and attached at a level.** A role is a named way of

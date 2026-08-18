@@ -71,8 +71,14 @@ commands:
                                            and it serves 127.0.0.1:8080 unless told another port
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
-                                          a file. A value given as an argument still works
-  secret list [<workspace>]               which secrets are set, never what they say
+                                          a file. A value given as an argument still works. Say crew
+                                          where the workspace goes and every workspace reads it,
+                                          including the ones made later
+  secret mount [<workspace>] <name>       store a credential that is a file, which reaches a session
+    [<path>]                              at /run/secrets/<name> and not through its environment.
+                                          Takes crew the same way
+  secret list [<workspace>|crew]          which secrets are set, never what they say. It says which
+                                          level holds each one
   skill import <directory>                take a skill into the crew from its directory. A fresh
                                           crew already holds the ones this build ships with
   skill list [<workspace>]                what the crew can do, or what one workspace holds
