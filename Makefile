@@ -37,7 +37,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down logs ps proto build install test features lint fmt tidy sandbox-image image rebuild config home-check env-check hooks help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install test features lint fmt tidy sandbox-image image rebuild config home-check env-check hooks help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -148,6 +148,11 @@ upgrade:
 	else \
 		echo "moved from $$before to $$after"; \
 	fi
+	@echo "building the tool first, so the sessions are put down by the build that knows how. It is"
+	@echo "built again below with everything else, which costs nothing and keeps one list of what an"
+	@echo "upgrade builds."
+	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory drain
 	@echo "rebuilding the tool, the hooks and the sandbox image. Sessions run whatever the image holds,"
 	@echo "so leaving it behind means upgrading the tool and the stack while every conversation keeps"
 	@echo "the build from before."
@@ -155,8 +160,9 @@ upgrade:
 	@$(MAKE) --no-print-directory home-check
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
-	@echo "clearing the sandboxes from before the upgrade. They run the old image, the control plane"
-	@echo "has forgotten them, and their names would block those sessions from starting again."
+	@echo "clearing whatever sandboxes are left. Draining took the ones the crew knows about; these"
+	@echo "are the containers it has forgotten, and their names would block those sessions from"
+	@echo "starting again."
 	@docker ps -a --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' \
 		| awk -F'|' '$$2 == "" { print $$1 }' \
 		| grep -E '$(SANDBOX_PATTERN)' \
@@ -176,6 +182,30 @@ up-observability: up
 ## down: stop and remove everything
 down: config
 	$(COMPOSE) down
+
+## drain: put every live session down, so nothing loses a task when the containers go
+#
+# `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes the
+# task in flight with it, which the operator reads as "model: run exited: exit status 137, and it said
+# nothing about why" against a conversation they were watching. Going through the crew stops each
+# session first, so the row says stopped and the sandbox is closed rather than ripped out.
+#
+# A task still working refuses this. FORCE=1 drains over it, and says whose task went.
+#
+# A crew that is not up has nothing to drain and does not stop the upgrade: the tool says what it
+# could not reach and the sweep below still clears the containers.
+drain:
+	@if ! command -v quay >/dev/null 2>&1; then \
+		echo "note: quay is not on your PATH, so the sessions cannot be put down cleanly."; \
+		echo "      Whatever takes their containers will end any task still working."; \
+		exit 0; \
+	fi; \
+	quay drain $(if $(FORCE),anyway,) || { \
+		echo; \
+		echo "refusing: a session is still working. Wait for it, or upgrade over it with:"; \
+		echo "    make upgrade FORCE=1"; \
+		exit 1; \
+	}
 
 ## logs: follow all service logs
 logs: config

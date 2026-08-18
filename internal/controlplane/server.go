@@ -11,6 +11,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"path"
@@ -1832,6 +1833,75 @@ func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionReq
 	}
 	s.closeSandbox(ctx, req.GetId())
 	return &quaycrewv1.StopSessionResponse{}, nil
+}
+
+// DrainSessions puts every live session down, so whatever is about to take the containers away finds
+// nothing running.
+//
+// `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes a task
+// in flight with it, which lands as "model: run exited: exit status 137, and it said nothing about
+// why", and it leaves the row still holding the skills its container was born with while the
+// container is gone, so the listing measures staleness against a birth set nothing has any more.
+// Going through here instead stops each session first: the row says stopped, which is true, and the
+// birth set is cleared with the sandbox.
+//
+// A task under way refuses the drain rather than being interrupted, and the answer names what is
+// working so the operator can wait for it. Force is the operator saying they know, and then the drain
+// says what it interrupted rather than doing it quietly.
+func (s *Server) DrainSessions(ctx context.Context, req *quaycrewv1.DrainSessionsRequest) (*quaycrewv1.DrainSessionsResponse, error) {
+	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
+	if err != nil {
+		return nil, storeError(err, "list sessions")
+	}
+	var live, working []*quaycrewv1.Session
+	for _, session := range sessions {
+		if session.GetStatus() == StatusStopped {
+			continue
+		}
+		live = append(live, session)
+		if session.GetStatus() == StatusRunning {
+			working = append(working, session)
+		}
+	}
+	if len(working) > 0 && !req.GetForce() {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"%s still working: %s. Wait for it, or drain anyway and lose the task",
+			taskWord(len(working)), namesOf(working))
+	}
+	for _, session := range live {
+		if err := s.store.StopSession(ctx, session.GetId()); err != nil {
+			return nil, storeError(err, "session")
+		}
+		s.closeSandbox(ctx, session.GetId())
+	}
+	return &quaycrewv1.DrainSessionsResponse{Stopped: live, Working: working}, nil
+}
+
+// taskWord counts the tasks in flight in words, because "1 tasks still working" is the sentence that
+// makes an operator doubt the rest of the message.
+func taskWord(count int) string {
+	if count == 1 {
+		return "1 task is"
+	}
+	return fmt.Sprintf("%d tasks are", count)
+}
+
+// namesOf lists sessions the way the operator sees them: the handle they would type, and the label
+// they read, for as many as fit before the sentence stops being a sentence.
+func namesOf(sessions []*quaycrewv1.Session) string {
+	const most = 5
+	names := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		name := display.ShortID(session.GetHandle())
+		if label := session.GetLabel(); label != "" {
+			name += " (" + label + ")"
+		}
+		names = append(names, name)
+	}
+	if len(names) > most {
+		return strings.Join(names[:most], ", ") + fmt.Sprintf(" and %d more", len(names)-most)
+	}
+	return strings.Join(names, ", ")
 }
 
 // OpenDriver returns the project's driver, the session that drives the crew, creating it the first

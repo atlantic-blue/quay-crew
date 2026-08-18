@@ -352,6 +352,22 @@ message StopSessionRequest {
 }
 message StopSessionResponse {}
 
+// DrainSessionsRequest puts every live session down, so whatever is about to take the containers
+// away finds nothing running. `make upgrade` removes them by name from the daemon, which ends a task
+// in flight as "exit status 137" and leaves the row saying it was born holding skills its next
+// container will not have.
+message DrainSessionsRequest {
+  // force drains even when a task is under way. Without it a task in flight refuses the drain, and
+  // the answer names what is working so the operator can wait for it instead.
+  bool force = 1;
+}
+message DrainSessionsResponse {
+  // stopped is what went down, so the caller can say what it did rather than a count.
+  repeated Session stopped = 1;
+  // working is what was under way. Empty unless force was given: without it the drain refuses.
+  repeated Session working = 2;
+}
+
 // RestartSessionRequest brings a stopped session back.
 message RestartSessionRequest {
   string id = 1;
@@ -823,6 +839,7 @@ service ControlPlaneService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
+  rpc DrainSessions(DrainSessionsRequest) returns (DrainSessionsResponse);
   rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
   rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
