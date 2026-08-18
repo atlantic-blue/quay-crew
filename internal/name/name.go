@@ -77,3 +77,24 @@ func Validate(what, value string) error {
 	}
 	return fmt.Errorf("%s name %q cannot be part of an address: use lowercase letters, digits and hyphens, for example %q", what, value, suggestion)
 }
+
+// Crew is the word an address takes to mean the level above every workspace: what the whole crew
+// holds, rather than what one workspace holds. `quay skill attach crew`, `quay secret set crew` and
+// `quay context set crew` all read it.
+const Crew = "crew"
+
+// ValidateWorkspace is Validate plus the one name a workspace cannot take.
+//
+// A workspace called "crew" would shadow the word in every address, so `quay secret set crew TOKEN`
+// would set a secret on that workspace and no other workspace would ever read it. The refusal is
+// here rather than in the command line tool because every way in creates through the same control
+// plane.
+func ValidateWorkspace(value string) error {
+	if err := Validate("workspace", value); err != nil {
+		return err
+	}
+	if strings.TrimSpace(value) == Crew {
+		return fmt.Errorf("a workspace cannot be called %q: that word means the whole crew, so %q would take secrets and skills meant for every workspace", Crew, Crew)
+	}
+	return nil
+}

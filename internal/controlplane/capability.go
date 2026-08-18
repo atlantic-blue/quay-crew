@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -15,8 +16,8 @@ import (
 
 // crewScope is what a caller says to mean the whole crew rather than one workspace. It is the same
 // word the context calls address uses, so a skill and a piece of context are given to everything the
-// crew does the same way.
-const crewScope = "crew"
+// crew does the same way, and it is the word no workspace may be called.
+const crewScope = name.Crew
 
 // capability is everything a session holds, answered in one place: the skills, where each mounts
 // inside the sandbox, and which of them live in the store and need their files written to the host

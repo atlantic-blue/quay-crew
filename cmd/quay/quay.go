@@ -282,10 +282,13 @@ func move(path workspace.Path, out io.Writer) error {
 // runSecretList says which secrets a workspace has, and never what any of them says.
 func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay secret list [<workspace>]")
+		return fmt.Errorf("usage: quay secret list [<workspace>|crew]")
 	}
 	request := &quaycrewv1.ListSecretsRequest{}
-	if len(args) == 1 {
+	// "crew" asks for what the crew holds and nothing else. It is not a workspace, so it is answered
+	// by filtering the listing rather than by resolving an address.
+	onlyCrew := len(args) == 1 && args[0] == crewScope
+	if len(args) == 1 && !onlyCrew {
 		located, err := workspace.Resolve(ctx, client, args[0])
 		if err != nil {
 			return err
@@ -296,14 +299,24 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
-	if len(resp.GetSecrets()) == 0 {
-		fmt.Fprintln(out, "no secrets set")
-		return nil
-	}
+	shown := 0
 	for _, secret := range resp.GetSecrets() {
-		fmt.Fprintf(out, "%-20s %-32s %s\n",
-			display.Name(secret.GetWorkspaceName(), secret.GetWorkspace()), secret.GetName(),
+		if onlyCrew && !secret.GetCrew() {
+			continue
+		}
+		shown++
+		// The crew's own belong to no workspace, so the column says the level instead of an
+		// identifier. Reading "crew" where a workspace name goes is how the listing says every
+		// workspace has this one.
+		where := display.Name(secret.GetWorkspaceName(), secret.GetWorkspace())
+		if secret.GetCrew() {
+			where = crewScope
+		}
+		fmt.Fprintf(out, "%-20s %-32s %s\n", where, secret.GetName(),
 			whereItLands(secret.GetName(), secret.GetProjection()))
+	}
+	if shown == 0 {
+		fmt.Fprintln(out, "no secrets set")
 	}
 	return nil
 }
@@ -322,7 +335,9 @@ func whereItLands(name string, projection quaycrewv1.SecretProjection) string {
 // shell history and out of the process list.
 const secretUsage = "usage: <value> | quay secret set [<workspace>] <key>" +
 	"\n   or: quay secret set [<workspace>] <key> <value>" +
-	"\n   or: quay secret mount [<workspace>] <name> <path>   (a credential that is a file)"
+	"\n   or: quay secret mount [<workspace>] <name> <path>   (a credential that is a file)" +
+	"\n\nsay crew where a workspace goes to set it once for every workspace:" +
+	"\n   gh auth token | quay secret set crew GITHUB_TOKEN"
 
 // standardInputIsPiped says whether something is being fed in rather than a person typing. A
 // character device is a terminal; anything else is a pipe or a file redirection.
@@ -382,6 +397,20 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		}
 	}
 
+	// The crew's level, said the same way a skill, a hook and a piece of context are given to it. It
+	// is not an address, so there is nothing to resolve: no workspace is named and every workspace
+	// reads it.
+	if typed == crewScope {
+		if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+			Scope: crewScope, Key: key, Value: value,
+		}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "set secret %s for the crew, so every workspace has it\n", key)
+		fmt.Fprintln(out, "a workspace that sets the same name keeps its own")
+		return nil
+	}
+
 	located, err := locate(ctx, client, typed)
 	if err != nil {
 		return err
@@ -399,7 +428,8 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // mountUsage names the file form first, because a credential that is a file is what this command is
 // for and the piped form is the way to mount one that is not on disk.
 const mountUsage = "usage: quay secret mount [<workspace>] <name> <path>" +
-	"\n   or: <contents> | quay secret mount [<workspace>] <name>"
+	"\n   or: <contents> | quay secret mount [<workspace>] <name>" +
+	"\n\nsay crew where a workspace goes to mount it for every workspace"
 
 // runSecretMount stores a secret that reaches a session as a file rather than as an environment
 // variable.
@@ -430,6 +460,20 @@ func runSecretMount(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	}
 	if value == "" {
 		return fmt.Errorf("there is nothing to mount, so %s was not set", name)
+	}
+
+	if typed == crewScope {
+		if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+			Scope:      crewScope,
+			Key:        name,
+			Value:      value,
+			Projection: quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE,
+		}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "mounted %s for the crew at %s, so every workspace has it\n", name, sandbox.SecretFilePath(name))
+		fmt.Fprintln(out, "a session already running was made before this, so stop it to get a sandbox that has it")
+		return nil
 	}
 
 	located, err := locate(ctx, client, typed)

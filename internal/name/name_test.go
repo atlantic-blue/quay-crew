@@ -80,3 +80,25 @@ func TestValidateNamesWhatWouldWork(t *testing.T) {
 		t.Errorf("Validate(\"///\") = %v, want a refusal that suggests something real", err)
 	}
 }
+
+// "crew" is the word every address takes for the level above a workspace. A workspace called crew
+// would take the secrets, skills, hooks and roles meant for every workspace, and nothing else would
+// ever read them.
+func TestAWorkspaceCannotBeCalledCrew(t *testing.T) {
+	err := name.ValidateWorkspace(name.Crew)
+	if err == nil {
+		t.Fatal("ValidateWorkspace(\"crew\") = nil, want a refusal")
+	}
+	// The reason, not only the refusal. An operator told no and not why types it again.
+	if !strings.Contains(err.Error(), "whole crew") {
+		t.Fatalf("the refusal is %q, and it does not say why", err)
+	}
+	if err := name.ValidateWorkspace("crews"); err != nil {
+		t.Fatalf("ValidateWorkspace(\"crews\") = %v, want it accepted", err)
+	}
+	// A project may still be called crew: an address names a project under a workspace, so there is
+	// nothing for it to shadow.
+	if err := name.Validate("project", name.Crew); err != nil {
+		t.Fatalf("Validate(project, \"crew\") = %v, want it accepted", err)
+	}
+}

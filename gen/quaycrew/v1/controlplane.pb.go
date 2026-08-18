@@ -2262,11 +2262,17 @@ func (x *AttachChannelResponse) GetChannel() *Channel {
 
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 type SetSecretRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	Projection    SecretProjection       `protobuf:"varint,4,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// workspace is the workspace it belongs to, and is ignored when scope is "crew".
+	Workspace  string           `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Key        string           `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value      string           `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	Projection SecretProjection `protobuf:"varint,4,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
+	// scope is "workspace", which is what an empty value means, or "crew". A secret set on the crew
+	// reaches every workspace, including the ones made after it, which is the difference between
+	// setting a shared token once and setting it again for each workspace. A workspace that sets the
+	// same name keeps its own value.
+	Scope         string `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2327,6 +2333,13 @@ func (x *SetSecretRequest) GetProjection() SecretProjection {
 		return x.Projection
 	}
 	return SecretProjection_SECRET_PROJECTION_UNSPECIFIED
+}
+
+func (x *SetSecretRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
 }
 
 type SetSecretResponse struct {
@@ -3396,7 +3409,10 @@ type SecretRef struct {
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// projection is how this one reaches a sandbox. Where it lands is not carried, because it is
 	// derived from the name and every reader would derive the same path.
-	Projection    SecretProjection `protobuf:"varint,5,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
+	Projection SecretProjection `protobuf:"varint,5,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
+	// crew says the crew holds this one, so every workspace reads it without setting anything. Its
+	// workspace is then empty, because it belongs to no single workspace.
+	Crew          bool `protobuf:"varint,6,opt,name=crew,proto3" json:"crew,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3466,7 +3482,15 @@ func (x *SecretRef) GetProjection() SecretProjection {
 	return SecretProjection_SECRET_PROJECTION_UNSPECIFIED
 }
 
-// ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty.
+func (x *SecretRef) GetCrew() bool {
+	if x != nil {
+		return x.Crew
+	}
+	return false
+}
+
+// ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty. The
+// crew's own are in both answers, marked, because they reach every workspace either way.
 type ListSecretsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -6355,14 +6379,15 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\"G\n" +
 	"\x15AttachChannelResponse\x12.\n" +
-	"\achannel\x18\x01 \x01(\v2\x14.quaycrew.v1.ChannelR\achannel\"\x97\x01\n" +
+	"\achannel\x18\x01 \x01(\v2\x14.quaycrew.v1.ChannelR\achannel\"\xad\x01\n" +
 	"\x10SetSecretRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\tR\x05value\x12=\n" +
 	"\n" +
 	"projection\x18\x04 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
-	"projection\"\x13\n" +
+	"projection\x12\x14\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scope\"\x13\n" +
 	"\x11SetSecretResponse\"\x98\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
@@ -6419,7 +6444,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05owner\x18\x02 \x01(\tR\x05owner\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\"?\n" +
 	"\x12SetContextResponse\x12)\n" +
-	"\x03dir\x18\x01 \x01(\v2\x17.quaycrew.v1.ContextDirR\x03dir\"\xde\x01\n" +
+	"\x03dir\x18\x01 \x01(\v2\x17.quaycrew.v1.ContextDirR\x03dir\"\xf2\x01\n" +
 	"\tSecretRef\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12%\n" +
 	"\x0eworkspace_name\x18\x02 \x01(\tR\rworkspaceName\x12\x12\n" +
@@ -6428,7 +6453,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12=\n" +
 	"\n" +
 	"projection\x18\x05 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
-	"projection\"2\n" +
+	"projection\x12\x12\n" +
+	"\x04crew\x18\x06 \x01(\bR\x04crew\"2\n" +
 	"\x12ListSecretsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"G\n" +
 	"\x13ListSecretsResponse\x120\n" +
