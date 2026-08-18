@@ -604,6 +604,75 @@ message DetachHookRequest {
 }
 message DetachHookResponse {}
 
+// Role is a named way of working a session is given: a brief the model reads, the model it runs on,
+// and the material it is allowed to receive.
+//
+// The boundary is the point of it. A role that writes tests must not receive the code, or the two
+// sessions are one conversation wearing two names, so receives is a declaration the crew can hold a
+// session to rather than prose in a brief that asks it nicely.
+message Role {
+  string name = 1;
+  int32 version = 2;
+  // summary is the line a listing shows.
+  string summary = 3;
+  // model is which model a session running as this role uses, as a tier ("opus") or a full name
+  // ("claude-opus-5"). Declared per role because the work differs.
+  string model = 4;
+  // receives is the material this role is given, sorted. A name the crew does not hand out is
+  // refused at import, because a boundary that means nothing looks exactly like one that holds.
+  repeated string receives = 5;
+  google.protobuf.Timestamp imported_at = 6;
+  // crew says the crew holds this role, so every workspace has it without attaching anything.
+  bool crew = 7;
+}
+
+// RoleFile is one file of a role's directory, on its way into the crew.
+message RoleFile {
+  // path is relative to the role's directory, with forward slashes.
+  string path = 1;
+  bytes body = 2;
+}
+
+// ImportRoleRequest carries a role's directory, for the same reason ImportSkillRequest does: the
+// control plane runs in a container where a path on the operator's machine means nothing.
+message ImportRoleRequest {
+  repeated RoleFile files = 1;
+}
+message ImportRoleResponse {
+  Role role = 1;
+}
+
+// ListRolesRequest lists what the crew has imported, or what one workspace holds when workspace is
+// set.
+message ListRolesRequest {
+  string workspace = 1;
+}
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
+
+// AttachRoleRequest gives a workspace a role, at the version the crew holds now.
+message AttachRoleRequest {
+  // workspace is the workspace to give it to, and is ignored when scope is "crew".
+  string workspace = 1;
+  string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew".
+  string scope = 3;
+}
+message AttachRoleResponse {
+  Role role = 1;
+}
+
+// DetachRoleRequest takes a role away from a workspace. The role stays imported.
+message DetachRoleRequest {
+  // workspace is the workspace to take it from, and is ignored when scope is "crew".
+  string workspace = 1;
+  string name = 2;
+  // scope is "workspace", which is what an empty value means, or "crew".
+  string scope = 3;
+}
+message DetachRoleResponse {}
+
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
   string project = 1;
@@ -761,6 +830,11 @@ service ControlPlaneService {
   rpc ListHooks(ListHooksRequest) returns (ListHooksResponse);
   rpc AttachHook(AttachHookRequest) returns (AttachHookResponse);
   rpc DetachHook(DetachHookRequest) returns (DetachHookResponse);
+
+  rpc ImportRole(ImportRoleRequest) returns (ImportRoleResponse);
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc AttachRole(AttachRoleRequest) returns (AttachRoleResponse);
+  rpc DetachRole(DetachRoleRequest) returns (DetachRoleResponse);
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
 

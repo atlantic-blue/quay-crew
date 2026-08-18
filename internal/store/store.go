@@ -20,6 +20,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/google/uuid"
 )
@@ -56,6 +57,19 @@ var ErrSkillChanged = errors.New("store: that version of the skill is already im
 // Imported is a skill the crew holds: the skill as its author wrote it, and when it came in.
 type Imported struct {
 	skill.Skill
+	ImportedAt time.Time
+}
+
+// ErrRoleChanged is returned when a version of a role is imported again carrying a different role.
+//
+// A refusal rather than an overwrite, for the reason ErrSkillChanged gives: a workspace pins the
+// version it holds, and a role that changed underneath it would change how a session already running
+// as it is told to work. The way forward is to raise the version in the manifest.
+var ErrRoleChanged = errors.New("store: that version of the role is already imported and differs")
+
+// ImportedRole is a role the crew holds: the role as its author wrote it, and when it came in.
+type ImportedRole struct {
+	role.Role
 	ImportedAt time.Time
 }
 
@@ -207,6 +221,32 @@ type Store interface {
 	DetachCrewHook(ctx context.Context, name string) error
 	// CrewHooks returns what the crew holds, at the versions it pinned, files included.
 	CrewHooks(ctx context.Context) ([]ImportedHook, error)
+
+	// The same questions again for roles, and a separate set of calls for the same reason hooks are
+	// separate: a role is its own entity, and a workspace that holds a skill has said nothing about
+	// which roles its work may be split into.
+	//
+	// ImportRole takes a role into the crew at the version its manifest declares. The same name and
+	// version again is fine when it is the same role and refused when it is not.
+	ImportRole(ctx context.Context, imported ImportedRole) error
+	// GetRole returns one revision of a role.
+	GetRole(ctx context.Context, name string, version int) (ImportedRole, error)
+	// ListRoles returns the newest revision of every role the crew holds.
+	ListRoles(ctx context.Context) ([]ImportedRole, error)
+	// AttachRole gives a workspace a role, pinned to the newest revision the crew holds now.
+	AttachRole(ctx context.Context, workspace, name string) (ImportedRole, error)
+	// DetachRole takes a role away from a workspace. The role stays imported.
+	DetachRole(ctx context.Context, workspace, name string) error
+	// WorkspaceRoles returns the roles a workspace holds, at the versions it pinned.
+	WorkspaceRoles(ctx context.Context, workspace string) ([]ImportedRole, error)
+	// AttachCrewRole gives the role to the whole crew, so every workspace has it and one made
+	// tomorrow has it too.
+	AttachCrewRole(ctx context.Context, name string) (ImportedRole, error)
+	// DetachCrewRole takes a role away from the crew. A workspace that attached it for itself keeps
+	// it: the two are separate statements, and the narrower one is not undone by the wider one.
+	DetachCrewRole(ctx context.Context, name string) error
+	// CrewRoles returns what the crew holds, at the versions it pinned.
+	CrewRoles(ctx context.Context) ([]ImportedRole, error)
 
 	// AppendTask records one task of a session's history, and is safe to call twice with the same
 	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has

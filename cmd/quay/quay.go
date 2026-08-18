@@ -180,6 +180,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSkill(ctx, client, args[1:], out)
 	case "hook":
 		return runHook(ctx, client, args[1:], out)
+	case "role":
+		return runRole(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
 	case "repository":

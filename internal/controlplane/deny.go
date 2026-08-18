@@ -21,6 +21,11 @@ import (
 // already imported is not refused, because a run is dispatch, which the driver already has: it can
 // reach nothing through a flow that it could not reach by dispatching directly.
 //
+// A role is refused on the same line as a skill. It carries a brief, a model and the material a
+// session is allowed to receive, so a session that could import or attach one could write itself a
+// way of working nobody approved and then be run as it. Reading what the crew already holds stays
+// open, because choosing from what the operator attached is the point.
+//
 // Everything the driver exists to do stays open: workspaces, projects, sessions, dispatch, starting
 // a flow, and context at the workspace and project scopes.
 func DeniedToDriver(fullMethod string, request any) error {
@@ -30,6 +35,9 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_ImportSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_AttachSkill_FullMethodName,
 		quaycrewv1.ControlPlaneService_DetachSkill_FullMethodName,
+		quaycrewv1.ControlPlaneService_ImportRole_FullMethodName,
+		quaycrewv1.ControlPlaneService_AttachRole_FullMethodName,
+		quaycrewv1.ControlPlaneService_DetachRole_FullMethodName,
 		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName,
 		quaycrewv1.ControlPlaneService_ImportFlow_FullMethodName:
 		return refusedToDriver(fullMethod)

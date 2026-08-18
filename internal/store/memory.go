@@ -44,9 +44,14 @@ type Memory struct {
 	// same two attachment levels again. Separate maps rather than one generic set: a skill and a
 	// hook are different entities, and sharing the storage here would be the first step to sharing
 	// the semantics.
-	hooks           map[string]ImportedHook
-	hooksAttached   map[string]map[string]int
-	crewHooks       map[string]int
+	hooks         map[string]ImportedHook
+	hooksAttached map[string]map[string]int
+	crewHooks     map[string]int
+	// roles is every revision of every role the crew holds, and rolesAttached and crewRoles are the
+	// same two attachment levels once more.
+	roles           map[string]ImportedRole
+	rolesAttached   map[string]map[string]int
+	crewRoles       map[string]int
 	flowGraphs      map[string]map[int]string
 	flowRuns        map[string]*flow.Run
 	flowTransitions map[string][]flow.RecordedTransition

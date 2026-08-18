@@ -88,6 +88,13 @@ commands:
                                           session already running is not: a hook reaches a sandbox
                                           when the sandbox is built
   hook detach [<workspace>] <name>        take a hook away from a workspace, or from the crew
+  role import <directory>                 take a role into the crew from its directory. A role is a
+                                          named way of working: a brief, the model it runs on, and
+                                          the material it may receive
+  role list [<workspace>]                 what roles the crew holds, or what one workspace holds
+  role attach [<workspace>] <name>        give a workspace a role. Say crew where the workspace
+                                          goes and every workspace holds it
+  role detach [<workspace>] <name>        take a role away from a workspace, or from the crew
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a session
 may be the shortened id a listing prints. An address typed on the command line applies to that
