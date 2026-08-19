@@ -54,6 +54,30 @@ Feature: A secret every workspace needs is held once by the crew
     Then the sandbox is given the file "/run/secrets/gitconfig" holding "[user] name = operator"
     And the sandbox carries nothing called "gitconfig"
 
+  # Signing and the crew's level are two features that only pay off together: a key mounted once
+  # signs the work of every workspace, including the ones made tomorrow. Neither test suite covers
+  # the join, so each could keep passing while the pair stopped working.
+  Scenario: A gpg key the crew holds makes every workspace sign
+    Given the crew mounts the secret "GPG_SIGNING_KEY" holding "an exported secret key"
+    And a workspace named "me"
+    And a project named "house-bills"
+    When the operator dispatches "hello" to the project
+    Then the sandbox is given the file "/run/secrets/GPG_SIGNING_KEY" holding "an exported secret key"
+    And the sandbox is told to set "gpg.format" to "openpgp"
+    And the sandbox is told to set "commit.gpgsign" to "true"
+
+  # The one workspace that signs as somebody else, without the other workspaces losing the shared
+  # key. A private key is the secret an operator is most likely to want to say something different
+  # about.
+  Scenario: A workspace that mounts its own gpg key signs with that one
+    Given the crew mounts the secret "GPG_SIGNING_KEY" holding "the shared key"
+    And a workspace named "me"
+    And a project named "house-bills"
+    And the workspace mounts the secret "GPG_SIGNING_KEY" holding "the workspace's own key"
+    When the operator dispatches "hello" to the project
+    Then the sandbox is given the file "/run/secrets/GPG_SIGNING_KEY" holding "the workspace's own key"
+    And the sandbox is told to set "commit.gpgsign" to "true"
+
   # A workspace that attached nothing and has three secrets is a puzzle. The listing answers it.
   Scenario: A listing says which secrets the crew holds
     Given the crew has the secret "GITHUB_TOKEN" set to "ghp-shared"
