@@ -143,17 +143,56 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
 
+## Seeing what you built
+
+A session used to have no eyes. A change with a visual result was delivered on the strength of a
+passing build, and the build, the linter, the type check and the whole test suite all pass on a
+layout that is wrong. The image carries a browser now, so a session can look:
+
+```
+quay render http://localhost:3000
+quay render localhost:3000 home.png 390x844 dark 2s
+```
+
+The url comes first. Everything after it is recognised by its shape rather than its position, so any
+order is the same command: a file name, a size as `390x844`, `light` or `dark`, and a wait as `2s`.
+Say nothing and you get `render.png`, 1280 by 900, light, after half a second. It draws the whole
+page rather than the first screen of it, then reads the picture back and says what it drew:
+
+```
+drew http://localhost:3000 at 390x844, dark, into /home/agent/workspace/home.png (390 by 3120)
+```
+
+Then the session reads the file, which is the step the whole thing exists for. A command that exits
+well proves a file exists. Only the picture says whether the page is right.
+
+What is in the image is Playwright and the headless browser it drives, both pinned, with the
+browser's own dependencies installed as root at build time: 31 packages, fontconfig and seven font
+families among them. Without those the browser exits on
+`SkFontMgr_FontConfigInterface: Not implemented` rather than drawing anything, and the failure lands
+in a session rather than in a build. The stated cost is about 450 megabytes.
+
+`TestASessionRendersAPageAndReadsItBack` in `deploy/` is the proof: it draws a page in a fresh
+container and decodes the picture that comes back, so an image that holds a browser it cannot start
+fails there rather than in front of an operator. It needs Docker and the built image, so it runs in
+continuous integration and skips without one.
+
+A sandbox keeps what it was made with. A session that was running before the image carried a browser
+does not have one, cannot install one, and says so with what to do about it: stop the session and
+dispatch again.
+
 ## What the image pins
 
 Every tool the image installs names its version, as a build argument at the top of the step that
-installs it: `CLAUDE_CODE_VERSION`, `GH_VERSION`, `TF_VERSION`, `AWS_CLI_VERSION`. Raising one is an
-edit to `deploy/sandbox/claude.Dockerfile` with a commit behind it, so the same commit builds the
-same image on any day and a session that starts behaving differently has a change to point at.
+installs it: `CLAUDE_CODE_VERSION`, `GH_VERSION`, `TF_VERSION`, `AWS_CLI_VERSION` and
+`PLAYWRIGHT_VERSION`. Raising one is an edit to `deploy/sandbox/claude.Dockerfile` with a commit
+behind it, so the same commit builds the same image on any day and a session that starts behaving
+differently has a change to point at.
 
-Two tests hold this. `TestNothingInTheSandboxImageFloats` refuses any global install in the image
+Three tests hold this. `TestNothingInTheSandboxImageFloats` refuses any global install in the image
 that does not name a version, so the next tool added unpinned fails there rather than months later.
-`TestTheImageRunsTheClaudeCodeItPins` asks the built image what it runs, because a pin the registry
-quietly ignores reads exactly like a pin that works.
+`TestTheImageRunsTheClaudeCodeItPins` and `TestTheImageRunsThePlaywrightItPins` ask the built image
+what it runs, because a pin the registry quietly ignores reads exactly like a pin that works.
 
 ## A credential that is a file
 

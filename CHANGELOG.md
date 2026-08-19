@@ -6,6 +6,37 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 19 August 2026
+
+- **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
+  draws a page into a picture the session then reads. Before this, a change with a visual result was
+  delivered on the strength of a passing build: the build, the linter, the type check and the tests
+  all pass on a layout that is wrong, and the operator was the first person to look at it. On one
+  site that meant a spacing defect on every section of the home page, found by the first screenshot
+  anybody took.
+
+  ```
+  quay render http://localhost:3000
+  quay render localhost:3000 home.png 390x844 dark 2s
+  ```
+
+  The url comes first and everything after it is recognised by its shape rather than its position, so
+  a file name, a size, `light` or `dark` and a wait can be typed in any order. It draws the whole page
+  rather than the first screen of it, waits after load so a page that draws itself in script is not
+  caught blank, then reads the picture back and says what it drew and how big it is. A browser that
+  exits well and writes nothing is a failure rather than a report, because a session cannot tell
+  those two apart from the exit status.
+
+  The image installs Playwright and the headless browser it drives, pinned like everything else in
+  there, with the browser's dependencies installed first so a missing shared library fails the build
+  rather than a session. The stated cost is about 450 megabytes on the image.
+
+  A `browser` skill goes with it, which says the part no command can enforce: a picture nobody looks
+  at is worth nothing, and a rendered sample presented as observed output is worth less than nothing.
+
+  A sandbox keeps what it was made with, so a session that was already running when this landed has
+  no browser. Stop it and dispatch again.
+
 ## 18 August 2026
 
 - **Upgrading no longer takes a task away from under a session.** `make upgrade` removes every

@@ -98,6 +98,35 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 ARG CLAUDE_CODE_VERSION=2.1.233
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
+# A browser, so a session can look at what it built rather than delivering it on a passing build.
+#
+# Playwright rather than a bare chromium, because what a session needs to see is the whole page, at a
+# viewport it chooses, in the colour scheme it chooses, after the page's own scripts have run. Pinned
+# like gh, terraform and the AWS command line are.
+#
+# --only-shell takes the headless shell on its own, 340 megabytes against 641 for the full browser,
+# and it is what gets run anyway: with nothing installed, `playwright screenshot` asks for
+# chromium_headless_shell/chrome-linux/headless_shell by name. ffmpeg arrives beside it at 3.3
+# megabytes and there is no way to decline it.
+#
+# The dependencies go first and the browser second, on purpose. They are 31 apt packages, fontconfig
+# and seven font families among them, and without them the browser exits on
+# "SkFontMgr_FontConfigInterface: Not implemented" rather than rendering anything. The browser
+# download checks the host after it unpacks, so in this order a missing library fails the build here
+# instead of failing a session months later.
+#
+# The browsers land in a directory of their own rather than under root's home, because a session runs
+# as agent and a browser only root can read is a browser this image does not have. The stated cost is
+# about 450 megabytes.
+ARG PLAYWRIGHT_VERSION=1.62.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
+    && apt-get update \
+    && playwright install-deps chromium \
+    && playwright install --only-shell --no-progress chromium \
+    && chmod -R a+rX "$PLAYWRIGHT_BROWSERS_PATH" \
+    && rm -rf /var/lib/apt/lists/*
+
 # Reaching the control plane is a separate decision, made once in configuration: without a network
 # that can reach it and an address to dial, this is a command that says it cannot connect.
 COPY --from=tool /out/quay /usr/local/bin/quay
