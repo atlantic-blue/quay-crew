@@ -72,6 +72,9 @@ commands:
   attach <session>                         open a session's conversation, with its history
   web [<address>]                          read the crew in a browser on this machine. Read only,
                                            and it serves 127.0.0.1:8080 unless told another port
+  render <url> [<file>] [<size>]           draw a page into a picture and say what it drew, so a
+    [light|dark] [<wait>]                  session can look at what it built. The whole page, at
+                                           1280x900 in light unless told otherwise
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works. Say crew

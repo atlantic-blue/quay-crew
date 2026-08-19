@@ -279,3 +279,40 @@ func TestTheShippedAwsSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The browser skill is what makes "I looked at it" mean something. It carries no secret and needs no
+// network: what it needs is the browser in the image, which is why it names the binary.
+func TestTheShippedBrowserSkillLoads(t *testing.T) {
+	skills, err := Load("../../skills")
+	if err != nil {
+		t.Fatalf("loading the shipped skills: %v", err)
+	}
+
+	var found *Skill
+	for i := range skills {
+		if skills[i].Name == "browser" {
+			found = &skills[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("skills/ does not hold the browser skill")
+	}
+
+	named := false
+	for _, binary := range found.Binaries {
+		if binary == "playwright" {
+			named = true
+		}
+	}
+	if !named {
+		t.Error("the browser skill does not declare the browser it needs, so a session on an older image discovers it has none halfway through a piece of work rather than being refused with a sentence")
+	}
+
+	// The three things the brief exists to say. Drawing the picture is the easy part; looking at it
+	// and labelling it are the parts that get skipped.
+	for _, said := range []string{"quay render", "read the file", "reproduce"} {
+		if !strings.Contains(strings.ToLower(found.Brief), said) {
+			t.Errorf("the brief never says %q, and a picture nobody looks at is worth nothing", said)
+		}
+	}
+}

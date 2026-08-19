@@ -62,7 +62,10 @@ func everyGlobalInstall(image string) []string {
 		}
 		for _, name := range strings.Fields(after) {
 			name = strings.Trim(name, `"'`)
-			if strings.HasPrefix(name, "-") || name == "&&" {
+			// A flag, the next command in a chain, or the backslash that carries a RUN onto the next
+			// line. None of them is a package, and reading the continuation as one fails this test
+			// against an install that is pinned perfectly well.
+			if strings.HasPrefix(name, "-") || name == "&&" || name == "\\" {
 				continue
 			}
 			installed = append(installed, expand(image, name))
