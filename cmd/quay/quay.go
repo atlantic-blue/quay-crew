@@ -144,6 +144,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runWeb(ctx, client, args[1:], out)
 	case "render":
 		return runRender(args[1:], out)
+	case "room":
+		return runRoom(out)
 	case "panel":
 		// The way off the command that used to open this. `quay` opens the crew itself now, so this
 		// is refused loudly rather than being taken for an address or an unknown word.
