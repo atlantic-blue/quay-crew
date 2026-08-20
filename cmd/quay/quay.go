@@ -711,7 +711,7 @@ func dispatchTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	// Said out loud, because an empty line where a reply used to be reads as a task that answered
 	// nothing. It names both ways back in: the history, and the conversation itself.
 	if letGo {
-		fmt.Fprintf(out, "it is working on it. nothing here is waiting for it.\n")
+		fmt.Fprintf(out, "started. the crew has it, and nothing here is waiting for it.\n")
 		fmt.Fprintf(out, "read it back with quay tasks %s, or sit in it with quay attach %s\n",
 			display.ShortID(resp.GetHandle()), display.ShortID(resp.GetHandle()))
 	} else {
