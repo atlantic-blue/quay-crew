@@ -6,6 +6,24 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **A conversation that cannot be opened says why, and the reason stays on the screen.** Attach is
+  usually the whole command of a tmux pane, in the right half of the panel or beside the console, and
+  a pane closes the moment its command exits. So a refusal printed its reason and lost it in the same
+  instant. Measured against tmux 3.3a, the pane is gone before anything else can even list it. The
+  operator pressed the key, the screen flickered, and nothing on it ever said why. The console then
+  reported "the conversation opened and tmux does not say where", which is the one thing that had not
+  happened.
+
+  Attach stays now. It says what went wrong, names what to do about it, and waits there, the way
+  open-conversation already keeps a finished conversation's terminal alive inside the sandbox. Enter
+  gives the operator their console back. It reads the terminal rather than asking whether there is
+  one, so a scripted attach reads the end of a pipeline's input and comes back at once instead of
+  hanging. The console's own message says the conversation closed rather than claiming it opened.
+
+  Part of #380.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
