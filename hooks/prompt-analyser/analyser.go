@@ -7,8 +7,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -460,7 +462,7 @@ type Options struct {
 	Facts  func(cwd string) Facts
 	// Ask returns what the model said, or empty for every kind of failure. There is nothing the hook
 	// would do differently, so it never returns an error.
-	Ask func(system, user string) string
+	Ask func(system, user string) (answer, trouble string)
 }
 
 // Run is the hook. It returns nothing to check because every failure inside it is already handled as
@@ -478,9 +480,12 @@ func Run(o Options) {
 		return
 	}
 
-	answer := o.Ask(SystemPrompt(), o.message(read))
-	if strings.TrimSpace(answer) == "" {
-		o.finish(started, NoAnswer, read.Prompt, Notice("no answer, carrying on"))
+	answer, trouble := o.Ask(SystemPrompt(), o.message(read))
+	if trouble == "" && strings.TrimSpace(answer) == "" {
+		trouble = "the model answered with nothing"
+	}
+	if trouble != "" {
+		o.finish(started, NoAnswer, read.Prompt, Notice(trouble))
 		return
 	}
 	analysis := FormatAnalysis(answer, o.Config.MaxAnalysisChars)
@@ -525,4 +530,52 @@ func (o Options) finish(started time.Time, outcome Outcome, prompt, out string) 
 	if out != "" {
 		_, _ = io.WriteString(o.Stdout, out)
 	}
+}
+
+// Trouble turns a failed model call into a sentence naming what is wrong and what to do about it.
+//
+// The hook fails open, which is right: a message must always get through. But failing open quietly
+// means a hook that has never once worked looks exactly like a hook with nothing to add, and this one
+// ran that way in every sandbox from the day it shipped. So a failure says so, and says the next move.
+func Trouble(timedOut, err error, said string, config Config) string {
+	said = strings.TrimSpace(said)
+	switch {
+	case timedOut != nil:
+		return "the model took longer than " + config.Timeout.String() + ", so there is no analysis. " +
+			"Raise timeoutMs in hook.config.json, or use a smaller model than " + config.Model
+
+	case strings.Contains(said, "Not logged in"), strings.Contains(said, "Please run /login"),
+		strings.Contains(said, "Invalid bearer token"), strings.Contains(said, "authentication_error"):
+		return NotLoggedIn
+
+	case strings.Contains(err.Error(), "executable file not found"), errors.Is(err, exec.ErrNotFound):
+		return "there is no claude on the path, so the analysis cannot run. The hook names claude in " +
+			"its binaries, so a sandbox image without one should have been refused before this"
+
+	case said != "":
+		// Whatever it said, rather than a guess. One line, because this goes to a terminal.
+		return "the model call failed: " + firstLine(said)
+
+	default:
+		return "the model call failed with " + err.Error() + " and said nothing"
+	}
+}
+
+// NotLoggedIn is the failure every sandbox hits, so it is written once and says the whole of it.
+//
+// The token reaches the session. It does not reach what the session starts: Claude Code removes
+// CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it spawns, while passing nine other
+// CLAUDE_ variables through. A hook is one of those processes, so keeping the variable is a no-op:
+// it was never there to keep.
+const NotLoggedIn = "the model call is not logged in, so this hook cannot analyse anything. " +
+	"The subscription token reaches your session but not what the session starts, and a hook is " +
+	"started by the session. Until the crew hands the hook a credential of its own, turn it off with: " +
+	"quay hook detach crew prompt-analyser"
+
+func firstLine(text string) string {
+	line, _, _ := strings.Cut(text, "\n")
+	if len(line) > 200 {
+		line = line[:200]
+	}
+	return strings.TrimSpace(line)
 }

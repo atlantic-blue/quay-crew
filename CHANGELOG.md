@@ -6,6 +6,32 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **The analyser says why it cannot run, instead of shrugging.** It printed `no answer, carrying on`
+  on every message, which is what a hook says when it has nothing to add and also what it said when
+  it could not work at all. Those are not the same thing, and telling them apart meant reading a file
+  in /tmp.
+
+  The cause it was hiding: the subscription token reaches a session but not what the session starts.
+  Claude Code removes `CLAUDE_CODE_OAUTH_TOKEN` from the environment of every process it spawns while
+  passing nine other `CLAUDE_` variables through, and a hook is one of those processes. So the child
+  model call answered `Not logged in · Please run /login` on standard output and exited 1, the hook
+  discarded output because the status was not zero, and threw away the one sentence that said what
+  was wrong. Measured in a sandbox: the session's own process has the token, its direct child does
+  not.
+
+  It now keeps both streams whatever the status, names the cause, and says the next move. Not logged
+  in, no claude on the path, a timeout past `timeoutMs`, or anything else the child said, one line of
+  it. Four tests cover the messages and one drives the whole hook to check the terminal is told the
+  cause rather than that something went wrong. Mutation checked: putting the old shrug back turns it
+  red.
+
+  This does not make the analysis work. The credential still does not reach a hook, and until the
+  crew hands it one the honest move is `quay hook detach crew prompt-analyser`, which the failure now
+  says out loud.
+
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
