@@ -6,6 +6,9 @@ package display
 // that reads as a row rather than a wall of hex. Actions use the full value.
 const shortIDLength = 8
 
+// emptyCell is what a listing prints where there is nothing to say. A blank cell reads as a bug.
+const emptyCell = "-"
+
 // ShortID is safe to apply to values that are not identifiers: anything short enough is left alone.
 func ShortID(id string) string {
 	if len(id) <= shortIDLength {
@@ -21,7 +24,7 @@ func Name(name, id string) string {
 		return name
 	}
 	if id == "" {
-		return "-"
+		return emptyCell
 	}
 	return ShortID(id)
 }

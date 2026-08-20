@@ -23,6 +23,28 @@ Feature: The crew is addressed by path
     When the operator addresses the session by its first eight characters
     Then the address reaches that session
 
+  # What is on the screen has to be typeable back, and it was not: the listing printed the session's
+  # own id, the address took only the handle, and the refusal named a value that was nowhere on the
+  # screen. Naming the session took the handle off the screen altogether.
+  Scenario: An address takes the identifier the listing prints
+    Given a session started by dispatching "remember this"
+    When the operator addresses the session by the identifier the listing prints
+    Then the address reaches that session
+
+  Scenario: An address takes the identifier the listing prints for a session that has been named
+    Given a session started by dispatching "remember this"
+    And the session is called "the electricity bill"
+    When the operator addresses the session by the identifier the listing prints
+    Then the address reaches that session
+    And the listing still says what the session is called
+
+  # The session's own id is what the console acts on, what a container is named after, and what the
+  # listing used to print, so it is in everybody's notes. It resolves as well.
+  Scenario: An address takes the session's own id too
+    Given a session started by dispatching "remember this"
+    When the operator addresses the session by its own id
+    Then the address reaches that session
+
   Scenario: An address naming a project that does not exist is refused
     When the operator addresses "me/ghost"
     Then the address is refused as not found

@@ -6,6 +6,21 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **The listing prints the identifier an address takes.** `quay sessions` printed the session's own
+  id in its first column, and no address would take it: `quay dispatch me/website/a4db600a` came back
+  with "this crew has no session a4db600a. it has: 5ae35d77", naming a value that was nowhere on the
+  screen. Giving a session a name then replaced the handle in the name column, so nothing printed
+  could be typed back at all.
+
+  The first column is the handle now, under the heading `session`, and the name column carries what
+  the session is called and nothing else. A refusal offers the same identifiers the listing prints.
+
+  An address takes the session's own id as well, whole or shortened. It is what the console acts on,
+  what a sandbox container is named after, and what the listing used to print, so it is in
+  everybody's notes and it has to keep working.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`

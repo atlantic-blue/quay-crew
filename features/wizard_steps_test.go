@@ -127,7 +127,7 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetSessions()))
 		}
 		view := c.model.View()
-		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
+		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetHandle())) {
 			return fmt.Errorf("the console does not list the session the wizard made:\n%s", view)
 		}
 		return nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"github.com/cucumber/godog"
 )
@@ -48,6 +49,53 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, current.handle[:8]))
+	})
+
+	sc.Step(`^the session is called "([^"]*)"$`, func(ctx context.Context, label string) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		_, err = w.client.SetSessionLabel(ctx, &quaycrewv1.SetSessionLabelRequest{
+			Id: current.sessionID, Label: label,
+		})
+		return err
+	})
+
+	// Read off the listing rather than off the session, because the whole point is that what the
+	// operator has on screen is what the address takes. A step that read the handle from the crew
+	// would pass against a listing that prints something else entirely.
+	sc.Step(`^the operator addresses the session by the identifier the listing prints$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		cells, err := listedCells(ctx, w)
+		if err != nil {
+			return err
+		}
+		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, cells[0]))
+	})
+
+	sc.Step(`^the operator addresses the session by its own id$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s",
+			w.workspaceName, w.projectName, display.ShortID(current.sessionID)))
+	})
+
+	sc.Step(`^the listing still says what the session is called$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		cells, err := listedCells(ctx, w)
+		if err != nil {
+			return err
+		}
+		const nameColumn = 3
+		if cells[nameColumn] != "the electricity bill" {
+			return fmt.Errorf("the listing calls it %q, want the name the operator gave it", cells[nameColumn])
+		}
+		return nil
 	})
 
 	sc.Step(`^the address reaches the project$`, func(ctx context.Context) error {
@@ -115,6 +163,20 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// listedCells is the crew's one session as a listing draws it, which is the row the operator reads
+// and copies from.
+func listedCells(ctx context.Context, w *world) ([]string, error) {
+	listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if len(listed.GetSessions()) != 1 {
+		return nil, fmt.Errorf("the crew has %d sessions, so there is no single row to read",
+			len(listed.GetSessions()))
+	}
+	return display.SessionCells(listed.GetSessions()[0], w.workspaceName, w.projectName), nil
 }
 
 // resolveAddress parses and resolves an address, recording whichever of the two failed.

@@ -1411,13 +1411,13 @@ func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
 }
 
 func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Handle: "h1", Workspace: "acme", Status: "idle"}}}
 
 	var out strings.Builder
 	if err := Plain(context.Background(), client, &out); err != nil {
 		t.Fatalf("Plain: %v", err)
 	}
-	if !strings.Contains(out.String(), "s1") {
+	if !strings.Contains(out.String(), "h1") {
 		t.Fatalf("output %q does not list the session", out.String())
 	}
 	if strings.Contains(out.String(), "\x1b[") {

@@ -405,15 +405,16 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		shown := row.Cells[0]
-		if shown == full.sessionID {
+		if shown == full.handle {
 			return fmt.Errorf("the console shows the whole identifier %q, want it shortened", shown)
 		}
-		if !strings.HasPrefix(full.sessionID, shown) {
-			return fmt.Errorf("the shortened identifier %q is not a prefix of %q", shown, full.sessionID)
+		if !strings.HasPrefix(full.handle, shown) {
+			return fmt.Errorf("the shortened identifier %q is not a prefix of %q", shown, full.handle)
 		}
-		// The row must still carry the whole thing, or every action on it breaks.
+		// The cell is the handle, which is what an address takes. The row underneath it still carries
+		// the session's own id, which is what every action on that row works in.
 		if row.ID != full.sessionID {
-			return fmt.Errorf("the row carries %q, want the whole identifier %q", row.ID, full.sessionID)
+			return fmt.Errorf("the row carries %q, want the session id %q", row.ID, full.sessionID)
 		}
 		return nil
 	})
