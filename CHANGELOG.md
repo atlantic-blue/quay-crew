@@ -18,8 +18,8 @@ read, or run with `make features`.
 
   Now every path records the task as it starts, marks the session `running` while it works, and
   writes the reply or the failure into that same record when it lands. `quay tasks` says `still
-  running` for a task in flight, and the console's history view carries the status it already had a
-  column for.
+  running` for a task in flight, the web view says the same where the reply will go, and the
+  console's history view carries the status it already had a column for.
 
   One record per task, not two: the landing closes the row the start opened, so the prompt and the
   time the operator asked stay as they were written. The export to the event log is unchanged, one

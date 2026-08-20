@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
@@ -230,4 +231,62 @@ func dispatch(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, project
 		t.Fatalf("get session: %v", err)
 	}
 	return got.GetSession()
+}
+
+// A task is written when it starts, so the page draws tasks that have not answered yet. An empty
+// reply box under the prompt reads as a task that answered nothing, which is the same defect the
+// failure box exists to prevent.
+func TestATaskStillRunningSaysSoRatherThanShowingAnEmptyReply(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "the electricity bill is due on the ninth",
+		Gate: make(chan struct{}), Started: make(chan struct{})}
+	client := crewWith(t, runner)
+	project := projectOf(t, client)
+
+	// Detached, so the page can be read while the model is still working.
+	resp, err := client.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
+		Project: project, Text: "when is the electricity bill due", Detach: true,
+	})
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	select {
+	case <-runner.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the task never reached the model")
+	}
+
+	body, status := get(t, client, "/session/"+resp.GetId())
+	if status != http.StatusOK {
+		t.Fatalf("the conversation answered %d", status)
+	}
+	if !strings.Contains(body, "when is the electricity bill due") {
+		t.Fatalf("the page does not say what the session was asked:\n%s", body)
+	}
+	if !strings.Contains(body, "still running") {
+		t.Fatalf("the page does not say the task is still working:\n%s", body)
+	}
+
+	close(runner.Gate)
+	waitUntilIdle(t, client, resp.GetId())
+	answered, _ := get(t, client, "/session/"+resp.GetId())
+	if strings.Contains(answered, "still running") {
+		t.Fatalf("the page still calls a landed task running:\n%s", answered)
+	}
+	if !strings.Contains(answered, "the electricity bill is due on the ninth") {
+		t.Fatalf("the page does not carry the answer:\n%s", answered)
+	}
+}
+
+// waitUntilIdle waits for a detached task to land, so a page is never read mid task by accident.
+func waitUntilIdle(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, session string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		got, err := client.GetSession(context.Background(), &quaycrewv1.GetSessionRequest{Id: session})
+		if err == nil && got.GetSession().GetStatus() == "idle" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the task never landed")
 }
