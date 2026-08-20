@@ -18,7 +18,7 @@ func TestAnArchivedSessionsHistoryIsStillReadable(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "read the package file")
+	mustRun(t, client, "ask", "read the package file")
 
 	session := onlySession(t, client)
 	if _, err := client.ArchiveSession(context.Background(), &quaycrewv1.ArchiveSessionRequest{
@@ -42,7 +42,7 @@ func TestAnArchivedSessionAnswersToItsHandle(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "remember this")
+	mustRun(t, client, "ask", "remember this")
 
 	session := onlySession(t, client)
 	if _, err := client.ArchiveSession(context.Background(), &quaycrewv1.ArchiveSessionRequest{
@@ -67,7 +67,7 @@ func TestASessionNobodyHasIsStillRefused(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	_, err := runQuay(t, client, "tasks", "nosuchsession")
 	if err == nil {

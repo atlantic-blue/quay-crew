@@ -110,7 +110,7 @@ func TestTheNextTaskRunsInTheModeSetThroughTheHandle(t *testing.T) {
 	handle := onlySession(t, client).GetHandle()[:8]
 
 	mustRun(t, client, "mode", handle, "dangerous")
-	mustRun(t, client, "dispatch", addressOf(t, client), "and again")
+	mustRun(t, client, "ask", addressOf(t, client), "and again")
 
 	if was := runner.LastReq.PermissionMode; was != "bypassPermissions" {
 		t.Fatalf("the task after the change ran in %q, want bypassPermissions", was)

@@ -14,7 +14,7 @@ func TestTheListingHasTheSameColumnsAsTheConsole(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, column := range display.SessionColumns() {
@@ -37,10 +37,10 @@ func TestANarrowedListingSaysWhatItWasNarrowedTo(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "project", "create", "other")
-	mustRun(t, client, "dispatch", "hello there")
+	mustRun(t, client, "ask", "hello there")
 
 	// Standing in the second one, so the listing is narrower than the crew.
 	narrowed := mustRun(t, client, "sessions")
@@ -78,7 +78,7 @@ func TestNothingIsCutOutOfTheListing(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "a-workspace-with-a-long-name")
 	mustRun(t, client, "project", "create", "and-a-project-with-a-longer-one")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, whole := range []string{"a-workspace-with-a-long-name", "and-a-project-with-a-longer-one"} {
