@@ -6,6 +6,44 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **A session knows how much memory it has.** A session could not run a repository's own gates. The
+  linter, the build and the install were each killed part way through, and the session reported a
+  partial check.
+
+  The cause is a number that is not true. A sandbox with no memory limit of its own reports the whole
+  machine in `/proc/meminfo`, so node sizes its heap from it, Go sizes its collector from it, and
+  jest and webpack start one worker for each processor. What is really there is whatever the rest of
+  the machine has not taken. Measured in one sandbox: 7836 megabytes advertised, about 1500 free, and
+  an allocator killed after taking 1600. The session budgets against the first number and the kernel
+  kills it against the second.
+
+  ```
+  quay room
+  ```
+
+  It says what this sandbox advertises, what is free, what it holds, and what an out of memory killer
+  has already taken in it. The kill counts are the part that cannot be got any other way: a kill by
+  the machine's own killer raises `oom_kill` and leaves the limit count at zero, so the pair says
+  whether the machine ran out or the session did. The kernel log is not readable from inside a
+  container, so nothing else in there answers that.
+
+  Then it says what to do about a gate that does not fit: cap the heap under what is free, take one
+  worker rather than one for each processor, run the gate over part of the tree and name the part it
+  ran. If it still does not fit, say what could not run rather than reporting a partial check. That
+  advice is in the tool rather than in each session's memory, so the answer is the same every time
+  instead of being invented once per session.
+
+  A task killed for memory says so now as well. Nothing taken by signal 9 gets to say why, so
+  `run exited: exit status 137, and it said nothing about why` read as a hang, and it is also what
+  an upgrade taking a container away produces. Both are named, with the command that answers which.
+
+  `QC_SANDBOX_MEMORY` gives a session a limit of its own, as the daemon spells it, for example
+  `4g`, with swap capped at the same figure so the limit means what it says. Unset, a session has no
+  limit, which is where every session already is. The figure shares one machine between the stack,
+  the sessions already running and this one, so it is the operator's to choose.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`

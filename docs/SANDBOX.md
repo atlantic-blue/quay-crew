@@ -181,6 +181,45 @@ A sandbox keeps what it was made with. A session that was running before the ima
 does not have one, cannot install one, and says so with what to do about it: stop the session and
 dispatch again.
 
+## How much memory a session has
+
+A sandbox with no memory limit of its own reports the whole machine in `/proc/meminfo`. So node
+sizes its heap from that number, Go sizes its collector from it, and jest and webpack start one
+worker for each processor, while what is actually there is whatever the rest of the machine has not
+taken. Measured in one sandbox on 20 August 2026: 7836 megabytes advertised, about 1500 free, and an
+allocator killed after taking 1600. The session budgets against the first number and the kernel kills
+it against the second.
+
+The kill says nothing. Signal 9 leaves no last line on either stream, and the kernel log is not
+readable from inside a container, so the session sees exit 137 and reads it as a hang. That cost a
+real gate: a linter, a build and an install were each killed part way through and the session
+reported a partial check.
+
+`quay room` reads the machine's own accounting and says what is true:
+
+```
+quay room
+```
+
+It names what this sandbox advertises, what is free, what it holds, and what an out of memory killer
+has already taken in it. The last part is the one that cannot be got any other way: `memory.events`
+counts kills and counts how often the sandbox reached a limit of its own, and a kill by the machine's
+own killer raises the first and leaves the second at zero. That pair is what says whether the machine
+ran out or the session did.
+
+Then it says what to do about a gate that does not fit: cap the heap under what is free, take one
+worker rather than one for each processor, run the gate over part of the tree and name the part, and
+if it still does not fit say what could not run rather than reporting a partial check. The advice is
+in the tool rather than in each session's memory, so the answer is the same every time.
+
+Set `QC_SANDBOX_MEMORY` to give a session a limit of its own, as the daemon spells it, for example
+`4g`. Swap is capped with it at the same figure, because a daemon told a memory limit and nothing
+else allows swap of the same size again, so a session could take twice what was set and reach it by
+thrashing. Unset, a session has no limit, which is where every session started.
+
+The figure is the operator's. It shares one machine between the stack, every session already running,
+and this one, so add up what you are willing to give them and check it against what the daemon has.
+
 ## What the image pins
 
 Every tool the image installs names its version, as a build argument at the top of the step that
