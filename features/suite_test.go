@@ -536,6 +536,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
+	initializeScreenSteps(sc)
 	initializeRenderSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.

@@ -48,7 +48,11 @@ func main() {
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	if err := dispatch(context.Background(), client, os.Args[1:], addr); err != nil {
-		fmt.Fprintln(os.Stderr, "quay:", unreachable(err, told, inAContainer()))
+		// A command that already put the reason on the operator's screen, and waited there while they
+		// read it, does not get it printed underneath a second time.
+		if !errors.Is(err, ErrSaid) {
+			fmt.Fprintln(os.Stderr, "quay:", unreachable(err, told, inAContainer()))
+		}
 		os.Exit(1)
 	}
 }
