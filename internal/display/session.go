@@ -16,6 +16,7 @@ import (
 // the console had ten columns and the command line four, so a session's cost, its mode and how long
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
+//
 // The first column is the handle, which is the identifier an address takes. The session's own id
 // used to be there, and no command would accept it: `quay dispatch me/website/a4db600a` came back
 // with "this crew has no session a4db600a. it has: 5ae35d77", naming a value that was nowhere on the
@@ -105,7 +106,7 @@ func LastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
 // fifty years, which is what the zero value would otherwise read as.
 func Age(stamp *timestamppb.Timestamp) string {
 	if stamp == nil || !stamp.IsValid() || stamp.AsTime().IsZero() {
-		return "-"
+		return emptyCell
 	}
 	return compactDuration(time.Since(stamp.AsTime()))
 }
@@ -169,10 +170,13 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 // the same row. Repeating it there made a name look like an identifier that had lost its label, and
 // it is the reason the handle went missing from the screen the moment a session was named.
 func SessionLabel(session *quaycrewv1.Session) string {
-	if named := SessionName(session); named != ShortID(session.GetHandle()) {
-		return named
+	if label := strings.TrimSpace(session.GetLabel()); label != "" {
+		return label
 	}
-	return "-"
+	if described := strings.TrimSpace(session.GetDescription()); described != "" {
+		return described
+	}
+	return emptyCell
 }
 
 // SessionName is what to call a session anywhere one name is all there is room for: the name the
@@ -182,11 +186,8 @@ func SessionLabel(session *quaycrewv1.Session) string {
 // identifier is last because it is the thing nobody remembers, and it is never blank: a breadcrumb
 // or a page title with a gap in it reads as a bug.
 func SessionName(session *quaycrewv1.Session) string {
-	if label := strings.TrimSpace(session.GetLabel()); label != "" {
-		return label
-	}
-	if described := strings.TrimSpace(session.GetDescription()); described != "" {
-		return described
+	if named := SessionLabel(session); named != emptyCell {
+		return named
 	}
 	return ShortID(session.GetHandle())
 }
