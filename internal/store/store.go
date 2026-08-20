@@ -86,6 +86,21 @@ type ImportedHook struct {
 	ImportedAt time.Time
 }
 
+// Birth is what is true of a session only at the moment it is made.
+//
+// Both fields are read once, when the row is written, and ignored for a session that already exists.
+// A session's sandbox is born with its capabilities and never drifts, and these are the same
+// statement one level up: changing the crew's configuration must not widen a conversation already
+// running, and a role's boundary must hold for every task of the session rather than for the first.
+type Birth struct {
+	// Mode is what the session's tasks may do without asking, from the crew's configuration. An
+	// unknown or empty one is the mode every session had before this was configurable, so a crew
+	// that says nothing does not change under an upgrade.
+	Mode string
+	// Role is the role the session works as, empty for a session that works as nobody in particular.
+	Role string
+}
+
 // SessionFilter narrows a listing. The zero value is every live session the crew has.
 type SessionFilter struct {
 	// Project wins over Workspace when both are set, being the narrower.
@@ -114,12 +129,10 @@ type Store interface {
 	// FindOrCreateSession creates on first use, so a channel that knows only its own session id always
 	// lands in the same session.
 	//
-	// bornIn is what the session's tasks may do when it is created, which comes from the crew's
-	// configuration. An unknown or empty one is the mode every session had before this was
-	// configurable, so a crew that says nothing does not change under an upgrade. It is ignored for a
-	// session that already exists: what a session may do is its own, and changing configuration must not
-	// widen a conversation already running.
-	FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, error)
+	// born is what is true of the session only when it is made. It is ignored for a session that
+	// already exists: what a session may do and who it works as are its own, and neither may change
+	// under a conversation already running.
+	FindOrCreateSession(ctx context.Context, project, session string, born Birth) (*quaycrewv1.Session, error)
 	// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears
 	// it. SessionSkills reads it back, empty when no live sandbox is known. Stopping or archiving
 	// a session clears it, because the sandbox goes with it and the next one is born current.

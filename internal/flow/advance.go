@@ -103,6 +103,10 @@ type Command struct {
 	Node    string
 	Attempt int
 	Prompt  string
+	// Role is who does this dispatch, empty for the run's own session. A dispatch that names one
+	// runs in a session of that role rather than in the run's, which is what makes the boundary
+	// possible: a conversation that never received the material cannot have read it.
+	Role string
 }
 
 // Advance is the whole of the flow logic: a pure function from a run and an event to the next run
@@ -241,6 +245,7 @@ func settle(graph Graph, run Run, at string) (Run, []Command, error) {
 				Node:    at,
 				Attempt: run.Attempts[at],
 				Prompt:  render(node.Prompt, run.State),
+				Role:    node.Role,
 			}}, nil
 		case NodeWait:
 			// The run is put down here rather than pushed on: it says how long to leave it, asks

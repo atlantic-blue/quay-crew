@@ -319,8 +319,13 @@ type Session struct {
 	// described_at_task is how many tasks the session had when its description was written, so a
 	// conversation that has moved on can be described again. Zero means never described.
 	DescribedAtTask int32 `protobuf:"varint,16,opt,name=described_at_task,json=describedAtTask,proto3" json:"described_at_task,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// role is the name of the role this session runs as, empty for a session that runs as nobody in
+	// particular. It is set when the session is made and never changes: the boundary a role declares
+	// has to hold for every task of the session, not only the first, and a sandbox is born with its
+	// capabilities anyway.
+	Role          string `protobuf:"bytes,17,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -463,6 +468,13 @@ func (x *Session) GetDescribedAtTask() int32 {
 		return x.DescribedAtTask
 	}
 	return 0
+}
+
+func (x *Session) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -2398,7 +2410,12 @@ type DispatchRequest struct {
 	// It is what a surface that draws a screen needs. A task takes as long as the work takes, which is
 	// minutes, and a caller that waits for one is a caller that is not drawing anything. The console
 	// waited, gave up at thirty seconds, and left a session whose conversation never happened.
-	Detach        bool `protobuf:"varint,5,opt,name=detach,proto3" json:"detach,omitempty"`
+	Detach bool `protobuf:"varint,5,opt,name=detach,proto3" json:"detach,omitempty"`
+	// role names the role the session runs as, and is read only when the session is made: a role is
+	// the whole instruction and the whole boundary of a session, so it cannot be put on afterwards.
+	// A workspace that does not hold the named role is refused by name, because a step that names a
+	// role nobody attached must fail with a sentence rather than half run.
+	Role          string `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2466,6 +2483,13 @@ func (x *DispatchRequest) GetDetach() bool {
 		return x.Detach
 	}
 	return false
+}
+
+func (x *DispatchRequest) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
 }
 
 type DispatchResponse struct {
@@ -6351,7 +6375,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xc3\x04\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xd7\x04\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -6372,7 +6396,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05stale\x18\r \x01(\bR\x05stale\x12\x14\n" +
 	"\x05label\x18\x0e \x01(\tR\x05label\x12 \n" +
 	"\vdescription\x18\x0f \x01(\tR\vdescription\x12*\n" +
-	"\x11described_at_task\x18\x10 \x01(\x05R\x0fdescribedAtTask\"y\n" +
+	"\x11described_at_task\x18\x10 \x01(\x05R\x0fdescribedAtTask\x12\x12\n" +
+	"\x04role\x18\x11 \x01(\tR\x04role\"y\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12\x16\n" +
 	"\x06output\x18\x02 \x01(\x03R\x06output\x12\x1d\n" +
@@ -6492,13 +6517,14 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"projection\x18\x04 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
 	"projection\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\"\x13\n" +
-	"\x11SetSecretResponse\"\x98\x01\n" +
+	"\x11SetSecretResponse\"\xac\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12'\n" +
 	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\x12\x16\n" +
-	"\x06detach\x18\x05 \x01(\bR\x06detach\"P\n" +
+	"\x06detach\x18\x05 \x01(\bR\x06detach\x12\x12\n" +
+	"\x04role\x18\x06 \x01(\tR\x04role\"P\n" +
 	"\x10DispatchResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x14\n" +

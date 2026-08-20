@@ -6,6 +6,36 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **A step of a flow runs as a role, in its own session and its own container.** A dispatch node
+  takes `role: test-writer`, and that step no longer lands in the run's conversation. It gets a
+  session of its own, so the work is done by somebody who has read only what the role declares.
+
+  ```yaml
+  tests: { type: dispatch, role: test-writer, prompt: "write the tests" }
+  ```
+
+  What that session holds is `receives` and nothing else. A role without `context` is told its brief
+  and none of what the crew, the workspace or the project knows. A role without `skills` holds none:
+  no index in its memory file, no skill directory mounted. The brief itself is always given, under
+  its own mark, rendered every task and never read back.
+
+  Two holes had to be closed for the boundary to be worth anything. Every session in a workspace
+  shared one conversation store, so a role that must not see the code could read the transcript of
+  the session that wrote it; a role session keeps its own store under the session instead. And a
+  session's memory file is read back into the crew's context, so a role given nothing could have
+  written what every session in the workspace is told; a role session's file is never read back.
+
+  A step naming a role the workspace does not hold stops the run and says which role is missing,
+  rather than walking its success edge on a task that never happened. A run now puts away every
+  session it started, not only its own, and counts what every one of them spent against its ceiling.
+
+  The model a role declares is still not read: the runner takes one model per crew. That, the
+  product manager, sub tasks and the event trigger are the rest of
+  [#354](https://github.com/atlantic-blue/quay-crew/issues/354), and
+  [`docs/ROLES.md`](docs/ROLES.md) says which is which.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`

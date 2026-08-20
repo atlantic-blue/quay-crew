@@ -16,9 +16,10 @@ import (
 // The roles a crew holds. A role is imported, pinned to a version, and attached at a level, which is
 // the shape a skill and a hook already have.
 //
-// Nothing here reaches a sandbox. A role is the instruction and the boundary of a session that runs
-// as it, and no session runs as one yet, so attaching a role changes what the crew may be asked for
-// and changes nothing about a conversation already open.
+// A session may run as one. Dispatch names the role when it makes the session, the session keeps it
+// for as long as it lives, and what that session is given is what the role declares and nothing
+// else. Attaching a role changes nothing about a conversation already open, because a role is read
+// when a session is made.
 
 // ImportRole takes a role into the crew from the files a client read out of its directory.
 //
@@ -152,4 +153,63 @@ func asRole(one store.ImportedRole) *quaycrewv1.Role {
 		out.ImportedAt = timestamppb.New(one.ImportedAt)
 	}
 	return out
+}
+
+// roleFor is the role a workspace holds under this name, at the version it pinned.
+//
+// A workspace's own attachment wins over the crew's, which is the rule everywhere else: the narrower
+// statement is the more deliberate one. A name nobody attached is refused rather than ignored, and
+// the refusal names the role and how to give it, because a step that names a role the workspace does
+// not hold has to fail with a sentence rather than half run.
+func (s *Server) roleFor(ctx context.Context, workspace, name string) (store.ImportedRole, error) {
+	held, err := s.store.WorkspaceRoles(ctx, workspace)
+	if err != nil {
+		return store.ImportedRole{}, storeError(err, "read the workspace's roles")
+	}
+	for _, one := range s.withCrewRoles(ctx, held) {
+		if one.Name == name {
+			return one, nil
+		}
+	}
+	return store.ImportedRole{}, status.Errorf(codes.FailedPrecondition,
+		"this workspace does not hold the %s role, so nothing can run as it. Import it and attach it with: quay role attach %s",
+		name, name)
+}
+
+// receives says whether this session is given a kind of material.
+//
+// A session that runs as nobody in particular receives everything, which is every session the crew
+// had before roles existed. A session that runs as a role receives what the role declares and
+// nothing else.
+//
+// A role that cannot be read is treated as receiving nothing. That is the safe direction and the
+// only honest one: the alternative hands a session material its boundary may have forbidden, and a
+// boundary that opens when the store is slow is not a boundary.
+func (s *Server) receives(ctx context.Context, session *quaycrewv1.Session, material string) bool {
+	named := session.GetRole()
+	if named == "" {
+		return true
+	}
+	held, err := s.roleFor(ctx, session.GetWorkspace(), named)
+	if err != nil {
+		return false
+	}
+	return held.Gets(material)
+}
+
+// roleBrief is the instruction of the role a session runs as, empty for a session running as nobody
+// in particular or for a role the crew can no longer read.
+//
+// It is read from the version the workspace pinned, so a role edited after the session started does
+// not change how that session was told to work.
+func (s *Server) roleBrief(ctx context.Context, session *quaycrewv1.Session) string {
+	named := session.GetRole()
+	if named == "" {
+		return ""
+	}
+	held, err := s.roleFor(ctx, session.GetWorkspace(), named)
+	if err != nil {
+		return ""
+	}
+	return held.Brief
 }

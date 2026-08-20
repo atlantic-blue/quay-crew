@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Store is what the engine needs from the database: a graph to run, and a run whose every
@@ -287,22 +290,42 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 		// The mode travels with every dispatch, not only the first. The control plane applies it
 		// before the sandbox is built, and a run's session is made by its first dispatch, so this is
 		// the only moment anything can say what an automation's tasks are allowed to do.
+		//
+		// The handle decides which conversation does the work. A step naming a role gets its own,
+		// so the role's session is a new session in a new container that has read nothing the run's
+		// own session was told.
 		resp, err := e.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 			Project:        run.Project,
-			Handle:         run.SessionHandle(),
+			Handle:         run.HandleFor(*dispatch),
 			Text:           dispatch.Prompt,
 			PermissionMode: graph.Mode,
+			Role:           dispatch.Role,
 		})
 		if err != nil {
+			// A refusal is the crew saying this task cannot happen, so no work was done and the run
+			// must not walk its success edge on a reply that does not exist. A step naming a role
+			// the workspace does not hold arrives here, and it stops with the crew's own sentence
+			// rather than half running. Anything else is a task that failed, which a graph may
+			// branch on.
+			if status.Code(err) == codes.FailedPrecondition {
+				run.Status = StatusStopped
+				run.Reason = fmt.Sprintf("stopped at %s, which the crew refused: %s",
+					dispatch.Node, status.Convert(err).Message())
+				if err := e.store.AdvanceFlowRun(ctx, &run, Transition{Event: event.Kind, Node: run.Node}); err != nil {
+					return run, fmt.Errorf("flow: run %s was refused at %s and the stop did not land: %w",
+						run.ID, dispatch.Node, err)
+				}
+				return run, nil
+			}
 			event = Event{Kind: EventTaskFinished, Node: dispatch.Node, Failed: true, Reply: err.Error()}
 			continue
 		}
-		run.State[SessionKey] = resp.GetId()
+		run.State[run.SessionKeyFor(*dispatch)] = resp.GetId()
 		event = Event{
 			Kind:  EventTaskFinished,
 			Node:  dispatch.Node,
 			Reply: resp.GetReply(),
-			Unmet: e.unmet(ctx, graph.Nodes[dispatch.Node], run, resp.GetReply()),
+			Unmet: e.unmet(ctx, graph.Nodes[dispatch.Node], resp.GetId(), resp.GetReply()),
 		}
 	}
 }
@@ -311,8 +334,11 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, event Event)
 // the node claimed nothing, or the claim held.
 //
 // Checked here rather than in the reducer because it reads the world, and read after the task rather
-// than described by it: the model reporting on its own work is the thing this exists to stop.
-func (e *Engine) unmet(ctx context.Context, node Node, run Run, reply string) string {
+// than described by it: the model reporting on its own work is the thing this exists to stop. The
+// session is the one the task actually ran in, which for a step naming a role is the role's own: a
+// file left behind by the role is not in the run's own session, and asking there would fail a claim
+// that held.
+func (e *Engine) unmet(ctx context.Context, node Node, session, reply string) string {
 	if node.Expect == nil {
 		return ""
 	}
@@ -326,42 +352,101 @@ func (e *Engine) unmet(ctx context.Context, node Node, run Run, reply string) st
 	if e.prover == nil {
 		return fmt.Sprintf("%s could not be checked: this crew cannot read a session's files", path)
 	}
-	held, err := e.prover.SessionHolds(ctx, run.State[SessionKey], path)
+	held, err := e.prover.SessionHolds(ctx, session, path)
 	if err != nil {
 		return fmt.Sprintf("%s could not be checked: %v", path, err)
 	}
 	if !held {
-		return fmt.Sprintf("%s is not in the run's session", path)
+		return fmt.Sprintf("%s is not in the session that did the work", path)
 	}
 	return ""
 }
 
-// spentBy is what the run's session has cost. It keeps the last known number when there is no reader
-// wired or no session yet: a cost that cannot be read must not silently reset a run's spend to zero
-// and hand it a fresh ceiling.
+// spentBy is what the run has cost, over every session it started. It keeps the last known number
+// when there is no reader wired or no session yet: a cost that cannot be read must not silently reset
+// a run's spend to zero and hand it a fresh ceiling.
+//
+// Every session, because a run whose steps run as roles spends in each of them, and a ceiling that
+// counted one conversation would be a ceiling a graph could walk around by naming a role.
 func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
-	if e.spend == nil || run.State[SessionKey] == "" {
+	sessions := run.Sessions()
+	if e.spend == nil || len(sessions) == 0 {
 		return run.Spent
 	}
-	return e.spend.SessionTokens(ctx, run.State[SessionKey])
+	var total int64
+	for _, id := range sessions {
+		total += e.spend.SessionTokens(ctx, id)
+	}
+	return total
 }
 
-// SessionKey is where the run remembers its session's identifier, learned from the first dispatch.
-// The handle is the run's own by construction; the identifier is what archiving needs.
+// SessionKey is where the run remembers its own session's identifier, learned from the first dispatch
+// that named no role. The handle is the run's own by construction; the identifier is what archiving
+// needs.
 //
 // Exported because a run outlives the reading of it: the session is archived when the run ends, and
 // whoever reads the run afterwards has to be told where its history is.
 const SessionKey = "session.id"
 
-// archive puts the run's session away. A run that never dispatched has no session, and a session that
-// cannot be archived is logged by the control plane's side of the call; neither is a reason to call
-// a finished run anything else.
-func (e *Engine) archive(ctx context.Context, run Run) {
-	id := run.State[SessionKey]
-	if id == "" {
-		return
+// sessionKeyPrefix is where a run remembers the session a step running as a role used, one key per
+// node. Per node rather than one list, so reading a run's state says which step ran where.
+const sessionKeyPrefix = "session."
+
+// SessionKeyFor is where the identifier of this dispatch's session is remembered.
+func (r Run) SessionKeyFor(dispatch Command) string {
+	if dispatch.Role == "" {
+		return SessionKey
 	}
-	_, _ = e.plane.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: id})
+	return sessionKeyPrefix + dispatch.Node
+}
+
+// HandleFor names the conversation this dispatch goes to.
+//
+// A step that names no role continues the run's own conversation, which is what makes a graph one
+// train of thought. A step that names a role gets a handle of its own, so the crew makes a new
+// session in a new container: the boundary a role declares is only real if the conversation is new,
+// because a session that already read the material cannot unread it.
+func (r Run) HandleFor(dispatch Command) string {
+	if dispatch.Role == "" {
+		return r.SessionHandle()
+	}
+	return r.SessionHandle() + "-" + dispatch.Node
+}
+
+// Sessions are the identifiers of every session this run started, the run's own first.
+func (r Run) Sessions() []string { return SessionsIn(r.State) }
+
+// SessionsIn reads the sessions a run started out of its state, the run's own first and the rest in
+// the order of the nodes that started them.
+//
+// Exported because a run is read back as much as it is driven, and whoever is reading one has to be
+// able to reach every conversation it had rather than only the first.
+func SessionsIn(state map[string]string) []string {
+	var out []string
+	if id := state[SessionKey]; id != "" {
+		out = append(out, id)
+	}
+	keys := make([]string, 0, len(state))
+	for key := range state {
+		if key != SessionKey && strings.HasPrefix(key, sessionKeyPrefix) && state[key] != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		out = append(out, state[key])
+	}
+	return out
+}
+
+// archive puts away every session the run started. A run with sub tasks that closed only its own
+// would leave a container per step behind, and a container is not freed until the session holding it
+// is. A run that never dispatched has no session, and a session that cannot be archived is logged by
+// the control plane's side of the call; neither is a reason to call a finished run anything else.
+func (e *Engine) archive(ctx context.Context, run Run) {
+	for _, id := range run.Sessions() {
+		_, _ = e.plane.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: id})
+	}
 }
 
 // copy is a run that shares nothing writable with the one it came from.

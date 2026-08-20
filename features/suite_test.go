@@ -532,6 +532,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
 	initializeRoleSteps(sc)
+	initializeRoleSessionSteps(sc)
+	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
