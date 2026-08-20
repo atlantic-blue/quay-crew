@@ -6,6 +6,28 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **`quay dispatch` lets go of the task, and `quay ask` waits for the answer.** The command line held
+  every task in the client for as long as the work took, so the terminal was the weakest part of the
+  crew: a dispatch killed at seventeen minutes recorded `failed: model: run exited: signal: killed`,
+  said nothing about why, and the work was gone. The control plane could always run a task behind the
+  answer. Only the console could ask for it.
+
+  ```
+  quay dispatch "read the repository and write the migration"
+  quay ask "when is the electricity bill due"
+  ```
+
+  Dispatching answers as soon as the session exists, and says how to read the work back:
+  `quay tasks <session>` for the history, `quay attach <session>` to sit in the conversation. Asking
+  waits and prints the reply, which is what a short question wants.
+
+  Two words rather than a flag, because quay takes no flags and a word in front of free text would be
+  swallowed into the message: `quay dispatch wait for the build` would have meant something the
+  operator did not type. `--detach`, `--wait` and `--no-wait` are each refused by name and say which
+  word to type instead.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`

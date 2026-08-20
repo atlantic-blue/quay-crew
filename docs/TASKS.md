@@ -33,7 +33,7 @@ key land on one partition, which is what keeps a session's records in the order 
 
 ## The path
 
-1. You run `quay dispatch "read the package file"`. The command line calls `Dispatch` on the control
+1. You run `quay ask "read the package file"`. The command line calls `Dispatch` on the control
    plane over gRPC.
 2. The control plane finds or creates the session row, then builds or reuses that session's sandbox
    container.
@@ -57,7 +57,7 @@ sequenceDiagram
     participant DB as "store (Postgres)"
     participant LOG as "broker (Redpanda)"
 
-    YOU->>CLI: quay dispatch "read the package file"
+    YOU->>CLI: quay ask "read the package file"
     CLI->>CP: Dispatch (gRPC)
     CP->>SBX: run the task
     SBX-->>CP: reply

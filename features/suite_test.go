@@ -527,6 +527,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
+	initializeDispatchingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)

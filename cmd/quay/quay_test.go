@@ -81,9 +81,9 @@ func TestWorkspaceCreateAndList(t *testing.T) {
 	}
 }
 
-// TestCreateMovesYouAndDispatchFollows is the point of the whole change: say where you are once,
+// TestCreateMovesYouAndTalkingFollows is the point of the whole change: say where you are once,
 // then talk.
-func TestCreateMovesYouAndDispatchFollows(t *testing.T) {
+func TestCreateMovesYouAndTalkingFollows(t *testing.T) {
 	client := testClient(t)
 
 	mustRun(t, client, "workspace", "create", "me")
@@ -95,9 +95,9 @@ func TestCreateMovesYouAndDispatchFollows(t *testing.T) {
 		t.Fatalf("quay use says %q, want me/house-bills", where)
 	}
 
-	replied := mustRun(t, client, "dispatch", "hello", "there")
+	replied := mustRun(t, client, "ask", "hello", "there")
 	if !strings.Contains(replied, "ok") {
-		t.Fatalf("dispatch with no address did not run: %q", replied)
+		t.Fatalf("asking with no address did not run: %q", replied)
 	}
 	if !strings.Contains(replied, "session ") || !strings.Contains(replied, "handle ") {
 		t.Fatalf("dispatch did not show the session and its handle: %q", replied)
@@ -120,8 +120,8 @@ func TestAddressOnTheCommandLineDoesNotMoveYou(t *testing.T) {
 	mustRun(t, client, "project", "create", "gardening")
 	mustRun(t, client, "use", "me/house-bills")
 
-	if replied := mustRun(t, client, "dispatch", "me/gardening", "order the bulbs"); !strings.Contains(replied, "ok") {
-		t.Fatalf("dispatch to an explicit address did not run: %q", replied)
+	if replied := mustRun(t, client, "ask", "me/gardening", "order the bulbs"); !strings.Contains(replied, "ok") {
+		t.Fatalf("asking at an explicit address did not run: %q", replied)
 	}
 	if where := mustRun(t, client, "use"); strings.TrimSpace(where) != "me/house-bills" {
 		t.Fatalf("an address on the command line moved the operator to %q", where)
@@ -196,7 +196,7 @@ func TestAMessageIsNotAnAddress(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	replied := mustRun(t, client, "dispatch", "hello", "there")
+	replied := mustRun(t, client, "ask", "hello", "there")
 	if !strings.Contains(replied, "ok") {
 		t.Fatalf("a two word message was not dispatched: %q", replied)
 	}
@@ -321,7 +321,7 @@ func TestAMessageIsStillAMessage(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "demo")
 	mustRun(t, client, "project", "create", "default")
 
-	if replied := mustRun(t, client, "dispatch", "the well-known -5 degrees case"); !strings.Contains(replied, "ok") {
+	if replied := mustRun(t, client, "dispatch", "the well-known -5 degrees case"); !strings.Contains(replied, "handle ") {
 		t.Fatalf("a message with hyphens in it was refused: %q", replied)
 	}
 }
@@ -350,7 +350,7 @@ func TestAnIdWorksWhereverANameDoes(t *testing.T) {
 	}
 
 	address := created.GetWorkspace().GetId() + "/" + project.GetProject().GetId()
-	if replied := mustRun(t, client, "dispatch", address, "hello"); !strings.Contains(replied, "ok") {
-		t.Fatalf("dispatch by id: %q", replied)
+	if replied := mustRun(t, client, "ask", address, "hello"); !strings.Contains(replied, "ok") {
+		t.Fatalf("asking by id: %q", replied)
 	}
 }
