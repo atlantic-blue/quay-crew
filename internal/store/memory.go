@@ -201,7 +201,7 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 }
 
 // FindOrCreateSession returns the project's session for a session, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn string) (*quaycrewv1.Session, error) {
+func (m *Memory) FindOrCreateSession(_ context.Context, project, session string, born Birth) (*quaycrewv1.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
@@ -218,7 +218,8 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn
 		Project:        project,
 		Handle:         session,
 		Status:         "idle",
-		PermissionMode: model.PermissionModeBornIn(bornIn),
+		PermissionMode: model.PermissionModeBornIn(born.Mode),
+		Role:           born.Role,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

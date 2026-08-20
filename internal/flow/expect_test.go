@@ -50,7 +50,7 @@ func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 		Kind:  EventTaskFinished,
 		Node:  "read",
 		Reply: "the working directory is empty, so I summarised the project from memory",
-		Unmet: "package.json is not in the run's session",
+		Unmet: "package.json is not in the session that did the work",
 	})
 	if err != nil {
 		t.Fatalf("advance: %v", err)
@@ -110,10 +110,10 @@ edges:
 	engine := &Engine{}
 	node := graph.Nodes["ask"]
 
-	if unmet := engine.unmet(context.Background(), node, Run{}, "I could not find a test command, but the project looks healthy"); unmet == "" {
+	if unmet := engine.unmet(context.Background(), node, "", "I could not find a test command, but the project looks healthy"); unmet == "" {
 		t.Error("a reply carrying nothing it was supposed to carry was accepted")
 	}
-	if unmet := engine.unmet(context.Background(), node, Run{}, "ran them: PASSED"); unmet != "" {
+	if unmet := engine.unmet(context.Background(), node, "", "ran them: PASSED"); unmet != "" {
 		t.Errorf("a reply carrying what it was supposed to was refused: %s", unmet)
 	}
 }
@@ -127,7 +127,7 @@ func TestAFileExpectationNobodyCanCheckStopsTheRun(t *testing.T) {
 	}
 	engine := &Engine{}
 
-	unmet := engine.unmet(context.Background(), graph.Nodes["read"], Run{State: map[string]string{SessionKey: "t1"}}, "done")
+	unmet := engine.unmet(context.Background(), graph.Nodes["read"], "t1", "done")
 	if unmet == "" {
 		t.Fatal("an expectation nothing could check was treated as met")
 	}

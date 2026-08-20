@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"gopkg.in/yaml.v3"
 )
 
@@ -106,6 +107,10 @@ type Node struct {
 	// Prompt is what a dispatch node says to the run's session, with {{key}} rendered from the
 	// run's state.
 	Prompt string
+	// Role is the name of the role a dispatch runs as, empty for a step that runs in the run's own
+	// session. A step that names a role runs in a session of its own, so the work is done by
+	// somebody who has read only what the role declares.
+	Role string
 	// Expect is what shows this dispatch worked, or nil where the graph claims nothing.
 	Expect *Expect
 	// On is a choice node's condition: every named state key must equal its value for the choice
@@ -141,6 +146,7 @@ type graphFile struct {
 	Nodes map[string]struct {
 		Type   string            `yaml:"type"`
 		Prompt string            `yaml:"prompt"`
+		Role   string            `yaml:"role"`
 		On     map[string]string `yaml:"on"`
 		For    string            `yaml:"for"`
 		Text   string            `yaml:"text"`
@@ -239,6 +245,20 @@ func Parse(source []byte) (Graph, error) {
 			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, DoneNode)
 		}
 
+		// A role belongs to a dispatch, because a role is who does work and nothing else in a graph
+		// does any. Refused here rather than ignored: a role silently dropped from a choice reads as
+		// a boundary that is in force and is not.
+		roleName := strings.TrimSpace(node.Role)
+		if roleName != "" {
+			if node.Type != NodeDispatch {
+				return Graph{}, fmt.Errorf("flow: %s node %s names the role %s, and only a %s does work, so the role would do nothing",
+					node.Type, name, roleName, NodeDispatch)
+			}
+			if !role.UsableName(roleName) {
+				return Graph{}, fmt.Errorf("flow: dispatch node %s names the role %q, which is not a role name; a role is lowercase letters, digits and dashes",
+					name, roleName)
+			}
+		}
 		var expect *Expect
 		if node.Expect != nil {
 			if node.Type != NodeDispatch {
@@ -253,7 +273,8 @@ func Parse(source []byte) (Graph, error) {
 			}
 			expect = &Expect{File: path, Contains: carries}
 		}
-		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, On: node.On, For: waitFor, Text: node.Text, Expect: expect}
+		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, Role: roleName, On: node.On,
+			For: waitFor, Text: node.Text, Expect: expect}
 	}
 
 	pointedAt := map[string]bool{}

@@ -11,7 +11,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -223,7 +222,7 @@ func (s *Server) SessionTokens(ctx context.Context, id string) int64 {
 	if err != nil {
 		return 0
 	}
-	return s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId()).Total()
+	return s.storage.ConversationUsage(boxOf(session), session.GetModelSessionId()).Total()
 }
 
 // SessionHolds says whether a path is in a session's own working directory, which is how a graph's
@@ -243,9 +242,7 @@ func (s *Server) SessionHolds(ctx context.Context, id, path string) (bool, error
 	if err != nil {
 		return false, fmt.Errorf("the run's session could not be read: %w", err)
 	}
-	dir, kept := s.storage.WorkingDir(sandbox.Config{
-		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
-	})
+	dir, kept := s.storage.WorkingDir(boxOf(session))
 	if !kept {
 		return false, fmt.Errorf("this crew keeps no working directory on disk to look in")
 	}

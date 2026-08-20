@@ -235,7 +235,7 @@ func (r Role) check(directory string) error {
 	switch {
 	case r.Name == "":
 		return fmt.Errorf("role: %s/%s has no name", directory, ManifestFile)
-	case !usableName(r.Name):
+	case !UsableName(r.Name):
 		return fmt.Errorf("role: %q can hold lowercase letters, digits and dashes only, because it is also a key in the store and a word in a refusal",
 			r.Name)
 	case r.Version < 1:
@@ -288,8 +288,10 @@ func known(material string) bool {
 	return false
 }
 
-// usableName refuses a name that could not be a key.
-func usableName(name string) bool {
+// UsableName says whether this could be a role name. It is exported because a graph may name a role,
+// and a graph parser that carried its own copy of the rule would be a second answer to the same
+// question, drifting the moment either changed.
+func UsableName(name string) bool {
 	if name == "" || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
 		return false
 	}

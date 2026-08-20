@@ -74,6 +74,11 @@ message Session {
   // described_at_task is how many tasks the session had when its description was written, so a
   // conversation that has moved on can be described again. Zero means never described.
   int32 described_at_task = 16;
+  // role is the name of the role this session runs as, empty for a session that runs as nobody in
+  // particular. It is set when the session is made and never changes: the boundary a role declares
+  // has to hold for every task of the session, not only the first, and a sandbox is born with its
+  // capabilities anyway.
+  string role = 17;
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -299,6 +304,11 @@ message DispatchRequest {
   // minutes, and a caller that waits for one is a caller that is not drawing anything. The console
   // waited, gave up at thirty seconds, and left a session whose conversation never happened.
   bool detach = 5;
+  // role names the role the session runs as, and is read only when the session is made: a role is
+  // the whole instruction and the whole boundary of a session, so it cannot be put on afterwards.
+  // A workspace that does not hold the named role is refused by name, because a step that names a
+  // role nobody attached must fail with a sentence rather than half run.
+  string role = 6;
 }
 message DispatchResponse {
   string id = 1;

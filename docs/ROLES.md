@@ -8,9 +8,7 @@ what has shipped of it.
 
 ## What is built today
 
-A role is imported, pinned to a version, and attached at a level. That is the whole of it. Nothing
-runs as a role yet, so attaching one changes what the crew may be asked for later and changes nothing
-about a session already open.
+A role is imported, pinned to a version, and attached at a level:
 
 ```
 quay role import <directory>
@@ -18,6 +16,24 @@ quay role list [<workspace>]
 quay role attach [<workspace>|crew] <name>
 quay role detach [<workspace>|crew] <name>
 ```
+
+And a step of a flow runs as one. A dispatch node names a role, and that step runs in a session of
+its own rather than in the run's:
+
+```yaml
+name: write-tests
+version: 1
+nodes:
+  plan:  { type: dispatch, prompt: "say what needs testing" }
+  tests: { type: dispatch, role: test-writer, prompt: "write the tests" }
+edges:
+  - [plan, tests]
+  - [tests, done]
+```
+
+Nothing chooses the role. The operator writes it into the graph and the workspace has to hold it
+already, or the run stops at that step and says which role is missing. Choosing a team while the run
+is under way is the product manager's job and is not built.
 
 ## Why the boundary, not the persona
 
@@ -100,12 +116,43 @@ propose, and nothing self applies.
 Reading stays open. Choosing from the roles the operator already attached is the point of having
 them.
 
+## What a role's session is given
+
+A session running as a role is a new session in a new container, and what it holds is what its role
+declares:
+
+- **`work`** is the prompt of the step that named the role. Every role receives it.
+- **`context`** is the crew's, the workspace's, the project's and the session's context, as the
+  memory files carry it. A role without it is told its brief and nothing else.
+- **`skills`** are the skills the workspace holds. A role without them holds none: no index in its
+  memory file and no skill directory mounted into its container.
+
+The brief is always given, under its own mark in the memory file. It is not context and it is never
+read back: it is rendered from the role every task, the way the skills index is.
+
+Two things follow from the boundary being real rather than asked for:
+
+**A role keeps its conversation to itself.** Every other session in a workspace shares one
+conversation store, so a role that must not see the code could otherwise read the transcript of the
+session that wrote it. A role session's store sits under the session instead. The cost is that its
+conversation cannot be resumed from another project, which is not something a sub task does.
+
+**Nothing a role writes reaches the crew's memory.** An ordinary session's memory file is read back
+into the store, because something that wrote into its own memory has learned something. A role
+session's is not. It was given a brief rather than the crew's context, so what is in its file is not
+an edit of what the store holds, and reading it back would let a session that was given nothing
+write what every session in the workspace is told.
+
 ## What is not built
 
-- No session runs as a role. Nothing reads `receives` at dispatch yet.
-- No product manager role, so nothing chooses a team.
-- No sub tasks, so nothing runs one session per role.
+- No product manager role, so nothing chooses a team while a run is under way.
+- A role declares its model and nothing reads it: the runner takes one model per crew.
+- No sub tasks, so a step is one session rather than several, and there is no limit on how many run
+  at once.
+- A session running as a role emits no event when it finishes.
 - No event starts a flow.
 
 The scenarios that hold up what is built are in
-[`features/roles.feature`](../features/roles.feature). If a behaviour is not there, it is not built.
+[`features/roles.feature`](../features/roles.feature) and
+[`features/rolesessions.feature`](../features/rolesessions.feature). If a behaviour is not there, it
+is not built.
