@@ -57,10 +57,9 @@ func attachCommand(spec *quaycrewv1.AttachSessionResponse) (*exec.Cmd, error) {
 
 // resolveSession turns what the operator typed into a session id.
 //
-// A listing prints two identifiers for every session, the id and the handle, and dispatch takes an
-// address on top of those. All three are on the operator's screen, so all three get typed back, and
-// each one has to reach the session. Until this took more than the id, the identifier in the session
-// column was refused by every command that reads it, which is most of them.
+// A session carries two identifiers, the handle a listing prints and the session's own id, and
+// dispatch takes an address on top of those. All three end up on the operator's screen or in their
+// notes, so all three get typed back, and each one has to reach the session.
 //
 // Identifiers are printed shortened, so a prefix counts.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, reference string) (string, error) {
@@ -155,14 +154,13 @@ func sessionWithIdentifier(typed string, sessions []*quaycrewv1.Session) (string
 	}
 }
 
-// identifiersOf is every session the crew holds, written as the listing writes it: the id, then the
-// handle beside it. Both, because the operator was refused for typing one of them and has no way to
-// tell from the refusal which one the command wanted.
+// identifiersOf is every session the crew holds, written as the listing writes them: the handle,
+// shortened. A refusal that offers a value the operator cannot see on their screen reads as the crew
+// having lost the session, which is the whole of this defect said backwards.
 func identifiersOf(sessions []*quaycrewv1.Session) []string {
 	have := make([]string, 0, len(sessions))
 	for _, session := range sessions {
-		have = append(have, fmt.Sprintf("%s (session %s)",
-			display.ShortID(session.GetId()), display.ShortID(session.GetHandle())))
+		have = append(have, display.ShortID(session.GetHandle()))
 	}
 	sort.Strings(have)
 	return have

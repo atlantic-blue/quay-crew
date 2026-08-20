@@ -109,8 +109,9 @@ commands:
   role detach [<workspace>] <name>        take a role away from a workspace, or from the crew
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a session
-may be the shortened id a listing prints. An address typed on the command line applies to that
-command only and does not move you.
+is the shortened identifier the sessions listing prints in its first column. A session's own id is
+taken there too, so an identifier from anywhere reaches it. An address typed on the command line
+applies to that command only and does not move you.
 `
 
 // Text is the whole document.

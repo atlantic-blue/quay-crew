@@ -116,8 +116,14 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	return located, nil
 }
 
-// resolveSession tasks a session reference into a session id within one project. Listings shorten
-// identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
+// resolveSession tasks a session reference into a session handle within one project. Listings
+// shorten identifiers, so the thing on the operator's screen is a prefix and typing it back has to
+// work.
+//
+// A session carries two identifiers and both are answered here, whichever one somebody has in front
+// of them: the handle a listing prints and an address takes, and the session's own id, which is what
+// the console acts on, what a container is named after, and what the listing used to print. Only the
+// handle comes back, because that is what a dispatch is addressed by.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
 	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
@@ -126,17 +132,23 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 
 	matches := make([]string, 0, 1)
 	for _, session := range resp.GetSessions() {
-		if session.GetHandle() == reference {
-			return reference, nil
+		// An exact match wins outright, so a short identifier that happens to prefix another
+		// session still resolves to itself.
+		if session.GetHandle() == reference || session.GetId() == reference {
+			return session.GetHandle(), nil
 		}
-		if strings.HasPrefix(session.GetHandle(), reference) {
+		// Once per session, however many of its identifiers the reference prefixes: a short
+		// reference that starts both of them names one session, not two.
+		if strings.HasPrefix(session.GetHandle(), reference) || strings.HasPrefix(session.GetId(), reference) {
 			matches = append(matches, session.GetHandle())
 		}
 	}
 
 	switch len(matches) {
 	case 0:
-		// Shortened, because a listing prints them shortened and that is what gets typed back.
+		// The handles, shortened, because that is the first column of the listing and what the
+		// operator has in front of them. A refusal that offers a value nobody can see is worse than
+		// one that offers nothing.
 		return "", &NotFoundError{
 			What: "session", Name: reference,
 			Have: namesOf(resp.GetSessions(), func(i int) string {

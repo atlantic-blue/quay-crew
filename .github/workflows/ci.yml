@@ -333,10 +333,11 @@ jobs:
           # The workspace is still there.
           case "$workspaces" in *"$workspace"*) ;; *) echo "the workspace did not survive the restart"; exit 1 ;; esac
           # And so is the session, on the same session, exactly one of it. The listing shortens
-          # identifiers for a human, so match the prefix it prints rather than the whole session id.
+          # identifiers for a human, so match the prefix it prints rather than the whole handle.
           # By column rather than by substring: the listing has a header row and ten columns, and a
           # shortened identifier is eight hex characters that could appear in more than one of them.
-          test "$(printf '%s\n' "$sessions" | awk -v want="${handle:0:8}" 'NR > 1 && $4 == want' | wc -l)" -eq 1
+          # The first column is the identifier an address takes, which is the handle.
+          test "$(printf '%s\n' "$sessions" | awk -v want="${handle:0:8}" 'NR > 1 && $1 == want' | wc -l)" -eq 1
 
           # Dispatching a task after the restart is deliberately not asserted here. The control plane
           # forgets which container each session was running in, so it tries to start a second one

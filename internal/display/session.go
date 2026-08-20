@@ -16,17 +16,21 @@ import (
 // the console had ten columns and the command line four, so a session's cost, its mode and how long
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
+// The first column is the handle, which is the identifier an address takes. The session's own id
+// used to be there, and no command would accept it: `quay dispatch me/website/a4db600a` came back
+// with "this crew has no session a4db600a. it has: 5ae35d77", naming a value that was nowhere on the
+// screen. What is printed has to be typeable back, so the column prints what the address wants.
 func SessionColumns() []string {
-	return []string{"id", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
+	return []string{"session", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
 func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string) []string {
 	return []string{
-		ShortID(session.GetId()),
+		ShortID(session.GetHandle()),
 		Name(workspaceName, session.GetWorkspace()),
 		Name(projectName, session.GetProject()),
-		SessionName(session),
+		SessionLabel(session),
 		StatusLabel(session),
 		PermissionLabel(session.GetPermissionMode()),
 		Tokens(session.GetUsage().GetInput()),
@@ -158,12 +162,25 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 	out.WriteString("\n")
 }
 
-// SessionName is what to call a session in a listing: the name the operator gave it, then the one the
-// crew wrote for itself, then the identifier.
+// SessionLabel is the name cell of a listing: what the operator called this session, then what the
+// crew called it, then nothing at all.
+//
+// Nothing at all, rather than the identifier, because the identifier is already the first column of
+// the same row. Repeating it there made a name look like an identifier that had lost its label, and
+// it is the reason the handle went missing from the screen the moment a session was named.
+func SessionLabel(session *quaycrewv1.Session) string {
+	if named := SessionName(session); named != ShortID(session.GetHandle()) {
+		return named
+	}
+	return "-"
+}
+
+// SessionName is what to call a session anywhere one name is all there is room for: the name the
+// operator gave it, then the one the crew wrote for itself, then the identifier.
 //
 // The operator's name wins because a name somebody picked beats a name a machine wrote. The
-// identifier is last because it is the thing nobody remembers, and it is still in the id column
-// beside this one, so nothing is hidden by preferring a name.
+// identifier is last because it is the thing nobody remembers, and it is never blank: a breadcrumb
+// or a page title with a gap in it reads as a bug.
 func SessionName(session *quaycrewv1.Session) string {
 	if label := strings.TrimSpace(session.GetLabel()); label != "" {
 		return label
