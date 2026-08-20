@@ -237,6 +237,10 @@ type world struct {
 	lastDrain *quaycrewv1.DrainSessionsResponse
 	// release lets go of a task a scenario is holding open, and is nil when none is held.
 	release func()
+	// waited carries what a dispatch the scenario is not watching came back with. A waited dispatch
+	// does not return until its task lands, so a scenario about what is true while one runs has to
+	// start it behind itself and pick the answer up afterwards.
+	waited chan waitedDispatch
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
 	// attachment does and does not reach.
 	otherWorkspaceID string
@@ -527,6 +531,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
+	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)

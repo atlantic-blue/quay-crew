@@ -252,6 +252,13 @@ type Store interface {
 	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has
 	// already written must not double it. The task's Id is what makes that possible.
 	AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error
+	// FinishTask writes what came of a task into the record its start opened, and leaves the rest
+	// of that record alone. A task is written when it starts, so what a session was asked is
+	// visible while it works; this is the other half of that, the same row closed.
+	//
+	// A task the store does not hold is not an error. The task itself already happened, and the
+	// operator has its result, so a missing row must not come back as a failure of the task.
+	FinishTask(ctx context.Context, id, status, reply, failure string) error
 
 	// The flow engine's substrate: a run and its transitions are rows written in one transaction,
 	// which is what makes reconstructable a guarantee rather than a sentence. The contract is

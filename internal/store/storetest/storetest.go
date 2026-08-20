@@ -611,6 +611,49 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a task written when it started is closed by what came of it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+
+		running := &quaycrewv1.Task{
+			Id: "task-open", Session: session.GetId(), Prompt: "read the repository",
+			Status: "running", OccurredAt: timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)),
+		}
+		if err := s.AppendTask(ctx, running, project.GetWorkspace(), project.GetId(), "session-a"); err != nil {
+			t.Fatalf("AppendTask: %v", err)
+		}
+		if err := s.FinishTask(ctx, "task-open", "idle", "it is a control plane", ""); err != nil {
+			t.Fatalf("FinishTask: %v", err)
+		}
+
+		tasks, err := s.ListTasks(ctx, session.GetId(), 0)
+		if err != nil {
+			t.Fatalf("ListTasks: %v", err)
+		}
+		// One task, not two: the same record, closed.
+		if len(tasks) != 1 {
+			t.Fatalf("%d tasks came back, want 1", len(tasks))
+		}
+		if tasks[0].GetStatus() != "idle" || tasks[0].GetReply() != "it is a control plane" {
+			t.Fatalf("the task came back as %+v, so finishing it did not land", tasks[0])
+		}
+		// What the operator was asked is still there. Closing a task must not lose it.
+		if tasks[0].GetPrompt() != "read the repository" {
+			t.Fatalf("the task says %q was asked, want %q", tasks[0].GetPrompt(), "read the repository")
+		}
+	})
+
+	t.Run("finishing a task the store does not hold is not an error", func(t *testing.T) {
+		s := newDataset(t)(t)
+
+		// The task happened whatever the store holds, so this must not come back as a failure of it.
+		if err := s.FinishTask(context.Background(), "task-nobody-wrote", "idle", "done", ""); err != nil {
+			t.Fatalf("FinishTask on a task nobody wrote: %v", err)
+		}
+	})
+
 	t.Run("the same task delivered twice is stored once", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

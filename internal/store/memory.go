@@ -621,6 +621,23 @@ func (m *Memory) AppendTask(_ context.Context, task *quaycrewv1.Task, _, _, _ st
 	return nil
 }
 
+// FinishTask closes the record a task opened when it started.
+func (m *Memory) FinishTask(_ context.Context, id, status, reply, failure string) error {
+	if id == "" {
+		return errors.New("store: a task needs an id to be finished")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, task := range m.tasks {
+		if task.GetId() != id {
+			continue
+		}
+		task.Status, task.Reply, task.Failure = status, reply, failure
+		return nil
+	}
+	return nil
+}
+
 // ListTasks returns a session's tasks oldest first, capped at limit, keeping the most recent when
 // there are more than the cap: the end of a conversation is the part somebody wants.
 func (m *Memory) ListTasks(_ context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
