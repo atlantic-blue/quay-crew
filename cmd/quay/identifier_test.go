@@ -130,3 +130,42 @@ func TestARefusedSessionNamesTheSessionsThatExist(t *testing.T) {
 		t.Fatalf("the refusal %q names neither identifier of the one session that exists", said)
 	}
 }
+
+// Attach shares the resolver, and it is the command where a refusal costs most: the operator is
+// looking at a session on their screen that will not open. A label is set first because that is what
+// takes the handle off the screen, leaving the id as the only identifier they can read.
+func TestAttachTakesEveryIdentifierTheListingPrints(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+	mustRun(t, client, "label", session.GetId()[:8], "the bills")
+
+	for _, typed := range []string{
+		session.GetId(), session.GetId()[:8],
+		session.GetHandle(), session.GetHandle()[:8],
+		"me/house-bills/" + session.GetHandle()[:8],
+		"me/house-bills/" + session.GetId()[:8],
+	} {
+		reached, err := resolveSession(context.Background(), client, typed)
+		if err != nil {
+			t.Fatalf("quay attach %s was refused: %v", typed, err)
+		}
+		if reached != session.GetId() {
+			t.Fatalf("quay attach %s reached %s, want %s", typed, reached, session.GetId())
+		}
+	}
+}
+
+// The listing prints the id in its own column, so the address form has to take it. Every session
+// scoped command shares this, which is what makes the id typeable everywhere rather than only where
+// somebody remembered to allow it.
+func TestASessionScopedCommandTakesAnAddressCarryingTheId(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+	address := "me/house-bills/" + session.GetId()[:8]
+
+	said := mustRun(t, client, "mode", address)
+
+	if !strings.Contains(said, "runs in") {
+		t.Fatalf("quay mode %s said %q", address, said)
+	}
+}

@@ -18,10 +18,41 @@ Feature: The crew is addressed by path
     When the operator addresses "me"
     Then the address reaches the workspace but no project
 
-  Scenario: An address reaches a session by the shortened id a listing prints
+  Scenario: An address reaches a session by the shortened handle a listing prints
     Given a session started by dispatching "remember this"
     When the operator addresses the session by its first eight characters
     Then the address reaches that session
+
+  # A listing prints two identifiers. The id has a column of its own, and the handle sits in the name
+  # column until a label or a description takes that place. So on a session anybody has named, the id
+  # is the only identifier on the operator's screen, and it was the one form an address refused.
+  Scenario: An address reaches a session by the id the listing prints
+    Given a session started by dispatching "remember this"
+    When the operator addresses the session by the id in the listing
+    Then the address reaches that session
+
+  Scenario: An address reaches a labelled session, whose handle is nowhere on the screen
+    Given a session started by dispatching "remember this"
+    And the operator labels the session "the bills"
+    When the operator addresses the session by the id in the listing
+    Then the address reaches that session
+
+  # The operator does the next thing with it, which is the point of an address.
+  Scenario: A task is dispatched to the id the listing prints
+    Given a session started by dispatching "remember this"
+    And the operator labels the session "the bills"
+    When the operator dispatches "and again" to the session at the id in the listing
+    Then the reply is "you said: and again"
+    And both tasks ran in the same session
+
+  # A refusal that names one identifier sends the operator looking for a value their screen may not
+  # carry at all.
+  Scenario: A refused session names both of its identifiers
+    Given a session started by dispatching "remember this"
+    And the operator labels the session "the bills"
+    When the operator addresses "me/house-bills/ffffffff"
+    Then the address is refused as not found
+    And the refusal names both identifiers of that session
 
   Scenario: An address naming a project that does not exist is refused
     When the operator addresses "me/ghost"

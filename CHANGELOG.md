@@ -6,6 +6,24 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 20 August 2026
+
+- **Every identifier a listing prints reaches the session, in an address too.** A listing prints two
+  of them. The id has a column of its own, and the handle sits in the name column until a label or a
+  description takes that place. So on a session anybody has named, the id is the only identifier on
+  the operator's screen, and it was the one form an address refused:
+
+  ```
+  quay attach a4db600a                     # worked
+  quay attach me/house-bills/a4db600a      # this crew has no session "a4db600a"
+  ```
+
+  The address resolver takes either identifier now, whole or shortened, and it still answers with the
+  handle, so nothing downstream of an address changes. Every session scoped command shares that
+  resolver, which is `quay attach`, `quay dispatch`, `quay tasks`, `quay mode` and `quay label`. A
+  refusal names both identifiers, because naming only the handle sent the operator to look for a
+  value their screen does not carry. Closes #365, and part of #380.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
