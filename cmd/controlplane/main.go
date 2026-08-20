@@ -87,12 +87,20 @@ func main() {
 		// where it can reach nothing and see nothing of the machine.
 		Network:      os.Getenv("QC_SANDBOX_NETWORK"),
 		DriverMounts: splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
+		// How much memory one session may take. Unset gives it no limit, so it advertises the whole
+		// machine to node, Go, jest and webpack, and the kernel kills it against what is actually
+		// free. A session reads whichever of the two it got with quay room.
+		Memory: strings.TrimSpace(os.Getenv("QC_SANDBOX_MEMORY")),
 	})
 	if err != nil {
 		logger.Error("sandbox provider config failed", "error", err)
 		os.Exit(1)
 	}
 	sandboxKind, _ := sandbox.ResolveKind(os.Getenv("QC_SANDBOX"))
+	if sandboxKind == sandbox.KindDocker && strings.TrimSpace(os.Getenv("QC_SANDBOX_MEMORY")) == "" {
+		logger.Warn("no QC_SANDBOX_MEMORY set: a session sizes node, Go, jest and webpack against the " +
+			"whole machine, and the kernel kills them against what the rest of it has left")
+	}
 	// The skills the operator has written, read from files. A skill that does not make sense stops
 	// the crew starting rather than going quietly missing later, because a capability that is absent
 	// without a reason is one the session improvises around.

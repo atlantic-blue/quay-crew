@@ -82,6 +82,10 @@ services:
       # same interface the operator's does. Unset either and it cannot, which is the default.
       QC_SANDBOX_NETWORK: ${QC_SANDBOX_NETWORK:-}
       QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-}
+      # How much memory one session may take, as the daemon spells it, for example 4g. Unset gives
+      # a session no limit, so it advertises the whole machine to node, Go, jest and webpack, and
+      # the kernel kills them against whatever the rest of the machine has left.
+      QC_SANDBOX_MEMORY: ${QC_SANDBOX_MEMORY:-}
       # Host paths only the driver gets, so it has something to bring to the crew.
       QC_DRIVER_MOUNTS: ${QC_DRIVER_MOUNTS:-}
       # Who a commit made inside a sandbox is by. Both or neither: git refuses on either missing.
