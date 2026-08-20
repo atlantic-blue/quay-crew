@@ -349,6 +349,17 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "hello" to the project
     Then the refusal says "claude: command not found"
 
+  # Nothing killed with signal 9 gets to say why: no last line on either stream, and the kernel log
+  # is not readable from inside a container. So exit 137 on its own read as a hang, and the operator
+  # could not tell a task that ran out of memory from one whose container an upgrade took away. Both
+  # are named now, with the command that answers which it was.
+  Scenario: A task killed for memory says so rather than showing an exit status
+    Given the sandbox is killed for memory part way through the task
+    When the operator dispatches "hello" to the project
+    Then the refusal says "a kill rather than a failure"
+    And the refusal says "quay room"
+    And the refusal says "container went away"
+
   # The console shows the crew and a conversation shows one session, and using both meant losing sight
   # of one. The panel puts them on the screen at once, half the width each, side by side.
   #

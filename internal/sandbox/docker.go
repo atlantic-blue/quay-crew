@@ -31,6 +31,19 @@ type DockerProvider struct {
 	// "host:container[:ro]". They are what makes the driver the glue between the machine and the
 	// crew: without them it can reach the control plane and see nothing to bring to it.
 	DriverMounts []string
+	// Memory is how much memory one session may take, as the daemon spells it, for example "4g".
+	// Empty gives a session no limit, which is what every session had before this existed.
+	//
+	// A sandbox with no limit reports the whole machine in /proc/meminfo, so node sizes its heap
+	// from it, Go sizes its collector from it, and jest and webpack start one worker for each
+	// processor. What is really there is whatever the rest of the machine has not taken. The
+	// session budgets against the first number, and the kernel kills it against the second. A limit
+	// makes the advertised number the true one, and makes a kill the sandbox's own, which the sandbox
+	// can read. See internal/room.
+	//
+	// The figure is the operator's to choose, because it shares one machine between the stack, the
+	// sessions already running, and this one.
+	Memory string
 }
 
 var _ Provider = DockerProvider{}
@@ -164,6 +177,12 @@ func (s *dockerSandbox) Close(ctx context.Context) error {
 // is the difference between a session that can drive the crew and one that cannot.
 func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
 	args := []string{"run", "--detach", "--name", name, "--tmpfs", secretsMount()}
+	if d.Memory != "" {
+		// Swap is capped with it, at the same figure. Told a memory limit and nothing else, the
+		// daemon allows swap of the same size again, so a session may take twice what the operator
+		// said, and reach it by thrashing. Equal figures make the limit mean what it says.
+		args = append(args, "--memory", d.Memory, "--memory-swap", d.Memory)
+	}
 	if cfg.Driver && d.Network != "" {
 		args = append(args, "--network", d.Network)
 	}

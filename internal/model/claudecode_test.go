@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -343,5 +344,55 @@ func TestATokenFromSomewhereElseIsStillRedacted(t *testing.T) {
 	got := Redact("config has sk-ant-oat01-neverPassedThroughHere1234 in it", nil)
 	if strings.Contains(got, "neverPassedThroughHere") {
 		t.Fatalf("a token this process never held survived: %q", got)
+	}
+}
+
+// exited is an error carrying an exit status, the way *exec.ExitError does. Both sandbox backends
+// return that type; this stands in for it so the test does not have to start a process to make one.
+type exited struct{ status int }
+
+func (e exited) Error() string { return fmt.Sprintf("exit status %d", e.status) }
+func (e exited) ExitCode() int { return e.status }
+
+// TestATaskKilledForMemorySaysSoRatherThanShowingAnExitStatus.
+//
+// Nothing killed with signal 9 gets to say why: no last line on either stream, and the kernel log is
+// not readable from inside a container. So the operator read "run exited: exit status 137, and it
+// said nothing about why" and could not tell a session that ran out of memory from a session whose
+// container was taken away by an upgrade. Both are named now, and the command that answers which one
+// it was is named with them.
+func TestATaskKilledForMemorySaysSoRatherThanShowingAnExitStatus(t *testing.T) {
+	runner := NewClaudeCodeRunner()
+	_, err := runner.Run(context.Background(),
+		failingSandbox{proc: failingProcess{exit: exited{status: 137}}}, Request{Text: "hello"})
+	if err == nil {
+		t.Fatal("a killed task reported success")
+	}
+	for _, want := range []string{"a kill rather than a failure", "quay room", "container went away"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("a task killed for memory says %q, want it to say %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "said nothing about why") {
+		t.Fatalf("a killed task is still reported as saying nothing: %q", err)
+	}
+}
+
+// TestARealKilledProcessIsRecognised, because the interface above is only worth anything if the type
+// the sandbox actually returns satisfies it. This runs a process and has it killed with signal 9.
+func TestARealKilledProcessIsRecognised(t *testing.T) {
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("no shell to kill: %v", err)
+	}
+	waitErr := exec.Command(shell, "-c", "kill -9 $$").Run()
+	if waitErr == nil {
+		t.Fatal("a process killed with signal 9 exited well")
+	}
+	if !wasKilled(waitErr) {
+		t.Fatalf("a real killed process is not recognised as killed: %v", waitErr)
+	}
+	if wasKilled(exited{status: 1}) {
+		t.Fatal("an ordinary failure is reported as a kill")
 	}
 }
