@@ -28,7 +28,8 @@ press : to switch resource, / to filter, enter to drill in, s to shell into a se
 you work in one place at a time, and say where with an address: workspace/project/session.
 
   quay use me/house-bills
-  quay dispatch "when is the electricity bill due"
+  quay ask "when is the electricity bill due"
+  quay dispatch "read the repository and write the migration"
 
 commands:
   help                                    print this, which -h and --help do too
@@ -51,7 +52,11 @@ commands:
   flow show <run>                         where one run got to, what it cost, why it stopped
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
-  dispatch [<address>] <text>             start or continue a session
+  dispatch [<address>] <text>             start or continue a session and let go of the task. It
+                                          runs in the crew, so closing the terminal does not take
+                                          the work with it. quay tasks reads it back
+  ask [<address>] <text>                  the same, and wait here for the answer. For a short
+                                          question, where the reply is the point
   sessions [<address>]                    list sessions, which session and sessions also do
   tasks <session>                          what a session was asked to do, and what came back
   drain [anyway]                          put every live session down, so an upgrade does not take

@@ -116,7 +116,7 @@ func aCrewWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient,
 	})
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	session := onlySession(t, client)
 	if err := memory.RecordTask(context.Background(), session.GetId(), "", "running"); err != nil {
