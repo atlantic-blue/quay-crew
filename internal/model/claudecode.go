@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -127,8 +128,53 @@ func why(refused, stderr, unparsed string, exit error, env map[string]string) st
 	if said := firstOf(stderr, unparsed); said != "" {
 		return fmt.Sprintf("run exited: %v, saying: %s", exit, Redact(said, env))
 	}
+	if wasKilled(exit) {
+		return killed
+	}
 	return fmt.Sprintf("run exited: %v, and it said nothing about why", exit)
 }
+
+// killedStatus is what a shell, and the docker command line, report for a process taken by signal 9.
+// It is 128 plus the signal.
+const killedStatus = 137
+
+// killed is what the operator is told instead of the exit status on its own.
+//
+// Nothing is killed with signal 9 by accident, and nothing that is killed gets to say why: no last
+// line on either stream, and the kernel log is not readable from inside a container. So "exit status
+// 137" with nothing beside it reads as a hang, and the two things that actually cause it are worth
+// naming, because what to do differs. Measured: an allocator taking memory in a sandbox with no
+// limit was killed at exit 137 with both streams empty.
+const killed = "run exited: exit status 137, which is a kill rather than a failure, and nothing " +
+	"killed this way gets to say so. Two things do it. The kernel takes a process for memory, which " +
+	"quay room reports from inside the sandbox: it says what memory is there and what has already " +
+	"been killed in it. Or the container went away underneath the task, which an upgrade or a stop " +
+	"does."
+
+// exitStatus is anything that can say what status a command exited with. *exec.ExitError is one,
+// and it is what both sandbox backends return today. The interface is what is matched so a backend
+// that reports a status some other way is understood as well.
+type exitStatus interface{ ExitCode() int }
+
+// wasKilled says whether a command was taken by signal 9 rather than exiting on its own.
+//
+// Read from the status rather than from the process, because the process the crew waits on is the
+// docker command line and the one that died is inside the container. Docker reports the container
+// process status as its own, so the number is the same either way.
+func wasKilled(exit error) bool {
+	var status exitStatus
+	if errors.As(exit, &status) && status.ExitCode() == killedStatus {
+		return true
+	}
+	// A process the crew started itself, rather than through the docker command line, carries no
+	// exit status at all. Go reports the signal instead, and the status reads -1. Measured rather
+	// than assumed: a shell told to kill itself with signal 9 arrives here as "signal: killed".
+	return exit != nil && strings.Contains(exit.Error(), signalKilled)
+}
+
+// signalKilled is how Go states a process taken by signal 9, which is what os.ProcessState prints
+// when there is no exit status to print.
+const signalKilled = "signal: killed"
 
 func firstOf(values ...string) string {
 	for _, value := range values {
