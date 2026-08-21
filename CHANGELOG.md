@@ -6,6 +6,34 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 21 August 2026
+
+- **An attached conversation says how much of the context window it has used.** Attaching puts you in
+  the conversation with the model, and the one number that decides whether that conversation is still
+  worth continuing was nowhere on the screen. Not in the console, not in the panel's header, and
+  asking the model for it costs a task and fills a little more of the window to answer.
+
+  The model runtime keeps a line under the prompt and redraws it every time the conversation moves.
+  The sandbox image now points that line at `quay statusline`:
+
+  ```
+  context 12% used (124k of 1M)
+  context 34% used (340k of 1M), over the 30% mark
+  ```
+
+  The second one is yellow. Thirty per cent rather than something closer to full, because what you do
+  about a filling window (finish the task, compact it, or open a fresh session) is much cheaper
+  decided at thirty than at ninety.
+
+  How big the window is, and how much of it the next task carries, are the runtime's to report rather
+  than this build's to remember. A runtime that reports neither says so on the line instead of
+  guessing, because a guessed window is a confident wrong number and a blank line reads as the crew
+  being broken. A session that runs under hooks keeps the line: the hooks file is additional settings
+  rather than settings instead.
+
+  A sandbox keeps what it was made with, so this reaches a session that is already running only after
+  `make rebuild`, and then stopping that session and dispatching again.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
