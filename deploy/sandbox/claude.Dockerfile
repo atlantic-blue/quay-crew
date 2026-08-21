@@ -168,21 +168,10 @@ COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 # working" because nothing ever gets far enough to authenticate. The runtime rewrites this file as it
 # runs; these are only the starting values.
 #
-# The directory is made here, as the sandbox user, rather than left to the copy below to create.
-# Everything the runtime keeps about a conversation lands in it, the transcripts among them, so a
-# directory owned by root is a session whose conversation cannot be written at all.
+# The directory is made here, as the sandbox user, and nothing else is put in it. The crew mounts the
+# workspace's own directory over this path in every sandbox, so a file the image writes here is a file
+# no session ever reads: what the runtime is told, beyond this first run, is rendered by the crew and
+# mounted read only somewhere the mount cannot hide. Everything the runtime keeps about a conversation
+# lands in this directory, the transcripts among them, so it has to be the sandbox user's.
 RUN mkdir -p /home/agent/.claude \
     && printf '%s\n' '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true,"hasCompletedProjectOnboarding":true}}}' > /home/agent/.claude.json
-
-# What the model runtime reads when a conversation opens. A file in the repository rather than a
-# printf here, so a test can read the same thing the image ships. Owned by the sandbox user, because
-# the runtime rewrites this file as it runs.
-#
-# The status line is why this is more than a theme. An operator attached to a conversation is talking
-# to the model directly, and how much of the context window that conversation has filled was nowhere
-# on their screen: not in the console, not in the header, and asking for it costs a task. The runtime
-# draws this line under the prompt on every redraw and quay fills it in.
-#
-# A session with hooks opens under a second settings file, passed with --settings. That one is
-# additional rather than instead of, and carries nothing but hooks, so the status line survives it.
-COPY --chown=agent:agent deploy/sandbox/claude-settings.json /home/agent/.claude/settings.json

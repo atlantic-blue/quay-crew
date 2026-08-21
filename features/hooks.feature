@@ -95,12 +95,14 @@ Feature: A hook is a constraint the crew holds
     When the operator dispatches "hello" to the project
     Then the task loaded the hooks settings
 
-  # A settings file pointing at a directory that is not there fails the task before it starts, so a
-  # crew with no hooks says nothing rather than saying something empty.
-  Scenario: A session under no hooks is given no hooks directory and no settings
+  # The settings the crew renders carry more than hooks: the line the runtime draws under the
+  # conversation is in there too, and an operator attached to a session with no hooks needs that line
+  # as much as anybody. So the directory and the file travel to every session, holding no hook.
+  Scenario: A session under no hooks still carries the crew's settings
     When the operator dispatches "hello" to the project
-    Then the session's sandbox carries no hooks directory
-    And the task was not told to load any settings
+    Then the session's sandbox carries the hooks directory
+    And the settings file binds nothing to any event
+    And the task loaded the hooks settings
 
   # The crew ships the analyser because it only adds context and can never wrongly refuse. Anything
   # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the work.
