@@ -1,7 +1,0 @@
-{
-  "theme": "dark",
-  "statusLine": {
-    "type": "command",
-    "command": "quay statusline"
-  }
-}

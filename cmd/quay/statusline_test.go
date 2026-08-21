@@ -5,20 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atlantic-blue/quay-crew/internal/hook"
 )
 
-// sandboxSettings is what the sandbox image writes to the model runtime's settings file.
-const sandboxSettings = "../../deploy/sandbox/claude-settings.json"
-
-// shipped reads the command the image asks the runtime to run for its status line.
+// shipped reads the command the crew asks the runtime to run for its status line, out of the settings
+// the crew renders for every session.
 func shipped(t *testing.T) string {
 	t.Helper()
-	contents, err := os.ReadFile(filepath.Clean(sandboxSettings))
+	rendered, err := hook.Settings("/home/agent/hooks", nil)
 	if err != nil {
-		t.Fatalf("read the settings the sandbox image ships: %v", err)
+		t.Fatalf("render the settings the crew mounts: %v", err)
 	}
 	var settings struct {
 		StatusLine struct {
@@ -26,35 +25,35 @@ func shipped(t *testing.T) string {
 			Command string `json:"command"`
 		} `json:"statusLine"`
 	}
-	if err := json.Unmarshal(contents, &settings); err != nil {
-		t.Fatalf("the settings the sandbox image ships are not readable as JSON: %v", err)
+	if err := json.Unmarshal(rendered, &settings); err != nil {
+		t.Fatalf("the settings the crew renders are not readable as JSON: %v", err)
 	}
 	if settings.StatusLine.Type != "command" {
-		t.Fatalf("the image configures a status line of type %q, and the runtime only runs %q",
+		t.Fatalf("the crew asks for a status line of type %q, and the runtime only runs %q",
 			settings.StatusLine.Type, "command")
 	}
 	if settings.StatusLine.Command == "" {
-		t.Fatal("the image configures no status line, so an attached operator sees nothing")
+		t.Fatal("the crew asks for no status line, so an attached operator sees nothing")
 	}
 	return settings.StatusLine.Command
 }
 
-// The words the image configures have to be words this binary answers to. Both halves passed their
-// own tests while disagreeing: a settings file naming a subcommand that does not exist leaves the
-// runtime running something that fails on every draw, and the operator sees a blank line rather than
-// an error, which reads as the crew having no answer.
-func TestTheStatusLineTheImageConfiguresIsOneThisBinaryDraws(t *testing.T) {
+// The words the crew renders have to be words this binary answers to. Both halves passed their own
+// tests while disagreeing: a settings file naming a subcommand that does not exist leaves the runtime
+// running something that fails on every draw, and the operator sees a blank line rather than an
+// error, which reads as the crew having no answer.
+func TestTheStatusLineTheCrewConfiguresIsOneThisBinaryDraws(t *testing.T) {
 	words := strings.Fields(shipped(t))
 	if len(words) < 2 || words[0] != "quay" {
-		t.Fatalf("the image's status line runs %q, which is not this tool", strings.Join(words, " "))
+		t.Fatalf("the crew's status line runs %q, which is not this tool", strings.Join(words, " "))
 	}
 
 	printed := drawn(t, words[1:], payload(296_000, 1_000_000))
 	if !strings.Contains(printed, "context 30% used (296k of 1M)") {
-		t.Errorf("running the command the image configures printed %q, which does not say the context", printed)
+		t.Errorf("running the command the crew configures printed %q, which does not say the context", printed)
 	}
 	if !strings.Contains(printed, "over the 30% mark") {
-		t.Errorf("running the command the image configures printed %q, which does not warn", printed)
+		t.Errorf("running the command the crew configures printed %q, which does not warn", printed)
 	}
 }
 

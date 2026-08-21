@@ -5,53 +5,43 @@ import (
 	"testing"
 )
 
-// The status line is a file the image copies in and a binary the image carries, and neither one is
-// worth anything without the other. A settings file that lands nowhere the runtime reads, or a
-// runtime asked to run a tool that is not on its PATH, both leave an attached operator with the blank
-// line they had before.
-func TestTheSandboxImageGivesTheRuntimeAStatusLine(t *testing.T) {
-	image := theSandboxImage(t)
-
-	const at = "/home/agent/.claude/settings.json"
-	copied := ""
-	for _, line := range strings.Split(image, "\n") {
-		if strings.HasPrefix(line, "COPY") && strings.HasSuffix(strings.TrimSpace(line), at) {
-			copied = line
+// The way off the settings this image used to ship.
+//
+// A file the image writes to /home/agent/.claude is a file no session ever reads: the crew mounts the
+// workspace's own directory over that path in every sandbox, and a mount hides what the image put
+// underneath it. That is not visible from the Dockerfile, it is not visible from any test that reads
+// the Dockerfile, and nothing in continuous integration builds this image, so the whole class is
+// refused here instead. What the runtime is told is rendered by the crew, in internal/hook.
+func TestTheImageWritesNoSettingsWhereTheCrewMountsOverIt(t *testing.T) {
+	for _, line := range strings.Split(theSandboxImage(t), "\n") {
+		naked := strings.TrimSpace(line)
+		if strings.HasPrefix(naked, "#") || !strings.Contains(naked, "/home/agent/.claude/settings.json") {
+			continue
 		}
-	}
-	if copied == "" {
-		t.Fatalf("the image never puts a settings file at %s, so the runtime opens a conversation with no status line", at)
-	}
-	if !strings.Contains(copied, "deploy/sandbox/claude-settings.json") {
-		t.Errorf("the settings at %s come from somewhere other than the file this repository holds, "+
-			"so the test that reads that file is reading something the image does not ship:\n%s", at, copied)
-	}
-	// The runtime rewrites this file as it runs, and it runs as the sandbox user.
-	if !strings.Contains(copied, "--chown=agent:agent") {
-		t.Errorf("the settings file lands owned by root, so the runtime cannot write it:\n%s", copied)
-	}
-	if !strings.Contains(image, "COPY --from=tool /out/quay /usr/local/bin/quay") {
-		t.Error("the image carries no quay, so the command its settings name is not there to run")
+		t.Errorf("the image writes settings the mount hides, so no session reads them:\n%s\n\n"+
+			"say it in internal/hook.Settings instead, which the crew renders and mounts read only", naked)
 	}
 }
 
-// The directory has to exist and be the sandbox user's before anything is copied into it: everything
-// the runtime keeps about a conversation lands there, the transcripts among them, so a directory
-// owned by root is a conversation that cannot be written at all.
+// The runtime is told to run quay for its status line, so the image has to carry quay.
+func TestTheSandboxImageCarriesTheToolThatDrawsTheStatusLine(t *testing.T) {
+	if !strings.Contains(theSandboxImage(t), "COPY --from=tool /out/quay /usr/local/bin/quay") {
+		t.Error("the image carries no quay, so the command the crew's settings name is not there to run")
+	}
+}
+
+// The directory has to exist and be the sandbox user's: everything the runtime keeps about a
+// conversation lands there, the transcripts among them, so a directory owned by root is a
+// conversation that cannot be written at all.
 func TestTheRuntimesDirectoryBelongsToTheSandboxUser(t *testing.T) {
 	image := theSandboxImage(t)
 
 	made := strings.Index(image, "mkdir -p /home/agent/.claude")
 	dropped := strings.Index(image, "USER agent")
-	copied := strings.Index(image, "/home/agent/.claude/settings.json")
 	switch {
 	case made < 0:
 		t.Fatal("nothing makes /home/agent/.claude, so it is made by whatever writes into it first")
 	case dropped < 0 || made < dropped:
 		t.Error("/home/agent/.claude is made before the image drops to the sandbox user, so it belongs to root")
-	case copied < 0:
-		t.Error("the settings are never copied into /home/agent/.claude, so nothing here checks their order")
-	case copied < made:
-		t.Error("the settings are copied in before the directory is made, so the copy makes it instead")
 	}
 }

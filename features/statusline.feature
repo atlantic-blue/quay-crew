@@ -16,6 +16,15 @@ Feature: An attached operator sees how much of the model's context window is use
   not say says so on the line, because a guessed window is a confident wrong number and a blank line
   reads as the crew being broken.
 
+  The crew says all of this in the settings file it renders and mounts read only, not in the sandbox
+  image. The image cannot say it: the crew mounts the workspace's own directory over the conversation
+  directory in every sandbox, and a mount hides whatever the image put underneath it.
+
+  Background:
+    Given a running control plane
+    And a workspace named "acme"
+    And a project named "house-bills"
+
   Scenario: The line says the share and the count it came from
     Given a conversation that has used 124000 of a 1000000 token context window
     When the runtime draws its status line
@@ -42,6 +51,7 @@ Feature: An attached operator sees how much of the model's context window is use
     Then the line says the runtime does not report it
     And the line claims no share
 
-  Scenario: The sandbox image points the runtime's status line at quay
-    Given the settings the sandbox image ships
-    Then they tell the runtime to draw its status line by running quay
+  Scenario: Every session is given a status line, whether or not it runs under hooks
+    When the operator dispatches "hello" to the project
+    Then the session's sandbox carries the hooks directory
+    And the settings tell the runtime to draw its status line by running quay

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/atlantic-blue/quay-crew/internal/statusline"
@@ -99,36 +97,6 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Read from the file the image ships rather than from a constant: the settings are what join the
-	// two halves, and a runtime pointed at a command that is not there draws nothing at all.
-	sc.Step(`^the settings the sandbox image ships$`, func(ctx context.Context) error {
-		contents, err := os.ReadFile(filepath.Join("..", "deploy", "sandbox", "claude-settings.json"))
-		if err != nil {
-			return fmt.Errorf("read the settings the sandbox image ships: %w", err)
-		}
-		statusLineFrom(ctx).said = contents
-		return nil
-	})
-
-	sc.Step(`^they tell the runtime to draw its status line by running quay$`, func(ctx context.Context) error {
-		var settings struct {
-			StatusLine struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-			} `json:"statusLine"`
-		}
-		if err := json.Unmarshal(statusLineFrom(ctx).said, &settings); err != nil {
-			return fmt.Errorf("the settings the image ships are not readable: %w", err)
-		}
-		if settings.StatusLine.Type != "command" {
-			return fmt.Errorf("the image asks for a status line of type %q, and the runtime only runs a command",
-				settings.StatusLine.Type)
-		}
-		if words := strings.Fields(settings.StatusLine.Command); len(words) < 2 || words[0] != "quay" {
-			return fmt.Errorf("the image's status line runs %q, which is not this tool", settings.StatusLine.Command)
-		}
-		return nil
-	})
 }
 
 // drawnLine is the line as a terminal shows it, with the colouring taken off, so a scenario reads
