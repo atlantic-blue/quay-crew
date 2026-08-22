@@ -1616,6 +1616,7 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	}
 	for _, session := range sessions {
 		s.withUsage(session)
+		s.withContextWindow(session)
 	}
 	s.withStaleness(ctx, sessions)
 	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
@@ -1628,6 +1629,7 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
+	s.withContextWindow(session)
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -1668,6 +1670,25 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 		CacheRead:    spent.CacheRead,
 		CacheWritten: spent.CacheWritten,
 	}
+}
+
+// withContextWindow puts how full the model's context window is onto a session.
+//
+// A different question from what the conversation cost, and the one that decides whether it is still
+// worth continuing: cost only grows, while the window empties again when the model compacts. The used
+// figure comes from the transcript, and the size of the window from whatever the model runtime last
+// told a session in this workspace, because nothing else in the crew knows it.
+//
+// A conversation nobody has spoken in is left without a figure. A window nobody has been told the
+// size of is reported as a count with no size, which a listing shows as tokens rather than as a share
+// it made up.
+func (s *Server) withContextWindow(session *quaycrewv1.Session) {
+	carried := s.storage.ConversationContext(session.GetWorkspace(), session.GetModelSessionId())
+	if carried.Empty() {
+		return
+	}
+	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
+	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
 }
 
 // AttachSession describes how to open a session's conversation.

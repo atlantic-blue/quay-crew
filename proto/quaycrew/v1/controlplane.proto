@@ -74,6 +74,24 @@ message Session {
   // described_at_task is how many tasks the session had when its description was written, so a
   // conversation that has moved on can be described again. Zero means never described.
   int32 described_at_task = 16;
+  // context_window is how full the model's context window is. Absent where the crew cannot say.
+  ContextWindow context_window = 17;
+}
+
+// ContextWindow is how full a conversation's context window is.
+//
+// This is the model's context window, not the crew's context documents. It is the number that says
+// whether a conversation is still worth continuing, and it is not the same thing as what the
+// conversation has cost: cost only grows, while the window empties again when the model compacts.
+message ContextWindow {
+  // used is what the next task carries: everything sent on the last answer, including what was read
+  // back from the cache, because that is the context rather than the part of it charged as new. Read
+  // from the transcript the model keeps.
+  int64 used = 1;
+  // size is how big the window is. The crew cannot work that out for itself, so this is what the
+  // model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
+  // listing shows as a count rather than as a guessed share.
+  int64 size = 2;
 }
 
 // Usage is what a conversation has cost, in tokens.

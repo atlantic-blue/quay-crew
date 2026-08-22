@@ -4,7 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 
 	"github.com/atlantic-blue/quay-crew/internal/statusline"
 	"github.com/cucumber/godog"
@@ -97,6 +104,78 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// What the model wrote in its own transcript, which is the only record of a conversation the crew
+	// never saw. The context is what the last answer carried, so one answer is enough to say it.
+	sc.Step(`^the model has answered carrying (\d+) tokens of context$`,
+		func(ctx context.Context, carried int) error {
+			world := worldFrom(ctx)
+			current, err := world.lastTask()
+			if err != nil {
+				return err
+			}
+			session, err := world.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+			if err != nil {
+				return err
+			}
+			return writeTranscript(world.storage.Dir, session.GetSession().GetWorkspace(),
+				session.GetSession().GetModelSessionId(), 0, 400, carried)
+		})
+
+	// The crew cannot work the size out for itself. A session writes down what the model runtime told
+	// it, in the conversation directory the crew mounts.
+	sc.Step(`^a session in the workspace was told the window holds (\d+)$`,
+		func(ctx context.Context, size int) error {
+			world := worldFrom(ctx)
+			current, err := world.lastTask()
+			if err != nil {
+				return err
+			}
+			session, err := world.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+			if err != nil {
+				return err
+			}
+			at := filepath.Join(world.storage.Dir, "workspaces",
+				session.GetSession().GetWorkspace(), "claude", sandbox.ContextWindowFile)
+			return os.WriteFile(at, []byte(strconv.Itoa(size)+"\n"), 0o666)
+		})
+
+	sc.Step(`^the session reports (\d+) per cent of its context window used$`,
+		func(ctx context.Context, want int) error {
+			window, err := onlyContextWindow(ctx)
+			if err != nil {
+				return err
+			}
+			if got := display.Share(window.GetUsed(), window.GetSize()); got != int64(want) {
+				return fmt.Errorf("the session reports %d per cent used, want %d (used %d of %d)",
+					got, want, window.GetUsed(), window.GetSize())
+			}
+			return nil
+		})
+
+	sc.Step(`^the session reports (\d+) tokens of context used, and no share$`,
+		func(ctx context.Context, want int) error {
+			window, err := onlyContextWindow(ctx)
+			if err != nil {
+				return err
+			}
+			if window.GetUsed() != int64(want) {
+				return fmt.Errorf("the session reports %d tokens of context, want %d", window.GetUsed(), want)
+			}
+			if window.GetSize() != 0 {
+				return fmt.Errorf("the crew claims a window of %d, and nothing told it", window.GetSize())
+			}
+			return nil
+		})
+}
+
+// onlyContextWindow is the one session in the listing that says how full its context window is.
+func onlyContextWindow(ctx context.Context) (*quaycrewv1.ContextWindow, error) {
+	for _, session := range usageFrom(ctx).listed {
+		if session.GetContextWindow() != nil {
+			return session.GetContextWindow(), nil
+		}
+	}
+	return nil, fmt.Errorf("no session in the listing says how full its context window is")
 }
 
 // drawnLine is the line as a terminal shows it, with the colouring taken off, so a scenario reads

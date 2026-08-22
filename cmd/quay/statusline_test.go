@@ -86,6 +86,11 @@ func TestTheStatusLineTakesNoArguments(t *testing.T) {
 // way the runtime hands it over.
 func drawn(t *testing.T, args []string, session []byte) string {
 	t.Helper()
+	// Somewhere of its own to write the window size down, because the real path is the operator's own
+	// home on any machine that is not a sandbox.
+	heldDir := conversationDir
+	conversationDir = t.TempDir()
+	defer func() { conversationDir = heldDir }()
 	read, write, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("make a pipe: %v", err)

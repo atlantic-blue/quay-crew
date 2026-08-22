@@ -54,18 +54,14 @@ func Line(payload []byte) string {
 // The threshold is read off the percentage that is printed rather than off the exact share, so a
 // line that says thirty per cent is never a line that declined to warn.
 //
-// A window reported as more than full is a conversation the runtime is about to compact. The share
-// stops at a hundred, because a hundred and four per cent reads as a defect in the crew, while the
-// count beside it stays what was reported. Nothing is multiplied above that ceiling either, so a
-// nonsense count cannot overflow into a nonsense share.
+// The share itself is worked out where the console works it out, so the line under the prompt and the
+// listing can never disagree about the same conversation. The count beside it stays what was
+// reported, even where the share stops at a hundred.
 func draw(used, size int64) string {
-	percent := int64(100)
-	switch {
-	case used <= 0:
-		used, percent = 0, 0
-	case used < size:
-		percent = (used*100 + size/2) / size
+	if used < 0 {
+		used = 0
 	}
+	percent := display.Share(used, size)
 	line := fmt.Sprintf("context %d%% used (%s of %s)", percent, tokens(used), tokens(size))
 	if percent < Warn {
 		return line
@@ -91,4 +87,18 @@ func tokens(count int64) string {
 // tell yellow from the rest of the line, still reads what it says.
 func warning(line string) string {
 	return "\033[1;33m" + line + "\033[0m"
+}
+
+// WindowSize is how big the runtime says the context window is, and whether it said. Zero where the
+// payload carries no window, which is a runtime older than this build rather than a window of no
+// size.
+func WindowSize(payload []byte) (int64, bool) {
+	var said Input
+	if err := json.Unmarshal(payload, &said); err != nil {
+		return 0, false
+	}
+	if said.Window == nil || said.Window.Size <= 0 {
+		return 0, false
+	}
+	return said.Window.Size, true
 }

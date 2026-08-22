@@ -16,6 +16,12 @@ Feature: An attached operator sees how much of the model's context window is use
   not say says so on the line, because a guessed window is a confident wrong number and a blank line
   reads as the crew being broken.
 
+  The console answers the same question for a session nobody is attached to. It reads what the last
+  answer carried out of the transcript, which is not what the conversation cost: cost only grows, and
+  the window empties again when the model compacts. The size of the window is the runtime's to say
+  there too, so a session writes it down where the crew reads, and until one does the listing shows
+  the count rather than a share it made up.
+
   The crew says all of this in the settings file it renders and mounts read only, not in the sandbox
   image. The image cannot say it: the crew mounts the workspace's own directory over the conversation
   directory in every sandbox, and a mount hides whatever the image put underneath it.
@@ -55,3 +61,16 @@ Feature: An attached operator sees how much of the model's context window is use
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries the hooks directory
     And the settings tell the runtime to draw its status line by running quay
+
+  Scenario: The listing says how full a session's context window is
+    Given the operator dispatches "hello" to the project
+    And the model has answered carrying 258000 tokens of context
+    And a session in the workspace was told the window holds 1000000
+    When the operator lists the sessions
+    Then the session reports 26 per cent of its context window used
+
+  Scenario: Before anything says how big the window is, the listing says the count
+    Given the operator dispatches "hello" to the project
+    And the model has answered carrying 258000 tokens of context
+    When the operator lists the sessions
+    Then the session reports 258000 tokens of context used, and no share
