@@ -6,6 +6,25 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 22 August 2026
+
+- **The console says how full each session's context window is.** A new `ctx` column, beside what the
+  conversation cost, holding `26%`. It turns yellow at thirty per cent, where the line under the
+  prompt turns yellow, and both work the share out in one place so they cannot disagree about the same
+  conversation.
+
+  How full the window is is not what the conversation cost, and the difference matters: cost only
+  grows, while the window empties again when the model compacts. So the column reads what the last
+  answer carried, out of the transcript the model keeps, and skips a sub agent's answer because that
+  fills a window of its own.
+
+  The size of the window is nowhere in the transcript, and a list of models in the crew's own code
+  would be right today and quietly wrong at the next one. Only the model runtime knows it, and it says
+  it to the status line. So a session writes it down in the conversation directory the crew already
+  mounts, and the crew reads it from there. Until some session in a workspace is attached to once, the
+  column shows the count instead, for example `258k`. A count is true; a share worked out from a
+  guessed window is not.
+
 ## 21 August 2026
 
 - **The status line reaches a session, which yesterday it did not.** The setting was shipped in the

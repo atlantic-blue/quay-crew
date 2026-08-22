@@ -27,6 +27,12 @@ func runStatusLine(args []string, in io.Reader, out io.Writer) error {
 	// A read that fails is handled the way an unreadable payload is: this has one line to say
 	// anything in, and exiting with an error says nothing at all.
 	payload, _ := io.ReadAll(io.LimitReader(in, statusLineLimit))
+	// Written down before the line is drawn, because this is the only place the crew can learn how big
+	// the model's context window is: the console has to answer the same question for a session nobody
+	// is attached to, and nothing else in the crew is ever told the size.
+	if size, said := statusline.WindowSize(payload); said {
+		rememberWindowSize(conversationDir, size)
+	}
 	fmt.Fprintln(out, statusline.Line(payload))
 	return nil
 }
