@@ -6,6 +6,50 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 21 August 2026
+
+- **The status line reaches a session, which yesterday it did not.** The setting was shipped in the
+  sandbox image, at `/home/agent/.claude/settings.json`. The crew mounts the workspace's own directory
+  over that exact path in every sandbox, and a mount hides whatever the image put underneath it, so no
+  session ever read it. The feature was green in every gate and did nothing.
+
+  The crew says it now, in the settings file it already renders for hooks and mounts read only. That
+  file is the only thing the crew can say to the runtime that a mount cannot hide. Two things follow.
+  Every session is given that file, holding no hook where there are none, rather than only the
+  sessions running under a hook. And the image writes no settings at all: a test refuses the whole
+  class, because nothing here builds that image and nothing would have caught it again.
+
+  A task is told to load the file only when the file is on disk. The runtime refuses to start on
+  settings that are missing, saying only `Settings file not found`, and that would be every task on
+  the crew rather than one.
+
+- **An attached conversation says how much of the context window it has used.** Attaching puts you in
+  the conversation with the model, and the one number that decides whether that conversation is still
+  worth continuing was nowhere on the screen. Not in the console, not in the panel's header, and
+  asking the model for it costs a task and fills a little more of the window to answer.
+
+  The model runtime keeps a line under the prompt and redraws it every time the conversation moves.
+  The crew points that line at `quay statusline` (it shipped pointing there from the sandbox image,
+  which no session reads; see the entry above):
+
+  ```
+  context 12% used (124k of 1M)
+  context 34% used (340k of 1M), over the 30% mark
+  ```
+
+  The second one is yellow. Thirty per cent rather than something closer to full, because what you do
+  about a filling window (finish the task, compact it, or open a fresh session) is much cheaper
+  decided at thirty than at ninety.
+
+  How big the window is, and how much of it the next task carries, are the runtime's to report rather
+  than this build's to remember. A runtime that reports neither says so on the line instead of
+  guessing, because a guessed window is a confident wrong number and a blank line reads as the crew
+  being broken. A session that runs under hooks keeps the line: the hooks file is additional settings
+  rather than settings instead.
+
+  A sandbox keeps what it was made with, so this reaches a session that is already running only after
+  `make rebuild`, and then stopping that session and dispatching again.
+
 ## 20 August 2026
 
 - **A conversation opens whatever the session's row says.** The row is the crew's own bookkeeping. It
