@@ -61,6 +61,10 @@ type Memory struct {
 	// same record twice harmless.
 	tasks    []*quaycrewv1.Task
 	taskSeen map[string]bool
+	// sessionEvents is what happened to each session, oldest first, and eventSeen does for them what
+	// taskSeen does for tasks.
+	sessionEvents []*quaycrewv1.SessionEvent
+	eventSeen     map[string]bool
 }
 
 var _ Store = (*Memory)(nil)
@@ -201,15 +205,15 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 }
 
 // FindOrCreateSession returns the project's session for a session, creating it on first use.
-func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn string) (*quaycrewv1.Session, error) {
+func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn string) (*quaycrewv1.Session, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owner, err := m.getProjectLocked(project)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if id, ok := m.bySession[sessionKey(project, session)]; ok {
-		return clone(m.sessions[id]), nil
+		return clone(m.sessions[id]), false, nil
 	}
 	now := timestamppb.New(time.Now().UTC())
 	made := &quaycrewv1.Session{
@@ -224,7 +228,7 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, session, bornIn
 	}
 	m.sessions[made.GetId()] = made
 	m.bySession[sessionKey(project, session)] = made.GetId()
-	return clone(made), nil
+	return clone(made), true, nil
 }
 
 // RecordTask stores the model conversation handle and status after a task. An empty handle leaves
@@ -631,6 +635,49 @@ func (m *Memory) ListTasks(_ context.Context, session string, limit int) ([]*qua
 	for _, task := range m.tasks {
 		if task.GetSession() == session {
 			out = append(out, clone(task))
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].GetOccurredAt().AsTime().Before(out[j].GetOccurredAt().AsTime())
+	})
+	if capped := TaskLimit(limit); len(out) > capped {
+		out = out[len(out)-capped:]
+	}
+	return out, nil
+}
+
+// AppendSessionEvent records one thing that happened to a session. Writing the same event twice
+// leaves one, the way a task does.
+func (m *Memory) AppendSessionEvent(_ context.Context, event *quaycrewv1.SessionEvent) error {
+	if event.GetId() == "" {
+		return errors.New("store: a session event needs an id, so writing the same one twice leaves one event")
+	}
+	if event.GetKind() == "" {
+		return errors.New("store: a session event needs a kind, which is the field a consumer switches on")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.eventSeen == nil {
+		m.eventSeen = make(map[string]bool)
+	}
+	if m.eventSeen[event.GetId()] {
+		return nil
+	}
+	m.eventSeen[event.GetId()] = true
+	m.sessionEvents = append(m.sessionEvents, clone(event))
+	return nil
+}
+
+// ListSessionEvents returns a session's lifecycle oldest first, or the whole crew's when no session
+// is named, capped the way a history is: the most recent, turned back the right way round.
+func (m *Memory) ListSessionEvents(_ context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make([]*quaycrewv1.SessionEvent, 0)
+	for _, event := range m.sessionEvents {
+		if session == "" || event.GetSession() == session {
+			out = append(out, clone(event))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {

@@ -3,6 +3,7 @@ syntax = "proto3";
 package quaycrew.v1;
 
 import "google/protobuf/timestamp.proto";
+import "quaycrew/v1/events.proto";
 
 // A workspace is the runtime unit of isolation. Created through this API, never stored in the repo.
 message Workspace {
@@ -826,6 +827,17 @@ message ListTasksResponse {
   repeated Task tasks = 1;
 }
 
+// ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
+// session left out asks for the whole crew's, which is what a view of what is going on reads.
+message ListSessionEventsRequest {
+  string session = 1;
+  // limit caps how many come back. Zero means a sensible default rather than everything.
+  int32 limit = 2;
+}
+message ListSessionEventsResponse {
+  repeated SessionEvent events = 1;
+}
+
 // ControlPlane is the spine API. Channels feed the event log; the dashboard and CLI drive this.
 service ControlPlaneService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
@@ -882,6 +894,7 @@ service ControlPlaneService {
   rpc DetachRole(DetachRoleRequest) returns (DetachRoleResponse);
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc ListSessionEvents(ListSessionEventsRequest) returns (ListSessionEventsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
   // GetUsage adds up what every conversation in the crew has cost. It is a running total rather than

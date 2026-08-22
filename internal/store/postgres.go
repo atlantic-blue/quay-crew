@@ -225,21 +225,30 @@ func (p *Postgres) DeleteProject(ctx context.Context, id string) error {
 //
 // The insert races with any other caller dispatching to the same session, so it defers to the unique
 // constraint on (workspace, handle) and reads the winner back rather than trusting a prior select.
-func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, error) {
+func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, bool, error) {
 	owner, err := p.GetProject(ctx, project)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// The mode is written here rather than left to the column's default, because the default is one
 	// value for every crew and this is the crew's own choice.
-	if _, err := p.pool.Exec(ctx, `
+	//
+	// Whether a row was written is read from the insert rather than by looking first: two callers
+	// racing for one handle would both find nothing and both call it a creation, and the session
+	// would be announced twice.
+	tag, err := p.pool.Exec(ctx, `
 		insert into sessions (id, workspace, project, handle, status, permission_mode)
 		values ($1, $2, $3, $4, 'idle', $5)
 		on conflict (project, handle) do nothing`,
-		NewID(), owner.GetWorkspace(), project, session, model.PermissionModeBornIn(bornIn)); err != nil {
-		return nil, fmt.Errorf("create session: %w", err)
+		NewID(), owner.GetWorkspace(), project, session, model.PermissionModeBornIn(bornIn))
+	if err != nil {
+		return nil, false, fmt.Errorf("create session: %w", err)
 	}
-	return p.sessionBy(ctx, `project = $1 and handle = $2`, project, session)
+	found, err := p.sessionBy(ctx, `project = $1 and handle = $2`, project, session)
+	if err != nil {
+		return nil, false, err
+	}
+	return found, tag.RowsAffected() == 1, nil
 }
 
 // RecordTask stores the model conversation handle and status after a task. An empty handle leaves
@@ -564,6 +573,64 @@ func (p *Postgres) ListTasks(ctx context.Context, session string, limit int) ([]
 		tasks[i], tasks[j] = tasks[j], tasks[i]
 	}
 	return tasks, nil
+}
+
+// AppendSessionEvent records one thing that happened to a session. The same event written twice
+// leaves one row, which is what the primary key is for.
+func (p *Postgres) AppendSessionEvent(ctx context.Context, event *quaycrewv1.SessionEvent) error {
+	if event.GetId() == "" {
+		return errors.New("store: a session event needs an id, so writing the same one twice leaves one event")
+	}
+	if event.GetKind() == "" {
+		return errors.New("store: a session event needs a kind, which is the field a consumer switches on")
+	}
+	_, err := p.pool.Exec(ctx, `
+		insert into session_events (id, kind, session, workspace, project, handle, detail, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		on conflict (id) do nothing`,
+		event.GetId(), event.GetKind(), event.GetSession(), event.GetWorkspace(),
+		event.GetProject(), event.GetHandle(), event.GetDetail(), event.GetOccurredAt().AsTime())
+	if err != nil {
+		return fmt.Errorf("append session event: %w", err)
+	}
+	return nil
+}
+
+// ListSessionEvents returns a session's lifecycle oldest first, or the whole crew's when no session
+// is named.
+//
+// Read newest first so the cap keeps the recent end, then turned back the right way round, the same
+// as a history.
+func (p *Postgres) ListSessionEvents(ctx context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, kind, session, workspace, project, handle, detail, occurred_at
+		from session_events
+		where $1 = '' or session = $1
+		order by occurred_at desc, id desc
+		limit $2`, session, TaskLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("list session events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]*quaycrewv1.SessionEvent, 0)
+	for rows.Next() {
+		var event quaycrewv1.SessionEvent
+		var occurredAt time.Time
+		if err := rows.Scan(&event.Id, &event.Kind, &event.Session, &event.Workspace,
+			&event.Project, &event.Handle, &event.Detail, &occurredAt); err != nil {
+			return nil, fmt.Errorf("scan session event: %w", err)
+		}
+		event.OccurredAt = timestamppb.New(occurredAt)
+		events = append(events, &event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list session events: %w", err)
+	}
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events, nil
 }
 
 // FindOrCreateDriver returns the project's driver, the session that drives the crew, creating it the
