@@ -60,6 +60,12 @@ only place the shape is written down. It carries ten fields:
 - `prompt`, `reply`, `status` and `failure` are what happened, redacted as described above.
 - `occurred_at` is when the task finished.
 
+The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
+inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
+what makes one session's records arrive in the order they happened. Two sessions have no order
+between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
+dispatched.
+
 ### What kinds there are
 
 There is no `kind` field, and no `type`. One message is published, at four moments, and the only
@@ -80,12 +86,6 @@ It stops being enough the moment a second record kind exists, which is
 [#349](https://github.com/atlantic-blue/quay-crew/issues/349). Two messages with no discriminator
 leave a consumer guessing from the topic name, so a kind field is part of that work rather than
 something to add afterwards.
-
-The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
-inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
-what makes one session's records arrive in the order they happened. Two sessions have no order
-between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
-dispatched.
 
 Three more streams are designed and not built:
 
@@ -220,7 +220,7 @@ go test -tags=integration -count=1 ./internal/messaging/
 Continuous integration runs the same command across the repository. `-count=1` matters: a cached
 pass and a real one are indistinguishable otherwise.
 
-## What would turn it on
+## What would switch it on
 
 In rough order, each an open issue:
 
