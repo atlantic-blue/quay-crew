@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 22 August 2026
 
+- **A session says what happened to it, and every record carries a kind.** The crew emitted one
+  event, a finished task, and that record has no kind at all: the only thing that varied was
+  `status`, which is `idle` or `failed`. So nothing could tell that a session had been made, that
+  work had begun, or that one had been put away, and nothing could react to a change. A workflow
+  trigger has nothing to match on when there is nothing to match.
+
+  Eight kinds now, on a stream of their own: `session.created`, `session.started`,
+  `session.completed`, `session.errored`, `session.stopped`, `session.archived`, `session.restored`
+  and `session.deleted`. Each names something that happened, in the past tense, at one moment.
+  `idle` and `running` are deliberately not among them: they are what the row says now, which is the
+  fold of the events, and a consumer handed a state learns nothing about what changed.
+
+  Each event lands in the store in the same breath as the thing it describes, and is exported to
+  `<workspace>.sessions` after, keyed by session so one session's records stay in order on one
+  partition. That is the split the crew decided on 9 August: the store is the truth, so
+  `quay` and the console can read the lifecycle whether or not a broker is up, and an export that
+  cannot land is dropped rather than failing what already happened. The detail each event carries
+  goes through the same redactor a task does, because what came back and what failed can both hold
+  something the operator pasted.
+
+  `ListSessionEvents` reads them back, for one session or for the whole crew. The console's own view
+  of them, and the kinds the flow engine should emit for a run, are the next two pieces.
+  ([#349](https://github.com/atlantic-blue/quay-crew/issues/349))
+
 - **The console says how full each session's context window is.** A new `ctx` column, beside what the
   conversation cost, holding `26%`. It turns yellow at thirty per cent, where the line under the
   prompt turns yellow, and both work the share out in one place so they cannot disagree about the same

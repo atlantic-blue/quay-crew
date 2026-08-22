@@ -46,7 +46,7 @@ status block says so rather than leaving an empty column to read as fine.
 
 ## What is on the log
 
-One record kind exists.
+Two record kinds exist, on two streams.
 
 **`<workspace>.tasks` carries a `TaskEvent`**, one per task, whether the task worked or not. The key
 is the session identifier. The value is protobuf, so it reads as binary in a terminal, and it is
@@ -60,10 +60,10 @@ only place the shape is written down. It carries ten fields:
 - `prompt`, `reply`, `status` and `failure` are what happened, redacted as described above.
 - `occurred_at` is when the task finished.
 
-### What kinds there are
+### What a task record says happened
 
-There is no `kind` field, and no `type`. One message is published, at four moments, and the only
-thing that tells them apart is `status`, which is `idle` or `failed`:
+A `TaskEvent` has no `kind` field. One message is published, at four moments, and the only thing
+that tells them apart is `status`, which is `idle` or `failed`:
 
 - **A task worked.** `idle`, with `prompt` and `reply` filled in and `failure` empty.
 - **The model did not finish.** `failed`, with `prompt` filled in, `reply` empty, and `failure`
@@ -73,13 +73,9 @@ thing that tells them apart is `status`, which is `idle` or `failed`:
 - **The crew restarted while the task was running.** `failed`, with no `prompt` at all, because the
   crew is settling a row it found on the way up rather than reporting a task it ran.
 
-So a consumer reads `status`, then `failure`, and there is nothing else to branch on. That is the
-whole vocabulary of the log today.
-
-It stops being enough the moment a second record kind exists, which is
-[#349](https://github.com/atlantic-blue/quay-crew/issues/349). Two messages with no discriminator
-leave a consumer guessing from the topic name, so a kind field is part of that work rather than
-something to add afterwards.
+So a consumer of this stream reads `status`, then `failure`, and there is nothing else to branch on.
+The stream below is the one with a kind on every record, and it is the one to subscribe to when what
+you want is to know what the crew is doing.
 
 The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
 inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
@@ -87,21 +83,42 @@ what makes one session's records arrive in the order they happened. Two sessions
 between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
 dispatched.
 
-Three more streams are designed and not built:
+**`<workspace>.sessions` carries a `SessionEvent`**, one every time something happens to a session.
+This is the stream a consumer subscribes to, and the one a workflow trigger will match on, because
+here the kind is a field rather than something to work out. It is keyed by session for the same
+reason the tasks stream is.
+
+The kinds, and each is something that happened rather than a state the session is in:
+
+- `session.created`, the session exists
+- `session.started`, work began in it, and the detail is what was asked
+- `session.completed`, the work landed, and the detail is what came back
+- `session.errored`, the work did not land, and the detail is why
+- `session.stopped`, it was put down and its container with it
+- `session.archived` and `session.restored`
+- `session.deleted`, with its project or its workspace
+
+`idle` and `running` are not kinds. They are what the session's row says now, which is the fold of
+these, and a consumer handed a state learns nothing about what changed. The listing keeps showing the
+state; the log carries the change.
+
+The detail is one short line, and it goes through the same redactor a task does before it is written
+anywhere, because what came back and what failed can both carry something the operator pasted. The
+whole of what was said stays in the task record.
+
+Two more streams are designed and not built:
 
 - **`<workspace>.inbound`** is a message arriving from a chat channel, written by the gateway, which
   is still a skeleton. [#9](https://github.com/atlantic-blue/quay-crew/issues/9)
 - **Outbound delivery** is a reply going back out through a channel, gated so nothing is sent
   without the operator's intent. [#10](https://github.com/atlantic-blue/quay-crew/issues/10)
-- **`<workspace>.sessions`** is a session's own lifecycle: created, stopped, archived, restored, and
-  the rest. Today a finished task is the only thing the crew emits, so there is nothing to watch.
-  [#349](https://github.com/atlantic-blue/quay-crew/issues/349)
 
 ```mermaid
 flowchart LR
     CP["control plane"] -->|"TaskEvent"| TASKS[["workspace.tasks"]]
     TASKS -.->|"nothing reads it yet"| SECOND["a second consumer, when one exists"]
-    CP -. "SessionEvent, issue 349" .-> SESSIONS[["workspace.sessions"]]
+    CP -->|"SessionEvent"| SESSIONS[["workspace.sessions"]]
+    SESSIONS -.->|"nothing reads it yet"| SECOND
     GW["gateway, a skeleton"] -. "InboundMessage, issue 9" .-> IN[["workspace.inbound"]]
     CP -. "OutboundMessage, issue 10" .-> OUT["a chat channel"]
 ```

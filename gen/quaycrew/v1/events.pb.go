@@ -158,6 +158,132 @@ func (x *TaskEvent) GetOccurredAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// SessionEvent is one thing that happened to a session, written every time it happens.
+//
+// This is what a consumer subscribes to, and what a workflow trigger matches on. It goes to the
+// store in the same breath as the thing it describes, and to `<workspace>.sessions` after, keyed by
+// session so one session's records stay in order on one partition.
+type SessionEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
+	// record more than once and needs something to recognise it by.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// kind is what happened, and it is the field a consumer switches on:
+	//
+	//	session.created    the session exists
+	//	session.started    work began in it
+	//	session.completed  the work landed, and detail carries the reply
+	//	session.errored    the work did not land, and detail carries the reason
+	//	session.stopped    the session was put down, and its container with it
+	//	session.archived   it was put away
+	//	session.restored   it was brought back
+	//	session.deleted    it is gone, with the project or on its own
+	//
+	// A kind names something that happened, in the past tense, at one moment. "idle" and "running"
+	// are not kinds: they are what the session's row says now, which is the fold of these.
+	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	// session is the session this happened to, and the key the record is published under.
+	Session string `protobuf:"bytes,3,opt,name=session,proto3" json:"session,omitempty"`
+	// workspace, project and handle are where the session sits, denormalised deliberately: a consumer
+	// must not have to query the store to know what it is reading.
+	Workspace string `protobuf:"bytes,4,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Project   string `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`
+	Handle    string `protobuf:"bytes,6,opt,name=handle,proto3" json:"handle,omitempty"`
+	// detail is one short line about this event, empty on the kinds that need none. It carries what
+	// the model replied and what a failure said, so it goes through the crew's redactor first.
+	Detail string `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"`
+	// occurred_at is when it happened.
+	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionEvent) Reset() {
+	*x = SessionEvent{}
+	mi := &file_quaycrew_v1_events_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionEvent) ProtoMessage() {}
+
+func (x *SessionEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_events_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionEvent.ProtoReflect.Descriptor instead.
+func (*SessionEvent) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_events_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SessionEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetHandle() string {
+	if x != nil {
+		return x.Handle
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
 var File_quaycrew_v1_events_proto protoreflect.FileDescriptor
 
 const file_quaycrew_v1_events_proto_rawDesc = "" +
@@ -175,6 +301,16 @@ const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\x06status\x18\a \x01(\tR\x06status\x12\x18\n" +
 	"\afailure\x18\b \x01(\tR\afailure\x12;\n" +
 	"\voccurred_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\"\xf1\x01\n" +
+	"\fSessionEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
+	"\asession\x18\x03 \x01(\tR\asession\x12\x1c\n" +
+	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12\x18\n" +
+	"\aproject\x18\x05 \x01(\tR\aproject\x12\x16\n" +
+	"\x06handle\x18\x06 \x01(\tR\x06handle\x12\x16\n" +
+	"\x06detail\x18\a \x01(\tR\x06detail\x12;\n" +
+	"\voccurred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"occurredAtB\xaa\x01\n" +
 	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
@@ -190,18 +326,20 @@ func file_quaycrew_v1_events_proto_rawDescGZIP() []byte {
 	return file_quaycrew_v1_events_proto_rawDescData
 }
 
-var file_quaycrew_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_quaycrew_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_quaycrew_v1_events_proto_goTypes = []any{
 	(*TaskEvent)(nil),             // 0: quaycrew.v1.TaskEvent
-	(*timestamppb.Timestamp)(nil), // 1: google.protobuf.Timestamp
+	(*SessionEvent)(nil),          // 1: quaycrew.v1.SessionEvent
+	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_events_proto_depIdxs = []int32{
-	1, // 0: quaycrew.v1.TaskEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 0: quaycrew.v1.TaskEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	2, // 1: quaycrew.v1.SessionEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_quaycrew_v1_events_proto_init() }
@@ -215,7 +353,7 @@ func file_quaycrew_v1_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quaycrew_v1_events_proto_rawDesc), len(file_quaycrew_v1_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
