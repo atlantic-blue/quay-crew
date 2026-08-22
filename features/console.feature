@@ -76,11 +76,13 @@ Feature: The operator sees the crew from the console
     And the operator presses enter on the selected session
     Then the console opens that session's conversation
 
-  Scenario: Enter on a session with no conversation says why rather than opening something that errors
+  # A first task that failed leaves a session holding no conversation. Enter said so and stopped,
+  # which left a row in the listing nobody could open. The crew names a conversation for it instead.
+  Scenario: Enter on a session whose first task failed opens a conversation the crew names
     Given a session whose first task failed
     When the operator opens the console
     And the operator presses enter on the selected session
-    Then the console says the session has no conversation yet
+    Then the console opens a conversation the crew can name
 
   # Every destructive key asks first. These drive the console's own reducer against the real control
   # plane, so "nothing was stopped" is a fact about the store rather than about a double.

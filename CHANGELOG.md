@@ -6,6 +6,50 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 21 August 2026
+
+- **The status line reaches a session, which yesterday it did not.** The setting was shipped in the
+  sandbox image, at `/home/agent/.claude/settings.json`. The crew mounts the workspace's own directory
+  over that exact path in every sandbox, and a mount hides whatever the image put underneath it, so no
+  session ever read it. The feature was green in every gate and did nothing.
+
+  The crew says it now, in the settings file it already renders for hooks and mounts read only. That
+  file is the only thing the crew can say to the runtime that a mount cannot hide. Two things follow.
+  Every session is given that file, holding no hook where there are none, rather than only the
+  sessions running under a hook. And the image writes no settings at all: a test refuses the whole
+  class, because nothing here builds that image and nothing would have caught it again.
+
+  A task is told to load the file only when the file is on disk. The runtime refuses to start on
+  settings that are missing, saying only `Settings file not found`, and that would be every task on
+  the crew rather than one.
+
+- **An attached conversation says how much of the context window it has used.** Attaching puts you in
+  the conversation with the model, and the one number that decides whether that conversation is still
+  worth continuing was nowhere on the screen. Not in the console, not in the panel's header, and
+  asking the model for it costs a task and fills a little more of the window to answer.
+
+  The model runtime keeps a line under the prompt and redraws it every time the conversation moves.
+  The crew points that line at `quay statusline` (it shipped pointing there from the sandbox image,
+  which no session reads; see the entry above):
+
+  ```
+  context 12% used (124k of 1M)
+  context 34% used (340k of 1M), over the 30% mark
+  ```
+
+  The second one is yellow. Thirty per cent rather than something closer to full, because what you do
+  about a filling window (finish the task, compact it, or open a fresh session) is much cheaper
+  decided at thirty than at ninety.
+
+  How big the window is, and how much of it the next task carries, are the runtime's to report rather
+  than this build's to remember. A runtime that reports neither says so on the line instead of
+  guessing, because a guessed window is a confident wrong number and a blank line reads as the crew
+  being broken. A session that runs under hooks keeps the line: the hooks file is additional settings
+  rather than settings instead.
+
+  A sandbox keeps what it was made with, so this reaches a session that is already running only after
+  `make rebuild`, and then stopping that session and dispatching again.
+
 ## 20 August 2026
 
 - **Every identifier a listing prints reaches the session, in an address too.** A listing prints two
@@ -23,6 +67,25 @@ read, or run with `make features`.
   resolver, which is `quay attach`, `quay dispatch`, `quay tasks`, `quay mode` and `quay label`. A
   refusal names both identifiers, because naming only the handle sent the operator to look for a
   value their screen does not carry. Closes #365, and part of #380.
+
+- **A conversation opens whatever the session's row says.** The row is the crew's own bookkeeping. It
+  used to decide whether the operator could open a session at all, and it refused three states.
+
+  A stopped session was refused with "restart it first". That is the one an operator meets most,
+  because `make upgrade` drains before it rebuilds, and a drain puts every live session down. After
+  an upgrade the whole crew read stopped, so every session in it refused to open.
+
+  An archived session was refused with the same sentence, because archiving sets the row to stopped
+  as well and that answer came first. Restarting an archived session is itself refused, so attach
+  named the one action that could not be taken.
+
+  A session whose first task failed holds no conversation, and that was refused too. It sat in the
+  listing with nothing that could open it.
+
+  All three open now. The row is then brought up to date rather than obeyed: the session comes back
+  to idle, an archived one comes back into the listing, and a session with no conversation is given
+  one, the way the driver already was. A row that still said stopped would have the next startup reap
+  the container out from under the conversation. See issue #380.
 
 ## 19 August 2026
 

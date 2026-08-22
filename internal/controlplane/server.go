@@ -1681,13 +1681,32 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	// A driver with no conversation yet is opened rather than refused: it is made the moment somebody
-	// opens the crew, and telling them to dispatch a task to the thing they just opened is a loop.
-	// Everything below is about a conversation that exists, so it is skipped too.
-	if session.GetModelSessionId() == "" && !session.GetDriver() {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s has no conversation yet: send it a message with quay dispatch first",
-			display.ShortID(session.GetHandle()))
+	// The row never decides whether a conversation opens. It is the crew's own bookkeeping, and it
+	// used to be the gate: a drain puts every live session down, `make upgrade` drains, so after an
+	// upgrade the whole crew said stopped and every session refused to open. An archived session was
+	// worse. Archiving sets the row to stopped as well, so the refusal read "is stopped: restart it
+	// first", and restarting an archived session is itself refused. Attach named the one action that
+	// could not be taken.
+	//
+	// So the row is brought up to date rather than obeyed. A session somebody is talking in is
+	// neither put away nor put down, and a row that said otherwise would have the next startup reap
+	// the container out from under the conversation.
+	if session.GetArchivedAt() != nil || session.GetStatus() == StatusStopped {
+		if session.GetArchivedAt() != nil {
+			if err := s.store.RestoreSession(ctx, session.GetId()); err != nil {
+				return nil, storeError(err, "restore session")
+			}
+		}
+		if session.GetStatus() == StatusStopped {
+			if err := s.store.RestartSession(ctx, session.GetId()); err != nil {
+				return nil, storeError(err, "restart session")
+			}
+		}
+		// Read back rather than patched in place, so the conversation below is recorded against the
+		// state the store now holds rather than the one this call arrived with.
+		if session, err = s.store.GetSession(ctx, req.GetId()); err != nil {
+			return nil, storeError(err, "session")
+		}
 	}
 	// The crew names the conversation rather than learning what it was called afterwards. A
 	// conversation started interactively picks its own identifier and tells nobody, so before this
@@ -1696,20 +1715,16 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	//
 	// Assigned here rather than at creation: this is the moment a conversation starts to exist, and a
 	// session that is only dispatched to gets its identifier from the task.
+	//
+	// Every session, not only the driver. A session exists from the moment a task is dispatched, so a
+	// first task that failed leaves one holding no conversation at all, and that session sat in the
+	// listing with no way to open it.
 	if session.GetModelSessionId() == "" {
 		named := store.NewConversationID()
 		if err := s.store.RecordTask(ctx, session.GetId(), named, session.GetStatus()); err != nil {
 			return nil, storeError(err, "name the conversation")
 		}
 		session.ModelSessionId = named
-	}
-	if session.GetStatus() == StatusStopped {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is stopped: restart it first", display.ShortID(session.GetHandle()))
-	}
-	if session.GetArchivedAt() != nil {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 	// A handle can outlive what it points at, and a conversation the crew has just named has no
 	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a
