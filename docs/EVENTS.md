@@ -44,6 +44,70 @@ store is the source of truth.
 If `QC_KAFKA_SEEDS` is not set, history is kept in the store and nothing is exported, and the
 status block says so rather than leaving an empty column to read as fine.
 
+## What is on the log
+
+One record kind exists.
+
+**`<workspace>.tasks` carries a `TaskEvent`**, one per task, whether the task worked or not. The key
+is the session identifier. The value is protobuf, so it reads as binary in a terminal, and it is
+defined in [`../proto/quaycrew/v1/events.proto`](../proto/quaycrew/v1/events.proto), which is the
+only place the shape is written down. It carries ten fields:
+
+- `id` is the task's own identifier, and the same value as the row in the `tasks` table. That is how
+  a record on the log joins back to the store, with no lookup and no guessing.
+- `session`, `workspace`, `project` and `handle` say where the task ran. They are copied into every
+  record on purpose, so a consumer knows what it is reading without asking the database.
+- `prompt`, `reply`, `status` and `failure` are what happened, redacted as described above.
+- `occurred_at` is when the task finished.
+
+### What kinds there are
+
+There is no `kind` field, and no `type`. One message is published, at four moments, and the only
+thing that tells them apart is `status`, which is `idle` or `failed`:
+
+- **A task worked.** `idle`, with `prompt` and `reply` filled in and `failure` empty.
+- **The model did not finish.** `failed`, with `prompt` filled in, `reply` empty, and `failure`
+  saying which: a refusal, a crash, a deadline the caller set, or a caller that went away.
+- **The sandbox could not be made.** `failed`, with `failure` naming the sandbox and what the daemon
+  said.
+- **The crew restarted while the task was running.** `failed`, with no `prompt` at all, because the
+  crew is settling a row it found on the way up rather than reporting a task it ran.
+
+So a consumer reads `status`, then `failure`, and there is nothing else to branch on. That is the
+whole vocabulary of the log today.
+
+It stops being enough the moment a second record kind exists, which is
+[#349](https://github.com/atlantic-blue/quay-crew/issues/349). Two messages with no discriminator
+leave a consumer guessing from the topic name, so a kind field is part of that work rather than
+something to add afterwards.
+
+The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
+inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
+what makes one session's records arrive in the order they happened. Two sessions have no order
+between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
+dispatched.
+
+Three more streams are designed and not built:
+
+- **`<workspace>.inbound`** is a message arriving from a chat channel, written by the gateway, which
+  is still a skeleton. [#9](https://github.com/atlantic-blue/quay-crew/issues/9)
+- **Outbound delivery** is a reply going back out through a channel, gated so nothing is sent
+  without the operator's intent. [#10](https://github.com/atlantic-blue/quay-crew/issues/10)
+- **`<workspace>.sessions`** is a session's own lifecycle: created, stopped, archived, restored, and
+  the rest. Today a finished task is the only thing the crew emits, so there is nothing to watch.
+  [#349](https://github.com/atlantic-blue/quay-crew/issues/349)
+
+```mermaid
+flowchart LR
+    CP["control plane"] -->|"TaskEvent"| TASKS[["workspace.tasks"]]
+    TASKS -.->|"nothing reads it yet"| SECOND["a second consumer, when one exists"]
+    CP -. "SessionEvent, issue 349" .-> SESSIONS[["workspace.sessions"]]
+    GW["gateway, a skeleton"] -. "InboundMessage, issue 9" .-> IN[["workspace.inbound"]]
+    CP -. "OutboundMessage, issue 10" .-> OUT["a chat channel"]
+```
+
+A solid line is built. A dotted line is not.
+
 ## Why an event log at all
 
 The synchronous path does not need one. Today `quay` speaks gRPC to the control plane, the control
@@ -156,7 +220,7 @@ go test -tags=integration -count=1 ./internal/messaging/
 Continuous integration runs the same command across the repository. `-count=1` matters: a cached
 pass and a real one are indistinguishable otherwise.
 
-## What would task it on
+## What would turn it on
 
 In rough order, each an open issue:
 
