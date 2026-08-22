@@ -60,6 +60,27 @@ only place the shape is written down. It carries ten fields:
 - `prompt`, `reply`, `status` and `failure` are what happened, redacted as described above.
 - `occurred_at` is when the task finished.
 
+### What kinds there are
+
+There is no `kind` field, and no `type`. One message is published, at four moments, and the only
+thing that tells them apart is `status`, which is `idle` or `failed`:
+
+- **A task worked.** `idle`, with `prompt` and `reply` filled in and `failure` empty.
+- **The model did not finish.** `failed`, with `prompt` filled in, `reply` empty, and `failure`
+  saying which: a refusal, a crash, a deadline the caller set, or a caller that went away.
+- **The sandbox could not be made.** `failed`, with `failure` naming the sandbox and what the daemon
+  said.
+- **The crew restarted while the task was running.** `failed`, with no `prompt` at all, because the
+  crew is settling a row it found on the way up rather than reporting a task it ran.
+
+So a consumer reads `status`, then `failure`, and there is nothing else to branch on. That is the
+whole vocabulary of the log today.
+
+It stops being enough the moment a second record kind exists, which is
+[#349](https://github.com/atlantic-blue/quay-crew/issues/349). Two messages with no discriminator
+leave a consumer guessing from the topic name, so a kind field is part of that work rather than
+something to add afterwards.
+
 The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
 inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
 what makes one session's records arrive in the order they happened. Two sessions have no order
