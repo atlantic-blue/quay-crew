@@ -50,6 +50,27 @@ read, or run with `make features`.
   A sandbox keeps what it was made with, so this reaches a session that is already running only after
   `make rebuild`, and then stopping that session and dispatching again.
 
+## 20 August 2026
+
+- **A conversation opens whatever the session's row says.** The row is the crew's own bookkeeping. It
+  used to decide whether the operator could open a session at all, and it refused three states.
+
+  A stopped session was refused with "restart it first". That is the one an operator meets most,
+  because `make upgrade` drains before it rebuilds, and a drain puts every live session down. After
+  an upgrade the whole crew read stopped, so every session in it refused to open.
+
+  An archived session was refused with the same sentence, because archiving sets the row to stopped
+  as well and that answer came first. Restarting an archived session is itself refused, so attach
+  named the one action that could not be taken.
+
+  A session whose first task failed holds no conversation, and that was refused too. It sat in the
+  listing with nothing that could open it.
+
+  All three open now. The row is then brought up to date rather than obeyed: the session comes back
+  to idle, an archived one comes back into the listing, and a session with no conversation is given
+  one, the way the driver already was. A row that still said stopped would have the next startup reap
+  the container out from under the conversation. See issue #380.
+
 ## 19 August 2026
 
 - **A session can see what it built.** The sandbox image carries a browser now, and `quay render`
