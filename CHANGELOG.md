@@ -26,6 +26,33 @@ read, or run with `make features`.
   Nothing in the crew raises one either, so a piece of work reaching a terminal phase does not start a
   flow today. There is no command for triggers, and `quay flow` is unchanged. Reading the event log
   and writing a trigger row from it is the next slice of `quay-crew#399`.
+- **The front door says what the crew does today.** The README's list of what works predated
+  seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
+  the shape of the product rather than with a feature list: you declare a piece of work, the crew
+  writes it down, a controller makes reality match the record, the work outlives the controller that
+  started it, it runs as a named role with only what that role receives, and every movement is
+  exported carrying the trace the whole tree belongs to. There is a diagram of one piece of work from
+  declared to done, and `docs/ORCHESTRATION.md` is the long version.
+
+  The quick start is the single `make install`. The status paragraph was checked against the code
+  before it was rewritten: chat channels still do not exist and the gateway is still a skeleton that
+  boots and waits, there is still no admin dashboard, and nothing still consumes the event log. What
+  was no longer true is the telemetry stack, which starts with the crew and carries logs, what each
+  task cost, and traces of the crew's own calls.
+
+  The blockquote is gone, and nothing brings it back. A reader who wants to copy a paragraph out had
+  to strip a `>` from every line of it first.
+
+  **The front door is now tested.** Three things it claims have an answer elsewhere in this
+  repository, so they are checked against it rather than reread by hand: every `quay` command it
+  names is one the tool this checkout builds actually lists, every `make` target it names is one the
+  Makefile declares, and every document it points at is there. The quick start is held to one
+  command, the diagram is held to showing a piece of work through the controller, the lease, the
+  session and the role, and the whole file is swept for a blockquote, a table or a dash used as
+  punctuation. What none of that says is whether a sentence is true: a bullet claiming a capability
+  in words that name no command passes every case. `features/` is what says whether a capability is
+  real.
+
 - **A first run is one command.** It was four, and the order mattered: `make config`,
   `make sandbox-image`, `make up`, `make install`. Miss one and the failure arrived somewhere else.
   Compose read a configuration file that was not there, or a first task was refused for a missing
@@ -52,6 +79,42 @@ read, or run with `make features`.
 
   A failed `go build` inside that target used to print "installed quay to ..." and exit 0, because a
   shell command list exits with the status of its last command. It exits non zero now.
+
+- **Twelve roles ship, ported from greenlight.** Quay had the role mechanism and no roles, so
+  `roles/` at the root of the repository now holds `architect`, `assessor`, `codebase-mapper`,
+  `debugger`, `designer`, `implementer`, `marketing`, `marketing-researcher`, `security`,
+  `test-writer`, `verifier` and `wrapper`, ported from the twelve agents in
+  [`atlantic-blue/greenlight`](https://github.com/atlantic-blue/greenlight/tree/main/src/agents) as
+  they were on 27 August 2026. Import one with `quay role import roles/<name>`. A fresh crew is
+  seeded with none of them.
+
+  Each agent's body is already an instruction, so it became the `ROLE.md`. The frontmatter did not
+  carry over: a greenlight agent declares `tools:` and quay has no word for a tool or a file, so
+  nothing was invented to stand in for it. The `gl-` prefix came off. Each role keeps greenlight's own
+  model, and the wrapper, whose model greenlight resolves at run time, names sonnet here and says so.
+
+  **A role cannot be told which files it may not touch, and eleven of these twelve briefs ask for
+  exactly that.** `test-writer` says it never sees implementation code, `implementer` says it never
+  edits a test file, `verifier` and `assessor` and `codebase-mapper` say they are read only. Quay
+  enforces none of it: `receives` is `work`, `context` and `skills`, and none of the three is about
+  the contents of a repository. So every role opens with a line saying what its brief asks that the
+  crew does not hold it to, and names the greenlight paths and commands it mentions that do not exist
+  here. `docs/ROLES.md` says it once for all twelve.
+
+  All twelve receive `work`, `context` and `skills`. Only the assessor declares a `may` list,
+  `work.create` and `work.read`, because its brief spawns a security review and reads the answer.
+
+  Two briefs did not fit. A brief may be 16,384 bytes and greenlight's architect is 17,993 and its
+  assessor 18,126, so both were refused at import as they stood. Restated lists and the sample of the
+  message greenlight's orchestrator sends came out of those two, nothing either asks the role to do
+  was removed, and `docs/ROLES.md` lists every cut. The ceiling was sized on an estimate that these
+  roles "run to about twelve thousand bytes", and two of them are eighteen thousand, so raising it is
+  worth a look.
+
+  `role.All` reads a directory of roles and refuses one holding none, so the test that every shipped
+  role imports reads `roles/` rather than a list somebody has to remember to extend, and a `roles/`
+  that lost its contents fails rather than reporting a clean run over nothing.
+
 
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could

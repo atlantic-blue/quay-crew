@@ -1,0 +1,8 @@
+name: wrapper
+version: 1
+summary: reads an existing boundary, writes down the contract it already keeps, and locks that behaviour with tests
+model: sonnet
+receives:
+  - work
+  - context
+  - skills
