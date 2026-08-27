@@ -8,6 +8,33 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A first run is one command.** It was four, and the order mattered: `make config`,
+  `make sandbox-image`, `make up`, `make install`. Miss one and the failure arrived somewhere else.
+  Compose read a configuration file that was not there, or a first task was refused for a missing
+  image, which reads as a broken crew rather than a missing step.
+
+  `make install` is now the whole first run. It writes `~/.quay/env` if there is none, builds the
+  command line tool, the hooks and the sandbox image, brings the stack up, and prints the four
+  commands it cannot run for you, in full. It cannot mint your model credential, so
+  `claude setup-token` and the three `quay` commands after it are still yours.
+
+  Running it twice is safe. It never writes over the configuration file you edited. On a crew that
+  is already up it says what replacing the services costs, because a task in flight is executing
+  through the control plane and ends with it, then waits for you to type the crew's name back the
+  way `quay workspace delete` does. `YES=1` goes over it without being asked. Every refusal exits
+  non zero, which is the defect issue 419 is open about one layer up.
+
+  **The target that built only the command line tool is now `make tool`.** `make install` used to be
+  that and nothing else, so the name had to move for the first run to take it. `make rebuild` is
+  still the three builds together and still leaves a running crew alone, which is what to type when
+  you want a new build and not a restart. `make config`, `make hooks`, `make sandbox-image` and
+  `make up` are unchanged and still work on their own. `make upgrade` calls `make tool` where it
+  called `make install`, so it still builds the tool before it drains and it still brings the stack
+  up exactly once.
+
+  A failed `go build` inside that target used to print "installed quay to ..." and exit 0, because a
+  shell command list exits with the status of its last command. It exits non zero now.
+
 - **Twelve roles ship, ported from greenlight.** Quay had the role mechanism and no roles, so
   `roles/` at the root of the repository now holds `architect`, `assessor`, `codebase-mapper`,
   `debugger`, `designer`, `implementer`, `marketing`, `marketing-researcher`, `security`,
@@ -42,6 +69,7 @@ read, or run with `make features`.
   `role.All` reads a directory of roles and refuses one holding none, so the test that every shipped
   role imports reads `roles/` rather than a list somebody has to remember to extend, and a `roles/`
   that lost its contents fails rather than reporting a clean run over nothing.
+
 
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could
@@ -405,7 +433,6 @@ read, or run with `make features`.
   drawn, so the key looked like it did nothing at all. The reason is now held until the next key, and
   the scenario for it runs the command the key produces, feeds the answer back the way the runtime
   does, and asserts on where the operator is left.
-
 
 ## 22 August 2026
 
@@ -1357,7 +1384,6 @@ read, or run with `make features`.
   those examples exactly would otherwise have it thrown away.
   ([#271](https://github.com/atlantic-blue/quay-crew/issues/271))
 
-
 - **A session carries a name you chose.** A listing was a column of hexadecimal, so working out which
   conversation was the one about the electricity bill meant opening them. `quay label <session>
   "the electricity bill"` names one, no text reads it back, and `""` clears it. `L` in the console
@@ -1378,7 +1404,6 @@ read, or run with `make features`.
   The migration adds the description column beside it, unused until the crew writes its own.
   ([#84](https://github.com/atlantic-blue/quay-crew/issues/84))
 
-
 - **A run is not written while it is being read.** `quay flow start` failed about one run in six with
   `grpc: error while marshaling: size mismatch, calculated=110, measured=169`. `Engine.Begin` answered
   with the run and drove the same value in a goroutine behind that answer. A `Run` carries two maps,
@@ -1386,7 +1411,6 @@ read, or run with `make features`.
   that contained it, and the message grew between protobuf's sizing pass and its encoding pass. The
   goroutine drives its own copy now. `go test -race ./cmd/quay/` reported five races before and none
   after, and twelve runs of the package that was failing all pass.
-
 
 - **The sessions listing is readable in colour.** Thirty rows in one colour meant reading every
   character of every row to find the conversation you wanted. Each cell is now coloured the way the
