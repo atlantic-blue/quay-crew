@@ -60,6 +60,12 @@ only place the shape is written down. It carries ten fields:
 - `prompt`, `reply`, `status` and `failure` are what happened, redacted as described above.
 - `occurred_at` is when the task finished.
 
+The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
+inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
+what makes one session's records arrive in the order they happened. Two sessions have no order
+between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
+dispatched.
+
 ### What a task record says happened
 
 A `TaskEvent` has no `kind` field. One message is published, at four moments, and the only thing
@@ -76,12 +82,6 @@ that tells them apart is `status`, which is `idle` or `failed`:
 So a consumer of this stream reads `status`, then `failure`, and there is nothing else to branch on.
 The stream below is the one with a kind on every record, and it is the one to subscribe to when what
 you want is to know what the crew is doing.
-
-The key is the session rather than the task, and that is a deliberate choice. A broker keeps order
-inside a partition and nowhere else, and it picks the partition from the key, so keying by session is
-what makes one session's records arrive in the order they happened. Two sessions have no order
-between them. [`TASKS.md`](TASKS.md) follows one of these records from the moment a task is
-dispatched.
 
 **`<workspace>.sessions` carries a `SessionEvent`**, one every time something happens to a session.
 This is the stream a consumer subscribes to, and the one a workflow trigger will match on, because
@@ -237,7 +237,7 @@ go test -tags=integration -count=1 ./internal/messaging/
 Continuous integration runs the same command across the repository. `-count=1` matters: a cached
 pass and a real one are indistinguishable otherwise.
 
-## What would turn it on
+## What would switch it on
 
 In rough order, each an open issue:
 
