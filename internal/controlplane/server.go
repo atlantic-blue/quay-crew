@@ -72,6 +72,9 @@ type Info struct {
 	// SandboxBuild is the build of the crew the sandbox image was made from. Empty means the image
 	// does not say, and nothing is then claimed about it.
 	SandboxBuild string
+	// Version is the build this control plane binary was made from, stamped in at build time. Empty
+	// is a binary nobody stamped, which the tool reports as unknown rather than as a difference.
+	Version string
 }
 
 // Config is everything the control plane is built from. It is a struct rather than a parameter list
@@ -289,6 +292,7 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 		Events:       s.info.Events,
 		Secrets:      s.info.Secrets,
 		SandboxBuild: s.info.SandboxBuild,
+		Version:      s.info.Version,
 	}, nil
 }
 

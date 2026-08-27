@@ -67,6 +67,9 @@ services:
       target: runtime-docker
       args:
         SERVICE: controlplane
+        # Which build this crew is, so the tool can say when it and the crew are different builds.
+        # The up target passes the commit; anything else builds a crew that says "dev".
+        QC_VERSION: ${QC_VERSION:-dev}
     environment:
       QC_SERVICE_NAME: controlplane
       QC_OTEL_ENDPOINT: otel-collector:4317

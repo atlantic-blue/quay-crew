@@ -31,6 +31,10 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// version is the build this control plane is, stamped in at build time by the image build. A crew
+// that cannot say which build it is leaves an operator diagnosing a defect that is already fixed.
+var version = "dev"
+
 func main() {
 	// Asked whether the crew beside it is serving, this binary asks and exits. It is the container
 	// health check, and it goes before anything else here because it starts nothing.
@@ -177,6 +181,9 @@ func main() {
 			// What the sandboxes are running, so the tool can say when the crew has moved on and
 			// they have not.
 			SandboxBuild: sandboxBuild,
+			// Which build this control plane is, so the tool can say when it and the crew are
+			// different builds. Stamped in at build time, the way the tool is.
+			Version: version,
 		},
 	})
 	// Waits that came due while the crew was down are resumed on the way up, and every one after

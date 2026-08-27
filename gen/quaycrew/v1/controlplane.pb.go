@@ -6056,7 +6056,12 @@ type GetInfoResponse struct {
 	// and the containers did not: the `quay` inside one is from that build, or is not there at all.
 	// Empty means the image says nothing about which build it came from, which is every image made
 	// before this was stamped, and nothing is claimed about it either way.
-	SandboxBuild  string `protobuf:"bytes,7,opt,name=sandbox_build,json=sandboxBuild,proto3" json:"sandbox_build,omitempty"`
+	SandboxBuild string `protobuf:"bytes,7,opt,name=sandbox_build,json=sandboxBuild,proto3" json:"sandbox_build,omitempty"`
+	// version is the build of the crew this control plane was made from, for example "5bf99a0". Empty
+	// means this crew predates the field, so nothing is claimed about which build it is. The tool, the
+	// control plane and the sandbox image are built on their own and drift apart, and three defects
+	// were investigated as live on 27 August 2026 that were fixed already, because nothing said so.
+	Version       string `protobuf:"bytes,8,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6136,6 +6141,13 @@ func (x *GetInfoResponse) GetSecrets() string {
 func (x *GetInfoResponse) GetSandboxBuild() string {
 	if x != nil {
 		return x.SandboxBuild
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
 	}
 	return ""
 }
@@ -6899,7 +6911,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x16RestoreSessionResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"\x10\n" +
-	"\x0eGetInfoRequest\"\xc4\x01\n" +
+	"\x0eGetInfoRequest\"\xde\x01\n" +
 	"\x0fGetInfoResponse\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x18\n" +
 	"\asandbox\x18\x02 \x01(\tR\asandbox\x12\x14\n" +
@@ -6907,7 +6919,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
 	"\x06events\x18\x05 \x01(\tR\x06events\x12\x18\n" +
 	"\asecrets\x18\x06 \x01(\tR\asecrets\x12#\n" +
-	"\rsandbox_build\x18\a \x01(\tR\fsandboxBuild\"\x11\n" +
+	"\rsandbox_build\x18\a \x01(\tR\fsandboxBuild\x12\x18\n" +
+	"\aversion\x18\b \x01(\tR\aversion\"\x11\n" +
 	"\x0fGetUsageRequest\"X\n" +
 	"\x10GetUsageResponse\x12(\n" +
 	"\x05total\x18\x01 \x01(\v2\x12.quaycrew.v1.UsageR\x05total\x12\x1a\n" +
