@@ -234,12 +234,12 @@ func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
 func TestAnOrdinaryFirstWordIsStillTheMessage(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 
-	said := mustRun(t, client, "dispatch", "hello", "there")
+	said := mustRun(t, client, "ask", "hello", "there")
 
 	if !strings.Contains(said, "ok") {
-		t.Fatalf("quay dispatch hello there said %q, want the reply to a message", said)
+		t.Fatalf("quay ask hello there said %q, want the reply to a message", said)
 	}
 	if strings.Contains(said, "no session") {
-		t.Fatalf("quay dispatch hello there was read as a session: %q", said)
+		t.Fatalf("quay ask hello there was read as a session: %q", said)
 	}
 }
