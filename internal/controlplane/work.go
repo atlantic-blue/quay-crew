@@ -8,6 +8,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/work"
@@ -54,12 +55,19 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		Title: tidy.Title, Brief: tidy.Brief, Mode: tidy.NamedMode(),
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
-		Labels: tidy.Labels,
-		// Every caller is a root in this slice. The parent is read from a work credential, and
-		// nothing mints one yet, so depth stays zero and the depth limit has nothing to bound.
+		Labels:  tidy.Labels,
 		Version: 1, Phase: work.PhasePending,
 	}
-	s.traceWork(ctx, declared, nil)
+	// The parent comes from the credential the caller presented and never from the request. It is
+	// the whole of what keeps the depth count honest: a caller that could name its own parent could
+	// name none and start again at the top.
+	if err := s.underTheCaller(ctx, declared); err != nil {
+		return nil, err
+	}
+	// And the trace follows the same parent, because one trace covers a whole tree. It is read after
+	// the parent is known rather than before: a child that minted its own would leave the tree in as
+	// many traces as it has nodes.
+	s.traceWork(ctx, declared, s.parentOf(ctx, declared))
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, err
 	}
@@ -298,4 +306,55 @@ func ControllerName(hostname func() (string, error)) string {
 		return ""
 	}
 	return "controlplane-" + strings.TrimSpace(name)
+}
+
+// underTheCaller reads the parent from the credential the caller presented, and holds the result to
+// the workspace's ceiling.
+//
+// An operator's call carries no credential of that kind and so declares a root. A session running a
+// piece of work carries one, and everything it declares hangs under that work, one level deeper. The
+// caller cannot say otherwise, which is why depth bounds anything at all: work at depth d creates at
+// depth d+1, so a loop of any shape stops at the limit.
+// parentOf is the piece of work this one hangs under, and nil for a root.
+//
+// Read after underTheCaller has set the parent, because the parent is the credential's to say and
+// never the request's. It exists so a child can inherit its parent's trace: one trace covers a whole
+// tree, and a child that minted its own would leave the tree in as many traces as it has nodes.
+func (s *Server) parentOf(ctx context.Context, declared *work.Work) *work.Work {
+	if declared.Parent == "" {
+		return nil
+	}
+	parent, err := s.store.GetWork(ctx, declared.Parent)
+	if err != nil {
+		// The parent was read a moment ago to set the depth, so this is a store that went away
+		// between the two. The work is declared either way and takes a trace of its own, which is a
+		// tree in two traces rather than a piece of work nobody has.
+		slog.WarnContext(ctx, "the parent of this work could not be read, so it starts a trace of its own",
+			"work", declared.ID, "parent", declared.Parent, "error", err)
+		return nil
+	}
+	return parent
+}
+
+func (s *Server) underTheCaller(ctx context.Context, declared *work.Work) error {
+	grant, carried := auth.GrantFrom(ctx)
+	if carried && grant.Work != "" {
+		parent, err := s.store.GetWork(ctx, grant.Work)
+		if err != nil {
+			return storeError(err, "the work this session is running")
+		}
+		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
+	}
+	limits, err := s.store.WorkspaceLimits(ctx, declared.Workspace)
+	if err != nil {
+		return storeError(err, "the workspace's limits")
+	}
+	if declared.Depth > limits.MaxDepth {
+		return status.Errorf(codes.PermissionDenied,
+			"this workspace allows work no deeper than %d, and this would be at depth %d. "+
+				"Raise it with quay limits <workspace> --max-depth %d, which an operator does deliberately: "+
+				"a session that could raise its own ceiling has none",
+			limits.MaxDepth, declared.Depth, declared.Depth)
+	}
+	return nil
 }

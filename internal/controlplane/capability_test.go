@@ -1,0 +1,380 @@
+package controlplane_test
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/auth"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/role"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// A session may declare work, and what bounds it is two things that mean different things: the role
+// says what it may do, and the workspace says how much of it. The effective capability is the
+// intersection, and a refusal names the one an operator would change.
+
+// asWorkCredential is a call made by a session running a piece of work, which is a context carrying
+// that work's grant.
+func asWorkCredential(ctx context.Context, workID string, verbs ...string) context.Context {
+	return auth.WithGrant(ctx, auth.Grant{Work: workID, Verbs: verbs})
+}
+
+// raiseDepth lets a workspace declare work down to a depth.
+func raiseDepth(t *testing.T, s *controlplane.Server, workspace string, depth int32) {
+	t.Helper()
+	if _, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: depth},
+	}); err != nil {
+		t.Fatalf("SetWorkspaceLimits: %v", err)
+	}
+}
+
+// Default deny: a workspace nobody configured lets no session declare anything.
+func TestAWorkspaceStartsWithNoDepthAtAll(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, _ := newProject(t, s)
+
+	held, err := s.GetWorkspaceLimits(context.Background(), &quaycrewv1.GetWorkspaceLimitsRequest{
+		Workspace: workspace,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkspaceLimits: %v", err)
+	}
+	if got := held.GetLimits().GetMaxDepth(); got != 0 {
+		t.Fatalf("a workspace nobody configured allows depth %d, want 0 so recursion is off until somebody turns it on", got)
+	}
+	for _, unset := range []int64{int64(held.GetLimits().GetMaxRunning()), held.GetLimits().GetBudgetTokens(),
+		int64(held.GetLimits().GetLeaseSeconds())} {
+		if unset != 0 {
+			t.Fatalf("a workspace nobody configured carries %d, want every limit unset", unset)
+		}
+	}
+}
+
+// The operator declares a root, whatever the depth limit says: the ceiling is on what sessions
+// declare, not on what a person does.
+func TestTheOperatorDeclaresARootInAWorkspaceWithNoDepth(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+
+	declared := declareWork(t, s, project, "read the electricity bill")
+
+	if declared.GetParent() != "" || declared.GetDepth() != 0 {
+		t.Fatalf("the operator's work is at depth %d under %q, want a root", declared.GetDepth(), declared.GetParent())
+	}
+}
+
+// The parent is read from the credential, so work a session declares hangs under the work that
+// session is running.
+func TestWorkASessionDeclaresHangsUnderTheWorkItIsRunning(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, project := newProject(t, s)
+	raiseDepth(t, s, workspace, 2)
+	parent := declareWork(t, s, project, "clear the backlog")
+
+	child, err := s.CreateWork(asWorkCredential(context.Background(), parent.GetId(), role.VerbWorkCreate),
+		&quaycrewv1.CreateWorkRequest{
+			Project: project, Title: "pull request 341", Brief: "review it",
+		})
+	if err != nil {
+		t.Fatalf("CreateWork: %v", err)
+	}
+
+	if child.GetWork().GetParent() != parent.GetId() {
+		t.Fatalf("the child hangs under %q, want the work the session is running", child.GetWork().GetParent())
+	}
+	if child.GetWork().GetDepth() != 1 {
+		t.Fatalf("the child is at depth %d, want one deeper than its parent", child.GetWork().GetDepth())
+	}
+}
+
+// The refusal names the limit and the command that raises it, because a session that was refused has
+// to tell its operator what to change.
+func TestWorkDeeperThanTheWorkspaceAllowsIsRefusedNamingTheLimit(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, project := newProject(t, s)
+	raiseDepth(t, s, workspace, 1)
+	root := declareWork(t, s, project, "clear the backlog")
+	child, err := s.CreateWork(asWorkCredential(context.Background(), root.GetId(), role.VerbWorkCreate),
+		&quaycrewv1.CreateWorkRequest{Project: project, Title: "pull request 341", Brief: "review it"})
+	if err != nil {
+		t.Fatalf("CreateWork at depth 1: %v", err)
+	}
+
+	_, err = s.CreateWork(asWorkCredential(context.Background(), child.GetWork().GetId(), role.VerbWorkCreate),
+		&quaycrewv1.CreateWorkRequest{Project: project, Title: "write a test", Brief: "write it"})
+
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("work below the limit answered %v, want PermissionDenied", status.Code(err))
+	}
+	for _, want := range []string{"depth 2", "no deeper than 1", "quay limits"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal says %q, want it to say %q", err, want)
+		}
+	}
+	// And nothing was written: a refusal that leaves a row behind is a refusal nobody can trust.
+	listed, err := s.ListWork(context.Background(), &quaycrewv1.ListWorkRequest{Project: project})
+	if err != nil {
+		t.Fatalf("ListWork: %v", err)
+	}
+	if len(listed.GetWork()) != 2 {
+		t.Fatalf("the project holds %d pieces of work, want the two that were allowed", len(listed.GetWork()))
+	}
+}
+
+// A session in a workspace nobody raised may declare nothing at all, which is what default deny
+// means when a session meets it.
+func TestASessionInAWorkspaceWithNoDepthDeclaresNothing(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+	root := declareWork(t, s, project, "clear the backlog")
+
+	_, err := s.CreateWork(asWorkCredential(context.Background(), root.GetId(), role.VerbWorkCreate),
+		&quaycrewv1.CreateWorkRequest{Project: project, Title: "pull request 341", Brief: "review it"})
+
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("a session in a workspace nobody raised answered %v, want PermissionDenied", status.Code(err))
+	}
+	if !strings.Contains(err.Error(), "no deeper than 0") {
+		t.Fatalf("the refusal says %q, want it to name the limit", err)
+	}
+}
+
+// A limit is a number, and a number below zero is not one.
+func TestALimitBelowZeroIsRefused(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, _ := newProject(t, s)
+
+	_, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: -1},
+	})
+
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("a depth of -1 answered %v, want InvalidArgument", status.Code(err))
+	}
+}
+
+func TestTheLimitsOfAWorkspaceNobodyHasAreRefused(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+
+	_, err := s.GetWorkspaceLimits(context.Background(), &quaycrewv1.GetWorkspaceLimitsRequest{
+		Workspace: "nowhere",
+	})
+
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("the limits of a workspace nobody has answered %v, want NotFound", status.Code(err))
+	}
+}
+
+// The whole row is written, so an operator raising one number does not silently keep another they
+// meant to change.
+func TestTheCeilingIsWrittenWholeAndReadBack(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, _ := newProject(t, s)
+
+	written, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{
+			Workspace: workspace, MaxDepth: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
+		},
+	})
+	if err != nil {
+		t.Fatalf("SetWorkspaceLimits: %v", err)
+	}
+	if written.GetLimits().GetMaxDepth() != 2 || written.GetLimits().GetMaxRunning() != 4 ||
+		written.GetLimits().GetBudgetTokens() != 5000 || written.GetLimits().GetLeaseSeconds() != 90 {
+		t.Fatalf("the ceiling reads back as %+v", written.GetLimits())
+	}
+
+	held, err := s.GetWorkspaceLimits(context.Background(), &quaycrewv1.GetWorkspaceLimitsRequest{
+		Workspace: workspace,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkspaceLimits: %v", err)
+	}
+	if held.GetLimits().GetMaxRunning() != 4 {
+		t.Fatalf("the ceiling reads back as %+v", held.GetLimits())
+	}
+}
+
+// The credential is minted for one piece of work, carries the verbs that work's role declared, and
+// expires. Everything about it is narrower than the driver's token.
+func TestTheCredentialAWorkRunsUnderCarriesItsRolesVerbs(t *testing.T) {
+	s, kept := serverOnAStore(t)
+	workspace, project := newProject(t, s)
+	importRoleThatMay(t, s, "backlog-clearer", role.VerbWorkCreate, role.VerbWorkRead)
+	attachRole(t, s, workspace, "backlog-clearer")
+	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
+		Project: project, Title: "clear the backlog", Brief: "read the pull requests",
+		Role: "backlog-clearer",
+	})
+	if err != nil {
+		t.Fatalf("CreateWork: %v", err)
+	}
+	_ = kept
+
+	token, minted := s.WorkCredentialForTest(context.Background(), declared.GetWork().GetId())
+	if !minted {
+		t.Fatal("no credential was minted for a piece of work")
+	}
+	grant, recognised := s.Grants().Grant(token)
+	if !recognised {
+		t.Fatal("the crew does not recognise the credential it minted")
+	}
+	if grant.Work != declared.GetWork().GetId() {
+		t.Fatalf("the credential is bound to %q, want the work it was minted for", grant.Work)
+	}
+	for _, verb := range []string{role.VerbWorkCreate, role.VerbWorkRead} {
+		if !grant.May(verb) {
+			t.Errorf("the credential may not %s, and the role declared it", verb)
+		}
+	}
+	for _, verb := range []string{role.VerbWorkStop, role.VerbWorkAnswer} {
+		if grant.May(verb) {
+			t.Errorf("the credential may %s, and the role never declared it", verb)
+		}
+	}
+	if grant.ExpiresAt.IsZero() {
+		t.Fatal("the credential never expires, so one that leaks out of a sandbox works forever")
+	}
+}
+
+// Work that runs as no role gets a credential that may call nothing. Default deny: a role is what
+// grants, so work without one grants nothing.
+func TestWorkThatRunsAsNoRoleCarriesACredentialThatMayCallNothing(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+	declared := declareWork(t, s, project, "read the electricity bill")
+
+	token, minted := s.WorkCredentialForTest(context.Background(), declared.GetId())
+	if !minted {
+		t.Fatal("no credential was minted")
+	}
+	grant, _ := s.Grants().Grant(token)
+	for _, verb := range role.Verbs {
+		if grant.May(verb) {
+			t.Errorf("work that runs as no role may %s", verb)
+		}
+	}
+}
+
+// The deadline is the ceiling on the credential's life, because a grant that outlives the work it
+// belongs to is a grant nobody is watching.
+func TestACredentialExpiresNoLaterThanTheWorksDeadline(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+	deadline := timeSoon()
+	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
+		Project: project, Title: "read the electricity bill", Brief: "open it",
+		Deadline: deadline,
+	})
+	if err != nil {
+		t.Fatalf("CreateWork: %v", err)
+	}
+
+	token, _ := s.WorkCredentialForTest(context.Background(), declared.GetWork().GetId())
+	grant, _ := s.Grants().Grant(token)
+
+	if grant.ExpiresAt.After(deadline.AsTime()) {
+		t.Fatalf("the credential runs to %v, past the work's own deadline of %v", grant.ExpiresAt, deadline.AsTime())
+	}
+}
+
+func importRoleThatMay(t *testing.T, s *controlplane.Server, name string, verbs ...string) {
+	t.Helper()
+	manifest := "name: " + name + "\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - work\n"
+	if len(verbs) > 0 {
+		manifest += "may:\n"
+		for _, verb := range verbs {
+			manifest += "  - " + verb + "\n"
+		}
+	}
+	if _, err := s.ImportRole(context.Background(), &quaycrewv1.ImportRoleRequest{
+		Files: []*quaycrewv1.RoleFile{
+			{Path: role.ManifestFile, Body: []byte(manifest)},
+			{Path: role.BriefFile, Body: []byte("Read the open pull requests.")},
+		},
+	}); err != nil {
+		t.Fatalf("ImportRole: %v", err)
+	}
+}
+
+// timeSoon is a deadline close enough that the credential's own life is not the shorter of the two.
+func timeSoon() *timestamppb.Timestamp {
+	return timestamppb.New(time.Now().UTC().Add(time.Minute))
+}
+
+// The credential travels on the task and never at sandbox birth.
+//
+// A sandbox keeps the configuration it was made with, so a credential written at birth would label
+// every later task with the first task's grant, and one minted after birth would never reach the
+// container at all. This is the assertion that pins the shape: the sandbox carries no token, and the
+// task does.
+func TestTheCredentialTravelsOnTheTaskAndNeverAtSandboxBirth(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "done"}
+	provider := &sandbox.FakeProvider{}
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner, Provider: provider, Secrets: secrets.NewMemory(),
+		// A crew a session could reach, because a credential is only written where the address is.
+		Reachable: "controlplane:50051",
+	})
+	_, project := newProject(t, s)
+	declared := declareWork(t, s, project, "read the electricity bill")
+
+	if _, err := s.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
+		Project: project, Handle: "work-session", Text: "open the bill",
+		Work: declared.GetId(),
+	}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if len(provider.Created) != 1 {
+		t.Fatalf("%d sandboxes were made, want 1", len(provider.Created))
+	}
+	for _, line := range provider.Created[0].Env {
+		if strings.HasPrefix(line, auth.TokenEnv+"=") {
+			t.Fatalf("the sandbox was born carrying a credential: %q", line)
+		}
+	}
+	token := runner.LastReq.Env[auth.TokenEnv]
+	if token == "" {
+		t.Fatal("the task carried no credential, so a session running work holds nothing")
+	}
+	grant, recognised := s.Grants().Grant(token)
+	if !recognised || grant.Work != declared.GetId() {
+		t.Fatalf("the task carried a credential for %q, want the work it runs", grant.Work)
+	}
+	if runner.LastReq.Env["QC_GRPC_ADDR"] == "" {
+		t.Fatal("the task carries a credential and no address, so the session cannot use it")
+	}
+}
+
+// A task that runs no piece of work carries no credential at all, which is every task the crew ran
+// before this existed.
+func TestATaskThatRunsNoWorkCarriesNoCredential(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "done"}
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner, Provider: &sandbox.FakeProvider{},
+		Secrets: secrets.NewMemory(), Reachable: "controlplane:50051",
+	})
+	_, project := newProject(t, s)
+
+	if _, err := s.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
+		Project: project, Text: "hello",
+	}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if token := runner.LastReq.Env[auth.TokenEnv]; token != "" {
+		t.Fatalf("a task running no work carried a credential: %q", token)
+	}
+}

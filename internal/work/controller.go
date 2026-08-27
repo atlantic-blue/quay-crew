@@ -83,6 +83,9 @@ type Store interface {
 	// ExpiredWork is the work whose holder went away: running, under a lease that has run out or was
 	// never written. Reading it is how a controller finds what a dead one left behind.
 	ExpiredWork(ctx context.Context, limit int) ([]*Work, error)
+	// WorkspaceLimits is what a workspace lets its work do, which the controller reads for the lease
+	// length: a workspace whose store is slow is the operator's to give a longer hold.
+	WorkspaceLimits(ctx context.Context, workspace string) (Limits, error)
 	// StartWork claims one piece of work and takes a lease on it. It applies only to work that is
 	// still pending, which is what keeps two controllers from both starting it, and it is what makes
 	// a tick safe to run twice.
@@ -213,6 +216,16 @@ func (c *Controller) leaseNow() Lease {
 	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(c.lease)}
 }
 
+// leaseIn is a hold as long as that workspace says, or as long as this controller's own where the
+// workspace says nothing. A workspace whose store is slow is the operator's to give more room.
+func (c *Controller) leaseIn(ctx context.Context, workspace string) Lease {
+	limits, err := c.store.WorkspaceLimits(ctx, workspace)
+	if err != nil {
+		return c.leaseNow()
+	}
+	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
+}
+
 // Exporting returns a controller that offers each record it writes to the event log, after the
 // transaction that wrote it. Without one nothing is exported, which is a crew with no broker.
 func (c *Controller) Exporting(exporter Exporter) *Controller {
@@ -298,7 +311,7 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 
 	handle := SessionFor(one.ID)
-	lease := c.leaseNow()
+	lease := c.leaseIn(ctx, one.Workspace)
 	records := []*Event{
 		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
 		c.event(ctx, one, EventStarted, fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)),
@@ -321,6 +334,9 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 		Project: claimed.Project, Handle: handle, Text: claimed.Brief,
 		PermissionMode: claimed.Mode, Detach: true,
+		// Which piece of work this task runs, so the crew mints the credential for it and puts it in
+		// the environment of this task alone.
+		Work: claimed.ID,
 	})
 	if err == nil {
 		if err := c.store.RecordWorkSession(ctx, claimed.ID, sent.GetId()); err != nil {
@@ -374,7 +390,7 @@ func (c *Controller) recover(ctx context.Context, one *Work) {
 		return
 	}
 
-	lease := c.leaseNow()
+	lease := c.leaseIn(ctx, one.Workspace)
 	records := []*Event{
 		c.event(ctx, one, EventReleased,
 			fmt.Sprintf("previous owner %s, phase found %s", ownerOrNobody(one.LeaseOwner), one.Phase)),
@@ -509,7 +525,7 @@ func (c *Controller) adopt(ctx context.Context, one *Work) {
 // renew moves this controller's hold on, which is what says it is still alive. A hold that stops
 // moving is the only signal another controller has that this one went away.
 func (c *Controller) renew(ctx context.Context, one *Work) {
-	if err := c.store.RenewLease(ctx, one.ID, c.leaseNow()); err != nil && !errors.Is(err, ErrHeld) {
+	if err := c.store.RenewLease(ctx, one.ID, c.leaseIn(ctx, one.Workspace)); err != nil && !errors.Is(err, ErrHeld) {
 		c.logger.WarnContext(ctx, "could not keep hold of a piece of work", "work", one.ID, "error", err)
 	}
 }

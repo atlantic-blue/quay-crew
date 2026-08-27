@@ -166,7 +166,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	said, err := s.runner.Run(ctx, box, model.Request{
 		Text:           prompt,
 		PermissionMode: model.PermissionPlan,
-		Env:            s.taskEnv(ctx, session),
+		Env:            s.taskEnv(ctx, session, ""),
 	})
 	if err != nil {
 		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)

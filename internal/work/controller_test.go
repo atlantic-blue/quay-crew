@@ -136,6 +136,8 @@ type rows struct {
 	// inside one at the same moment and make the conditional write answer the question it exists for.
 	beforeStart    func()
 	beforeTakeOver func()
+	// limits is what each workspace allows, for the tests about a hold as long as the workspace says.
+	limits map[string]work.Limits
 }
 
 func newRows() *rows {
@@ -165,6 +167,17 @@ func (r *rows) setSession(id, session string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.held[id].Session = session
+}
+
+// WorkspaceLimits is what the workspace allows. A test that says nothing gets the defaults, which
+// grant nothing, so a scenario about a limit has to set one.
+func (r *rows) WorkspaceLimits(_ context.Context, workspace string) (work.Limits, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if held, set := r.limits[workspace]; set {
+		return held, nil
+	}
+	return work.Limits{Workspace: workspace}, nil
 }
 
 func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {

@@ -380,3 +380,30 @@ func Cycle(id string, after []string, dependsOn func(string) []string) (from, to
 	}
 	return "", "", false
 }
+
+// Limits is what a workspace lets its sessions declare.
+//
+// The workspace carries the ceiling and a role carries the grant. A role alone would give the same
+// power in every workspace it reaches, including the ones nobody thought about; a workspace alone
+// would give no review, because a limit is not a file anybody reads in a pull request.
+type Limits struct {
+	Workspace string
+	// MaxDepth is how deep the tree of work may go. Zero, the default, means no session in this
+	// workspace may declare work at all.
+	MaxDepth int
+	// MaxRunning is how many pieces of work may run at once here. Zero is unset.
+	MaxRunning int
+	// BudgetTokens is what a tree may spend when its root declares none. Zero is unset.
+	BudgetTokens int64
+	// LeaseSeconds is how long a controller holds a piece of work here. Zero takes the crew's own
+	// measured default.
+	LeaseSeconds int
+}
+
+// Lease is how long a hold lasts in this workspace, or the default where the workspace says nothing.
+func (l Limits) Lease(standard time.Duration) time.Duration {
+	if l.LeaseSeconds > 0 {
+		return time.Duration(l.LeaseSeconds) * time.Second
+	}
+	return standard
+}

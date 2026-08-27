@@ -73,6 +73,9 @@ type Memory struct {
 	// it, keyed by the event identifier so writing one twice leaves one.
 	work       map[string]*work.Work
 	workEvents map[string]*work.Event
+	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
+	// defaults, which grant nothing.
+	limits map[string]work.Limits
 }
 
 var _ Store = (*Memory)(nil)

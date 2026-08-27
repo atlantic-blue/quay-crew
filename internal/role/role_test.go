@@ -305,3 +305,113 @@ func TestARoleReadsBackWholeFromItsDirectory(t *testing.T) {
 		t.Errorf("what it receives read as %v", loaded.Receives)
 	}
 }
+
+// A role says what a session running as it may do, as well as what it may see. Both boundaries live
+// in one file, so a reader holds one answer rather than two.
+
+// mayDo is the valid role with a may list on it.
+func mayDo(verbs ...string) []File {
+	lines := []string{
+		"name: test-writer",
+		"version: 1",
+		"summary: writes the tests for a piece of work, from the work alone",
+		"model: opus",
+		"receives:",
+		"  - work",
+	}
+	if len(verbs) > 0 {
+		lines = append(lines, "may:")
+		for _, verb := range verbs {
+			lines = append(lines, "  - "+verb)
+		}
+	}
+	return replace(good(), ManifestFile, manifestOf(lines...))
+}
+
+func TestARoleDeclaresTheVerbsItMayCall(t *testing.T) {
+	loaded, err := FromFiles(mayDo(VerbWorkCreate, VerbWorkRead))
+	if err != nil {
+		t.Fatalf("FromFiles: %v", err)
+	}
+
+	for _, verb := range []string{VerbWorkCreate, VerbWorkRead} {
+		if !loaded.May(verb) {
+			t.Errorf("the role may not %s, and it declared it", verb)
+		}
+	}
+	for _, verb := range []string{VerbWorkStop, VerbWorkAnswer} {
+		if loaded.May(verb) {
+			t.Errorf("the role may %s, and it never declared it", verb)
+		}
+	}
+}
+
+// A role that declares nothing may call nothing. Default deny, which is what every role imported
+// before this existed becomes.
+func TestARoleThatDeclaresNoVerbsMayCallNothing(t *testing.T) {
+	loaded, err := FromFiles(good())
+	if err != nil {
+		t.Fatalf("FromFiles: %v", err)
+	}
+
+	for _, verb := range Verbs {
+		if loaded.May(verb) {
+			t.Errorf("a role that declared nothing may %s", verb)
+		}
+	}
+}
+
+// A word the crew does not know is a boundary that quietly means nothing, so it is refused while
+// somebody is looking at the file.
+func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
+	_, err := FromFiles(mayDo(VerbWorkCreate, "workspace.create"))
+
+	if err == nil {
+		t.Fatal("a verb the crew does not know was accepted")
+	}
+	if !strings.Contains(err.Error(), "workspace.create") {
+		t.Errorf("the refusal says %q, want it to name the verb", err)
+	}
+	for _, verb := range Verbs {
+		if !strings.Contains(err.Error(), verb) {
+			t.Errorf("the refusal says %q, want it to offer %q", err, verb)
+		}
+	}
+}
+
+// Four verbs and no more: a verb nobody uses is a boundary that means nothing.
+func TestTheVerbsAreTheFourWorkVerbs(t *testing.T) {
+	if got := strings.Join(Verbs, ","); got != "work.create,work.read,work.answer,work.stop" {
+		t.Fatalf("the verbs are %q, want the four work verbs and no more", got)
+	}
+}
+
+// The same version carrying different verbs is a different role, or a workspace pinned to a version
+// would find its boundary changed underneath it.
+func TestTheVerbsArePartOfWhatAVersionIs(t *testing.T) {
+	narrow, err := FromFiles(mayDo(VerbWorkRead))
+	if err != nil {
+		t.Fatalf("FromFiles: %v", err)
+	}
+	wide, err := FromFiles(mayDo(VerbWorkRead, VerbWorkCreate))
+	if err != nil {
+		t.Fatalf("FromFiles: %v", err)
+	}
+
+	if narrow.Fingerprint() == wide.Fingerprint() {
+		t.Fatal("two roles with different verbs have the same fingerprint, so one could replace the other")
+	}
+}
+
+// The verbs come back sorted and without repeats, so a listing and a fingerprint do not depend on
+// the order somebody happened to type them in.
+func TestTheVerbsAreTidiedTheWayTheMaterialIs(t *testing.T) {
+	loaded, err := FromFiles(mayDo(VerbWorkRead, VerbWorkCreate, VerbWorkRead))
+	if err != nil {
+		t.Fatalf("FromFiles: %v", err)
+	}
+
+	if got := strings.Join(loaded.May_, ","); got != VerbWorkCreate+","+VerbWorkRead {
+		t.Fatalf("the verbs read back as %q, want them sorted and once each", got)
+	}
+}

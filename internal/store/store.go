@@ -336,6 +336,11 @@ type Store interface {
 	LandWork(ctx context.Context, id string, landed work.Landing, event *work.Event) (*work.Work, error)
 	// ListWorkEvents returns one piece of work's own history, oldest first.
 	ListWorkEvents(ctx context.Context, id string) ([]*work.Event, error)
+	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
+	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a crew
+	// nobody configured refuses rather than allows.
+	WorkspaceLimits(ctx context.Context, workspace string) (work.Limits, error)
+	SetWorkspaceLimits(ctx context.Context, limits work.Limits) (work.Limits, error)
 
 	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.
