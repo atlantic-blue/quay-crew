@@ -30,6 +30,8 @@ func frontDoorFrom(ctx context.Context) *frontDoorWorld {
 }
 
 func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
+	initializeFrontDoorDifferenceSteps(sc)
+
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, frontDoorKey{}, &frontDoorWorld{}), nil
 	})
@@ -136,6 +138,41 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^it holds no blockquote, no table and no dash used as punctuation$`, func(ctx context.Context) error {
 		if found := unreusableMarkdownIn(frontDoorFrom(ctx).body); len(found) > 0 {
 			return fmt.Errorf("a reader cannot copy this back out:\n%s", strings.Join(found, "\n"))
+		}
+		return nil
+	})
+}
+
+// The two steps below are registered from initializeFrontDoorSteps, and are kept here rather than
+// inside it so the rule they hold up reads on its own.
+
+// initializeFrontDoorDifferenceSteps holds the front door to answering the question a reader asks
+// first: not what a piece of work is, but how it differs from the task they already know how to send.
+func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^it names both a task and a piece of work$`, func(ctx context.Context) error {
+		body := frontDoorFrom(ctx).body
+		for _, both := range []string{"a task", "a piece of work"} {
+			if !strings.Contains(body, both) {
+				return fmt.Errorf("the front door never names %q, so a reader has only one of the two "+
+					"things they can ask for", both)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^it says what the difference between them is$`, func(ctx context.Context) error {
+		said, err := whatATaskAndAPieceOfWorkAre(frontDoorFrom(ctx).body)
+		if err != nil {
+			return err
+		}
+		// Naming both somewhere is not saying how they differ. What the rule wants is one place that
+		// defines each of them against the other, so a reader gets the answer without assembling it
+		// from a feature list.
+		for _, defined := range []string{"a task is", "a piece of work is"} {
+			if !strings.Contains(strings.ToLower(said), defined) {
+				return fmt.Errorf("the front door never says what %s, so it names the two without "+
+					"telling anybody which they want:\n%s", strings.TrimSuffix(defined, " is"), said)
+			}
 		}
 		return nil
 	})
