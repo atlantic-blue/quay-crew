@@ -6,6 +6,38 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 27 August 2026
+
+- **Every surface takes the identifier the listing prints, and enter opens a session.** A session
+  carries two identifiers. The `id` is the crew's own row and it names the sandbox container. The
+  `handle` is the name a channel dispatches to, because a chat channel knows what it calls a
+  conversation before the crew has a session for it. The listing printed both: the `id` in a column
+  headed `id`, and the `handle` under the heading `name`, which is where a name goes.
+
+  So the operator read the `name` cell and typed it back, and `quay dispatch 615d48dc "and again"`
+  did not refuse it. It joined the word to the message, sent `615d48dc and again` to a session
+  nobody asked for, and said nothing. Naming a session then took the `handle` off the screen
+  entirely, leaving a row with nothing on it that any command had ever taken.
+
+  Now the first column is headed `session` and it holds the `id`, the `name` column holds a name and
+  is empty until somebody writes one, and one resolver reads what the operator typed for every
+  surface. There were two of these and they disagreed: one answered with the `id` and the other with
+  the `handle`, and each wrote its own refusal. Both identifiers still reach a session, from
+  `dispatch`, `tasks`, `attach`, `label`, `mode` and the console, because the `handle` is what a
+  channel sends and it is in notes and in scripts. Only one of them is printed, and a refusal offers
+  that one.
+
+  A first word shaped like an identifier that names no session is refused, and the refusal says to
+  quote the whole message if that is what it was. It is never absorbed. `quay dispatch hello there`
+  is still a message.
+
+  Enter on a console row could not report a failure. It wrote the reason into the model and asked for
+  a listing in the same return, and the listing that came back blanked the reason before it was
+  drawn, so the key looked like it did nothing at all. The reason is now held until the next key, and
+  the scenario for it runs the command the key produces, feeds the answer back the way the runtime
+  does, and asserts on where the operator is left.
+
+
 ## 22 August 2026
 
 - **A session says what happened to it, and every record carries a kind.** The crew emitted one
@@ -94,6 +126,109 @@ read, or run with `make features`.
   `make rebuild`, and then stopping that session and dispatching again.
 
 ## 20 August 2026
+
+- **A step of a flow runs as a role, in its own session and its own container.** A dispatch node
+  takes `role: test-writer`, and that step no longer lands in the run's conversation. It gets a
+  session of its own, so the work is done by somebody who has read only what the role declares.
+
+  ```yaml
+  tests: { type: dispatch, role: test-writer, prompt: "write the tests" }
+  ```
+
+  What that session holds is `receives` and nothing else. A role without `context` is told its brief
+  and none of what the crew, the workspace or the project knows. A role without `skills` holds none:
+  no index in its memory file, no skill directory mounted. The brief itself is always given, under
+  its own mark, rendered every task and never read back.
+
+  Two holes had to be closed for the boundary to be worth anything. Every session in a workspace
+  shared one conversation store, so a role that must not see the code could read the transcript of
+  the session that wrote it; a role session keeps its own store under the session instead. And a
+  session's memory file is read back into the crew's context, so a role given nothing could have
+  written what every session in the workspace is told; a role session's file is never read back.
+
+  A step naming a role the workspace does not hold stops the run and says which role is missing,
+  rather than walking its success edge on a task that never happened. A run now puts away every
+  session it started, not only its own, and counts what every one of them spent against its ceiling.
+
+  The model a role declares is still not read: the runner takes one model per crew. That, the
+  product manager, sub tasks and the event trigger are the rest of
+  [#354](https://github.com/atlantic-blue/quay-crew/issues/354), and
+  [`docs/ROLES.md`](docs/ROLES.md) says which is which.
+
+- **A conversation that cannot be opened says why, and the reason stays on the screen.** Attach is
+  usually the whole command of a tmux pane, in the right half of the panel or beside the console, and
+  a pane closes the moment its command exits. So a refusal printed its reason and lost it in the same
+  instant. Measured against tmux 3.3a, the pane is gone before anything else can even list it. The
+  operator pressed the key, the screen flickered, and nothing on it ever said why. The console then
+  reported "the conversation opened and tmux does not say where", which is the one thing that had not
+  happened.
+
+  Attach stays now. It says what went wrong, names what to do about it, and waits there, the way
+  open-conversation already keeps a finished conversation's terminal alive inside the sandbox. Enter
+  gives the operator their console back. It reads the terminal rather than asking whether there is
+  one, so a scripted attach reads the end of a pipeline's input and comes back at once instead of
+  hanging. The console's own message says the conversation closed rather than claiming it opened.
+
+  Part of #380.
+
+- **A session knows how much memory it has.** A session could not run a repository's own gates. The
+  linter, the build and the install were each killed part way through, and the session reported a
+  partial check.
+
+  The cause is a number that is not true. A sandbox with no memory limit of its own reports the whole
+  machine in `/proc/meminfo`, so node sizes its heap from it, Go sizes its collector from it, and
+  jest and webpack start one worker for each processor. What is really there is whatever the rest of
+  the machine has not taken. Measured in one sandbox: 7836 megabytes advertised, about 1500 free, and
+  an allocator killed after taking 1600. The session budgets against the first number and the kernel
+  kills it against the second.
+
+  ```
+  quay room
+  ```
+
+  It says what this sandbox advertises, what is free, what it holds, and what an out of memory killer
+  has already taken in it. The kill counts are the part that cannot be got any other way: a kill by
+  the machine's own killer raises `oom_kill` and leaves the limit count at zero, so the pair says
+  whether the machine ran out or the session did. The kernel log is not readable from inside a
+  container, so nothing else in there answers that.
+
+  Then it says what to do about a gate that does not fit: cap the heap under what is free, take one
+  worker rather than one for each processor, run the gate over part of the tree and name the part it
+  ran. If it still does not fit, say what could not run rather than reporting a partial check. That
+  advice is in the tool rather than in each session's memory, so the answer is the same every time
+  instead of being invented once per session.
+
+  A task killed for memory says so now as well. Nothing taken by signal 9 gets to say why, so
+  `run exited: exit status 137, and it said nothing about why` read as a hang, and it is also what
+  an upgrade taking a container away produces. Both are named, with the command that answers which.
+
+  `QC_SANDBOX_MEMORY` gives a session a limit of its own, as the daemon spells it, for example
+  `4g`, with swap capped at the same figure so the limit means what it says. Unset, a session has no
+  limit, which is where every session already is. The figure shares one machine between the stack,
+  the sessions already running and this one, so it is the operator's to choose.
+
+- **The analyser says why it cannot run, instead of shrugging.** It printed `no answer, carrying on`
+  on every message, which is what a hook says when it has nothing to add and also what it said when
+  it could not work at all. Those are not the same thing, and telling them apart meant reading a file
+  in /tmp.
+
+  The cause it was hiding: the subscription token reaches a session but not what the session starts.
+  Claude Code removes `CLAUDE_CODE_OAUTH_TOKEN` from the environment of every process it spawns while
+  passing nine other `CLAUDE_` variables through, and a hook is one of those processes. So the child
+  model call answered `Not logged in · Please run /login` on standard output and exited 1, the hook
+  discarded output because the status was not zero, and threw away the one sentence that said what
+  was wrong. Measured in a sandbox: the session's own process has the token, its direct child does
+  not.
+
+  It now keeps both streams whatever the status, names the cause, and says the next move. Not logged
+  in, no claude on the path, a timeout past `timeoutMs`, or anything else the child said, one line of
+  it. Four tests cover the messages and one drives the whole hook to check the terminal is told the
+  cause rather than that something went wrong. Mutation checked: putting the old shrug back turns it
+  red.
+
+  This does not make the analysis work. The credential still does not reach a hook, and until the
+  crew hands it one the honest move is `quay hook detach crew prompt-analyser`, which the failure now
+  says out loud.
 
 - **`quay dispatch` lets go of the task, and `quay ask` waits for the answer.** The command line held
   every task in the client for as long as the work took, so the terminal was the weakest part of the

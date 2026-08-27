@@ -375,6 +375,17 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "hello" to the project
     Then the refusal says "claude: command not found"
 
+  # Nothing killed with signal 9 gets to say why: no last line on either stream, and the kernel log
+  # is not readable from inside a container. So exit 137 on its own read as a hang, and the operator
+  # could not tell a task that ran out of memory from one whose container an upgrade took away. Both
+  # are named now, with the command that answers which it was.
+  Scenario: A task killed for memory says so rather than showing an exit status
+    Given the sandbox is killed for memory part way through the task
+    When the operator dispatches "hello" to the project
+    Then the refusal says "a kill rather than a failure"
+    And the refusal says "quay room"
+    And the refusal says "container went away"
+
   # The console shows the crew and a conversation shows one session, and using both meant losing sight
   # of one. The panel puts them on the screen at once, half the width each, side by side.
   #
@@ -394,6 +405,27 @@ Feature: Sessions run in isolated sandboxes
     And a session started by dispatching "the newer one" on a new session
     When the operator opens the panel
     Then the panel opens the newer conversation
+
+  # A pane closes the moment its command exits, and the conversation half of the screen is a pane
+  # running one command. So a conversation that could not be opened printed the reason and had it
+  # destroyed in the same instant. The operator pressed the key, the screen flickered, and nothing on
+  # it ever said why. Attach stays instead: it says what happened and waits there, the way a finished
+  # conversation already keeps its terminal alive inside the sandbox.
+  #
+  # These two drive a real terminal multiplexer, on a socket of their own, because the whole of this
+  # is what the multiplexer does with a pane whose command has ended.
+  Scenario: A conversation that cannot be opened says why and stays on the screen
+    Given a terminal with the console in it
+    When quay attach is put beside the console and cannot reach the crew
+    Then the reason is on the screen
+    And pressing enter gives the operator the console back
+
+  # The measurement the one above is built on, kept so a multiplexer that changed its mind about this
+  # would be noticed rather than quietly making the answer pointless.
+  Scenario: A conversation that says why and exits takes the reason with it
+    Given a terminal with the console in it
+    When a conversation that says why and exits is put beside the console
+    Then the pane is gone, and the reason with it
 
   Scenario: The panel refuses rather than opening half of one
     When the operator opens the panel

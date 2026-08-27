@@ -149,11 +149,13 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "ask":
 		return runAsk(ctx, client, args[1:], out)
 	case "attach":
-		return runAttach(ctx, client, args[1:], out)
+		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":
 		return runWeb(ctx, client, args[1:], out)
 	case "render":
 		return runRender(args[1:], out)
+	case "room":
+		return runRoom(out)
 	case "panel":
 		// The way off the command that used to open this. `quay` opens the crew itself now, so this
 		// is refused loudly rather than being taken for an address or an unknown word.
@@ -690,22 +692,36 @@ func runAsk(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 // dispatchTask is the road both of them take. One request, one difference: whether anybody waits.
 func dispatchTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string,
 	command string, letGo bool, out io.Writer) error {
-	typed, words := splitAddressFromText(args)
+	typed, words := workspace.SplitSession(args)
 	text := strings.TrimSpace(strings.Join(words, " "))
 	if text == "" {
 		return fmt.Errorf("usage: quay %s [<address>] <text>", command)
 	}
 
-	located, err := locate(ctx, client, typed)
-	if err != nil {
-		return err
-	}
-	if !located.HasProject() {
-		return needsAProject(ctx, client, located)
+	project, handle := "", ""
+	switch {
+	case typed == "" || strings.Contains(typed, workspace.Separator):
+		// No address at all is where the operator is standing, which may already name a session.
+		located, err := locate(ctx, client, typed)
+		if err != nil {
+			return err
+		}
+		if !located.HasProject() {
+			return needsAProject(ctx, client, located)
+		}
+		project, handle = located.ProjectID, located.SessionID
+	default:
+		// One bare identifier, read off the session column. The crew's own call takes a project and a
+		// handle, so both are read from the session the operator named rather than worked out again.
+		session, err := workspace.Session(ctx, client, typed)
+		if err != nil {
+			return fmt.Errorf("%w\n\nto send %q as the message instead, quote the whole message", err, typed)
+		}
+		project, handle = session.GetProject(), session.GetHandle()
 	}
 
 	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: located.ProjectID, Handle: located.SessionID, Text: text, Detach: letGo,
+		Project: project, Handle: handle, Text: text, Detach: letGo,
 	})
 	if err != nil {
 		return err
@@ -721,17 +737,6 @@ func dispatchTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	fmt.Fprintf(out, "(session %s, handle %s)\n", resp.GetId(), resp.GetHandle())
 	return nil
-}
-
-// splitAddressFromText decides whether the first word is an address or the start of the message.
-//
-// An address has to reach a project for a task to run, so it always carries a separator. That keeps
-// `quay dispatch hello there` a message rather than a mystifying lookup of "hello".
-func splitAddressFromText(args []string) (address string, words []string) {
-	if len(args) > 1 && strings.Contains(args[0], workspace.Separator) {
-		return args[0], args[1:]
-	}
-	return "", args
 }
 
 // needsAProject explains an address that stops at a workspace and lists what it holds, because the

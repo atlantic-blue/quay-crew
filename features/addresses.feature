@@ -45,14 +45,14 @@ Feature: The crew is addressed by path
     Then the reply is "you said: and again"
     And both tasks ran in the same session
 
-  # A refusal that names one identifier sends the operator looking for a value their screen may not
-  # carry at all.
-  Scenario: A refused session names both of its identifiers
+  # A refusal that offers a value the operator's screen does not carry sends them looking for
+  # something they cannot find. It offers the session column, which is what they read it off.
+  Scenario: A refused session offers the identifier the listing prints
     Given a session started by dispatching "remember this"
     And the operator labels the session "the bills"
     When the operator addresses "me/house-bills/ffffffff"
     Then the address is refused as not found
-    And the refusal names both identifiers of that session
+    And the refusal offers the identifier the listing prints
 
   Scenario: An address naming a project that does not exist is refused
     When the operator addresses "me/ghost"

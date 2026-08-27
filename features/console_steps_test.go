@@ -26,6 +26,11 @@ type consoleWorld struct {
 	openErr error
 	// model is the real console, driven by keys, for the scenarios about what a key does.
 	model console.Model
+	// handedOver is every command the console gave the terminal, and terminalErr is what the terminal
+	// answered with. Together they carry a key through to what the operator is left looking at, rather
+	// than stopping at the command the key produced.
+	handedOver  []*exec.Cmd
+	terminalErr error
 	// contextFile is a file a scenario wrote for the guided setup's context stage to read.
 	contextFile string
 }
@@ -304,7 +309,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		view := c.model.View()
-		want := "stop session " + display.ShortID(current.handle) + "?"
+		want := "stop session " + display.ShortID(current.sessionID) + "?"
 		if !strings.Contains(view, want) {
 			return fmt.Errorf("the console does not ask %q:\n%s", want, view)
 		}
@@ -579,7 +584,13 @@ func (c *consoleWorld) openModel(w *world) error {
 	if err != nil {
 		return err
 	}
-	c.model = model.WithInfo(described)
+	c.model = model.WithInfo(described).WithTerminal(recordingTerminal(c))
+	return c.refresh()
+}
+
+// refresh reloads the active view, which is what the key for it does and what the clock does on its
+// own every few seconds.
+func (c *consoleWorld) refresh() error {
 	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 }
 

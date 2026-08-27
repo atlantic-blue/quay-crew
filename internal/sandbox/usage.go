@@ -83,10 +83,14 @@ type transcriptLine struct {
 // control plane at all: an operator talking in the panel is talking to the sandbox directly, and the
 // only record of it is the file the tool writes as it goes.
 //
+// It takes the session's configuration rather than its workspace, because where a conversation is
+// kept is decided by the same layout the mounts come from: a session running as a role keeps its own,
+// and reading the workspace's store for it would answer zero forever.
+//
 // It answers zero for a conversation with no transcript, which is one nobody has spoken in yet, and
 // zero for anything it cannot read. A cost is not worth failing a listing over.
-func (s Storage) ConversationUsage(workspace, conversation string) Usage {
-	path, found := s.transcript(workspace, conversation)
+func (s Storage) ConversationUsage(cfg Config, conversation string) Usage {
+	path, found := s.transcript(cfg, conversation)
 	if !found {
 		return Usage{}
 	}
@@ -100,9 +104,13 @@ func (s Storage) ConversationUsage(workspace, conversation string) Usage {
 // cost only grows, and the window empties again when the model compacts. Only the last answer counts,
 // because everything before it was sent again as part of it.
 //
+// It takes the session's configuration for the same reason ConversationUsage does: a session running
+// as a role keeps its own conversation store, and reading the workspace's store for it would answer
+// that a full window was empty.
+//
 // Zero for a conversation nobody has spoken in, and for anything this cannot read.
-func (s Storage) ConversationContext(workspace, conversation string) Usage {
-	path, found := s.transcript(workspace, conversation)
+func (s Storage) ConversationContext(cfg Config, conversation string) Usage {
+	path, found := s.transcript(cfg, conversation)
 	if !found {
 		return Usage{}
 	}
@@ -110,21 +118,44 @@ func (s Storage) ConversationContext(workspace, conversation string) Usage {
 }
 
 // transcript is where the model keeps a conversation, and whether it is there. The working directory
-// is the same inside every sandbox, so the tool files them all under one directory per workspace and
-// the name of the file is the name of the conversation.
-func (s Storage) transcript(workspace, conversation string) (string, bool) {
-	if s.Dir == "" || workspace == "" || conversation == "" {
+// is the same inside every sandbox, so the tool files them all under one directory per conversation
+// store and the name of the file is the name of the conversation.
+func (s Storage) transcript(cfg Config, conversation string) (string, bool) {
+	if s.Dir == "" || cfg.Workspace == "" || conversation == "" {
 		return "", false
 	}
-	if usableAsPath("workspace", workspace) != nil || !plainIdentifier(conversation) {
+	if usableAsPath("workspace", cfg.Workspace) != nil || !plainIdentifier(conversation) {
 		return "", false
 	}
-	matches, err := filepath.Glob(filepath.Join(
-		s.Dir, "workspaces", workspace, "claude", "projects", "*", conversation+ConversationFile))
+	store, found := s.conversationDir(cfg)
+	if !found {
+		return "", false
+	}
+	matches, err := filepath.Glob(filepath.Join(store, "projects", "*", conversation+ConversationFile))
 	if err != nil || len(matches) == 0 {
 		return "", false
 	}
 	return matches[0], true
+}
+
+// conversationDir is where this session's conversation store sits, read from the same layout the
+// mounts come from so the two cannot drift.
+func (s Storage) conversationDir(cfg Config) (string, bool) {
+	if cfg.Role != "" {
+		for _, part := range []struct{ kind, value string }{
+			{"project", cfg.Project}, {"session", cfg.ID},
+		} {
+			if usableAsPath(part.kind, part.value) != nil {
+				return "", false
+			}
+		}
+	}
+	for _, one := range layout(cfg) {
+		if one.target == ConversationPath {
+			return filepath.Join(append([]string{s.Dir}, one.parts...)...), true
+		}
+	}
+	return "", false
 }
 
 // usageCache keeps what each transcript came to, so a console refreshing every few seconds does not

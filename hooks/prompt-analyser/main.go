@@ -94,8 +94,8 @@ func (OS) Write(file string, body []byte) error { return os.WriteFile(file, body
 // MAX_THINKING_TOKENS=0 is what makes this usable at all. With extended thinking left on, the same
 // call spent 3,855 thinking tokens and 42 seconds to produce five short lines. With it off it is
 // about 1.5 seconds.
-func AskModel(config Config, home string) func(string, string) string {
-	return func(system, user string) string {
+func AskModel(config Config, home string) func(string, string) (string, string) {
+	return func(system, user string) (string, string) {
 		ctx, stop := context.WithTimeout(context.Background(), config.Timeout)
 		defer stop()
 
@@ -115,14 +115,21 @@ func AskModel(config Config, home string) func(string, string) string {
 		command.Dir = home
 		command.Env = childEnv(os.Environ())
 
-		out, err := command.Output()
+		// Both streams, kept whatever the status. The child says why it failed on standard output and
+		// then exits 1, so discarding output on a bad status throws away the one sentence that says
+		// what to do: "Not logged in · Please run /login".
+		var out, errOut strings.Builder
+		command.Stdout, command.Stderr = &out, &errOut
+		err := command.Run()
+
 		trace("model", time.Since(started).Truncate(time.Millisecond).String())
-		if err != nil {
-			trace("error", err.Error())
-			return ""
+		if err == nil {
+			trace("answer", strings.TrimSpace(out.String()))
+			return out.String(), ""
 		}
-		trace("answer", strings.TrimSpace(string(out)))
-		return string(out)
+		trouble := Trouble(ctx.Err(), err, out.String()+errOut.String(), config)
+		trace("error", trouble)
+		return "", trouble
 	}
 }
 

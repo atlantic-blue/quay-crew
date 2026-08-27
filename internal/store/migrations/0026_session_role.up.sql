@@ -1,0 +1,11 @@
+-- The role a session runs as, empty for a session that runs as nobody in particular.
+--
+-- On the session rather than on each task, because a role is the whole instruction and the whole
+-- boundary of the session: what it may receive has to hold for every task it has, not only the one
+-- that named it. A sandbox is born with its capabilities and never drifts, and this is the same
+-- statement one level up.
+--
+-- Not a reference to roles (name, version). A workspace pins the version it holds, so the version a
+-- session runs is read through the workspace's attachment, and a role detached after a session ran
+-- must not take that session's history with it.
+alter table sessions add column if not exists role text not null default '';
