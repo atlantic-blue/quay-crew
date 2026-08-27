@@ -274,7 +274,7 @@ func NewServer(cfg Config) *Server {
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).
 		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).
-		Redacting(server).Exporting(server)
+		Redacting(server).Exporting(server).Reading(server)
 	return server
 }
 

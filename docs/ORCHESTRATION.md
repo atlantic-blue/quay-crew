@@ -171,6 +171,27 @@ states, moved earlier: refusing at the write is refusing while somebody is looki
 Zero when no role. A piece of work is pinned the way a run pins its graph, so editing a role cannot
 change work that is already declared.
 
+**`hands`, text array, optional, default empty.** The material this piece of work cannot be done
+without, drawn from the same three words a role receives: `work`, `context` and `skills`. A word the
+crew does not hand out is refused by name at the write, with the three offered back.
+
+Empty is every piece of work written before this existed: it hands nothing beyond its own brief, and
+nothing about it changes.
+
+Where the work names a role, what it hands is held against what that role receives, and where the
+two disagree the work is refused. The refusal names the role, the material it does not receive, and
+the two ways out: widen the role and import it again, or declare the work without the material.
+
+It is checked twice, and the second check is the one that matters. At the write, because a refusal
+that arrives hours later has nothing pointing back at the declaration. And again at the dispatch,
+because a role can be detached, imported at a new version and attached again while work sits pending,
+so what the crew would put in front of a session is only settled at the moment it hands it over. Work
+refused there is `stopped` with the reason on the row, and no container is ever built for it.
+
+The reason to refuse rather than to withhold: a session asked to do work with the context missing
+answers plausibly instead of stopping. That is the same failure `expect_file` exists to catch, and
+`docs/ARCHITECTURE.md` states it plainly.
+
 **`mode`, text, optional, default empty.** What this work's tasks may do without asking. Empty
 leaves the session in the mode it is born in. Validated through `model.PermissionModeNamed`, which
 is what `flow.Parse` already does, and refused with the same list of what would work.
@@ -346,10 +367,12 @@ flowchart LR
     TASK -->|"yes"| CLAIMED{"does the answer meet<br/>what the work claimed?"}
     CLAIMED -->|"no"| STOP["phase stopped,<br/>reason names the claim"]
     CLAIMED -->|"yes"| DONE["phase done, answer,<br/>spent tokens, finished at"]
-    TICK --> RUNNABLE["read the work that is pending,<br/>with no parent, no role and no after"]
+    TICK --> RUNNABLE["read the work that is pending,<br/>with no parent and no after"]
     RUNNABLE --> CLAIM{"claim it:<br/>pending to running,<br/>in one statement"}
     CLAIM -->|"another controller won"| NOTHING["nothing"]
-    CLAIM -->|"claimed"| SEND["dispatch the brief into a session<br/>named after the work, and let go"]
+    CLAIM -->|"claimed"| BOUNDARY{"does its role receive<br/>everything the work hands?"}
+    BOUNDARY -->|"no, or the role cannot be read"| REFUSED["phase stopped,<br/>reason names the role<br/>and the material.<br/>No container is built"]
+    BOUNDARY -->|"yes, or it names no role"| SEND["dispatch the brief into a session<br/>running as the role, and let go"]
     SEND --> RECORD["record the session on the row"]
 ```
 
@@ -360,11 +383,10 @@ row that has already started does nothing. Work is paid for, so a second dispatc
 The dispatch lets go of its task. A controller that waits on a model is a controller that stops
 controlling, so the answer is read off the task record on a later tick.
 
-**What it does not do yet, and which slice does it.** It runs root work only: work that waits for
-something, work in a role and work under a parent are read and left alone. There is no budget check, no
-depth limit and no credential of its own, which is slice 5. Nothing is published to the event log,
-which is slice 6. A piece of work that goes to `asking` is not moved by anything here, because
-nothing asks yet.
+**What it does not do yet, and which slice does it.** It runs root work: work that waits for
+something and work under a parent are read and left alone. Work that names a role is run as that
+role, which is slice 10. There is no budget check and no depth limit, which is slice 5. A piece of
+work that goes to `asking` is not moved by anything here, because nothing asks yet.
 
 The session is named after the work rather than minted, so a dispatch that has to be made again
 lands in the same conversation. That is what makes the recovery in slice 4 possible without a second

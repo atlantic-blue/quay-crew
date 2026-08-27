@@ -49,6 +49,7 @@ const (
 	flagDeadline       = "--deadline"
 	flagBudgetTokens   = "--budget-tokens"
 	flagLabel          = "--label"
+	flagHands          = "--hands"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -91,6 +92,7 @@ func runWorkCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		ExpectFile:     values.first(flagExpectFile),
 		ExpectContains: values.first(flagExpectContains),
 		After:          values[flagAfter],
+		Hands:          values[flagHands],
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -204,6 +206,9 @@ func runWorkShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	for _, waits := range one.GetAfter() {
 		fmt.Fprintf(out, "waits for %s\n", display.ShortID(waits))
+	}
+	if handed := one.GetHands(); len(handed) > 0 {
+		fmt.Fprintf(out, "handed %s\n", strings.Join(handed, ", "))
 	}
 	if one.GetBudgetTokens() > 0 {
 		fmt.Fprintf(out, "budget %d tokens\n", one.GetBudgetTokens())
@@ -354,7 +359,7 @@ func workFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains,
-		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagPhase, flagRoots,
+		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagHands, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.
 		flagParent,

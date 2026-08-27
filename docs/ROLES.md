@@ -35,6 +35,41 @@ Nothing chooses the role. The operator writes it into the graph and the workspac
 already, or the run stops at that step and says which role is missing. Choosing a team while the run
 is under way is the product manager's job and is not built.
 
+And a piece of work runs as one. A caller names a role when it declares work, and the controller runs
+that work in a session running as that role:
+
+```
+quay work create me/quay-crew --role backlog-clearer \
+  --title "clear the open pull request backlog" \
+  --brief "Read the open pull requests. For each one, declare a piece of work." \
+  --hands context
+```
+
+The role is on the record, never on the call that runs the task. A caller that could name its own
+role could name one granting more than the work was declared with, and the credential the crew mints
+for that task carries what the role's `may` list declares.
+
+`--hands` is the other side of `receives`: it says what this piece of work cannot be done without.
+Where the role does not receive it, the work is refused, and no container is ever built for it.
+
+```mermaid
+flowchart LR
+    WORK["a piece of work<br/>role backlog-clearer<br/>hands context"] --> CHECK{"does the role receive<br/>everything the work hands?"}
+    CHECK -->|"no"| STOPPED["phase stopped.<br/>The refusal names the role,<br/>the material, and both ways out"]
+    CHECK -->|"yes"| SESSION["a session running as the role,<br/>in its own container"]
+    SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its may list"]
+```
+
+The check happens twice, and the second one is the one that matters. At the write, so the refusal
+reaches whoever wrote the declaration. And again at the dispatch, because a role can be detached,
+imported at a new version and attached again while work sits pending, so what the crew would put in
+front of a session is only settled at the moment it hands it over.
+
+Refused rather than withheld, and that is the difference from a flow step. A flow step naming a role
+that receives no context is given none, silently, because the operator wrote the boundary into the
+graph and meant it. A piece of work that says it cannot be done without the context is saying the
+opposite, so running it without would leave a session answering plausibly instead of stopping.
+
 ## Why the boundary, not the persona
 
 A flow sends work to one session, and every step lands in the same conversation. The session that
@@ -196,8 +231,16 @@ write what every session in the workspace is told.
   at once.
 - A session running as a role emits no event when it finishes.
 - No event starts a flow.
+- A piece of work pins the version of the role it was declared against, and the session is built from
+  the version the workspace holds now. The pin is on the record and nothing reads it back yet, so a
+  role narrowed after the work was declared stops that work rather than running it as it was
+  written.
+- Work in a role is root work only. Work under a parent and work that waits for something are each
+  their own slice, whether or not they name a role.
 
 The scenarios that hold up what is built are in
-[`features/roles.feature`](../features/roles.feature) and
-[`features/rolesessions.feature`](../features/rolesessions.feature). If a behaviour is not there, it
-is not built.
+[`features/roles.feature`](../features/roles.feature),
+[`features/rolesessions.feature`](../features/rolesessions.feature),
+[`features/work.feature`](../features/work.feature) and
+[`features/workcontroller.feature`](../features/workcontroller.feature). If a behaviour is not there,
+it is not built.

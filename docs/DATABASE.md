@@ -121,8 +121,9 @@ is minted where the row is written, so the same identifier travels outward on th
 `docs/TASKS.md` for the whole path and `docs/EVENTS.md` for the export.
 
 **`work`** is declared intent: one row per piece of work a caller asked for. It carries what the
-caller declared (the title, the brief, the role and the version it was pinned to, the mode, what the
-answer must carry, what it waits for, a deadline, a budget and its labels), what the crew assigned
+caller declared (the title, the brief, the role and the version it was pinned to, the material it
+hands that role, the mode, what the answer must carry, what it waits for, a deadline, a budget and
+its labels), what the crew assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
 answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
 process, so it outlives the caller. `quay work list` and `quay work show` read it.

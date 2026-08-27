@@ -13,7 +13,7 @@ import (
 // workColumns is the row every read of a piece of work selects, in one place so a reader and a
 // listing cannot drift into scanning different things.
 const workColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
-	expect_contains, after_work, deadline, budget_tokens, labels, coalesce(parent, ''), depth, version,
+	expect_contains, after_work, deadline, budget_tokens, labels, hands, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, created_at, updated_at, started_at, finished_at`
 
@@ -38,15 +38,15 @@ func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *w
 	// a double that accepts more than the real thing manufactures a green suite.
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
+			expect_contains, after_work, deadline, budget_tokens, labels, hands, parent, depth, version, phase,
 			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
 			lease_owner, lease_until, trace_id, parent_span_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		afterOrEmpty(declared.Hands), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
@@ -229,7 +229,7 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	var labels []byte
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
-		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Parent, &found.Depth,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Hands, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
@@ -246,6 +246,9 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	}
 	if len(found.After) == 0 {
 		found.After = nil
+	}
+	if len(found.Hands) == 0 {
+		found.Hands = nil
 	}
 	return &found, nil
 }
@@ -281,15 +284,16 @@ func nullIfEmpty(value string) any {
 	return value
 }
 
-// RunnableWork is the work a controller may start: pending, with no parent, no role and nothing it
-// waits for, oldest declared first.
+// RunnableWork is the work a controller may start: pending, with no parent and nothing it waits
+// for, oldest declared first. Work that names a role is in it, and the controller runs it as that
+// role.
 //
-// The shape is deliberately narrow. Work that waits for something, work in a role and work under a
-// parent are each a later slice, and offering them to a controller that honours none of those would
-// run them with their ordering, their boundary and their budget ignored.
+// Work that waits for something and work under a parent are still left out. Each is a later slice,
+// and offering them to a controller that honours neither would run them with their ordering and
+// their budget ignored.
 func (p *Postgres) RunnableWork(ctx context.Context, limit int) ([]*work.Work, error) {
 	return p.workMatching(ctx, `
-		where phase = $1 and parent is null and role = '' and cardinality(after_work) = 0
+		where phase = $1 and parent is null and cardinality(after_work) = 0
 		order by created_at, id`, limit, work.PhasePending)
 }
 

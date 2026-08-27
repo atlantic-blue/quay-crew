@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/cucumber/godog"
@@ -496,4 +497,89 @@ func eventKinds(events []*work.Event) []string {
 		kinds = append(kinds, event.Kind)
 	}
 	return kinds
+}
+
+// The steps for what a piece of work hands the session that runs it, and the boundary that holds it
+// against what its role receives.
+func initializeWorkMaterialSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the workspace holds the role "([^"]*)" at version (\d+) receiving "([^"]*)"$`,
+		func(ctx context.Context, name string, version int, material string) error {
+			w := worldFrom(ctx)
+			receives := []string{}
+			for _, one := range strings.Split(material, ",") {
+				receives = append(receives, strings.TrimSpace(one))
+			}
+			if _, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{
+				Files: roleFiles(name, version, roleManifest{model: "opus", receives: receives}),
+			}); err != nil {
+				return err
+			}
+			_, err := w.client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{
+				Workspace: w.workspaceID, Name: name,
+			})
+			return err
+		})
+
+	sc.Step(`^the caller declares work in the role "([^"]*)" handed "([^"]*)"$`,
+		func(ctx context.Context, named, material string) error {
+			return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
+				Title: "write the tests", Brief: "from the work alone",
+				Role: named, Hands: []string{material},
+			})
+		})
+
+	sc.Step(`^the caller declares work handed "([^"]*)"$`, func(ctx context.Context, material string) error {
+		return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
+			Title: "read the electricity bill", Brief: "open it", Hands: []string{material},
+		})
+	})
+
+	// The three parts of a refusal a caller can act on: whose boundary it is, what it does not
+	// receive, and the two ways out.
+	sc.Step(`^the crew refuses it, naming the role, the material and what to change$`,
+		func(ctx context.Context) error {
+			for _, want := range []string{"test-writer", "context", "import it again", "declare the work without"} {
+				if err := theRefusalSays(want)(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the crew refuses it and lists the material it hands out$`, func(ctx context.Context) error {
+		for _, want := range role.Material {
+			if err := theRefusalSays(want)(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^no work was written$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		listed, err := w.client.ListWork(ctx, &quaycrewv1.ListWorkRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		if len(listed.GetWork()) != 0 {
+			return fmt.Errorf("the crew holds %d pieces of work, and a refusal writes no row", len(listed.GetWork()))
+		}
+		return nil
+	})
+
+	sc.Step(`^the work is handed "([^"]*)"$`, func(ctx context.Context, material string) error {
+		if w := worldFrom(ctx); w.lastErr != nil {
+			return fmt.Errorf("the declaration was refused: %v", w.lastErr)
+		}
+		one, err := lastWork(ctx)
+		if err != nil {
+			return err
+		}
+		for _, handed := range one.GetHands() {
+			if handed == material {
+				return nil
+			}
+		}
+		return fmt.Errorf("the work hands %v, want %q among them", one.GetHands(), material)
+	})
 }

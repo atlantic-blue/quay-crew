@@ -74,8 +74,9 @@ type Landing struct {
 // Store is the rows a controller reads and writes. Every write takes the event that describes it, so
 // the row and the record of how it moved land in one transaction or neither does.
 type Store interface {
-	// RunnableWork is the work this controller may start: pending, with no parent, no role and
-	// nothing it waits for, oldest declared first.
+	// RunnableWork is the work this controller may start: pending, with no parent and nothing it
+	// waits for, oldest declared first. Work that names a role is included, and the controller runs
+	// it as that role.
 	RunnableWork(ctx context.Context, limit int) ([]*Work, error)
 	// HeldWork is the work this controller is holding: running, with a session, under a lease that
 	// is this controller's and has not run out. Another controller's work is not this one's to move.
@@ -141,6 +142,16 @@ type Exporter interface {
 	ExportWork(ctx context.Context, events ...*Event)
 }
 
+// Roles is how a controller reads the role a piece of work names, as the workspace holds it now.
+//
+// Now rather than at the version the work pinned, because it is the same role the crew would build
+// the session from: two answers to "which role is this" is how a boundary comes to be checked
+// against one role and applied against another. A crew that cannot answer refuses the work, because
+// running it would run it as nobody.
+type Roles interface {
+	RoleFor(ctx context.Context, workspace, named string) (Receiver, error)
+}
+
 // Prover answers what a piece of work said would show its task did the work.
 //
 // An implementation that cannot answer says so, and the work stops. A check that quietly passes when
@@ -163,6 +174,7 @@ type Controller struct {
 	plane    ControlPlane
 	spend    Spend
 	prover   Prover
+	roles    Roles
 	redactor Redactor
 	exporter Exporter
 	logger   *slog.Logger
@@ -224,6 +236,13 @@ func (c *Controller) leaseIn(ctx context.Context, workspace string) Lease {
 		return c.leaseNow()
 	}
 	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
+}
+
+// Reading returns a controller that reads the role a piece of work names. Without one, work that
+// names a role is stopped rather than run, because a boundary nobody can read is not a boundary.
+func (c *Controller) Reading(roles Roles) *Controller {
+	c.roles = roles
+	return c
 }
 
 // Exporting returns a controller that offers each record it writes to the event log, after the
@@ -312,9 +331,13 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 
 	handle := SessionFor(one.ID)
 	lease := c.leaseIn(ctx, one.Workspace)
-	records := []*Event{
-		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
-		c.event(ctx, one, EventStarted, fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)),
+	// The boundary is read before the claim is described, so work that is refused carries a claim and
+	// a refusal on its record and no line saying a task was started that never was.
+	refusal := c.refusedMaterial(ctx, one)
+	records := []*Event{c.event(ctx, one, EventClaimed, c.leaseDetail(lease))}
+	if refusal == "" {
+		records = append(records,
+			c.event(ctx, one, EventStarted, fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)))
 	}
 	claimed, err := c.store.StartWork(ctx, one.ID, lease, records)
 	if err != nil {
@@ -325,6 +348,12 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 		return
 	}
 	c.exported(ctx, records...)
+	// Claimed and then stopped, with nothing dispatched. The claim is what keeps another controller
+	// from picking the same row up while this one writes the refusal.
+	if refusal != "" {
+		c.land(ctx, claimed, Landing{Phase: PhaseStopped, Reason: refusal}, EventStopped)
+		return
+	}
 
 	// Detached, because a controller that waits on a model is a controller that stops controlling.
 	// The answer is read off the task record on a later tick.
@@ -334,6 +363,10 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 		Project: claimed.Project, Handle: handle, Text: claimed.Brief,
 		PermissionMode: claimed.Mode, Detach: true,
+		// The role comes off the row and never from a caller. A caller that could name its own role
+		// could name one granting more than the work was declared with, and the credential the crew
+		// mints for this task carries what that role declared it may call.
+		Role: claimed.Role,
 		// Which piece of work this task runs, so the crew mints the credential for it and puts it in
 		// the environment of this task alone.
 		Work: claimed.ID,
@@ -348,6 +381,32 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	// Work whose task could not be started is failed with the reason rather than left running with
 	// nothing behind it, which is a row nobody can tell from work in progress.
 	c.land(ctx, claimed, Landing{Phase: PhaseFailed, Reason: oneLine(err.Error())}, EventFailed)
+}
+
+// refusedMaterial is why a piece of work cannot be given to the role it names, and empty where the
+// boundary holds or there is no role.
+//
+// Read here rather than only at the write, because a role can be detached, imported again at a new
+// version and attached again while work sits pending: what the crew would put in front of a session
+// is settled at the moment it hands it over. A crew that cannot read the role refuses the work, for
+// the reason an unprovable expectation stops it: a check that quietly passes when it could not be
+// run is the same false green as no check at all.
+func (c *Controller) refusedMaterial(ctx context.Context, one *Work) string {
+	if one.Role == "" {
+		return ""
+	}
+	if c.roles == nil {
+		return fmt.Sprintf("this work runs as the %s role and this crew cannot read its roles, "+
+			"so what the role receives could not be checked", one.Role)
+	}
+	held, err := c.roles.RoleFor(ctx, one.Workspace, one.Role)
+	if err != nil {
+		return oneLine(err.Error())
+	}
+	if material := Unreceived(one.Hands, held); material != "" {
+		return RefusedMaterial(one.Role, material)
+	}
+	return ""
 }
 
 // recoverAbandoned picks up the work a controller left behind when it went away.

@@ -460,7 +460,7 @@ func stoppedEvent(id, workspace, project, reason string) *work.Event {
 func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
-	t.Run("the work a controller may run is root work that is pending", func(t *testing.T) {
+	t.Run("the work a controller may run is root work that is pending, in a role or not", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -469,6 +469,8 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		waiting := workShaped(t, s, workspace, project, "waits for the root", func(w *work.Work) {
 			w.After = []string{root}
 		})
+		// Work in a role is offered, because the controller runs it as that role. The two left out
+		// are ordering and depth, which are each a later slice.
 		inRole := workShaped(t, s, workspace, project, "runs as a role", func(w *work.Work) {
 			w.Role, w.RoleVersion = "backlog-clearer", 1
 		})
@@ -484,10 +486,44 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		if err != nil {
 			t.Fatalf("RunnableWork: %v", err)
 		}
-		if len(runnable) != 1 || runnable[0].ID != root {
-			t.Fatalf("the runnable work is %v, want the one root", titlesOf(runnable))
+		offered := map[string]bool{}
+		for _, one := range runnable {
+			offered[one.ID] = true
 		}
-		_ = []string{waiting, inRole, child}
+		if len(runnable) != 2 || !offered[root] || !offered[inRole] {
+			t.Fatalf("the runnable work is %v, want the root and the one in a role", titlesOf(runnable))
+		}
+		_ = []string{waiting, child}
+	})
+
+	// What a piece of work hands its session survives the store, which is the whole of the boundary
+	// the controller checks: a field that came back empty would refuse nothing and look exactly like
+	// a boundary that held.
+	t.Run("what a piece of work hands is kept", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		handed := workShaped(t, s, workspace, project, "needs the crew's context", func(w *work.Work) {
+			w.Role, w.RoleVersion = "backlog-clearer", 1
+			w.Hands = []string{"context", "skills"}
+		})
+		bare := declaredWork(t, s, workspace, project, "hands nothing")
+
+		kept, err := s.GetWork(ctx, handed)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if len(kept.Hands) != 2 || kept.Hands[0] != "context" || kept.Hands[1] != "skills" {
+			t.Fatalf("the work hands %v, want context and skills", kept.Hands)
+		}
+		plain, err := s.GetWork(ctx, bare)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if len(plain.Hands) != 0 {
+			t.Fatalf("work that handed nothing hands %v, want nothing", plain.Hands)
+		}
 	})
 
 	t.Run("the oldest declared work is offered first", func(t *testing.T) {
