@@ -34,21 +34,28 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the session's sandbox carries no hooks directory$`, func(ctx context.Context) error {
-		if _, err := hooksMount(ctx); err == nil {
-			return fmt.Errorf("a session under no hooks was given a hooks directory anyway")
+	sc.Step(`^the settings file binds nothing to any event$`, func(ctx context.Context) error {
+		body, err := renderedSettings(ctx)
+		if err != nil {
+			return err
+		}
+		var document struct {
+			Hooks map[string]json.RawMessage `json:"hooks"`
+		}
+		if err := json.Unmarshal(body, &document); err != nil {
+			return fmt.Errorf("the settings file is not valid json: %w", err)
+		}
+		if len(document.Hooks) != 0 {
+			return fmt.Errorf("a session under no hooks was bound to something anyway:\n%s", body)
 		}
 		return nil
 	})
 
 	sc.Step(`^the settings file binds "([^"]*)" to "([^"]*)"$`,
 		func(ctx context.Context, name, event string) error {
-			w := worldFrom(ctx)
-			path := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID,
-				sandbox.HooksDir, hook.SettingsFile)
-			body, err := os.ReadFile(path)
+			body, err := renderedSettings(ctx)
 			if err != nil {
-				return fmt.Errorf("no settings file was written: %w", err)
+				return err
 			}
 			var document struct {
 				Hooks map[string][]struct {
@@ -79,13 +86,42 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the task was not told to load any settings$`, func(ctx context.Context) error {
-		// Pointing the runtime at a file that is not there fails the task before it starts.
-		if last := worldFrom(ctx).runner.lastRequest(); last.Settings != "" {
-			return fmt.Errorf("a session under no hooks was told to load %q", last.Settings)
-		}
-		return nil
-	})
+	// The line an attached operator reads, said by the same file that binds the hooks.
+	sc.Step(`^the settings tell the runtime to draw its status line by running quay$`,
+		func(ctx context.Context) error {
+			body, err := renderedSettings(ctx)
+			if err != nil {
+				return err
+			}
+			var document struct {
+				StatusLine struct {
+					Type    string `json:"type"`
+					Command string `json:"command"`
+				} `json:"statusLine"`
+			}
+			if err := json.Unmarshal(body, &document); err != nil {
+				return fmt.Errorf("the settings file is not valid json: %w", err)
+			}
+			if document.StatusLine.Type != "command" {
+				return fmt.Errorf("the crew asks for a status line of type %q, and the runtime only runs a command",
+					document.StatusLine.Type)
+			}
+			if words := strings.Fields(document.StatusLine.Command); len(words) < 2 || words[0] != "quay" {
+				return fmt.Errorf("the status line runs %q, which is not this tool", document.StatusLine.Command)
+			}
+			return nil
+		})
+}
+
+// renderedSettings is the settings file the crew wrote for this session's workspace.
+func renderedSettings(ctx context.Context) ([]byte, error) {
+	w := worldFrom(ctx)
+	at := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, sandbox.HooksDir, hook.SettingsFile)
+	body, err := os.ReadFile(at) //nolint:gosec // a path this test built, under its own temporary directory
+	if err != nil {
+		return nil, fmt.Errorf("no settings file was written: %w", err)
+	}
+	return body, nil
 }
 
 // hooksMount is the mount carrying the hooks into the session's sandbox, or an error saying there is

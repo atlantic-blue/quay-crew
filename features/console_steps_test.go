@@ -350,13 +350,34 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console says the session has no conversation yet$`, func(ctx context.Context) error {
-		c := consoleFrom(ctx)
-		if c.openErr == nil {
-			return fmt.Errorf("enter opened %v, want a reason the operator can act on", c.opened)
+	// What the operator is left with, rather than what the key returned: the command opens the one
+	// session on their screen, and the crew can name the conversation it opens, so the history and
+	// the cost of it belong to that session afterwards.
+	sc.Step(`^the console opens a conversation the crew can name$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		if c.openErr != nil {
+			return fmt.Errorf("enter was refused: %w", c.openErr)
 		}
-		if !strings.Contains(c.openErr.Error(), "no conversation yet") {
-			return fmt.Errorf("the reason is %q, want it to say there is no conversation yet", c.openErr)
+		if c.opened == nil {
+			return fmt.Errorf("enter produced no command")
+		}
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: row.ID})
+		if err != nil {
+			return err
+		}
+		named := resp.GetSession().GetModelSessionId()
+		if named == "" {
+			return fmt.Errorf("the conversation that opened has no name, so nothing can be attributed to it")
+		}
+		line := strings.Join(c.opened.Args, " ")
+		for _, want := range []string{sandbox.ContainerName(row.ID), sandbox.OpenConversation, named} {
+			if !strings.Contains(line, want) {
+				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
+			}
 		}
 		return nil
 	})

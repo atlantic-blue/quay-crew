@@ -10,8 +10,6 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/cucumber/godog"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type attachWorld struct {
@@ -125,7 +123,11 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if len(sessions.GetSessions()) != 1 {
 			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetSessions()))
 		}
-		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sessions.GetSessions()[0].GetId()})
+		only := sessions.GetSessions()[0]
+		// Recorded as the session in play, so the steps that name the sandbox and read the crew's
+		// conversation back can be asked about it. The dispatch failed, so nothing else recorded it.
+		w.tasks = append(w.tasks, task{sessionID: only.GetId(), handle: only.GetHandle()})
+		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: only.GetId()})
 		return nil
 	})
 
@@ -258,17 +260,6 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			if !strings.Contains(a.err.Error(), want) {
 				return fmt.Errorf("the refusal is %q, want it to say %q", a.err.Error(), want)
 			}
-		}
-		return nil
-	})
-
-	sc.Step(`^the control plane refuses it as not yet ready$`, func(ctx context.Context) error {
-		a := attachFrom(ctx)
-		if a.err == nil {
-			return fmt.Errorf("attaching was allowed, expected a refusal")
-		}
-		if got := status.Code(a.err); got != codes.FailedPrecondition {
-			return fmt.Errorf("refused as %s, want failed precondition", got)
 		}
 		return nil
 	})

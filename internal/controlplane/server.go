@@ -678,17 +678,19 @@ func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 // stopSessions stops every live session the filter matches and closes its sandbox. It is what
 // deleting has to do to the things it hides: sessions keep their history, and a container running
 // for a session nobody can see is the leak archiving already closes.
-func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) {
+func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) []*quaycrewv1.Session {
 	sessions, err := s.store.ListSessions(ctx, filter)
 	if err != nil {
-		return
+		return nil
 	}
 	for _, session := range sessions {
 		if session.GetStatus() != StatusStopped {
 			_ = s.store.StopSession(ctx, session.GetId())
+			s.emit(ctx, session, KindSessionStopped, "")
 		}
 		s.closeSandbox(ctx, session.GetId())
 	}
+	return sessions
 }
 
 // ReapStrays removes the sandboxes of sessions that no longer want one: the row is gone, archived, or
@@ -807,9 +809,15 @@ func (s *Server) ListWorkspaces(ctx context.Context, _ *quaycrewv1.ListWorkspace
 
 // DeleteWorkspace removes a workspace, stopping what it hides first.
 func (s *Server) DeleteWorkspace(ctx context.Context, req *quaycrewv1.DeleteWorkspaceRequest) (*quaycrewv1.DeleteWorkspaceResponse, error) {
-	s.stopSessions(ctx, store.SessionFilter{Workspace: req.GetId()})
+	gone := s.stopSessions(ctx, store.SessionFilter{Workspace: req.GetId()})
 	if err := s.store.DeleteWorkspace(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "workspace")
+	}
+	// After the delete, so nothing is announced that did not happen. The workspace is gone by now, so
+	// these reach the store and not the log: the export names its topic after a workspace there is no
+	// longer a row for.
+	for _, session := range gone {
+		s.emit(ctx, session, KindSessionDeleted, "")
 	}
 	return &quaycrewv1.DeleteWorkspaceResponse{}, nil
 }
@@ -977,9 +985,12 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 
 // DeleteProject removes a project, stopping what it hides first.
 func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjectRequest) (*quaycrewv1.DeleteProjectResponse, error) {
-	s.stopSessions(ctx, store.SessionFilter{Project: req.GetId()})
+	gone := s.stopSessions(ctx, store.SessionFilter{Project: req.GetId()})
 	if err := s.store.DeleteProject(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "project")
+	}
+	for _, session := range gone {
+		s.emit(ctx, session, KindSessionDeleted, "")
 	}
 	return &quaycrewv1.DeleteProjectResponse{}, nil
 }
@@ -997,9 +1008,12 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if handle == "" {
 		handle = store.NewID()
 	}
-	session, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle, s.birthMode)
+	session, created, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle, s.birthMode)
 	if err != nil {
 		return nil, storeError(err, "project")
+	}
+	if created {
+		s.emit(ctx, session, KindSessionCreated, "")
 	}
 	// A handle is matched whether the session is put away or not, so a dispatch to one the operator
 	// archived used to start a container for a session nobody can see. Archiving stops the session, and
@@ -1058,12 +1072,16 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 	// working for half an hour read idle, with the task burning its tokens invisible.
 	s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
 	task := s.beginTask(ctx, session, text)
+	// Emitted here rather than where the task was asked for, so both roads say the same thing: a
+	// detached task and a waited one are one path from this line down.
+	s.emit(ctx, session, KindSessionStarted, text)
 
 	box, err := s.sandboxFor(ctx, session)
 	if err != nil {
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
-		s.landTask(ctx, session, task, StatusFailed, "",
-			"the session's sandbox could not be created: "+err.Error())
+		failure := "the session's sandbox could not be created: " + err.Error()
+		s.landTask(ctx, session, task, StatusFailed, "", failure)
+		s.emit(ctx, session, KindSessionErrored, failure)
 		return "", sandboxError(err, "create sandbox")
 	}
 
@@ -1083,11 +1101,13 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 		// complete the task", so a deadline, a crash and a refusal were one indistinguishable line and
 		// the operator had nothing to act on.
 		s.landTask(ctx, session, task, StatusFailed, "", taskFailure(err))
+		s.emit(ctx, session, KindSessionErrored, taskFailure(err))
 		return "", status.Errorf(codes.Internal, "run task: %v", err)
 	}
 	s.recordTask(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
 	s.measureTask(ctx, session, resp, StatusIdle)
 	s.landTask(ctx, session, task, StatusIdle, resp.Reply, "")
+	s.emit(ctx, session, KindSessionCompleted, resp.Reply)
 
 	// Behind the answer, so the operator waits for their task rather than for the crew to think of a
 	// name for it. Only the identifier crosses into it: everything else is read again in there, so
@@ -1643,6 +1663,7 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	}
 	for _, session := range sessions {
 		s.withUsage(session)
+		s.withContextWindow(session)
 	}
 	s.withStaleness(ctx, sessions)
 	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
@@ -1655,6 +1676,7 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
+	s.withContextWindow(session)
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -1697,6 +1719,25 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 	}
 }
 
+// withContextWindow puts how full the model's context window is onto a session.
+//
+// A different question from what the conversation cost, and the one that decides whether it is still
+// worth continuing: cost only grows, while the window empties again when the model compacts. The used
+// figure comes from the transcript, and the size of the window from whatever the model runtime last
+// told a session in this workspace, because nothing else in the crew knows it.
+//
+// A conversation nobody has spoken in is left without a figure. A window nobody has been told the
+// size of is reported as a count with no size, which a listing shows as tokens rather than as a share
+// it made up.
+func (s *Server) withContextWindow(session *quaycrewv1.Session) {
+	carried := s.storage.ConversationContext(session.GetWorkspace(), session.GetModelSessionId())
+	if carried.Empty() {
+		return
+	}
+	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
+	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
+}
+
 // AttachSession describes how to open a session's conversation.
 //
 // It returns the container and the command, and no credential. The conversation handle is a pointer
@@ -1708,13 +1749,32 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	// A driver with no conversation yet is opened rather than refused: it is made the moment somebody
-	// opens the crew, and telling them to dispatch a task to the thing they just opened is a loop.
-	// Everything below is about a conversation that exists, so it is skipped too.
-	if session.GetModelSessionId() == "" && !session.GetDriver() {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s has no conversation yet: send it a message with quay dispatch first",
-			display.ShortID(session.GetHandle()))
+	// The row never decides whether a conversation opens. It is the crew's own bookkeeping, and it
+	// used to be the gate: a drain puts every live session down, `make upgrade` drains, so after an
+	// upgrade the whole crew said stopped and every session refused to open. An archived session was
+	// worse. Archiving sets the row to stopped as well, so the refusal read "is stopped: restart it
+	// first", and restarting an archived session is itself refused. Attach named the one action that
+	// could not be taken.
+	//
+	// So the row is brought up to date rather than obeyed. A session somebody is talking in is
+	// neither put away nor put down, and a row that said otherwise would have the next startup reap
+	// the container out from under the conversation.
+	if session.GetArchivedAt() != nil || session.GetStatus() == StatusStopped {
+		if session.GetArchivedAt() != nil {
+			if err := s.store.RestoreSession(ctx, session.GetId()); err != nil {
+				return nil, storeError(err, "restore session")
+			}
+		}
+		if session.GetStatus() == StatusStopped {
+			if err := s.store.RestartSession(ctx, session.GetId()); err != nil {
+				return nil, storeError(err, "restart session")
+			}
+		}
+		// Read back rather than patched in place, so the conversation below is recorded against the
+		// state the store now holds rather than the one this call arrived with.
+		if session, err = s.store.GetSession(ctx, req.GetId()); err != nil {
+			return nil, storeError(err, "session")
+		}
 	}
 	// The crew names the conversation rather than learning what it was called afterwards. A
 	// conversation started interactively picks its own identifier and tells nobody, so before this
@@ -1723,20 +1783,16 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	//
 	// Assigned here rather than at creation: this is the moment a conversation starts to exist, and a
 	// session that is only dispatched to gets its identifier from the task.
+	//
+	// Every session, not only the driver. A session exists from the moment a task is dispatched, so a
+	// first task that failed leaves one holding no conversation at all, and that session sat in the
+	// listing with no way to open it.
 	if session.GetModelSessionId() == "" {
 		named := store.NewConversationID()
 		if err := s.store.RecordTask(ctx, session.GetId(), named, session.GetStatus()); err != nil {
 			return nil, storeError(err, "name the conversation")
 		}
 		session.ModelSessionId = named
-	}
-	if session.GetStatus() == StatusStopped {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is stopped: restart it first", display.ShortID(session.GetHandle()))
-	}
-	if session.GetArchivedAt() != nil {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 	// A handle can outlive what it points at, and a conversation the crew has just named has no
 	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a
@@ -1823,7 +1879,9 @@ func (s *Server) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSess
 	if err := s.store.ArchiveSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.ArchiveSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
+	archived := s.reread(ctx, req.GetId())
+	s.emit(ctx, archived, KindSessionArchived, "")
+	return &quaycrewv1.ArchiveSessionResponse{Session: archived}, nil
 }
 
 // RestoreSession brings an archived session back into the default listing. It comes back stopped,
@@ -1839,7 +1897,9 @@ func (s *Server) RestoreSession(ctx context.Context, req *quaycrewv1.RestoreSess
 	if err := s.store.RestoreSession(ctx, req.GetId()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	return &quaycrewv1.RestoreSessionResponse{Session: s.reread(ctx, req.GetId())}, nil
+	restored := s.reread(ctx, req.GetId())
+	s.emit(ctx, restored, KindSessionRestored, "")
+	return &quaycrewv1.RestoreSessionResponse{Session: restored}, nil
 }
 
 // reread returns the session as it now is, so a caller does not have to ask again. A read that fails
@@ -1859,6 +1919,7 @@ func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionReq
 		return nil, storeError(err, "session")
 	}
 	s.closeSandbox(ctx, req.GetId())
+	s.emit(ctx, s.reread(ctx, req.GetId()), KindSessionStopped, "")
 	return &quaycrewv1.StopSessionResponse{}, nil
 }
 

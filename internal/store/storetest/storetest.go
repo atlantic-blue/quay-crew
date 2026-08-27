@@ -123,7 +123,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
 
-		born, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionPlan)
+		born, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionPlan)
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -133,7 +133,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		// What a session may do is its own once it exists. A crew whose configuration changed must not
 		// widen a conversation that is already running.
-		again, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionBypass)
+		again, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", model.PermissionBypass)
 		if err != nil {
 			t.Fatalf("FindOrCreateSession again: %v", err)
 		}
@@ -146,7 +146,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		project := newProject(t, s, "acme", "house bills")
 
-		born, err := s.FindOrCreateSession(context.Background(), project.GetId(), "session-quiet", "")
+		born, _, err := s.FindOrCreateSession(context.Background(), project.GetId(), "session-quiet", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -162,7 +162,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -207,7 +207,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -234,11 +234,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		other, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		other, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession other: %v", err)
 		}
@@ -281,7 +281,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
 
-		first, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		first, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -289,7 +289,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("new session status is %q, want idle", first.GetStatus())
 		}
 
-		again, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		again, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession again: %v", err)
 		}
@@ -297,7 +297,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the same session made two sessions: %q and %q", first.GetId(), again.GetId())
 		}
 
-		other, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		other, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession other session: %v", err)
 		}
@@ -308,7 +308,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 	t.Run("a session needs a live project", func(t *testing.T) {
 		s := newDataset(t)(t)
-		if _, err := s.FindOrCreateSession(context.Background(), "ghost", "session-a", ""); !errors.Is(err, store.ErrNotFound) {
+		if _, _, err := s.FindOrCreateSession(context.Background(), "ghost", "session-a", ""); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("session on a missing project returned %v, want ErrNotFound", err)
 		}
 	})
@@ -317,7 +317,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTask: %v", err)
@@ -335,7 +335,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTask: %v", err)
@@ -368,13 +368,13 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		first := newProject(t, s, "acme", "house bills")
 		second := newProject(t, s, "other", "gardening")
 
-		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-a", ""); err != nil {
+		if _, _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-a", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-b", ""); err != nil {
+		if _, _, err := s.FindOrCreateSession(ctx, first.GetId(), "session-b", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, second.GetId(), "session-c", ""); err != nil {
+		if _, _, err := s.FindOrCreateSession(ctx, second.GetId(), "session-c", ""); err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 
@@ -404,7 +404,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if err := s.StopSession(ctx, session.GetId()); err != nil {
 			t.Fatalf("StopSession: %v", err)
@@ -422,7 +422,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if fingerprint, err := s.SessionSkills(ctx, session.GetId()); err != nil || fingerprint != "" {
 			t.Fatalf("a fresh session answers %q, %v; want empty and no error", fingerprint, err)
@@ -466,7 +466,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTask: %v", err)
 		}
@@ -496,8 +496,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		kept, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
-		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		kept, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		other, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if err := s.RecordTask(ctx, kept.GetId(), "conversation-1", "idle"); err != nil {
 			t.Fatalf("RecordTask: %v", err)
 		}
@@ -550,7 +550,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		if got := session.GetPermissionMode(); got != "acceptEdits" {
 			t.Fatalf("a new session runs as %q, want acceptEdits, which is what every task has run as", got)
@@ -564,7 +564,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the session runs as %q, want bypassPermissions", got.GetPermissionMode())
 		}
 		// And the session it was set on, not every session in the project.
-		other, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		other, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 		if other.GetPermissionMode() != "acceptEdits" {
 			t.Fatalf("another session runs as %q, want it untouched", other.GetPermissionMode())
 		}
@@ -577,7 +577,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
 		for i, text := range []string{"first", "second", "third"} {
@@ -615,7 +615,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		running := &quaycrewv1.Task{
 			Id: "task-open", Session: session.GetId(), Prompt: "read the repository",
@@ -658,7 +658,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		// Delivery from the event log is at least once, so this is not a hypothetical.
 		task := &quaycrewv1.Task{
@@ -684,7 +684,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		err := s.AppendTask(ctx, &quaycrewv1.Task{Session: session.GetId(), Prompt: "hello"},
 			project.GetWorkspace(), project.GetId(), "session-a")
@@ -697,7 +697,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		session, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 
 		start := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
 		for i := range 5 {
@@ -727,8 +727,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
-		first, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
-		second, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
+		first, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		second, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-b", "")
 
 		now := timestamppb.New(time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC))
 		if err := s.AppendTask(ctx, &quaycrewv1.Task{Id: "a", Session: first.GetId(), Prompt: "mine", OccurredAt: now},
@@ -856,7 +856,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if _, err := s.GetProject(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("GetProject after delete returned %v, want ErrNotFound", err)
 		}
-		if _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", ""); !errors.Is(err, store.ErrNotFound) {
+		if _, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", ""); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("a deleted project still took a session: %v", err)
 		}
 		if err := s.DeleteProject(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
@@ -902,11 +902,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateProject: %v", err)
 		}
 
-		first, err := s.FindOrCreateSession(ctx, bills.GetId(), "general", "")
+		first, _, err := s.FindOrCreateSession(ctx, bills.GetId(), "general", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
-		second, err := s.FindOrCreateSession(ctx, garden.GetId(), "general", "")
+		second, _, err := s.FindOrCreateSession(ctx, garden.GetId(), "general", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession in the second project: %v", err)
 		}
@@ -929,7 +929,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("CreateProject: %v", err)
 		}
-		session, err := before.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		session, _, err := before.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
@@ -969,7 +969,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		// The same session must still resolve to the same session, which is what lets the next task
 		// resume the conversation rather than start a new one.
-		same, err := after.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		same, _, err := after.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
 		if err != nil {
 			t.Fatalf("FindOrCreateSession after reopening: %v", err)
 		}
@@ -1689,6 +1689,95 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if err := s.DetachCrewSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("detaching a skill the crew does not hold returned %v, want ErrNotFound", err)
+		}
+	})
+
+	// A session coming into existence is an event, and only the store knows it happened. A caller
+	// that found out by looking first would announce a session twice under a race.
+	t.Run("finding or creating a session says which it did", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+
+		if _, created, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", ""); err != nil || !created {
+			t.Fatalf("the first call created %v (%v), want it to say it made one", created, err)
+		}
+		if _, created, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", ""); err != nil || created {
+			t.Fatalf("the second call created %v (%v), want it to say it found one", created, err)
+		}
+	})
+
+	t.Run("a session's lifecycle is kept, in the order it happened", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		session, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-a", "")
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+
+		at := time.Now().UTC().Add(-time.Hour)
+		for i, kind := range []string{"session.created", "session.started", "session.completed"} {
+			event := &quaycrewv1.SessionEvent{
+				Id:         fmt.Sprintf("event-%d", i),
+				Kind:       kind,
+				Session:    session.GetId(),
+				Workspace:  session.GetWorkspace(),
+				Project:    session.GetProject(),
+				Handle:     session.GetHandle(),
+				Detail:     kind + " happened",
+				OccurredAt: timestamppb.New(at.Add(time.Duration(i) * time.Minute)),
+			}
+			if err := s.AppendSessionEvent(ctx, event); err != nil {
+				t.Fatalf("AppendSessionEvent %s: %v", kind, err)
+			}
+			// Written twice, because a caller that is unsure whether its write landed must be able to
+			// send it again and leave one record.
+			if err := s.AppendSessionEvent(ctx, event); err != nil {
+				t.Fatalf("AppendSessionEvent %s again: %v", kind, err)
+			}
+		}
+
+		kept, err := s.ListSessionEvents(ctx, session.GetId(), 0)
+		if err != nil {
+			t.Fatalf("ListSessionEvents: %v", err)
+		}
+		if len(kept) != 3 {
+			t.Fatalf("the session holds %d events, want the three that happened once each", len(kept))
+		}
+		for i, want := range []string{"session.created", "session.started", "session.completed"} {
+			if kept[i].GetKind() != want {
+				t.Errorf("event %d is %q, want %q", i+1, kept[i].GetKind(), want)
+			}
+		}
+		if kept[0].GetDetail() == "" || kept[0].GetHandle() != session.GetHandle() {
+			t.Errorf("an event came back without what it carried: %+v", kept[0])
+		}
+
+		// No session named asks for the whole crew's, which is what a view of what is going on reads.
+		all, err := s.ListSessionEvents(ctx, "", 0)
+		if err != nil {
+			t.Fatalf("ListSessionEvents for the crew: %v", err)
+		}
+		if len(all) != 3 {
+			t.Fatalf("the crew holds %d events, want 3", len(all))
+		}
+
+		// A session nobody has is empty rather than an error: nothing has happened to it yet.
+		none, err := s.ListSessionEvents(ctx, "no-such-session", 0)
+		if err != nil || len(none) != 0 {
+			t.Fatalf("a session with no events answered %d (%v)", len(none), err)
+		}
+	})
+
+	t.Run("an event with no id or no kind is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		if err := s.AppendSessionEvent(ctx, &quaycrewv1.SessionEvent{Kind: "session.created"}); err == nil {
+			t.Error("an event with no id was accepted, so writing it twice would leave two")
+		}
+		if err := s.AppendSessionEvent(ctx, &quaycrewv1.SessionEvent{Id: "e1"}); err == nil {
+			t.Error("an event with no kind was accepted, so a consumer would have nothing to switch on")
 		}
 	})
 

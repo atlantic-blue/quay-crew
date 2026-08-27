@@ -119,7 +119,10 @@ type Store interface {
 	// configurable, so a crew that says nothing does not change under an upgrade. It is ignored for a
 	// session that already exists: what a session may do is its own, and changing configuration must not
 	// widen a conversation already running.
-	FindOrCreateSession(ctx context.Context, project, session, bornIn string) (*quaycrewv1.Session, error)
+	//
+	// It says whether it made one. Only the store knows, and the caller has to: a session coming into
+	// existence is an event, and finding out afterwards means comparing timestamps and guessing.
+	FindOrCreateSession(ctx context.Context, project, session, bornIn string) (found *quaycrewv1.Session, created bool, err error)
 	// SetSessionSkills records the skill set a session's live sandbox was born with; empty clears
 	// it. SessionSkills reads it back, empty when no live sandbox is known. Stopping or archiving
 	// a session clears it, because the sandbox goes with it and the next one is born current.
@@ -259,6 +262,14 @@ type Store interface {
 	// A task the store does not hold is not an error. The task itself already happened, and the
 	// operator has its result, so a missing row must not come back as a failure of the task.
 	FinishTask(ctx context.Context, id, status, reply, failure string) error
+
+	// AppendSessionEvent records one thing that happened to a session, and is safe to call twice with
+	// the same event for the same reason AppendTask is: the event's Id is what makes a repeat harmless.
+	AppendSessionEvent(ctx context.Context, event *quaycrewv1.SessionEvent) error
+	// ListSessionEvents returns a session's lifecycle oldest first, capped at limit, so it reads the
+	// way it happened. An empty session asks for the whole crew's, which is what a view of what is
+	// going on right now reads. A limit of zero or less means the default.
+	ListSessionEvents(ctx context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error)
 
 	// The flow engine's substrate: a run and its transitions are rows written in one transaction,
 	// which is what makes reconstructable a guarantee rather than a sentence. The contract is

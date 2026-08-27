@@ -337,6 +337,11 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "name", Width: 0, Colour: colourOfName},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
+			// How full the model's context window is, which is the number that decides whether a
+			// conversation is still worth continuing. It gives way after the cost columns and before
+			// everything else: what a conversation cost is history, and how full it is now is a
+			// decision waiting to be made.
+			{Title: "ctx", Width: 6, Give: 4, Colour: colourOfContext},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
 			// the first to give way, because at half a window the age of a session is worth more than
 			// what it read from a cache.
@@ -440,6 +445,11 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "name", Width: 0, Colour: colourOfName},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
 			{Title: "mode", Width: 12, Colour: colourOfMode},
+			// How full the model's context window is, which is the number that decides whether a
+			// conversation is still worth continuing. It gives way after the cost columns and before
+			// everything else: what a conversation cost is history, and how full it is now is a
+			// decision waiting to be made.
+			{Title: "ctx", Width: 6, Give: 4, Colour: colourOfContext},
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},

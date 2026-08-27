@@ -149,10 +149,12 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		// is refused loudly rather than being taken for an address or an unknown word.
 		return fmt.Errorf("there is no panel command: `quay` on its own opens the crew, and p shows " +
 			"or hides the conversation beside it")
-	// Internal: the panes quay opens run these. Not in the usage, because they are not commands
-	// anybody types.
+	// Internal: the panes quay opens run these, and the model runtime in a sandbox runs the last of
+	// them. Not in the usage, because they are not commands anybody types.
 	case "header":
 		return runHeader(ctx, client, args[1:], out, addr)
+	case "statusline":
+		return runStatusLine(args[1:], os.Stdin, out)
 	case "console":
 		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions", "session":
