@@ -2,8 +2,12 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
 	"time"
+
+	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // DefaultPollEvery is how often the crew looks for waits that have come due.
@@ -24,6 +28,9 @@ type Poller struct {
 	engine *Engine
 	every  time.Duration
 	logger *slog.Logger
+	// owner is what this poller writes on the claims it takes. Two pollers must not share one, or
+	// each could take the other's row by claiming it again.
+	owner string
 }
 
 // NewPoller builds one over an engine.
@@ -34,7 +41,17 @@ func NewPoller(engine *Engine, every time.Duration, logger *slog.Logger) *Poller
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Poller{engine: engine, every: every, logger: logger}
+	// A name of its own, minted rather than asked for, for the reason the work controller mints one.
+	return &Poller{engine: engine, every: every, logger: logger, owner: "poller-" + newEventID()[:8]}
+}
+
+// Owned returns a poller that writes this name on the claims it takes. Zero length names are
+// ignored, because a claim nobody owns is a claim nothing can tell from another poller's.
+func (p *Poller) Owned(owner string) *Poller {
+	if strings.TrimSpace(owner) != "" {
+		p.owner = strings.TrimSpace(owner)
+	}
+	return p
 }
 
 // Run polls until ctx is done. It blocks, so a caller that wants it in the background runs it in a
@@ -60,8 +77,55 @@ func (p *Poller) Run(ctx context.Context) {
 // waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (p *Poller) Tick(ctx context.Context) {
 	p.carryWorked(ctx)
+	p.startTriggered(ctx)
 	p.startScheduled(ctx)
 	p.resumeWaiting(ctx)
+}
+
+// startTriggered starts a run for every trigger nothing has acted on yet.
+//
+// Each row is claimed before its run is started, in the same statement as the condition, so two
+// pollers reading the same pending trigger start one run between them. The run and the row saying
+// started land in one transaction after that, which is what makes it exactly one rather than at most
+// one: a poller that dies in between leaves a row another poller finds and finishes.
+//
+// A trigger the crew cannot start a run from is failed with the sentence that says why, rather than
+// left pending. It is not retried: a trigger naming a flow nobody imported would otherwise be read,
+// refused and logged every five seconds forever, and the row would still say pending, which reads
+// exactly like a trigger that has not been got to yet.
+func (p *Poller) startTriggered(ctx context.Context) {
+	pending, err := p.engine.store.PendingTriggers(ctx, pollBatch)
+	if err != nil {
+		p.logger.Warn("could not read which triggers are waiting to start a run", "error", err)
+		return
+	}
+	for _, trigger := range pending {
+		claimed, err := p.engine.store.ClaimTrigger(ctx, trigger.ID,
+			work.Lease{Owner: p.owner, Until: p.engine.now().Add(TriggerLease)})
+		if errors.Is(err, ErrTriggerTaken) {
+			// Another poller has it. Its run is that poller's to start.
+			continue
+		}
+		if err != nil {
+			p.logger.Warn("could not claim a trigger, so it is left for the next tick",
+				"trigger", trigger.ID, "graph", trigger.GraphName, "error", err)
+			continue
+		}
+		run, err := p.engine.Triggered(ctx, *claimed)
+		if err != nil {
+			// Loudly, and on the row: the log says it now and the row says it whenever somebody
+			// looks. One trigger that starts nothing must not stop the others.
+			p.logger.Warn("a trigger started no flow run", "trigger", claimed.ID,
+				"graph", claimed.GraphName, "project", claimed.Project, "error", err)
+			if err := p.engine.store.FailTrigger(ctx, claimed.ID, oneLine(err.Error())); err != nil {
+				p.logger.Warn("a trigger that started no flow run could not be marked failed",
+					"trigger", claimed.ID, "error", err)
+			}
+			continue
+		}
+		p.logger.Info("a trigger started a flow run", "trigger", claimed.ID,
+			"graph", claimed.GraphName, "run", run.ID)
+	}
 }
 
 // carryWorked carries on every run whose step has ended.

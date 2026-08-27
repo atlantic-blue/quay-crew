@@ -340,7 +340,16 @@ type Store interface {
 	UnscheduleFlow(ctx context.Context, graph, project string) error
 	DueFlowSchedules(ctx context.Context, now time.Time) ([]flow.Schedule, error)
 	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
-	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error
+	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error
+	// The pending trigger queue: something that happened, written down so a run starts from it. A
+	// row is raised in the transaction of whatever caused it, read off an indexed query, and claimed
+	// with a conditional write, so two pollers reading one trigger start one run. The contract is
+	// flow.Store.
+	RaiseTrigger(ctx context.Context, trigger *flow.Trigger) error
+	PendingTriggers(ctx context.Context, limit int) ([]*flow.Trigger, error)
+	ClaimTrigger(ctx context.Context, id string, lease work.Lease) (*flow.Trigger, error)
+	FailTrigger(ctx context.Context, id, reason string) error
+	GetTrigger(ctx context.Context, id string) (*flow.Trigger, error)
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
 	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error)

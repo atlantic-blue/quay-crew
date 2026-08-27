@@ -8,6 +8,25 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A flow run can start because something happened.** A run could only ever start three ways: a
+  person asked for one, a schedule came due, or a wait finished. All three are the crew talking to
+  itself. A graph may now begin at a `trigger` node, something writes one `pending_triggers` row
+  saying what should run and what it carried, and the poller claims that row on its next tick and
+  starts the run. The payload becomes the run's opening state, so the first step is asked about the
+  thing that happened. The delay is one poll interval, five seconds.
+
+  A trigger starts exactly one run. The claim is a conditional update in one statement, the same
+  lease discipline the work controller holds a piece of work under, and the run, the piece of work
+  carrying it and the row saying started land in one transaction. A trigger the crew cannot start a
+  run from, naming a flow nobody imported or a graph that does not begin at a trigger node, is marked
+  failed with the sentence saying what to do about it, rather than quietly doing nothing.
+
+  **Nothing outside the control plane's process can raise one yet.** There is no ingress and no
+  broker: `QC_KAFKA_SEEDS` is untouched, and a crew with it unset loses the export and nothing else.
+  Nothing in the crew raises one either, so a piece of work reaching a terminal phase does not start a
+  flow today. There is no command for triggers, and `quay flow` is unchanged. Reading the event log
+  and writing a trigger row from it is the next slice of `quay-crew#399`.
+
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could
   react to nothing while it waited. It writes the step down as a piece of work and returns. A
