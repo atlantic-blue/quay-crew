@@ -356,3 +356,60 @@ func unreusableMarkdownIn(text string) []string {
 	}
 	return found
 }
+
+// theSectionThatTellsThemApart is the heading under which the front door defines a task and a piece
+// of work against each other. It is named here rather than searched for, because a rule that
+// accepted any section would pass on the two words landing in unrelated paragraphs.
+const theSectionThatTellsThemApart = "## Two things you can ask for"
+
+// whatATaskAndAPieceOfWorkAre returns that section.
+func whatATaskAndAPieceOfWorkAre(text string) (string, error) {
+	return sectionOf(text, theSectionThatTellsThemApart)
+}
+
+// TestTheFrontDoorSaysHowATaskAndAPieceOfWorkDiffer.
+//
+// A reader who has sent a task asks how work is different before they ask what work is, and the
+// front door answered that nowhere. It also has to come before the long explanation of work, because
+// an answer underneath the thing it explains is an answer nobody reaches.
+func TestTheFrontDoorSaysHowATaskAndAPieceOfWorkDiffer(t *testing.T) {
+	body := frontDoor(t)
+
+	said, err := whatATaskAndAPieceOfWorkAre(body)
+	if err != nil {
+		t.Fatalf("%v, so a reader is never told which of the two they want", err)
+	}
+	for _, defined := range []string{"a task is", "a piece of work is"} {
+		if !strings.Contains(strings.ToLower(said), defined) {
+			t.Errorf("it never says what %s:\n%s", strings.TrimSuffix(defined, " is"), said)
+		}
+	}
+
+	tellsApart := strings.Index(body, theSectionThatTellsThemApart)
+	explains := strings.Index(body, "## Work is a record the crew keeps")
+	if explains < 0 {
+		t.Fatal("the front door no longer explains what work is at all")
+	}
+	if tellsApart > explains {
+		t.Errorf("the difference is explained after the long section on work, so a reader meets the " +
+			"answer to their second question before the answer to their first")
+	}
+
+	// No diagram in it. The picture below already carries the shape, and a second one this early
+	// costs a reader more than it gives them.
+	if strings.Contains(said, "```mermaid") {
+		t.Errorf("the section that tells them apart carries a diagram:\n%s", said)
+	}
+
+	// Short, because this is the front door. Four paragraphs, and the heading is not one of them.
+	paragraphs := 0
+	for _, block := range strings.Split(strings.TrimSpace(said), "\n\n") {
+		if strings.TrimSpace(block) != "" && !strings.HasPrefix(strings.TrimSpace(block), "#") {
+			paragraphs++
+		}
+	}
+	if paragraphs > 4 {
+		t.Errorf("the section that tells them apart runs to %d paragraphs, and the front door gets 4",
+			paragraphs)
+	}
+}
