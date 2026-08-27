@@ -8,6 +8,14 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The front door says how a task and a piece of work differ.** It is the question a reader asks
+  before they ask what work is, and the README answered it nowhere. A short section near the top says
+  it: a task is a message and its life ends with the reply, a piece of work is a job the crew keeps a
+  readable phase for, and the test is whether you would ever ask where it is up to. It names the two
+  phases that are written down and not yet reached, `waiting` and `asking`, rather than promising
+  them. A scenario holds the section to defining both against each other, to sitting above the long
+  explanation of work, and to staying four paragraphs with no diagram in it.
+
 - **The front door says what the crew does today.** The README's list of what works predated
   seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
   the shape of the product rather than with a feature list: you declare a piece of work, the crew
