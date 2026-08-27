@@ -4,7 +4,9 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
@@ -79,10 +82,31 @@ func startedFlow(t *testing.T, s *controlplane.Server, project, definition strin
 	return started.GetRun()
 }
 
+// echoingRunner answers with the prompt it was asked, so two steps of one run answer differently.
+//
+// model.FakeRunner hands back one canned reply whatever it is asked, which is right for a test about
+// a phase and useless for a test about an answer: every step would carry the same string, and the
+// assertion would hold just as well if the crew wrote one step's answer onto the other's row. This is
+// what lets the answer be traced back to the task that gave it.
+type echoingRunner struct {
+	mu    sync.Mutex
+	asked int
+}
+
+func (e *echoingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.asked++
+	return model.Response{
+		Reply:          "you said: " + req.Text,
+		ModelSessionID: fmt.Sprintf("conversation-%d", e.asked),
+	}, nil
+}
+
 // The whole of what this slice buys, against the database that holds it: a run declares its step and
 // returns, a controller runs it, and the run carries on from the row.
 func TestAFlowRunDeclaresItsStepsAsWorkInPostgres(t *testing.T) {
-	s, _ := aCrewWithAController(t, &model.FakeRunner{Reply: "done"})
+	s, _ := aCrewWithAController(t, &echoingRunner{})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -133,13 +157,18 @@ func TestAFlowRunDeclaresItsStepsAsWorkInPostgres(t *testing.T) {
 			t.Errorf("step %s is %q, want done", node, step.GetPhase())
 		}
 	}
-	// The answer of a step is a field a caller reads, which is the other half of what this buys.
-	whole, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: steps["fix"].GetId()})
-	if err != nil {
-		t.Fatalf("GetWork: %v", err)
-	}
-	if !strings.Contains(whole.GetWork().GetAnswer(), "fix the build") {
-		t.Errorf("the step answers %q, want what its task said", whole.GetWork().GetAnswer())
+	// The answer of a step is a field a caller reads, which is the other half of what this buys. Both
+	// steps, each against its own prompt, because a run with two steps is where an answer written onto
+	// the wrong row would show and a single step would hide it.
+	for node, prompt := range map[string]string{"fix": "fix the build", "push": "push the fix"} {
+		whole, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: steps[node].GetId()})
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if !strings.Contains(whole.GetWork().GetAnswer(), prompt) {
+			t.Errorf("step %s answers %q, want what its own task said about %q",
+				node, whole.GetWork().GetAnswer(), prompt)
+		}
 	}
 	// And the run's own work carries what the run came to.
 	ended, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: run.GetWork()})

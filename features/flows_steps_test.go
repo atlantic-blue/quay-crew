@@ -198,19 +198,26 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^each of the run's steps carries the answer its task gave$`, func(ctx context.Context) error {
+	// Each step against its own prompt, rather than each step against "not empty". The model here
+	// answers with what it was asked, so an answer written onto the wrong step's row shows up, and a
+	// run with two steps is the shape where it would.
+	sc.Step(`^each of the run's steps carries the answer its own task gave$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		steps, err := runSteps(ctx, w)
 		if err != nil {
 			return err
 		}
-		if len(steps) == 0 {
-			return fmt.Errorf("the run took no steps, so this proves nothing")
+		if len(steps) < 2 {
+			return fmt.Errorf("the run took %d steps, and one step cannot show an answer on the wrong row", len(steps))
 		}
 		for _, step := range steps {
 			if step.Answer == "" {
 				return fmt.Errorf("the step %q is %q and carries no answer, so a caller reading it back gets nothing",
 					step.Title, step.Phase)
+			}
+			if !strings.Contains(step.Answer, step.Brief) {
+				return fmt.Errorf("the step asked %q answers %q, which is another step's answer on this step's row",
+					step.Brief, step.Answer)
 			}
 		}
 		return nil

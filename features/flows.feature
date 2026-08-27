@@ -81,7 +81,7 @@ Feature: A flow runs a graph across sessions
   Scenario: Every step's answer is a field a caller can read
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And each of the run's steps carries the answer its task gave
+    And each of the run's steps carries the answer its own task gave
     And the run's own work carries what the run came to
 
   # The four records issue 349 named and nothing ever wrote. They are written against the piece of
