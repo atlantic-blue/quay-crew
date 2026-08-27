@@ -65,6 +65,7 @@ const (
 	ControlPlaneService_AttachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachRole"
 	ControlPlaneService_DetachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachRole"
 	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
+	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
 )
@@ -121,6 +122,7 @@ type ControlPlaneServiceClient interface {
 	AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error)
 	DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
@@ -595,6 +597,16 @@ func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasks
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSessionEventsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListSessionEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInfoResponse)
@@ -667,6 +679,7 @@ type ControlPlaneServiceServer interface {
 	AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error)
 	DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
@@ -818,6 +831,9 @@ func (UnimplementedControlPlaneServiceServer) DetachRole(context.Context, *Detac
 }
 func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSessionEvents not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInfo not implemented")
@@ -1674,6 +1690,24 @@ func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListSessionEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSessionEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListSessionEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListSessionEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListSessionEvents(ctx, req.(*ListSessionEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
@@ -1900,6 +1934,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTasks",
 			Handler:    _ControlPlaneService_ListTasks_Handler,
+		},
+		{
+			MethodName: "ListSessionEvents",
+			Handler:    _ControlPlaneService_ListSessionEvents_Handler,
 		},
 		{
 			MethodName: "GetInfo",
