@@ -48,6 +48,31 @@ func TaskLimit(limit int) int {
 // ErrNotFound covers deleted as well as never existed.
 var ErrNotFound = errors.New("store: not found")
 
+// StatusReclaimed is the session status this store writes when the crew takes a container back. The
+// control plane owns the whole vocabulary; this one is here because two queries below are written in
+// terms of it and the store must not depend on the package that calls it.
+const StatusReclaimed = "reclaimed"
+
+// settledStatuses are the states a session can be in and still be nothing's to hold open: waiting for
+// work, holding a failed last task, or already reclaimed and waiting to be filed.
+//
+// "running" is absent because a task is in flight. "stopped" is absent because an operator put the
+// session down, and a crew that archived what somebody halted would be overwriting a decision with
+// bookkeeping.
+func settledStatuses() []string { return []string{"idle", "failed", StatusReclaimed} }
+
+// terminalPhases are the phases of work that no longer hold a session open. Read from the work
+// package rather than listed here, so a phase added there cannot be forgotten in these two queries.
+func terminalPhases() []string {
+	var terminal []string
+	for _, phase := range work.Phases() {
+		if work.Terminal(phase) {
+			terminal = append(terminal, phase)
+		}
+	}
+	return terminal
+}
+
 // ErrSkillChanged is returned when a version of a skill is imported again carrying a different skill.
 //
 // It is a refusal rather than an overwrite because a workspace pins the version it holds. Overwriting
@@ -150,6 +175,23 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
 	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
+	// ReclaimSession records that the crew took a session's container back: the status becomes
+	// reclaimed and the moment is stamped. Nothing else moves. The conversation handle, the workspace's
+	// conversation store and the project's files are all untouched, so the next task builds a fresh
+	// container over the same state and the conversation carries on.
+	//
+	// It is not a stop. A stop is somebody's decision, and a session that went quiet must never read
+	// the same as one that was halted. Whether a session is in a state that may be reclaimed is the
+	// control plane's question, not the store's.
+	ReclaimSession(ctx context.Context, id string) error
+	// SettledSessions is the sessions nothing is holding open, oldest touched first: live, not
+	// running, and named by no piece of work in a non terminal phase. It is the fourth query a
+	// controller runs each tick, and the one the session lifecycle is derived from.
+	//
+	// A session is not a second resource with a declaration of its own. What is wanted of it is read
+	// from the work that names it, so work still in flight keeps its session alive and nothing here
+	// has to be told.
+	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 	// ArchiveSession only hides a session from the default listing. The row, the conversation handle
 	// and the files on the host all stay.
 	ArchiveSession(ctx context.Context, id string) error

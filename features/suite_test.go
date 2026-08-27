@@ -136,7 +136,13 @@ func (r *recordingRunner) waitForTask() error {
 
 var _ model.Runner = (*recordingRunner)(nil)
 
-func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
+// Run answers what the double was told to answer, and gives up the moment its context is cancelled.
+//
+// The cancellation matters as much as the answer. The real runner runs the model as a process under
+// this context, so cancelling it ends the task, which is exactly what stopping one session does. A
+// double that blocked on regardless would be looser than the thing it stands in for, and a scenario
+// about stopping a task would hang against it while the real crew stopped the task at once.
+func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
 	takes, gate, started, work := r.takes, r.gate, r.started, r.onTask
 	r.mu.Unlock()
@@ -148,10 +154,18 @@ func (r *recordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Re
 		r.once.Do(func() { close(started) })
 	}
 	if gate != nil {
-		<-gate
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return model.Response{}, ctx.Err()
+		}
 	}
 	if takes > 0 {
-		time.Sleep(takes)
+		select {
+		case <-time.After(takes):
+		case <-ctx.Done():
+			return model.Response{}, ctx.Err()
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -237,6 +251,10 @@ type world struct {
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
+	// lastStop is what the last stop of one session came back with, and lastStopReason what the
+	// operator said, so a Then step can hold the record to their own words.
+	lastStop       *quaycrewv1.StopTaskResponse
+	lastStopReason string
 	// lastDrain is what the last drain put down, kept so a scenario can ask what went rather than
 	// counting sandboxes.
 	lastDrain *quaycrewv1.DrainSessionsResponse
@@ -566,6 +584,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkMaterialSteps(sc)
 	initializeWorkControllerSteps(sc)
 	initializeWorkRoleSteps(sc)
+	initializeLifecycleSteps(sc)
 	initializeWorkEventsSteps(sc)
 	initializeWorkLeaseSteps(sc)
 	initializeCapabilitySteps(sc)

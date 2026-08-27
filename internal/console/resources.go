@@ -757,7 +757,9 @@ func stateFromStatus(status string) State {
 		return StateReady
 	case "running", "dispatching":
 		return StateBusy
-	case "stopped":
+	// Reclaimed reads the same as stopped, because from the console's side both are a session with
+	// no container. What tells them apart is the word itself, which the listing prints.
+	case "stopped", "reclaimed":
 		return StateStopped
 	case "failed":
 		return StateFailed

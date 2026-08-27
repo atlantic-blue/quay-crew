@@ -1809,6 +1809,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runWorkControllerConformance(t, newDataset)
 	runWorkLeaseConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
+	runSessionLifecycleConformance(t, newDataset)
 }
 
 // aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two

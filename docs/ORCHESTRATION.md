@@ -1712,6 +1712,76 @@ an unset time means the controller does nothing.** That is today's behaviour, so
 this loop changes nothing until an operator sets a number. It refuses a number it was never given
 rather than choosing one.
 
+### What shipped, and what it does not do
+
+Slice 7. The mechanism is built and both numbers are absent.
+
+**The state.** A session status `reclaimed`, beside the four that existed, and a `reclaimed_at`
+stamp on the row. The container is gone; the row, the conversation handle, the workspace's
+conversation store and the project's files all stay. A task sent to a reclaimed session builds a
+fresh container over the same mounts and the conversation carries on, which is the property
+`internal/controlplane/server.go` already relied on for restarting a stopped session.
+
+**The fourth query.** `SettledSessions` on the store: live, not running, and named by no piece of
+work in a non terminal phase, oldest touched first. It runs once a tick, on `sessions_settled_idx`.
+A session an operator stopped is left out, because filing away what somebody halted overwrites a
+decision with bookkeeping.
+
+**The two times.** `reclaim_seconds` and `archive_seconds` on `workspace_limits`, read and written
+with `quay limits <workspace> --reclaim <duration> --archive <duration>`. Both default to zero, and
+`quay limits` prints "unset" beside what unset does. The reclaim time is measured from the session's
+last write, and the archive time from `reclaimed_at`.
+
+**The attached signal.** `Provider.Attached` asks the container whether the `quay` tmux session
+inside it has a client, through one exec. That is the first of the two options above, chosen because
+it needs no new state and nothing to keep fresh: stamping the row on attach would need the console to
+refresh the stamp while the pane is open, and how often is a number nobody has measured. The
+controller reads a failure as attached, never as nobody, so a daemon that will not answer costs a
+container held longer rather than a conversation closed under somebody's hands. A controller with no
+signal wired reclaims nothing at all.
+
+The exec is asked last, after the clock, so a crew whose reclaim time is unset never runs it. That is
+why the unmeasured cost of the signal is not a reason to hold the mechanism back: with the number
+absent, the cost is zero.
+
+**Stopping one session**, from `quay-crew#395`. `quay stop <session> [<reason>]` halts the task a
+session is running and keeps the session: the conversation, the container and the history all stay,
+and the next dispatch continues it. The task record reads `stopped` with the operator's own reason
+rather than `failed`, and a piece of work running in that session is stopped with the same reason
+rather than failed with whatever the runtime said about being killed. A stop while nothing is running
+says so and changes nothing. It answers only once the task has actually ended.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle: "the first dispatch creates the session"
+    idle --> running: "a task starts"
+    running --> idle: "the task lands"
+    running --> idle: "quay stop, and the task reads stopped"
+    running --> failed: "the task did not land"
+    failed --> running: "the next task starts"
+    idle --> reclaimed: "settled past the reclaim time, and nobody is attached"
+    failed --> reclaimed: "the same rule"
+    reclaimed --> running: "the next task builds a fresh container"
+    reclaimed --> archived: "reclaimed past the archive time"
+    idle --> stopped: "an operator stopped it, or drain did"
+    reclaimed --> stopped: "the same"
+    stopped --> idle: "an operator restarted it"
+    archived --> idle: "an operator attaches, which restores it"
+    archived --> [*]: "an operator deleted it"
+    stopped --> [*]: "an operator deleted it"
+```
+
+**What this slice does not do.**
+
+- It sets no number, and it will not until the three runs above exist. A crew upgraded to this build
+  behaves exactly as the one before it.
+- The controller does not reclaim a session an operator stopped, and never archives one.
+- It does not stop a container it cannot ask about. After a control plane restart the provider is
+  still asked by name, so this is not a gap, but a daemon that is unreachable holds every candidate.
+- It does not measure anything. Nothing here records how long sessions sit idle, so the first of the
+  three runs still has to be done by hand against the `tasks` table.
+- Nothing reclaims on a `local` sandbox, which has no container to take back.
+
 ## 12. The panel is the orchestrator's seat
 
 The panel is where an operator sits. This section says what the two halves should hold once work
@@ -2215,6 +2285,10 @@ never taken. Both times ship unset, and unset means the controller does nothing.
 *Removes nothing, and it is the slice that keeps a crew running for a month.* It cannot ship its
 numbers until the three measurements in section 11 exist. It is written so that shipping it with no
 numbers changes no behaviour at all.
+
+Shipped, with both numbers absent. It also answers `quay-crew#395`, stopping the task one session is
+running, because a session an operator cannot stop is a session whose lifecycle they do not own.
+Section 11 says what it does and what it does not do.
 
 **8. The flow engine declares work.** `advance.go` unchanged. `engine.go` writes a piece of work
 instead of blocking at line 297. The `working` run status. `flow.run.*` events, which `quay-crew#349`

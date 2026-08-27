@@ -411,6 +411,12 @@ type Limits struct {
 	// LeaseSeconds is how long a controller holds a piece of work here. Zero takes the crew's own
 	// measured default.
 	LeaseSeconds int
+	// ReclaimSeconds is how long a settled session here keeps its container before the crew takes it
+	// back. Zero is unset, and it ships unset: see Reclaim.
+	ReclaimSeconds int
+	// ArchiveSeconds is how long a reclaimed session here waits before the crew files it away. Zero
+	// is unset, and it ships unset for the same reason.
+	ArchiveSeconds int
 }
 
 // Lease is how long a hold lasts in this workspace, or the default where the workspace says nothing.
@@ -419,6 +425,30 @@ func (l Limits) Lease(standard time.Duration) time.Duration {
 		return time.Duration(l.LeaseSeconds) * time.Second
 	}
 	return standard
+}
+
+// Reclaim is how long a settled session here keeps its container. Zero means unset, and unset means
+// the controller reclaims nothing in this workspace, however long it runs.
+//
+// There is no default beside it, unlike Lease. A lease is a property of the loop and the loop was
+// measured; a reclaim time is a property of how an operator uses a conversation, and nothing has
+// measured that. Three runs would set it and none of them has happened, so the crew refuses a number
+// it was never given rather than choosing one. Section 11 of docs/ORCHESTRATION.md names the runs.
+func (l Limits) Reclaim() time.Duration { return seconds(l.ReclaimSeconds) }
+
+// Archive is how long a reclaimed session here waits before it is filed away. Zero means unset, and
+// unset means the controller archives nothing in this workspace.
+func (l Limits) Archive() time.Duration { return seconds(l.ArchiveSeconds) }
+
+// seconds reads a configured number of seconds as a length of time, and reads anything at or below
+// zero as unset. Negative is unset rather than an error here: the refusal belongs where the number is
+// written, and a limit that arrives negative anyway must not turn into a time in the past that
+// reclaims everything at once.
+func seconds(count int) time.Duration {
+	if count <= 0 {
+		return 0
+	}
+	return time.Duration(count) * time.Second
 }
 
 // TidyHands puts what a caller handed into one order, with the blanks and the repeats gone, so what

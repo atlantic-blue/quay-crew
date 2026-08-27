@@ -17,9 +17,10 @@ import (
 func (p *Postgres) WorkspaceLimits(ctx context.Context, workspace string) (work.Limits, error) {
 	limits := work.Limits{Workspace: workspace}
 	err := p.pool.QueryRow(ctx, `
-		select max_depth, max_running, budget_tokens, lease_seconds
+		select max_depth, max_running, budget_tokens, lease_seconds, reclaim_seconds, archive_seconds
 		from workspace_limits where workspace = $1`, workspace).Scan(
-		&limits.MaxDepth, &limits.MaxRunning, &limits.BudgetTokens, &limits.LeaseSeconds)
+		&limits.MaxDepth, &limits.MaxRunning, &limits.BudgetTokens, &limits.LeaseSeconds,
+		&limits.ReclaimSeconds, &limits.ArchiveSeconds)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return work.Limits{Workspace: workspace}, nil
 	}
@@ -33,13 +34,16 @@ func (p *Postgres) WorkspaceLimits(ctx context.Context, workspace string) (work.
 // first and sending the row back is how one of them is changed.
 func (p *Postgres) SetWorkspaceLimits(ctx context.Context, limits work.Limits) (work.Limits, error) {
 	if _, err := p.pool.Exec(ctx, `
-		insert into workspace_limits (workspace, max_depth, max_running, budget_tokens, lease_seconds)
-		values ($1, $2, $3, $4, $5)
+		insert into workspace_limits
+			(workspace, max_depth, max_running, budget_tokens, lease_seconds, reclaim_seconds, archive_seconds)
+		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (workspace) do update set
 			max_depth = excluded.max_depth, max_running = excluded.max_running,
 			budget_tokens = excluded.budget_tokens, lease_seconds = excluded.lease_seconds,
+			reclaim_seconds = excluded.reclaim_seconds, archive_seconds = excluded.archive_seconds,
 			updated_at = now()`,
-		limits.Workspace, limits.MaxDepth, limits.MaxRunning, limits.BudgetTokens, limits.LeaseSeconds); err != nil {
+		limits.Workspace, limits.MaxDepth, limits.MaxRunning, limits.BudgetTokens, limits.LeaseSeconds,
+		limits.ReclaimSeconds, limits.ArchiveSeconds); err != nil {
 		return work.Limits{}, fmt.Errorf("set workspace limits: %w", err)
 	}
 	return p.WorkspaceLimits(ctx, limits.Workspace)
