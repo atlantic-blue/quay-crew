@@ -98,16 +98,28 @@ var helpSpellings = map[string]bool{
 	"help": true, "-h": true, "--help": true, "-help": true, "?": true,
 }
 
-// refuseFlags returns an error when an invocation uses a flag. This tool has none: everything it used
-// to take one for is said with an address now, and a flag that is quietly ignored is worse than one
-// that never existed, because `quay dispatch --project default "hello"` reads as a good command and
-// what actually happened was that both words became the start of the message.
+// takenFlags are the flags a command genuinely takes, against the command that takes them.
+//
+// One entry, and it is deliberate: everything a flag used to say here is said with an address, and
+// this one says what shape the output takes rather than where anything is.
+var takenFlags = map[string]map[string]bool{
+	"answer": {allAnswers: true},
+}
+
+// refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
+// flag that is quietly ignored is worse than one that never existed, because
+// `quay dispatch --project default "hello"` reads as a good command and what actually happened was
+// that both words became the start of the message.
 func refuseFlags(args []string) error {
+	taken := takenFlags[args[0]]
 	for _, arg := range args {
 		if !strings.HasPrefix(arg, "--") {
 			continue
 		}
 		name, _, _ := strings.Cut(arg, "=")
+		if taken[name] {
+			continue
+		}
 		if instead, removed := removedFlags[name]; removed {
 			return fmt.Errorf("%s is gone: %s", name, instead)
 		}
@@ -173,6 +185,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSessions(ctx, client, args[1:], out)
 	case "tasks", "task":
 		return runTasks(ctx, client, args[1:], out)
+	case "answer":
+		return runAnswer(ctx, client, args[1:], out)
 	case "drain":
 		return runDrain(ctx, client, args[1:], out)
 	// The way off the old words. Refused by name rather than treated as an unknown command, because

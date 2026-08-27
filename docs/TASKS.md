@@ -130,6 +130,12 @@ Read the store, which always works:
 quay tasks <session>
 ```
 
+Read one answer as data, which is what a caller outside the crew pipes into the next command:
+
+```
+quay answer <session>
+```
+
 Read the log, which needs `QC_KAFKA_SEEDS` set. The compose file defaults it to `redpanda:9092`, so
 it is set unless your own configuration empties it:
 

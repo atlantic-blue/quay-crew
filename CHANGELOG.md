@@ -8,6 +8,21 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **An answer comes back out as data.** `quay answer <session>` writes the reply of the most recent
+  landed task to standard output, with nothing else on it. `--all` writes every landed reply, oldest
+  first, one to a line.
+
+  `quay ask` prints the reply of a task it waited for. A dispatch lets go of its task, so the answer
+  to a dispatched task had no way out. The history listing is written for a person: it shortens a
+  reply at 120 characters and puts a clock and a speaker beside it. A caller that piped it read a
+  listing where the value belongs.
+
+  A refusal goes to standard error and the exit status is not zero, so a caller that reads standard
+  output never receives a sentence where the data belongs. A session with no landed task is refused.
+  A task still running is refused as running, rather than answered with the task before it, because
+  the answer to the previous question is not the answer to this one. What a failed task failed with
+  is its answer, so it is printed, and the command still fails.
+
 - **Every surface takes the identifier the listing prints, and enter opens a session.** A session
   carries two identifiers. The `id` is the crew's own row and it names the sandbox container. The
   `handle` is the name a channel dispatches to, because a chat channel knows what it calls a
