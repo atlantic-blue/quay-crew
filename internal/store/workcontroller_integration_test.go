@@ -116,11 +116,13 @@ func TestTwoControllersTickingAtOnceStartTheWorkOnceInPostgres(t *testing.T) {
 	claims := make(chan error, 2)
 	for range 2 {
 		go func() {
-			_, err := kept.StartWork(ctx, id, &work.Event{
-				ID: store.NewID(), Kind: work.EventStarted, Work: id,
-				Workspace: declared.GetWork().GetWorkspace(), Project: project,
-				Detail: "attempt 1", OccurredAt: time.Now().UTC(),
-			})
+			_, err := kept.StartWork(ctx, id,
+				work.Lease{Owner: "controller-a", Until: time.Now().UTC().Add(time.Minute)},
+				[]*work.Event{{
+					ID: store.NewID(), Kind: work.EventStarted, Work: id,
+					Workspace: declared.GetWork().GetWorkspace(), Project: project,
+					Detail: "attempt 1", OccurredAt: time.Now().UTC(),
+				}})
 			claims <- err
 		}()
 	}

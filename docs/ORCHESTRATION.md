@@ -361,8 +361,7 @@ The dispatch lets go of its task. A controller that waits on a model is a contro
 controlling, so the answer is read off the task record on a later tick.
 
 **What it does not do yet, and which slice does it.** It runs root work only: work that waits for
-something, work in a role and work under a parent are read and left alone. There is no lease and no
-recovery from a controller that died mid dispatch, which is slice 4. There is no budget check, no
+something, work in a role and work under a parent are read and left alone. There is no budget check, no
 depth limit and no credential of its own, which is slice 5. Nothing is published to the event log,
 which is slice 6. A piece of work that goes to `asking` is not moved by anything here, because
 nothing asks yet.
@@ -370,6 +369,62 @@ nothing asks yet.
 The session is named after the work rather than minted, so a dispatch that has to be made again
 lands in the same conversation. That is what makes the recovery in slice 4 possible without a second
 bill.
+
+### What of the lease shipped on 27 August 2026
+
+A controller holds the work it is running, and the hold is what makes the controller disposable.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: "a caller declares it"
+    pending --> running: "a controller claims it and takes the lease"
+    running --> running: "the holder renews on every tick while the task is open"
+    running --> done: "the task answered and the claim held"
+    running --> failed: "the model did not finish"
+    running --> stopped: "the answer did not meet what the work claimed"
+    running --> abandoned: "the holder stopped renewing"
+    abandoned --> running: "another controller reads the task row and takes over"
+    abandoned --> pending: "no task was ever sent, so nothing was paid for"
+    done --> [*]
+    failed --> [*]
+    stopped --> [*]
+```
+
+`abandoned` is not a phase. It is the same `running` row with a lease that has run out, drawn apart
+here because it is the state the recovery reads.
+
+**The claim.** One statement, with its condition inside it: a controller takes work only where the
+lease is free or has run out. Two controllers racing over one row leave one winner, and the loser is
+told the work is somebody else's rather than being given an error. The same statement shape does the
+take over, so the two moments a race can happen are guarded the same way.
+
+**The recovery reads before it writes.** A controller that finds an abandoned row reads the task
+record for its session first. A task that already answered is adopted; a task still open leaves the
+work running under a new hold. Only work with no task anywhere goes back to `pending`, because that
+is the one state that says for certain nothing was paid for. Where the row carries no session, the
+crew is asked for one named after the work, which closes the gap between a dispatch and the row that
+records it: a task sent by a controller that died a moment later is still found, and never sent twice.
+
+**The lease length, and where the number comes from.** It is a minute, and it is derived rather than
+chosen. The holder renews on every tick while its task is open, so what the lease has to outlast is a
+gap between renewals rather than a task. Measured on one machine against the real control plane and
+the real store, with a model that answers at once: a tick with nothing to do cost 1 to 4
+microseconds, a tick that dispatched a hundred pieces of work cost under a millisecond, and a whole
+piece of work from declared to done cost 2 milliseconds over twenty runs. Reproduce it by timing
+`Server.TickWork` around a crew holding work with the fake model runner. So the renewal rate is set
+by the five second tick and not by the work, and a minute is twelve of those: a holder misses twelve
+renewals in a row before its work is taken. It is also the budget the crew already gives the longest
+healthy operation it has, the whole path from a session row to a sandbox ready for its first task.
+
+**This number is provisional.** What replaces it is the ninety fifth percentile of the gap between
+renewals over the first fifty completed pieces of work, which needs the metric slice 6 adds. Until
+then `QC_WORK_LEASE` sets it, and a crew that says nothing gets the measured default rather than
+refusing to start.
+
+**What the lease does not do yet.** It does not cover work in `asking`, because nothing asks yet. It
+is not a limit an operator sets per workspace, which is where the `workspace_limits` row in slice 5
+puts it. Nothing counts how often a lease expires, which is the metric slice 6 adds and the only
+signal that a controller died.
 
 ### Where the Kubernetes idea fits quay, and where it does not
 

@@ -3,6 +3,7 @@ package storetest
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -462,7 +463,7 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		workspace, project := aProject(t, s)
 		id := declaredWork(t, s, workspace, project, "read the electricity bill")
 
-		claimed, err := s.StartWork(ctx, id, startedEvent(id, workspace, project))
+		claimed, err := s.StartWork(ctx, id, aLease("controller-a"), []*work.Event{startedEvent(id, workspace, project)})
 		if err != nil {
 			t.Fatalf("StartWork: %v", err)
 		}
@@ -476,7 +477,7 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 			t.Fatal("claimed work does not carry when it started")
 		}
 
-		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); !errors.Is(err, work.ErrNotPending) {
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"), []*work.Event{startedEvent(id, workspace, project)}); !errors.Is(err, work.ErrNotPending) {
 			t.Fatalf("the second claim answered %v, want ErrNotPending", err)
 		}
 		// And the refused claim wrote no record, or a listing would say the work started twice.
@@ -492,8 +493,8 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 	t.Run("claiming work the crew does not hold is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		if _, err := s.StartWork(context.Background(), "0123456789abcdef01234567",
-			startedEvent("0123456789abcdef01234567", "w", "p")); !errors.Is(err, store.ErrNotFound) {
+		if _, err := s.StartWork(context.Background(), "0123456789abcdef01234567", aLease("controller-a"),
+			[]*work.Event{startedEvent("0123456789abcdef01234567", "w", "p")}); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("claiming missing work answered %v, want ErrNotFound", err)
 		}
 		_ = ctx
@@ -504,7 +505,7 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 		id := declaredWork(t, s, workspace, project, "read the electricity bill")
-		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"), []*work.Event{startedEvent(id, workspace, project)}); err != nil {
 			t.Fatalf("StartWork: %v", err)
 		}
 
@@ -521,7 +522,7 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		}
 		// Started work is what a controller comes back to, and only once it has a session: without
 		// one there is no task to read.
-		started, err := s.StartedWork(ctx, 0)
+		started, err := s.HeldWork(ctx, "controller-a", 0)
 		if err != nil {
 			t.Fatalf("StartedWork: %v", err)
 		}
@@ -535,11 +536,11 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 		id := declaredWork(t, s, workspace, project, "read the electricity bill")
-		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"), []*work.Event{startedEvent(id, workspace, project)}); err != nil {
 			t.Fatalf("StartWork: %v", err)
 		}
 
-		started, err := s.StartedWork(ctx, 0)
+		started, err := s.HeldWork(ctx, "controller-a", 0)
 		if err != nil {
 			t.Fatalf("StartedWork: %v", err)
 		}
@@ -553,7 +554,7 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 		id := declaredWork(t, s, workspace, project, "read the electricity bill")
-		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"), []*work.Event{startedEvent(id, workspace, project)}); err != nil {
 			t.Fatalf("StartWork: %v", err)
 		}
 
@@ -634,5 +635,304 @@ func answeredEvent(id, workspace, project string) *work.Event {
 	return &work.Event{
 		ID: store.NewID(), Kind: work.EventAnswered, Work: id,
 		Workspace: workspace, Project: project, Detail: "1234 tokens", OccurredAt: time.Now().UTC(),
+	}
+}
+
+// aLease is a hold long enough that no test outlives it by accident.
+func aLease(owner string) work.Lease {
+	return work.Lease{Owner: owner, Until: time.Now().UTC().Add(time.Minute)}
+}
+
+// anExpiredLease is a hold that has already run out, which is what a controller that went away left
+// behind.
+func anExpiredLease(owner string) work.Lease {
+	return work.Lease{Owner: owner, Until: time.Now().UTC().Add(-time.Second)}
+}
+
+// runWorkLeaseConformance holds both stores to what a lease means.
+//
+// A controller is disposable and the work is not. What is proved here is the compare and set: a
+// claim applies only where the lease is free, a take over applies only where it has run out, and a
+// renewal belongs to the holder alone. Neither store is allowed to be the lenient one.
+func runWorkLeaseConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a claim writes who holds the work and until when", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+
+		lease := aLease("controller-a")
+		claimed, err := s.StartWork(ctx, id, lease, []*work.Event{startedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+		if claimed.LeaseOwner != "controller-a" {
+			t.Fatalf("the work is held by %q", claimed.LeaseOwner)
+		}
+		if claimed.LeaseUntil == nil || !claimed.LeaseUntil.After(time.Now()) {
+			t.Fatalf("the lease runs to %v, want a moment still ahead", claimed.LeaseUntil)
+		}
+	})
+
+	t.Run("work under a lease that still runs is nobody else's to take", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		if _, err := s.TakeOverWork(ctx, id, aLease("controller-b"),
+			[]*work.Event{claimedEvent(id, workspace, project)}); !errors.Is(err, work.ErrHeld) {
+			t.Fatalf("taking over held work answered %v, want ErrHeld", err)
+		}
+		found, _ := s.GetWork(ctx, id)
+		if found.LeaseOwner != "controller-a" {
+			t.Fatalf("the work is now held by %q, and the lease had not run out", found.LeaseOwner)
+		}
+		// And it is not offered to another controller as abandoned.
+		expired, err := s.ExpiredWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("ExpiredWork: %v", err)
+		}
+		if len(expired) != 0 {
+			t.Fatalf("%d pieces of work are offered as abandoned while their lease runs", len(expired))
+		}
+	})
+
+	t.Run("work whose lease has run out is offered, taken over once, and only once", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, anExpiredLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		expired, err := s.ExpiredWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("ExpiredWork: %v", err)
+		}
+		if len(expired) != 1 || expired[0].ID != id {
+			t.Fatalf("the abandoned work is %v, want the one whose lease ran out", titlesOf(expired))
+		}
+
+		taken, err := s.TakeOverWork(ctx, id, aLease("controller-b"),
+			[]*work.Event{claimedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("TakeOverWork: %v", err)
+		}
+		if taken.LeaseOwner != "controller-b" {
+			t.Fatalf("the work is held by %q after the take over", taken.LeaseOwner)
+		}
+		if taken.Phase != work.PhaseRunning {
+			t.Fatalf("taking over moved the work to %q, and a take over moves nothing but the lease", taken.Phase)
+		}
+		// A third controller finds a lease that runs, so it leaves it alone.
+		if _, err := s.TakeOverWork(ctx, id, aLease("controller-c"),
+			[]*work.Event{claimedEvent(id, workspace, project)}); !errors.Is(err, work.ErrHeld) {
+			t.Fatalf("a second take over answered %v, want ErrHeld", err)
+		}
+	})
+
+	t.Run("the work a controller holds is its own, and no other controller is offered it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+		if err := s.RecordWorkSession(ctx, id, "session-1"); err != nil {
+			t.Fatalf("RecordWorkSession: %v", err)
+		}
+
+		mine, err := s.HeldWork(ctx, "controller-a", 0)
+		if err != nil {
+			t.Fatalf("HeldWork: %v", err)
+		}
+		if len(mine) != 1 || mine[0].ID != id {
+			t.Fatalf("the holder is offered %v, want its own work", titlesOf(mine))
+		}
+
+		theirs, err := s.HeldWork(ctx, "controller-b", 0)
+		if err != nil {
+			t.Fatalf("HeldWork: %v", err)
+		}
+		if len(theirs) != 0 {
+			t.Fatalf("a controller holding nothing is offered %v, which is another controller's work",
+				titlesOf(theirs))
+		}
+	})
+
+	t.Run("only the holder renews, and a renewal moves the hold on", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		claimed, err := s.StartWork(ctx, id, work.Lease{
+			Owner: "controller-a", Until: time.Now().UTC().Add(10 * time.Second),
+		}, []*work.Event{startedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		if err := s.RenewLease(ctx, id, aLease("controller-a")); err != nil {
+			t.Fatalf("RenewLease: %v", err)
+		}
+		found, _ := s.GetWork(ctx, id)
+		if !found.LeaseUntil.After(*claimed.LeaseUntil) {
+			t.Fatalf("the lease still runs to %v, want it moved on from %v", found.LeaseUntil, claimed.LeaseUntil)
+		}
+
+		if err := s.RenewLease(ctx, id, aLease("controller-b")); !errors.Is(err, work.ErrHeld) {
+			t.Fatalf("a controller that holds nothing renewed and got %v, want ErrHeld", err)
+		}
+		after, _ := s.GetWork(ctx, id)
+		if after.LeaseOwner != "controller-a" {
+			t.Fatalf("the work is held by %q after somebody else renewed", after.LeaseOwner)
+		}
+	})
+
+	t.Run("work whose holder went away before dispatching goes back to pending", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, anExpiredLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		released, err := s.ReleaseWork(ctx, id, []*work.Event{releasedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("ReleaseWork: %v", err)
+		}
+		if released.Phase != work.PhasePending {
+			t.Fatalf("the released work is %q, want pending", released.Phase)
+		}
+		if released.LeaseOwner != "" || released.LeaseUntil != nil {
+			t.Fatalf("the released work is still held by %q until %v", released.LeaseOwner, released.LeaseUntil)
+		}
+		// And it is offered to be started again, because nothing was ever paid for.
+		runnable, _ := s.RunnableWork(ctx, 0)
+		if len(runnable) != 1 || runnable[0].ID != id {
+			t.Fatalf("the runnable work is %v, want the one that was released", titlesOf(runnable))
+		}
+	})
+
+	t.Run("work with a session is never released, because its task was paid for", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, anExpiredLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+		if err := s.RecordWorkSession(ctx, id, "session-1"); err != nil {
+			t.Fatalf("RecordWorkSession: %v", err)
+		}
+
+		if _, err := s.ReleaseWork(ctx, id, []*work.Event{releasedEvent(id, workspace, project)}); !errors.Is(err, work.ErrHeld) {
+			t.Fatalf("work with a task behind it was released and got %v, want ErrHeld", err)
+		}
+	})
+
+	t.Run("work that ended holds no lease", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		landed, err := s.LandWork(ctx, id, work.Landing{Phase: work.PhaseDone, Answer: "done"},
+			answeredEvent(id, workspace, project))
+		if err != nil {
+			t.Fatalf("LandWork: %v", err)
+		}
+		if landed.LeaseOwner != "" || landed.LeaseUntil != nil {
+			t.Fatalf("work that ended is held by %q until %v", landed.LeaseOwner, landed.LeaseUntil)
+		}
+		// And nothing offers it as abandoned, however long ago its lease would have run out.
+		expired, _ := s.ExpiredWork(ctx, 0)
+		if len(expired) != 0 {
+			t.Fatalf("%d pieces of finished work are offered as abandoned", len(expired))
+		}
+	})
+
+	t.Run("work a person stopped holds no lease either", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, aLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		stopped, err := s.StopWork(ctx, id, "the bill is not due yet",
+			stoppedEvent(id, workspace, project, "the bill is not due yet"))
+		if err != nil {
+			t.Fatalf("StopWork: %v", err)
+		}
+		if stopped.LeaseOwner != "" || stopped.LeaseUntil != nil {
+			t.Fatalf("stopped work is held by %q until %v", stopped.LeaseOwner, stopped.LeaseUntil)
+		}
+	})
+
+	t.Run("the record of a take over is written with it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, anExpiredLease("controller-a"),
+			[]*work.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		if _, err := s.TakeOverWork(ctx, id, aLease("controller-b"), []*work.Event{
+			releasedEvent(id, workspace, project), claimedEvent(id, workspace, project),
+		}); err != nil {
+			t.Fatalf("TakeOverWork: %v", err)
+		}
+
+		events, err := s.ListWorkEvents(ctx, id)
+		if err != nil {
+			t.Fatalf("ListWorkEvents: %v", err)
+		}
+		want := []string{work.EventDeclared, work.EventStarted, work.EventReleased, work.EventClaimed}
+		got := make([]string, 0, len(events))
+		for _, event := range events {
+			got = append(got, event.Kind)
+		}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("the records read %v, want %v", got, want)
+		}
+	})
+}
+
+func claimedEvent(id, workspace, project string) *work.Event {
+	return &work.Event{
+		ID: store.NewID(), Kind: work.EventClaimed, Work: id,
+		Workspace: workspace, Project: project, Detail: "lease_owner controller-b",
+		OccurredAt: time.Now().UTC(),
+	}
+}
+
+func releasedEvent(id, workspace, project string) *work.Event {
+	return &work.Event{
+		ID: store.NewID(), Kind: work.EventReleased, Work: id,
+		Workspace: workspace, Project: project, Detail: "previous owner controller-a, phase found running",
+		OccurredAt: time.Now().UTC(),
 	}
 }

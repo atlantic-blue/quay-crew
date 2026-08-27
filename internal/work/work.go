@@ -95,6 +95,12 @@ type Work struct {
 	// that is stale.
 	ObservedVersion int
 
+	// LeaseOwner is the controller holding this work, and LeaseUntil is when its hold runs out.
+	// They are the only status fields a reader should ignore: they say who is holding the work, not
+	// what came of it. A lease that has run out is the signal that its holder went away.
+	LeaseOwner string
+	LeaseUntil *time.Time
+
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	StartedAt  *time.Time
@@ -121,6 +127,10 @@ type Event struct {
 // the two a lease writes belong to the slice that adds one.
 const (
 	EventDeclared = "work.declared"
+	// EventClaimed and EventReleased are internal, and nothing outside should read them. A dashboard
+	// counting work must not break because the crew changed how it leases.
+	EventClaimed  = "work.claimed"
+	EventReleased = "work.released"
 	EventStarted  = "work.started"
 	EventAnswered = "work.answered"
 	EventFailed   = "work.failed"

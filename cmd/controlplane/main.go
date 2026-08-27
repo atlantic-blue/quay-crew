@@ -149,12 +149,16 @@ func main() {
 	server := controlplane.NewServer(controlplane.Config{
 		// How often a session describes itself, from the crew's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
-		Store:         durable,
-		Runner:        runner,
-		Provider:      provider,
-		Secrets:       credentials,
-		Storage:       storage,
-		Events:        events,
+		// How long the controller holds a piece of work before another may take it, and the name it
+		// writes on the hold so an investigator knows which machine stopped.
+		WorkLease:      controlplane.WorkLease(os.Getenv("QC_WORK_LEASE"), logger),
+		ControllerName: controlplane.ControllerName(os.Hostname),
+		Store:          durable,
+		Runner:         runner,
+		Provider:       provider,
+		Secrets:        credentials,
+		Storage:        storage,
+		Events:         events,
 		// What a session's tasks may do when it is born, from the crew's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.

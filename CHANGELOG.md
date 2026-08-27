@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **Work survives the controller that started it.** A controller takes a lease on the work it runs,
+  and renews it on every tick while its task is open. Kill that controller and the task keeps
+  running, because the sandbox belongs to the crew rather than to the controller. The lease runs out,
+  another controller finds the work, reads the task record before it does anything, and takes the
+  answer that landed. The work is sent once and paid for once.
+
+  The claim is one statement with its condition inside it, so two controllers racing over one row
+  leave one winner and the loser is told the work is somebody else's. The take over is the same shape,
+  because a race can happen at either moment.
+
+  Only work with no task anywhere goes back to pending, since that is the one state that says for
+  certain nothing was paid for. Where the row carries no session, the crew is asked for one named
+  after the work, which covers a controller that died between sending the task and writing down where
+  it went.
+
+  The lease is a minute, and the number is derived rather than chosen. A holder renews every five
+  seconds, so what the lease has to outlast is a gap between renewals rather than a task: measured on
+  one machine against the real control plane and the real store, a tick with nothing to do cost 1 to 4
+  microseconds and a whole piece of work from declared to done cost 2 milliseconds. A minute is twelve
+  of those intervals. It is provisional until there are fifty completed pieces of work to measure the
+  gap over, and `QC_WORK_LEASE` sets it in the meantime.
+
+  Every movement writes its own record. `work.claimed` says who took the work and until when, and
+  `work.released` names the controller that stopped and the phase its work was found in. Both are
+  internal: a dashboard counting work should never break because the crew changed how it leases.
+
 - **A controller makes declared work happen.** Declaring a piece of work recorded intent. A loop
   inside the control plane now makes reality match it: it reads the work the crew holds, sends the
   brief as a task, and writes what came back onto the row. Declare work, close the terminal, and find

@@ -320,13 +320,18 @@ type Store interface {
 	// beside it. Work that already ended is refused rather than overwritten: how it ended is the
 	// useful part.
 	StopWork(ctx context.Context, id, reason string, event *work.Event) (*work.Work, error)
-	// The four a controller needs. RunnableWork is the work it may start and StartedWork is the work
-	// it has to come back to; StartWork claims one and LandWork writes what came of it. Both writes
-	// are conditional on the phase in the same statement, which is what keeps two controllers from
-	// both starting the same work or both writing its end.
+	// What a controller needs of the store. RunnableWork is the work it may start, HeldWork is what
+	// it holds and has to come back to, and ExpiredWork is what a controller that went away left
+	// behind. Every write is conditional in the same statement as its condition, which is what keeps
+	// two controllers from both starting one piece of work, both taking over one abandoned row, or
+	// both writing what came of it. The contract is work.Store.
 	RunnableWork(ctx context.Context, limit int) ([]*work.Work, error)
-	StartedWork(ctx context.Context, limit int) ([]*work.Work, error)
-	StartWork(ctx context.Context, id string, event *work.Event) (*work.Work, error)
+	HeldWork(ctx context.Context, owner string, limit int) ([]*work.Work, error)
+	ExpiredWork(ctx context.Context, limit int) ([]*work.Work, error)
+	StartWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error)
+	TakeOverWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error)
+	ReleaseWork(ctx context.Context, id string, events []*work.Event) (*work.Work, error)
+	RenewLease(ctx context.Context, id string, lease work.Lease) error
 	RecordWorkSession(ctx context.Context, id, session string) error
 	LandWork(ctx context.Context, id string, landed work.Landing, event *work.Event) (*work.Work, error)
 	// ListWorkEvents returns one piece of work's own history, oldest first.

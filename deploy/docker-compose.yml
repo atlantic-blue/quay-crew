@@ -118,6 +118,9 @@ services:
       # How many tasks past its description a conversation goes before the crew writes it again.
       # "off" tasks it off, which a crew paying for automation runs wants.
       QC_DESCRIBE_EVERY: ${QC_DESCRIBE_EVERY:-}
+      # How long the work controller holds a piece of work before another controller may take it.
+      # Unset takes the measured default, which is a minute.
+      QC_WORK_LEASE: ${QC_WORK_LEASE:-}
       # A workspace's conversation store and a project's files live here, on the host, rather than
       # inside the sandbox container, so replacing a container does not destroy the conversation the
       # database holds a handle to. QC_DATA_DIR is this container's view of the directory, the one it

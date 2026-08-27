@@ -15,7 +15,7 @@ import (
 const workColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_work, deadline, budget_tokens, labels, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
-	created_at, updated_at, started_at, finished_at`
+	lease_owner, lease_until, created_at, updated_at, started_at, finished_at`
 
 // CreateWork writes a piece of work and the record of its declaration in one transaction.
 //
@@ -39,15 +39,17 @@ func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *w
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
-			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at)
+			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
+			lease_owner, lease_until)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
 		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
-		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt); err != nil {
+		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
+		declared.LeaseOwner, declared.LeaseUntil); err != nil {
 		return fmt.Errorf("create work: %w", err)
 	}
 	if err := appendWorkEvent(ctx, tx, event); err != nil {
@@ -143,7 +145,8 @@ func (p *Postgres) StopWork(ctx context.Context, id, reason string, event *work.
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		update work set phase = $2, reason = $3, finished_at = now(), updated_at = now()
+		update work set phase = $2, reason = $3, lease_owner = '', lease_until = null,
+			finished_at = now(), updated_at = now()
 		where id = $1 and phase in ($4, $5, $6, $7)`,
 		id, work.PhaseStopped, reason,
 		work.PhasePending, work.PhaseWaiting, work.PhaseRunning, work.PhaseAsking)
@@ -224,6 +227,7 @@ func scanWork(row rowScanner) (*work.Work, error) {
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.SpentTokens, &found.ObservedVersion,
+		&found.LeaseOwner, &found.LeaseUntil,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
@@ -284,11 +288,19 @@ func (p *Postgres) RunnableWork(ctx context.Context, limit int) ([]*work.Work, e
 		order by created_at, id`, limit, work.PhasePending)
 }
 
-// StartedWork is the work a controller started and has not written an answer onto. Work with no
-// session yet is left out: there is no task to read back.
-func (p *Postgres) StartedWork(ctx context.Context, limit int) ([]*work.Work, error) {
+// HeldWork is the work this controller is holding, and only this one: another controller's work is
+// not this one's to move. Work with no session yet is left out, because there is no task to read back.
+func (p *Postgres) HeldWork(ctx context.Context, owner string, limit int) ([]*work.Work, error) {
 	return p.workMatching(ctx, `
-		where phase = $1 and session <> ''
+		where phase = $1 and session <> '' and lease_owner = $2 and lease_until > now()
+		order by created_at, id`, limit, work.PhaseRunning, owner)
+}
+
+// ExpiredWork is the work whose holder went away: running, under a lease that has run out or was
+// never written.
+func (p *Postgres) ExpiredWork(ctx context.Context, limit int) ([]*work.Work, error) {
+	return p.workMatching(ctx, `
+		where phase = $1 and (lease_until is null or lease_until <= now())
 		order by created_at, id`, limit, work.PhaseRunning)
 }
 
@@ -324,30 +336,83 @@ func (p *Postgres) workMatching(ctx context.Context, where string, limit int, ar
 // The update is conditional on the phase in the same statement, which is the compare and set that
 // keeps two controllers from both starting the same work. A row that moved on first is refused, and
 // the refusal is not a failure: it means somebody else has it.
-func (p *Postgres) StartWork(ctx context.Context, id string, event *work.Event) (*work.Work, error) {
+func (p *Postgres) StartWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
+	return p.moveWork(ctx, id, "start work", work.ErrNotPending, events, `
+		update work set phase = $2, attempts = attempts + 1, lease_owner = $3, lease_until = $4,
+			started_at = now(), updated_at = now()
+		where id = $1 and phase = $5`,
+		work.PhaseRunning, lease.Owner, lease.Until, work.PhasePending)
+}
+
+// TakeOverWork takes the lease on work whose holder went away.
+//
+// The condition on the lease is in the same statement as the write, so two controllers finding the
+// same abandoned row leave one holder. That is the compare and set a log cannot give.
+func (p *Postgres) TakeOverWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
+	return p.moveWork(ctx, id, "take over work", work.ErrHeld, events, `
+		update work set lease_owner = $2, lease_until = $3, updated_at = now()
+		where id = $1 and phase = $4 and (lease_until is null or lease_until <= now())`,
+		lease.Owner, lease.Until, work.PhaseRunning)
+}
+
+// ReleaseWork puts work back to pending. Only running work with no session under a lease that has
+// run out, which is the one state that says for certain no task was ever sent.
+func (p *Postgres) ReleaseWork(ctx context.Context, id string, events []*work.Event) (*work.Work, error) {
+	return p.moveWork(ctx, id, "release work", work.ErrHeld, events, `
+		update work set phase = $2, lease_owner = '', lease_until = null,
+			started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and session = '' and (lease_until is null or lease_until <= now())`,
+		work.PhasePending, work.PhaseRunning)
+}
+
+// RenewLease moves the holder's hold on. Only the holder renews, so a controller that lost a row
+// cannot take it back by renewing.
+func (p *Postgres) RenewLease(ctx context.Context, id string, lease work.Lease) error {
+	tag, err := p.pool.Exec(ctx, `
+		update work set lease_until = $3, updated_at = now()
+		where id = $1 and lease_owner = $2`, id, lease.Owner, lease.Until)
+	if err != nil {
+		return fmt.Errorf("renew lease: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetWork(ctx, id); err != nil {
+			return err
+		}
+		return work.ErrHeld
+	}
+	return nil
+}
+
+// moveWork runs one conditional movement and the records that describe it, in one transaction.
+//
+// The condition lives in the statement rather than in a read before it, which is what makes two
+// controllers racing over one row leave one winner. A statement that changed nothing means the row
+// was not in the state this movement is for, and that is refused rather than reported as a failure.
+func (p *Postgres) moveWork(ctx context.Context, id, what string, refusal error,
+	events []*work.Event, statement string, args ...any) (*work.Work, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("start work: %w", err)
+		return nil, fmt.Errorf("%s: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	tag, err := tx.Exec(ctx, `
-		update work set phase = $2, attempts = attempts + 1, started_at = now(), updated_at = now()
-		where id = $1 and phase = $3`, id, work.PhaseRunning, work.PhasePending)
+	tag, err := tx.Exec(ctx, statement, append([]any{id}, args...)...)
 	if err != nil {
-		return nil, fmt.Errorf("start work: %w", err)
+		return nil, fmt.Errorf("%s: %w", what, err)
 	}
 	if tag.RowsAffected() == 0 {
 		if _, err := p.GetWork(ctx, id); err != nil {
 			return nil, err
 		}
-		return nil, work.ErrNotPending
+		return nil, refusal
 	}
-	if err := appendWorkEvent(ctx, tx, event); err != nil {
-		return nil, err
+	for _, event := range events {
+		if err := appendWorkEvent(ctx, tx, event); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("start work: %w", err)
+		return nil, fmt.Errorf("%s: %w", what, err)
 	}
 	return p.GetWork(ctx, id)
 }
@@ -377,7 +442,8 @@ func (p *Postgres) LandWork(ctx context.Context, id string, landed work.Landing,
 
 	tag, err := tx.Exec(ctx, `
 		update work set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
-			observed_version = version, finished_at = now(), updated_at = now()
+			observed_version = version, lease_owner = '', lease_until = null,
+			finished_at = now(), updated_at = now()
 		where id = $1 and phase = $6`,
 		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, work.PhaseRunning)
 	if err != nil {

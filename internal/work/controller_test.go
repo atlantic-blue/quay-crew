@@ -25,6 +25,9 @@ type crew struct {
 	dispatched []*quaycrewv1.DispatchRequest
 	// tasks is the history each session has, which is what the controller reads an answer off.
 	tasks map[string][]*quaycrewv1.Task
+	// sessions are the conversations the crew holds, which is what a controller reads when a row
+	// says nothing about which one its work ran in.
+	sessions []*quaycrewv1.Session
 	// refuse makes the next dispatch fail, which is a crew that could not make a sandbox.
 	refuse error
 }
@@ -41,6 +44,7 @@ func (c *crew) Dispatch(_ context.Context, req *quaycrewv1.DispatchRequest) (*qu
 	}
 	c.dispatched = append(c.dispatched, req)
 	session := "session-" + req.GetHandle()
+	c.sessions = append(c.sessions, &quaycrewv1.Session{Id: session, Handle: req.GetHandle(), Project: req.GetProject()})
 	// A task is written when it starts, so the history carries an open row before any answer.
 	c.tasks[session] = append(c.tasks[session], &quaycrewv1.Task{
 		Id: fmt.Sprintf("task-%d", len(c.tasks[session])+1), Session: session,
@@ -81,6 +85,25 @@ func (c *crew) fails(why string) {
 	}
 }
 
+// dispatchedInto is a task the crew is already running in a session, which is what a controller that
+// died between the dispatch and writing the session onto the row left behind.
+func (c *crew) dispatchedInto(handle, project, text string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.dispatched = append(c.dispatched, &quaycrewv1.DispatchRequest{Project: project, Handle: handle, Text: text})
+	session := "session-" + handle
+	c.sessions = append(c.sessions, &quaycrewv1.Session{Id: session, Handle: handle, Project: project})
+	c.tasks[session] = append(c.tasks[session], &quaycrewv1.Task{
+		Id: "task-1", Session: session, Prompt: text, Status: "running",
+	})
+}
+
+func (c *crew) ListSessions(_ context.Context, _ *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return &quaycrewv1.ListSessionsResponse{Sessions: append([]*quaycrewv1.Session(nil), c.sessions...)}, nil
+}
+
 func (c *crew) sent() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -95,8 +118,10 @@ type rows struct {
 	order  []string
 	// refuseStart makes the claim fail, which is a database that went away mid tick.
 	refuseStart error
-	// beforeStart runs before each claim, so a test can put two callers inside it at the same moment.
-	beforeStart func()
+	// beforeStart and beforeTakeOver run before each of those calls, so a test can put two callers
+	// inside one at the same moment and make the conditional write answer the question it exists for.
+	beforeStart    func()
+	beforeTakeOver func()
 }
 
 func newRows() *rows {
@@ -112,31 +137,54 @@ func (r *rows) add(one *work.Work) *work.Work {
 	return &kept
 }
 
+// claim puts a lease on a row by hand, which is what a controller that then died left behind.
+func (r *rows) claim(id, owner string, until time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one := r.held[id]
+	one.Phase, one.LeaseOwner, one.LeaseUntil = work.PhaseRunning, owner, &until
+	one.Attempts = 1
+}
+
+// setSession puts a session on a row by hand.
+func (r *rows) setSession(id, session string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.held[id].Session = session
+}
+
 func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := []*work.Work{}
-	for _, id := range r.order {
-		one := r.held[id]
-		if one.Phase != work.PhasePending || one.Parent != "" || one.Role != "" || len(one.After) > 0 {
-			continue
-		}
-		kept := *one
-		out = append(out, &kept)
-		if limit > 0 && len(out) == limit {
-			break
-		}
-	}
-	return out, nil
+	return r.matching(limit, func(one *work.Work) bool {
+		return one.Phase == work.PhasePending && one.Parent == "" && one.Role == "" && len(one.After) == 0
+	}), nil
 }
 
-func (r *rows) StartedWork(_ context.Context, limit int) ([]*work.Work, error) {
+func (r *rows) HeldWork(_ context.Context, owner string, limit int) ([]*work.Work, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.matching(limit, func(one *work.Work) bool {
+		return one.Phase == work.PhaseRunning && one.Session != "" &&
+			one.LeaseOwner == owner && one.LeaseUntil != nil && one.LeaseUntil.After(time.Now())
+	}), nil
+}
+
+func (r *rows) ExpiredWork(_ context.Context, limit int) ([]*work.Work, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.matching(limit, func(one *work.Work) bool {
+		return one.Phase == work.PhaseRunning &&
+			(one.LeaseUntil == nil || !one.LeaseUntil.After(time.Now()))
+	}), nil
+}
+
+// matching is every row that matches, capped. The caller holds the lock.
+func (r *rows) matching(limit int, matches func(*work.Work) bool) []*work.Work {
 	out := []*work.Work{}
 	for _, id := range r.order {
 		one := r.held[id]
-		if one.Phase != work.PhaseRunning || one.Session == "" {
+		if !matches(one) {
 			continue
 		}
 		kept := *one
@@ -145,10 +193,10 @@ func (r *rows) StartedWork(_ context.Context, limit int) ([]*work.Work, error) {
 			break
 		}
 	}
-	return out, nil
+	return out
 }
 
-func (r *rows) StartWork(_ context.Context, id string, event *work.Event) (*work.Work, error) {
+func (r *rows) StartWork(_ context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
 	// Before the lock, so a test can hold two callers inside this call at once and make the claim
 	// answer the question it exists for.
 	if r.beforeStart != nil {
@@ -170,10 +218,65 @@ func (r *rows) StartWork(_ context.Context, id string, event *work.Event) (*work
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Attempts = work.PhaseRunning, one.Attempts+1
+	one.LeaseOwner, one.LeaseUntil = lease.Owner, &lease.Until
 	one.StartedAt, one.UpdatedAt = &now, now
-	r.events[id] = append(r.events[id], event)
+	r.record(id, events)
 	kept := *one
 	return &kept, nil
+}
+
+func (r *rows) TakeOverWork(_ context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
+	if r.beforeTakeOver != nil {
+		r.beforeTakeOver()
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such work")
+	}
+	// Only work nobody is holding. A lease that still runs belongs to whoever wrote it.
+	if one.Phase != work.PhaseRunning || (one.LeaseUntil != nil && one.LeaseUntil.After(time.Now())) {
+		return nil, work.ErrHeld
+	}
+	one.LeaseOwner, one.LeaseUntil = lease.Owner, &lease.Until
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+func (r *rows) ReleaseWork(_ context.Context, id string, events []*work.Event) (*work.Work, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such work")
+	}
+	if one.Phase != work.PhaseRunning || one.Session != "" ||
+		(one.LeaseUntil != nil && one.LeaseUntil.After(time.Now())) {
+		return nil, work.ErrHeld
+	}
+	one.Phase, one.LeaseOwner, one.LeaseUntil = work.PhasePending, "", nil
+	one.StartedAt, one.UpdatedAt = nil, time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+func (r *rows) RenewLease(_ context.Context, id string, lease work.Lease) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return errors.New("no such work")
+	}
+	// Only the holder renews. A controller that lost the row must not take it back by renewing.
+	if one.LeaseOwner != lease.Owner {
+		return work.ErrHeld
+	}
+	one.LeaseUntil, one.UpdatedAt = &lease.Until, time.Now().UTC()
+	return nil
 }
 
 func (r *rows) RecordWorkSession(_ context.Context, id, session string) error {
@@ -200,10 +303,20 @@ func (r *rows) LandWork(_ context.Context, id string, landed work.Landing, event
 	now := time.Now().UTC()
 	one.Phase, one.Answer, one.Reason = landed.Phase, landed.Answer, landed.Reason
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
+	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now
-	r.events[id] = append(r.events[id], event)
+	r.record(id, []*work.Event{event})
 	kept := *one
 	return &kept, nil
+}
+
+// record appends what happened, the way a store writes the events in the same transaction.
+func (r *rows) record(id string, events []*work.Event) {
+	for _, event := range events {
+		if event != nil {
+			r.events[id] = append(r.events[id], event)
+		}
+	}
 }
 
 func (r *rows) get(id string) *work.Work {
@@ -211,6 +324,12 @@ func (r *rows) get(id string) *work.Work {
 	defer r.mu.Unlock()
 	kept := *r.held[id]
 	return &kept
+}
+
+func (r *rows) recorded(id string) []*work.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]*work.Event(nil), r.events[id]...)
 }
 
 func (r *rows) kinds(id string) []string {
@@ -569,8 +688,11 @@ func TestEveryMovementIsOnTheRecord(t *testing.T) {
 	plane.lands("the bill is due on the 14th")
 	controller.Tick(ctx)
 
-	if got := strings.Join(kept.kinds(one.ID), ","); got != work.EventStarted+","+work.EventAnswered {
-		t.Fatalf("the records read %q, want the start then the answer", got)
+	// The claim comes before the start, because a controller takes the work in hand before it sends
+	// anything, and the record says so in that order.
+	want := strings.Join([]string{work.EventClaimed, work.EventStarted, work.EventAnswered}, ",")
+	if got := strings.Join(kept.kinds(one.ID), ","); got != want {
+		t.Fatalf("the records read %q, want %q", got, want)
 	}
 }
 
@@ -583,8 +705,9 @@ func TestWorkThatFailedRecordsThatItFailed(t *testing.T) {
 	plane.fails("the model refused this task")
 	controller.Tick(ctx)
 
-	if got := strings.Join(kept.kinds(one.ID), ","); got != work.EventStarted+","+work.EventFailed {
-		t.Fatalf("the records read %q, want the start then the failure", got)
+	want := strings.Join([]string{work.EventClaimed, work.EventStarted, work.EventFailed}, ",")
+	if got := strings.Join(kept.kinds(one.ID), ","); got != want {
+		t.Fatalf("the records read %q, want %q", got, want)
 	}
 }
 
