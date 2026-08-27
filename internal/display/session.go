@@ -16,8 +16,11 @@ import (
 // the console had ten columns and the command line four, so a session's cost, its mode and how long
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
+// The first column is headed "session" rather than "id" because it is the value every command takes.
+// Under "id" it read as bookkeeping, and the operator reached for the name cell instead, which held
+// the other identifier.
 func SessionColumns() []string {
-	return []string{"id", "workspace", "project", "name", "status", "mode", "ctx", "in", "out", "cache", "age"}
+	return []string{"session", "workspace", "project", "name", "status", "mode", "ctx", "in", "out", "cache", "age"}
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
@@ -26,7 +29,7 @@ func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string
 		ShortID(session.GetId()),
 		Name(workspaceName, session.GetWorkspace()),
 		Name(projectName, session.GetProject()),
-		SessionName(session),
+		SessionLabel(session),
 		StatusLabel(session),
 		PermissionLabel(session.GetPermissionMode()),
 		ContextLabel(session),
@@ -195,18 +198,27 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 	out.WriteString("\n")
 }
 
-// SessionName is what to call a session in a listing: the name the operator gave it, then the one the
-// crew wrote for itself, then the identifier.
+// SessionName is what to call a session where one word has to stand for it: the name the operator
+// gave it, then the one the crew wrote for itself, then the identifier a listing prints.
 //
 // The operator's name wins because a name somebody picked beats a name a machine wrote. The
-// identifier is last because it is the thing nobody remembers, and it is still in the id column
-// beside this one, so nothing is hidden by preferring a name.
+// identifier is last, and it is the id rather than the handle: the id is the value the session column
+// carries, so a breadcrumb falling back to it falls back to something the operator can type.
 func SessionName(session *quaycrewv1.Session) string {
+	if named := SessionLabel(session); named != "" {
+		return named
+	}
+	return ShortID(session.GetId())
+}
+
+// SessionLabel is what a session is called, and nothing else. Empty until somebody names it.
+//
+// The name cell used to fall back to the handle, which put a raw identifier under the heading "name"
+// and took it off the screen again the moment the session was labelled. Two identifiers were on the
+// screen and neither was in a column that said so.
+func SessionLabel(session *quaycrewv1.Session) string {
 	if label := strings.TrimSpace(session.GetLabel()); label != "" {
 		return label
 	}
-	if described := strings.TrimSpace(session.GetDescription()); described != "" {
-		return described
-	}
-	return ShortID(session.GetHandle())
+	return strings.TrimSpace(session.GetDescription())
 }

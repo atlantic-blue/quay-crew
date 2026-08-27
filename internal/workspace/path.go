@@ -3,11 +3,9 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
 // Separator divides the levels of an address.
@@ -131,38 +129,26 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 
 	// The handle either way: it is what every caller of an address goes on to dispatch against, so
 	// taking the id here is about what the operator may type, not about what an address returns.
-	matches := make([]string, 0, 1)
+	matches := make([]*quaycrewv1.Session, 0, 1)
 	for _, session := range resp.GetSessions() {
 		if session.GetHandle() == reference || session.GetId() == reference {
 			return session.GetHandle(), nil
 		}
 		if strings.HasPrefix(session.GetHandle(), reference) || strings.HasPrefix(session.GetId(), reference) {
-			matches = append(matches, session.GetHandle())
+			matches = append(matches, session)
 		}
 	}
 
 	switch len(matches) {
 	case 0:
-		// Both identifiers, shortened the way the listing prints them. Naming only the handle sent
-		// the operator to look for a value their screen does not carry.
 		return "", &NotFoundError{
 			What: "session", Name: reference,
-			Have: namesOf(resp.GetSessions(), func(i int) string {
-				return identifiersOf(resp.GetSessions()[i])
-			}),
+			Have: identifiersOf(resp.GetSessions()),
 			Make: `start one with quay dispatch "..."`,
 		}
 	case 1:
-		return matches[0], nil
+		return matches[0].GetHandle(), nil
 	default:
-		sort.Strings(matches)
-		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: matches}
+		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: identifiersOf(matches)}
 	}
-}
-
-// identifiersOf writes a session the way its listing does: the id in the first column, then the
-// handle that the name column carries until a label or a description takes that place.
-func identifiersOf(session *quaycrewv1.Session) string {
-	return fmt.Sprintf("%s (session %s)",
-		display.ShortID(session.GetId()), display.ShortID(session.GetHandle()))
 }

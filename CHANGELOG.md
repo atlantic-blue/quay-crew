@@ -6,6 +6,38 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 27 August 2026
+
+- **Every surface takes the identifier the listing prints, and enter opens a session.** A session
+  carries two identifiers. The `id` is the crew's own row and it names the sandbox container. The
+  `handle` is the name a channel dispatches to, because a chat channel knows what it calls a
+  conversation before the crew has a session for it. The listing printed both: the `id` in a column
+  headed `id`, and the `handle` under the heading `name`, which is where a name goes.
+
+  So the operator read the `name` cell and typed it back, and `quay dispatch 615d48dc "and again"`
+  did not refuse it. It joined the word to the message, sent `615d48dc and again` to a session
+  nobody asked for, and said nothing. Naming a session then took the `handle` off the screen
+  entirely, leaving a row with nothing on it that any command had ever taken.
+
+  Now the first column is headed `session` and it holds the `id`, the `name` column holds a name and
+  is empty until somebody writes one, and one resolver reads what the operator typed for every
+  surface. There were two of these and they disagreed: one answered with the `id` and the other with
+  the `handle`, and each wrote its own refusal. Both identifiers still reach a session, from
+  `dispatch`, `tasks`, `attach`, `label`, `mode` and the console, because the `handle` is what a
+  channel sends and it is in notes and in scripts. Only one of them is printed, and a refusal offers
+  that one.
+
+  A first word shaped like an identifier that names no session is refused, and the refusal says to
+  quote the whole message if that is what it was. It is never absorbed. `quay dispatch hello there`
+  is still a message.
+
+  Enter on a console row could not report a failure. It wrote the reason into the model and asked for
+  a listing in the same return, and the listing that came back blanked the reason before it was
+  drawn, so the key looked like it did nothing at all. The reason is now held until the next key, and
+  the scenario for it runs the command the key produces, feeds the answer back the way the runtime
+  does, and asserts on where the operator is left.
+
+
 ## 22 August 2026
 
 - **The console says how full each session's context window is.** A new `ctx` column, beside what the

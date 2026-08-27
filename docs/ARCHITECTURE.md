@@ -216,6 +216,14 @@ handle and the conversation continues), and `model_session_id` is the model's ow
 conversation it keeps, used to resume it. `quay threads` and `quay turns` are refused by name, and
 neither word opens anything in the console.
 
+**Decided 27 August 2026: a listing prints one identifier for a session, and it is the `id`.** It
+sits in a column headed `session`, and the `name` column carries what the operator called the
+session and nothing else. The `name` cell used to fall back to the `handle`, which put the second
+identifier on the screen under a heading that said it was a name, and took it off the screen again
+the moment anybody labelled the session. Every surface takes either identifier, because the `handle`
+is what a channel sends and it is in notes and in scripts, but only one of them is printed and a
+refusal offers only that one.
+
 **Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
 two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
 learn both. `turn` came from conversation analysis and never said how long the work takes.

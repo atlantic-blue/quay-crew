@@ -93,7 +93,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return w.dispatch(ctx, located.ProjectID, located.SessionID, text)
 		})
 
-	sc.Step(`^the refusal names both identifiers of that session$`, func(ctx context.Context) error {
+	sc.Step(`^the refusal offers the identifier the listing prints$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), addressFrom(ctx)
 		if a.err == nil {
 			return fmt.Errorf("the address resolved, expected a refusal")
@@ -103,10 +103,14 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		said := a.err.Error()
-		for _, want := range []string{current.sessionID[:8], current.handle[:8]} {
-			if !strings.Contains(said, want) {
-				return fmt.Errorf("the refusal is %q, want it to name %q", said, want)
-			}
+		if !strings.Contains(said, current.sessionID[:8]) {
+			return fmt.Errorf("the refusal is %q, want it to offer %q", said, current.sessionID[:8])
+		}
+		// And not the handle, which no column of the listing carries. Offering it sent the operator
+		// looking for a value they cannot see.
+		if strings.Contains(said, current.handle[:8]) {
+			return fmt.Errorf("the refusal is %q, and it offers the handle %q, which is nowhere on the screen",
+				said, current.handle[:8])
 		}
 		return nil
 	})
