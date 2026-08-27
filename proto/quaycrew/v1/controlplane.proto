@@ -998,6 +998,10 @@ message Work {
   int64 budget_tokens = 13;
   // labels are free text pairs, so a caller finds its own work later.
   map<string, string> labels = 14;
+  // hands is the material this work cannot be done without: the same words a role receives, drawn
+  // from work, context and skills. Work handed material its role does not receive is refused at
+  // dispatch, before a container starts, rather than run blind.
+  repeated string hands = 32;
 
   // What the crew assigned, and the caller may not.
   // parent is which piece of work asked for this one, read from the credential the caller presented
@@ -1057,6 +1061,9 @@ message CreateWorkRequest {
   google.protobuf.Timestamp deadline = 9;
   int64 budget_tokens = 10;
   map<string, string> labels = 11;
+  // hands is the material this work cannot be done without, drawn from work, context and skills. A
+  // word the crew does not hand out is refused by name.
+  repeated string hands = 14;
   // id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.

@@ -7,9 +7,10 @@ Feature: A controller makes declared work happen
   The loop never waits on a model. It sends the task and lets go, and reads the answer off the record
   on a later tick, so a task that takes an hour costs the loop nothing.
 
-  It runs pending work with nothing outstanding. Work under a parent and work in a role both run,
-  because a flow declares every step under the run and a step may name a role. Work that waits for
-  something else is left alone, because nothing honours ordering yet.
+  It runs pending work with nothing outstanding. Work that names a role is run as that role, and work
+  handed material its role does not receive never reaches a container. Work under a parent runs too,
+  because a flow declares every step under its own run. Work that waits for something else is left
+  alone, because nothing honours ordering yet.
 
   Background:
     Given a running control plane
@@ -72,13 +73,36 @@ Feature: A controller makes declared work happen
     Then the work titled "pay the electricity bill" is pending
     And the crew was asked to run 1 task
 
-  Scenario: Work in a role runs, in a session of that role
-    Given the workspace holds the role "backlog-clearer" at version 1
+  # The reason the whole substrate was built. The work names a role, and the session that runs it
+  # runs as that role, so the credential it holds carries what that role declared it may call.
+  Scenario: Work in a role runs, in a session running as that role
+    Given the workspace holds the role "backlog-clearer" at version 1 receiving "work"
     And a piece of work titled "clear the backlog" in the role "backlog-clearer"
     When the controller ticks
     Then the crew was asked to run 1 task
-    And the task went out as the role "backlog-clearer"
-    And the work is running
+    And the session doing that work runs as the "backlog-clearer" role
+
+  # The boundary, at the moment the material would be handed over. The role was attached receiving
+  # the crew's context when the work was declared, and narrowed while the work sat pending.
+  Scenario: Work handed material its role stopped receiving never reaches a container
+    Given the workspace holds the role "test-writer" at version 1 receiving "work, context"
+    And a piece of work titled "write the tests" in the role "test-writer" handed "context"
+    And the workspace holds the role "test-writer" at version 2 receiving "work"
+    When the controller ticks
+    Then the crew was asked to run 0 tasks
+    And the crew built 0 sandboxes
+    And the work is stopped, saying the "test-writer" role does not receive "context"
+    And the work ran in no session
+
+  # A role the workspace no longer holds is a session that would run as nobody, so the work stops
+  # rather than running with the boundary gone.
+  Scenario: Work naming a role the workspace has given up stops, and names it
+    Given the workspace holds the role "backlog-clearer" at version 1 receiving "work"
+    And a piece of work titled "clear the backlog" in the role "backlog-clearer"
+    And the operator detaches the "backlog-clearer" role from the workspace
+    When the controller ticks
+    Then the crew was asked to run 0 tasks
+    And the work is stopped, and the reason names the "backlog-clearer" role
 
   Scenario: Every movement is on the record
     Given a piece of work titled "read the electricity bill"

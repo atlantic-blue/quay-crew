@@ -8,6 +8,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -212,4 +213,20 @@ func (s *Server) roleBrief(ctx context.Context, session *quaycrewv1.Session) str
 		return ""
 	}
 	return held.Brief
+}
+
+// RoleFor is how the work controller reads the role a piece of work names, over an interface that
+// carries only the question it asks: does this role receive this material.
+//
+// The role the workspace holds now, which is the same one the crew would build the session from. Two
+// answers to "which role is this" is how a boundary comes to be checked against one role and applied
+// against another.
+func (s *Server) RoleFor(ctx context.Context, workspace, named string) (work.Receiver, error) {
+	held, err := s.roleFor(ctx, workspace, named)
+	if err != nil {
+		// The sentence, without the status wrapping around it: the controller writes this onto the
+		// work's own row, where a reader wants what to do rather than a code and a method name.
+		return nil, errors.New(status.Convert(err).Message())
+	}
+	return held, nil
 }

@@ -5,13 +5,17 @@
 // intent is still there tomorrow, because it is a row rather than a list held in a process. Nothing
 // here dispatches anything: a controller makes reality match the record, and that is its own slice.
 //
-// Every rule below is checked at the moment of the write, never at the moment of the dispatch. A
-// refusal that arrives hours later, inside a run, has nothing to point back at.
+// Almost every rule below is checked at the moment of the write, because a refusal that arrives
+// hours later, inside a run, has nothing to point back at. The one exception is what a role
+// receives, which is checked again at the dispatch: a role can be detached, imported again and
+// attached again while work sits pending, so what the crew would put in front of a session is only
+// settled at the moment it hands it over.
 package work
 
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,6 +76,10 @@ type Work struct {
 	Deadline       *time.Time
 	BudgetTokens   int64
 	Labels         map[string]string
+	// Hands is the material this work cannot be done without, drawn from role.Material. It is the
+	// other side of a role's boundary: the role says what it receives and this says what the work
+	// needs, and where the two disagree the work is refused rather than run without it.
+	Hands []string
 
 	// What the crew assigned, and the caller may not.
 	Parent string
@@ -201,6 +209,7 @@ type Declaration struct {
 	Deadline       *time.Time
 	BudgetTokens   int64
 	Labels         map[string]string
+	Hands          []string
 	ID             string
 	Parent         string
 }
@@ -212,6 +221,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Role = strings.TrimSpace(d.Role)
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
+	d.Hands = TidyHands(d.Hands)
 	return d
 }
 
@@ -247,6 +257,9 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := usableExpectFile(tidy.ExpectFile); err != nil {
+		return err
+	}
+	if err := tidy.validateHands(); err != nil {
 		return err
 	}
 	return tidy.validateLabels()
@@ -436,4 +449,80 @@ func seconds(count int) time.Duration {
 		return 0
 	}
 	return time.Duration(count) * time.Second
+}
+
+// TidyHands puts what a caller handed into one order, with the blanks and the repeats gone, so what
+// a piece of work hands does not depend on the order somebody typed it in. It is the rule a role
+// already applies to what it receives.
+func TidyHands(handed []string) []string {
+	seen := make(map[string]bool, len(handed))
+	tidy := make([]string, 0, len(handed))
+	for _, one := range handed {
+		trimmed := strings.TrimSpace(one)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		tidy = append(tidy, trimmed)
+	}
+	if len(tidy) == 0 {
+		return nil
+	}
+	sort.Strings(tidy)
+	return tidy
+}
+
+// validateHands holds what a caller handed to the words the crew hands out, and offers those words
+// back. A word nobody assembles is a boundary that quietly means nothing, and a boundary that means
+// nothing looks exactly like one that holds.
+func (d Declaration) validateHands() error {
+	for _, material := range d.Hands {
+		if !handable(material) {
+			return fmt.Errorf("work is handed %q, which is not material the crew hands out; it is one of: %s",
+				material, strings.Join(role.Material, ", "))
+		}
+	}
+	return nil
+}
+
+func handable(material string) bool {
+	for _, one := range role.Material {
+		if one == material {
+			return true
+		}
+	}
+	return false
+}
+
+// Receiver is a role, as much of one as this rule needs. It is an interface so the rule lives in this
+// package, which holds no role, and is applied wherever one is read.
+type Receiver interface {
+	// Gets says whether the role receives a kind of material.
+	Gets(material string) bool
+}
+
+// Unreceived is the first material a piece of work hands that its role does not receive, and empty
+// where the boundary holds.
+//
+// Work that hands nothing, and work that runs as no role, are both empty: this changes nothing for
+// either.
+func Unreceived(handed []string, held Receiver) string {
+	if held == nil {
+		return ""
+	}
+	for _, material := range TidyHands(handed) {
+		if !held.Gets(material) {
+			return material
+		}
+	}
+	return ""
+}
+
+// RefusedMaterial is what the crew says to work whose role cannot be given the material it hands. It
+// names the role, the material the role does not receive, and the two ways out, because a refusal a
+// caller cannot act on is a refusal that sends them looking.
+func RefusedMaterial(named, material string) string {
+	return fmt.Sprintf("this work is handed %s and the %s role does not receive it, so the session would be "+
+		"asked to do the work without it. Add %s to what the %s role receives and import it again, or "+
+		"declare the work without %s.", material, named, material, named, material)
 }

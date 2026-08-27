@@ -291,7 +291,7 @@ func NewServer(cfg Config) *Server {
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).
 		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).
-		Redacting(server).Exporting(server).
+		Redacting(server).Exporting(server).Reading(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)

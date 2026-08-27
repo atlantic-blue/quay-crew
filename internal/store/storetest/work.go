@@ -469,6 +469,8 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		waiting := workShaped(t, s, workspace, project, "waits for the root", func(w *work.Work) {
 			w.After = []string{root}
 		})
+		// Work in a role is offered, because the controller runs it as that role. The two left out
+		// are ordering and depth, which are each a later slice.
 		inRole := workShaped(t, s, workspace, project, "runs as a role", func(w *work.Work) {
 			w.Role, w.RoleVersion = "backlog-clearer", 1
 		})
@@ -499,6 +501,36 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		}
 		if offered[stopped] {
 			t.Errorf("work a person stopped was offered to a controller")
+		}
+	})
+
+	// What a piece of work hands its session survives the store, which is the whole of the boundary
+	// the controller checks: a field that came back empty would refuse nothing and look exactly like
+	// a boundary that held.
+	t.Run("what a piece of work hands is kept", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		handed := workShaped(t, s, workspace, project, "needs the crew's context", func(w *work.Work) {
+			w.Role, w.RoleVersion = "backlog-clearer", 1
+			w.Hands = []string{"context", "skills"}
+		})
+		bare := declaredWork(t, s, workspace, project, "hands nothing")
+
+		kept, err := s.GetWork(ctx, handed)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if len(kept.Hands) != 2 || kept.Hands[0] != "context" || kept.Hands[1] != "skills" {
+			t.Fatalf("the work hands %v, want context and skills", kept.Hands)
+		}
+		plain, err := s.GetWork(ctx, bare)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if len(plain.Hands) != 0 {
+			t.Fatalf("work that handed nothing hands %v, want nothing", plain.Hands)
 		}
 	})
 

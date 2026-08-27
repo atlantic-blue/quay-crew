@@ -52,6 +52,28 @@ Feature: Work is a record the crew keeps
     When the caller declares work in the role "backlog-clearer"
     Then the work carries the role at version 1
 
+  # A role declares what it receives and a piece of work declares what it cannot be done without.
+  # Where the two disagree the work is refused, while the person who wrote it is looking.
+  Scenario: Work handed material its role does not receive is refused
+    Given the workspace holds the role "test-writer" at version 1 receiving "work"
+    When the caller declares work in the role "test-writer" handed "context"
+    Then the crew refuses it, naming the role, the material and what to change
+    And no work was written
+
+  Scenario: Work handed what its role does receive is kept
+    Given the workspace holds the role "backlog-clearer" at version 1 receiving "work, context"
+    When the caller declares work in the role "backlog-clearer" handed "context"
+    Then the work is handed "context"
+
+  Scenario: Work handed something the crew does not hand out is refused
+    When the caller declares work handed "the codebase"
+    Then the crew refuses it and lists the material it hands out
+
+  # Work that names no role hands its material to nobody, so nothing here applies to it.
+  Scenario: Work with no role is held to no boundary
+    When the caller declares work handed "context"
+    Then the work is handed "context"
+
   Scenario: Work naming a mode that is not a mode is refused
     When the caller declares work in the mode "yolo"
     Then the crew refuses it and lists the modes

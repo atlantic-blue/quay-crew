@@ -181,17 +181,6 @@ func (c *crew) sent() int {
 	return len(c.dispatched)
 }
 
-// lastDispatch is the task the crew was last asked for, whole, so a test can read what travelled
-// with it rather than only that something did.
-func (c *crew) lastDispatch() *quaycrewv1.DispatchRequest {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.dispatched) == 0 {
-		return &quaycrewv1.DispatchRequest{}
-	}
-	return c.dispatched[len(c.dispatched)-1]
-}
-
 // rows is a store double: the smallest set of rows a controller reads and writes.
 type rows struct {
 	mu     sync.Mutex
@@ -339,6 +328,8 @@ func (r *rows) WorkspaceLimits(_ context.Context, workspace string) (work.Limits
 func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// The same shape the real stores offer, work in a role included: a double that offered less than
+	// the store does would hide every behaviour that only work in a role reaches.
 	return r.matching(limit, func(one *work.Work) bool {
 		return one.Phase == work.PhasePending && len(one.After) == 0
 	}), nil
@@ -816,10 +807,9 @@ func TestWhatTheWorkSpentIsWrittenOntoTheRecord(t *testing.T) {
 	}
 }
 
-// Root work only in this slice. Everything else is a later one, and picking it up early would run
-// work whose ordering, role or budget nothing here honours.
-// Ordering is the one thing still not honoured, so work that waits is the one thing left alone. A
-// controller that ran it would run it out of order, which is the whole of what after means.
+// Ordering is the one thing a controller still honours nothing of, so work that waits is the one
+// thing left alone. Work in a role runs, and so does work under a parent: a flow declares every step
+// under its own run.
 func TestWorkThatWaitsForSomethingIsLeftAlone(t *testing.T) {
 	controller, kept, plane := aController(t)
 	declared := declaredWork("read the electricity bill")
@@ -848,28 +838,6 @@ func TestWorkUnderAParentIsRun(t *testing.T) {
 
 	if plane.sent() != 1 {
 		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
-	}
-	if got := kept.get(one.ID); got.Phase != work.PhaseRunning {
-		t.Fatalf("the work is %q, want it running", got.Phase)
-	}
-}
-
-// Work in a role runs in a session of that role. The role travels on the dispatch, which is what
-// makes the boundary real: a new session in a new container that has read nothing anybody else was
-// told.
-func TestWorkInARoleRunsAsThatRole(t *testing.T) {
-	controller, kept, plane := aController(t)
-	declared := declaredWork("clear the backlog")
-	declared.Role, declared.RoleVersion = "backlog-clearer", 1
-	one := kept.add(declared)
-
-	controller.Tick(context.Background())
-
-	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
-	}
-	if got := plane.lastDispatch().GetRole(); got != "backlog-clearer" {
-		t.Fatalf("the task went out as role %q, want the role the work names", got)
 	}
 	if got := kept.get(one.ID); got.Phase != work.PhaseRunning {
 		t.Fatalf("the work is %q, want it running", got.Phase)

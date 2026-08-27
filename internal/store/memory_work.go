@@ -170,6 +170,9 @@ func cloneWork(from work.Work) work.Work {
 	if from.After != nil {
 		from.After = append([]string(nil), from.After...)
 	}
+	if from.Hands != nil {
+		from.Hands = append([]string(nil), from.Hands...)
+	}
 	if from.Labels != nil {
 		labels := make(map[string]string, len(from.Labels))
 		for key, value := range from.Labels {
@@ -193,7 +196,8 @@ func cloneTime(at *time.Time) *time.Time {
 }
 
 // RunnableWork is the work a controller may start: pending with nothing it waits for, oldest
-// declared first.
+// declared first. Work under a parent is in it, because a flow run declares every step under its own
+// work, and work that names a role is in it, and the controller runs it as that role.
 func (m *Memory) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

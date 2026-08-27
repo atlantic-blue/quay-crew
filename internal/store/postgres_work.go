@@ -13,7 +13,7 @@ import (
 // workColumns is the row every read of a piece of work selects, in one place so a reader and a
 // listing cannot drift into scanning different things.
 const workColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
-	expect_contains, after_work, deadline, budget_tokens, labels, coalesce(parent, ''), depth, version,
+	expect_contains, after_work, deadline, budget_tokens, labels, hands, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, created_at, updated_at, started_at, finished_at`
 
@@ -54,15 +54,15 @@ func insertWork(ctx context.Context, tx pgx.Tx, declared *work.Work) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
+			expect_contains, after_work, deadline, budget_tokens, labels, hands, parent, depth, version, phase,
 			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
 			lease_owner, lease_until, trace_id, parent_span_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		afterOrEmpty(declared.Hands), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
@@ -239,7 +239,7 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	var labels []byte
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
-		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Parent, &found.Depth,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Hands, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
@@ -256,6 +256,9 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	}
 	if len(found.After) == 0 {
 		found.After = nil
+	}
+	if len(found.Hands) == 0 {
+		found.Hands = nil
 	}
 	return &found, nil
 }
@@ -294,11 +297,12 @@ func nullIfEmpty(value string) any {
 // RunnableWork is the work a controller may start: pending with nothing it waits for, oldest
 // declared first.
 //
-// Work under a parent and work in a role are both started, because both are needed the moment a flow
-// step is a piece of work: every step hangs under the run and a step may name a role. What is still
-// left alone is work that waits for something, because nothing honours ordering yet. The tree budget
-// is not enforced for these and is not enforced for a root either, so nothing is honoured less here
-// than anywhere else.
+// Work under a parent and work in a role are both started. A role because the controller runs it as
+// that role, and a parent because a flow run declares every step under its own work, so a controller
+// that started roots only would leave every step of every automation pending forever. What is still
+// left out is work that waits for something, because nothing honours ordering yet. The tree budget is
+// enforced for none of these and for a root either, so nothing is honoured less here than anywhere
+// else.
 func (p *Postgres) RunnableWork(ctx context.Context, limit int) ([]*work.Work, error) {
 	return p.workMatching(ctx, `
 		where phase = $1 and cardinality(after_work) = 0
