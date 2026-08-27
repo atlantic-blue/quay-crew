@@ -129,6 +129,21 @@ The contract, which another service may depend on:
   credential a session asks with, which is a later slice. It is named here because a consumer
   written against a list that grows later has to be changed twice.
 
+A flow run is carried by a piece of work, so a run's own records are on this stream too, against that
+work. They are the four kinds
+[issue 349](https://github.com/atlantic-blue/quay-crew/issues/349) named, and they are a contract:
+
+- `flow.run.started`, when the run was declared. The detail names the run, the graph and the version
+  it pinned.
+- `flow.run.asked`, when the run put a question to a person. The detail is the node and the question.
+- `flow.run.finished`, when the run reached the end of its graph. The detail is the node, how many
+  movements it took and what it spent.
+- `flow.run.stopped`, when the run was halted instead: a limit, a refusal, or a person. The detail is
+  the reason.
+
+One history rather than two, which is why they are here and not on a stream of their own. Every step
+the run took is a piece of work under the same one, so its `work.*` records are beside these.
+
 Internal, which nothing outside should depend on:
 
 - `work.claimed`, when a controller took the row. The detail names the holder and until when.
