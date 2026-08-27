@@ -129,3 +129,15 @@ Feature: A controller makes declared work happen
     And another controller ticks
     Then the work is still held by the controller that started it
     And one task is recorded against that work
+
+  # The point of the port is twelve roles a person can use rather than twelve directories, so one of
+  # them runs a real piece of work here, end to end, and the answer comes back on the row.
+  Scenario: Work runs as a role this build ships
+    Given the operator imports every role this build ships
+    And the operator attaches the "test-writer" role to the workspace
+    And a piece of work titled "write the tests" in the role "test-writer"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the work is done, and its answer is what the model said
+    And the session doing that work runs as the "test-writer" role

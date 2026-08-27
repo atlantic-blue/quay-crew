@@ -3,6 +3,8 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -280,4 +282,89 @@ func roleNamed(ctx context.Context, workspace, name string) (*quaycrewv1.Role, e
 		}
 	}
 	return nil, fmt.Errorf("the listing does not hold the %s role", name)
+}
+
+// The roles this build ships, read from roles/ at the root of the repository rather than from a list
+// written here. A role added tomorrow is imported by these steps without anybody remembering, and a
+// roles/ that lost its contents fails the scenario rather than passing over nothing: role.All
+// refuses a directory holding none.
+const shippedRoles = "../roles"
+
+func initializeShippedRoleSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator imports every role this build ships$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		ships, err := role.All(shippedRoles)
+		if err != nil {
+			return err
+		}
+		for _, one := range ships {
+			files, err := roleFilesFrom(one.Dir)
+			if err != nil {
+				return err
+			}
+			if _, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files}); err != nil {
+				return fmt.Errorf("the crew refused the %s role, which ships with it: %w", one.Name, err)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the crew holds every role this build ships$`, func(ctx context.Context) error {
+		ships, err := role.All(shippedRoles)
+		if err != nil {
+			return err
+		}
+		held, err := worldFrom(ctx).client.ListRoles(ctx, &quaycrewv1.ListRolesRequest{})
+		if err != nil {
+			return err
+		}
+		names := make([]string, 0, len(held.GetRoles()))
+		for _, one := range held.GetRoles() {
+			names = append(names, one.GetName())
+		}
+		sort.Strings(names)
+		wanted := make([]string, 0, len(ships))
+		for _, one := range ships {
+			wanted = append(wanted, one.Name)
+		}
+		sort.Strings(wanted)
+		if strings.Join(names, ", ") != strings.Join(wanted, ", ") {
+			return fmt.Errorf("the crew holds %q and roles/ ships %q",
+				strings.Join(names, ", "), strings.Join(wanted, ", "))
+		}
+		return nil
+	})
+
+	// A ported brief carrying a word the crew does not hand out is the failure this scenario exists
+	// to catch, so it is a shipped role with one word changed rather than a role invented here.
+	sc.Step(`^the operator imports a shipped role receiving "([^"]*)"$`,
+		func(ctx context.Context, material string) error {
+			w := worldFrom(ctx)
+			files, err := roleFilesFrom(filepath.Join(shippedRoles, "test-writer"))
+			if err != nil {
+				return err
+			}
+			for _, file := range files {
+				if file.GetPath() == role.ManifestFile {
+					file.Body = []byte(strings.Replace(string(file.GetBody()),
+						"  - skills", "  - "+material, 1))
+				}
+			}
+			_, w.lastErr = w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files})
+			return nil
+		})
+}
+
+// roleFilesFrom reads a role off disk into the shape the wire carries, which is what the command
+// line does before it sends one.
+func roleFilesFrom(dir string) ([]*quaycrewv1.RoleFile, error) {
+	read, err := role.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]*quaycrewv1.RoleFile, 0, len(read))
+	for _, file := range read {
+		files = append(files, &quaycrewv1.RoleFile{Path: file.Path, Body: file.Body})
+	}
+	return files, nil
 }

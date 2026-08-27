@@ -148,6 +148,8 @@ commands:
   role import <directory>                 take a role into the crew from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
+                                          this build ships twelve in roles/ at the root of the
+                                          repository, and a fresh crew is seeded with none of them
   role list [<workspace>]                 what roles the crew holds, or what one workspace holds
   role attach [<workspace>] <name>        give a workspace a role. Say crew where the workspace
                                           goes and every workspace holds it
