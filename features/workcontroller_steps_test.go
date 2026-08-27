@@ -147,12 +147,25 @@ func initializeWorkControllerSteps(sc *godog.ScenarioContext) {
 		if one.GetSession() == "" {
 			return fmt.Errorf("the work says no session, so nothing was asked of the crew")
 		}
-		tasks, err := worldFrom(ctx).client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: one.GetSession()})
-		if err != nil {
-			return err
+		// The controller lets go of its task, so the row is written by the goroutine running it rather
+		// than by the call that started it. Waited for rather than read once: reading straight after
+		// the tick asks whether the goroutine has been scheduled yet, which is a question about the
+		// machine and not about the crew.
+		var counted int
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			tasks, err := worldFrom(ctx).client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: one.GetSession()})
+			if err != nil {
+				return err
+			}
+			counted = len(tasks.GetTasks())
+			if counted >= 1 {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
 		}
-		if len(tasks.GetTasks()) != 1 {
-			return fmt.Errorf("%d tasks are recorded against the work, want 1", len(tasks.GetTasks()))
+		if counted != 1 {
+			return fmt.Errorf("%d tasks are recorded against the work, want 1", counted)
 		}
 		return nil
 	})

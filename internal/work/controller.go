@@ -11,6 +11,8 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // DefaultTickEvery is how often the controller looks at the work the crew holds.
@@ -131,6 +133,14 @@ type Redactor interface {
 	RedactFor(ctx context.Context, workspace, text string) string
 }
 
+// Exporter offers each record of a movement to the event log, after the transaction that wrote it.
+//
+// The store is the truth and the log is the copy, so this never fails what it describes and a crew
+// with no broker configured loses the export and nothing else. A nil exporter is exactly that crew.
+type Exporter interface {
+	ExportWork(ctx context.Context, events ...*Event)
+}
+
 // Prover answers what a piece of work said would show its task did the work.
 //
 // An implementation that cannot answer says so, and the work stops. A check that quietly passes when
@@ -154,6 +164,7 @@ type Controller struct {
 	spend    Spend
 	prover   Prover
 	redactor Redactor
+	exporter Exporter
 	logger   *slog.Logger
 	every    time.Duration
 	batch    int
@@ -213,6 +224,23 @@ func (c *Controller) leaseIn(ctx context.Context, workspace string) Lease {
 		return c.leaseNow()
 	}
 	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
+}
+
+// Exporting returns a controller that offers each record it writes to the event log, after the
+// transaction that wrote it. Without one nothing is exported, which is a crew with no broker.
+func (c *Controller) Exporting(exporter Exporter) *Controller {
+	c.exporter = exporter
+	return c
+}
+
+// exported hands records to the log after they have landed in the store, and does nothing at all
+// where there is no exporter. It is called after every write rather than inside it, because a record
+// that is on the log and not in the store is a record nothing can explain.
+func (c *Controller) exported(ctx context.Context, events ...*Event) {
+	if c.exporter == nil {
+		return
+	}
+	c.exporter.ExportWork(ctx, events...)
 }
 
 // Redacting returns a controller that takes every line it writes through the crew redactor.
@@ -276,12 +304,19 @@ func (c *Controller) startDeclared(ctx context.Context) {
 
 // start claims one piece of work and sends its task.
 func (c *Controller) start(ctx context.Context, one *Work) {
+	// Everything this controller does for this piece of work happens under the work's own trace. The
+	// dispatch below then writes its task with the same identifier, which is what lets a reader join
+	// a piece of work to the conversation that ran it. The context comes off the row rather than out
+	// of this process, so it is the same trace after a controller has died and another took over.
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+
 	handle := SessionFor(one.ID)
 	lease := c.leaseIn(ctx, one.Workspace)
-	claimed, err := c.store.StartWork(ctx, one.ID, lease, []*Event{
+	records := []*Event{
 		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
 		c.event(ctx, one, EventStarted, fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)),
-	})
+	}
+	claimed, err := c.store.StartWork(ctx, one.ID, lease, records)
 	if err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			// One row that cannot be claimed must not stop the others: the next tick tries it again.
@@ -289,6 +324,7 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 		}
 		return
 	}
+	c.exported(ctx, records...)
 
 	// Detached, because a controller that waits on a model is a controller that stops controlling.
 	// The answer is read off the task record on a later tick.
@@ -355,16 +391,18 @@ func (c *Controller) recover(ctx context.Context, one *Work) {
 	}
 
 	lease := c.leaseIn(ctx, one.Workspace)
-	if _, err := c.store.TakeOverWork(ctx, one.ID, lease, []*Event{
+	records := []*Event{
 		c.event(ctx, one, EventReleased,
 			fmt.Sprintf("previous owner %s, phase found %s", ownerOrNobody(one.LeaseOwner), one.Phase)),
 		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
-	}); err != nil {
+	}
+	if _, err := c.store.TakeOverWork(ctx, one.ID, lease, records); err != nil {
 		if !errors.Is(err, ErrHeld) {
 			c.logger.WarnContext(ctx, "could not take over work that was left behind", "work", one.ID, "error", err)
 		}
 		return
 	}
+	c.exported(ctx, records...)
 	// The session goes onto the row now, so the next reader learns it from the record rather than by
 	// asking the crew again.
 	if one.Session == "" {
@@ -378,15 +416,18 @@ func (c *Controller) recover(ctx context.Context, one *Work) {
 // release puts work back to pending. Only where no task exists anywhere, so nothing that has been
 // paid for is ever sent again.
 func (c *Controller) release(ctx context.Context, one *Work) {
-	if _, err := c.store.ReleaseWork(ctx, one.ID, []*Event{
+	records := []*Event{
 		c.event(ctx, one, EventReleased,
 			fmt.Sprintf("previous owner %s, phase found %s, no task was sent",
 				ownerOrNobody(one.LeaseOwner), one.Phase)),
-	}); err != nil {
+	}
+	if _, err := c.store.ReleaseWork(ctx, one.ID, records); err != nil {
 		if !errors.Is(err, ErrHeld) {
 			c.logger.WarnContext(ctx, "could not put work that was left behind back", "work", one.ID, "error", err)
 		}
+		return
 	}
+	c.exported(ctx, records...)
 }
 
 // sessionNamedAfter is the conversation this work would have run in, if the crew holds one.
@@ -491,15 +532,53 @@ func (c *Controller) renew(ctx context.Context, one *Work) {
 
 // land writes the end of a piece of work, with the record of it.
 func (c *Controller) land(ctx context.Context, one *Work, landed Landing, kind string) {
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 	detail := landed.Reason
 	if detail == "" {
 		detail = fmt.Sprintf("%d tokens in session %s", landed.SpentTokens, one.Session)
 	}
-	if _, err := c.store.LandWork(ctx, one.ID, landed, c.event(ctx, one, kind, detail)); err != nil {
+	record := c.event(ctx, one, kind, detail)
+	ended, err := c.store.LandWork(ctx, one.ID, landed, record)
+	if err != nil {
 		if !errors.Is(err, ErrNotRunning) {
 			c.logger.WarnContext(ctx, "could not write what came of a piece of work",
 				"work", one.ID, "error", err)
 		}
+		return
+	}
+	c.exported(ctx, record)
+	c.drawSpans(ctx, ended)
+}
+
+// drawSpans puts the life of a piece of work on the trace, once the crew knows both ends of it.
+//
+// One span for the attempt that just landed and one for the whole piece of work. They are recorded
+// here rather than opened when the work started, because a piece of work outlives the process that
+// declared it: a span held in memory across a controller that died would be lost with it, and the
+// timestamps are on the row either way.
+func (c *Controller) drawSpans(ctx context.Context, ended *Work) {
+	if ended == nil || ended.TraceID == "" {
+		return
+	}
+	finished := time.Now().UTC()
+	if ended.FinishedAt != nil {
+		finished = *ended.FinishedAt
+	}
+	shared := []attribute.KeyValue{
+		attribute.String("quaycrew.work", ended.ID),
+		attribute.String("quaycrew.workspace", ended.Workspace),
+		attribute.String("quaycrew.project", ended.Project),
+		attribute.String("quaycrew.phase", ended.Phase),
+	}
+	if ended.StartedAt != nil {
+		telemetry.Record(ctx, "work.attempt", *ended.StartedAt, finished, append(shared,
+			attribute.Int("quaycrew.attempt", ended.Attempts),
+			attribute.String("quaycrew.session", ended.Session))...)
+	}
+	// The whole life of the work, and only once it has ended: a span covering work that is still
+	// running would report a duration that is not the answer to anything.
+	if Terminal(ended.Phase) {
+		telemetry.Record(ctx, "work", ended.CreatedAt, finished, shared...)
 	}
 }
 
@@ -545,7 +624,8 @@ func (c *Controller) event(ctx context.Context, one *Work, kind, detail string) 
 	}
 	return &Event{
 		ID: newEventID(), Kind: kind, Work: one.ID, Workspace: one.Workspace, Project: one.Project,
-		Parent: one.Parent, Depth: one.Depth, Detail: detail, OccurredAt: time.Now().UTC(),
+		Parent: one.Parent, Depth: one.Depth, Detail: detail, TraceID: one.TraceID,
+		OccurredAt: time.Now().UTC(),
 	}
 }
 

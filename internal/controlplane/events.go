@@ -9,6 +9,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -85,6 +86,11 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 	event.Project = session.GetProject()
 	event.Handle = session.GetHandle()
 	event.OccurredAt = timestamppb.Now()
+	// The trace the call that ran this task belonged to, which is the same value every log line
+	// written under it carries. Without it the durable record of what the crew did joins to neither
+	// the trace nor the lines: weeks later the logs are gone and this row is all that is left. A task
+	// nothing was tracing leaves it empty rather than inventing one. See issue 346.
+	event.TraceId = telemetry.TraceIDFrom(ctx)
 
 	task := &quaycrewv1.Task{
 		Id:         event.GetId(),
@@ -93,6 +99,7 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 		Reply:      event.GetReply(),
 		Status:     event.GetStatus(),
 		Failure:    event.GetFailure(),
+		TraceId:    event.GetTraceId(),
 		OccurredAt: event.GetOccurredAt(),
 	}
 	if err := s.store.AppendTask(ctx, task, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {

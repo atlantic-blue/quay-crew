@@ -64,6 +64,10 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 	if err := s.underTheCaller(ctx, declared); err != nil {
 		return nil, err
 	}
+	// And the trace follows the same parent, because one trace covers a whole tree. It is read after
+	// the parent is known rather than before: a child that minted its own would leave the tree in as
+	// many traces as it has nodes.
+	s.traceWork(ctx, declared, s.parentOf(ctx, declared))
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, err
 	}
@@ -71,9 +75,13 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		return nil, err
 	}
 
-	if err := s.store.CreateWork(ctx, declared, s.workEvent(ctx, declared, work.EventDeclared, declared.Title)); err != nil {
+	declaredEvent := s.workEvent(ctx, declared, work.EventDeclared, declared.Title)
+	if err := s.store.CreateWork(ctx, declared, declaredEvent); err != nil {
 		return nil, storeError(err, "create work")
 	}
+	// After the transaction, never inside it. The store is the truth and the log is the copy, so an
+	// export that cannot land is dropped and the record stands.
+	s.ExportWork(ctx, declaredEvent)
 	// Read back rather than answered from memory, so the caller is given what the store holds,
 	// stamped with the store's own clock.
 	kept, err := s.store.GetWork(ctx, declared.ID)
@@ -189,7 +197,8 @@ func (s *Server) StopWork(ctx context.Context, req *quaycrewv1.StopWorkRequest) 
 		return nil, storeError(err, "work")
 	}
 
-	stopped, err := s.store.StopWork(ctx, found.ID, reason, s.workEvent(ctx, found, work.EventStopped, reason))
+	stoppedEvent := s.workEvent(ctx, found, work.EventStopped, reason)
+	stopped, err := s.store.StopWork(ctx, found.ID, reason, stoppedEvent)
 	if err != nil {
 		if strings.Contains(err.Error(), "already ended") {
 			return nil, status.Errorf(codes.FailedPrecondition,
@@ -197,6 +206,7 @@ func (s *Server) StopWork(ctx context.Context, req *quaycrewv1.StopWorkRequest) 
 		}
 		return nil, storeError(err, "stop work")
 	}
+	s.ExportWork(ctx, stoppedEvent)
 	return &quaycrewv1.StopWorkResponse{Work: asWork(stopped)}, nil
 }
 
@@ -210,6 +220,7 @@ func (s *Server) workEvent(ctx context.Context, of *work.Work, kind, detail stri
 		ID: store.NewID(), Kind: kind, Work: of.ID,
 		Workspace: of.Workspace, Project: of.Project, Parent: of.Parent, Depth: of.Depth,
 		Detail:     oneShortLine(model.Redact(detail, s.sealedForWorkspace(ctx, of.Workspace))),
+		TraceID:    of.TraceID,
 		OccurredAt: timestamppb.Now().AsTime(),
 	}
 }
@@ -225,6 +236,7 @@ func asWork(from *work.Work) *quaycrewv1.Work {
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question,
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
+		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
 	}
 	if from.Deadline != nil {
@@ -303,6 +315,27 @@ func ControllerName(hostname func() (string, error)) string {
 // piece of work carries one, and everything it declares hangs under that work, one level deeper. The
 // caller cannot say otherwise, which is why depth bounds anything at all: work at depth d creates at
 // depth d+1, so a loop of any shape stops at the limit.
+// parentOf is the piece of work this one hangs under, and nil for a root.
+//
+// Read after underTheCaller has set the parent, because the parent is the credential's to say and
+// never the request's. It exists so a child can inherit its parent's trace: one trace covers a whole
+// tree, and a child that minted its own would leave the tree in as many traces as it has nodes.
+func (s *Server) parentOf(ctx context.Context, declared *work.Work) *work.Work {
+	if declared.Parent == "" {
+		return nil
+	}
+	parent, err := s.store.GetWork(ctx, declared.Parent)
+	if err != nil {
+		// The parent was read a moment ago to set the depth, so this is a store that went away
+		// between the two. The work is declared either way and takes a trace of its own, which is a
+		// tree in two traces rather than a piece of work nobody has.
+		slog.WarnContext(ctx, "the parent of this work could not be read, so it starts a trace of its own",
+			"work", declared.ID, "parent", declared.Parent, "error", err)
+		return nil
+	}
+	return parent
+}
+
 func (s *Server) underTheCaller(ctx context.Context, declared *work.Work) error {
 	grant, carried := auth.GrantFrom(ctx)
 	if carried && grant.Work != "" {

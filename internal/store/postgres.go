@@ -541,11 +541,13 @@ func (p *Postgres) AppendTask(ctx context.Context, task *quaycrewv1.Task, worksp
 		return errors.New("store: a task needs an id, so writing the same one twice leaves one task")
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into tasks (id, session, workspace, project, handle, prompt, reply, status, failure, occurred_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into tasks (id, session, workspace, project, handle, prompt, reply, status, failure,
+			trace_id, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		on conflict (id) do nothing`,
 		task.GetId(), task.GetSession(), workspace, project, session,
-		task.GetPrompt(), task.GetReply(), task.GetStatus(), task.GetFailure(), task.GetOccurredAt().AsTime())
+		task.GetPrompt(), task.GetReply(), task.GetStatus(), task.GetFailure(), task.GetTraceId(),
+		task.GetOccurredAt().AsTime())
 	if err != nil {
 		return fmt.Errorf("append task: %w", err)
 	}
@@ -573,7 +575,7 @@ func (p *Postgres) FinishTask(ctx context.Context, id, status, reply, failure st
 // for, and then the result is turned back the right way round so it reads as it happened.
 func (p *Postgres) ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, session, prompt, reply, status, failure, occurred_at
+		select id, session, prompt, reply, status, failure, trace_id, occurred_at
 		from tasks where session = $1
 		order by occurred_at desc, id desc
 		limit $2`, session, TaskLimit(limit))
@@ -587,7 +589,7 @@ func (p *Postgres) ListTasks(ctx context.Context, session string, limit int) ([]
 		var task quaycrewv1.Task
 		var occurredAt time.Time
 		if err := rows.Scan(&task.Id, &task.Session, &task.Prompt, &task.Reply,
-			&task.Status, &task.Failure, &occurredAt); err != nil {
+			&task.Status, &task.Failure, &task.TraceId, &occurredAt); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		task.OccurredAt = timestamppb.New(occurredAt)

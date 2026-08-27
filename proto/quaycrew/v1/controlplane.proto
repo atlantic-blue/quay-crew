@@ -896,6 +896,10 @@ message Task {
   // failure says what went wrong, empty on a task that worked.
   string failure = 6;
   google.protobuf.Timestamp occurred_at = 7;
+  // trace_id is the trace the call that ran this task belonged to, and empty for a task nothing was
+  // tracing. A reader holding it can open the trace, and it is the same value the piece of work that
+  // dispatched the task carries, so the two join. See issue 346.
+  string trace_id = 8;
 }
 
 // ListTasksRequest asks for one session's history, most recent last, so a conversation reads the way
@@ -972,6 +976,16 @@ message Work {
   // observed_version is the version of the declaration the status describes. A controller that has
   // not caught up leaves this behind the version above.
   int32 observed_version = 25;
+
+  // trace_id is the trace this whole tree belongs to, minted at the root and inherited unchanged by
+  // every descendant, so one identifier joins a piece of work, its children, the tasks they ran and
+  // the spans around them. parent_span_id is the span the caller was inside when it declared this
+  // work, empty for a root nothing was tracing.
+  //
+  // Both are columns rather than something a process holds, which is what makes a trace survive a
+  // controller that died: the context is in the declaration.
+  string trace_id = 30;
+  string parent_span_id = 31;
 
   google.protobuf.Timestamp created_at = 26;
   google.protobuf.Timestamp updated_at = 27;

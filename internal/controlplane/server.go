@@ -273,7 +273,8 @@ func NewServer(cfg Config) *Server {
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).
-		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).Redacting(server)
+		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).
+		Redacting(server).Exporting(server)
 	return server
 }
 
@@ -1215,7 +1216,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		Text:           text,
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session, s.birthMode),
-		Env:            s.taskEnv(ctx, session, credential),
+		Env:            withTraceparent(ctx, s.taskEnv(ctx, session, credential)),
 		Settings:       s.settingsFor(ctx, session),
 	})
 	if err != nil {
@@ -1245,6 +1246,30 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	}(session.GetId())
 
 	return resp.Reply, nil
+}
+
+// withTraceparent adds this task's trace context to the environment the command runs with.
+//
+// On the task and never on the sandbox, and that is the whole point of it being here rather than in
+// taskEnv. A sandbox is born with its environment and is then reused across every later task, so a
+// trace context written at birth labels the tenth task with the first task's span for as long as the
+// container lives. The same trap the crew's refusal message names about a capability granted after
+// birth: the container already running never sees the new value, and the value it does hold is the
+// one from a moment that has passed.
+//
+// The honest limit, stated because a reader will look for it: nothing inside the container adopts
+// this yet. The model's own tool does not read it, so what the crew gets is one span per attempt
+// written by the crew, around work whose inside is opaque.
+func withTraceparent(ctx context.Context, env map[string]string) map[string]string {
+	parent := telemetry.Traceparent(ctx)
+	if parent == "" {
+		return env
+	}
+	if env == nil {
+		env = map[string]string{}
+	}
+	env[telemetry.TraceparentEnv] = parent
+	return env
 }
 
 // measureTask publishes what a task spent and where it was spent.
