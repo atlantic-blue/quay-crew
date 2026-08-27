@@ -19,7 +19,8 @@ run with `make features`, or read from the binary itself with `quay features`.
 - **A session is a conversation in its own container.** It starts on the first task, is reused for
   every task after it, and runs the Claude Code command line tool on your subscription, so a task costs
   no API credit.
-- **You address the crew by path.** `quay use me/house-bills`, then `quay dispatch "..."`. Creating a
+- **You address the crew by path.** `quay use me/house-bills`, then `quay dispatch "..."` to start
+  work and let go of it, or `quay ask "..."` to wait here for the answer. Creating a
   workspace or a project moves you into it. An address typed on a command applies to that command only,
   and a session is the third level, so standing in one continues that conversation.
 - **A conversation survives its container.** The model's own store and the project's files are mounted
@@ -84,7 +85,7 @@ make install                                                  # build quay and i
 quay workspace create me
 quay project create house-bills
 quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
-quay dispatch "say pong"
+quay ask "say pong"
 ```
 
 The stack reads `~/.quay/env` on every command, so the model and image you chose survive a restart

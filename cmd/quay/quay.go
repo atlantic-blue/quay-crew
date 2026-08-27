@@ -1,6 +1,7 @@
-// Command quay is the CLI channel: a synchronous client of the control plane. You create workspaces,
-// dispatch a task, and list sessions, and the reply comes straight back. Async chat channels use the
-// event log instead; the CLI talks to the ControlPlaneService gRPC API directly.
+// Command quay is the command line channel, a client of the control plane. You create workspaces,
+// start a task and list sessions. Dispatching lets go of the task and asking waits for its answer,
+// which is the one difference between the two ways of talking to a session. Async chat channels use
+// the event log instead; this tool talks to the ControlPlaneService gRPC API directly.
 package main
 
 import (
@@ -81,6 +82,13 @@ var removedFlags = map[string]string{
 	// "say where with an address instead" was advice that could not be acted on, since neither is
 	// asking where anything is.
 	"--version": "which build this is: quay version",
+	// Both halves of dispatching are a word of their own, so neither is a flag and neither can be
+	// quietly swallowed into the message.
+	"--detach": "quay dispatch already lets go: the task runs in the crew and quay tasks <session> " +
+		"reads it back",
+	"--wait": "waiting for the answer is its own command: quay ask [<address>] \"...\"",
+	"--no-wait": "letting go is what dispatch does: quay dispatch [<address>] \"...\"" +
+		"\n\nand quay ask waits for the answer instead",
 }
 
 // helpSpellings are every way somebody asks what this tool does. Asking for help is the one thing
@@ -138,6 +146,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runProject(ctx, client, args[1:], out)
 	case "dispatch":
 		return runDispatch(ctx, client, args[1:], out)
+	case "ask":
+		return runAsk(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":
@@ -661,11 +671,31 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return names
 }
 
+// runDispatch starts a task and lets go of it. The crew runs it, and this command comes back as soon
+// as the session exists.
+//
+// Letting go is the default because a task takes as long as the work takes, which is minutes and
+// sometimes an hour, and holding it in the client makes the terminal the weakest part of the crew: a
+// dispatch killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
+// nothing about why, and the work was gone. The control plane has always been able to do this. Only
+// the console could ask for it.
 func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	return dispatchTask(ctx, client, args, "dispatch", true, out)
+}
+
+// runAsk starts a task and waits for the answer, which is what somebody typing a short question
+// wants: they are looking at the terminal and the reply is the point.
+func runAsk(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	return dispatchTask(ctx, client, args, "ask", false, out)
+}
+
+// dispatchTask is the road both of them take. One request, one difference: whether anybody waits.
+func dispatchTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string,
+	command string, letGo bool, out io.Writer) error {
 	typed, words := workspace.SplitSession(args)
 	text := strings.TrimSpace(strings.Join(words, " "))
 	if text == "" {
-		return fmt.Errorf("usage: quay dispatch [<address>] <text>")
+		return fmt.Errorf("usage: quay %s [<address>] <text>", command)
 	}
 
 	project, handle := "", ""
@@ -691,12 +721,20 @@ func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 
 	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: project, Handle: handle, Text: text,
+		Project: project, Handle: handle, Text: text, Detach: letGo,
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(out, resp.GetReply())
+	// Said out loud, because an empty line where a reply used to be reads as a task that answered
+	// nothing. It names both ways back in: the history, and the conversation itself.
+	if letGo {
+		fmt.Fprintf(out, "started. the crew has it, and nothing here is waiting for it.\n")
+		fmt.Fprintf(out, "read it back with quay tasks %s, or sit in it with quay attach %s\n",
+			display.ShortID(resp.GetHandle()), display.ShortID(resp.GetHandle()))
+	} else {
+		fmt.Fprintln(out, resp.GetReply())
+	}
 	fmt.Fprintf(out, "(session %s, handle %s)\n", resp.GetId(), resp.GetHandle())
 	return nil
 }

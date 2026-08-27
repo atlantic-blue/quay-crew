@@ -266,7 +266,7 @@ its event. [`docs/HOOKS.md`](HOOKS.md) is the long version.
 ```sh
 quay project create acme/billing
 quay use acme/billing
-quay dispatch "say pong"
+quay ask "say pong"
 quay sessions
 quay attach <session>
 ```

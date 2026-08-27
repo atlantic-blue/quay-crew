@@ -32,7 +32,7 @@ func aSessionWatchingTheModel(t *testing.T) (quaycrewv1.ControlPlaneServiceClien
 	})
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 	return client, runner
 }
 
@@ -71,7 +71,7 @@ func TestTheNextTaskRunsInTheModeThatWasSet(t *testing.T) {
 	}
 
 	mustRun(t, client, "mode", session, "dangerous")
-	mustRun(t, client, "dispatch", addressOf(t, client), "and again")
+	mustRun(t, client, "ask", addressOf(t, client), "and again")
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionBypass {
 		t.Fatalf("the task after the change ran in %q, want %q", was, model.PermissionBypass)

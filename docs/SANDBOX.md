@@ -66,17 +66,21 @@ You need Docker and a Claude subscription.
    project. The control plane reads the secret when running a task and injects it into that
    session's sandbox; it is never part of the message or the event log.
 
-5. Dispatch a task and get a real reply:
+5. Ask something and get a real reply:
 
    ```
-   quay dispatch "say pong"
+   quay ask "say pong"
    ```
 
    You are already in `demo/house-bills`, so nothing needs saying twice. To reach somewhere else for
-   one task without moving, put the address first: `quay dispatch demo/gardening "order the bulbs"`.
+   one task without moving, put the address first: `quay ask demo/gardening "order the bulbs"`.
+
+   `quay ask` waits for the answer, which is what a short question wants. Real work takes minutes, so
+   `quay dispatch` starts the task and lets go of it: the crew runs it, and `quay tasks <session>`
+   reads it back.
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first task and is reused for the
-   rest of the session. A second dispatch on the same session continues the same conversation.
+   rest of the session. A second task on the same session continues the same conversation.
 
 ## The gated integration test
 
@@ -105,8 +109,8 @@ itself, that a value in the sandbox env reaches the process inside the container
 
 ## Getting inside a conversation
 
-`quay dispatch` runs one task and returns. To sit inside the conversation, with its history, and keep
-typing:
+`quay dispatch` starts a task and returns, and `quay ask` waits for its answer. To sit inside the
+conversation, with its history, and keep typing:
 
 ```
 quay sessions

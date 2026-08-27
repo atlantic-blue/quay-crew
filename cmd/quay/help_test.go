@@ -72,7 +72,7 @@ func TestSessionIsACommandBecauseTheToolTeachesTheWord(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, spelling := range []string{"session", "sessions", "session"} {

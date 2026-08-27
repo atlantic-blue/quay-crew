@@ -12,7 +12,7 @@ func TestAWorkspaceCanBeRemovedWithEverythingUnderIt(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "typo")
 	mustRun(t, client, "project", "create", "notes")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 	mustRun(t, client, "secret", "set", "typo", "GH_TOKEN", "ghp-1234")
 
 	saying(t, "typo\n")
@@ -57,7 +57,7 @@ func TestAProjectCanBeRemovedAndYouStepBackToItsWorkspace(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "notes")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	saying(t, "notes\n")
 	removed := mustRun(t, client, "project", "delete", "me/notes")

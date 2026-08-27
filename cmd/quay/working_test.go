@@ -31,12 +31,12 @@ func TestWhatTheOperatorSeesWhileATaskRuns(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	// Typed at a terminal, so the caller waits. That is the path that recorded nothing.
+	// The caller waits for the answer, which is the path that recorded nothing.
 	dispatched := make(chan error, 1)
 	go func() {
 		var out bytes.Buffer
 		dispatched <- run(context.Background(), client,
-			[]string{"dispatch", "when is the electricity bill due"}, &out, "")
+			[]string{"ask", "when is the electricity bill due"}, &out, "")
 	}()
 	select {
 	case <-runner.Started:
@@ -100,7 +100,7 @@ func TestASessionWithNoTaskInItReadsIdle(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "dispatch", "hello")
+	mustRun(t, client, "ask", "hello")
 
 	if got := onlySession(t, client).GetStatus(); got != "idle" {
 		t.Fatalf("a session between tasks reads %q, want idle", got)
