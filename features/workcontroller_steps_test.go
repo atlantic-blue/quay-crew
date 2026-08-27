@@ -388,3 +388,85 @@ func waitForTheLeaseToRunOut(ctx context.Context, id string) error {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+// The steps for work that names a role: the session it runs in, and the refusal that keeps a
+// container from ever being built for it.
+func initializeWorkRoleSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^a piece of work titled "([^"]*)" in the role "([^"]*)" handed "([^"]*)"$`,
+		func(ctx context.Context, title, named, material string) error {
+			return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
+				Title: title, Brief: "from the work alone", Role: named, Hands: []string{material},
+			})
+		})
+
+	// The session, not the row. What decides whether the boundary is real is the conversation the
+	// crew actually built, and a row saying the name proves nothing about it.
+	sc.Step(`^the session doing that work runs as the "([^"]*)" role$`,
+		func(ctx context.Context, named string) error {
+			one, err := readWork(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if one.GetSession() == "" {
+				return fmt.Errorf("the work says no session, so nothing ran as anybody")
+			}
+			w := worldFrom(ctx)
+			listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+			if err != nil {
+				return err
+			}
+			for _, session := range listed.GetSessions() {
+				if session.GetId() != one.GetSession() {
+					continue
+				}
+				if session.GetRole() != named {
+					return fmt.Errorf("the session doing the work runs as %q, want %q", session.GetRole(), named)
+				}
+				return nil
+			}
+			return fmt.Errorf("the crew holds no session %s", one.GetSession())
+		})
+
+	sc.Step(`^the work is stopped, saying the "([^"]*)" role does not receive "([^"]*)"$`,
+		func(ctx context.Context, named, material string) error {
+			one, err := readWork(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if one.GetPhase() != work.PhaseStopped {
+				return fmt.Errorf("the work is %q saying %q, want stopped", one.GetPhase(), one.GetReason())
+			}
+			for _, want := range []string{named, material, "declare the work without"} {
+				if !strings.Contains(one.GetReason(), want) {
+					return fmt.Errorf("the refusal says %q, want it to name %q", one.GetReason(), want)
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the work is stopped, and the reason names the "([^"]*)" role$`,
+		func(ctx context.Context, named string) error {
+			one, err := readWork(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if one.GetPhase() != work.PhaseStopped {
+				return fmt.Errorf("the work is %q saying %q, want stopped", one.GetPhase(), one.GetReason())
+			}
+			if !strings.Contains(one.GetReason(), named) {
+				return fmt.Errorf("the refusal says %q, want it to name the %s role", one.GetReason(), named)
+			}
+			return nil
+		})
+
+	sc.Step(`^the work ran in no session$`, func(ctx context.Context) error {
+		one, err := readWork(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetSession() != "" {
+			return fmt.Errorf("the refused work ran in session %q, and no session should exist", one.GetSession())
+		}
+		return nil
+	})
+}

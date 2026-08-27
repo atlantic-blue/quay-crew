@@ -161,6 +161,9 @@ func cloneWork(from work.Work) work.Work {
 	if from.After != nil {
 		from.After = append([]string(nil), from.After...)
 	}
+	if from.Hands != nil {
+		from.Hands = append([]string(nil), from.Hands...)
+	}
 	if from.Labels != nil {
 		labels := make(map[string]string, len(from.Labels))
 		for key, value := range from.Labels {
@@ -183,13 +186,14 @@ func cloneTime(at *time.Time) *time.Time {
 	return &copied
 }
 
-// RunnableWork is the work a controller may start: pending, with no parent, no role and nothing it
-// waits for, oldest declared first.
+// RunnableWork is the work a controller may start: pending, with no parent and nothing it waits
+// for, oldest declared first. Work that names a role is in it, and the controller runs it as that
+// role.
 func (m *Memory) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.workMatching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhasePending && one.Parent == "" && one.Role == "" && len(one.After) == 0
+		return one.Phase == work.PhasePending && one.Parent == "" && len(one.After) == 0
 	}), nil
 }
 

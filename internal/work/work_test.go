@@ -339,3 +339,95 @@ func TestTheSpaceAroundATitleAndABriefComesOff(t *testing.T) {
 		t.Fatalf("the brief is %q, want the space taken off", tidied.Brief)
 	}
 }
+
+// What a piece of work hands is held to the words the crew hands out, and the refusal offers those
+// words back. A word nobody assembles is a boundary that quietly means nothing.
+func TestWorkHandedSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
+	d := declared()
+	d.Hands = []string{"the codebase"}
+
+	err := d.Validate()
+
+	if err == nil {
+		t.Fatal("work handed material the crew does not hand out was accepted")
+	}
+	for _, want := range []string{"the codebase", "work", "context", "skills"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal says %q, want it to name %q", err, want)
+		}
+	}
+}
+
+func TestWorkHandedMaterialTheCrewHandsOutIsAccepted(t *testing.T) {
+	d := declared()
+	d.Hands = []string{"context", "skills", "work"}
+
+	if err := d.Validate(); err != nil {
+		t.Fatalf("work handed material the crew does hand out was refused: %v", err)
+	}
+}
+
+// One order and no repeats, so what a piece of work hands does not depend on the order somebody
+// typed it in, and two declarations that say the same thing are the same row.
+func TestWhatIsHandedIsSortedAndDeduplicated(t *testing.T) {
+	d := declared()
+	d.Hands = []string{" skills ", "context", "skills", ""}
+
+	tidy := d.Tidied()
+
+	if len(tidy.Hands) != 2 || tidy.Hands[0] != "context" || tidy.Hands[1] != "skills" {
+		t.Fatalf("the work hands %v, want context and skills once each", tidy.Hands)
+	}
+}
+
+func TestWorkThatHandsNothingHandsNothing(t *testing.T) {
+	if tidy := declared().Tidied(); tidy.Hands != nil {
+		t.Fatalf("work that handed nothing hands %v", tidy.Hands)
+	}
+}
+
+// receives is a role, as much of one as the rule needs.
+type receives []string
+
+func (r receives) Gets(material string) bool {
+	for _, held := range r {
+		if held == material {
+			return true
+		}
+	}
+	return false
+}
+
+func TestTheFirstMaterialARoleDoesNotReceiveIsNamed(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		handed []string
+		role   work.Receiver
+		want   string
+	}{
+		{"the role receives everything handed", []string{"work", "context"}, receives{"work", "context"}, ""},
+		{"the role receives none of it", []string{"context"}, receives{"work"}, "context"},
+		{"the role receives some of it", []string{"context", "skills"}, receives{"work", "context"}, "skills"},
+		{"nothing was handed", nil, receives{"work"}, ""},
+		{"a role that receives nothing at all", []string{"work"}, receives{}, "work"},
+		{"no role to hold it against", []string{"context"}, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := work.Unreceived(tc.handed, tc.role); got != tc.want {
+				t.Fatalf("the material the role does not receive is %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A refusal a caller cannot act on is a refusal that sends them looking, so it names the role, the
+// material and both ways out.
+func TestTheRefusalNamesTheRoleTheMaterialAndWhatToChange(t *testing.T) {
+	said := work.RefusedMaterial("test-writer", "context")
+
+	for _, want := range []string{"test-writer", "context", "import it again", "declare the work without"} {
+		if !strings.Contains(said, want) {
+			t.Fatalf("the refusal says %q, want it to name %q", said, want)
+		}
+	}
+}

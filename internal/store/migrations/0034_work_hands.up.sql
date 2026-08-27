@@ -1,0 +1,16 @@
+-- What a piece of work hands the session that runs it, beyond the brief.
+--
+-- A role declares what it receives, and this is the other side of that boundary: what this work
+-- cannot be done without. The words are the ones a role already uses, so a reader learns one
+-- vocabulary rather than two.
+--
+-- The check happens where the material is handed over. A role can be detached, imported again at a
+-- new version and attached again while work sits pending, so what the crew would put in front of a
+-- session is only settled at the moment it dispatches. Work handed material its role does not
+-- receive is stopped there, before a container is built, rather than run without it: a session asked
+-- to do the work with the context missing answers plausibly instead of stopping, which is the
+-- failure expect_file already exists to catch.
+--
+-- Empty, the default, is every piece of work written before today: it hands nothing beyond its own
+-- brief, and nothing about it changes.
+alter table work add column if not exists hands text[] not null default '{}';

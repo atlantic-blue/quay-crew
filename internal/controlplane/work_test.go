@@ -656,3 +656,117 @@ func workWithAnAnswer(t *testing.T, kept store.Store, workspace, project, title,
 	}
 	return declared.ID
 }
+
+// importRoleReceiving imports a role that receives exactly what it is given, so a test can put the
+// boundary where it needs it.
+func importRoleReceiving(t *testing.T, s *controlplane.Server, name string, version int, material ...string) {
+	t.Helper()
+	receives := ""
+	for _, one := range material {
+		receives += fmt.Sprintf("  - %s\n", one)
+	}
+	manifest := fmt.Sprintf("name: %s\nversion: %d\nsummary: clears the backlog\nmodel: opus\nreceives:\n%s",
+		name, version, receives)
+	if _, err := s.ImportRole(context.Background(), &quaycrewv1.ImportRoleRequest{
+		Files: []*quaycrewv1.RoleFile{
+			{Path: role.ManifestFile, Body: []byte(manifest)},
+			{Path: role.BriefFile, Body: []byte("Read the open pull requests.")},
+		},
+	}); err != nil {
+		t.Fatalf("ImportRole: %v", err)
+	}
+}
+
+// The boundary is checked while the caller is looking, as well as at the dispatch: a refusal that
+// arrives hours later has nothing pointing back at the declaration.
+func TestWorkHandedMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, project := newProject(t, s)
+	importRoleReceiving(t, s, "test-writer", 1, "work")
+	attachRole(t, s, workspace, "test-writer")
+
+	err := refusalOf(t, s, &quaycrewv1.CreateWorkRequest{
+		Project: project, Title: "write the tests", Brief: "from the work alone",
+		Role: "test-writer", Hands: []string{"context"},
+	})
+
+	for _, want := range []string{"test-writer", "context", "declare the work without"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal says %q, want it to name %q", err, want)
+		}
+	}
+	listed, listErr := s.ListWork(context.Background(), &quaycrewv1.ListWorkRequest{Project: project})
+	if listErr != nil {
+		t.Fatalf("ListWork: %v", listErr)
+	}
+	if len(listed.GetWork()) != 0 {
+		t.Fatalf("the crew holds %d pieces of work, and a refusal must write no row", len(listed.GetWork()))
+	}
+}
+
+func TestWorkHandedWhatItsRoleReceivesIsKeptWholeAndReadBack(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, project := newProject(t, s)
+	importRoleReceiving(t, s, "backlog-clearer", 1, "work", "context")
+	attachRole(t, s, workspace, "backlog-clearer")
+
+	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
+		Project: project, Title: "clear the backlog", Brief: "read the pull requests",
+		Role: "backlog-clearer", Hands: []string{"context", "work"},
+	})
+	if err != nil {
+		t.Fatalf("CreateWork: %v", err)
+	}
+	handed := declared.GetWork().GetHands()
+	if len(handed) != 2 || handed[0] != "context" || handed[1] != "work" {
+		t.Fatalf("the work hands %v, want context and work", handed)
+	}
+}
+
+// Work that names no role hands its material to nobody, so nothing about it changes.
+func TestWorkWithNoRoleIsNeverHeldToAnyBoundary(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+
+	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
+		Project: project, Title: "read the electricity bill", Brief: "open it",
+		Hands: []string{"context", "skills"},
+	})
+	if err != nil {
+		t.Fatalf("work with no role was refused: %v", err)
+	}
+	if declared.GetWork().GetRole() != "" {
+		t.Fatalf("the work runs as %q, want as nobody", declared.GetWork().GetRole())
+	}
+}
+
+// What the controller reads is the role the workspace holds now, over the narrow interface: two
+// answers to which role this is would check the boundary against one and apply it against another.
+func TestTheControllerReadsTheRoleTheWorkspaceHolds(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	workspace, _ := newProject(t, s)
+	importRoleReceiving(t, s, "backlog-clearer", 1, "work")
+	attachRole(t, s, workspace, "backlog-clearer")
+
+	held, err := s.RoleFor(context.Background(), workspace, "backlog-clearer")
+	if err != nil {
+		t.Fatalf("RoleFor: %v", err)
+	}
+	if !held.Gets(role.MaterialWork) || held.Gets(role.MaterialContext) {
+		t.Fatal("the role the controller read is not the role the workspace holds")
+	}
+
+	// Detached, and the sentence the controller writes onto a work row carries no status wrapping.
+	if _, err := s.DetachRole(context.Background(), &quaycrewv1.DetachRoleRequest{
+		Workspace: workspace, Name: "backlog-clearer",
+	}); err != nil {
+		t.Fatalf("DetachRole: %v", err)
+	}
+	_, err = s.RoleFor(context.Background(), workspace, "backlog-clearer")
+	if err == nil {
+		t.Fatal("a role the workspace no longer holds was read back")
+	}
+	if !strings.Contains(err.Error(), "backlog-clearer") || strings.Contains(err.Error(), "rpc error") {
+		t.Fatalf("the refusal says %q, want the sentence naming the role and nothing wrapped round it", err)
+	}
+}

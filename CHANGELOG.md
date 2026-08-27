@@ -8,6 +8,40 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **Work runs as a role, and what a role receives is enforced before a container starts.** A piece of
+  work already carried a role and the version it was pinned to, and the controller read that column
+  and left the work alone. Now it runs it: the session the controller opens runs as that role, so it
+  is told the role's brief, it is given what the role receives and nothing else, and the credential
+  the crew mints for its task carries the verbs the role's `may` list declares. A role that declares
+  no `may` list may call nothing, which is the direction the capability model already took.
+
+  The role comes off the work record and never from the caller of the task. A caller that could name
+  its own role could name one granting more than the work was declared with.
+
+  A piece of work can now say what it cannot be done without, with `--hands`, in the same three words
+  a role receives: `work`, `context` and `skills`. Where the role does not receive what the work
+  hands, the work is refused. The refusal names the role, the material and the two ways out, and the
+  work stops with that reason on the row.
+
+  It is checked at the write and again at the dispatch. The second check is the one that matters: a
+  role can be detached, imported at a new version and attached again while work sits pending, so what
+  the crew would put in front of a session is only settled at the moment it hands it over. Work
+  refused there never reaches a container.
+
+  Refused rather than withheld, which is the difference from a flow step naming a role. A step is
+  given less, silently, because the operator wrote that boundary into the graph. A piece of work that
+  says it cannot be done without the context is saying the opposite, so running it without would
+  leave a session answering plausibly instead of stopping, which is what `--expect-file` already
+  exists to catch.
+
+  Work that names no role is unchanged. It hands its material to nobody, no boundary applies to it,
+  and the scenarios written before this still pass as they were.
+
+  Still root work only: work under a parent and work that waits for something are left alone, role or
+  no role. A piece of work records the role version it was declared against and the session is built
+  from the version the workspace holds now, so a role narrowed underneath declared work stops that
+  work rather than running it as it was written.
+
 - **A session gives its container back and keeps its history.** Nothing in the crew ever put a
   session away on its own, so a session that answered one question in March still held its container
   in August unless somebody restarted the crew. A session now has a fifth state, `reclaimed`: the

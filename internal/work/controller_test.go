@@ -328,8 +328,10 @@ func (r *rows) WorkspaceLimits(_ context.Context, workspace string) (work.Limits
 func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// The same shape the real stores offer, work in a role included: a double that offered less than
+	// the store does would hide every behaviour that only work in a role reaches.
 	return r.matching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhasePending && one.Parent == "" && one.Role == "" && len(one.After) == 0
+		return one.Phase == work.PhasePending && one.Parent == "" && len(one.After) == 0
 	}), nil
 }
 
@@ -807,13 +809,14 @@ func TestWhatTheWorkSpentIsWrittenOntoTheRecord(t *testing.T) {
 
 // Root work only in this slice. Everything else is a later one, and picking it up early would run
 // work whose ordering, role or budget nothing here honours.
+// Ordering and depth are each a later slice, so a controller that honours neither leaves that work
+// alone. Work in a role is no longer here, because this slice runs it.
 func TestOnlyRootWorkIsRun(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		shape func(*work.Work)
 	}{
 		{"work that waits for something", func(w *work.Work) { w.After = []string{"work-0"} }},
-		{"work in a role", func(w *work.Work) { w.Role, w.RoleVersion = "backlog-clearer", 1 }},
 		{"work under a parent", func(w *work.Work) { w.Parent, w.Depth = "work-0", 1 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
