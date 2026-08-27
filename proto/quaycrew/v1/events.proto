@@ -35,3 +35,40 @@ message TaskEvent {
   // occurred_at is when the task finished.
   google.protobuf.Timestamp occurred_at = 9;
 }
+
+// SessionEvent is one thing that happened to a session, written every time it happens.
+//
+// This is what a consumer subscribes to, and what a workflow trigger matches on. It goes to the
+// store in the same breath as the thing it describes, and to `<workspace>.sessions` after, keyed by
+// session so one session's records stay in order on one partition.
+message SessionEvent {
+  // id identifies this record. Delivery from the log is at least once, so a consumer sees the same
+  // record more than once and needs something to recognise it by.
+  string id = 1;
+  // kind is what happened, and it is the field a consumer switches on:
+  //
+  //   session.created    the session exists
+  //   session.started    work began in it
+  //   session.completed  the work landed, and detail carries the reply
+  //   session.errored    the work did not land, and detail carries the reason
+  //   session.stopped    the session was put down, and its container with it
+  //   session.archived   it was put away
+  //   session.restored   it was brought back
+  //   session.deleted    it is gone, with the project or on its own
+  //
+  // A kind names something that happened, in the past tense, at one moment. "idle" and "running"
+  // are not kinds: they are what the session's row says now, which is the fold of these.
+  string kind = 2;
+  // session is the session this happened to, and the key the record is published under.
+  string session = 3;
+  // workspace, project and handle are where the session sits, denormalised deliberately: a consumer
+  // must not have to query the store to know what it is reading.
+  string workspace = 4;
+  string project = 5;
+  string handle = 6;
+  // detail is one short line about this event, empty on the kinds that need none. It carries what
+  // the model replied and what a failure said, so it goes through the crew's redactor first.
+  string detail = 7;
+  // occurred_at is when it happened.
+  google.protobuf.Timestamp occurred_at = 8;
+}

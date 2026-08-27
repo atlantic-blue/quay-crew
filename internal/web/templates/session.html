@@ -16,6 +16,8 @@
     <p class="prompt">{{.Prompt}}</p>
     {{if .Failed}}
     <pre class="failure">{{.Failure}}</pre>
+    {{else if .Running}}
+    <p class="running">still running</p>
     {{else}}
     <pre class="reply">{{.Reply}}</pre>
     {{end}}

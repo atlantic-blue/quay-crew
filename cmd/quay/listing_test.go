@@ -24,7 +24,7 @@ func TestTheListingHasTheSameColumnsAsTheConsole(t *testing.T) {
 	}
 	// A header is what makes ten columns readable. Reading 102 as a task count rather than as input
 	// tokens is what happens without one.
-	if !strings.HasPrefix(listed, "id ") {
+	if !strings.HasPrefix(listed, "session ") {
 		t.Errorf("the listing has no header row:\n%s", listed)
 	}
 	if !strings.Contains(listed, "edits") {

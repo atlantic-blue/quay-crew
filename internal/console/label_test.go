@@ -1,7 +1,6 @@
 package console
 
 import (
-	"strings"
 	"testing"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -103,7 +102,13 @@ func TestTheListingShowsTheNameAndFallsBackToTheIdentifier(t *testing.T) {
 	if got := display.SessionName(described); got != "fixing the payout job" {
 		t.Errorf("a described session is listed as %q", got)
 	}
-	if got := display.SessionName(bare); !strings.HasPrefix("f976832bcc", got) || got == "" {
-		t.Errorf("a session with no name at all is listed as %q, want its identifier", got)
+	// The id, which is the value the session column carries, so falling back lands on something the
+	// operator can type. It used to fall back to the handle, which no column names.
+	if got := display.SessionName(bare); got != "7f235f29" {
+		t.Errorf("a session with no name at all is listed as %q, want the id the session column prints", got)
+	}
+	// The name cell itself does not fall back at all: it is empty until somebody names the session.
+	if got := display.SessionLabel(bare); got != "" {
+		t.Errorf("the name cell of an unnamed session says %q, want nothing", got)
 	}
 }

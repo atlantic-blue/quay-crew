@@ -3,11 +3,9 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
 // Separator divides the levels of an address.
@@ -118,36 +116,39 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 
 // resolveSession tasks a session reference into a session id within one project. Listings shorten
 // identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
+//
+// Both identifiers reach the session. A listing prints the id in its own column and the handle in the
+// name column, and the name column gives way to a label or a description the moment the session has
+// one. So on a session anybody has named, the id is the only identifier on the screen, and it was the
+// one form an address refused.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
 	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
 		return "", fmt.Errorf("workspace: list sessions: %w", err)
 	}
 
-	matches := make([]string, 0, 1)
+	// The handle either way: it is what every caller of an address goes on to dispatch against, so
+	// taking the id here is about what the operator may type, not about what an address returns.
+	matches := make([]*quaycrewv1.Session, 0, 1)
 	for _, session := range resp.GetSessions() {
-		if session.GetHandle() == reference {
-			return reference, nil
+		if session.GetHandle() == reference || session.GetId() == reference {
+			return session.GetHandle(), nil
 		}
-		if strings.HasPrefix(session.GetHandle(), reference) {
-			matches = append(matches, session.GetHandle())
+		if strings.HasPrefix(session.GetHandle(), reference) || strings.HasPrefix(session.GetId(), reference) {
+			matches = append(matches, session)
 		}
 	}
 
 	switch len(matches) {
 	case 0:
-		// Shortened, because a listing prints them shortened and that is what gets typed back.
 		return "", &NotFoundError{
 			What: "session", Name: reference,
-			Have: namesOf(resp.GetSessions(), func(i int) string {
-				return display.ShortID(resp.GetSessions()[i].GetHandle())
-			}),
+			Have: identifiersOf(resp.GetSessions()),
 			Make: `start one with quay dispatch "..."`,
 		}
 	case 1:
-		return matches[0], nil
+		return matches[0].GetHandle(), nil
 	default:
-		sort.Strings(matches)
-		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: matches}
+		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: identifiersOf(matches)}
 	}
 }

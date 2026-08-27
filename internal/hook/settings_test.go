@@ -180,3 +180,43 @@ func TestRenderingWithNowhereToMountIsRefused(t *testing.T) {
 		t.Fatal("settings rendered with no root, so every command would be a relative path")
 	}
 }
+
+// The settings the crew renders are the only thing it can say to the model runtime, so the status
+// line is in here rather than in the sandbox image. The image cannot say it: the crew mounts the
+// workspace's own directory over the conversation directory in every sandbox, and a mount hides
+// whatever the image put underneath it. That cost an operator a feature that passed every test it
+// had, so it is held here, on both paths a session takes.
+func TestEverySettingsFileTellsTheRuntimeToDrawTheStatusLine(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		hooks []hook.Hook
+	}{
+		{name: "a session under no hooks", hooks: nil},
+		{name: "a session under a hook", hooks: []hook.Hook{
+			one("guard", hook.Binding{On: "PreToolUse", Entry: "bin/hook"}),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered, err := hook.Settings("/home/agent/hooks", tc.hooks)
+			if err != nil {
+				t.Fatalf("Settings: %v", err)
+			}
+			var read struct {
+				StatusLine struct {
+					Type    string `json:"type"`
+					Command string `json:"command"`
+				} `json:"statusLine"`
+			}
+			if err := json.Unmarshal(rendered, &read); err != nil {
+				t.Fatalf("the settings are unreadable: %v\n%s", err, rendered)
+			}
+			if read.StatusLine.Type != "command" {
+				t.Errorf("the status line is of type %q, and the runtime only runs a command:\n%s",
+					read.StatusLine.Type, rendered)
+			}
+			if read.StatusLine.Command != hook.StatusLineCommand {
+				t.Errorf("the status line runs %q, want %q", read.StatusLine.Command, hook.StatusLineCommand)
+			}
+		})
+	}
+}
