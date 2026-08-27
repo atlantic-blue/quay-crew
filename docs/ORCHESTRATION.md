@@ -330,6 +330,47 @@ A controller is a loop. It watches, it compares what is declared against what ex
 close the gap, and it records what happened. It is an ordinary workload. Nothing about sitting near
 the control plane makes it privileged.
 
+### What of this shipped on 27 August 2026
+
+A controller runs inside the control plane, started the way the flow poller is: something owns its
+lifetime, and the goroutine is not hidden inside a constructor. It ticks every five seconds and on
+the way up, so work declared while the crew was down starts when the crew comes back.
+
+What one tick does today:
+
+```mermaid
+flowchart LR
+    TICK(["tick"]) --> READ["read the work that is running<br/>and has a session"]
+    READ --> TASK{"has its task landed?"}
+    TASK -->|"no"| LEAVE["leave it running"]
+    TASK -->|"yes"| CLAIMED{"does the answer meet<br/>what the work claimed?"}
+    CLAIMED -->|"no"| STOP["phase stopped,<br/>reason names the claim"]
+    CLAIMED -->|"yes"| DONE["phase done, answer,<br/>spent tokens, finished at"]
+    TICK --> RUNNABLE["read the work that is pending,<br/>with no parent, no role and no after"]
+    RUNNABLE --> CLAIM{"claim it:<br/>pending to running,<br/>in one statement"}
+    CLAIM -->|"another controller won"| NOTHING["nothing"]
+    CLAIM -->|"claimed"| SEND["dispatch the brief into a session<br/>named after the work, and let go"]
+    SEND --> RECORD["record the session on the row"]
+```
+
+The claim is the whole of the idempotency. It is a conditional update in one statement, so two
+controllers ticking at the same moment leave one task rather than two, and a tick run again over a
+row that has already started does nothing. Work is paid for, so a second dispatch is a second bill.
+
+The dispatch lets go of its task. A controller that waits on a model is a controller that stops
+controlling, so the answer is read off the task record on a later tick.
+
+**What it does not do yet, and which slice does it.** It runs root work only: work that waits for
+something, work in a role and work under a parent are read and left alone. There is no lease and no
+recovery from a controller that died mid dispatch, which is slice 4. There is no budget check, no
+depth limit and no credential of its own, which is slice 5. Nothing is published to the event log,
+which is slice 6. A piece of work that goes to `asking` is not moved by anything here, because
+nothing asks yet.
+
+The session is named after the work rather than minted, so a dispatch that has to be made again
+lands in the same conversation. That is what makes the recovery in slice 4 possible without a second
+bill.
+
 ### Where the Kubernetes idea fits quay, and where it does not
 
 **It fits.** The reducer in `internal/flow/advance.go` is already a pure function from state and

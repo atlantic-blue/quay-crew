@@ -271,3 +271,129 @@ func nullIfEmpty(value string) any {
 	}
 	return value
 }
+
+// RunnableWork is the work a controller may start: pending, with no parent, no role and nothing it
+// waits for, oldest declared first.
+//
+// The shape is deliberately narrow. Work that waits for something, work in a role and work under a
+// parent are each a later slice, and offering them to a controller that honours none of those would
+// run them with their ordering, their boundary and their budget ignored.
+func (p *Postgres) RunnableWork(ctx context.Context, limit int) ([]*work.Work, error) {
+	return p.workMatching(ctx, `
+		where phase = $1 and parent is null and role = '' and cardinality(after_work) = 0
+		order by created_at, id`, limit, work.PhasePending)
+}
+
+// StartedWork is the work a controller started and has not written an answer onto. Work with no
+// session yet is left out: there is no task to read back.
+func (p *Postgres) StartedWork(ctx context.Context, limit int) ([]*work.Work, error) {
+	return p.workMatching(ctx, `
+		where phase = $1 and session <> ''
+		order by created_at, id`, limit, work.PhaseRunning)
+}
+
+// workMatching runs one of the controller's queries, capped.
+func (p *Postgres) workMatching(ctx context.Context, where string, limit int, args ...any) ([]*work.Work, error) {
+	query := `select ` + workColumns + ` from work ` + where
+	if limit > 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" limit $%d", len(args))
+	}
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read work: %w", err)
+	}
+	defer rows.Close()
+
+	found := make([]*work.Work, 0)
+	for rows.Next() {
+		one, err := scanWork(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read work: %w", err)
+		}
+		found = append(found, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read work: %w", err)
+	}
+	return found, nil
+}
+
+// StartWork claims one piece of work and records the record of the claim in the same transaction.
+//
+// The update is conditional on the phase in the same statement, which is the compare and set that
+// keeps two controllers from both starting the same work. A row that moved on first is refused, and
+// the refusal is not a failure: it means somebody else has it.
+func (p *Postgres) StartWork(ctx context.Context, id string, event *work.Event) (*work.Work, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start work: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		update work set phase = $2, attempts = attempts + 1, started_at = now(), updated_at = now()
+		where id = $1 and phase = $3`, id, work.PhaseRunning, work.PhasePending)
+	if err != nil {
+		return nil, fmt.Errorf("start work: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetWork(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, work.ErrNotPending
+	}
+	if err := appendWorkEvent(ctx, tx, event); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("start work: %w", err)
+	}
+	return p.GetWork(ctx, id)
+}
+
+// RecordWorkSession writes which conversation a piece of work runs in. Not a movement, so it writes
+// no record of its own.
+func (p *Postgres) RecordWorkSession(ctx context.Context, id, session string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update work set session = $2, updated_at = now() where id = $1`, id, session)
+	if err != nil {
+		return fmt.Errorf("record work session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// LandWork writes what came of the work, with its record, in one transaction. Conditional on the
+// work still running, so what it ended as is written once.
+func (p *Postgres) LandWork(ctx context.Context, id string, landed work.Landing, event *work.Event) (*work.Work, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("land work: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		update work set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
+			observed_version = version, finished_at = now(), updated_at = now()
+		where id = $1 and phase = $6`,
+		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, work.PhaseRunning)
+	if err != nil {
+		return nil, fmt.Errorf("land work: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetWork(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, work.ErrNotRunning
+	}
+	if err := appendWorkEvent(ctx, tx, event); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("land work: %w", err)
+	}
+	return p.GetWork(ctx, id)
+}

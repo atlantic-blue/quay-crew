@@ -8,6 +8,29 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A controller makes declared work happen.** Declaring a piece of work recorded intent. A loop
+  inside the control plane now makes reality match it: it reads the work the crew holds, sends the
+  brief as a task, and writes what came back onto the row. Declare work, close the terminal, and find
+  it done, with the answer on the record and the conversation that did it named beside it.
+
+  The loop never waits on a model. It dispatches and lets go, and reads the answer off the task
+  record on a later tick, so a piece of work that takes an hour costs the loop nothing. It ticks
+  every five seconds and once on the way up, so work declared while the crew was down starts when the
+  crew comes back.
+
+  Asking twice is paying twice, so the claim is a conditional update in one statement: pending to
+  running, or nothing. Two controllers ticking at the same moment leave one task, and a tick run
+  again over a row that has already started does nothing.
+
+  What a piece of work claimed is checked by the crew rather than believed from the model. An answer
+  that does not carry what the work said it would, or a file the work said would be there and is not,
+  stops the work with a reason naming the claim. The answer stays on the record either way, because
+  what the model said is how somebody works out why the claim failed.
+
+  It runs root work only: work that waits for something else, work in a role and work under a parent
+  are read and left alone for the slices that honour their ordering, their boundary and their budget.
+  There is no lease and no recovery from a controller that died mid dispatch yet.
+
 - **A dispatch that cannot start says so instead of waiting without end.** A control plane that had
   come back from the machine running out of memory served every listing in under a second and
   started no work at all. `quay dispatch` wrote the session row, then stayed inside the call: no

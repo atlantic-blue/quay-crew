@@ -34,6 +34,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -130,6 +131,9 @@ type Config struct {
 	// ExportWait is how long one record's export to the event log is given before it is dropped.
 	// Zero takes exportWait.
 	ExportWait time.Duration
+	// WorkTickEvery is how often the work controller looks at the work the crew holds. Zero takes
+	// work.DefaultTickEvery.
+	WorkTickEvery time.Duration
 }
 
 // Identity is who a commit is by.
@@ -162,6 +166,9 @@ type Server struct {
 	// flowPoller resumes waiting runs whose time has come. Started by whoever owns the process,
 	// because a goroutine hidden inside a constructor is a lifetime nobody can see.
 	flowPoller *flow.Poller
+	// workController makes reality match the work the crew holds. Started the same way and for the
+	// same reason.
+	workController *work.Controller
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
@@ -243,6 +250,10 @@ func NewServer(cfg Config) *Server {
 	engine := flow.NewEngine(cfg.Store, server, server, server)
 	server.flows = engine
 	server.flowPoller = flow.NewPoller(engine, 0, nil)
+	// The controller reads and writes rows and dispatches through this same server, which is the
+	// property that lets it move out of this process later without changing a line of its logic.
+	server.workController = work.NewController(cfg.Store, server, server, server, nil).
+		Every(cfg.WorkTickEvery).Redacting(server)
 	return server
 }
 

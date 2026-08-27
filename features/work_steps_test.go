@@ -219,15 +219,10 @@ func initializeWorkSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// Read off the crew rather than off what the declaration answered, so a step that runs after
+	// something else has moved the work says what the crew holds now.
 	sc.Step(`^the work is pending$`, func(ctx context.Context) error {
-		one, err := firstWork(ctx)
-		if err != nil {
-			return err
-		}
-		if one.GetPhase() != work.PhasePending {
-			return fmt.Errorf("the work is %q, want pending", one.GetPhase())
-		}
-		return nil
+		return workIs(ctx, 0, work.PhasePending)
 	})
 
 	sc.Step(`^the work is at depth (\d+) with no parent$`, func(ctx context.Context, depth int) error {

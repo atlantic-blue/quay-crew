@@ -55,7 +55,7 @@ commands:
   flow answer <run> <answer>              tell a run waiting on you what you decided
   work create [<address>]                 declare a piece of work: what it is, and what has to
     --title "..." --brief "..."           happen. The crew keeps it, so the intent outlives the
-    [--role <name>] [--mode <mode>]       terminal that asked for it. Nothing runs it yet
+    [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it
     [--after <work>] [--label k=v]
     [--budget-tokens <n>] [--deadline <t>]
     [--expect-file <path>]

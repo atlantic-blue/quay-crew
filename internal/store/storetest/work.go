@@ -389,3 +389,250 @@ func stoppedEvent(id, workspace, project, reason string) *work.Event {
 		Workspace: workspace, Project: project, Detail: reason, OccurredAt: time.Now().UTC(),
 	}
 }
+
+// runWorkControllerConformance holds both stores to what a controller needs of them.
+//
+// A controller reads what it may start, claims it once however many controllers are asking, and
+// writes what came of it. The claim is the interesting one: it is conditional in the store, so two
+// callers cannot both win, and neither store is allowed to be the lenient one.
+func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("the work a controller may run is root work that is pending", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		root := declaredWork(t, s, workspace, project, "the root")
+		waiting := workShaped(t, s, workspace, project, "waits for the root", func(w *work.Work) {
+			w.After = []string{root}
+		})
+		inRole := workShaped(t, s, workspace, project, "runs as a role", func(w *work.Work) {
+			w.Role, w.RoleVersion = "backlog-clearer", 1
+		})
+		child := workShaped(t, s, workspace, project, "under the root", func(w *work.Work) {
+			w.Parent, w.Depth = root, 1
+		})
+		stopped := declaredWork(t, s, workspace, project, "stopped by a person")
+		if _, err := s.StopWork(ctx, stopped, "not yet", stoppedEvent(stopped, workspace, project, "not yet")); err != nil {
+			t.Fatalf("StopWork: %v", err)
+		}
+
+		runnable, err := s.RunnableWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("RunnableWork: %v", err)
+		}
+		if len(runnable) != 1 || runnable[0].ID != root {
+			t.Fatalf("the runnable work is %v, want the one root", titlesOf(runnable))
+		}
+		_ = []string{waiting, inRole, child}
+	})
+
+	t.Run("the oldest declared work is offered first", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		first := declaredWork(t, s, workspace, project, "first")
+		second := declaredWork(t, s, workspace, project, "second")
+
+		runnable, err := s.RunnableWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("RunnableWork: %v", err)
+		}
+		if len(runnable) != 2 {
+			t.Fatalf("%d pieces of work are runnable, want 2", len(runnable))
+		}
+		if runnable[0].ID != first || runnable[1].ID != second {
+			t.Fatalf("the work is offered as %v, want the oldest declared first", titlesOf(runnable))
+		}
+		// And a limit takes the oldest, rather than an arbitrary one.
+		capped, err := s.RunnableWork(ctx, 1)
+		if err != nil {
+			t.Fatalf("RunnableWork: %v", err)
+		}
+		if len(capped) != 1 || capped[0].ID != first {
+			t.Fatalf("a limit of one offered %v, want the oldest", titlesOf(capped))
+		}
+	})
+
+	t.Run("work is claimed once, and a second claim is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+
+		claimed, err := s.StartWork(ctx, id, startedEvent(id, workspace, project))
+		if err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+		if claimed.Phase != work.PhaseRunning {
+			t.Fatalf("claimed work is %q, want running", claimed.Phase)
+		}
+		if claimed.Attempts != 1 {
+			t.Fatalf("claimed work is on attempt %d, want 1", claimed.Attempts)
+		}
+		if claimed.StartedAt == nil {
+			t.Fatal("claimed work does not carry when it started")
+		}
+
+		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); !errors.Is(err, work.ErrNotPending) {
+			t.Fatalf("the second claim answered %v, want ErrNotPending", err)
+		}
+		// And the refused claim wrote no record, or a listing would say the work started twice.
+		events, err := s.ListWorkEvents(ctx, id)
+		if err != nil {
+			t.Fatalf("ListWorkEvents: %v", err)
+		}
+		if len(events) != 2 {
+			t.Fatalf("%d records exist, want the declaration and the one start", len(events))
+		}
+	})
+
+	t.Run("claiming work the crew does not hold is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		if _, err := s.StartWork(context.Background(), "0123456789abcdef01234567",
+			startedEvent("0123456789abcdef01234567", "w", "p")); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("claiming missing work answered %v, want ErrNotFound", err)
+		}
+		_ = ctx
+	})
+
+	t.Run("the session the work runs in is written onto the row", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		if err := s.RecordWorkSession(ctx, id, "session-1"); err != nil {
+			t.Fatalf("RecordWorkSession: %v", err)
+		}
+
+		found, err := s.GetWork(ctx, id)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if found.Session != "session-1" {
+			t.Fatalf("the work says session %q", found.Session)
+		}
+		// Started work is what a controller comes back to, and only once it has a session: without
+		// one there is no task to read.
+		started, err := s.StartedWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("StartedWork: %v", err)
+		}
+		if len(started) != 1 || started[0].ID != id {
+			t.Fatalf("the started work is %v, want the one that is running", titlesOf(started))
+		}
+	})
+
+	t.Run("work that is running with no session yet is not offered to be read back", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		started, err := s.StartedWork(ctx, 0)
+		if err != nil {
+			t.Fatalf("StartedWork: %v", err)
+		}
+		if len(started) != 0 {
+			t.Fatalf("%d pieces of work were offered with no session behind them", len(started))
+		}
+	})
+
+	t.Run("what came of the work is written with its record, once", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartWork(ctx, id, startedEvent(id, workspace, project)); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+
+		landed, err := s.LandWork(ctx, id, work.Landing{
+			Phase: work.PhaseDone, Answer: "the bill is due on the 14th", SpentTokens: 1234,
+		}, answeredEvent(id, workspace, project))
+		if err != nil {
+			t.Fatalf("LandWork: %v", err)
+		}
+		if landed.Phase != work.PhaseDone || landed.Answer != "the bill is due on the 14th" {
+			t.Fatalf("the work landed as %q saying %q", landed.Phase, landed.Answer)
+		}
+		if landed.SpentTokens != 1234 {
+			t.Fatalf("the work spent %d tokens", landed.SpentTokens)
+		}
+		if landed.FinishedAt == nil {
+			t.Fatal("landed work does not carry when it finished")
+		}
+		if landed.ObservedVersion != landed.Version {
+			t.Fatalf("the status describes version %d of a declaration at version %d",
+				landed.ObservedVersion, landed.Version)
+		}
+
+		// A second landing is refused: the work has ended, and what it ended as is the useful part.
+		if _, err := s.LandWork(ctx, id, work.Landing{Phase: work.PhaseFailed, Reason: "no"},
+			answeredEvent(id, workspace, project)); !errors.Is(err, work.ErrNotRunning) {
+			t.Fatalf("the second landing answered %v, want ErrNotRunning", err)
+		}
+		found, _ := s.GetWork(ctx, id)
+		if found.Phase != work.PhaseDone {
+			t.Fatalf("the second landing moved the work to %q", found.Phase)
+		}
+	})
+
+	t.Run("landing work that never started is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredWork(t, s, workspace, project, "read the electricity bill")
+
+		if _, err := s.LandWork(ctx, id, work.Landing{Phase: work.PhaseDone, Answer: "done"},
+			answeredEvent(id, workspace, project)); !errors.Is(err, work.ErrNotRunning) {
+			t.Fatalf("landing work that never started answered %v, want ErrNotRunning", err)
+		}
+	})
+}
+
+// workShaped writes one piece of work with a shape a controller must not pick up.
+func workShaped(t *testing.T, s store.Store, workspace, project, title string, shape func(*work.Work)) string {
+	t.Helper()
+	declared := &work.Work{
+		ID: store.NewID(), Workspace: workspace, Project: project,
+		Title: title, Brief: "do it", Version: 1, Phase: work.PhasePending,
+	}
+	shape(declared)
+	if err := s.CreateWork(context.Background(), declared, declaredEvent(declared)); err != nil {
+		t.Fatalf("CreateWork: %v", err)
+	}
+	return declared.ID
+}
+
+func titlesOf(listed []*work.Work) []string {
+	titles := make([]string, 0, len(listed))
+	for _, one := range listed {
+		titles = append(titles, one.Title)
+	}
+	return titles
+}
+
+func startedEvent(id, workspace, project string) *work.Event {
+	return &work.Event{
+		ID: store.NewID(), Kind: work.EventStarted, Work: id,
+		Workspace: workspace, Project: project, Detail: "attempt 1", OccurredAt: time.Now().UTC(),
+	}
+}
+
+func answeredEvent(id, workspace, project string) *work.Event {
+	return &work.Event{
+		ID: store.NewID(), Kind: work.EventAnswered, Work: id,
+		Workspace: workspace, Project: project, Detail: "1234 tokens", OccurredAt: time.Now().UTC(),
+	}
+}
