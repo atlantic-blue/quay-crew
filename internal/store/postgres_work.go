@@ -33,14 +33,21 @@ func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *w
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The whole record, status fields included, because the store keeps what it is handed. Writing
+	// only the declared half would leave the two stores disagreeing about the same call, which is how
+	// a double that accepts more than the real thing manufactures a green suite.
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
+			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase); err != nil {
+		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
+		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt); err != nil {
 		return fmt.Errorf("create work: %w", err)
 	}
 	if err := appendWorkEvent(ctx, tx, event); err != nil {

@@ -283,6 +283,56 @@ func runWorkConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// Every field the store is handed comes back, status included. A store that keeps the declared
+	// half and drops the rest passes every other case here while losing what a controller wrote.
+	t.Run("the whole record survives a write, status and all", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		started := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+		finished := started.Add(time.Minute).Truncate(time.Second)
+		declared := &work.Work{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "read the electricity bill", Brief: "open it", Version: 3,
+			Phase: work.PhaseDone, Session: "session-1", Attempts: 2,
+			Answer: "the bill is due on the 14th", Reason: "it answered", Question: "which bill",
+			SpentTokens: 1234, ObservedVersion: 3, StartedAt: &started, FinishedAt: &finished,
+		}
+		if err := s.CreateWork(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateWork: %v", err)
+		}
+
+		found, err := s.GetWork(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		for _, mismatch := range []struct {
+			field     string
+			got, want any
+		}{
+			{"phase", found.Phase, declared.Phase},
+			{"session", found.Session, declared.Session},
+			{"attempts", found.Attempts, declared.Attempts},
+			{"answer", found.Answer, declared.Answer},
+			{"reason", found.Reason, declared.Reason},
+			{"question", found.Question, declared.Question},
+			{"spent tokens", found.SpentTokens, declared.SpentTokens},
+			{"version", found.Version, declared.Version},
+			{"observed version", found.ObservedVersion, declared.ObservedVersion},
+		} {
+			if mismatch.got != mismatch.want {
+				t.Errorf("the %s reads back as %v, want %v", mismatch.field, mismatch.got, mismatch.want)
+			}
+		}
+		if found.StartedAt == nil || !found.StartedAt.Equal(started) {
+			t.Errorf("the start reads back as %v, want %v", found.StartedAt, started)
+		}
+		if found.FinishedAt == nil || !found.FinishedAt.Equal(finished) {
+			t.Errorf("the finish reads back as %v, want %v", found.FinishedAt, finished)
+		}
+	})
+
 	t.Run("work that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
