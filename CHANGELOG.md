@@ -95,6 +95,27 @@ read, or run with `make features`.
 
 ## 20 August 2026
 
+- **A task is recorded when it starts, so you can see what a session is working on.** A task was
+  written to history only when it ended, and only a detached dispatch marked its session `running`. A
+  dispatch typed at a terminal is not detached, so a session working for half an hour read `idle`
+  with nothing in its history: three sessions ran real work for over thirty minutes each and every
+  one of them read that way. One of them showed two finished tasks from three days earlier while the
+  task burning its tokens was invisible, its counters climbing from 592 in and 158 thousand out to
+  1.2 thousand in and 278.2 thousand out.
+
+  Now every path records the task as it starts, marks the session `running` while it works, and
+  writes the reply or the failure into that same record when it lands. `quay tasks` says `still
+  running` for a task in flight, the web view says the same where the reply will go, and the
+  console's history view carries the status it already had a column for.
+
+  One record per task, not two: the landing closes the row the start opened, so the prompt and the
+  time the operator asked stay as they were written. The export to the event log is unchanged, one
+  record per task at the end, because a consumer handed the same task twice would have to work out
+  which of the two to believe.
+
+  A crew that restarts mid task now says which task died with it, rather than recording a failure
+  with no prompt on it.
+
 - **Every identifier a listing prints reaches the session, in an address too.** A listing prints two
   of them. The id has a column of its own, and the handle sits in the name column until a label or a
   description takes that place. So on a session anybody has named, the id is the only identifier on

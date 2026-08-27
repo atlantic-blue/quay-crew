@@ -538,6 +538,21 @@ func (p *Postgres) AppendTask(ctx context.Context, task *quaycrewv1.Task, worksp
 	return nil
 }
 
+// FinishTask closes the record a task opened when it started. A row that is not there is left
+// alone: the task happened whatever the store holds.
+func (p *Postgres) FinishTask(ctx context.Context, id, status, reply, failure string) error {
+	if id == "" {
+		return errors.New("store: a task needs an id to be finished")
+	}
+	_, err := p.pool.Exec(ctx, `
+		update tasks set status = $2, reply = $3, failure = $4
+		where id = $1`, id, status, reply, failure)
+	if err != nil {
+		return fmt.Errorf("finish task: %w", err)
+	}
+	return nil
+}
+
 // ListTasks returns a session's tasks oldest first, capped at limit.
 //
 // The cap takes the most recent, because the end of a conversation is the part somebody is looking

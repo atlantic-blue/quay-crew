@@ -16,6 +16,40 @@ import (
 // tasksStream is the logical stream task events are published on, within a workspace's namespace.
 const tasksStream = "tasks"
 
+// beginTask writes a task the moment it starts, and hands back the record it opened so the landing
+// can close that same record rather than write a second one.
+//
+// It is written at the start because that is when the operator needs it. A task takes minutes, and a
+// history that only holds finished tasks says nothing at all about the one burning the tokens: the
+// session reads as though it were asked nothing, while the work it was actually asked for is
+// invisible until it lands.
+//
+// It is not exported here. The log carries one record per task, at the end, and a consumer handed a
+// task twice would have to work out which of the two to believe.
+func (s *Server) beginTask(ctx context.Context, session *quaycrewv1.Session, prompt string) *quaycrewv1.TaskEvent {
+	task := &quaycrewv1.TaskEvent{Prompt: prompt, Status: StatusRunning}
+	s.writeTask(ctx, session, task)
+	return task
+}
+
+// landTask closes the record beginTask opened, with what the task came to and what it said. The
+// prompt and the time it started stay as they were written, so the history says when the operator
+// asked rather than when the answer arrived.
+//
+// This is where the task reaches the export, once, whole.
+func (s *Server) landTask(ctx context.Context, session *quaycrewv1.Session, task *quaycrewv1.TaskEvent, landed, reply, failure string) {
+	ctx = context.WithoutCancel(ctx)
+	sealed := s.sealedValues(ctx, session)
+	task.Status = landed
+	task.Reply = model.Redact(reply, sealed)
+	task.Failure = model.Redact(failure, sealed)
+
+	if err := s.store.FinishTask(ctx, task.GetId(), task.GetStatus(), task.GetReply(), task.GetFailure()); err != nil {
+		slog.WarnContext(ctx, "a task could not be closed in history", "session", session.GetId(), "error", err)
+	}
+	s.exportTask(ctx, session, task)
+}
+
 // recordHistory writes a task into the store, in the same breath as the task itself, and then
 // offers it to the export. The store is the truth: history is complete whether or not any broker is
 // configured, reachable, or behind. It never fails the task, because the task already happened, and
@@ -25,6 +59,12 @@ const tasksStream = "tasks"
 // The context is detached first: a client hanging up after a long task used to cancel the write and
 // silently lose the record of the very task they were waiting on.
 func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
+	s.writeTask(ctx, session, event)
+	s.exportTask(context.WithoutCancel(ctx), session, event)
+}
+
+// writeTask redacts a task, stamps it with where it belongs, and stores it.
+func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
 	ctx = context.WithoutCancel(ctx)
 
 	// What an operator pastes into a conversation can be a credential, and everything recorded here
@@ -58,8 +98,6 @@ func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session,
 	if err := s.store.AppendTask(ctx, task, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
 		slog.WarnContext(ctx, "a task could not be written to history", "session", session.GetId(), "error", err)
 	}
-
-	s.exportTask(ctx, session, event)
 }
 
 // exportTask offers one already redacted task to the event log. The log is an audit export for

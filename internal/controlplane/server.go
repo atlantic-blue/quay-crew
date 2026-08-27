@@ -746,11 +746,35 @@ func (s *Server) SettleTasks(ctx context.Context) {
 			continue
 		}
 		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
-		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
-			Status:  StatusFailed,
-			Failure: "the crew restarted while this task was running, so it did not finish",
-		})
+		s.settleHistory(ctx, session, "the crew restarted while this task was running, so it did not finish")
 	}
+}
+
+// settleHistory marks whatever the session left open as failed. A task is written when it starts, so
+// the row is already there, carrying what the operator asked: closing it says which task died rather
+// than that some task did. A session with nothing open still gets a record, because a session the
+// store calls running was working on something and a history that says nothing is worse than a
+// history that says this much.
+func (s *Server) settleHistory(ctx context.Context, session *quaycrewv1.Session, why string) {
+	open, err := s.store.ListTasks(ctx, session.GetId(), 0)
+	if err == nil {
+		settled := false
+		for _, task := range open {
+			if task.GetStatus() != StatusRunning {
+				continue
+			}
+			s.landTask(ctx, session, &quaycrewv1.TaskEvent{
+				Id: task.GetId(), Session: session.GetId(), Workspace: session.GetWorkspace(),
+				Project: session.GetProject(), Handle: session.GetHandle(),
+				Prompt: task.GetPrompt(), OccurredAt: task.GetOccurredAt(),
+			}, StatusFailed, "", why)
+			settled = true
+		}
+		if settled {
+			return
+		}
+	}
+	s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{Status: StatusFailed, Failure: why})
 }
 
 // CreateWorkspace creates a workspace at runtime.
@@ -1017,7 +1041,8 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if req.GetDetach() {
 		// Marked running before the goroutine starts, not inside it: the caller is about to be told the
 		// session exists, and a session that reads idle in the listing it draws next is a session the
-		// operator will type into while its first task is still running.
+		// operator will type into while its first task is still running. The task itself marks it
+		// running too, which covers the waited path, and doing it twice costs a row update.
 		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
 		// Detached from the caller's context as well as from its patience. The caller is a console that
 		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
@@ -1041,6 +1066,12 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
 func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text string) (string, error) {
+	// Both of these happen before any work does, and that is the point of them. An operator has to be
+	// able to see what a session was asked to do while it is doing it, whether or not the caller
+	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
+	// working for half an hour read idle, with the task burning its tokens invisible.
+	s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+	task := s.beginTask(ctx, session, text)
 	// Emitted here rather than where the task was asked for, so both roads say the same thing: a
 	// detached task and a waited one are one path from this line down.
 	s.emit(ctx, session, KindSessionStarted, text)
@@ -1049,9 +1080,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 	if err != nil {
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
 		failure := "the session's sandbox could not be created: " + err.Error()
-		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
-			Prompt: text, Status: StatusFailed, Failure: failure,
-		})
+		s.landTask(ctx, session, task, StatusFailed, "", failure)
 		s.emit(ctx, session, KindSessionErrored, failure)
 		return "", sandboxError(err, "create sandbox")
 	}
@@ -1071,17 +1100,13 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 		// The error itself, not a sentence about tasks. Every failure used to read "the model did not
 		// complete the task", so a deadline, a crash and a refusal were one indistinguishable line and
 		// the operator had nothing to act on.
-		s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
-			Prompt: text, Status: StatusFailed, Failure: taskFailure(err),
-		})
+		s.landTask(ctx, session, task, StatusFailed, "", taskFailure(err))
 		s.emit(ctx, session, KindSessionErrored, taskFailure(err))
 		return "", status.Errorf(codes.Internal, "run task: %v", err)
 	}
 	s.recordTask(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
 	s.measureTask(ctx, session, resp, StatusIdle)
-	s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{
-		Prompt: text, Reply: resp.Reply, Status: StatusIdle,
-	})
+	s.landTask(ctx, session, task, StatusIdle, resp.Reply, "")
 	s.emit(ctx, session, KindSessionCompleted, resp.Reply)
 
 	// Behind the answer, so the operator waits for their task rather than for the crew to think of a
