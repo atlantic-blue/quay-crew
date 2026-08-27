@@ -82,4 +82,23 @@ Feature: A controller makes declared work happen
     When the controller ticks
     And the task the controller sent lands
     And the controller ticks again
-    Then the records for that work read "work.declared", "work.started", "work.answered"
+    Then the records for that work read "work.declared", "work.claimed", "work.started", "work.answered"
+
+  # The failure the whole design opens with: a controller is disposable and the work is not. The
+  # task keeps running when its controller goes, because the sandbox belongs to the crew.
+  Scenario: The controller is killed after the task starts, and the answer is still adopted once
+    Given a piece of work titled "read the electricity bill"
+    And the controller that started it goes away after the task starts
+    When the task the controller sent lands
+    And another controller ticks
+    Then the work is done, and its answer is what the model said
+    And the crew was asked to run 1 task
+    And the records for that work say the work was taken over once, and started once
+
+  Scenario: A controller that is still alive keeps hold of its work
+    Given a piece of work titled "read the electricity bill"
+    And the model takes longer over a task than anybody will wait
+    When the controller ticks
+    And another controller ticks
+    Then the work is still held by the controller that started it
+    And one task is recorded against that work

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/cucumber/godog"
 )
@@ -210,8 +211,8 @@ func initializeWorkControllerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the records for that work read "([^"]*)", "([^"]*)", "([^"]*)"$`,
-		func(ctx context.Context, first, second, third string) error {
+	sc.Step(`^the records for that work read "([^"]*)", "([^"]*)", "([^"]*)", "([^"]*)"$`,
+		func(ctx context.Context, first, second, third, fourth string) error {
 			one, err := readWork(ctx, 0)
 			if err != nil {
 				return err
@@ -221,8 +222,9 @@ func initializeWorkControllerSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			got := eventKinds(events)
-			if strings.Join(got, ",") != strings.Join([]string{first, second, third}, ",") {
-				return fmt.Errorf("the records read %v, want %v", got, []string{first, second, third})
+			want := []string{first, second, third, fourth}
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				return fmt.Errorf("the records read %v, want %v", got, want)
 			}
 			return nil
 		})
@@ -263,4 +265,113 @@ func workTitled(ctx context.Context, title string) (*quaycrewv1.Work, error) {
 		}
 	}
 	return nil, fmt.Errorf("this scenario declared no work titled %q", title)
+}
+
+// The controller a scenario stands up beside the crew's own, so a death is one controller going away
+// and another finding what it left. Both work over the same store, which is two control plane
+// processes over one database.
+func anotherController(ctx context.Context, name string, lease time.Duration) *controlplane.Server {
+	w := worldFrom(ctx)
+	return controlplane.NewServer(controlplane.Config{
+		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
+		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
+		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
+		ControllerName: name, WorkLease: lease,
+	})
+}
+
+func initializeWorkLeaseSteps(sc *godog.ScenarioContext) {
+	// A controller with a hold that runs out at once, ticked once and then never again. That is what
+	// a controller killed after its task started leaves behind: a task running in the crew, and a
+	// row nobody is renewing.
+	sc.Step(`^the controller that started it goes away after the task starts$`, func(ctx context.Context) error {
+		dying := anotherController(ctx, "controller-a", time.Millisecond)
+		dying.TickWork(ctx)
+
+		one, err := readWork(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetPhase() != work.PhaseRunning {
+			return fmt.Errorf("the work is %q after its controller ticked, want running", one.GetPhase())
+		}
+		return waitForTheLeaseToRunOut(ctx, one.GetId())
+	})
+
+	sc.Step(`^another controller ticks$`, func(ctx context.Context) error {
+		anotherController(ctx, "controller-b", time.Minute).TickWork(ctx)
+		return nil
+	})
+
+	sc.Step(`^the work is still held by the controller that started it$`, func(ctx context.Context) error {
+		one, err := heldWork(ctx)
+		if err != nil {
+			return err
+		}
+		if one.LeaseOwner == "" {
+			return fmt.Errorf("the work is held by nobody, and its controller has not gone anywhere")
+		}
+		if one.LeaseOwner == "controller-b" {
+			return fmt.Errorf("the work was taken by a controller that arrived while its holder was alive")
+		}
+		if one.LeaseUntil == nil || !one.LeaseUntil.After(time.Now()) {
+			return fmt.Errorf("the hold runs to %v, want a moment still ahead", one.LeaseUntil)
+		}
+		return nil
+	})
+
+	sc.Step(`^the records for that work say the work was taken over once, and started once$`,
+		func(ctx context.Context) error {
+			one, err := readWork(ctx, 0)
+			if err != nil {
+				return err
+			}
+			events, err := worldFrom(ctx).store.ListWorkEvents(ctx, one.GetId())
+			if err != nil {
+				return err
+			}
+			counted := map[string]int{}
+			for _, event := range events {
+				counted[event.Kind]++
+			}
+			if counted[work.EventReleased] != 1 {
+				return fmt.Errorf("the records say the work was taken over %d times, want once: %v",
+					counted[work.EventReleased], eventKinds(events))
+			}
+			// The absence is the evidence: one start means one task, and one task means one bill.
+			if counted[work.EventStarted] != 1 {
+				return fmt.Errorf("the records say the work was started %d times, want once: %v",
+					counted[work.EventStarted], eventKinds(events))
+			}
+			return nil
+		})
+}
+
+// heldWork reads the lease off the row, which no call puts on the wire: it is the one part of the
+// status a reader is told to ignore.
+func heldWork(ctx context.Context) (*work.Work, error) {
+	one, err := readWork(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	return worldFrom(ctx).store.GetWork(ctx, one.GetId())
+}
+
+// waitForTheLeaseToRunOut waits out a hold a scenario made short on purpose, so a death is a lease
+// that expired rather than a clock a scenario had to fake.
+func waitForTheLeaseToRunOut(ctx context.Context, id string) error {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		one, err := worldFrom(ctx).store.GetWork(ctx, id)
+		if err != nil {
+			return err
+		}
+		if one.LeaseUntil == nil || one.LeaseUntil.Before(time.Now()) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the hold on %s still runs to %v", id, one.LeaseUntil)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }

@@ -24,6 +24,35 @@ const DefaultTickEvery = 5 * time.Second
 // a reason for one tick to hold the store open.
 const DefaultBatch = 20
 
+// DefaultLease is how long a controller's hold on a piece of work lasts before another may take it.
+//
+// Measured rather than chosen, and the measurement is of the loop rather than of the work. A holder
+// renews its lease on every tick while its task is open, so what the lease has to outlast is a gap
+// between renewals, not a task: a task killed at seventeen minutes is on this crew's own record, and
+// a lease that had to outlast one would leave a dead controller unnoticed for that long.
+//
+// On this machine, against the real control plane and the real store with a model that answers at
+// once, a tick with nothing to do cost 1 to 4 microseconds, a tick that dispatched a hundred pieces
+// of work cost under a millisecond, and a whole piece of work from declared to done cost 2
+// milliseconds over twenty runs. So the renewal rate is set by DefaultTickEvery and not by the work,
+// and this is twelve of those intervals: a holder has to miss twelve renewals in a row before its
+// work is taken. It is the same budget the crew already gives the longest healthy operation it has,
+// the whole path from a session row to a sandbox ready for its first task.
+//
+// Provisional. What replaces it is the ninety fifth percentile of the gap between renewals over the
+// first fifty completed pieces of work, which needs the metric that slice 6 adds.
+const DefaultLease = 60 * time.Second
+
+// ErrHeld is what a store says when a lease belongs to somebody else. It is not a failure: the work
+// is another controller's, and this one leaves it alone.
+var ErrHeld = errors.New("work: that work is held by another controller")
+
+// Lease is who holds a piece of work and until when.
+type Lease struct {
+	Owner string
+	Until time.Time
+}
+
 // ErrNotPending is what a store says when the claim did not apply, which means another controller
 // claimed the same row first. It is not a failure: the row is somebody else's now.
 var ErrNotPending = errors.New("work: that work is no longer pending")
@@ -46,17 +75,32 @@ type Store interface {
 	// RunnableWork is the work this controller may start: pending, with no parent, no role and
 	// nothing it waits for, oldest declared first.
 	RunnableWork(ctx context.Context, limit int) ([]*Work, error)
-	// StartedWork is the work a controller started and has not written an answer onto.
-	StartedWork(ctx context.Context, limit int) ([]*Work, error)
-	// StartWork claims one piece of work. It applies only to work that is still pending, which is
-	// what keeps two controllers from both starting it, and it is what makes a tick safe to run
-	// twice.
-	StartWork(ctx context.Context, id string, event *Event) (*Work, error)
+	// HeldWork is the work this controller is holding: running, with a session, under a lease that
+	// is this controller's and has not run out. Another controller's work is not this one's to move.
+	HeldWork(ctx context.Context, owner string, limit int) ([]*Work, error)
+	// ExpiredWork is the work whose holder went away: running, under a lease that has run out or was
+	// never written. Reading it is how a controller finds what a dead one left behind.
+	ExpiredWork(ctx context.Context, limit int) ([]*Work, error)
+	// StartWork claims one piece of work and takes a lease on it. It applies only to work that is
+	// still pending, which is what keeps two controllers from both starting it, and it is what makes
+	// a tick safe to run twice.
+	StartWork(ctx context.Context, id string, lease Lease, events []*Event) (*Work, error)
+	// TakeOverWork takes the lease on work whose holder went away. It applies only where the lease
+	// has run out, in the same statement, so two controllers finding the same abandoned row leave
+	// one holder.
+	TakeOverWork(ctx context.Context, id string, lease Lease, events []*Event) (*Work, error)
+	// ReleaseWork puts work back to pending. It applies only to running work with no session under a
+	// lease that has run out, which is the one state that says for certain no task was ever sent.
+	ReleaseWork(ctx context.Context, id string, events []*Event) (*Work, error)
+	// RenewLease moves this controller's hold on further. Only the holder renews: a controller that
+	// lost the row must not take it back by renewing.
+	RenewLease(ctx context.Context, id string, lease Lease) error
 	// RecordWorkSession writes the session the crew made for a piece of work. It is not a movement,
 	// so it carries no record of its own: a reader learns which conversation did the work from the
 	// row, and the row is where quay attach reads it.
 	RecordWorkSession(ctx context.Context, id, session string) error
-	// LandWork writes what came of the work. It applies only to work that is still running.
+	// LandWork writes what came of the work and lets go of the lease. It applies only to work that
+	// is still running.
 	LandWork(ctx context.Context, id string, landed Landing, event *Event) (*Work, error)
 }
 
@@ -66,6 +110,9 @@ type Store interface {
 type ControlPlane interface {
 	Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error)
 	ListTasks(ctx context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error)
+	// ListSessions is how a controller finds the conversation a piece of work ran in when the row
+	// does not say. The session is named after the work, so it can be found without being told.
+	ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error)
 }
 
 // Spend is what one session's conversation has cost. An implementation that cannot tell answers zero.
@@ -107,6 +154,11 @@ type Controller struct {
 	logger   *slog.Logger
 	every    time.Duration
 	batch    int
+	// owner is what this controller writes on a lease. Two controllers must not share one, or
+	// neither could tell its own work from the other's.
+	owner string
+	// lease is how long a hold lasts before another controller may take the work.
+	lease time.Duration
 }
 
 // NewController builds one. A nil spend reader means what work cost is not written; a nil prover
@@ -117,8 +169,37 @@ func NewController(store Store, plane ControlPlane, spend Spend, prover Prover, 
 	}
 	return &Controller{
 		store: store, plane: plane, spend: spend, prover: prover, logger: logger,
-		every: DefaultTickEvery, batch: DefaultBatch,
+		every: DefaultTickEvery, batch: DefaultBatch, lease: DefaultLease,
+		// A name of its own, minted rather than asked for, because two controllers sharing one could
+		// each take the other's work by renewing a lease they never held.
+		owner: "controller-" + newEventID()[:8],
 	}
+}
+
+// Owned returns a controller that writes this name on the leases it takes. An investigator reading
+// a released record wants the name of the thing that stopped, so a crew names its own.
+func (c *Controller) Owned(owner string) *Controller {
+	if strings.TrimSpace(owner) != "" {
+		c.owner = strings.TrimSpace(owner)
+	}
+	return c
+}
+
+// Owner is the name this controller writes on a lease.
+func (c *Controller) Owner() string { return c.owner }
+
+// Leasing sets how long this controller's hold on a piece of work lasts. Zero or less leaves the
+// measured default.
+func (c *Controller) Leasing(lease time.Duration) *Controller {
+	if lease > 0 {
+		c.lease = lease
+	}
+	return c
+}
+
+// leaseNow is a hold that starts now and runs for this controller's lease.
+func (c *Controller) leaseNow() Lease {
+	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(c.lease)}
 }
 
 // Redacting returns a controller that takes every line it writes through the crew redactor.
@@ -157,6 +238,9 @@ func (c *Controller) Run(ctx context.Context) {
 // Tick reads the world once and closes what gaps it can. Exported so a test drives one tick rather
 // than waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (c *Controller) Tick(ctx context.Context) {
+	// Recovery first, so work a dead controller left behind is in this controller's hands before it
+	// reads what it holds, and one tick both takes the work over and writes what came of it.
+	c.recoverAbandoned(ctx)
 	c.adoptAnswers(ctx)
 	c.startDeclared(ctx)
 }
@@ -180,8 +264,11 @@ func (c *Controller) startDeclared(ctx context.Context) {
 // start claims one piece of work and sends its task.
 func (c *Controller) start(ctx context.Context, one *Work) {
 	handle := SessionFor(one.ID)
-	claimed, err := c.store.StartWork(ctx, one.ID, c.event(ctx, one, EventStarted,
-		fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)))
+	lease := c.leaseNow()
+	claimed, err := c.store.StartWork(ctx, one.ID, lease, []*Event{
+		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
+		c.event(ctx, one, EventStarted, fmt.Sprintf("attempt %d in session %s", one.Attempts+1, handle)),
+	})
 	if err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			// One row that cannot be claimed must not stop the others: the next tick tries it again.
@@ -211,11 +298,124 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	c.land(ctx, claimed, Landing{Phase: PhaseFailed, Reason: oneLine(err.Error())}, EventFailed)
 }
 
+// recoverAbandoned picks up the work a controller left behind when it went away.
+//
+// A controller is disposable and the work is not. The task it started keeps running, because the
+// sandbox belongs to the control plane rather than to the controller, and the model does not know
+// anybody stopped watching. So the rule here is: read what the crew actually did before doing
+// anything, and never send a second task for work that has already been paid for.
+func (c *Controller) recoverAbandoned(ctx context.Context) {
+	abandoned, err := c.store.ExpiredWork(ctx, c.batch)
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read which work has been left behind", "error", err)
+		return
+	}
+	for _, one := range abandoned {
+		c.recover(ctx, one)
+	}
+}
+
+// recover takes one abandoned piece of work back in hand.
+//
+// The session it ran in is what decides between the two outcomes, and where the row does not say,
+// the crew is asked: the session is named after the work, so a task sent by a controller that died
+// before it could write the name down is still found. Only work with no task anywhere goes back to
+// pending, and that is the one state that says for certain nothing was paid for.
+func (c *Controller) recover(ctx context.Context, one *Work) {
+	session := one.Session
+	if session == "" {
+		session = c.sessionNamedAfter(ctx, one)
+	}
+	if session == "" {
+		c.release(ctx, one)
+		return
+	}
+	// Read the task row before writing anything. A task that has already answered must be adopted
+	// rather than sent again, and this is the read that tells the two apart.
+	if _, err := c.plane.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session}); err != nil {
+		c.logger.WarnContext(ctx, "could not read the task of work that was left behind",
+			"work", one.ID, "session", session, "error", err)
+		return
+	}
+
+	lease := c.leaseNow()
+	if _, err := c.store.TakeOverWork(ctx, one.ID, lease, []*Event{
+		c.event(ctx, one, EventReleased,
+			fmt.Sprintf("previous owner %s, phase found %s", ownerOrNobody(one.LeaseOwner), one.Phase)),
+		c.event(ctx, one, EventClaimed, c.leaseDetail(lease)),
+	}); err != nil {
+		if !errors.Is(err, ErrHeld) {
+			c.logger.WarnContext(ctx, "could not take over work that was left behind", "work", one.ID, "error", err)
+		}
+		return
+	}
+	// The session goes onto the row now, so the next reader learns it from the record rather than by
+	// asking the crew again.
+	if one.Session == "" {
+		if err := c.store.RecordWorkSession(ctx, one.ID, session); err != nil {
+			c.logger.WarnContext(ctx, "could not record which session work that was left behind ran in",
+				"work", one.ID, "session", session, "error", err)
+		}
+	}
+}
+
+// release puts work back to pending. Only where no task exists anywhere, so nothing that has been
+// paid for is ever sent again.
+func (c *Controller) release(ctx context.Context, one *Work) {
+	if _, err := c.store.ReleaseWork(ctx, one.ID, []*Event{
+		c.event(ctx, one, EventReleased,
+			fmt.Sprintf("previous owner %s, phase found %s, no task was sent",
+				ownerOrNobody(one.LeaseOwner), one.Phase)),
+	}); err != nil {
+		if !errors.Is(err, ErrHeld) {
+			c.logger.WarnContext(ctx, "could not put work that was left behind back", "work", one.ID, "error", err)
+		}
+	}
+}
+
+// sessionNamedAfter is the conversation this work would have run in, if the crew holds one.
+//
+// This closes the gap between a dispatch and the row that records its session. A controller that
+// died in between left a task running with nothing on the row to say so, and putting that work back
+// to pending would send a second task and pay for it twice.
+func (c *Controller) sessionNamedAfter(ctx context.Context, one *Work) string {
+	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: one.Project})
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read the crew's sessions", "work", one.ID, "error", err)
+		// Nothing is released on a read that failed: releasing here is what would pay twice.
+		return unknownSession
+	}
+	handle := SessionFor(one.ID)
+	for _, session := range listed.GetSessions() {
+		if session.GetHandle() == handle {
+			return session.GetId()
+		}
+	}
+	return ""
+}
+
+// unknownSession is what a failed read answers with. It is not a session and it is not "no session":
+// it stops this tick from doing anything, which is the safe direction.
+const unknownSession = "?"
+
+// leaseDetail is what a claim writes on the record.
+func (c *Controller) leaseDetail(lease Lease) string {
+	return fmt.Sprintf("lease_owner %s, lease_until %s", lease.Owner, lease.Until.Format(time.RFC3339))
+}
+
+// ownerOrNobody names the controller that held a piece of work, for a record about it being taken.
+func ownerOrNobody(owner string) string {
+	if owner == "" {
+		return "nobody"
+	}
+	return owner
+}
+
 // adoptAnswers writes what came back onto every piece of work whose task has landed.
 func (c *Controller) adoptAnswers(ctx context.Context) {
-	started, err := c.store.StartedWork(ctx, c.batch)
+	started, err := c.store.HeldWork(ctx, c.owner, c.batch)
 	if err != nil {
-		c.logger.WarnContext(ctx, "could not read which work is running", "error", err)
+		c.logger.WarnContext(ctx, "could not read which work this controller is holding", "error", err)
 		return
 	}
 	for _, one := range started {
@@ -237,12 +437,15 @@ func (c *Controller) adopt(ctx context.Context, one *Work) {
 	}
 	tasks := resp.GetTasks()
 	if len(tasks) == 0 {
+		c.renew(ctx, one)
 		return
 	}
 	last := tasks[len(tasks)-1]
-	// Still working. Nothing to do, and nothing to write: a controller that wrote on every tick
-	// would fill the record with lines saying nothing happened.
+	// Still working. Nothing to do but keep hold of it: a controller that stopped renewing while its
+	// task ran would have its work taken from under it, and a controller that wrote a record on every
+	// tick would fill the history with lines saying nothing happened.
 	if last.GetStatus() == StatusRunning {
+		c.renew(ctx, one)
 		return
 	}
 
@@ -260,6 +463,14 @@ func (c *Controller) adopt(ctx context.Context, one *Work) {
 		}
 	}
 	c.land(ctx, one, landing, kind)
+}
+
+// renew moves this controller's hold on, which is what says it is still alive. A hold that stops
+// moving is the only signal another controller has that this one went away.
+func (c *Controller) renew(ctx context.Context, one *Work) {
+	if err := c.store.RenewLease(ctx, one.ID, c.leaseNow()); err != nil && !errors.Is(err, ErrHeld) {
+		c.logger.WarnContext(ctx, "could not keep hold of a piece of work", "work", one.ID, "error", err)
+	}
 }
 
 // land writes the end of a piece of work, with the record of it.

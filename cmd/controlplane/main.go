@@ -150,6 +150,10 @@ func main() {
 	server := controlplane.NewServer(controlplane.Config{
 		// How often a session describes itself, from the crew's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
+		// How long the controller holds a piece of work before another may take it, and the name it
+		// writes on the hold so an investigator knows which machine stopped.
+		WorkLease:      controlplane.WorkLease(os.Getenv("QC_WORK_LEASE"), logger),
+		ControllerName: controlplane.ControllerName(os.Hostname),
 		// What reads the machine. Only where a daemon is what makes the sandboxes: a crew running
 		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
 		// to a command that is not there.

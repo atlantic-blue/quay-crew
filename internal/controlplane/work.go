@@ -3,7 +3,9 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -253,4 +255,38 @@ func (s *Server) TickWork(ctx context.Context) {
 // here is persisted.
 func (s *Server) RedactFor(ctx context.Context, workspace, text string) string {
 	return model.Redact(text, s.sealedForWorkspace(ctx, workspace))
+}
+
+// WorkLease is how long a controller holds a piece of work, from the crew's configuration.
+//
+// The default is derived from what a tick costs rather than chosen, so a crew that says nothing gets
+// a measured number. A value that is not a duration is refused by falling back to that default and
+// saying so, because a crew that will not start over a misspelled interval is worse than a crew
+// running the number it was already running.
+func WorkLease(configured string, logger *slog.Logger) time.Duration {
+	value := strings.TrimSpace(configured)
+	if value == "" {
+		return work.DefaultLease
+	}
+	lease, err := time.ParseDuration(value)
+	if err != nil || lease <= 0 {
+		if logger != nil {
+			logger.Warn("QC_WORK_LEASE is not a length of time, so the measured default is used instead",
+				"configured", value, "using", work.DefaultLease)
+		}
+		return work.DefaultLease
+	}
+	return lease
+}
+
+// ControllerName is what this crew writes on the leases its controller takes.
+//
+// The host name, because an investigator reading a released record wants to know which machine
+// stopped. A crew that cannot say answers with nothing, and the controller mints itself a name.
+func ControllerName(hostname func() (string, error)) string {
+	name, err := hostname()
+	if err != nil || strings.TrimSpace(name) == "" {
+		return ""
+	}
+	return "controlplane-" + strings.TrimSpace(name)
 }

@@ -116,11 +116,13 @@ func TestTwoControllersTickingAtOnceStartTheWorkOnceInPostgres(t *testing.T) {
 	claims := make(chan error, 2)
 	for range 2 {
 		go func() {
-			_, err := kept.StartWork(ctx, id, &work.Event{
-				ID: store.NewID(), Kind: work.EventStarted, Work: id,
-				Workspace: declared.GetWork().GetWorkspace(), Project: project,
-				Detail: "attempt 1", OccurredAt: time.Now().UTC(),
-			})
+			_, err := kept.StartWork(ctx, id,
+				work.Lease{Owner: "controller-a", Until: time.Now().UTC().Add(time.Minute)},
+				[]*work.Event{{
+					ID: store.NewID(), Kind: work.EventStarted, Work: id,
+					Workspace: declared.GetWork().GetWorkspace(), Project: project,
+					Detail: "attempt 1", OccurredAt: time.Now().UTC(),
+				}})
 			claims <- err
 		}()
 	}
@@ -225,7 +227,8 @@ func TestEveryMovementIsOnTheRecordInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListWorkEvents: %v", err)
 	}
-	want := []string{work.EventDeclared, work.EventStarted, work.EventAnswered}
+	// The claim comes before the start: a controller takes the work in hand before it sends anything.
+	want := []string{work.EventDeclared, work.EventClaimed, work.EventStarted, work.EventAnswered}
 	if len(events) != len(want) {
 		t.Fatalf("%d records exist, want %v", len(events), want)
 	}

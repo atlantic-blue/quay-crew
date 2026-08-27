@@ -83,6 +83,8 @@ func (m *Memory) StopWork(_ context.Context, id, reason string, event *work.Even
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Reason = work.PhaseStopped, reason
+	// The hold goes with the work: a lease left on work that ended reads as held forever.
+	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.FinishedAt, found.UpdatedAt = &now, now
 	if err := m.appendWorkEvent(event); err != nil {
 		return nil, err
@@ -167,6 +169,7 @@ func cloneWork(from work.Work) work.Work {
 		from.Labels = labels
 	}
 	from.Deadline = cloneTime(from.Deadline)
+	from.LeaseUntil = cloneTime(from.LeaseUntil)
 	from.StartedAt = cloneTime(from.StartedAt)
 	from.FinishedAt = cloneTime(from.FinishedAt)
 	return from
@@ -190,13 +193,27 @@ func (m *Memory) RunnableWork(_ context.Context, limit int) ([]*work.Work, error
 	}), nil
 }
 
-// StartedWork is the work a controller started and has not written an answer onto. Work with no
-// session yet is left out: there is no task to read back.
-func (m *Memory) StartedWork(_ context.Context, limit int) ([]*work.Work, error) {
+// HeldWork is the work this controller is holding, and only this one: another controller's work is
+// not this one's to move. Work with no session yet is left out, because there is no task to read back.
+func (m *Memory) HeldWork(_ context.Context, owner string, limit int) ([]*work.Work, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	now := time.Now()
 	return m.workMatching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhaseRunning && one.Session != ""
+		return one.Phase == work.PhaseRunning && one.Session != "" &&
+			one.LeaseOwner == owner && one.LeaseUntil != nil && one.LeaseUntil.After(now)
+	}), nil
+}
+
+// ExpiredWork is the work whose holder went away: running, under a lease that has run out or was
+// never written.
+func (m *Memory) ExpiredWork(_ context.Context, limit int) ([]*work.Work, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	now := time.Now()
+	return m.workMatching(limit, func(one *work.Work) bool {
+		return one.Phase == work.PhaseRunning &&
+			(one.LeaseUntil == nil || !one.LeaseUntil.After(now))
 	}), nil
 }
 
@@ -224,7 +241,7 @@ func (m *Memory) workMatching(limit int, matches func(*work.Work) bool) []*work.
 
 // StartWork claims one piece of work. It applies only to work that is still pending, so two
 // controllers asking at once leave one task, not two.
-func (m *Memory) StartWork(_ context.Context, id string, event *work.Event) (*work.Work, error) {
+func (m *Memory) StartWork(_ context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	found, held := m.work[id]
@@ -236,12 +253,72 @@ func (m *Memory) StartWork(_ context.Context, id string, event *work.Event) (*wo
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Attempts = work.PhaseRunning, found.Attempts+1
+	found.LeaseOwner, found.LeaseUntil = lease.Owner, leaseEnd(lease)
 	found.StartedAt, found.UpdatedAt = &now, now
-	if err := m.appendWorkEvent(event); err != nil {
+	if err := m.appendWorkEvents(events); err != nil {
 		return nil, err
 	}
 	kept := cloneWork(*found)
 	return &kept, nil
+}
+
+// TakeOverWork takes the lease on work whose holder went away. Only where the lease has run out, so
+// two controllers finding the same abandoned row leave one holder.
+func (m *Memory) TakeOverWork(_ context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.work[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != work.PhaseRunning || (found.LeaseUntil != nil && found.LeaseUntil.After(time.Now())) {
+		return nil, work.ErrHeld
+	}
+	found.LeaseOwner, found.LeaseUntil = lease.Owner, leaseEnd(lease)
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendWorkEvents(events); err != nil {
+		return nil, err
+	}
+	kept := cloneWork(*found)
+	return &kept, nil
+}
+
+// ReleaseWork puts work back to pending. Only running work with no session under a lease that has
+// run out, which is the one state that says for certain no task was ever sent.
+func (m *Memory) ReleaseWork(_ context.Context, id string, events []*work.Event) (*work.Work, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.work[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != work.PhaseRunning || found.Session != "" ||
+		(found.LeaseUntil != nil && found.LeaseUntil.After(time.Now())) {
+		return nil, work.ErrHeld
+	}
+	found.Phase, found.LeaseOwner, found.LeaseUntil = work.PhasePending, "", nil
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendWorkEvents(events); err != nil {
+		return nil, err
+	}
+	kept := cloneWork(*found)
+	return &kept, nil
+}
+
+// RenewLease moves the holder's hold on. Only the holder renews, so a controller that lost a row
+// cannot take it back by renewing.
+func (m *Memory) RenewLease(_ context.Context, id string, lease work.Lease) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.work[id]
+	if !held {
+		return ErrNotFound
+	}
+	if found.LeaseOwner != lease.Owner {
+		return work.ErrHeld
+	}
+	found.LeaseUntil, found.UpdatedAt = leaseEnd(lease), time.Now().UTC()
+	return nil
 }
 
 // RecordWorkSession writes which conversation a piece of work runs in. Not a movement, so it writes
@@ -272,10 +349,29 @@ func (m *Memory) LandWork(_ context.Context, id string, landed work.Landing, eve
 	now := time.Now().UTC()
 	found.Phase, found.Answer, found.Reason = landed.Phase, landed.Answer, landed.Reason
 	found.SpentTokens, found.ObservedVersion = landed.SpentTokens, found.Version
+	// The hold goes with the work. A lease left on finished work would read as held forever.
+	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.FinishedAt, found.UpdatedAt = &now, now
 	if err := m.appendWorkEvent(event); err != nil {
 		return nil, err
 	}
 	kept := cloneWork(*found)
 	return &kept, nil
+}
+
+// appendWorkEvents records several things that happened, the way a store writes them in one
+// transaction with the change they describe. The caller holds the lock.
+func (m *Memory) appendWorkEvents(events []*work.Event) error {
+	for _, event := range events {
+		if err := m.appendWorkEvent(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// leaseEnd is when a hold runs out, as the row keeps it.
+func leaseEnd(lease work.Lease) *time.Time {
+	until := lease.Until.UTC()
+	return &until
 }

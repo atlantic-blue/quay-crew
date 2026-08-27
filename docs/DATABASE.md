@@ -127,6 +127,12 @@ answer must carry, what it waits for, a deadline, a budget and its labels), what
 answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
 process, so it outlives the caller. `quay work list` and `quay work show` read it.
 
+It also carries the lease: `lease_owner` and `lease_until`, which say which controller is holding the
+work and until when. Those two are the only fields on the row a reader should ignore. They are how a
+controller is made disposable: a hold that stops moving is the signal its holder went away, and the
+controller that finds it reads the task record before it does anything, so an answer that already
+landed is adopted rather than asked for a second time.
+
 **`work_events`** is what happened to each piece of work, one row per event, written in the same
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
 copy going outward rather than a source it could be rebuilt from.
