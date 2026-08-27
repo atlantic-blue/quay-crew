@@ -169,11 +169,16 @@ func (p *Postgres) StopWork(ctx context.Context, id, reason string, event *work.
 	return p.GetWork(ctx, id)
 }
 
-// ListWorkEvents returns one piece of work's own history, oldest first.
+// ListWorkEvents returns one piece of work's own history, in the order it was written.
+//
+// By the sequence rather than by the moment. Two records written in one transaction are stamped in
+// the same microsecond, and an order broken by a random identifier is an order that reads back wrong
+// about once in a few runs: "claimed" after "started", which is a controller that appears to have
+// worked backwards.
 func (p *Postgres) ListWorkEvents(ctx context.Context, id string) ([]*work.Event, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, kind, work, workspace, project, parent, depth, detail, trace_id, occurred_at
-		from work_events where work = $1 order by occurred_at, id`, id)
+		from work_events where work = $1 order by seq`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list work events: %w", err)
 	}

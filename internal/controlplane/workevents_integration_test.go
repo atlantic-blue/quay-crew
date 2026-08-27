@@ -88,6 +88,12 @@ func TestAMovementLandsInPostgresAndOnARealBroker(t *testing.T) {
 			found.GetWork().GetTraceId(), declaredWork.GetTraceId())
 	}
 
+	// The controller lets go of its task, so the record of it is written by the goroutine running it.
+	// Waited for rather than slept on: this is the same wait the crew's own shutdown does.
+	waiting, doneWaiting := context.WithTimeout(ctx, 30*time.Second)
+	server.WaitForTasks(waiting)
+	doneWaiting()
+
 	// The task the controller sent carries the same identifier, which is the join issue 346 asks for.
 	tasks, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: found.GetWork().GetSession()})
 	if err != nil {

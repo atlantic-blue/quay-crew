@@ -22,3 +22,16 @@ alter table work add column if not exists parent_span_id text not null default '
 -- And on each record of a movement, so a reader holding one event reaches the trace it happened in
 -- without reading the work row first.
 alter table work_events add column if not exists trace_id text not null default '';
+
+-- The order a piece of work's records were written in, which is the order a reader has to get them
+-- back in.
+--
+-- They were ordered by the moment they happened and then by identifier. Two records written in one
+-- transaction are stamped in the same microsecond, which is how often Postgres keeps time, and the
+-- identifier is random, so the tie was broken by chance: a controller writing "claimed" and then
+-- "started" could read them back the other way round. The export promises order on the partition, so
+-- the store has to be able to give it.
+--
+-- A sequence cannot tie. Existing rows are numbered as they are found, which is the best that can be
+-- said about records that were already written.
+alter table work_events add column if not exists seq bigserial;
