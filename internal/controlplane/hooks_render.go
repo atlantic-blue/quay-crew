@@ -2,7 +2,9 @@ package controlplane
 
 import (
 	"context"
+	"os"
 	"path"
+	"path/filepath"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
@@ -32,11 +34,10 @@ func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Session) (
 	if err := sandbox.WriteHooks(dir, hooks); err != nil {
 		return sandbox.Mount{}, false
 	}
-	if len(hooks) == 0 {
-		// Nothing held means no directory and no mount. Mounting an empty one would make the daemon
-		// create it, and the runtime would then be pointed at a settings file that is not there.
-		return sandbox.Mount{}, false
-	}
+	// A session under no hooks is mounted this directory too, because the settings file in it carries
+	// more than hooks now: it is where the crew says what the runtime draws under the conversation.
+	// The file is written whether or not there is a hook in it, so the runtime is never pointed at
+	// something that is not there.
 	host, known := s.storage.WorkspaceHooksHost(session.GetWorkspace())
 	if !known {
 		return sandbox.Mount{}, false
@@ -44,12 +45,19 @@ func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Session) (
 	return sandbox.Mount{Source: host, Target: sandbox.HooksPath, ReadOnly: true}, true
 }
 
-// settingsFor is the settings file a task should load, and empty when the session is under no hooks.
+// settingsFor is the settings file a task should load, and empty when there is none to load.
 //
-// Read again rather than remembered from sandbox creation, because a sandbox is adopted across tasks
-// and this process may not be the one that built it.
-func (s *Server) settingsFor(ctx context.Context, session *quaycrewv1.Session) string {
-	if len(s.hooksFor(ctx, session.GetWorkspace())) == 0 {
+// Read from the disk rather than remembered from sandbox creation, because a sandbox is adopted
+// across tasks and this process may not be the one that built it. The file itself is the question,
+// not the hooks in it: a task told to load settings that are not there does not start at all, and the
+// runtime says only "Settings file not found" before exiting. That is every task on the crew, so it
+// is worth a stat.
+func (s *Server) settingsFor(_ context.Context, session *quaycrewv1.Session) string {
+	dir, canWrite := s.storage.WorkspaceHooksDir(session.GetWorkspace())
+	if !canWrite {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(dir, hook.SettingsFile)); err != nil {
 		return ""
 	}
 	return path.Join(sandbox.HooksPath, hook.SettingsFile)

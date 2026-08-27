@@ -126,7 +126,120 @@ func TestARefusedSessionNamesTheSessionsThatExist(t *testing.T) {
 	err := refused(t, client, "mode", "ffffffff")
 
 	said := err.Error()
-	if !strings.Contains(said, session.GetHandle()[:8]) && !strings.Contains(said, session.GetId()[:8]) {
-		t.Fatalf("the refusal %q names neither identifier of the one session that exists", said)
+	if !strings.Contains(said, session.GetId()[:8]) {
+		t.Fatalf("the refusal %q does not offer what the listing prints", said)
+	}
+	// And not the handle. Offering it sent the operator looking for a value no column carries.
+	if strings.Contains(said, session.GetHandle()[:8]) {
+		t.Fatalf("the refusal %q offers the handle, which is nowhere on the screen", said)
+	}
+}
+
+// Attach shares the resolver, and it is the command where a refusal costs most: the operator is
+// looking at a session on their screen that will not open. A label is set first because that is what
+// takes the handle off the screen, leaving the id as the only identifier they can read.
+func TestAttachTakesEveryIdentifierTheListingPrints(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+	mustRun(t, client, "label", session.GetId()[:8], "the bills")
+
+	for _, typed := range []string{
+		session.GetId(), session.GetId()[:8],
+		session.GetHandle(), session.GetHandle()[:8],
+		"me/house-bills/" + session.GetHandle()[:8],
+		"me/house-bills/" + session.GetId()[:8],
+	} {
+		reached, err := resolveSession(context.Background(), client, typed)
+		if err != nil {
+			t.Fatalf("quay attach %s was refused: %v", typed, err)
+		}
+		if reached != session.GetId() {
+			t.Fatalf("quay attach %s reached %s, want %s", typed, reached, session.GetId())
+		}
+	}
+}
+
+// The listing prints the id in its own column, so the address form has to take it. Every session
+// scoped command shares this, which is what makes the id typeable everywhere rather than only where
+// somebody remembered to allow it.
+func TestASessionScopedCommandTakesAnAddressCarryingTheId(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+	address := "me/house-bills/" + session.GetId()[:8]
+
+	said := mustRun(t, client, "mode", address)
+
+	if !strings.Contains(said, "runs in") {
+		t.Fatalf("quay mode %s said %q", address, said)
+	}
+}
+
+// Dispatch is the command an operator types most, and it was the one that took neither identifier.
+// The word was not refused, it was joined to the message: `quay dispatch 615d48dc "and again"` sent
+// "615d48dc and again" to a session nobody asked for. These run the real command.
+
+func TestDispatchTakesTheIdentifierTheListingPrints(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+
+	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8], addressOf(t, client)} {
+		said := mustRun(t, client, "dispatch", typed, "and again")
+		if !strings.Contains(said, "(session "+session.GetId()+",") {
+			t.Fatalf("quay dispatch %s said %q, want the session the listing named", typed, said)
+		}
+		history := mustRun(t, client, "tasks", session.GetId()[:8])
+		if strings.Contains(history, typed+" and again") {
+			t.Fatalf("quay dispatch %s put the identifier into the message:\n%s", typed, history)
+		}
+	}
+}
+
+// A name takes the handle off the screen, which is the row where the operator had nothing typeable
+// at all.
+func TestDispatchTakesTheIdentifierOfASessionSomebodyHasNamed(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+	mustRun(t, client, "label", session.GetId()[:8], "the bills")
+
+	said := mustRun(t, client, "dispatch", session.GetId()[:8], "and again")
+
+	if !strings.Contains(said, "(session "+session.GetId()+",") {
+		t.Fatalf("quay dispatch said %q, want the session the listing named", said)
+	}
+}
+
+// The way off the old behaviour. A word shaped like an identifier that names nothing has to stop and
+// say what to type, never be absorbed into the message and never start a session quietly.
+func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+	session := onlySession(t, client)
+
+	err := refused(t, client, "dispatch", "ffffffffff", "and again")
+
+	said := err.Error()
+	if !strings.Contains(said, session.GetId()[:8]) {
+		t.Fatalf("the refusal %q does not offer the identifier the listing prints", said)
+	}
+	if !strings.Contains(said, "quote the whole message") {
+		t.Fatalf("the refusal %q does not say how to send it as the message instead", said)
+	}
+	// And nothing was started behind it.
+	if listed := mustRun(t, client, "sessions"); strings.Count(listed, "idle") != 1 {
+		t.Fatalf("the refused word started a session:\n%s", listed)
+	}
+}
+
+// The other half of the split. A message whose first word is an ordinary word is still a message, or
+// every dispatch would need an address in front of it.
+func TestAnOrdinaryFirstWordIsStillTheMessage(t *testing.T) {
+	client, _ := aSessionWatchingTheModel(t)
+
+	said := mustRun(t, client, "dispatch", "hello", "there")
+
+	if !strings.Contains(said, "ok") {
+		t.Fatalf("quay dispatch hello there said %q, want the reply to a message", said)
+	}
+	if strings.Contains(said, "no session") {
+		t.Fatalf("quay dispatch hello there was read as a session: %q", said)
 	}
 }

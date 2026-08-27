@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -190,7 +191,7 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		return m.descendInto(action.Descend, row)
 	}
 	if action.Shell != nil {
-		return m, shellCmd(action, row)
+		return m, m.shellCmd(action, row)
 	}
 	if action.Run != nil {
 		return m, runCmd(action, row)
@@ -215,17 +216,17 @@ func (m Model) updateConfirmKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 // shellCmd suspends the console, hands the terminal to the command, and restores on exit.
-func shellCmd(action Action, row Row) tea.Cmd {
+func (m Model) shellCmd(action Action, row Row) tea.Cmd {
 	command, err := action.Shell(row)
 	if err != nil {
-		return func() tea.Msg { return errMsg{err: err} }
+		return func() tea.Msg { return heldErrMsg{err: err} }
 	}
 	if command == nil {
 		return func() tea.Msg {
-			return errMsg{err: fmt.Errorf("%s: nothing to run for %s", action.Label, row.ID)}
+			return heldErrMsg{err: fmt.Errorf("%s: nothing to run for %s", action.Label, row.ID)}
 		}
 	}
-	return tea.ExecProcess(command, func(err error) tea.Msg {
+	return m.handOver(command, func(err error) tea.Msg {
 		if err != nil || action.After == nil {
 			return actionDoneMsg{err: err}
 		}
@@ -236,6 +237,25 @@ func shellCmd(action Action, row Row) tea.Cmd {
 		}
 		return actionDoneMsg{}
 	})
+}
+
+// handOver gives the terminal to a command and reports what came back.
+//
+// A seam rather than a call to the terminal library, because the library's own version is answered by
+// the program loop and never runs anything a test can see. Without it a scenario can only assert on
+// the command the key produced, which is the half that always worked: the half that did not is what
+// the operator is left looking at once the command has run.
+func (m Model) handOver(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
+	if m.terminal != nil {
+		return m.terminal(command, done)
+	}
+	return tea.ExecProcess(command, done)
+}
+
+// WithTerminal says how the console hands the terminal to a command it starts.
+func (m Model) WithTerminal(handOver Terminal) Model {
+	m.terminal = handOver
+	return m
 }
 
 func runCmd(action Action, row Row) tea.Cmd {

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atlantic-blue/quay-crew/internal/statusline"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -140,6 +141,25 @@ func colourOfMode(mode string) string {
 // tool's, which is the listing this is being made to match.
 func colourOfTokens(cell string) string {
 	if strings.HasSuffix(cell, "M") {
+		return ansiYellowCode
+	}
+	return dimCode
+}
+
+// colourOfContext marks a conversation that is filling up. The share is what an operator acts on, so
+// it warns at the same mark the line under the prompt warns at, and a cell holding a count rather
+// than a share is dimmed like any other number: nothing has said how big the window is, so there is
+// nothing there to act on yet.
+func colourOfContext(cell string) string {
+	share, found := strings.CutSuffix(cell, "%")
+	if !found {
+		return dimCode
+	}
+	used, err := strconv.Atoi(share)
+	if err != nil {
+		return dimCode
+	}
+	if used >= statusline.Warn {
 		return ansiYellowCode
 	}
 	return dimCode
