@@ -195,6 +195,11 @@ func main() {
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
 
+	// And the work the crew holds is made to happen the same way: a controller reads the rows, sends
+	// a task for what has not started, and writes what came back. Declared intent is a row, so work
+	// declared while the crew was down starts on the way up.
+	go server.RunWorkController(ctx)
+
 	// And the machine itself, on its own timer. The header reads the last sample rather than the
 	// daemon, because reading the daemon takes as long as the daemon takes and the header redraws
 	// every second.
