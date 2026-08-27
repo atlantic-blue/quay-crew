@@ -1,0 +1,2081 @@
+# Orchestration in quay
+
+## 1. Purpose
+
+Today a person outside quay decides what to dispatch, watches it, reads the answer and decides the
+next thing. The intent lives in that conversation. When the process dies, the intent dies with it.
+That happened twice on 27 August 2026.
+
+**The one sentence: move the intent out of the conversation and into a record the crew stores, and
+let an ordinary loop make reality match that record.**
+
+This document is a delta. It does not replace the two designs that already cover this ground.
+
+## What already exists as a design, and what commit this was searched at
+
+Searched at commit `d6a6417bdd28bb0b68e0d945a39c1182b5bbe3e9` on `main`, 27 August 2026. The search
+covered `docs/`, all 392 issues open and closed, and the merged pull requests. No file or issue uses
+the word orchestration. Two designs cover most of this ground, and this document sits under both.
+
+**`quay-crew#354`, "Roles: a sub task runs as a named role, in its own session and container".**
+Open. It is the closest existing design and it decides the part this document does not repeat: a
+role is the boundary, a team is chosen at run time, and the crew starts one session per role named.
+Its slice 1 has shipped. This document supplies the substrate that its slices 5, 6 and 7 need, and
+it changes none of its decisions.
+
+**The "Automation graphs" section of `docs/ARCHITECTURE.md`, filed as `quay-crew#42` and delivered
+through `quay-crew#182`.** The flow engine. It decides that Postgres is the state, that the log is
+the export, that the graph is a deliberate restriction for legibility, and that a run pins its graph
+version. This document keeps every one of those and adds one record beneath them.
+
+Where this document disagrees with either, it says so by name. There is one such place, in section
+8b, and it concerns where a dispatch node's blocking happens.
+
+## 2. What quay has today, and what it does not
+
+Named by file and by command, because a design that describes a built thing as missing wastes the
+reader's time.
+
+### The three stated blockers, checked against the code
+
+**Blocker one, a session cannot start another session. Half true, and the half matters.**
+
+An ordinary session cannot. A driver session can, and does so today. `internal/controlplane/server.go:1621`
+puts `QC_GRPC_ADDR` and the driver's own token into the sandbox environment, but only when
+`session.GetDriver()` is true. `internal/sandbox/docker.go:186` joins only the driver to the control
+plane's network. `internal/controlplane/deny.go` refuses eleven calls to that token, and `Dispatch`
+and `StartFlow` are not among them. So the driver holds exactly the capability this document wants
+to generalise.
+
+Captured from inside an ordinary session on 27 August 2026, in the sandbox this document was written
+in. `which quay` answers `/usr/local/bin/quay`, so the tool is in the image. `quay sessions` then
+answers:
+
+```
+quay: this session was not told where the crew is, so there is nothing at the address it fell
+back to. It reaches the control plane only when the crew is set up for it: QC_SANDBOX_NETWORK
+and QC_SANDBOX_CONTROL_PLANE on the control plane ... Then start this session again, because a
+sandbox keeps the configuration it was made with.
+```
+
+That last sentence is the trap. A sandbox is born with its environment. A capability granted after
+birth does not reach the container that is already running.
+
+**Blocker two, a session's answer cannot be read as data. True, and smaller than it looks.**
+
+The store already holds the whole reply. `internal/store/migrations/0007_turns.up.sql` declares
+`reply text`, which Postgres does not bound. `ListTasks` on the control plane returns it whole, and
+`proto/quaycrew/v1/controlplane.proto:820` puts no limit on the field.
+
+One function truncates it. `oneLine` in `cmd/quay/tasks.go` cuts at 120 characters and appends three
+dots, so a listing stays readable. There is no command that prints one reply whole. That is the
+entire defect, and section 15 fixes it first.
+
+**Blocker three, a running task is invisible. Fixed today, at this commit.**
+
+`quay-crew#376` described exactly this symptom. Its fix merged as `e53befc` on 27 August 2026, hours
+before this document. A task is now written to the `tasks` table when it starts, on every path, and
+`cmd/quay/tasks.go` prints `still running` for a task whose row is still open. A crew that shows the
+old behaviour is running a build older than `e53befc`.
+
+This matters more than it reads. A controller that dies mid task can only recover because the task
+row exists before the answer does. Section 4 depends on it.
+
+### What else is already built
+
+- **The store is the truth and the log is the export.** Decided 9 August 2026, recorded in
+  `docs/EVENTS.md`. Publishing is deliberately lossy and never fails work that already happened.
+- **A session has a lifecycle on the log.** `quay-crew#349` merged as `156e867`. Eight kinds,
+  `session.created` through `session.deleted`, written to `session_events` by
+  `internal/controlplane/sessionevents.go` and exported to `<workspace>.sessions`. `ListSessionEvents`
+  reads them back.
+- **The flow engine runs graphs.** `internal/flow`, over migration 0014. A pure reducer in
+  `advance.go`, an engine in `engine.go`, a poller in `poller.go`. All five node types work.
+  `quay flow import|start|list|show|stop|answer|schedule|unschedule`.
+- **Dispatch is idempotent per step.** The `flow_dispatches` table keys on run, node and attempt in
+  the same transaction as the movement, so one task can never be paid for twice.
+- **A run cannot spend without bound.** `flow.DefaultTransitions` is 100 movements. A graph may
+  declare `limits.tokens`. Both are checked in `brake` before the movement, so the dispatch that
+  would cross a line is never made.
+- **A run can wait, and a restart does not lose it.** The due time is a column the poller reads.
+- **A run can ask, and only a person answers.** The poller passes over asking runs by status.
+- **A role is imported, pinned and attached.** `internal/role/role.go`, migration 0024,
+  `quay role import|list|attach|detach`. A role declares `name`, `version`, `summary`, `model` and
+  `receives`. `receives` is one of `work`, `context` or `skills`.
+- **A caller is recognised by a token.** `internal/auth`. One crew token, one driver token, and a
+  deny policy over the driver's.
+- **Every task carries its cost.** `internal/telemetry/taskmetrics.go` publishes `quaycrew.tasks`,
+  `quaycrew.tokens` and `quaycrew.cost.usd`.
+- **Inbound calls are traced.** `telemetry.ServerOptions` puts a stats handler on the control plane
+  server. Every log line written with a context carries `correlation_id`, and that value is the trace
+  identifier rather than a second identifier beside it.
+
+### What is missing
+
+- **No declared unit of work.** Everything is a verb. `Dispatch` runs a task, `StartFlow` starts a
+  run. Nothing writes down what somebody wants and lets a loop make it so.
+- **No capability a session can hold except the driver's.** The boundary is locality: the network
+  and the token follow the `driver` flag on the row.
+- **No quota anywhere.** A workspace has no limit on running sessions, on depth, or on spend. The
+  flow engine's caps are per run, and nothing bounds a workspace.
+- **No command prints one answer whole.** Named above.
+- **No `work.*` or `flow.*` records on the log.** `quay-crew#349` named four flow kinds and shipped
+  none of them. `docs/EVENTS.md` lists the eight session kinds and nothing else.
+- **No span below the control plane's own interface.** `quay-crew#345`. No span around a task, a
+  sandbox or the model call, and the command line tool starts no trace.
+- **No trace identifier on a durable record.** `quay-crew#346`. The `tasks` row and the `TaskEvent`
+  carry none, so history and traces cannot be joined.
+- **No events view and no flows view in the console.** `internal/console/resources.go` registers
+  ten views and neither is among them.
+- **Nothing consumes the log.** Expected, and stated as such in `docs/EVENTS.md`.
+
+## 3. The resource
+
+The declared unit is a **piece of work**, and the record is called `work`. The word is already the
+crew's own. A role declares `receives: work`, and `quay-crew#354` says the product manager reads the
+work first.
+
+A caller writes a piece of work. A controller makes reality match it. Nothing dispatches.
+
+### What a caller declares
+
+Every field below is a column on the `work` table. Types are Postgres types. Every one is validated
+at the moment of the write, never at the moment of the dispatch, for the reason the graph parser
+already gives: a refusal in the middle of a run arrives hours later with nothing pointing back at
+the declaration.
+
+**`id`, text, assigned by the crew.** Twenty four hexadecimal characters, the shape
+`flow.newRunID` already mints. A caller that sets it is refused. Reason: an identifier the caller
+chooses is an identifier the caller can collide.
+
+**`workspace`, text, required.** Must name a workspace that exists and is not soft deleted. A
+missing or unknown workspace is refused, and the refusal names it.
+
+**`project`, text, required.** Must name a project inside that workspace. Refused otherwise. A
+piece of work needs a project because a dispatch needs one.
+
+**`title`, text, required.** One line, for a listing. Between 1 and 200 bytes after the leading and
+trailing space is removed. The ceiling is `role.SummaryLimit`, which is the same job on a role.
+Empty is refused. Over the ceiling is refused, and the refusal says how long it is.
+
+**`brief`, text, required.** What the session is asked to do. Between 1 and 16,384 bytes, which is
+`role.BriefLimit`. The reason for the ceiling is the reason `docs/ROLES.md` gives: a brief nobody
+reads to the end is a brief nobody follows.
+
+**`role`, text, optional, default empty.** Names a role. Empty means the session runs with no role,
+which is what every session does today. A role the workspace does not hold, at the crew level or at
+its own, is refused by name at the write. This is the acceptance criterion `quay-crew#354` already
+states, moved earlier: refusing at the write is refusing while somebody is looking.
+
+**`role_version`, integer, assigned by the crew.** The version attached at the moment of the write.
+Zero when no role. A piece of work is pinned the way a run pins its graph, so editing a role cannot
+change work that is already declared.
+
+**`mode`, text, optional, default empty.** What this work's tasks may do without asking. Empty
+leaves the session in the mode it is born in. Validated through `model.PermissionModeNamed`, which
+is what `flow.Parse` already does, and refused with the same list of what would work.
+
+**`expect_file`, text, optional, default empty.** A path that must be in the session's working
+directory after the task. Relative only. An absolute path is refused. A path with a `..` part is
+refused. Both rules are `flow.usableExpectFile`, unchanged.
+
+**`expect_contains`, text, optional, default empty.** A string the answer must carry.
+
+Both may be empty, which claims nothing and is checked as nothing. Where either is set, the
+controller checks it, and work that does not meet its claim stops rather than reporting success. The
+reason is in `docs/ARCHITECTURE.md`: a model asked to read a file that is not there answers
+plausibly instead of stopping.
+
+**`after`, text array, optional, default empty.** Identifiers of other work this work waits for.
+Every identifier must name work that exists. A cycle is refused, and the refusal names the two
+identifiers that close it. This is the ordering primitive, and it is the whole of it: there is no
+condition, no branch and no expression. A piece of work waits until every identifier in `after`
+reaches a terminal phase, whatever that phase is. Where a caller wants to stop on a failure, it
+declares the dependent work only after it reads the answer.
+
+**`deadline`, timestamptz, optional, default null.** After this moment the controller stops the work
+rather than starting it. Work already running is not killed, for the reason `quay flow stop` gives:
+the model is already working and abandoning it mid sentence gains nothing.
+
+**`budget_tokens`, bigint, optional, default 0.** What this work and everything under it may spend.
+Zero means it draws from its parent, and a root with zero draws from the workspace. Negative is
+refused. A value above the parent's remaining budget is refused, and the refusal says both numbers.
+
+**`labels`, jsonb, optional, default empty.** Free text pairs, so a caller finds its own work later.
+At most 16 pairs. Each key and each value at most 63 characters, which is the ceiling Kubernetes
+puts on a label value. Anything larger is refused.
+
+### What the crew assigns and the caller may not
+
+**`parent`, text, empty for a root.** Which piece of work asked for this one. **The caller never
+sets this.** The crew reads it from the credential the caller presented, and a caller presenting an
+operator's credential creates a root. This is the mechanism that bounds depth, and it only works
+because the caller cannot lie about it. A `parent` in the request body is refused, not ignored.
+
+**`depth`, integer, derived.** Zero for a root. Otherwise the parent's depth plus one. Work whose
+depth would exceed the workspace's limit is refused, and the refusal names the limit, the current
+depth and the command that raises it.
+
+**`trace_id`, text, 32 hexadecimal characters.** Minted for a root. Inherited unchanged from the
+parent otherwise. One trace covers a whole tree.
+
+**`parent_span_id`, text, 16 hexadecimal characters, empty for a root.** The span the parent was
+inside when it declared this work. Section 8c explains why both live on the row rather than in a
+process.
+
+**`created_at`, `updated_at`, timestamptz.** Every table in this crew carries them.
+
+### What the controller writes, and nobody else
+
+This is the status. A reader reads a field, never a log.
+
+**`phase`, text.** Seven words, and they are the flow engine's words plus one, so a reader learns
+one vocabulary rather than two.
+
+- `pending`, declared and not started. The opening phase of every piece of work.
+- `waiting`, held back because something in `after` has not finished, or because the workspace is at
+  its concurrency limit, or because it is a parent whose children are outstanding.
+- `running`, a session exists and a task is in flight.
+- `asking`, it put a question to a person and nothing but an answer moves it. No timer and no poller,
+  which is the rule `flow.Advance` already enforces for a run.
+- `done`, it finished and the answer is on the record.
+- `failed`, the model did not finish, or the sandbox could not be made.
+- `stopped`, it was halted: a person stopped it, or it met a limit, or its claim did not hold. A
+  piece of work that went quiet and one that was halted must never read the same.
+
+The last three are terminal. Nothing moves work out of them.
+
+**`session`, text, empty until a session exists.** The session the work runs in. This is how a
+reader gets from the work to the conversation, and it is what `quay attach` takes.
+
+**`attempts`, integer, default 0.** How many times a controller started a session for this work.
+
+**`answer`, text, default empty.** What came back, whole, redacted by the crew's own redactor before
+it is written, exactly as `landTask` already redacts a reply. **This field is the read path.** It is
+the difference between an answer that lives in a conversation and an answer a caller can read.
+
+**`reason`, text, default empty.** Why a stopped or failed piece of work stopped. Empty while
+running and empty when done.
+
+**`question`, text, default empty.** What an asking piece of work is waiting to be told.
+
+**`spent_tokens`, bigint, default 0.** What this work's own session has cost, read by the same
+reader the flow ceiling uses, `Server.SessionTokens` in `internal/controlplane/flows.go`.
+
+**`observed_version`, integer, default 0.** The `version` of the declaration this status describes.
+The record carries a `version` integer that increases on every write to a declared field. A
+controller that has not caught up has an `observed_version` behind it, and a reader can tell a
+status that is current from one that is stale. Kubernetes calls this the observed generation, and it
+is worth copying because a status field with no such marker gets believed after the declaration
+under it has changed.
+
+**`lease_owner`, text, and `lease_until`, timestamptz.** Which controller holds this work and until
+when. Section 4 explains them. They are the only status fields a reader should ignore.
+
+**`started_at`, `finished_at`, timestamptz, null until each happens.**
+
+### Validation a test can fail
+
+Every rule above is a refusal with a sentence. The scenarios go in `features/work.feature`, in the
+shape the other feature files take, and each was written to be checked by breaking the code on
+purpose. The list, so a test can be written against it:
+
+- A work with no title is refused, and the refusal says a title is needed.
+- A work with a title of 201 bytes is refused, and the refusal says the ceiling.
+- A work with a brief of 16,385 bytes is refused.
+- A work naming a role the workspace does not hold is refused, and the refusal names the role.
+- A work naming a mode that is not a mode is refused, and the refusal lists the modes.
+- A work whose `expect_file` starts with a slash is refused.
+- A work whose `expect_file` holds a `..` part is refused.
+- A work whose `after` names an identifier that does not exist is refused.
+- A work whose `after` closes a cycle is refused, and the refusal names both identifiers.
+- A work with `parent` in the request is refused, and the refusal says the parent comes from the
+  credential.
+- A work declared by a credential at the depth limit is refused, and the refusal names the limit.
+- A work with a budget above its parent's remaining budget is refused, and the refusal says both
+  numbers.
+- A work with 17 labels is refused.
+- A work with a label value of 64 characters is refused.
+- A caller that is not the controller cannot write `phase`, `answer`, `reason` or `session`.
+
+### The lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: a caller declares it
+    pending --> waiting: something in after is open
+    pending --> running: a controller claims it and starts a session
+    waiting --> pending: every dependency reached a terminal phase
+    waiting --> stopped: the deadline passed
+    running --> asking: the task put a question to a person
+    running --> done: the answer landed and the claim held
+    running --> failed: the model did not finish
+    running --> stopped: a limit, a person, or an unmet claim
+    running --> pending: the lease expired and the task never started
+    asking --> running: a person answered
+    asking --> stopped: a person stopped it
+    pending --> stopped: a person stopped it
+    done --> [*]
+    failed --> [*]
+    stopped --> [*]
+```
+
+The one edge worth reading twice is `running` back to `pending`. A controller that dies leaves work
+marked running with a lease nobody holds. The next controller reads the task row, and the shape of
+that recovery is section 4.
+
+## 4. The controller loop
+
+A controller is a loop. It watches, it compares what is declared against what exists, it acts to
+close the gap, and it records what happened. It is an ordinary workload. Nothing about sitting near
+the control plane makes it privileged.
+
+### Where the Kubernetes idea fits quay, and where it does not
+
+**It fits.** The reducer in `internal/flow/advance.go` is already a pure function from state and
+event to next state and commands, with the world touched only beside it. That is the controller
+shape, written before anybody called it one. A controller over work is the same arrangement with a
+different resource.
+
+**It does not fit in one place, and the mismatch is real.** In Kubernetes the control plane runs
+nothing. Quay's control plane holds the Docker socket, builds sandboxes and calls the model. It is a
+control plane and a node agent in one process, and `docs/ARCHITECTURE.md` says so plainly: mounting
+the host socket is equivalent to giving it root on the host.
+
+This design does not fix that, and it deliberately does not make it worse. The work controller
+touches no socket and no model. It reads and writes rows, and it calls `Dispatch` on the same
+interface every other caller uses, which is the property `internal/flow` already holds. So the
+controller can move out of the control plane process later without changing a line of its logic. Two
+things must land before it can: it needs a credential of its own rather than the process's, and it
+needs the answer read path so it stops needing the store handle. Slices 5 and 1 supply those.
+
+### The loop
+
+```mermaid
+flowchart TD
+    START(["tick"]) --> READ["read the work this controller may act on:<br/>pending, waiting, running with an expired lease"]
+    READ --> GATE{"is the workspace<br/>at its running limit?"}
+    GATE -->|"yes"| PARK["leave the rest pending<br/>and record why"]
+    GATE -->|"no"| PICK["take the oldest declared work<br/>whose dependencies all ended"]
+    PICK --> CLAIM{"claim it:<br/>set lease_owner and lease_until<br/>where the lease is free"}
+    CLAIM -->|"another controller won"| START
+    CLAIM -->|"claimed"| BUDGET{"is there budget<br/>and depth left?"}
+    BUDGET -->|"no"| STOPW["phase stopped<br/>reason names the limit"]
+    BUDGET -->|"yes"| RECOVER{"does this work<br/>already have a session?"}
+    RECOVER -->|"no"| DISPATCH["Dispatch into a session<br/>named after the work"]
+    RECOVER -->|"yes"| TASKROW{"read the task row<br/>for that session"}
+    TASKROW -->|"still running"| RENEW["renew the lease<br/>and come back next tick"]
+    TASKROW -->|"it landed"| ADOPT["adopt the answer<br/>without dispatching again"]
+    DISPATCH --> ADOPT
+    ADOPT --> CHECK{"does the answer meet<br/>what the work claimed?"}
+    CHECK -->|"no"| STOPW
+    CHECK -->|"yes"| WRITE["write phase, answer,<br/>spent_tokens, finished_at"]
+    WRITE --> WAKE["wake anything whose after<br/>named this work"]
+    STOPW --> WAKE
+    RENEW --> START
+    PARK --> START
+    WAKE --> START
+```
+
+### What it watches
+
+Rows in `work`, in the store, by polling. Not the log. This is the same split the flow engine
+already made and for the same reason: publishing is lossy, so a controller whose next action
+depended on a record arriving would sit forever with nothing to say why.
+
+Three queries per tick, each on an index:
+
+- work in `pending` whose `after` identifiers have all reached a terminal phase, oldest declared
+  first;
+- work in `waiting` whose dependencies have now ended, which moves it back to `pending`;
+- work in `running` or `asking` whose `lease_until` has passed.
+
+A crew with a thousand finished pieces of work and one pending does one row of work per tick. That
+is the property `DueFlowRuns` already has and it is worth keeping.
+
+### What it compares
+
+The declaration against reality. Reality is three things, and they are read rather than remembered:
+
+- the `phase` on the row;
+- whether a session named on the row still exists, through `GetSession`;
+- whether the `tasks` row for that session is still open, through `ListTasks`.
+
+The third is the one that makes recovery possible, and it only became possible at `e53befc` this
+morning.
+
+### What it does
+
+One of: nothing, claim, dispatch, adopt an answer, stop, or wake dependents. Never more than one
+piece of work per tick moves from `pending` to `running`, so the concurrency limit is enforced by
+construction rather than by counting after the fact.
+
+### What it writes
+
+Every movement writes the row and appends one event row in the same transaction. That is the
+guarantee `flow_run_events` already gives: there is no gap for a crash to hide in, so either the
+work moved and the record exists, or neither happened. The export to the log follows the write and
+never fails it.
+
+### The claim, and what happens when it dies
+
+A controller claims work by writing `lease_owner` and `lease_until` where the lease is free or
+expired. The write is conditional in the same statement, so two controllers cannot both win. This is
+the compare and set the log cannot give, and `flow_dispatches` already uses the same idea.
+
+The lease length is provisional. It must be longer than the longest task a piece of work runs, and a
+task takes minutes rather than seconds. The measurement that would set it is the ninety fifth
+percentile of `quaycrew.work.duration` over the first fifty completed pieces of work. Until that
+exists the operator sets it, and the crew refuses to start with it unset rather than choosing a
+number nobody measured.
+
+Now the phases, and what a death in each one costs.
+
+**It dies before claiming.** Nothing was written. The next controller reads the same pending row and
+claims it. Cost: one tick.
+
+**It dies after claiming and before dispatching.** The row says `running` with a lease and no
+session. The lease expires. The next controller sees `running` with no session, which can only mean
+the dispatch never happened, and puts the work back to `pending`. Cost: one lease length. Nothing
+was paid for, because no model was called.
+
+**It dies during the dispatch call.** This is the expensive one, and it is why the task row matters.
+The row says `running` and carries a session, because the controller writes the session identifier
+before it waits. The task may be running in a sandbox right now, and the sandbox belongs to the
+control plane rather than to the controller, so the model keeps working whether or not anybody is
+watching. The next controller reads the `tasks` row for that session. If the row is open, it renews
+the lease and waits. If the row has landed, it takes the reply from the row as the answer and never
+dispatches again. **The work is never dispatched twice, so it is never paid for twice.** That is the
+same protection `flow_dispatches` gives a run, achieved here by reading rather than by claiming.
+
+**It dies after the answer landed and before writing the phase.** The row still says `running`. The
+next controller reads the closed task row and adopts the answer. The only cost is the delay.
+
+**It dies while a piece of work is asking.** Nothing happens, correctly. An asking piece of work
+moves on an answer and on nothing else, so a controller that is not there is not a controller that
+answered. The question stays on the row and a person still sees it.
+
+**It dies after writing the phase and before waking dependents.** The next tick's second query finds
+the dependents itself, because waking is derived from the dependency's phase rather than pushed by
+whoever finished. A push that can be lost is a design that stalls; a query that is re run cannot be.
+
+The property that holds all six together: **the controller keeps nothing in memory that it cannot
+read back from a row.** No timers, no goroutine per piece of work, no map of outstanding calls. That
+is the same reason `docs/ARCHITECTURE.md` gives for a wait being a column rather than a timer.
+
+## 5. The capability model
+
+### The verbs
+
+Four, and no more, because a verb nobody uses is a boundary that means nothing.
+
+- `work.create`, declare a piece of work. The parent comes from the credential.
+- `work.read`, read work and its answer. Scoped to the tree the credential's own work is in.
+- `work.answer`, answer a question a piece of work asked. An operator only, in the first version.
+- `work.stop`, stop a piece of work in the tree.
+
+Asking is not a fifth verb. A session puts a question about the work it is itself running, and the
+credential is already bound to that work identifier, so no grant is involved. `AskWork` refuses any
+identifier but the caller's own, which is why it needs none.
+
+Deliberately absent: no verb creates a workspace, a project, a secret, a skill, a hook or a role.
+Those are already refused to the driver in `DeniedToDriver`, and the reason there is the reason
+here. A session that could grant itself a capability could write itself a way of working nobody
+approved and then run as it.
+
+### How a grant reaches a session
+
+Not through the `driver` flag. The flag makes the boundary locality, which is the thing to change.
+
+A session that is running a piece of work gets a credential minted for that piece of work: a token
+bound to the work identifier, the verbs its role declares, and an expiry no later than the work's
+deadline. It reaches the sandbox the way the driver's token reaches the driver, through the
+environment at task time. The control plane recognises it, reads the work identifier from it, and
+that identifier is the `parent` of anything the session declares.
+
+Two consequences follow, and both are the point:
+
+- **A caller cannot lie about its parent**, so it cannot escape the depth count.
+- **A credential that leaks out of a sandbox grants only what that piece of work could do**, and
+  only until it ends. That is strictly less than the driver's token grants today.
+
+The cost is stated. A container's environment is readable for the life of the container, through
+`docker inspect` among other things. `docs/ARCHITECTURE.md` already says this about the workspace's
+secrets. A work token is worse than a secret in one way and better in another: it is narrower, and
+it expires.
+
+### Where capability belongs: on the role and on the workspace, and they mean different things
+
+**The role carries the grant.** A role declares which verbs a session running as it may use, in a
+new `may` list beside `receives`. Validated as an allow list at import, refused by name for a word
+the crew does not know, exactly as `role.Material` is validated today.
+
+The reason is the reason `docs/ARCHITECTURE.md` already gives for putting `mode` on the graph rather
+than on the operator: what an automation is allowed to do should be versioned and reviewable beside
+what it does. A role is a file. It is imported, pinned to a version, and attached by the operator
+and never by a session. So the grant is reviewable in a pull request, and a session cannot widen it.
+
+There is a second reason, and it is the one `docs/ROLES.md` was written around. `receives` is
+already the material boundary on the role. Putting the verb boundary somewhere else would mean two
+answers to one question, in two files, and a reader would have to hold both. One file says what a
+role may see and what it may do.
+
+**The workspace carries the ceiling.** A `workspace_limits` row per workspace: `max_depth`,
+`max_running`, `budget_tokens` and the lease length. The workspace is already the unit of tenancy,
+and secrets, skills, channels and isolation are all scoped there. A quota is a tenancy concern.
+
+**The effective capability is the intersection.** A role granting `work.create` in a workspace whose
+`max_depth` is zero creates nothing, and the refusal names the workspace limit rather than the role,
+because that is the thing an operator would change.
+
+**Why not one of the two alone.** A role alone gives no ceiling, so a role attached to the crew
+would grant the same power everywhere including workspaces the operator never thought about. A
+workspace alone gives no review, so a session in a permitted workspace would hold every verb the
+workspace holds, and the boundary between a role that plans and a role that writes code would be
+prose in a brief asking nicely.
+
+### How depth is bounded
+
+`depth` is derived from the credential, never declared, so the count cannot be skipped. The
+workspace's `max_depth` refuses a write above it. The refusal names the limit and the command that
+raises it.
+
+**What stops a piece of work starting itself.** Depth alone, and that is enough. Work at depth d
+creates at d+1, so a cycle of any shape terminates at `max_depth`. There is no cycle check between
+work items and none is needed: the parent relation is a tree by construction, because the parent is
+assigned rather than chosen.
+
+The default for `max_depth` is 0, which means no session in that workspace may declare work at all.
+Default deny. An operator raises it deliberately, per workspace.
+
+The value an operator should raise it to is provisional. There is no measurement yet. The one that
+would set it is the greatest `depth` over completed root trees after the first month, plus one. A
+number chosen now would either stop real work or protect nothing.
+
+### How spend is bounded
+
+Three limits, and each catches a different failure.
+
+- **The tree budget.** A root declares `budget_tokens`, or draws the workspace default. Every child
+  draws from the parent's remaining budget, so no tree can spend more than its root declared. The
+  controller checks it before each dispatch, never after, which is what `brake` already does in
+  `internal/flow/advance.go`. The dispatch that would cross the line is never made and never paid
+  for.
+- **The concurrency limit.** `max_running` per workspace. It bounds the rate of spend rather than
+  the total, and it also bounds memory. Two open issues make that concrete: `quay-crew#381` says the
+  core services share one memory pool with the sandboxes, so a session can kill the crew, and
+  `quay-crew#373` says a session already runs out of memory running a repository's own gates. Until
+  those are closed, the limit is the only thing standing between a fan out and a dead crew.
+- **The deadline.** Wall clock rather than tokens, for work that has stopped being useful.
+
+No default value is named here for `budget_tokens` or `max_running`. The crew ships them unset, and
+work runs bounded by depth and by the deadline alone. The measurement that would set the budget is
+the median `quaycrew.tokens` for a completed piece of work over the first fifty. The measurement
+that would set `max_running` is the number of concurrent sandboxes at which the host's memory
+pressure first appears, which is exactly what `quay-crew#381` asks somebody to measure.
+
+## 6. The system workspace
+
+**A system workspace is the wrong boundary, and this is a decision rather than an omission.**
+
+The crew already has a level above the workspace and it is called `crew`. `name.Crew` is the word.
+`quay skill attach crew`, `quay hook attach crew`, `quay secret set crew` and `quay context set crew`
+all take it, and no workspace may be called it, because a workspace with that name would take what
+every workspace reads.
+
+A system workspace would be a fifth thing that looks like a workspace, occupies the workspace name
+space, needs its own reserved name, and needs a rule that already exists for `crew`. It would also
+put the boundary back on locality: power would follow from which workspace a session sits in. That
+is the idea this design is trying to replace.
+
+**So an orchestrator runs in an ordinary workspace.** What makes it an orchestrator is the role
+attached to it and the credential that role earns, not where it lives. Identity, not locality.
+
+**What holds the crew level.** The limits an operator wants to state once: a default `max_depth`, a
+default `max_running`, a default budget and the lease length. A workspace's own row wins where it
+sets one, which is the rule secrets already follow: a workspace wins on a name and every other
+workspace reads the crew's.
+
+**What stops an ordinary workspace reaching the same power.** Three things, in order of how much
+work each costs an attacker.
+
+- The crew's default `max_depth` is 0. A workspace that was never given a limit row grants nothing.
+- A role granting `work.create` must be imported and attached by an operator. Import and attach are
+  already refused to a session's own token in `DeniedToDriver`, and a work token grants strictly less
+  than the driver's.
+- A work token names its own piece of work, and the verbs come from the role that work pinned at its
+  declaration. A session cannot mint one, cannot widen one, and cannot use one after its work ends.
+
+**What this deliberately does not do.** It does not stop an operator granting an ordinary workspace
+everything. It cannot: there is one operator and no second reviewer, and a crew that refused its own
+operator would be a crew nobody could set up. The protection is default deny plus a listing that
+says which workspaces hold what.
+
+## 7. The read path
+
+An orchestrator cannot work without this, and it is the smallest piece of the design.
+
+### The problem, stated exactly
+
+The reply already survives whole. Postgres `text` is unbounded, `ListTasks` returns the field whole,
+and the protobuf message puts no limit on it. One function truncates, `oneLine` in
+`cmd/quay/tasks.go`, at 120 characters, so a history listing stays readable. That is correct for a
+listing and wrong for everything else, and there is no other way to get the value out.
+
+### The fix, in three parts
+
+**One, a command that prints one answer whole.** `quay answer <session>` writes the reply of that
+session's most recent landed task to standard output, with nothing else on it: no timestamp, no
+prefix, no truncation. `--all` writes every task's prompt and reply in order. A caller pipes it. This
+needs no new table, no new call and no controller. It closes the second blocker on its own.
+
+**Two, the answer as a field on the work record.** `answer` on the `work` row, redacted the way
+`landTask` already redacts. A caller that declared work reads the answer without knowing which
+session ran it, without a listing, and after the session has been archived and its container
+removed.
+
+**Three, the calls.** `CreateWork`, `GetWork`, `ListWork`, `AskWork`, `AnswerWork`, `StopWork` on
+`ControlPlaneService`. `GetWork` returns the whole record including the answer. `ListWork` filters by
+workspace, project, parent, phase and label, and returns records without their answers, because a
+listing of a hundred answers is a listing nobody can read. A caller that wants an answer asks for one
+piece of work.
+
+### Why the answer belongs on the work and not only on the task
+
+Three reasons, and the third is the one that matters.
+
+- A piece of work may take more than one attempt, and the answer is the one that counted.
+- A session is archived when its work ends, so a reader coming later should not have to know that
+  the history outlives the container.
+- **A caller reads a field rather than parsing prose.** The whole difference between orchestration
+  inside quay and orchestration outside it is whether the next decision reads a value or reads a
+  transcript. A transcript is what a person outside the crew has been doing.
+
+### What a machine reads, and what a person reads
+
+They are the same records with two renderings, which is the split the console and the command line
+tool already make. A person opens `quay work show <id>` and sees the phase, the reason, the question
+and where to read the conversation. A caller reads `GetWork` and switches on `phase`.
+
+## 8. Three worked scenarios
+
+Every scenario names its records, its commands, its events, its trace and its metrics. A state
+change that emits nothing is a state change nobody can audit.
+
+### The events, defined once
+
+Written to a `work_events` table in the same transaction as the row they describe, and exported to
+`<workspace>.work` after, keyed by the work identifier so one piece of work's records stay in order
+on one partition. That is the shape `session_events` already has.
+
+Each carries `id`, `kind`, `work`, `workspace`, `project`, `parent`, `depth`, `trace_id` and
+`occurred_at`, plus the fields named below. Each `detail` goes through the crew's redactor.
+
+**The contract, which another service may depend on:**
+
+- `work.declared`, fields: `title`, `role`, `role_version`, `after`.
+- `work.started`, fields: `session`, `attempt`.
+- `work.answered`, fields: `session`, `spent_tokens`, `duration_ms`.
+- `work.failed`, fields: `reason`.
+- `work.asked`, fields: `question`.
+- `work.stopped`, fields: `reason`.
+
+**Internal, which nothing outside should depend on:**
+
+- `work.claimed`, fields: `lease_owner`, `lease_until`.
+- `work.released`, fields: `previous_owner`, `phase_found`.
+
+The split is the useful part. A dashboard counting work should never break because the crew changed
+how it leases. A dashboard counting leases has taken a dependency it was told not to take.
+
+**A correction, forced by reading the code on 27 August 2026.** No such service exists, and none is
+being built. `docs/EVENTS.md` says it plainly: "Nothing consumes it. There is no projection any
+more: history does not travel through the log, so nothing has to read it back. The log exists for a
+second consumer that is not built yet." The export also only happens when `QC_KAFKA_SEEDS` is set.
+So the contract above is a promise kept for a consumer that does not exist, and no part of this
+design may wait on a record arriving on the log. The store is the state. Section 14 says which
+consumer lands first and why.
+
+`quay-crew#349` already named four flow kinds, `flow.run.started`, `flow.run.asked`,
+`flow.run.stopped` and `flow.run.finished`, and shipped none of them. They belong to the same
+contract and section 8b uses them.
+
+### The correlation identifier
+
+**One identifier ties everything: the trace identifier.**
+
+It is already the crew's answer. `internal/logging` says the correlation identifier equals the trace
+identifier rather than sitting beside it, and Grafana pivots between a log line and a trace on that
+one value. This design extends the same value rather than adding a second.
+
+- A **resource** carries it as `trace_id`, minted at the root and inherited by every descendant.
+- An **event** carries it as `trace_id`.
+- A **span** is the trace it names.
+- A **log line** carries it as `correlation_id`, which is the same value.
+- A **task row** gains it, which closes `quay-crew#346` for work at the same time.
+
+So an investigator holding any one of the five reaches the other four. The work identifier is the
+second key and it narrows within a trace: one trace covers a tree, one work identifier covers a
+node.
+
+### 8a. One session
+
+**The answer: a single piece of work should not go through the orchestrator, and `quay dispatch`
+stays the right command.**
+
+The reason is cost against gain. `quay dispatch` is one call, one row in `tasks`, and the reply comes
+back on the same connection. A piece of work is one row in `work`, at least three rows in
+`work_events`, a controller tick before anything starts, the same task row, and a second read to get
+the answer. Every one of those buys durability, and durability is worth nothing while a person is
+sitting there watching the reply arrive.
+
+**A correction, forced by reading the code on 27 August 2026.** `quay dispatch` no longer waits.
+Merged pull request 378 made it let go. `cmd/quay/quay.go:683` passes the let go flag, `dispatchTask`
+sets `Detach` on the request, the control
+plane runs the task in a goroutine (`internal/controlplane/server.go:1077`), and the command prints
+"started. the crew has it, and nothing here is waiting for it." `quay ask` is the command that waits
+and prints the reply. So a person watching a reply arrive types `quay ask`, and the paragraph above
+holds for that command. `quay dispatch` is now closer to declaring work than it was: it starts a
+task and reads nothing back, which is exactly why the read path in section 7 matters more than the
+first draft of this document assumed.
+
+**The rule.** A person at a terminal dispatches. Anything that is not a person, or anything whose
+answer must outlive the caller, declares work.
+
+Where a piece of work does earn it for a single session: a long task the operator wants to walk away
+from, a task that must run at a deadline, or a task another piece of work waits for.
+
+**The records, the commands and what the operator sees, today.** All of this is built.
+
+The operator runs `quay dispatch me/house-bills "read the package file"`. The control plane finds or
+creates the session, writes the task row as `running`, builds or reuses the sandbox, runs the model,
+and writes the reply into the row it opened. The reply comes back down the connection.
+
+Status at each step, read from `quay sessions` and `quay tasks <session>`:
+
+- before: the session does not exist, or reads `idle`.
+- during: the session reads `running`, and the task listing shows the prompt with `still running`
+  under it. This is what `e53befc` fixed today.
+- after: the session reads `idle` and the task listing shows the prompt with the reply under it,
+  truncated at 120 characters.
+
+**Events.** Three, and all three are built: `session.created` on the first dispatch,
+`session.started` when the task begins, and `session.completed` when it lands with the reply as the
+detail. A failure writes `session.errored` with the reason instead. Each lands in `session_events`
+and is exported to `<workspace>.sessions`. The contract is the kind field. There is nothing internal
+here.
+
+One record also lands on `<workspace>.tasks` as a `TaskEvent`. It has no kind and only `status`
+varies, which `docs/EVENTS.md` says plainly, so a consumer that wants to know what the crew is doing
+subscribes to the sessions stream instead. Neither stream has a consumer today, and the export runs
+only where `QC_KAFKA_SEEDS` is set, so the two sentences above describe a contract rather than a
+delivery anybody depends on.
+
+**The trace.** The root span is the control plane serving `Dispatch`, named
+`quaycrew.v1.ControlPlaneService/Dispatch`. It exists today, created by the stats handler in
+`telemetry.ServerOptions`. There are no child spans. `quay-crew#345` is that gap, and it names the
+three that are missing: a span around the task, a span around the sandbox work, and a span around
+the model call. The command line tool starts no trace of its own, so the operator's own wait is not
+the root today.
+
+What this scenario needs from this design: nothing new. Where the operator does declare work for a
+single session, the root span becomes `work` and the `Dispatch` span hangs under it, and the trace
+context travels as section 8c describes.
+
+**Metrics.** Three, all built and all published after the task by
+`internal/telemetry/taskmetrics.go`: `quaycrew.tasks`, a counter of tasks; `quaycrew.tokens`, a
+counter of tokens split by `kind` into input, output, cache read and cache written; and
+`quaycrew.cost.usd`, a counter of what those tokens would cost at published prices. Each carries
+`workspace`, `project`, `model` and `status` by name.
+
+Nothing measures how long the task took. `quay-crew#333` is that gap.
+
+**What a person opens.**
+
+- *Where is this now.* `quay sessions` for the status, `quay tasks <session>` for the prompt and
+  whether it is still running. Both exist. The console's `sessions` and `tasks` views show the same
+  thing.
+- *Why did it stop.* `quay tasks <session>` prints `failed:` and the reason. Exists.
+- *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.
+  Exists, with no dashboard on it. The console's `stats` view shows what the crew and a session have
+  cost.
+
+**What limit applies.** None. A single dispatch is bounded by nothing today: no deadline, no token
+ceiling, no concurrency limit. That is the honest state, and it is one of the reasons this design
+exists.
+
+### 8b. One flow
+
+**The flow engine becomes a controller over work. Its reducer does not change.**
+
+This is the one place this document amends `docs/ARCHITECTURE.md`. That document says the blocking
+is done by an executor beside the reducer: it takes the commands the reducer returned, makes the
+synchronous `Dispatch` call, and feeds the result back in, one goroutine per outstanding dispatch.
+The amendment: **the executor writes a piece of work instead of making the call, and the run waits
+on that work the way it already waits on a timer.**
+
+**This disagreement now has a tracked home: `quay-crew#399`, opened 27 August 2026.** Its slice 2 is
+this change, named there as "a non blocking dispatch node. The run records the task and waits for
+`task.finished` as an event, rather than holding the call open. This is the disagreement recorded in
+section 8b of the orchestration design." The blocking line is `internal/flow/engine.go:297`, where
+`e.plane.Dispatch` is called and its reply is read in the same statement. Section 14 covers the rest
+of that issue.
+
+Three things change and one does not.
+
+- `advance.go` does not change at all. It is pure, it returns `[]Command`, and `CommandDispatch`
+  already carries the node, the attempt and the rendered prompt. That is exactly the shape of a work
+  declaration.
+- `engine.go` changes in one function. Where `advance` calls `e.plane.Dispatch` and blocks, it writes
+  a piece of work whose `after` is empty, whose parent is the run, and whose identifier it records on
+  the run. Then it returns.
+- A new run status, `working`, sits beside `waiting` and `asking`. The poller already passes over
+  runs by status, so a run that is `working` is passed over by the timer and moved by the work
+  controller when the work reaches a terminal phase.
+- The idempotency ledger stays. `flow_dispatches` keys on run, node and attempt in the same
+  transaction as the movement, and the work declaration lands in that same transaction.
+
+**What this buys, and it is not tidiness.**
+
+- **A step's answer becomes readable.** Today a step's reply lands in the run's state under
+  `result.reply`, and `quay flow show` truncates it. With work, the answer is a field.
+- **A step can run as a role in its own session.** That is what `quay-crew#354` slices 2 and 5 want,
+  and it needs a per step session rather than the run's one session.
+- **The engine stops holding goroutines.** One goroutine per outstanding dispatch becomes zero, and a
+  restart mid step recovers from rows rather than losing the wait.
+- **An asking run stops holding a container.** `quay-crew#354` names this trap by name: a run that
+  waits or asks holds its container for the whole wait, because `advance.go` closes a session only at
+  the end. With work, the session belongs to the piece of work, and the work ended when it answered.
+  The run then asks its question holding nothing.
+
+**What it costs.** One more row per step, and one controller tick of latency per step. On a task that
+takes minutes, a tick is noise. On a graph of twenty pure choice nodes it is nothing, because
+`settle` already runs a chain of pure nodes inside one movement.
+
+**The scenario.** A graph of four nodes: `fix` dispatches, `ok` chooses on the result, `ask` puts a
+question, `push` dispatches. The operator runs `quay flow start me/house-bills fix-red`.
+
+The records, in order:
+
+1. A row in `flow_runs`, status `running`, pinned to the graph's version, with the trigger payload as
+   its opening state. Its `trace_id` is minted here and it is the root of the whole run's trace.
+2. A movement to node `fix`, one row in `flow_run_events`, one row in `flow_dispatches` keyed on run,
+   `fix`, attempt 1, and one row in `work`: phase `pending`, parent the run, `trace_id` inherited,
+   brief the rendered prompt, `expect_file` if the node declared one. All in one transaction.
+3. The work controller claims it, dispatches, and the model works. The work row carries the session.
+4. The work reaches `done` with its answer. The controller wakes the run.
+5. The run moves to `ok`, which is pure, and then to `ask`, in one movement. Status `asking`, the
+   question on the row.
+6. The operator answers with `quay flow answer <run> yes`.
+7. The run moves to `push`, which declares a second piece of work, and then to `done`.
+
+**A step that fails.** Two shapes, and the crew already tells them apart.
+
+*The model did not finish.* The work reaches `failed` with the reason. The controller writes
+`result.failed` as `true` into the run's state and wakes the run. A graph that branches on
+`result.failed` handles it. A graph that does not, walks its success edge, which is the graph
+author's decision and is visible in the file.
+
+*The work did not do what the graph said proves it worked.* `expect_file` names a path that is not
+in the session. The work reaches `stopped`, and its reason names the path. **The run stops rather
+than branching.** That is the existing rule in `advance.go` and it is right: the crew knows the work
+did not happen and does not know why, and a run that halts is read correctly while a run that
+finishes is believed. `result.expected` carries the reason and the session is left alone, because
+that is where the evidence is.
+
+**A step that waits for an operator answer.** The `ask` node. The run's status is `asking`, nothing
+but an answer moves it, and the poller's own query passes over asking runs on their status. So an
+automation nobody answered can never take silence for a yes. Delivered through `quay flow answer`
+today rather than through a chat channel, which is deliberate: it exercises the gate end to end with
+no bot token.
+
+**If the controller dies halfway.** Section 4 covers every phase. The one worth naming here: the run
+is `working` and the work is `running` with an expired lease. The next controller reads the task row.
+If it is open, it waits. If it landed, it adopts the answer. The run never loses its place, because
+the run's place is a row, and it never dispatches twice, because the ledger row is already claimed.
+
+**Events.** In order, with the four flow kinds that `quay-crew#349` named and did not ship:
+
+1. `flow.run.started`, contract. Fields: run, graph, version, project, `trace_id`.
+2. `work.declared`, contract. Fields: work, parent the run, node `fix`, attempt 1.
+3. `work.claimed`, internal.
+4. `session.created`, contract. Built today.
+5. `work.started` and `session.started`, both contract.
+6. `session.completed`, contract. Built today.
+7. `work.answered`, contract.
+8. `flow.run.asked`, contract. Fields: run, node `ask`, the question.
+9. `flow.run.finished`, contract. Fields: run, node, transitions, spend.
+
+A run that hits a limit writes `flow.run.stopped` with the reason instead, and a run halted by a
+person writes the same kind with the person's reason. A run that was halted and a run that went
+quiet must never read the same, which is the rule `StatusStopped` already carries.
+
+**The trace.** One trace covers the whole run.
+
+- Root span: `flow.run`, opened when the run row is written, closed when the run reaches a terminal
+  status. Attributes: run, graph, version, workspace, project.
+- Child per movement: `flow.transition`, attributes node and event kind. Short, and there is one per
+  row in `flow_run_events`, so the trace and the audit record have the same shape.
+- Child per piece of work: `work`, opened when the work is declared and closed when it reaches a
+  terminal phase. This one can last minutes.
+- Child of that: `work.attempt`, one per attempt. A retry is a new span rather than a longer one,
+  because a single span cannot honestly cover two attempts an hour apart.
+- Child of the attempt: the control plane serving `Dispatch`, which exists today.
+- Missing, and named in `quay-crew#345`: the spans below that, around the task, the sandbox and the
+  model call.
+- An `asking` run's wait is not a span. A span covering a wait for a person would be a span that runs
+  for days and it says nothing. The gap between `flow.run.asked` and the next span is the wait, and
+  the event carries the timestamps.
+
+**Trace context across the session boundary.** Covered in full in 8c, because that is where it is
+hardest. The mechanism is the same here: `trace_id` and `parent_span_id` are columns on the work row.
+
+**Metrics.** The three that exist, plus these, and every one of them is a metric the loop exports
+rather than a metric a dashboard computes:
+
+- `quaycrew.work.pending`, up down counter, unit records. Work waiting to start.
+- `quaycrew.work.running`, up down counter, unit records.
+- `quaycrew.work.first_action`, histogram, unit seconds. From declared to started. This is the number
+  that says whether the crew is keeping up.
+- `quaycrew.work.duration`, histogram, unit seconds. From declared to a terminal phase.
+- `quaycrew.work.failures`, counter, unit records, attribute `reason` from a closed list: `model`,
+  `sandbox`, `unmet`, `budget`, `depth`, `deadline`, `stopped`, `lease`.
+- `quaycrew.work.budget.remaining`, up down counter, unit tokens, attribute `root` naming the tree.
+- `quaycrew.controller.leases.expired`, counter, unit leases. Non zero means a controller died.
+- `quaycrew.flow.runs`, counter, unit runs, attribute `status`.
+
+Spend against the budget reuses `quaycrew.tokens`, which already exists, with a `work` attribute
+added. A second token metric beside it would be two answers to one question.
+
+**No threshold and no alert value is named here.** The first one worth setting is on
+`quaycrew.work.first_action`, and the measurement that would set it is that histogram's ninety fifth
+percentile over the first two weeks of real use. `quay-crew#347` is the ticket for dashboards and a
+cost ceiling alert as code, and it is open.
+
+**What a person opens.**
+
+- *Where is this now.* `quay flow show <run>` prints the node, the status, the reason, the question
+  and the state. It exists. `quay work show <id>` for the step, which does not exist yet. A `flows`
+  view and an `events` view in the console: neither exists, and `internal/console/resources.go`
+  registers ten views without them.
+- *Why did it stop.* `quay flow show <run>` prints the reason on its own line before the state,
+  deliberately, because a run that halted and a run that went quiet look identical without it.
+  Exists.
+- *What did it cost.* `quay flow show` prints the run's spend. Grafana for the trend. Both exist.
+
+**What limit applies.** The graph's `limits.transitions`, defaulting to 100. The graph's
+`limits.tokens` where declared, and no ceiling where not. The workspace's `max_running`, new. The
+work's deadline, new. A schedule shorter than fifteen minutes is refused, which is
+`flow.MinimumEvery`.
+
+### 8c. One orchestrator role that starts others
+
+This is the scenario that does not work today. The worked example: **clear a backlog of nine pull
+requests, one at a time.** Some need a human decision. The whole run must survive the orchestrator
+process being killed.
+
+**How it names what it wants.** It writes nine records. It does not hold a queue, a list or a plan in
+its conversation.
+
+The operator declares one root:
+
+```
+quay work create me/quay-crew \
+  --role backlog-clearer \
+  --title "clear the open pull request backlog" \
+  --budget-tokens <a number the operator sets> \
+  --brief "Read the open pull requests on atlantic-blue/quay-crew. For each one, declare a
+           piece of work that reviews it and either fixes it or asks. Run them one at a time.
+           When they are all finished, read the answers and tell me what is left."
+```
+
+The controller claims it, starts a session called after the work, and hands that session a
+credential granting `work.create`, `work.read` and `work.stop`, because that is what the
+`backlog-clearer` role declares in its `may` list.
+
+The session lists the pull requests with `gh`, which is the github skill already in the image. It
+then makes nine calls, and the ordering is the important part:
+
+```
+quay work create --title "pull request 341" --brief "..." --expect-contains "..."
+quay work create --title "pull request 344" --brief "..." --after <the identifier of the first>
+quay work create --title "pull request 350" --brief "..." --after <the identifier of the second>
+... seven more, each after the one before it
+```
+
+Nine rows. Each carries `parent` from the credential, so each is at depth 1. Each carries the root's
+`trace_id`. Eight carry an `after` naming the one before, so the chain runs one at a time whatever
+the workspace's concurrency limit says.
+
+**Then the orchestrator's session finishes its task and the root work goes to `waiting`.** Not
+`done`. A root with outstanding children waits. Its session is not archived, because the conversation
+is where the orchestrator's own memory lives.
+
+That is the whole mechanism, and it is worth saying flatly: **the ordering is a field on nine rows,
+not a process holding a list.** Kill the orchestrator now and the nine still run in order.
+
+**How it learns the answers.** When every child reaches a terminal phase, the controller dispatches
+a new task into the same session:
+
+```
+The work you asked for has finished. Read each answer with quay work show <id>.
+<the nine identifiers, with their phases>
+Decide what is left and say so.
+```
+
+The session resumes because `FindOrCreateSession` continues a conversation on the same handle, and
+the model's own conversation store lives in the workspace's mounted directory rather than in the
+container. `docs/ARCHITECTURE.md` already states this property for a flow run: the next dispatch
+lands in the same session and the same sandbox, so the model's own state across the run survives a
+restart.
+
+So the intent lives in the rows and the reasoning lives in the conversation, and both outlive the
+process. That is the answer to the failure this document opens with.
+
+**A pull request that needs a human decision.** The child's session cannot merge and should not. Its
+brief tells it to ask. It calls `quay work ask <id> "pull request 344 changes the sandbox image. Merge?"`,
+which moves its own work to `asking` and writes the question on the row. Its session then ends and
+its container goes away, because the question is on the record rather than held open in a
+conversation.
+
+The operator answers with `quay work answer <id> yes`. The controller starts a new attempt in the
+same session with the answer in the brief. Nothing else moves: the chain behind it stays `waiting`,
+because `after` waits for a terminal phase and `asking` is not one. **The orchestrator is not woken
+and is not involved.** A person answered a question about one pull request, and the orchestrator
+learns about it in the summary at the end.
+
+**How depth is bounded.** The root is depth 0 and the nine are depth 1. If a child decides a pull
+request needs a test written by a `test-writer` role, that child is depth 2. The workspace's
+`max_depth` refuses depth 3, and the refusal reaches the model as the error from its own
+`quay work create`, naming the limit. The model then does the work itself or says it cannot.
+
+The value of `max_depth` is the operator's and it is provisional. There is no measurement. The one
+that would set it is the greatest depth over completed root trees after the first month.
+
+**How spend is bounded.** The root declares `budget_tokens`. Each of the nine draws from what is
+left, checked before each dispatch. When the tenth dispatch would cross the line, it is never made:
+that piece of work goes to `stopped` with a reason naming the budget, and so does everything still
+`pending` in the tree. The root then gets its summary task with the truth in it, which is that six of
+nine finished and three were stopped by the budget.
+
+**What stops it starting itself.** The parent is read from the credential and never from the request,
+so every declaration increases the depth. A cycle of any shape terminates at `max_depth`. There is
+nothing else to check.
+
+**What an operator sees while it runs.**
+
+```
+quay work list me/quay-crew
+```
+
+Eleven rows: the root at `waiting`, one child `running`, one `asking`, six `pending`, one `done`, one
+`stopped`. The listing prints the work identifier, the depth, the phase, the title and the age.
+`quay work show <id>` on the asking one prints the question and how to answer it, the way
+`quay flow show` already does for a run.
+
+**The events, in order.** The contract kinds are what another service may depend on.
+
+1. `work.declared` for the root. Contract. Fields: work, workspace, project, parent empty, depth 0,
+   role `backlog-clearer`, role version, title, `trace_id`.
+2. `work.claimed` for the root. Internal.
+3. `session.created`, then `work.started`, then `session.started`. All contract. The first two carry
+   the session and the attempt.
+4. `session.completed`. Contract. The orchestrator's first task landed.
+5. Nine `work.declared`. Contract. Each carries parent the root, depth 1, and the `after` it holds.
+6. `work.claimed`, `work.started`, `session.created`, `session.started` for the first child.
+7. `session.completed` and `work.answered` for the first child. `work.answered` carries the session,
+   the tokens and the duration.
+8. For the child that asks: `work.asked`, contract, carrying the question. Then nothing until a
+   person answers, then `work.started` again with attempt 2.
+9. `work.stopped` for anything the budget caught, contract, with the reason.
+10. `work.answered` for the root, once its summary task lands.
+
+Two events are internal and nothing outside should read them: `work.claimed` and `work.released`.
+
+**The trace, and how the context crosses the session boundary.**
+
+One trace covers the whole run, from the operator's `quay work create` to the last child finishing.
+
+- Root span: `work`, on the root piece of work. Opened when the row is written, closed when the root
+  reaches `done`. It lasts as long as the backlog takes.
+- Child span per attempt: `work.attempt`, one per attempt of the root and one per attempt of each of
+  the nine. The nine hang under the root's span, not under each other, because the `after` chain is
+  ordering rather than causation.
+- Under each attempt: the control plane serving `Dispatch`, which exists today.
+- Under each `work.create` the session makes: the control plane serving `CreateWork`. That span is
+  what ties the child's declaration to the parent's attempt.
+
+**How the context travels, exactly.** This is the hard part and it has three parts.
+
+*Part one, the crew's own side.* `trace_id` and `parent_span_id` are columns on the work row. A
+controller that picks up a piece of work reads both and opens its span under them. It does not
+inherit a context from the process it happens to be in. **That is what makes the trace survive a
+controller restart:** the context is in the declaration, not in memory. This is the same reason a
+wait is a column rather than a timer.
+
+*Part two, into the container.* A child session runs in its own container as its own process. The
+crew sets `QC_TRACEPARENT` on the task, formatted as the standard trace context header,
+`00-<trace id>-<span id>-01`, where the span identifier is the `work.attempt` span. It goes on the
+task rather than on the sandbox, through `sandbox.Spec.Env`, which already exists and is already how
+per task environment reaches a command. It must not go on the sandbox at birth: a sandbox is born
+with its environment and a session is reused across tasks, so a value set at birth would label every
+later task with the first task's span. That is the same trap the refusal message quoted in section 2
+describes.
+
+*Part three, and the honest limit.* The model's own tool does not read `QC_TRACEPARENT` today.
+Nothing inside the container adopts it. So what the crew gets is one span per attempt, written by the
+crew, around work whose inside is opaque. Anything finer needs the hook mechanism in `docs/HOOKS.md`,
+which raises `PreToolUse` and `PostToolUse`, and no hook emits a span today. **This is a real gap and
+this design does not close it.** What it does close is the break between sessions: without the two
+columns, a tree of eleven sessions is eleven unrelated traces.
+
+*When a child is resumed or retried.* The `trace_id` never changes. The attempt number increases and
+a new `work.attempt` span opens, carrying an attribute naming the attempt and a link to the previous
+attempt's span. Not a longer span: a span that covers two attempts an hour apart reports a duration
+that is mostly waiting, and the duration is the number somebody reads. A resumed `asking` piece of
+work is the same shape: attempt 2 opens when the person answers, and the gap between attempt 1 and
+attempt 2 is how long the person took.
+
+**Metrics.** The eight named in 8b, unchanged. The two that matter most in this scenario:
+
+- `quaycrew.work.pending`, because a backlog of nine shows as nine and then falls to zero. A number
+  that stops falling is a chain that is stuck.
+- `quaycrew.controller.leases.expired`, because it is the only signal that says a controller died.
+
+`quaycrew.work.budget.remaining` with the `root` attribute is what says how much of the backlog the
+budget will actually cover.
+
+**What a person opens.**
+
+- *Where is this now.* `quay work list me/quay-crew`, which does not exist yet. Today the nearest is
+  `quay sessions`, which shows eleven sessions with no relation between them, which is exactly the
+  problem.
+- *Why did it stop.* `quay work show <id>` prints the reason. For the tree, `quay work list --parent
+  <root>` shows which child holds the failure. Neither exists yet.
+- *What did it cost.* `quay work show <root>` prints the tree's spend against its budget. Grafana for
+  the trend. The first does not exist; the second does, with no dashboard on it.
+
+**What limit applies.** `max_depth` on the workspace, refusing depth 3. `max_running` on the
+workspace, which the `after` chain makes moot here because it runs one at a time. `budget_tokens` on
+the root. A deadline where the operator sets one. And the lease length, which is not a limit on the
+work but on how long a death goes unnoticed.
+
+#### The failure walkthrough: kill the controller in the middle
+
+Kill the controller while child four is running. Child four's task has been going for six minutes.
+
+**What happens.** The task keeps running. The sandbox belongs to the control plane, not to the
+controller, and the model does not know anybody stopped watching. The work row stays `running` with a
+lease that is now nobody's.
+
+The lease expires. A controller starts, or the same one restarts, and its third query finds child
+four: `running`, lease expired, session set. It reads the `tasks` row for that session. The row is
+open, so the task is still going. It renews the lease and waits. When the row closes, it takes the
+reply from the row and writes `done`. **The work was dispatched once and paid for once.**
+
+**What an investigator sees afterwards.**
+
+*The events.* In `work_events`, filtered by the work identifier:
+
+```
+work.declared    child four, parent root, depth 1, after child three
+work.claimed     lease_owner controller-a, lease_until 14:32:10
+work.started     session <id>, attempt 1
+work.released    previous_owner controller-a, phase_found running
+work.claimed     lease_owner controller-b, lease_until 14:41:55
+work.answered    session <id>, spent_tokens <n>, duration_ms <n>
+```
+
+The `work.released` row is the whole story. It names the controller that stopped and the phase the
+work was in when it was found. There is no second `work.started`, and the absence is the evidence
+that no second dispatch happened.
+
+*The trace.* One trace, because `trace_id` is on the row rather than in the dead process. Under the
+root `work` span sits `work.attempt` for child four, still open when the controller died and closed
+by the controller that adopted it. The `Dispatch` span underneath it runs the whole six minutes,
+because the control plane served that call and the control plane did not die.
+
+**What the trace does not show, and this is worth stating.** There is no span for the controller
+being dead. A gap is not a span. What names it is the `work.released` event and the metric below.
+
+*The metrics.* `quaycrew.controller.leases.expired` goes up by one. That counter is the signal that
+a controller died, and it is the only one: `quaycrew.work.running` did not change, because the work
+never stopped running. `quaycrew.work.duration` for child four records the whole elapsed time
+including the gap, which is right, because that is how long the work actually took from the point of
+view of whoever was waiting for it.
+
+**What an investigator should not have to do.** Read a container's log. The container may be gone,
+and `docs/OBSERVABILITY.md` already says logs on a container's stdout are gone when the container is
+replaced. Every fact above comes from a row or from a trace.
+
+## 9. Diagrams
+
+Three, and each is inline where it belongs rather than gathered at the end.
+
+- **The controller loop**, in section 4.
+- **The resource lifecycle with its status transitions**, in section 3.
+- **The third scenario end to end**, below.
+
+Sections 11 to 14 were added later and each carries its own, which takes the total in this file to
+ten. Every one of the ten was rendered through the mermaid command line tool before this
+document was finished, with `PUPPETEER_EXECUTABLE_PATH` set to the browser the sandbox image already
+carries at `/opt/playwright/chromium_headless_shell-1234/chrome-linux/headless_shell`, and with the
+output written to a file ending in `.svg`. The reproduction step, from this repository's own working
+directory:
+
+```
+PUPPETEER_EXECUTABLE_PATH=/opt/playwright/chromium_headless_shell-1234/chrome-linux/headless_shell \
+  npx -y @mermaid-js/mermaid-cli -i docs/ORCHESTRATION.md -o /tmp/design.svg
+```
+
+That is a reproduction step and not a captured result. It renders every diagram in this file.
+
+### The third scenario, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OP as "operator"
+    participant CP as "control plane"
+    participant CTL as "work controller"
+    participant ORCH as "orchestrator session"
+    participant KID as "child session"
+
+    OP->>CP: quay work create, root, role backlog-clearer
+    CP->>CP: write work row, phase pending, mint trace id
+    Note over CP: event work.declared
+    CTL->>CP: claim the root, dispatch into a new session
+    Note over CTL: events work.claimed, work.started
+    CP->>ORCH: run the task, with a work credential
+    ORCH->>CP: gh: list the open pull requests
+    ORCH->>CP: quay work create, nine times, each after the one before
+    Note over CP: nine events work.declared, each depth 1
+    ORCH-->>CP: the task lands
+    CP->>CP: root goes to waiting, session kept
+    CTL->>CP: claim child one, dispatch
+    CP->>KID: run the task
+    KID-->>CP: the answer lands
+    CTL->>CP: child one done, wake child two
+    Note over CTL: this repeats for children two to nine
+    KID->>CP: quay work ask, on the pull request needing a decision
+    CP->>CP: that child goes to asking, its session ends
+    OP->>CP: quay work answer, yes
+    CTL->>CP: new attempt in the same session
+    CTL->>CP: every child reached a terminal phase
+    CTL->>ORCH: dispatch the summary task into the same session
+    ORCH-->>CP: what is left
+    CP->>CP: root goes to done, its session is archived
+```
+
+## 10. What is deliberately left out
+
+**The largest omission, and it is a decision: this design gives the crew no judgement.** It executes
+declared intent and never generates it. There is no planner, no team chooser and no product manager
+role here. A person or a model still writes every brief.
+
+That is deliberate for two reasons. `quay-crew#354` already owns that decision and decided it on 17
+August 2026: the team is chosen at run time by a product manager role, and writing a second design
+for it would disagree with the first in a few places that somebody else would then have to find. And
+the substrate is worth having on its own: a flow with no roles at all still gets durability, a read
+path and a bound.
+
+The rest, in order of how much each one will be missed.
+
+**Only one join, and it is parent over children.** A piece of work waits for its `after` list and a
+parent waits for its children. There is no join an author writes, no condition on a dependency's
+phase, and no partial join. The flow engine deliberately shipped with no joins at all, on the
+argument that joins are where every workflow engine turns into a product and which join is needed
+will not be knowable until two real automations exist. This adds exactly one, on a relation the store
+already indexes, because scenario 8c cannot be written without it.
+
+**Nothing cancels work already inside a sandbox.** Stopping a piece of work stops the crew taking
+another step. It does not kill a model mid sentence. That is the rule `quay flow stop` already
+follows, and it is inherited rather than decided again here.
+
+**No fairness.** `max_running` is first come first served by declared time. A tree of ninety children
+starves everything else in that workspace until it drains. A workspace is the only fairness boundary,
+which means one project can starve another inside the same workspace.
+
+**A chat channel does not deliver a question.** `quay work answer` is a command, the way
+`quay flow answer` is. A chat delivery follows `quay-crew#10`, which is blocked on a bot token rather
+than on code.
+
+**Nothing consumes `<workspace>.work`.** The export accumulates records nothing reads, which is the
+expected state until a second consumer lands and is exactly what `docs/EVENTS.md` says about the two
+streams that already exist.
+
+**The controller runs in the control plane process at first.** It should be its own workload, and the
+design is written so it can be, but slice 3 puts it where the flow poller already is. Moving it is a
+deployment change and not a logic change, and it needs slices 1 and 5 first.
+
+**No backup.** A crew can still be destroyed by an ordinary Docker command. `quay-crew#266`.
+
+**Nothing inside the container adopts the trace context.** Named in 8c. The crew writes one span per
+attempt and the inside of the attempt is opaque.
+
+## 11. The session lifecycle
+
+The question is when the crew starts putting sessions away. The answer today is that it never does.
+Nothing in the code removes a container on its own. A person removes it, or it stays.
+
+This section designs the states a session moves through, and it names the controller that moves it.
+It sets no threshold. The reason is in the last part of this section.
+
+### What the code holds today
+
+A session row carries one of four statuses. They are written down in
+`internal/controlplane/server.go:43` and the comment above them calls them the whole vocabulary.
+
+- `idle`, no task is running and the last one landed.
+- `running`, a task is under way.
+- `failed`, the last task did not land.
+- `stopped`, the session was put down and its sandbox is gone.
+
+Beside the status sits `archived_at`, a stamp rather than a status. A session is archived or it is
+not, and it also holds one of the four statuses. `ArchiveSession` stops the session first, so an
+archived session is always stopped as well.
+
+A container goes away in five ways, and every one of them needs somebody to ask:
+
+- `StopSession`, one session, by the operator.
+- `ArchiveSession`, one session, by the operator.
+- `DeleteSession` and the workspace and project deletes, through `stopSessions`.
+- `DrainSessions`, every live session at once.
+- `ReapStrays`, at startup only, for containers whose session is gone, archived or stopped.
+
+There is no timer, no idle sweep and no reclaim. A session that answered one question in March still
+holds its container in August, if the crew has not restarted.
+
+### What drain does, and how it differs from archiving
+
+`quay drain` puts every live session down before something else takes the containers away. Read
+`cmd/quay/drain.go` and `internal/controlplane/server.go:1975`.
+
+- It lists every session that is not stopped, and stops each one and closes its sandbox.
+- It refuses while any task is running. The refusal names the sessions that are working.
+- The word `anyway` drains over a working task. The answer then names what it interrupted.
+- It writes no `archived_at` stamp, so every session stays in the default listing.
+- `make upgrade` runs it, then removes any sandbox container left by name.
+
+Archiving is a different action for a different reason.
+
+- It works on one session, not on the crew.
+- It stops the session and closes the sandbox first, for the same reason drain does.
+- It then stamps `archived_at`, which moves the session out of the default listing into the console's
+  `archived` view.
+- `Dispatch` to an archived session is refused, and the refusal says to restore it first.
+
+The one line difference: drain is a shutdown step for the whole crew, and archiving is a filing step
+for one session. Both close the container. Neither deletes a conversation, a file or a row.
+
+### What an archived session already means, checked against the code
+
+Merged pull request 339 is titled "an archived thread runs nothing". The code does most of that and
+one thing more, and the one thing more matters to this design.
+
+What holds:
+
+- `Dispatch` refuses an archived session (`internal/controlplane/server.go:1057`).
+- `recordTask` keeps the archived session's status when a task lands late
+  (`internal/controlplane/server.go:1582`). A session archived mid task does not read as idle again.
+- `ReapStrays` removes the container of an archived session at the next startup
+  (`internal/controlplane/server.go:733`).
+
+What the title does not cover: **attaching to an archived session brings it back, silently.**
+`AttachSession` restores the session, restarts it, and builds a sandbox for it
+(`internal/controlplane/server.go:1798`). The comment above that code says why. The row used to be
+the gate. An archived session then refused every action, including the one action that would fix it.
+
+So archived means two things today. The crew starts nothing in it, and one operator command undoes
+it without asking. The lifecycle below keeps both, and it says which of them the controller may use.
+
+### The states, and what moves a session between them
+
+Six states. Four exist in the code. Two are new, and this document names them.
+
+- `running`, a task is in flight and the container is up. Exists.
+- `idle`, no task is in flight and the container is up. Exists.
+- `reclaimed`, no task is in flight and the crew took the container back. **New.** The row keeps its
+  conversation handle, and the next task builds a fresh container over the same host state.
+- `archived`, filed away by the crew or by the operator. The container is gone and nothing starts it.
+  Exists as a stamp.
+- `stopped`, a person put it down. Exists.
+- `deleted`, the row is gone. Exists.
+
+**Why `reclaimed` is not `stopped`.** This document already holds the rule that a thing which went
+quiet and a thing which was halted must never read the same. `stopped` is an operator's decision, and
+it is what drain writes over the whole crew. `reclaimed` is the crew saving memory on a session
+nobody is using. An operator who sees `stopped` looks for who stopped it. An operator who sees
+`reclaimed` looks for nothing, because the next dispatch fixes it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle: the first dispatch creates the session
+    idle --> running: a task starts
+    running --> idle: the task lands
+    running --> failed: the task did not land
+    failed --> running: the next task starts
+    idle --> reclaimed: the controller took the container back
+    reclaimed --> running: the next task builds a fresh container
+    idle --> archived: every piece of work naming it ended
+    reclaimed --> archived: the same rule, one step later
+    archived --> idle: an operator attaches, which restores it today
+    idle --> stopped: an operator stopped it, or drain did
+    reclaimed --> stopped: the same
+    stopped --> idle: an operator restarted it
+    archived --> [*]: an operator deleted it
+    stopped --> [*]: an operator deleted it
+```
+
+Who owns each move:
+
+- The operator owns `stopped`, `deleted`, and the way back from `archived`.
+- Drain owns the sweep to `stopped`, and it belongs to `make upgrade` rather than to a person.
+- The controller in section 4 owns `reclaimed` and `archived`, and nothing else.
+- The control plane owns `running`, `idle` and `failed`, which it already writes today.
+
+### How the controller in section 4 owns this
+
+The controller reconciles work. A session is not a second resource with its own declaration. **The
+declared state of a session is derived from the work that names it.** So this lifecycle belongs to
+the same loop rather than to a second one.
+
+The rule, in three lines:
+
+- A session named by a piece of work in a non terminal phase is wanted alive. The controller does
+  nothing to it.
+- A session named only by terminal work, whose last task landed longer ago than the workspace's
+  reclaim time, is wanted reclaimed. The controller closes the sandbox and writes `reclaimed`.
+- A session named only by terminal work, and reclaimed for longer than the workspace's archive time,
+  is wanted archived. The controller archives it, which is `ArchiveSession` with no operator.
+
+Each rule is a fourth query per tick, on the same index the other three use. The controller keeps
+nothing in memory, which is the property section 4 depends on.
+
+```mermaid
+flowchart TD
+    TICK(["tick"]) --> READ["read every session whose work is terminal"]
+    READ --> ATTACHED{"is somebody attached<br/>to the conversation?"}
+    ATTACHED -->|"yes, or the crew cannot tell"| LEAVE["leave it alone"]
+    ATTACHED -->|"no"| RECLAIM{"has it been idle longer<br/>than the reclaim time?"}
+    RECLAIM -->|"no"| LEAVE
+    RECLAIM -->|"yes"| CLOSE["close the sandbox<br/>write reclaimed"]
+    CLOSE --> AGE{"reclaimed for longer<br/>than the archive time?"}
+    AGE -->|"no"| LEAVE
+    AGE -->|"yes"| FILE["archive it<br/>write session.archived"]
+    FILE --> LEAVE
+```
+
+**One gap this design does not close, and it is the dangerous one.** The crew cannot tell whether an
+operator is attached. `AttachSession` returns a `tmux` command that the operator runs against the
+container, and the crew records nothing about it afterwards. So a controller that reclaimed on idle
+time alone would close a container an operator is typing into. Until a signal exists, the reclaim
+time is unset and the controller reclaims nothing, which is exactly the behaviour today.
+
+Two signals would work, and neither is built. The crew can ask the container whether the `quay` tmux
+session inside it has a client, through one exec. Or `AttachSession` can stamp the row, and the
+console can refresh the stamp while the pane is open. The first needs no new state and costs one exec
+per candidate session per tick. That cost is unmeasured.
+
+### Can a session resume after its container goes, and what does it cost
+
+Yes, and two mechanisms in the code already do it.
+
+- **The state is on the host, not in the container.** The workspace's conversation store and the
+  project's files are mounts. The comment at `internal/controlplane/server.go:1837` states the
+  property: a fresh container over the same mounts is the same conversation.
+- **The provider adopts a container by name and starts a stopped one.**
+  `internal/sandbox/docker.go:70` adopts, and the adopt function at `internal/sandbox/docker.go:86`
+  starts a container that had stopped. So a reclaim that only stops the container is cheaper still.
+
+A resume does seven things, in this order. It creates the container. It prepares the mounts. It
+writes the context files. It renders the hooks. It checks that every skill's binaries are in the
+image. It runs each skill's setup script once. It sets up commit signing. The setup runs once per
+container, marked by a file under `/tmp` (`internal/controlplane/server.go:410`). Repositories are
+not cloned again. A workspace keeps one clone in its own volume under `/home/agent/shared/repos`.
+
+**No number is given here, because none was measured.**
+
+### The quantities to measure, and the commands that would measure them
+
+Three numbers decide the reclaim time and the archive time. Each is marked provisional until the run
+exists. None of the commands below was run for this document.
+
+**One, the idle gap.** The time between one task landing in a session and the next task starting in
+the same session. The distribution of that gap is what a reclaim time has to sit above. The `tasks`
+table holds `occurred_at` per task and an index on session and time, so one query answers it:
+
+```
+docker exec -i quaycrew-postgres-1 psql -U quaycrew -d quaycrew -c \
+  "select session, occurred_at - lag(occurred_at) over (partition by session order by occurred_at) as gap from tasks order by session, occurred_at"
+```
+
+Read the ninety fifth percentile of that gap. Set the reclaim time above it. A reclaim time below it
+throws away containers that were about to be used.
+
+**Two, what a resume costs.** Remove one session's container by name, then time one task against it,
+then time a second task against the warm container. The difference is the resume.
+
+```
+docker rm -f quaycrew-<session id>
+time quay ask <session id> "reply with ok"
+time quay ask <session id> "reply with ok"
+```
+
+`quay ask` waits for the answer and prints it, so both numbers include one model call. The
+subtraction removes it.
+
+**Three, what a reclaim buys.** The memory an idle container holds.
+
+```
+docker stats --no-stream --format "{{.Name}} {{.MemUsage}}"
+```
+
+That number times the count of idle sessions is the whole benefit. If it is small, the reclaim time
+should be long, and the honest answer may be that reclaiming is not worth building yet.
+
+**Until those three runs exist, the crew ships with the reclaim time and the archive time unset, and
+an unset time means the controller does nothing.** That is today's behaviour, so the first version of
+this loop changes nothing until an operator sets a number. It refuses a number it was never given
+rather than choosing one.
+
+## 12. The panel is the orchestrator's seat
+
+The panel is where an operator sits. This section says what the two halves should hold once work
+exists, and why the right half cannot be an ordinary session.
+
+### What the panel is today, checked against the code
+
+Two corrections first, because the design brief for this section described it differently.
+
+**There is no `quay panel` command.** `cmd/quay/quay.go:159` refuses the word and says that `quay` on
+its own opens the crew, and that `p` shows or hides the conversation beside the console. The layout
+itself lives in `internal/panel/panel.go`.
+
+**The right half already opens the driver, not an ordinary worker session.**
+`cmd/quay/panel.go:116` calls `OpenDriver` for the project the operator is standing in. The comment
+beside it says why. Opening the crew should not drop the operator into somebody else's work. Naming a
+session on the command line opens that one instead.
+
+What `internal/panel/panel.go` builds, from `Layout.Commands` at line 62:
+
+- A header pane across the full width, running `quay header`, resized to exactly its own line count.
+- The console below it on the left, running `quay console`.
+- A conversation on the right, at fifty per cent width, running `quay attach <session>`.
+- A hook on client resize and on client attach, which puts the header back to its rows.
+- The keyboard starts in the conversation pane.
+
+```mermaid
+flowchart TD
+    subgraph WINDOW["one tmux window, session quay-panel"]
+        HEADER["pane 0: quay header, full width, fixed rows"]
+        LEFT["pane 1: quay console"]
+        RIGHT["pane 2: quay attach, the driver"]
+    end
+    HEADER --- LEFT
+    LEFT --- RIGHT
+```
+
+### Why a driver session cannot be an ordinary session
+
+Three properties follow the `driver` flag on the session row, and all three are decided when the
+container is created.
+
+- **The address and the token.** `internal/controlplane/server.go:1621` reads
+  `if session.GetDriver() && s.reachable != ""`, and only then writes `QC_GRPC_ADDR` into the
+  environment. The token follows inside the same block, at line 1626. The comment states the rule:
+  the token travels with the address and only with it.
+- **The network.** `internal/sandbox/docker.go:186` reads `if cfg.Driver && d.Network != ""`, and
+  only then passes `--network`. An ordinary session's container is not on a network that reaches the
+  control plane. It could not use the address even if it held one.
+- **The extra host paths.** `internal/sandbox/docker.go:189` adds the driver mounts, and an ordinary
+  session gets none of them.
+
+The flag reaches the container at `internal/controlplane/server.go:345`, where `cfg.Driver` is set,
+one line after `cfg.Env` is filled from `taskEnv`.
+
+### What a sandbox keeps, and what that forces
+
+A sandbox is born with its configuration. `internal/sandbox/docker.go:70` adopts a container that
+already carries the session's name, and returns it untouched. The comment at line 58 says what an
+adopted container carries. It carries what it was created with.
+
+Three things follow, and they decide the design rather than decorating it.
+
+- **There is no promotion.** Setting `driver` on a row that already has a running container gives it
+  nothing. The driver has to be born a driver, which is what `OpenDriver` and `FindOrCreateDriver`
+  already do.
+- **A capability granted after birth needs a new container, or it needs a per task path.** The per
+  task path exists. `taskEnv` is read twice: once into `cfg.Env` at sandbox creation, and once into
+  `model.Request.Env`, which `internal/model/claudecode.go:98` puts on `sandbox.Spec.Env` for that
+  one command. **So the work credential in section 5 travels per task, and it must not be written at
+  sandbox birth.** A value written at birth would label every later task with the first task's
+  grant. That is the same trap section 8c names for the trace context.
+- **An upgraded crew adopts containers born under the old build.** That is section 13's problem, and
+  it is the reason it is a separate section.
+
+### What the driver may do, and what it may not
+
+`internal/controlplane/deny.go` holds the policy. `cmd/controlplane/main.go:198` installs it over the
+driver's token only.
+
+Ten calls are refused outright, at `internal/controlplane/deny.go:33` to line 42: `SetSecret`,
+`ListSecrets`, `ImportSkill`, `AttachSkill`, `DetachSkill`, `ImportRole`, `AttachRole`, `DetachRole`,
+`SetSessionPermissionMode` and `ImportFlow`. An eleventh case is conditional: `SetContext` is refused
+only when the scope is `crew` (line 44). So the count depends on how a conditional refusal is
+counted. Ten methods can never be called. One more can be called at two of its four scopes.
+
+`Dispatch` and `StartFlow` are not in the list, and the comment at line 20 says why. Starting a run
+of a flow the operator already imported reaches nothing that dispatching directly would not reach.
+
+So the driver may do these things:
+
+- create a workspace, a project or a session;
+- dispatch a task;
+- start, stop and answer a flow;
+- set context at the workspace, project and session scopes;
+- read what the crew already holds.
+
+The driver may not do these things:
+
+- set or read a secret;
+- import, attach or detach a skill or a role;
+- set a session's permission mode;
+- import a flow;
+- write the crew's own context.
+
+**One gap worth naming, because it is the same argument as a skill.** `ImportHook` and `AttachHook`
+are not in the deny list. A hook is a command that runs on the session's own tool use. So a session
+that can attach one changes what every session in that workspace may do. The four hook calls are
+declared at `proto/quaycrew/v1/controlplane.proto:896`. Adding them to the deny list is a four line
+change. It belongs with the capability slice.
+
+**What this section adds.** The driver keeps every verb above. It gains the four work verbs from
+section 5, the same way any other session does, through a role with a `may` list. The driver then
+stops being a special case in the code. It becomes an ordinary session with a wide role.
+
+### What the left half should show once work exists
+
+Today the console drills workspaces into projects, and projects into sessions. `DrillTo` on each
+resource in `internal/console/resources.go` decides that. Ten views are registered, and neither work
+nor flows is among them.
+
+A flat session list is the wrong shape once one operator command produces eleven sessions. Section 8c
+says so plainly: eleven sessions with no relation between them is the problem.
+
+So the left half shows the work tree.
+
+- The top level is work with no parent, one row each, with the phase, the title and the age.
+- Drilling into a piece of work shows its children, which is the same drill the console already does.
+- The session is a column on the work row, not a level of its own.
+- The transcript moves one level deeper. An operator selects a piece of work and opens the
+  conversation that ran it, which is `quay attach` on the session named by the row.
+
+```mermaid
+flowchart LR
+    subgraph NOW["today"]
+        W1["workspaces"] --> P1["projects"] --> S1["sessions"] --> T1["tasks"]
+    end
+    subgraph NEXT["once work exists"]
+        W2["workspaces"] --> P2["projects"] --> K2["work, by tree"]
+        K2 --> K3["child work"]
+        K2 --> S2["the session that ran it"]
+        S2 --> T2["the transcript"]
+    end
+```
+
+The right half does not change shape. It stays one conversation, and it stays the driver's. What
+changes is that the driver now declares work rather than dispatching tasks, so the left half shows
+what the right half asked for.
+
+## 13. Surviving an upgrade
+
+`quay-crew#397` records the cost. Taking a fix costs every running session, and nothing tells an
+operator that the stack is behind. On 27 August 2026 three symptoms were investigated as live
+defects. All three were already fixed, and the crew was running a build from five days earlier.
+
+### What drain already gives, and why it is not enough
+
+Drain makes the loss orderly. Section 11 describes what it does. The value is real. A container
+removed by name takes its task with it and says nothing useful. A drained session says stopped, and
+that is true.
+
+It is not enough for three reasons, and none of them is a defect in drain.
+
+- **It is a loss, made tidy.** Every session's container goes. Each one comes back on the next
+  attach or the next dispatch, and each pays the resume cost in section 11.
+- **The word `anyway` still loses the task.** The answer names what it interrupted. Naming a loss is
+  better than hiding one, and it is not the same as keeping the work.
+- **A task runs inside the control plane process.** `SettleTasks` runs once at startup and marks
+  every session the store still calls running as failed
+  (`internal/controlplane/server.go:762`). The reason it writes is "the crew restarted while this
+  task was running, so it did not finish". So even without drain, a restart ends every task in
+  flight as far as the crew's records are concerned.
+
+### Where the work state must live
+
+In Postgres, on the `work` row. The container is disposable and the process is disposable. That is
+the same rule the rest of this document holds, and an upgrade is the case that proves it.
+
+What survives an upgrade today, without any new code:
+
+- The session row, its conversation handle, and its history.
+- The conversation itself and the project's files, because they are host mounts rather than container
+  layers.
+- A container that was not removed, because the provider adopts one by name and starts a stopped one.
+
+What does not survive:
+
+- The task in flight, because the goroutine running it is in the control plane process.
+- The answer, because the reply is read from a stream the control plane holds.
+
+**One thing here is not proved, and it must not be asserted.** The model runs through
+`docker exec` started by the control plane. When the control plane dies, the client that reads the
+stream dies. Whether the process inside the container also stops is a property of the daemon and it
+was not tested for this document. The measurement is one run: start a long task, kill the control
+plane container, then run `docker exec quaycrew-<session id> ps -ef` and look for the model process.
+Until that run exists, the design assumes the answer is lost either way. That is the safe assumption,
+because the crew cannot read a stream it no longer holds.
+
+### What an in flight piece of work does across a restart
+
+Section 4 already covers a controller that dies while the control plane lives. This is the other
+death, and it costs more.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OP as "operator"
+    participant CP as "control plane"
+    participant DB as "Postgres"
+    participant SBX as "the session container"
+
+    OP->>CP: make upgrade
+    CP->>DB: work is running, lease held, session set
+    CP->>SBX: the task is under way
+    Note over CP: the process stops
+    CP--xSBX: the stream is lost
+    Note over CP,DB: a new control plane starts
+    CP->>DB: SettleTasks marks the open task failed
+    CP->>DB: the work row still says running, lease expiring
+    Note over DB: the declaration outlived the process
+    CP->>DB: the controller reads the task row and sees failed
+    CP->>SBX: attempt 2, in the same session
+    SBX-->>CP: the answer lands
+    CP->>DB: work is done, answer written
+```
+
+The lease from slice 4 of the delivery order is what makes that safe, and it does two jobs here.
+
+- **It bounds how long the work sits still.** The new control plane does not know which controller
+  held the row. It waits for the lease to expire, and then any controller may claim it.
+- **It stops two controllers starting attempt 2 at once.** The claim is conditional in one statement,
+  so one wins.
+
+The cost of this death is one attempt's tokens. That is worse than the controller death in section 4,
+where the answer was adopted from the task row and nothing was paid twice. The difference is worth
+stating plainly: **when the controller dies, the work is recovered; when the control plane dies, the
+work is retried.** Closing that gap needs the task to run where a control plane restart cannot reach
+it. That is a change to where the model runs, and this design does not make it.
+
+### A version drift warning
+
+**Today the client cannot learn the crew's version at all.** This was checked against the code.
+
+- `quay version` prints the tool's own stamped build and nothing else
+  (`cmd/quay/quay.go:134`, `cmd/quay/main.go:23`).
+- `GetInfoResponse` carries seven fields and none of them is a version
+  (`proto/quaycrew/v1/controlplane.proto:773`). It reports the model, the sandbox kind, the store,
+  the state, the events log, the secrets backend and the sandbox image build.
+- `sandbox_build` is the build the sandbox **image** was made from, read from an image label at
+  startup (`internal/sandbox/docker.go:232`). The console compares it against the tool's own build
+  and says the image is older (`internal/console/view.go:210`). That is a real drift warning, and it
+  is about the image rather than about the control plane.
+- The only signal about the control plane itself is coarse. `internal/console/model.go:583` turns an
+  `Unimplemented` answer from `GetInfo` into "this control plane is older than the tool". That fires
+  only when the crew is old enough to lack the call entirely.
+
+So a crew nineteen commits behind reports nothing, which is exactly the case `quay-crew#397`
+describes.
+
+The fix is small and it is one field.
+
+- Stamp the control plane binary with its build at compile time, the way `make install` already
+  stamps the tool.
+- Add `version` to `GetInfoResponse`, beside `sandbox_build`.
+- `quay version` prints three lines: this tool, the crew, and the sandbox image. Where any two
+  differ, it says so in one sentence and names `make upgrade`.
+- The header pane shows the same difference, because that is the surface an operator is already
+  looking at.
+
+**What this does not give.** A commit count. The tool holds no repository, so it cannot count the
+commits between two builds. It prints both builds and says they differ. Counting them is one `git`
+command the operator runs, and the sentence names it.
+
+**Test the way off, as `quay-crew#397` asks.** Two scenarios, and both belong in the same change.
+
+- A client whose build differs from the crew's reports the difference, and the report names both
+  builds.
+- A client against a crew with no `version` field at all says the crew is too old to say, rather than
+  showing a blank column.
+
+### Upgrading without taking the work away
+
+The full answer is that a session's state belongs in the store rather than in the process, and most
+of it already does. Three steps in order, and each is worth having on its own.
+
+- **Say how far behind the stack is.** The field above. It removes the whole cost recorded in the
+  issue, which was hours spent reproducing fixed defects.
+- **Keep the work declaration outside the process.** The `work` row and the lease. An upgrade then
+  costs one attempt rather than the intent.
+- **Stop removing the containers.** `make upgrade` removes every sandbox by name after draining. The
+  provider already adopts a container by name, so a new control plane can pick the containers up
+  instead. This step carries a constraint, and `quay-crew#397` names it. A sandbox keeps the
+  configuration it was made with. So an adopted container runs the `quay` from the older image, and
+  it holds the environment it was born with. An adopted container is therefore safe for a
+  conversation and unsafe for a new capability. The crew must say which build a container was born
+  from, rather than assume. The session listing already has a column for how stale a session is.
+
+## 14. Work and flow runs, after the trigger node
+
+`quay-crew#399` was opened on 27 August 2026. It says the engine has no trigger node. So a run starts
+only on a schedule, on a manual start, or when a wait comes due. Its four event kinds are `started`,
+`task.finished`, `due` and `answered`. Every one of them is internal, and none of them says that the
+world changed.
+
+It also names the blocking dispatch, and this document confirms the line.
+`internal/flow/engine.go:297` calls `e.plane.Dispatch` and reads `resp.GetReply()` from the same
+call, so a run holds its own dispatch open and can react to nothing while it waits. Section 8b of
+this document already disagreed with that behaviour, and the issue is now the tracked home for the
+disagreement.
+
+The issue keeps the rule this document keeps. Postgres stays the source of truth. The event log is
+the way in from outside, and never the state.
+
+### Is a flow run a piece of work, or does a piece of work start a flow run
+
+**A flow run is carried by a piece of work.** Starting a run declares one piece of work, and the run
+row hangs under it. There is one tree, and the tree is the work tree.
+
+The composition, in three lines:
+
+- Starting a run writes a piece of work whose brief names the flow and its version. That work is a
+  node in the tree, at the depth its caller sits at.
+- The run row keeps its own state, its node, its transitions and its pinned version. Nothing about
+  the reducer changes.
+- Every step the run dispatches is a piece of work whose parent is the run's own work, which is what
+  section 8b already designed.
+
+```mermaid
+flowchart TD
+    R["work: run the release flow, depth 1"] --> RUN["flow_runs row, pinned to version 3"]
+    RUN --> S1["work: step build, depth 2"]
+    RUN --> S2["work: step test, depth 2"]
+    RUN --> S3["work: step publish, depth 2"]
+    S2 --> N1["work: a child the step declared, depth 3"]
+```
+
+**Why this way round, and not the other.** Two hierarchies would need two of everything, and the two
+would disagree.
+
+- **Depth.** The document bounds recursion with one counter derived from the credential. A run
+  outside the work tree would need its own counter. A cycle crossing from one hierarchy to the other
+  would then be counted by neither.
+- **Budget.** A tree budget only holds when every descendant draws from its parent. A run outside the
+  tree spends without drawing from anything.
+- **Stopping.** `quay work stop` on a parent must stop what is under it. With one tree, stopping the
+  run's work stops the run. With two, stopping a piece of work leaves a run going and nobody notices
+  until the bill arrives.
+- **Reading.** The console shows one tree, as section 12 describes. A second hierarchy would need a
+  second view and a rule about which one an operator opens first.
+
+The decision costs one extra row for every run, and one more level of depth for every step inside a
+flow. A flow started by a session at depth 1 puts its steps at depth 3. So a workspace whose
+`max_depth` is 2 cannot run a flow from inside a session. That is a real constraint, and it is stated
+rather than hidden. The alternative, letting a run's steps take the run's own depth, was rejected
+because it makes a flow a way to gain a level.
+
+### Trigger rows and work events: one mechanism, two tables
+
+They are **two tables and one mechanism.** The shapes look the same on purpose, and merging them
+would break both.
+
+The mechanism, which the crew already uses three times, for waits, for dispatch idempotency and for
+work events:
+
+- Write the row in the same transaction as the thing that happened, so there is no gap for a crash
+  to hide in.
+- Poll an indexed query rather than hold a timer.
+- Where the row must be acted on once, claim it with a conditional write in one statement.
+
+Why the tables stay apart:
+
+- **An audit record is never claimed.** `work_events` is the history. Marking a row consumed rewrites
+  that history. A later reader would then see a record that says something different from what it
+  said when it was written.
+- **A trigger must be claimed exactly once.** A pending trigger row is a queue entry. It is claimed,
+  acted on and finished, and the claim is what stops two pollers starting two runs from one event.
+- **They are read by different queries.** A trigger poll reads the few rows that are pending. An audit
+  read is by work identifier and by time. One table would make the trigger poll scan the history
+  forever.
+
+So `pending_triggers` is its own table, with the shape `quay-crew#399` gives it, and `work_events`
+stays the audit record described in section 8.
+
+**Where an outside event comes in.** The log is the way in and never the state. A consumer reads the
+broker and writes a `pending_triggers` row. A broker outage delays a trigger and never loses a run,
+because the run only ever starts from the row. That ingress is also the first real consumer the
+export has ever had, which answers the correction in section 8. Today nothing reads
+`<workspace>.tasks` or `<workspace>.sessions`. The trigger ingress is a better reason to run a broker
+than the audit export is.
+
+### A piece of work finishing is an event. Can it trigger a flow
+
+Yes, and it should. It is the case the crew needs most: a review finishes, so a fix starts.
+
+The path, and every part of it already exists or is designed above:
+
+```mermaid
+flowchart TD
+    DONE["a piece of work reaches a terminal phase"] --> TX["one transaction:<br/>write the phase, the work event,<br/>and a pending trigger row per matching flow"]
+    TX --> POLL["the poller reads pending triggers"]
+    POLL --> CLAIM{"claim the trigger row"}
+    CLAIM -->|"another poller won"| DROP["do nothing"]
+    CLAIM -->|"claimed"| NEW["declare the run's own work,<br/>parent is the work that finished"]
+    NEW --> DEPTH{"is the new depth<br/>within the workspace limit?"}
+    DEPTH -->|"no"| REFUSE["stop, reason names the limit"]
+    DEPTH -->|"yes"| RUN["start the flow run under that work"]
+```
+
+**What stops this becoming an unbounded loop.** Four bounds, and the first is the one that actually
+holds.
+
+- **Depth, which the document already has.** The run's work is a child of the work that finished. A
+  flow whose own step finishes and triggers the same flow again gains one level of depth every cycle,
+  so the workspace's `max_depth` ends it. The refusal names the limit, and the record shows the whole
+  chain, because every link is a parent pointer.
+- **The tree budget.** Every cycle draws from the same root's remaining tokens. A loop that is under
+  the depth limit still stops when the budget is spent.
+- **The transitions cap inside a run.** `flow.DefaultTransitions` is 100 movements, checked before
+  each movement.
+- **Only an operator imports a flow.** `ImportFlow` is refused to a session's own token
+  (`internal/controlplane/deny.go:42`), so a session cannot write itself a trigger rule. The loop
+  above needs a flow file that a person reviewed.
+
+**One rule to add, and it is cheap.** A trigger row carries the work identifier that caused it. A
+flow may then declare that it does not trigger on work in its own tree. That turns the depth bound
+from a backstop into a refusal at the right moment. It is optional, because the depth limit already
+makes the design safe.
+
+### What stays exactly as it is
+
+Postgres is the state. The event log is the export. A run pins its version. A wait is a column, an
+ask moves on an answer and on nothing else, and a dispatch is idempotent per step and attempt. This
+section adds one table and one node type, and it changes none of those.
+
+## 15. Delivery order
+
+Ten slices, smallest useful thing first. Each one names which of the three blockers it removes.
+Blocker three is already fixed at `e53befc`, so nothing below is spent on it.
+
+This list replaces the seven slices this document first carried. Three are new: slice 2 comes from
+`quay-crew#397`, slice 7 comes from section 11, and slice 9 comes from `quay-crew#399`. The old
+numbers map across as 1, 3, 4, 5, 6, 8 and 10.
+
+**1. Print one answer whole.** `quay answer <session>` writes the most recent landed task's reply to
+standard output with nothing else on it. `--all` writes the history. No new table, no new call, no
+controller.
+
+*Removes blocker two, entirely, on its own.* It is one command and about thirty lines, and after it a
+caller outside quay can already read an answer as data. Ship it first for that reason. `quay ask`
+already prints the reply of a task it waited for. This closes the other half, which is reading back
+an answer the caller did not wait for. That is now the default for `quay dispatch`.
+
+**2. The crew says which build it is.** A `version` field on `GetInfoResponse`, stamped into the
+control plane binary at build time. `quay version` prints the tool, the crew and the sandbox image,
+and says when any two differ.
+
+*Removes no blocker, and removes the largest recorded waste.* `quay-crew#397` counts hours spent
+reproducing defects that were already fixed. It is a field and a sentence, and it is independent of
+everything else in this list.
+
+**3. The work record, the read path and a controller that runs a root.** The `work` table, the
+`work_events` table, `CreateWork`, `GetWork`, `ListWork`, `StopWork`, `quay work create|list|show|stop`,
+and a controller loop that runs work with no parent, no role and no `after`. Every validation rule in
+section 3 and its refusal.
+
+*Removes nothing of the three blockers, and is the slice everything else needs.* What it buys on its
+own: intent survives the caller. Declare a piece of work, close the terminal, read the answer
+tomorrow.
+
+**4. The lease and recovery.** `lease_owner`, `lease_until`, the conditional claim, and the recovery
+that reads the task row. `work.claimed` and `work.released`.
+
+*Removes the failure this document opens with.* Kill the controller and the work carries on. This is
+the slice that makes the difference between a loop and a script. Section 13 depends on it for the
+other death, where the control plane goes and the work is retried rather than recovered.
+
+**5. Capability: the credential, the verbs and the workspace limits.** The `may` list on a role, the
+per work token carried on the task rather than at sandbox birth, `parent` from the credential, the
+`workspace_limits` row with `max_depth` defaulting to zero, `max_running`, `budget_tokens` and the
+lease length. `quay limits` to read and set them. The four hook calls join the deny list here, for
+the reason section 12 gives.
+
+*Removes blocker one.* A session can now declare work, bounded by depth, by budget and by
+concurrency, and it holds strictly less than the driver's token holds today.
+
+**6. Events and trace context.** The `work.*` kinds on `<workspace>.work`. `trace_id` and
+`parent_span_id` as columns. `QC_TRACEPARENT` on the task rather than on the sandbox. The spans named
+in 8b. A `trace_id` column on `tasks`, which closes `quay-crew#346`.
+
+*Removes nothing, and without it none of the above can be audited.* A state change that emits nothing
+is a state change nobody can replay.
+
+**7. The session lifecycle.** The `reclaimed` state, the fourth controller query, the reclaim time and
+the archive time on the workspace, and an attached signal so a container an operator is typing into is
+never taken. Both times ship unset, and unset means the controller does nothing.
+
+*Removes nothing, and it is the slice that keeps a crew running for a month.* It cannot ship its
+numbers until the three measurements in section 11 exist. It is written so that shipping it with no
+numbers changes no behaviour at all.
+
+**8. The flow engine declares work.** `advance.go` unchanged. `engine.go` writes a piece of work
+instead of blocking at line 297. The `working` run status. `flow.run.*` events, which `quay-crew#349`
+named and never shipped. A run is carried by a piece of work, as section 14 decides.
+
+*Removes the container an asking run holds, and gives every flow step a readable answer.* This is
+slice 2 of `quay-crew#399`.
+
+**9. The trigger node.** A `trigger` node type, a `pending_triggers` table, and an in process source:
+a piece of work reaching a terminal phase writes a trigger row in the same transaction. Then an
+ingress that writes a trigger row from an outside event, which is the first real consumer the event
+log has ever had.
+
+*Removes nothing of the three blockers, and it is the difference between an automation you set off
+and an automation that reacts.* This is slices 1 and 3 of `quay-crew#399`. Neither needs a broker.
+
+**10. Roles on work.** A piece of work names a role, the session runs as it, and `receives` is
+enforced at dispatch. This is `quay-crew#354` slices 2, 3 and 5, and it is the reason the substrate
+was built.
+
+Slices 1, 2, 3 and 4 are worth having on their own. Slices 1 and 2 are worth having tomorrow.
+
+### What proves each one
+
+Scenarios in `features/`, because that is what says a behaviour exists in this repository. One
+feature file, `features/work.feature`, growing with each slice, driving the control plane over its
+real interface. Every scenario checked by breaking the implementation on purpose and confirmed to go
+red, because a scenario that passes against a broken system is worse than no scenario.
+
+The five that are worth writing before the code:
+
+- Given a piece of work whose controller is killed after the task starts, when a controller runs
+  again, then the answer is adopted and the work is dispatched once.
+- Given a session whose role does not grant `work.create`, when it declares work, then the refusal
+  names the verb and no row is written.
+- Given a workspace whose `max_depth` is 1, when work at depth 1 declares more, then the refusal
+  names the limit and the command that raises it.
+- Given a piece of work running when the control plane restarts, when it comes back up, then the work
+  is still declared, the task is marked failed, and attempt 2 runs in the same session.
+- Given a client whose build differs from the crew's, when any command runs, then the difference is
+  reported and both builds are named.
