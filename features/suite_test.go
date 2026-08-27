@@ -544,6 +544,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
+	initializeScreenSteps(sc)
 	initializeRenderSteps(sc)
 	initializeRoomSteps(sc)
 	initializeStatusLineSteps(sc)

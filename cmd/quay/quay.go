@@ -139,7 +139,7 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	case "dispatch":
 		return runDispatch(ctx, client, args[1:], out)
 	case "attach":
-		return runAttach(ctx, client, args[1:], out)
+		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":
 		return runWeb(ctx, client, args[1:], out)
 	case "render":

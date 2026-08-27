@@ -78,7 +78,12 @@ func openConversationCmd(here string, right []string) tea.Cmd {
 				return conversationMsg{pane: pane}
 			}
 		}
-		return conversationMsg{err: fmt.Errorf("the conversation opened and tmux does not say where")}
+		// It did not open. The pane was made and its command was gone before this could list the
+		// panes, which is what a conversation that could not be opened looks like from out here: the
+		// reason was printed into a pane that no longer exists. Say that, rather than reporting an
+		// open conversation nobody can find.
+		return conversationMsg{err: fmt.Errorf("the conversation closed as soon as it opened, so the " +
+			"reason went with it. Run quay attach on this session in a terminal to read it")}
 	}
 }
 
