@@ -21,7 +21,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
 	registry, err := NewRegistry(Sessions(client), Tasks(client), Archived(client), Projects(client),
-		Workspaces(client), Contexts(client), Secrets(client), Features(), Stats(client))
+		Workspaces(client), Contexts(client), Secrets(client), Features(), Stats(client), Room(client))
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +30,19 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 		return nil, err
 	}
 	return registry, nil
+}
+
+// RoomFrom asks the crew what the machine has left: one figure and one word.
+//
+// The crew answers from its own last sample rather than from the daemon, so this may be asked every
+// second. A crew too old to answer, or one that could not read its machine, leaves both empty and
+// the header says nothing rather than claiming room nobody measured.
+func RoomFrom(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) (line, state string) {
+	answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
+	if err != nil {
+		return "", ""
+	}
+	return answer.GetUsed() + " of " + answer.GetLimit(), answer.GetState()
 }
 
 // InfoFrom asks the control plane what it is running and folds the answer into what the caller
@@ -56,6 +69,9 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 				CacheWritten: spent.GetTotal().GetCacheWritten(),
 			}
 		}
+		// What the machine has left, from the crew's own last sample. Swallowed the same way and for
+		// the same reason: a crew that cannot say still has a header worth drawing.
+		known.Room, known.RoomState = RoomFrom(ctx, client)
 		return known, nil
 	}
 }

@@ -19,6 +19,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/headroom"
 	"github.com/atlantic-blue/quay-crew/internal/logging"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -149,12 +150,16 @@ func main() {
 	server := controlplane.NewServer(controlplane.Config{
 		// How often a session describes itself, from the crew's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
-		Store:         durable,
-		Runner:        runner,
-		Provider:      provider,
-		Secrets:       credentials,
-		Storage:       storage,
-		Events:        events,
+		// What reads the machine. Only where a daemon is what makes the sandboxes: a crew running
+		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
+		// to a command that is not there.
+		Headroom: headroomSource(sandboxKind, logger),
+		Store:    durable,
+		Runner:   runner,
+		Provider: provider,
+		Secrets:  credentials,
+		Storage:  storage,
+		Events:   events,
 		// What a session's tasks may do when it is born, from the crew's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
@@ -189,6 +194,11 @@ func main() {
 	// Waits that came due while the crew was down are resumed on the way up, and every one after
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
+
+	// And the machine itself, on its own timer. The header reads the last sample rather than the
+	// daemon, because reading the daemon takes as long as the daemon takes and the header redraws
+	// every second.
+	go server.RunHeadroom(ctx)
 
 	// What strayed while the crew was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
@@ -245,6 +255,18 @@ func main() {
 	if err := shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// headroomSource is what reads the machine the crew runs on, and nil where there is nothing to read
+// it with. Nil is a crew that reports unknown headroom, which is the honest answer for a crew whose
+// sessions do not run on a daemon at all.
+func headroomSource(sandboxKind string, logger *slog.Logger) headroom.Source {
+	if sandboxKind != sandbox.KindDocker {
+		logger.Info("sessions do not run on a docker daemon, so the crew reports no headroom",
+			"sandbox", sandboxKind)
+		return nil
+	}
+	return headroom.Daemon{}
 }
 
 // openEventLog returns the log tasks are exported to. With QC_KAFKA_SEEDS set it is Kafka, spoken

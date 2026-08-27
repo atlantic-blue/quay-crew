@@ -806,6 +806,67 @@ message GetInfoResponse {
   string version = 8;
 }
 
+// GetHeadroomRequest asks how much room the machine has left for another session.
+message GetHeadroomRequest {}
+// GetHeadroomResponse is the crew's last reading of the machine it runs on.
+//
+// Every byte count is a string rather than a number, and the string is either a figure or the word
+// "unknown". The crew knew nothing about its machine while the kernel killed eighteen sandboxes, and
+// the fix for that must never be a zero standing in for a reading nobody took. A caller that wants
+// to compare numbers reads the bytes fields beside them, which carry -1 for unmeasured.
+message GetHeadroomResponse {
+  // used is what every container on the daemon holds, added up. Every container rather than the
+  // crew's own, because the cap binds all of them.
+  string used = 1;
+  // limit is the memory the daemon may hold, which is the limit that binds. On a Mac it is the
+  // Docker virtual machine's cap and never the Mac's own memory.
+  string limit = 2;
+  // free is limit less used.
+  string free = 3;
+  // state is one word about the two above: "room", "tight", "full", or "unknown". Full has to be
+  // readable without reading the number beside it.
+  string state = 4;
+  // machine_name is what the daemon calls the machine it runs on, for example "Docker Desktop".
+  // Empty means the daemon did not say.
+  string machine_name = 5;
+  // machine_total, machine_available, swap_total and swap_used are the pressure on that machine,
+  // which is a different question from what the daemon may hold. The kill on 27 August 2026 came
+  // from a machine at 94 per cent of its swap while the daemon held less than half its cap.
+  string machine_total = 6;
+  string machine_available = 7;
+  string swap_total = 8;
+  string swap_used = 9;
+  // sandboxes is one entry per session container, largest first.
+  repeated HeadroomSandbox sandboxes = 10;
+  // taken_at is when the reading was taken. Unset means the crew has never read the machine, which
+  // is a crew with no daemon or a daemon that has never answered.
+  google.protobuf.Timestamp taken_at = 11;
+  // failed says what could not be read, empty when the whole reading worked. A reading that failed
+  // never fails a command: the figures read unknown and the crew carries on.
+  string failed = 12;
+  // used_bytes and limit_bytes carry -1 where nothing measured them, so a caller comparing numbers
+  // does not have to parse the strings above.
+  int64 used_bytes = 13;
+  int64 limit_bytes = 14;
+}
+// HeadroomSandbox is one session's container as the daemon reports it.
+message HeadroomSandbox {
+  string session = 1;
+  // held is the memory this container holds, or "unknown".
+  string held = 2;
+  // processor is its share of one processor, for example "12.4%", or "unknown".
+  string processor = 3;
+  // idle is how long since this session's last task, for example "12m". Empty means the crew does
+  // not know, which is a container with no session row beside it.
+  string idle = 4;
+  // held_bytes carries -1 where nothing measured it.
+  int64 held_bytes = 5;
+  // status is what the session's row says it is doing, for example "running" or "idle". Empty means
+  // the crew holds no session for this container, which is a stray. An operator deciding what to
+  // stop reads this first: the largest sandbox may be the one doing the work.
+  string status = 6;
+}
+
 // GetUsageRequest asks what the crew has cost so far.
 message GetUsageRequest {}
 // GetUsageResponse is every conversation the crew holds, added up.
@@ -1053,4 +1114,7 @@ service ControlPlaneService {
   // GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
   // configuration, which is why it is not part of GetInfo.
   rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+  // GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+  // and never from the daemon, so the header may ask it every second.
+  rpc GetHeadroom(GetHeadroomRequest) returns (GetHeadroomResponse);
 }

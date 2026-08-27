@@ -2,9 +2,10 @@ package console
 
 import (
 	"fmt"
-	"github.com/atlantic-blue/quay-crew/internal/display"
 	"strings"
 
+	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/headroom"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -63,8 +64,20 @@ func (m Model) headerLines() []string {
 	// the status are usually the widest thing in it, so measuring the status line alone let the
 	// wordmark go at a wider window than the total did, which is the wrong way round.
 	status := m.statusLines("")
-	if spent := m.spent(); spent != "" && m.roomFor(status, hints, spent) {
-		status = m.statusLines(spent)
+	// What joins the first line, in the order it earns its place: the machine first, because a full
+	// machine stops the crew and what it cost does not. Each is added only while the whole block
+	// still leaves room for the wordmark, so the header stays one row and the wordmark stays on it.
+	trailer := ""
+	for _, extra := range []string{m.roomPhrase(), m.spent()} {
+		if extra == "" {
+			continue
+		}
+		if m.roomFor(status, hints, trailer+extra) {
+			trailer += extra
+		}
+	}
+	if trailer != "" {
+		status = m.statusLines(trailer)
 	}
 
 	widest := 0
@@ -213,6 +226,37 @@ func (m Model) statusLines(spent string) []string {
 				", older than this build, run make sandbox-image"))
 	}
 	return lines
+}
+
+// roomPhrase is what the machine has left: one figure and one word, beside the build.
+//
+// One row rather than one line of its own, because the header is one row and the whole point of it
+// is what can be read at a glance. The word is coloured rather than only spelled, because a full
+// machine has to be readable without reading the number beside it. A crew that measured nothing says
+// unknown, and unknown is never green: a header that claimed room it had not measured is what let
+// eighteen sandboxes be killed with nothing said about it.
+func (m Model) roomPhrase() string {
+	if m.info.RoomState == "" {
+		return ""
+	}
+	if m.info.RoomState == headroom.StateUnknown {
+		return "   " + statusKey.Render("Memory ") + faint.Render(headroom.StateUnknown)
+	}
+	return "   " + statusKey.Render("Memory ") + m.info.Room + " " + roomWord(m.info.RoomState)
+}
+
+// roomWord colours the one word the header carries about the machine.
+func roomWord(state string) string {
+	switch state {
+	case headroom.StateFull:
+		return alert.Render(strings.ToUpper(state))
+	case headroom.StateTight:
+		return busy.Render(state)
+	case headroom.StateRoom:
+		return ready.Render(state)
+	default:
+		return faint.Render(headroom.StateUnknown)
+	}
 }
 
 // sandboxImagePhrase names the build every session is running, and says in red when the crew has

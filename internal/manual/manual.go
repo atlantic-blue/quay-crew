@@ -97,7 +97,9 @@ commands:
   room                                     how much memory this sandbox actually has, and what to
                                            do about a gate that does not fit in it. A sandbox with
                                            no limit advertises the whole machine, and the kernel
-                                           kills against what is free
+                                           kills against what is free. Run where there is no such
+                                           accounting, on a Mac, it asks the crew what its own
+                                           machine holds and which session is holding it
   render <url> [<file>] [<size>]           draw a page into a picture and say what it drew, so a
     [light|dark] [<wait>]                  session can look at what it built. The whole page, at
                                            1280x900 in light unless told otherwise

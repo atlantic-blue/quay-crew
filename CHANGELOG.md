@@ -8,6 +8,36 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The crew says how much room the machine has left.** The host ran out of memory and the kernel
+  killed 18 sandboxes, three monitors and a build in one event. Nothing in quay reported it before,
+  during or after. The console kept drawing a healthy crew, and every number that mattered had to be
+  read from outside quay with `docker stats`. See issue 405.
+
+  The control plane now reads the daemon it already talks to, on its own timer, and everything else
+  reads that last sample. The header carries one figure and one word: what every container holds
+  against the limit that binds, and `room`, `tight` or `full`. Full is drawn so it can be read
+  without reading the number. A new console view is one line per sandbox, largest first, with what it
+  holds, its share of one processor, how long since its last task, and what its session is doing. The
+  last column is there because the largest sandbox may be the one doing the work.
+
+  The limit that binds is the daemon's own and never the machine's memory, so a Mac with 36 gigabytes
+  and a 7.8 gigabyte cap is full at 7.8. The machine underneath the daemon is reported apart from it,
+  because the kill came from there while the daemon sat at less than half its cap and the machine was
+  at 94 per cent of its swap.
+
+  Nothing is estimated. Every figure is measured or it reads unknown, and unknown is never room. A
+  read that fails never fails a command: the figures read unknown and the answer says why.
+
+  `quay room` keeps the reading it always did inside a sandbox, which is the question a session about
+  to run a gate is asking. Off a Mac it used to fail outright, so the operator most likely to need the
+  number was the one who could not have it. It now asks the crew and prints what the crew read.
+
+  The three words are fractions of the binding limit, three quarters and nine tenths, and both are
+  provisional. `docs/OBSERVABILITY.md` states them, says what would measure them, and carries the two
+  sandbox figures that show why the view exists: a working sandbox at 1,206 mebibytes and an idle one
+  at about 1.6 megabytes.
+
+
 - **A dispatch that cannot start says so instead of waiting without end.** A control plane that had
   come back from the machine running out of memory served every listing in under a second and
   started no work at all. `quay dispatch` wrote the session row, then stayed inside the call: no
