@@ -71,7 +71,8 @@ Once you are at the `quaycrew=#` prompt:
 
 ## What is in there
 
-Seven tables. Five are the model, one is a projection of the event log, one is bookkeeping.
+The tables an operator meets most often. Most of them are the model, one is the history, one is
+bookkeeping. The crew has more: the flow engine, skills, hooks, roles and secrets each keep their own.
 
 **`workspaces`** is the top level: a body of work with its own secrets, its own channels and its own
 event log topics. It carries `id`, `name`, timestamps and `deleted_at`. Deletion is soft: a deleted
@@ -119,6 +120,17 @@ It is not disposable. It is the only copy of what a session has done, and the ex
 is minted where the row is written, so the same identifier travels outward on the export. See
 `docs/TASKS.md` for the whole path and `docs/EVENTS.md` for the export.
 
+**`work`** is declared intent: one row per piece of work a caller asked for. It carries what the
+caller declared (the title, the brief, the role and the version it was pinned to, the mode, what the
+answer must carry, what it waits for, a deadline, a budget and its labels), what the crew assigned
+(the parent, the depth and the version), and what a controller writes (the phase, the session, the
+answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
+process, so it outlives the caller. `quay work list` and `quay work show` read it.
+
+**`work_events`** is what happened to each piece of work, one row per event, written in the same
+transaction as the row it describes. The store is the source of truth, and an export to the log is a
+copy going outward rather than a source it could be rebuilt from.
+
 **`schema_migrations`** is one row per applied migration, with the timestamp it was applied.
 
 ```mermaid
@@ -128,6 +140,8 @@ erDiagram
     projects   ||--o{ sessions : "holds sessions"
     sessions }o--|| workspaces : "belongs to"
     contexts   }o..o| projects : "renders into (scope and owner, no key)"
+    projects   ||--o{ work : "holds declared work"
+    work       ||--o{ work_events : "records what happened"
 ```
 
 ## Queries worth knowing

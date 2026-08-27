@@ -129,23 +129,31 @@ func (s *Server) exportTask(ctx context.Context, session *quaycrewv1.Session, ev
 // read is skipped rather than failing the task, because the redactor still catches the published
 // token shape without it.
 func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Session) map[string]string {
+	values := s.sealedForWorkspace(ctx, session.GetWorkspace())
+	if session.GetDriver() && s.driverToken != "" {
+		values[auth.TokenEnv] = s.driverToken
+	}
+	return values
+}
+
+// sealedForWorkspace is the same set for a workspace rather than for a session, which is what
+// anything redacting outside a conversation has: a piece of work has no session yet.
+func (s *Server) sealedForWorkspace(ctx context.Context, workspace string) map[string]string {
 	values := map[string]string{}
-	refs, err := s.secrets.List(ctx, session.GetWorkspace())
+	refs, err := s.secrets.List(ctx, workspace)
 	if err != nil {
-		slog.WarnContext(ctx, "the workspace's secret names could not be listed for redaction", "session", session.GetId(), "error", err)
+		slog.WarnContext(ctx, "the workspace's secret names could not be listed for redaction",
+			"workspace", workspace, "error", err)
 	}
 	// Every projection, because a value is worth redacting wherever it came from. A mounted secret
 	// reaches the sandbox as a file rather than as an environment variable, and a session that reads
 	// that file can still say what is in it.
 	for _, ref := range refs {
-		value, err := s.secrets.Get(ctx, session.GetWorkspace(), ref.Name)
+		value, err := s.secrets.Get(ctx, workspace, ref.Name)
 		if err != nil || value == "" {
 			continue
 		}
 		values[ref.Name] = value
-	}
-	if session.GetDriver() && s.driverToken != "" {
-		values[auth.TokenEnv] = s.driverToken
 	}
 	return values
 }

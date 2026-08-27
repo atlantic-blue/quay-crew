@@ -8,6 +8,31 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **Work is a record the crew keeps.** A caller declares a piece of work with
+  `quay work create --title "..." --brief "..."`, and the crew keeps it: a row with a title, a brief,
+  a role, a mode, a claim about what the answer must carry, what it waits for, a deadline, a budget
+  and its labels. `quay work list` says what there is, newest first, and narrows by phase, by label,
+  by parent or to the roots. `quay work show` reads one piece of work whole. `quay work stop` halts
+  work that has not ended, keeping the reason.
+
+  The intent is a row rather than a list held in a process, so it outlives the terminal that asked
+  for it. Declare work, close the terminal, read it back tomorrow.
+
+  Nothing runs it yet. Declaring work records intent, and a controller that makes reality match the
+  record is the next slice.
+
+  Every rule is checked at the moment of the write, while the person who wrote it is looking. The
+  identifier is the crew's to assign and one a caller sets is refused. The parent comes from the
+  credential the caller presented and one in the request is refused, because a caller that could set
+  its own parent could set its own depth. A title over 200 bytes, a brief over 16,384, a mode that is
+  not a mode, a path that climbs out of the working directory, a budget below zero, more than 16
+  labels, a label over 63 characters, a role the workspace does not hold and work waiting on
+  something the crew does not hold are each refused with a sentence saying what to do instead.
+
+  The record of what happened is a row beside the row it describes, written in the same transaction:
+  the store is the source of truth, and a row with no record of how it came to exist is a state
+  nothing can explain afterwards. Nothing is published to the event log yet.
+
 - **The crew says which build it is, and drift is reported.** `quay version` prints three builds now:
   this tool, the crew, and the image every session runs in. Where two of them came from different
   commits it says so and names both. Any command, not only this one, puts one line on standard error

@@ -517,6 +517,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeToolSteps(sc)
 	initializeAnswerSteps(sc)
 	initializeVersionSteps(sc)
+	initializeWorkSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)

@@ -104,6 +104,7 @@ var helpSpellings = map[string]bool{
 // this one says what shape the output takes rather than where anything is.
 var takenFlags = map[string]map[string]bool{
 	"answer": {allAnswers: true},
+	"work":   workFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -213,6 +214,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHook(ctx, client, args[1:], out)
 	case "role":
 		return runRole(ctx, client, args[1:], out)
+	case "work":
+		return runWork(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
 	case "repository":
