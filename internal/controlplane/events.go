@@ -118,7 +118,7 @@ func (s *Server) exportTask(ctx context.Context, session *quaycrewv1.Session, ev
 		slog.WarnContext(ctx, "a task could not be encoded, so it is not exported", "session", session.GetId(), "error", err)
 		return
 	}
-	if err := s.events.Publish(ctx, topic, []byte(session.GetId()), value); err != nil {
+	if err := s.export(ctx, session.GetId(), topic, value); err != nil {
 		slog.WarnContext(ctx, "a task could not be exported", "session", session.GetId(), "topic", topic, "error", err)
 	}
 }

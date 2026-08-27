@@ -327,6 +327,12 @@ type Store interface {
 	// the way it happened. A limit of zero or less means the default.
 	ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error)
 
+	// Probe writes, so a caller can prove the store still takes one. A crew whose reads all answer
+	// and whose writes never land looks healthy from every listing, which is how a control plane that
+	// dispatched nothing went unnoticed for an hour. It writes one row and keeps writing over it, so
+	// asking often costs one row and never grows.
+	Probe(ctx context.Context) error
+
 	// Close releases whatever the implementation holds open.
 	Close()
 }

@@ -267,7 +267,7 @@ func TestATaskStillRunningSaysSoRatherThanShowingAnEmptyReply(t *testing.T) {
 	}
 
 	close(runner.Gate)
-	waitUntilIdle(t, client, resp.GetId())
+	waitUntilLanded(t, client, resp.GetId())
 	answered, _ := get(t, client, "/session/"+resp.GetId())
 	if strings.Contains(answered, "still running") {
 		t.Fatalf("the page still calls a landed task running:\n%s", answered)
@@ -277,14 +277,23 @@ func TestATaskStillRunningSaysSoRatherThanShowingAnEmptyReply(t *testing.T) {
 	}
 }
 
-// waitUntilIdle waits for a detached task to land, so a page is never read mid task by accident.
-func waitUntilIdle(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, session string) {
+// waitUntilLanded waits for a detached task to be closed in the history, so a page is never read
+// mid task by accident.
+//
+// It watches the task rather than the session. A session is marked idle before its task record is
+// closed, so a page read on the session's status alone can still be drawn from a task that says it
+// is running and carries no reply, which is what this waited for and failed on about once in a
+// hundred runs.
+func waitUntilLanded(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, session string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		got, err := client.GetSession(context.Background(), &quaycrewv1.GetSessionRequest{Id: session})
-		if err == nil && got.GetSession().GetStatus() == "idle" {
-			return
+		got, err := client.ListTasks(context.Background(), &quaycrewv1.ListTasksRequest{Session: session})
+		if err == nil && len(got.GetTasks()) > 0 {
+			last := got.GetTasks()[len(got.GetTasks())-1]
+			if last.GetStatus() != "running" {
+				return
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

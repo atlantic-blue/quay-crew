@@ -138,6 +138,15 @@ services:
       # Loopback only: the port is the whole crew, and the token guards a caller, not the network.
       # Publish it wider only behind transport you own.
       - "127.0.0.1:50051:50051"
+    # The crew is asked to write, not merely to answer. A control plane that served every listing and
+    # started no work read as healthy for an hour, so this asks the one question that told the two
+    # apart. The image carries no shell, so the check is the service binary in its other mode.
+    healthcheck:
+      test: ["CMD", "/service", "health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
     depends_on:
       otel-collector:
         condition: service_started

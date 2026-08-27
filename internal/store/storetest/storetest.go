@@ -65,6 +65,28 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("a probe writes, and says so again on the same row", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		for attempt := 1; attempt <= 3; attempt++ {
+			if err := s.Probe(ctx); err != nil {
+				t.Fatalf("Probe %d: %v", attempt, err)
+			}
+		}
+	})
+
+	t.Run("a probe under a context that is already over is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		over, stop := context.WithCancel(context.Background())
+		stop()
+		// The health check gives its probe a budget, so a store that cannot answer inside one comes
+		// back rather than taking the caller with it.
+		if err := s.Probe(over); err == nil {
+			t.Fatal("a probe under a dead context answered, so a budget on it would mean nothing")
+		}
+	})
+
 	t.Run("a workspace that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		if _, err := s.GetWorkspace(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {
