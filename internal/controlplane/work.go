@@ -231,3 +231,26 @@ func asWork(from *work.Work) *quaycrewv1.Work {
 	}
 	return on
 }
+
+// RunWorkController makes reality match the work the crew holds, until ctx is done. It blocks, so
+// the caller runs it in a goroutine and owns its lifetime.
+//
+// Declared work is a row rather than a call somebody is holding, which is what makes it survive a
+// restart: this reads the rows on the way up, so a crew restarted onto work declared while it was
+// down starts that work now rather than losing it.
+func (s *Server) RunWorkController(ctx context.Context) {
+	s.workController.Run(ctx)
+}
+
+// TickWork moves the work the crew holds on by one step. Exported so a test and a scenario drive one
+// tick rather than waiting for a ticker, which would be slow when it passed and flaky when it did not.
+func (s *Server) TickWork(ctx context.Context) {
+	s.workController.Tick(ctx)
+}
+
+// RedactFor removes anything the workspace keeps sealed from a line the crew is about to write down.
+// What a model says can carry a value somebody pasted into a conversation, and everything recorded
+// here is persisted.
+func (s *Server) RedactFor(ctx context.Context, workspace, text string) string {
+	return model.Redact(text, s.sealedForWorkspace(ctx, workspace))
+}

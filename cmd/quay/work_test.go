@@ -50,8 +50,8 @@ func TestDeclaringWorkSaysHowToReadItBack(t *testing.T) {
 	if !strings.Contains(said, "quay work show") {
 		t.Fatalf("quay work create says %q, want it to name how to read the work back", said)
 	}
-	if !strings.Contains(said, "nothing runs it yet") {
-		t.Fatalf("quay work create says %q, want it to say nothing runs the work yet", said)
+	if !strings.Contains(said, "A controller picks it up") {
+		t.Fatalf("quay work create says %q, want it to say what happens to the work next", said)
 	}
 }
 

@@ -117,10 +117,13 @@ type Event struct {
 	OccurredAt time.Time
 }
 
-// The kinds of event this slice writes. The contract another service may one day depend on is wider;
-// nothing runs work yet, so these two are the whole of it.
+// The kinds of event the crew writes. The contract another service may one day depend on is wider:
+// the two a lease writes belong to the slice that adds one.
 const (
 	EventDeclared = "work.declared"
+	EventStarted  = "work.started"
+	EventAnswered = "work.answered"
+	EventFailed   = "work.failed"
 	EventStopped  = "work.stopped"
 )
 

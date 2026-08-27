@@ -118,7 +118,7 @@ func runWorkCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	declared := resp.GetWork()
 	fmt.Fprintf(out, "declared %s in %s\n", display.ShortID(declared.GetId()), located.Path)
-	fmt.Fprintf(out, "%s, and nothing runs it yet: read it back with quay work show %s\n",
+	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with quay work show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
 	return nil
 }

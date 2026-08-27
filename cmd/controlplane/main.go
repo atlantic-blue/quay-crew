@@ -190,6 +190,11 @@ func main() {
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
 
+	// And the work the crew holds is made to happen the same way: a controller reads the rows, sends
+	// a task for what has not started, and writes what came back. Declared intent is a row, so work
+	// declared while the crew was down starts on the way up.
+	go server.RunWorkController(ctx)
+
 	// What strayed while the crew was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
