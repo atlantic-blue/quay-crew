@@ -1,8 +1,8 @@
 Feature: A step of a flow runs as a role, in its own session
 
-  A flow sends its work to one session, so every step lands in the same conversation and the session
-  that writes the code has already read everything the session that planned it said. A step that
-  names a role runs somewhere else: its own session, its own container, its own conversation store.
+  Every step of a flow is a piece of work now, and a piece of work owns the session that does it, so
+  each step has a conversation of its own. A step that names a role goes further: its session is made
+  as that role, with the role's brief and only what the role receives.
 
   The boundary is the point, not the persona. A role receives what it declares and nothing else, so
   a role that must not see the code is a session the code was never given to, rather than a session
@@ -32,7 +32,7 @@ Feature: A step of a flow runs as a role, in its own session
   Scenario: The step that names a role runs in a session of its own
     When the operator starts the flow "write-tests" in the project
     Then the flow run is done
-    And the run's session was asked 1 task
+    And the run's steps were asked 2 tasks
     And the "tests" step ran in a session of its own
     And that session was asked "write the tests"
 

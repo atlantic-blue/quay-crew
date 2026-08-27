@@ -6,9 +6,10 @@ Feature: A flow runs a graph across sessions
   starts, moving one node at a time with every movement recorded in the same transaction as the
   position it describes.
 
-  A run owns its own session, named after the graph and the run, so the console reads as what the
-  run is doing and a task on that session is unambiguously the run's. When a run ends its session is
-  put away, because a finished run must not leave a container behind.
+  A run holds nothing while it works. Each step is a piece of work: the run writes it down and
+  returns, a controller sends its task, and the run carries on when that work ends. So a step owns
+  its own session, the session is put away the moment the step ends, and a run waiting on a person
+  holds no container at all.
 
   Background:
     Given a running control plane
@@ -29,11 +30,66 @@ Feature: A flow runs a graph across sessions
         - [push, done]
       """
 
-  Scenario: A run moves through its graph and puts its session away
+  Scenario: A run moves through its graph and puts its sessions away
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And the run's session was asked "fix the build" and then "push the fix"
-    And the run's session is archived
+    And the run's steps were asked "fix the build" and then "push the fix"
+    And every session the run started is archived
+
+  # The fault this slice exists for. A run used to dispatch and read the reply in the same statement,
+  # so starting one lasted as long as the model did and the run could react to nothing while it
+  # waited. It writes the step down and returns instead.
+  Scenario: Starting a run writes its step down and returns
+    When the operator starts the flow "fix-red" in the project, without driving the crew
+    Then the flow run is working
+    And the crew was asked to run 0 tasks
+    And the run's step is a piece of work under the run, one level deeper
+
+  Scenario: A run whose step is running holds no call open
+    Given the model takes longer over a task than anybody will wait
+    When the operator starts the flow "fix-red" in the project, without driving the crew
+    And the controller ticks
+    And a task is under way
+    Then the flow run is working
+    And the run's step is running while the model has not answered
+    When the model finishes the task
+    And the crew is driven
+    Then the flow run is done
+
+  # The trap issue 354 names by name: a run that waits or asks used to hold its container for the
+  # whole wait, because it closed its session only at the end. The step's work ended when it
+  # answered, so the run asks its question holding nothing.
+  Scenario: A run waiting on a person holds no container
+    Given the crew holds this flow graph:
+      """
+      name: careful
+      version: 1
+      nodes:
+        fix:    { type: dispatch, prompt: "fix the build" }
+        permit: { type: ask, text: "fixed it locally. push?" }
+      edges:
+        - [fix, permit]
+        - [permit, done]
+      """
+    When the operator starts the flow "careful" in the project
+    Then the flow run is asking "fixed it locally. push?"
+    And no session the run started is still live
+    And no piece of work of the run is still open
+
+  # A step's answer used to land in the run's state as result.reply, where quay flow show truncated
+  # it. It is a field on a piece of work now, so a caller reads it as data.
+  Scenario: Every step's answer is a field a caller can read
+    When the operator starts the flow "fix-red" in the project
+    Then the flow run is done
+    And each of the run's steps carries the answer its own task gave
+    And the run's own work carries what the run came to
+
+  # The four records issue 349 named and nothing ever wrote. They are written against the piece of
+  # work that carries the run, so a reader has one history rather than two.
+  Scenario: A run writes the record of its own life
+    When the operator starts the flow "fix-red" in the project
+    Then the flow run is done
+    And the run's own work records "flow.run.started" and then "flow.run.finished"
 
   Scenario: Every movement of the run is recorded, in order
     When the operator starts the flow "fix-red" in the project
@@ -43,7 +99,7 @@ Feature: A flow runs a graph across sessions
     Given the next task will fail
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
 
   # A wait is a row rather than a timer somebody is holding, which is the whole reason it survives
   # the crew being restarted underneath it.
@@ -63,10 +119,10 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "patient" in the project
     Then the flow run is waiting
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
     When ten minutes pass and the crew looks for waits that are due
     Then the flow run is done
-    And the run's session was asked "start the build" and then "is it done"
+    And the run's steps were asked "start the build" and then "is it done"
 
   Scenario: A wait that is not yet due is left alone
     Given the crew holds this flow graph:
@@ -85,7 +141,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "patient" in the project
     And the crew looks for waits that are due
     Then the flow run is waiting
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
 
   # Editing a graph must not change an automation that is halfway through it, which is the whole
   # reason a run pins a version. A wait is where that gets tested, because it is the only moment a
@@ -121,7 +177,7 @@ Feature: A flow runs a graph across sessions
       """
     When ten minutes pass and the crew looks for waits that are due
     Then the flow run is done
-    And the run's session was asked "start the build" and then "is it done"
+    And the run's steps were asked "start the build" and then "is it done"
 
   # The whole difference between an automation and a shell script: a person decides whether it goes
   # further. Delivered through the command line, so it needs no chat channel and no bot token.
@@ -144,10 +200,10 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "careful" in the project
     Then the flow run is asking "fixed it locally. push?"
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
     When the operator answers the run with "yes"
     Then the flow run is done
-    And the run's session was asked "fix the build" and then "push it"
+    And the run's steps were asked "fix the build" and then "push it"
 
   Scenario: A run told no does not do the thing it asked about
     Given the crew holds this flow graph:
@@ -169,7 +225,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "careful" in the project
     And the operator answers the run with "no"
     Then the flow run is done
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
 
   # A question nobody answered must never answer itself, or an automation asking permission would
   # take silence for a yes.
@@ -190,7 +246,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "careful" in the project
     And ten minutes pass and the crew looks for waits that are due
     Then the flow run is asking "push?"
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
 
   # The crew acting on its own, which is the point of the whole thing: without a trigger, an
   # automation is a script somebody still has to remember to run.
@@ -294,7 +350,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "site-check" in the project
     Then the flow run is stopped
     And reading the run back says it stopped over "package.json"
-    And the run's session was asked 1 task
+    And the run's steps were asked 1 task
 
   # The other direction. A check that stops every run would satisfy the scenario above and be worth
   # nothing, so this one is the same graph against a model that does the work.
@@ -313,7 +369,7 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "site-check" in the project
     Then the flow run is done
-    And the run's session was asked 2 tasks
+    And the run's steps were asked 2 tasks
 
   # The weaker check, for work that leaves no file behind. It is still the model's own prose, and it
   # is here because a graph that runs a command and reads its answer has nothing else to point at.
@@ -331,10 +387,10 @@ Feature: A flow runs a graph across sessions
     Then the flow run is stopped
     And reading the run back says it stopped over "all green"
 
-  # A run's session is made by its first dispatch, so there is nothing to set a mode on before the run
-  # starts and `quay mode` has nothing to point at. Every automation therefore ran in the mode a
-  # session is born in, and a graph whose first step is "clone this" could not take it: cloning needs
-  # the network, and a dispatched task has nobody to ask for permission.
+  # A step's session is made when its work starts, so there is nothing to set a mode on beforehand and
+  # `quay mode` has nothing to point at. Every automation therefore ran in the mode a session is born
+  # in, and a graph whose first step is "clone this" could not take it: cloning needs the network, and
+  # a dispatched task has nobody to ask for permission.
   Scenario: A graph says what its runs may do, and the turns run in it
     Given the crew holds this flow graph:
       """

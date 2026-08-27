@@ -66,7 +66,7 @@ func (s *Server) StartFlow(ctx context.Context, req *quaycrewv1.StartFlowRequest
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "start flow %s: %v", req.GetGraph(), err)
 	}
-	return &quaycrewv1.StartFlowResponse{Run: asFlowRun(&run)}, nil
+	return &quaycrewv1.StartFlowResponse{Run: s.flowRun(ctx, &run)}, nil
 }
 
 // GetFlowRun says where a run got to.
@@ -75,7 +75,7 @@ func (s *Server) GetFlowRun(ctx context.Context, req *quaycrewv1.GetFlowRunReque
 	if err != nil {
 		return nil, storeError(err, "flow run")
 	}
-	return &quaycrewv1.GetFlowRunResponse{Run: asFlowRun(run)}, nil
+	return &quaycrewv1.GetFlowRunResponse{Run: s.flowRun(ctx, run)}, nil
 }
 
 // ListFlowRuns lists runs, narrowed to one project when the request names one.
@@ -86,9 +86,22 @@ func (s *Server) ListFlowRuns(ctx context.Context, req *quaycrewv1.ListFlowRunsR
 	}
 	out := make([]*quaycrewv1.FlowRun, 0, len(runs))
 	for _, run := range runs {
-		out = append(out, asFlowRun(run))
+		out = append(out, s.flowRun(ctx, run))
 	}
 	return &quaycrewv1.ListFlowRunsResponse{Runs: out}, nil
+}
+
+// flowRun puts a run on the wire, with the piece of work that carries it.
+//
+// The work is read here rather than kept on the run, because the reducer holds the run and has no
+// business knowing where in the tree it sits. A run whose work cannot be read is answered without it
+// rather than refused: where it sits is not why somebody asked.
+func (s *Server) flowRun(ctx context.Context, run *flow.Run) *quaycrewv1.FlowRun {
+	on := asFlowRun(run)
+	if carrier, err := s.store.FlowRunCarrier(ctx, run.ID); err == nil {
+		on.Work = carrier
+	}
+	return on
 }
 
 // asFlowRun puts a run on the wire.
@@ -131,7 +144,7 @@ func (s *Server) StopFlowRun(ctx context.Context, req *quaycrewv1.StopFlowRunReq
 		}
 		return nil, storeError(err, "flow run")
 	}
-	return &quaycrewv1.StopFlowRunResponse{Run: asFlowRun(run)}, nil
+	return &quaycrewv1.StopFlowRunResponse{Run: s.flowRun(ctx, run)}, nil
 }
 
 // AnswerFlowRun tells a run what the operator decided.
@@ -152,7 +165,7 @@ func (s *Server) AnswerFlowRun(ctx context.Context, req *quaycrewv1.AnswerFlowRu
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "answer run %s: %v", run.ID, err)
 	}
-	return &quaycrewv1.AnswerFlowRunResponse{Run: asFlowRun(&answered)}, nil
+	return &quaycrewv1.AnswerFlowRunResponse{Run: s.flowRun(ctx, &answered)}, nil
 }
 
 // ScheduleFlow starts a graph running on its own in one project, at the interval the graph declares.
@@ -212,6 +225,13 @@ func (s *Server) UnscheduleFlow(ctx context.Context, req *quaycrewv1.UnscheduleF
 // resumes them immediately rather than losing them.
 func (s *Server) RunFlowPoller(ctx context.Context) {
 	s.flowPoller.Run(ctx)
+}
+
+// TickFlows moves every run the crew holds on by one step: a wait that came due, a schedule that
+// fired, a step whose work ended. Exported so a test and a scenario drive one tick rather than
+// waiting for a ticker, which would be slow when it passed and flaky when it did not.
+func (s *Server) TickFlows(ctx context.Context) {
+	s.flowPoller.Tick(ctx)
 }
 
 // SessionTokens is what one session's conversation has cost, which is what a run's ceiling is checked

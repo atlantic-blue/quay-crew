@@ -74,9 +74,9 @@ type Landing struct {
 // Store is the rows a controller reads and writes. Every write takes the event that describes it, so
 // the row and the record of how it moved land in one transaction or neither does.
 type Store interface {
-	// RunnableWork is the work this controller may start: pending, with no parent and nothing it
-	// waits for, oldest declared first. Work that names a role is included, and the controller runs
-	// it as that role.
+	// RunnableWork is the work this controller may start: pending with nothing it waits for, oldest
+	// declared first. Work under a parent is included, because a flow run declares every step under
+	// its own work. Work that names a role is included, and the controller runs it as that role.
 	RunnableWork(ctx context.Context, limit int) ([]*Work, error)
 	// HeldWork is the work this controller is holding: running, with a session, under a lease that
 	// is this controller's and has not run out. Another controller's work is not this one's to move.

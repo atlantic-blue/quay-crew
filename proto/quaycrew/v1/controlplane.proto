@@ -166,8 +166,8 @@ message ListProjectsResponse {
   repeated Project projects = 1;
 }
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
-// time. Its session is named after the graph and the run, so a listing reads as what the run is
-// doing.
+// time. It is carried by a piece of work, and every step it takes is a piece of work under that one,
+// so a run sits inside the work tree rather than beside it.
 message FlowRun {
   string id = 1;
   string workspace = 2;
@@ -190,6 +190,10 @@ message FlowRun {
   // reason says why a stopped run stopped. Empty on one that is running or that finished: a run
   // that went quiet and a run that was halted must never read the same.
   string reason = 13;
+  // work is the piece of work that carries this run. There is one tree and it is the work tree, so a
+  // run hangs inside it rather than beside it: that is what makes the depth limit and the tree budget
+  // bound a run at all. Every step the run takes is another piece of work under this one.
+  string work = 15;
 }
 
 // ImportFlowRequest carries a graph as authored. The version inside it is the pin a run takes, so

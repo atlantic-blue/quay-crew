@@ -70,27 +70,12 @@ edges:
 	}
 }
 
-// The handle decides which conversation does the work, so this is the whole of "its own session".
-func TestAStepNamingARoleGoesToItsOwnHandle(t *testing.T) {
-	run := Run{ID: "abcdef0123456789", GraphName: "write-tests"}
-
-	own := run.HandleFor(Command{Node: "plan"})
-	if own != run.SessionHandle() {
-		t.Errorf("a step naming no role goes to %q, want the run's own %q", own, run.SessionHandle())
-	}
-	asRole := run.HandleFor(Command{Node: "tests", Role: "test-writer"})
-	if asRole == own {
-		t.Fatalf("a step naming a role goes to the run's own conversation %q", asRole)
-	}
-	if !strings.HasSuffix(asRole, "-tests") {
-		t.Errorf("the role's handle is %q, want it to name the step it belongs to", asRole)
-	}
-}
-
 // A run has to be able to reach every conversation it started, because what it archives and what it
 // counts as spent both come from this list.
 func TestARunKnowsEverySessionItStarted(t *testing.T) {
 	run := Run{State: map[string]string{
+		// A run made before its steps were work kept its own session under this key, and reading one
+		// back has to still reach it.
 		SessionKey:      "own-session",
 		"session.tests": "tests-session",
 		"session.docs":  "docs-session",

@@ -331,7 +331,7 @@ func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) 
 	// The same shape the real stores offer, work in a role included: a double that offered less than
 	// the store does would hide every behaviour that only work in a role reaches.
 	return r.matching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhasePending && one.Parent == "" && len(one.After) == 0
+		return one.Phase == work.PhasePending && len(one.After) == 0
 	}), nil
 }
 
@@ -807,33 +807,40 @@ func TestWhatTheWorkSpentIsWrittenOntoTheRecord(t *testing.T) {
 	}
 }
 
-// Root work only in this slice. Everything else is a later one, and picking it up early would run
-// work whose ordering, role or budget nothing here honours.
-// Ordering and depth are each a later slice, so a controller that honours neither leaves that work
-// alone. Work in a role is no longer here, because this slice runs it.
-func TestOnlyRootWorkIsRun(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		shape func(*work.Work)
-	}{
-		{"work that waits for something", func(w *work.Work) { w.After = []string{"work-0"} }},
-		{"work under a parent", func(w *work.Work) { w.Parent, w.Depth = "work-0", 1 }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			controller, kept, plane := aController(t)
-			declared := declaredWork("read the electricity bill")
-			tc.shape(declared)
-			one := kept.add(declared)
+// Ordering is the one thing a controller still honours nothing of, so work that waits is the one
+// thing left alone. Work in a role runs, and so does work under a parent: a flow declares every step
+// under its own run.
+func TestWorkThatWaitsForSomethingIsLeftAlone(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := declaredWork("read the electricity bill")
+	declared.After = []string{"work-0"}
+	one := kept.add(declared)
 
-			controller.Tick(context.Background())
+	controller.Tick(context.Background())
 
-			if plane.sent() != 0 {
-				t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
-			}
-			if got := kept.get(one.ID); got.Phase != work.PhasePending {
-				t.Fatalf("the work is %q, want left pending", got.Phase)
-			}
-		})
+	if plane.sent() != 0 {
+		t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
+	}
+	if got := kept.get(one.ID); got.Phase != work.PhasePending {
+		t.Fatalf("the work is %q, want left pending", got.Phase)
+	}
+}
+
+// Work under a parent runs. It has to: a flow run declares every step under the run's own work, so a
+// controller that started roots only would leave every step of every automation pending forever.
+func TestWorkUnderAParentIsRun(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := declaredWork("write the tests")
+	declared.Parent, declared.Depth = "work-0", 1
+	one := kept.add(declared)
+
+	controller.Tick(context.Background())
+
+	if plane.sent() != 1 {
+		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
+	}
+	if got := kept.get(one.ID); got.Phase != work.PhaseRunning {
+		t.Fatalf("the work is %q, want it running", got.Phase)
 	}
 }
 

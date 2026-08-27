@@ -8,6 +8,43 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
+  reply from the same statement, so starting one lasted as long as the model did and the run could
+  react to nothing while it waited. It writes the step down as a piece of work and returns. A
+  controller sends the task, and the run carries on when that work reaches a terminal phase, read off
+  a row by the poller. So a crew restarted while twenty steps were running picks all twenty up on its
+  next tick rather than losing them, and the engine holds no goroutine, no call and no container.
+
+  A run is carried by a piece of work, and every step is another under it, one level deeper. There is
+  one tree and it is the work tree, because depth and budget are counted once and a run outside the
+  tree would be counted by neither. Read a whole run out of it with
+  `quay work list --label flow.run=<run>`, which `quay flow show` now prints.
+
+  A step's answer is a field rather than a line of a transcript, which is what `quay answer` and
+  `quay work show` read. `working` is a new run status, for a run whose step is out. The four records
+  issue 349 named are written at last: `flow.run.started`, `flow.run.asked`, `flow.run.finished` and
+  `flow.run.stopped`, as work events on the piece of work that carries the run.
+
+  A run asking a person now holds no container. Its step's session is put away the moment that step's
+  work ends, which is the trap issue 354 names by name.
+
+  **A run no longer has one session, and a graph author has to know that.** Each step is a piece of
+  work, a piece of work owns the session that does it, so a step does not see what the step before it
+  was told. What travels between steps is the run's state: `{{result.reply}}` in a prompt is the last
+  step's answer. A graph that leaned on the earlier conversation has to say what it needs.
+
+  The work controller now runs work under a parent, because a flow declares every step under the run
+  and a controller that started roots only would leave every step of every automation pending forever.
+  Work waiting on something in `after` is still left alone, since nothing honours ordering yet, and
+  the tree budget is enforced for nothing, a root included. The workspace's `max_depth` is checked
+  when a run is declared, against the credential of
+  whoever started it, and not again per step: a graph is a finite set of nodes with a transition cap
+  rather than a way to recurse, and checking each step would have meant no flow ran at all until an
+  operator raised a limit.
+
+  `advance.go` is unchanged. The reducer never learns that work exists: the engine puts a run back to
+  running before it feeds a step's result in. This is slice 2 of issue 399 and slice 8 of the
+  delivery order in `docs/ORCHESTRATION.md`. The trigger node is slice 9 and is not here.
 - **Work runs as a role, and what a role receives is enforced before a container starts.** A piece of
   work already carried a role and the version it was pinned to, and the controller read that column
   and left the work alone. Now it runs it: the session the controller opens runs as that role, so it

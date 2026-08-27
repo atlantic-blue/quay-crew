@@ -334,11 +334,13 @@ type Store interface {
 	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
 	FlowGraph(ctx context.Context, name string, version int) (string, error)
 	DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error)
+	LandedFlowSteps(ctx context.Context, limit int) ([]flow.Landed, error)
+	FlowRunCarrier(ctx context.Context, run string) (string, error)
 	ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error
 	UnscheduleFlow(ctx context.Context, graph, project string) error
 	DueFlowSchedules(ctx context.Context, now time.Time) ([]flow.Schedule, error)
 	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
-	CreateFlowRun(ctx context.Context, run *flow.Run) error
+	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
 	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
 	ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error)

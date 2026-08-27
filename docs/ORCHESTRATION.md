@@ -1141,6 +1141,70 @@ cost ceiling alert as code, and it is open.
 work's deadline, new. A schedule shorter than fifteen minutes is refused, which is
 `flow.MinimumEvery`.
 
+### What of this shipped on 27 August 2026
+
+**Slice 8, and the disagreement above is now the behaviour.** `engine.go` writes a piece of work
+instead of calling `Dispatch` and reading the reply from the same statement. `advance.go` did not
+change: the reducer is byte for byte what it was, and it never learns that work exists.
+
+What a run does now, one movement at a time:
+
+```mermaid
+stateDiagram-v2
+    [*] --> running: "the run is declared, under a piece of work"
+    running --> working: "a dispatch node: the step is written down as work, and the call returns"
+    working --> running: "that work reached a terminal phase"
+    running --> waiting: "a wait node"
+    waiting --> running: "the due time came"
+    running --> asking: "an ask node, holding no container"
+    asking --> running: "a person answered"
+    running --> done: "the end of the graph"
+    running --> stopped: "a limit, a refusal, or a person"
+    done --> [*]
+    stopped --> [*]
+```
+
+- **`working` is the new status**, and it is the engine's word rather than the reducer's. The engine
+  puts a run back to `running` before it feeds the step's result in, which is why `advance.go` did not
+  have to change. The store treats it as live: a `working` run can be stopped, and it moves.
+- **A run is carried by a piece of work**, as section 14 decides. Starting a run writes that work with
+  a brief naming the flow and its version, and the run row points at it. It is written in phase
+  `waiting` rather than `pending`, so no controller ever sends a run's own work as a task.
+- **Every step is a piece of work under the run's**, one level deeper, carrying the node's prompt as
+  its brief, the graph's mode, the node's role and whatever the node said would prove it worked. The
+  work and the movement that declared it land in one transaction, beside the transition and the
+  idempotency claim.
+- **What carries a run on is a row.** The flow poller reads the runs that are `working` whose step
+  reached a terminal phase, and feeds the answer in as the `task.finished` event the reducer always
+  took. A movement answering a step applies only to a run still out with that step, so two pollers
+  reading one landed step move the run once.
+- **The step's session is put away as its work ends.** So a run that then asks a person holds no
+  container, which is the trap `quay-crew#354` names by name.
+- **`flow.run.started`, `flow.run.asked`, `flow.run.finished` and `flow.run.stopped`** are written, and
+  they are work events against the piece of work that carries the run. One history rather than two,
+  and they reach `<workspace>.work`, which the export already carries.
+- **Every piece of work a run declares carries labels**: `flow.run`, `flow.graph`, and for a step
+  `flow.node` and `flow.attempt`. So a person reads a whole run out of the work tree with
+  `quay work list --label flow.run=<run>`, which is what `quay flow show` now prints.
+
+**What it changed for a graph author, and it is not small.** A run no longer has one session. Each
+step is a piece of work and a piece of work owns the session that does it, so a step no longer sees
+what the step before it was told. What travels between steps is the run's state: `result.reply`
+carries the last step's answer, and a prompt reads it as `{{result.reply}}`. A graph that relied on
+the earlier conversation has to say what it needs in its prompt.
+
+**What the depth limit does and does not bound here.** The piece of work that carries a run is held
+to the workspace's `max_depth` like any other declaration, counted from the credential of whoever
+started the run. A step is not checked again: the ceiling was decided when the run was declared, and
+the steps of one graph are a finite set with a transition cap rather than a way to recurse. So a
+session in a workspace whose `max_depth` is 1 can start a flow and cannot start one from inside that
+flow's own step, and a flow an operator started needs no limit raised.
+
+**What is still not built.** Stopping the piece of work that carries a run does not stop the run;
+`quay flow stop` does. Nothing enforces the tree budget, for a run or for anything else. A step
+carries no deadline of its own. The controller still leaves work that waits for something in `after`
+alone, because nothing honours ordering yet.
+
 ### 8c. One orchestrator role that starts others
 
 This is the scenario that does not work today. The worked example: **clear a backlog of nine pull
@@ -2142,6 +2206,27 @@ flow. A flow started by a session at depth 1 puts its steps at depth 3. So a wor
 rather than hidden. The alternative, letting a run's steps take the run's own depth, was rejected
 because it makes a flow a way to gain a level.
 
+### What of this shipped on 27 August 2026
+
+The composition above is built. A run is carried by a piece of work, every step hangs under that one,
+and there is one tree. The columns are `flow_runs.work` and `flow_runs.step_work`, added by migration
+`0033`, and the poller's query reads the second.
+
+Two things this section said that the code says differently, and both are stated here rather than
+left for somebody to find:
+
+- **The controller now runs work under a parent and work in a role.** It ran roots only, which would
+  have left every step of every flow pending forever. Work that waits for something in `after` is
+  still left alone, because nothing honours ordering yet, and the tree budget is enforced for nothing,
+  a root included.
+- **A step is not checked against `max_depth` a second time.** Section 5 says the ceiling refuses a
+  write above it, and it does, for the run's own work, counted from the credential of whoever started
+  the run. The steps under it are not a way to recurse: a graph is a finite set of nodes with a
+  transition cap. Checking each step against the ceiling would have meant no flow could run at all
+  until an operator raised a limit, because the default is zero.
+
+The trigger node and `pending_triggers` are still slice 9, and nothing in this delivery touched them.
+
 ### Trigger rows and work events: one mechanism, two tables
 
 They are **two tables and one mechanism.** The shapes look the same on purpose, and merging them
@@ -2296,6 +2381,9 @@ named and never shipped. A run is carried by a piece of work, as section 14 deci
 
 *Removes the container an asking run holds, and gives every flow step a readable answer.* This is
 slice 2 of `quay-crew#399`.
+
+**Shipped, 27 August 2026.** See the delivery note under section 8b for what changed and what it cost
+a graph author.
 
 **9. The trigger node.** A `trigger` node type, a `pending_triggers` table, and an in process source:
 a piece of work reaching a terminal phase writes a trigger row in the same transaction. Then an

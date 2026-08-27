@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,31 @@ edges:
   - [say, done]
 `
 
+// flowCrew is a crew with its two loops running, which is what a flow needs now: a run declares its
+// step as a piece of work and returns, the work controller sends the task, and the poller carries the
+// run on when the work ends. A crew with the loops stopped holds a run at its first step forever.
+func flowCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	return flowCrewWith(t, controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+}
+
+func flowCrewWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	// Faster than the crew ticks in production, because these tests poll for an answer and the real
+	// five seconds would be five seconds of sleeping per step.
+	cfg.WorkTickEvery, cfg.FlowPollEvery = 5*time.Millisecond, 5*time.Millisecond
+	srv := controlplane.NewServer(cfg)
+	client := testClientFor(t, srv)
+	running, stop := context.WithCancel(context.Background())
+	t.Cleanup(stop)
+	go srv.RunWorkController(running)
+	go srv.RunFlowPoller(running)
+	return client
+}
+
 func graphFile(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "graph.yaml")
@@ -39,7 +65,7 @@ func graphFile(t *testing.T, body string) string {
 // back. A run advances behind the answer that started it, so the listing is polled rather than read
 // once.
 func TestQuayFlowImportsStartsAndShows(t *testing.T) {
-	client := testClient(t)
+	client := flowCrew(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -83,7 +109,7 @@ func TestQuayFlowImportsStartsAndShows(t *testing.T) {
 // A run that was halted and a run that went quiet must not read the same, so showing a stopped run
 // says why on its own line.
 func TestQuayFlowShowSaysWhyARunStopped(t *testing.T) {
-	client := testClient(t)
+	client := flowCrew(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -133,7 +159,7 @@ func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
 	// A model that takes a moment, so the run is genuinely still working when the stop lands.
 	// With an instant one the automation reaches its cap before a second command can be typed, and
 	// this would be racing rather than testing.
-	client := testClientWith(t, controlplane.Config{
+	client := flowCrewWith(t, controlplane.Config{
 		Store:    store.NewMemory(),
 		Runner:   &model.FakeRunner{Reply: "ok", Takes: 200 * time.Millisecond},
 		Provider: &sandbox.FakeProvider{},
@@ -180,7 +206,7 @@ edges:
 // A run waiting on a person is the one state the operator has to act on, so showing it says the
 // question and how to answer, and answering it carries the run on.
 func TestQuayFlowAnswerCarriesARunOn(t *testing.T) {
-	client := testClient(t)
+	client := flowCrew(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -220,7 +246,9 @@ edges:
 	if !strings.Contains(answered, "yes") {
 		t.Fatalf("answering said %q", answered)
 	}
-	after := mustRun(t, client, "flow", "show", fields[0])
+	// Polled for the same reason: the answer moves the run to its next step, and that step is a
+	// piece of work a controller runs rather than a call the answer waits on.
+	after := showWhen(t, client, fields[0], "done")
 	if !strings.Contains(after, "done") {
 		t.Fatalf("after the answer the run reads %q, want it carried on to the end", after)
 	}
@@ -312,7 +340,7 @@ func showWhen(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, run, wa
 // was empty. Showing the run printed a session identifier and the command that reads a session refused
 // that exact identifier, so the record was reachable through the database alone.
 func TestShowingAFinishedRunPrintsAWorkingWayToReadItsTasks(t *testing.T) {
-	client := testClient(t)
+	client := flowCrew(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))
@@ -359,4 +387,47 @@ func typedCommandIn(t *testing.T, output, starting string) []string {
 	}
 	t.Fatalf("nothing in %q says to type %q", output, starting)
 	return nil
+}
+
+// The pointer a run prints to its own work has to be a command that works, so this types it.
+//
+// A run is carried by a piece of work and every step is another under it, which is where a step's
+// answer is a field rather than a line of a transcript. That is worth nothing if reading a run does
+// not say how to get there.
+func TestShowingARunPrintsAWorkingWayToReadItsSteps(t *testing.T) {
+	client := flowCrew(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))
+	mustRun(t, client, "flow", "start", "greet")
+
+	deadline := time.Now().Add(10 * time.Second)
+	var shown string
+	for {
+		listed := mustRun(t, client, "flow", "list")
+		fields := strings.Fields(listed)
+		if len(fields) > 0 {
+			shown = mustRun(t, client, "flow", "show", fields[0])
+			if strings.Contains(shown, "done") {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the run never finished: %q", shown)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	typed := typedCommandIn(t, shown, "quay work list ")
+	read, err := runQuay(t, client, typed[1:]...)
+	if err != nil {
+		t.Fatalf("the run said to type %q, and that was refused: %v", strings.Join(typed, " "), err)
+	}
+	// The run's own work and the one step it took, both under the label the run carries.
+	if !strings.Contains(read, "greet") {
+		t.Fatalf("%q answered %q, want the run's own work and its step", strings.Join(typed, " "), read)
+	}
+	if !strings.Contains(read, "step say") {
+		t.Fatalf("%q answered %q, want the step the graph dispatched", strings.Join(typed, " "), read)
+	}
 }

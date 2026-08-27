@@ -1,7 +1,6 @@
 package flow
 
 import (
-	"context"
 	"strings"
 	"testing"
 )
@@ -39,6 +38,11 @@ func TestADispatchNodeDeclaresWhatProvesItWorked(t *testing.T) {
 // The one that matters. A task that could not do the work is not a failed task, so before this the
 // run took the success edge and finished at done with the model's account of work that never
 // happened. It stops instead, and says what it was looking for.
+//
+// What a claim is checked against lives on the piece of work the step goes out as, and the work
+// controller reads it after the task: TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheWork and
+// TestAFileTheWorkClaimedIsCheckedAndItsAbsenceStopsTheWork in internal/work. This is the half the
+// reducer owns, which is what a run does about it.
 func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 	graph, err := Parse([]byte(provingGraph))
 	if err != nil {
@@ -90,49 +94,6 @@ func TestAMetExpectationCarriesTheRunOn(t *testing.T) {
 	}
 	if len(commands) != 1 || commands[0].Kind != CommandDispatch {
 		t.Fatalf("the run asked for %v, want the next dispatch", commands)
-	}
-}
-
-// A reply that does not carry what the node said it would is the weaker check, and it is the one
-// available where the work leaves no file behind.
-func TestAReplyThatDoesNotCarryWhatWasExpectedIsUnmet(t *testing.T) {
-	graph, err := Parse([]byte(`
-name: says-so
-version: 1
-nodes:
-  ask: { type: dispatch, prompt: "run the tests and say PASSED or FAILED", expect: { contains: "PASSED" } }
-edges:
-  - [ask, done]
-`))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	engine := &Engine{}
-	node := graph.Nodes["ask"]
-
-	if unmet := engine.unmet(context.Background(), node, "", "I could not find a test command, but the project looks healthy"); unmet == "" {
-		t.Error("a reply carrying nothing it was supposed to carry was accepted")
-	}
-	if unmet := engine.unmet(context.Background(), node, "", "ran them: PASSED"); unmet != "" {
-		t.Errorf("a reply carrying what it was supposed to was refused: %s", unmet)
-	}
-}
-
-// A crew that cannot look stops the run rather than believing it. A check that quietly passes when
-// it could not be run is the same false green as no check at all.
-func TestAFileExpectationNobodyCanCheckStopsTheRun(t *testing.T) {
-	graph, err := Parse([]byte(provingGraph))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	engine := &Engine{}
-
-	unmet := engine.unmet(context.Background(), graph.Nodes["read"], "t1", "done")
-	if unmet == "" {
-		t.Fatal("an expectation nothing could check was treated as met")
-	}
-	if !strings.Contains(unmet, "package.json") {
-		t.Errorf("it says %q, want it to name what could not be checked", unmet)
 	}
 }
 

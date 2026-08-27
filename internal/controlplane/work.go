@@ -26,7 +26,8 @@ import (
 // slice of its own. What this buys on its own is that the intent outlives the caller.
 func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkRequest) (*quaycrewv1.CreateWorkResponse, error) {
 	declaration := work.Declaration{
-		Title: req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
+		Project: req.GetProject(),
+		Title:   req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
 		ExpectFile: req.GetExpectFile(), ExpectContains: req.GetExpectContains(),
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
 		Hands: req.GetHands(),
@@ -36,47 +37,10 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		at := req.GetDeadline().AsTime()
 		declaration.Deadline = &at
 	}
-	// Before the project is read, so a caller that got the shape wrong is told what is wrong with
-	// the shape rather than being sent to look for a project.
-	if err := declaration.Validate(); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	if req.GetProject() == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"work needs a project to run in: say where with an address, for example quay work create me/house-bills")
-	}
-	project, err := s.store.GetProject(ctx, req.GetProject())
+	declared, declaredEvent, err := s.PrepareWork(ctx, "", declaration)
 	if err != nil {
-		return nil, storeError(err, "project")
-	}
-
-	tidy := declaration.Tidied()
-	declared := &work.Work{
-		ID: store.NewID(), Workspace: project.GetWorkspace(), Project: project.GetId(),
-		Title: tidy.Title, Brief: tidy.Brief, Mode: tidy.NamedMode(),
-		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
-		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
-		Labels: tidy.Labels, Hands: tidy.Hands,
-		Version: 1, Phase: work.PhasePending,
-	}
-	// The parent comes from the credential the caller presented and never from the request. It is
-	// the whole of what keeps the depth count honest: a caller that could name its own parent could
-	// name none and start again at the top.
-	if err := s.underTheCaller(ctx, declared); err != nil {
 		return nil, err
 	}
-	// And the trace follows the same parent, because one trace covers a whole tree. It is read after
-	// the parent is known rather than before: a child that minted its own would leave the tree in as
-	// many traces as it has nodes.
-	s.traceWork(ctx, declared, s.parentOf(ctx, declared))
-	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
-		return nil, err
-	}
-	if err := s.checkAfter(ctx, declared); err != nil {
-		return nil, err
-	}
-
-	declaredEvent := s.workEvent(ctx, declared, work.EventDeclared, declared.Title)
 	if err := s.store.CreateWork(ctx, declared, declaredEvent); err != nil {
 		return nil, storeError(err, "create work")
 	}
@@ -90,6 +54,54 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		return nil, storeError(err, "work")
 	}
 	return &quaycrewv1.CreateWorkResponse{Work: asWork(kept)}, nil
+}
+
+// PrepareWork holds a declaration to every rule and answers with the row to write and the record of
+// writing it. It writes nothing: the caller decides which transaction the row lands in, which is what
+// lets a flow run declare its step in the same transaction as the movement that asked for it.
+//
+// `under` names the piece of work this one hangs under, and empty means the parent comes from the
+// credential the caller presented. Only the crew itself passes one, and only ever an identifier it
+// read off a row of its own: a caller that could name its own parent could name none and start again
+// at the top, which is why a parent in a request is refused rather than ignored.
+func (s *Server) PrepareWork(ctx context.Context, under string, declaration work.Declaration) (*work.Work, *work.Event, error) {
+	// Before the project is read, so a caller that got the shape wrong is told what is wrong with
+	// the shape rather than being sent to look for a project.
+	if err := declaration.Validate(); err != nil {
+		return nil, nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if declaration.Project == "" {
+		return nil, nil, status.Error(codes.InvalidArgument,
+			"work needs a project to run in: say where with an address, for example quay work create me/house-bills")
+	}
+	project, err := s.store.GetProject(ctx, declaration.Project)
+	if err != nil {
+		return nil, nil, storeError(err, "project")
+	}
+
+	tidy := declaration.Tidied()
+	declared := &work.Work{
+		ID: store.NewID(), Workspace: project.GetWorkspace(), Project: project.GetId(),
+		Title: tidy.Title, Brief: tidy.Brief, Mode: tidy.NamedMode(),
+		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
+		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
+		Labels: tidy.Labels, Hands: tidy.Hands,
+		Version: 1, Phase: work.PhasePending,
+	}
+	if err := s.underTheCaller(ctx, under, declared); err != nil {
+		return nil, nil, err
+	}
+	// And the trace follows the same parent, because one trace covers a whole tree. It is read after
+	// the parent is known rather than before: a child that minted its own would leave the tree in as
+	// many traces as it has nodes.
+	s.traceWork(ctx, declared, s.parentOf(ctx, declared))
+	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
+		return nil, nil, err
+	}
+	if err := s.checkAfter(ctx, declared); err != nil {
+		return nil, nil, err
+	}
+	return declared, s.workEvent(ctx, declared, work.EventDeclared, declared.Title), nil
 }
 
 // pinRole attaches the role at the version the workspace holds now, and refuses work the role could
@@ -347,9 +359,21 @@ func (s *Server) parentOf(ctx context.Context, declared *work.Work) *work.Work {
 	return parent
 }
 
-func (s *Server) underTheCaller(ctx context.Context, declared *work.Work) error {
-	grant, carried := auth.GrantFrom(ctx)
-	if carried && grant.Work != "" {
+func (s *Server) underTheCaller(ctx context.Context, under string, declared *work.Work) error {
+	// The crew declaring work for something it is already running, which today is one thing: a step
+	// of a flow run. The ceiling was checked when the run's own work was declared, against the
+	// credential of whoever started it, so a step is not a second chance to cross it. What bounds the
+	// steps themselves is the graph: it is a finite set of nodes with a transition cap, and a run
+	// started from inside a session is bounded by the check that session already passed.
+	if under != "" {
+		parent, err := s.store.GetWork(ctx, under)
+		if err != nil {
+			return storeError(err, "the work this one hangs under")
+		}
+		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
+		return nil
+	}
+	if grant, carried := auth.GrantFrom(ctx); carried && grant.Work != "" {
 		parent, err := s.store.GetWork(ctx, grant.Work)
 		if err != nil {
 			return storeError(err, "the work this session is running")

@@ -50,7 +50,7 @@ Feature: The operator drives flows from the command line
     And the operator starts a run of "loop" in the project
     Then the run stops
     And reading the run back says it was stopped for hitting its cap
-    And the run's session was asked no more than 4 tasks
+    And the run's steps were asked no more than 4 tasks
 
   Scenario: A graph whose cap could never be met is refused at import
     When the operator imports a flow graph capped at 0 transitions
@@ -72,7 +72,7 @@ Feature: The operator drives flows from the command line
     And the operator starts a run of "loop" in the project
     And the operator stops the run, saying "enough"
     Then the run stops
-    And the run's session stops being asked, well short of the cap
+    And the run's steps stop being asked, well short of the cap
 
   Scenario: A run that already finished cannot be stopped
     When the operator imports the flow graph "fix-red"

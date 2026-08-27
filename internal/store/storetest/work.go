@@ -460,7 +460,7 @@ func stoppedEvent(id, workspace, project, reason string) *work.Event {
 func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
-	t.Run("the work a controller may run is root work that is pending, in a role or not", func(t *testing.T) {
+	t.Run("the work a controller may run is pending work with nothing outstanding", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -486,14 +486,22 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		if err != nil {
 			t.Fatalf("RunnableWork: %v", err)
 		}
+		// Work under a parent and work in a role both run: a flow declares every step under the run
+		// and a step may name a role. Work that waits for something is the one thing left out,
+		// because nothing honours ordering yet, and work a person stopped is not pending.
 		offered := map[string]bool{}
 		for _, one := range runnable {
 			offered[one.ID] = true
 		}
-		if len(runnable) != 2 || !offered[root] || !offered[inRole] {
-			t.Fatalf("the runnable work is %v, want the root and the one in a role", titlesOf(runnable))
+		if len(runnable) != 3 || !offered[root] || !offered[inRole] || !offered[child] {
+			t.Fatalf("the runnable work is %v, want the root, the role and the child", titlesOf(runnable))
 		}
-		_ = []string{waiting, child}
+		if offered[waiting] {
+			t.Errorf("work that waits for something else was offered to a controller that cannot order it")
+		}
+		if offered[stopped] {
+			t.Errorf("work a person stopped was offered to a controller")
+		}
 	})
 
 	// What a piece of work hands its session survives the store, which is the whole of the boundary
