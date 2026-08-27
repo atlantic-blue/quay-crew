@@ -135,7 +135,7 @@ func (s *Server) StopTask(ctx context.Context, req *quaycrewv1.StopTaskRequest) 
 		return &quaycrewv1.StopTaskResponse{Stopped: false, Session: session}, nil
 	}
 	if held.stopping(strings.TrimSpace(req.GetReason())) {
-		s.emit(ctx, session, KindSessionStopped, stopDetail(req.GetReason()))
+		s.emit(ctx, session, KindSessionHalted, stopDetail(req.GetReason()))
 	}
 	held.cancel()
 

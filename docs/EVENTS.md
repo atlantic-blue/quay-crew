@@ -94,7 +94,13 @@ The kinds, and each is something that happened rather than a state the session i
 - `session.started`, work began in it, and the detail is what was asked
 - `session.completed`, the work landed, and the detail is what came back
 - `session.errored`, the work did not land, and the detail is why
+- `session.halted`, an operator stopped the task with `quay stop`, and the detail is their reason.
+  The session survives, so this is not `session.stopped`: it keeps its container and its
+  conversation, and the next dispatch continues it
 - `session.stopped`, it was put down and its container with it
+- `session.reclaimed`, the crew took its container back on its own. Nothing else went, so a task
+  sent to it builds a fresh container over the same conversation. See section 11 of
+  `docs/ORCHESTRATION.md`
 - `session.archived` and `session.restored`
 - `session.deleted`, with its project or its workspace
 
@@ -105,6 +111,46 @@ state; the log carries the change.
 The detail is one short line, and it goes through the same redactor a task does before it is written
 anywhere, because what came back and what failed can both carry something the operator pasted. The
 whole of what was said stays in the task record.
+
+**`<workspace>.work` carries a `WorkEvent`**, one per movement of a piece of work, keyed by the work
+identifier so one piece of work's records stay in order on one partition. A consumer rebuilding a
+tree depends on that. The row goes into `work_events` in the same transaction as the change it
+describes, and the export follows the commit, so a crew with no broker keeps the whole history and
+loses only the copy.
+
+The kinds split in two, and the split is the useful part. A dashboard counting work must never break
+because the crew changed how it leases, and a dashboard counting leases has taken a dependency it was
+told not to take.
+
+The contract, which another service may depend on:
+
+- `work.declared`, when somebody wrote the work down. The detail is the title.
+- `work.started`, when a controller sent the brief as a task. The detail names the attempt and the
+  session.
+- `work.answered`, when the answer landed and the claim held. The detail is what it spent and where.
+- `work.failed`, when the model did not finish or the sandbox could not be made. The detail is the
+  reason.
+- `work.stopped`, when a person stopped it, or a limit did, or its claim did not hold.
+- `work.asked`, when it put a question to a person. Nothing writes this yet: asking needs the
+  credential a session asks with, which is a later slice. It is named here because a consumer
+  written against a list that grows later has to be changed twice.
+
+Internal, which nothing outside should depend on:
+
+- `work.claimed`, when a controller took the row. The detail names the holder and until when.
+- `work.released`, when a hold ran out and another controller took over. The detail names the
+  previous holder and the phase it was found in.
+
+Every record carries `trace_id`, the trace the whole tree belongs to. It is minted at the root and
+inherited unchanged by every descendant, so one identifier joins a piece of work, its children, the
+tasks they ran and the spans around them. `TaskEvent` carries the same field, and so does the `tasks`
+row, which is what closes
+[issue 346](https://github.com/atlantic-blue/quay-crew/issues/346): before it, the durable record of
+what the crew did joined to neither the trace nor the log lines, and weeks later the logs are gone
+and the row is all that is left.
+
+Each `detail` goes through the crew's redactor before it is written or exported, the same way a task
+does, because what a caller types into a title or a reason can be a credential.
 
 Two more streams are designed and not built:
 
@@ -119,6 +165,8 @@ flowchart LR
     TASKS -.->|"nothing reads it yet"| SECOND["a second consumer, when one exists"]
     CP -->|"SessionEvent"| SESSIONS[["workspace.sessions"]]
     SESSIONS -.->|"nothing reads it yet"| SECOND
+    CP -->|"WorkEvent"| WORK[["workspace.work"]]
+    WORK -.->|"nothing reads it yet"| SECOND
     GW["gateway, a skeleton"] -. "InboundMessage, issue 9" .-> IN[["workspace.inbound"]]
     CP -. "OutboundMessage, issue 10" .-> OUT["a chat channel"]
 ```

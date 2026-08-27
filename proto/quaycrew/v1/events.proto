@@ -34,6 +34,13 @@ message TaskEvent {
   string failure = 8;
   // occurred_at is when the task finished.
   google.protobuf.Timestamp occurred_at = 9;
+  // trace_id is the trace the call that ran this task belonged to, 32 hexadecimal characters, and
+  // empty for a task nothing was tracing. It is the one value that joins this record to the trace
+  // and to every log line written under it, because the crew's correlation id is the trace id
+  // rather than a second identifier beside it. Without it the durable record of what the crew did
+  // links to neither, and weeks later the logs are gone and the row is all that is left. See
+  // issue 346.
+  string trace_id = 11;
 }
 
 // SessionEvent is one thing that happened to a session, written every time it happens.
@@ -71,4 +78,57 @@ message SessionEvent {
   string detail = 7;
   // occurred_at is when it happened.
   google.protobuf.Timestamp occurred_at = 8;
+}
+
+// WorkEvent is one thing that happened to a piece of work, written every time it happens.
+//
+// It goes to the `work_events` table in the same transaction as the row it describes, and to
+// `<workspace>.work` after, keyed by the work identifier so one piece of work's records stay in
+// order on one partition. The store is the truth: a crew with no broker keeps the whole history and
+// loses only the export.
+//
+// The kinds split in two, and the split is the useful part. A dashboard counting work must not break
+// because the crew changed how it leases.
+message WorkEvent {
+  // id identifies this record. Delivery from the log is at least once, so a consumer sees the same
+  // record more than once and needs something to recognise it by. It is the same value as the row in
+  // the `work_events` table.
+  string id = 1;
+  // kind is what happened, and it is the field a consumer switches on.
+  //
+  // The contract, which another service may depend on:
+  //
+  //   work.declared   somebody wrote the work down
+  //   work.started    a controller sent its brief as a task
+  //   work.answered   the answer landed and the claim held
+  //   work.failed     the model did not finish, or the sandbox could not be made
+  //   work.asked      it put a question to a person
+  //   work.stopped    a person stopped it, or a limit did, or its claim did not hold
+  //
+  // Internal, which nothing outside should depend on:
+  //
+  //   work.claimed    a controller took the row
+  //   work.released   a controller's hold ran out and another took it
+  //
+  // A kind names something that happened, in the past tense, at one moment. A phase, "pending" or
+  // "running", is what the row says now, which is the fold of these, so it is never a kind.
+  string kind = 2;
+  // work is the piece of work this happened to, and the key the record is published under.
+  string work = 3;
+  // workspace, project, parent and depth are where the work sits in the tree, denormalised
+  // deliberately: a consumer must not have to query the store to know what it is reading. parent is
+  // empty for a root.
+  string workspace = 4;
+  string project = 5;
+  string parent = 6;
+  int32 depth = 7;
+  // detail is one short line about this event: the title declared, the session and attempt, what it
+  // spent, the reason it stopped. It can carry what a caller typed, so it goes through the crew's
+  // redactor before it is written or exported.
+  string detail = 8;
+  // trace_id is the trace the whole tree belongs to, minted at the root and inherited by every
+  // descendant, so one identifier joins a piece of work, its children, its tasks and its spans.
+  string trace_id = 9;
+  // occurred_at is when it happened.
+  google.protobuf.Timestamp occurred_at = 10;
 }

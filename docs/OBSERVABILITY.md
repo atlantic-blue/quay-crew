@@ -212,6 +212,56 @@ shown here.
 - **It keeps no history.** There is one sample, the last one. A figure that has to be read over time
   belongs on the telemetry pipeline this document already describes.
 
+## One trace joins a piece of work, its task and its records
+
+The crew's correlation identifier is the trace identifier rather than a second value beside it. So
+one identifier is enough to get from any part of the record to any other, and it is a column rather
+than something a process holds. That last part is the whole reason it works: a piece of work outlives
+the controller that started it, so a trace held in memory would be lost with the first controller
+that died.
+
+```mermaid
+flowchart TD
+    CALL["a caller declares work"] --> ROW["the work row: trace_id, parent_span_id"]
+    ROW --> REC["work_events rows, each carrying the trace"]
+    REC --> LOG[["workspace.work, exported after the commit"]]
+    ROW --> CTL["a controller reads the row and works under that trace"]
+    CTL --> TASK["the tasks row, carrying the same trace"]
+    CTL --> ENV["the task environment: QC_TRACEPARENT"]
+    CTL --> SPAN["spans: work, and work.attempt"]
+```
+
+**Where each value comes from.** A root takes the trace of the call that declared it, and mints one
+when nothing was tracing that call, because the identifier is what joins the tree afterwards. A child
+inherits its parent's unchanged. `parent_span_id` is the span the caller was inside at the moment of
+the write.
+
+**The trace context reaches a container on the task and never on the sandbox.** A sandbox is born
+with its environment and is then reused across every later task, so a value written at birth labels
+the tenth task with the first task's span for as long as the container lives. `QC_TRACEPARENT` is set
+on the command instead, once per task.
+
+**The spans.** Two, and both are recorded when the crew knows both ends of them rather than held open
+in memory: `work.attempt` covers one attempt, and `work` covers the whole life of the work and is
+written once it reaches a terminal phase. Their attributes name the work, the workspace, the project,
+the phase, the attempt and the session.
+
+### What this does not do
+
+- **Nothing inside the container adopts the trace context.** The model's own tool does not read
+  `QC_TRACEPARENT`, so what the crew gets is one span per attempt around work whose inside is opaque.
+  Anything finer needs a hook, and no hook emits a span today.
+- **The two spans are siblings, not parent and child.** A span identifier cannot be minted before the
+  span exists, and the work span is written at the end, so `work.attempt` hangs beside `work` under
+  the same parent rather than inside it. They are joined by the trace identifier.
+- **Nothing reads the log back.** There is no consumer and no projection. An empty consumer group
+  list is the expected state.
+- **No span below the control plane's own interface.** The spans around the task, the sandbox and the
+  model call are still missing, and they are
+  [issue 345](https://github.com/atlantic-blue/quay-crew/issues/345).
+- **A flow run has no spans of its own yet.** `flow.run` and `flow.transition` belong to the slice
+  that makes the engine declare work.
+
 ## What you can actually look at today
 
 Follow everything:

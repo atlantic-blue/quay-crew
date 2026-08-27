@@ -80,6 +80,67 @@ func runWorkConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	t.Run("the trace a piece of work belongs to survives the process that declared it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &work.Work{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "read the electricity bill", Brief: "open it", Version: 1, Phase: work.PhasePending,
+			TraceID:      "4bf92f3577b34da6a3ce929d0e0e4736",
+			ParentSpanID: "00f067aa0ba902b7",
+		}
+		if err := s.CreateWork(ctx, declared, &work.Event{
+			ID: store.NewID(), Kind: work.EventDeclared, Work: declared.ID,
+			Workspace: workspace, Project: project, Detail: "read the electricity bill",
+			TraceID: declared.TraceID, OccurredAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("CreateWork: %v", err)
+		}
+
+		found, err := s.GetWork(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if found.TraceID != declared.TraceID || found.ParentSpanID != declared.ParentSpanID {
+			t.Fatalf("the trace reads back as %q / %q, and a trace held in a process is a trace lost "+
+				"with the controller that died", found.TraceID, found.ParentSpanID)
+		}
+
+		events, err := s.ListWorkEvents(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("ListWorkEvents: %v", err)
+		}
+		if len(events) != 1 || events[0].TraceID != declared.TraceID {
+			t.Fatalf("%d records came back, the first tracing %q", len(events), events[0].TraceID)
+		}
+	})
+
+	t.Run("a piece of work nothing was tracing reads back with no trace rather than a made up one", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &work.Work{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "read it", Brief: "open it", Version: 1, Phase: work.PhasePending,
+		}
+		if err := s.CreateWork(ctx, declared, &work.Event{
+			ID: store.NewID(), Kind: work.EventDeclared, Work: declared.ID,
+			Workspace: workspace, Project: project, OccurredAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("CreateWork: %v", err)
+		}
+		found, err := s.GetWork(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if found.TraceID != "" || found.ParentSpanID != "" {
+			t.Fatalf("the store invented a trace: %q / %q", found.TraceID, found.ParentSpanID)
+		}
+	})
+
 	t.Run("what a piece of work waits for is kept in order", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

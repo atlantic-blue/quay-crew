@@ -583,6 +583,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkSteps(sc)
 	initializeWorkControllerSteps(sc)
 	initializeLifecycleSteps(sc)
+	initializeWorkEventsSteps(sc)
 	initializeWorkLeaseSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeTasksViewSteps(sc)
@@ -1039,6 +1040,11 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		for key, value := range last.Env {
 			if key == sandbox.SessionIDEnv && value != "" {
+				continue
+			}
+			// What the crew is already tracing, carried so anything in the container joins that trace
+			// rather than starting a second one. It names no credential and no address.
+			if key == telemetry.TraceparentEnv {
 				continue
 			}
 			return fmt.Errorf("the task ran with %s=%q, which it was not given", key, value)

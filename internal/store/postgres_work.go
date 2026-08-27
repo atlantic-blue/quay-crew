@@ -15,7 +15,7 @@ import (
 const workColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_work, deadline, budget_tokens, labels, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
-	lease_owner, lease_until, created_at, updated_at, started_at, finished_at`
+	lease_owner, lease_until, trace_id, parent_span_id, created_at, updated_at, started_at, finished_at`
 
 // CreateWork writes a piece of work and the record of its declaration in one transaction.
 //
@@ -40,16 +40,16 @@ func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *w
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
 			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
-			lease_owner, lease_until)
+			lease_owner, lease_until, trace_id, parent_span_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
 		nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
-		declared.LeaseOwner, declared.LeaseUntil); err != nil {
+		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
 		return fmt.Errorf("create work: %w", err)
 	}
 	if err := appendWorkEvent(ctx, tx, event); err != nil {
@@ -169,11 +169,16 @@ func (p *Postgres) StopWork(ctx context.Context, id, reason string, event *work.
 	return p.GetWork(ctx, id)
 }
 
-// ListWorkEvents returns one piece of work's own history, oldest first.
+// ListWorkEvents returns one piece of work's own history, in the order it was written.
+//
+// By the sequence rather than by the moment. Two records written in one transaction are stamped in
+// the same microsecond, and an order broken by a random identifier is an order that reads back wrong
+// about once in a few runs: "claimed" after "started", which is a controller that appears to have
+// worked backwards.
 func (p *Postgres) ListWorkEvents(ctx context.Context, id string) ([]*work.Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, kind, work, workspace, project, parent, depth, detail, occurred_at
-		from work_events where work = $1 order by occurred_at, id`, id)
+		select id, kind, work, workspace, project, parent, depth, detail, trace_id, occurred_at
+		from work_events where work = $1 order by seq`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list work events: %w", err)
 	}
@@ -183,7 +188,7 @@ func (p *Postgres) ListWorkEvents(ctx context.Context, id string) ([]*work.Event
 	for rows.Next() {
 		var event work.Event
 		if err := rows.Scan(&event.ID, &event.Kind, &event.Work, &event.Workspace, &event.Project,
-			&event.Parent, &event.Depth, &event.Detail, &event.OccurredAt); err != nil {
+			&event.Parent, &event.Depth, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan work event: %w", err)
 		}
 		events = append(events, &event)
@@ -204,11 +209,11 @@ func appendWorkEvent(ctx context.Context, tx pgx.Tx, event *work.Event) error {
 		return errors.New("store: a work event needs an id and a kind")
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into work_events (id, kind, work, workspace, project, parent, depth, detail, occurred_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		insert into work_events (id, kind, work, workspace, project, parent, depth, detail, trace_id, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (id) do nothing`,
 		event.ID, event.Kind, event.Work, event.Workspace, event.Project,
-		event.Parent, event.Depth, event.Detail, event.OccurredAt); err != nil {
+		event.Parent, event.Depth, event.Detail, event.TraceID, event.OccurredAt); err != nil {
 		return fmt.Errorf("append work event: %w", err)
 	}
 	return nil
@@ -227,7 +232,7 @@ func scanWork(row rowScanner) (*work.Work, error) {
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.SpentTokens, &found.ObservedVersion,
-		&found.LeaseOwner, &found.LeaseUntil,
+		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
