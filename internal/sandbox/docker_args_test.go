@@ -72,3 +72,29 @@ func TestEverySandboxGetsSomewhereToPutAMountedSecret(t *testing.T) {
 		t.Fatalf("the sandbox has nowhere to put a mounted secret, want %q:\n%s", want, got)
 	}
 }
+
+// TestASandboxIsGivenTheMemoryItWasConfiguredWith, and its swap is capped with it.
+//
+// Told a memory limit and nothing else, the daemon allows swap of the same size again, so a session
+// could take twice what the operator said and reach it by thrashing rather than by being told.
+func TestASandboxIsGivenTheMemoryItWasConfiguredWith(t *testing.T) {
+	provider := DockerProvider{Image: "img", Memory: "4g"}
+	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")
+
+	for _, want := range []string{"--memory 4g", "--memory-swap 4g"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the sandbox is missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestASandboxWithNoMemoryConfiguredIsGivenNoLimit. The figure is a share of one machine between the
+// stack, the sessions already running and this one, so it is the operator's to choose. Unset leaves
+// every session exactly where it was.
+func TestASandboxWithNoMemoryConfiguredIsGivenNoLimit(t *testing.T) {
+	got := strings.Join(DockerProvider{Image: "img"}.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")
+
+	if strings.Contains(got, "--memory") {
+		t.Fatalf("a sandbox is limited with nothing configured:\n%s", got)
+	}
+}
