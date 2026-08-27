@@ -86,6 +86,51 @@ Three, because those are what the crew puts in front of a session today. A word 
 assembles yet would be a boundary that means nothing, and a boundary that means nothing looks exactly
 like one that holds.
 
+`may` is the other boundary, and it is the one added on 27 August 2026. `receives` says what a
+session running as this role is given, and `may` says what it is allowed to call:
+
+```yaml
+name: backlog-clearer
+version: 1
+summary: clears the open pull request backlog
+model: opus
+receives:
+  - work
+may:
+  - work.create
+  - work.read
+```
+
+Four verbs, refused at import by name the way a material is, and no more, because a verb nobody uses
+is a boundary that means nothing:
+
+- `work.create` declares a piece of work. The parent comes from the credential, never from the
+  caller.
+- `work.read` reads work and its answer.
+- `work.answer` answers a question a piece of work asked.
+- `work.stop` stops a piece of work.
+
+A role that declares no `may` list may call nothing, which is what every role written before this
+became. Default deny, so a boundary is something an author wrote rather than something they forgot.
+
+Nothing here creates a workspace, a project, a secret, a skill, a hook or a role. A session that
+could grant itself a capability could write itself a way of working nobody approved and then run as
+it, which is the same reason those calls are already refused to the driver.
+
+**The grant is half of what a session holds.** The other half is the workspace's ceiling, and the two
+mean different things: the role says what a session may do, and the workspace says how much of it.
+The effective capability is the intersection, so a role granting `work.create` in a workspace whose
+`max_depth` is zero creates nothing. Read and set the ceiling with `quay limits`, and see section 5
+of `docs/ORCHESTRATION.md` for why capability is split across the two.
+
+```mermaid
+flowchart LR
+    ROLE["the role: may work.create"] --> AND{"both, or neither"}
+    LIMITS["the workspace: max depth 2"] --> AND
+    AND -->|"declared at depth 1"| YES["the work is written"]
+    AND -->|"declared at depth 2"| NO["refused, naming the workspace limit"]
+```
+
 ## How long a brief may be
 
 A brief may be 16,384 bytes, which is about four pages. A skill's brief may be 4,096.

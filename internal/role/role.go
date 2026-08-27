@@ -64,6 +64,31 @@ const (
 	MaterialSkills  = "skills"
 )
 
+// Verbs is what a role may declare it calls. An allow list, refused by name at import for the same
+// reason Material is: a boundary that quietly means nothing looks exactly like one that holds.
+//
+// Four, and no more, because a verb nobody uses is a boundary that means nothing. Nothing here
+// creates a workspace, a project, a secret, a skill, a hook or a role: a session that could grant
+// itself a capability could write itself a way of working nobody approved and then run as it.
+var Verbs = []string{
+	// VerbWorkCreate declares a piece of work. The parent comes from the credential, never from the
+	// caller, which is what keeps the depth count honest.
+	VerbWorkCreate,
+	// VerbWorkRead reads work and its answer.
+	VerbWorkRead,
+	// VerbWorkAnswer answers a question a piece of work asked.
+	VerbWorkAnswer,
+	// VerbWorkStop stops a piece of work.
+	VerbWorkStop,
+}
+
+const (
+	VerbWorkCreate = "work.create"
+	VerbWorkRead   = "work.read"
+	VerbWorkAnswer = "work.answer"
+	VerbWorkStop   = "work.stop"
+)
+
 // A Role is one way of working, as it was written down.
 type Role struct {
 	// Name is what it is called, and it is the directory it lives in.
@@ -79,6 +104,10 @@ type Role struct {
 	Model string
 	// Receives is the material this role is given, sorted, drawn from Material.
 	Receives []string
+	// May_ is what a session running as this role may call, sorted, drawn from Verbs. Empty is a role
+	// that may call nothing, which is what every role written before this existed becomes: default
+	// deny, so a boundary is something an author wrote rather than something they forgot.
+	May_ []string
 	// Brief is how this role works, read from ROLE.md.
 	Brief string
 	// Dir is where the role is, as this process sees it. Empty for one that arrived over the wire.
@@ -100,6 +129,7 @@ type manifest struct {
 	Summary  string   `yaml:"summary"`
 	Model    string   `yaml:"model"`
 	Receives []string `yaml:"receives"`
+	May      []string `yaml:"may"`
 }
 
 // One reads a single role from its directory.
@@ -157,6 +187,7 @@ func FromFiles(files []File) (Role, error) {
 		Summary:  strings.TrimSpace(read.Summary),
 		Model:    strings.TrimSpace(read.Model),
 		Receives: normalise(read.Receives),
+		May_:     normalise(read.May),
 		Brief:    strings.TrimRight(string(brief), "\n"),
 	}
 	return loaded, loaded.check(loaded.Name)
@@ -198,9 +229,21 @@ func ReadDir(dir string) ([]File, error) {
 // whether it is the same role or a different one wearing the same number.
 func (r Role) Fingerprint() string {
 	sum := sha256.New()
-	fmt.Fprintf(sum, "%s\x00%d\x00%s\x00%s\x00%s\x00%s\x00",
-		r.Name, r.Version, r.Summary, r.Model, strings.Join(r.Receives, ","), r.Brief)
+	fmt.Fprintf(sum, "%s\x00%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00",
+		r.Name, r.Version, r.Summary, r.Model, strings.Join(r.Receives, ","),
+		strings.Join(r.May_, ","), r.Brief)
 	return hex.EncodeToString(sum.Sum(nil))
+}
+
+// May says whether a session running as this role may call a verb. A role that declared nothing may
+// call nothing.
+func (r Role) May(verb string) bool {
+	for _, held := range r.May_ {
+		if held == verb {
+			return true
+		}
+	}
+	return false
 }
 
 // Gets says whether this role receives a kind of material.
@@ -272,11 +315,26 @@ func (r Role) check(directory string) error {
 				directory, material, strings.Join(Material, ", "))
 		}
 	}
+	for _, verb := range r.May_ {
+		if !knownVerb(verb) {
+			return fmt.Errorf("role: %s may %q, which is not a verb the crew grants; it is one of: %s",
+				directory, verb, strings.Join(Verbs, ", "))
+		}
+	}
 	if !r.Gets(MaterialWork) {
 		return fmt.Errorf("role: %s does not receive %s, and a session with no work to do is not a task; add %s to what it receives",
 			directory, MaterialWork, MaterialWork)
 	}
 	return nil
+}
+
+func knownVerb(verb string) bool {
+	for _, one := range Verbs {
+		if one == verb {
+			return true
+		}
+	}
+	return false
 }
 
 func known(material string) bool {

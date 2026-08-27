@@ -328,6 +328,13 @@ message DispatchRequest {
   // A workspace that does not hold the named role is refused by name, because a step that names a
   // role nobody attached must fail with a sentence rather than half run.
   string role = 6;
+  // work is the piece of work this task runs for, and only the operator may name one. The crew mints
+  // a credential bound to that work for this task and puts it in the environment of this task alone.
+  //
+  // Per task rather than at sandbox birth, because a sandbox is born with its configuration and keeps
+  // it: a credential written at birth would label every later task with the first task's grant, and a
+  // grant made after birth would never reach the container at all.
+  string work = 7;
 }
 message DispatchResponse {
   string id = 1;
@@ -1034,6 +1041,43 @@ message StopWorkResponse {
   Work work = 1;
 }
 
+// WorkspaceLimits is the ceiling a workspace puts on the work its sessions declare.
+//
+// The workspace carries the ceiling and a role carries the grant, and the two mean different things:
+// a role says what a session may do, and the workspace says how much of it. The effective capability
+// is the intersection, and a refusal names the workspace limit rather than the role, because the
+// limit is the thing an operator would change.
+message WorkspaceLimits {
+  string workspace = 1;
+  // max_depth is how deep the tree of work may go. Zero, the default, means no session in this
+  // workspace may declare work at all: default deny, raised deliberately and per workspace.
+  int32 max_depth = 2;
+  // max_running is how many pieces of work may run at once in this workspace. Zero is unset, and the
+  // crew ships it unset because no measurement has set it yet.
+  int32 max_running = 3;
+  // budget_tokens is what a tree of work may spend when its root declares none. Zero is unset.
+  int64 budget_tokens = 4;
+  // lease_seconds is how long a controller holds a piece of work here before another may take it.
+  // Zero takes the crew's own measured default.
+  int32 lease_seconds = 5;
+}
+
+message GetWorkspaceLimitsRequest {
+  string workspace = 1;
+}
+message GetWorkspaceLimitsResponse {
+  WorkspaceLimits limits = 1;
+}
+
+// SetWorkspaceLimitsRequest writes the ceiling. Every field is written as it arrives, so reading
+// first and sending the whole row back is how one of them is changed.
+message SetWorkspaceLimitsRequest {
+  WorkspaceLimits limits = 1;
+}
+message SetWorkspaceLimitsResponse {
+  WorkspaceLimits limits = 1;
+}
+
 // ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
 // session left out asks for the whole crew's, which is what a view of what is going on reads.
 message ListSessionEventsRequest {
@@ -1108,6 +1152,10 @@ service ControlPlaneService {
   rpc GetWork(GetWorkRequest) returns (GetWorkResponse);
   rpc ListWork(ListWorkRequest) returns (ListWorkResponse);
   rpc StopWork(StopWorkRequest) returns (StopWorkResponse);
+  // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
+  // neither, because a caller that could raise its own ceiling has no ceiling.
+  rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);
+  rpc SetWorkspaceLimits(SetWorkspaceLimitsRequest) returns (SetWorkspaceLimitsResponse);
   rpc ListSessionEvents(ListSessionEventsRequest) returns (ListSessionEventsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);

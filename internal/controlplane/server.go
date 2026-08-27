@@ -181,6 +181,9 @@ type Server struct {
 	// workController makes reality match the work the crew holds. Started the same way and for the
 	// same reason.
 	workController *work.Controller
+	// grants are the credentials this crew has minted for pieces of work, so a call carrying one is
+	// recognised as that work rather than as the operator.
+	grants *grants
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
@@ -251,6 +254,7 @@ func NewServer(cfg Config) *Server {
 		startWait:     orWait(cfg.StartWait, startWait),
 		exportWait:    orWait(cfg.ExportWait, exportWait),
 		starts:        make(chan struct{}, 1),
+		grants:        newGrants(),
 	}
 	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
 	// in this file rather than an operator's problem. Say it and carry on unmeasured: a crew that
@@ -405,7 +409,10 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 		mounts = append(mounts, mount)
 	}
 	cfg := boxOf(session)
-	cfg.Env = environ(s.taskEnv(ctx, session))
+	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
+	// credential written here would label every later task with the first task's grant, and one
+	// minted after birth would never reach the container at all. It travels on the task instead.
+	cfg.Env = environ(s.taskEnv(ctx, session, ""))
 	cfg.Mounts = mounts
 	cfg.Driver = session.GetDriver()
 	var box sandbox.Sandbox
@@ -1167,14 +1174,14 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
 		// carrying that context would be killed by the very thing that started it.
 		s.tasking.Add(1)
-		go func(session *quaycrewv1.Session, text string) {
+		go func(session *quaycrewv1.Session, text, credential string) {
 			defer s.tasking.Done()
-			_, _ = s.task(context.WithoutCancel(ctx), session, text)
-		}(session, req.GetText())
+			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential)
+		}(session, req.GetText(), s.credentialFor(ctx, req.GetWork()))
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText())
+	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -1184,7 +1191,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // task runs one task of a session and records what came of it, whichever way it was dispatched. Both
 // roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
-func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text string) (string, error) {
+func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string) (string, error) {
 	// Both of these happen before any work does, and that is the point of them. An operator has to be
 	// able to see what a session was asked to do while it is doing it, whether or not the caller
 	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
@@ -1208,7 +1215,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 		Text:           text,
 		ModelSessionID: session.GetModelSessionId(),
 		PermissionMode: permissionModeOf(session, s.birthMode),
-		Env:            s.taskEnv(ctx, session),
+		Env:            s.taskEnv(ctx, session, credential),
 		Settings:       s.settingsFor(ctx, session),
 	})
 	if err != nil {
@@ -1689,7 +1696,7 @@ func environ(values map[string]string) []string {
 // taskEnv gathers the environment a task runs with from the workspace's secrets. A workspace that has
 // set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
 // task, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
-func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session) map[string]string {
+func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, credential string) map[string]string {
 	env := map[string]string{}
 	// Who this session is. The volume is shared by every session in the workspace, so anything a
 	// session puts there needs a name of its own to avoid the session beside it: the git brief names
@@ -1708,6 +1715,17 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session) map[s
 		if s.driverToken != "" {
 			env[auth.TokenEnv] = s.driverToken
 		}
+	}
+	// The credential this one task runs under, where the task runs a piece of work. It is minted for
+	// that work, carries the verbs its role declared, and expires with it, so a value read out of the
+	// container grants what that piece of work could do and only until it ends.
+	//
+	// Never written at sandbox birth, and that is the constraint the obvious design fails on: a
+	// sandbox keeps what it was created with, so a credential put there would label every later task
+	// with the first task's grant, and one minted afterwards would never reach the container.
+	if credential != "" && s.reachable != "" {
+		env[grpcAddrEnv] = s.reachable
+		env[auth.TokenEnv] = credential
 	}
 	// Who a commit is by. All four, because git wants an author and a committer and refuses on either
 	// missing: setting the author alone produces "Committer identity unknown" and a wall of advice,

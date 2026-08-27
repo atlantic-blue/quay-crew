@@ -561,6 +561,61 @@ is the same reason `docs/ARCHITECTURE.md` gives for a wait being a column rather
 
 ## 5. The capability model
 
+
+### What of this shipped on 27 August 2026
+
+The `may` list, the credential, the parent from that credential, the `workspace_limits` row and
+`quay limits`. The four hook calls joined the deny list at the same time.
+
+```mermaid
+sequenceDiagram
+    participant OP as "the operator"
+    participant CP as "the control plane"
+    participant SES as "a session running a piece of work"
+    OP->>CP: "quay limits acme --max-depth 2"
+    OP->>CP: "quay work create, role backlog-clearer"
+    CP->>CP: "mint a credential for that work, holding the role's may list"
+    CP->>SES: "the task, with the credential in its environment"
+    SES->>CP: "CreateWork, presenting that credential"
+    CP->>CP: "parent and depth read from the credential"
+    CP->>CP: "depth against the workspace ceiling"
+    CP-->>SES: "the work, at depth 1"
+    SES->>CP: "AttachHook, presenting that credential"
+    CP-->>SES: "refused: a session may call the work verbs and nothing else"
+```
+
+**What the credential is.** A token minted for one piece of work, carrying the verbs that work's
+role declared and an expiry no later than the work's deadline. It reaches the session in the
+environment of one task and never at sandbox birth: a sandbox keeps the configuration it was made
+with, so a credential written at birth would label every later task with the first task's grant, and
+one minted afterwards would never reach the container at all. The crew holds the minted credentials
+in the control plane process, so a restart forgets them, which costs nothing because a restart also
+ends every task they belonged to.
+
+**What it holds.** Four verbs and nothing else, and the deny policy points the opposite way from the
+driver's: the driver is refused a named list and holds everything else, while a piece of work holds a
+named list and is refused everything else. It may not raise its own ceiling, name the work another
+task runs for, touch a hook, a skill, a role or a secret, or dispatch.
+
+**The four hook calls.** `ImportHook`, `ListHooks`, `AttachHook` and `DetachHook` are refused to the
+driver now. A hook is a command that runs on a session's own tool use, so attaching one changes what
+every session in that workspace may do, and reading the list is reading the map of the guard the
+session is under. That last one is the difference from a skill, whose listing stays open: a skill is
+a capability a session already holds and uses by name.
+
+**What is enforced, and what is only stored.** `max_depth` is enforced at the write, and the refusal
+names the limit and the command that raises it. `max_running` and `budget_tokens` are stored, read
+and set, and nothing enforces them yet: nothing runs a child, so there is no fan out to bound. The
+slice that runs work in a role is where they start to bite. The lease length is read by the
+controller when it claims that workspace's work.
+
+**What this does not do.** It does not put a session's container on a network that can reach the
+control plane, which is a property of sandbox birth and belongs to the session lifecycle slice. So
+the credential is honoured everywhere the crew is reachable, and a session that cannot reach the
+crew holds a credential it cannot spend. It does not scope `work.read` to the caller's own tree yet:
+the verb is checked, the tree is not. And `work.answer` is granted and refused but nothing asks a
+question yet.
+
 ### The verbs
 
 Four, and no more, because a verb nobody uses is a boundary that means nothing.

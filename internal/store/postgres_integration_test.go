@@ -162,7 +162,12 @@ func truncate(t *testing.T) {
 		// survived a truncate that claimed to leave nothing behind, so one subtest's task-0 was still
 		// there when the next one wrote its own, and AppendTask's "on conflict do nothing" dropped it
 		// silently. What that looked like was a case reading zero tasks it had just written.
-		`truncate sessions, tasks, channels, workspaces, skills, hooks, roles, secrets, crew_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		//
+		// Session events are the same shape once more. They are keyed by their own id and reference
+		// nothing, so the cascade cannot reach them, and a case that counts what the whole crew has
+		// seen was counting another test's sessions. It passed for as long as no test file sorting
+		// before this one happened to dispatch anything.
+		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, roles, secrets, crew_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

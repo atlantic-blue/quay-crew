@@ -69,6 +69,8 @@ const (
 	ControlPlaneService_GetWork_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetWork"
 	ControlPlaneService_ListWork_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/ListWork"
 	ControlPlaneService_StopWork_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/StopWork"
+	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
+	ControlPlaneService_SetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetWorkspaceLimits"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
@@ -133,6 +135,10 @@ type ControlPlaneServiceClient interface {
 	GetWork(ctx context.Context, in *GetWorkRequest, opts ...grpc.CallOption) (*GetWorkResponse, error)
 	ListWork(ctx context.Context, in *ListWorkRequest, opts ...grpc.CallOption) (*ListWorkResponse, error)
 	StopWork(ctx context.Context, in *StopWorkRequest, opts ...grpc.CallOption) (*StopWorkResponse, error)
+	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
+	// neither, because a caller that could raise its own ceiling has no ceiling.
+	GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error)
+	SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -651,6 +657,26 @@ func (c *controlPlaneServiceClient) StopWork(ctx context.Context, in *StopWorkRe
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWorkspaceLimitsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetWorkspaceLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetWorkspaceLimitsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetWorkspaceLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSessionEventsResponse)
@@ -749,6 +775,10 @@ type ControlPlaneServiceServer interface {
 	GetWork(context.Context, *GetWorkRequest) (*GetWorkResponse, error)
 	ListWork(context.Context, *ListWorkRequest) (*ListWorkResponse, error)
 	StopWork(context.Context, *StopWorkRequest) (*StopWorkResponse, error)
+	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
+	// neither, because a caller that could raise its own ceiling has no ceiling.
+	GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error)
+	SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -916,6 +946,12 @@ func (UnimplementedControlPlaneServiceServer) ListWork(context.Context, *ListWor
 }
 func (UnimplementedControlPlaneServiceServer) StopWork(context.Context, *StopWorkRequest) (*StopWorkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopWork not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceLimits not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetWorkspaceLimits not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessionEvents not implemented")
@@ -1850,6 +1886,42 @@ func _ControlPlaneService_StopWork_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkspaceLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetWorkspaceLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetWorkspaceLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetWorkspaceLimits(ctx, req.(*GetWorkspaceLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetWorkspaceLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetWorkspaceLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetWorkspaceLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetWorkspaceLimits(ctx, req.(*SetWorkspaceLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListSessionEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSessionEventsRequest)
 	if err := dec(in); err != nil {
@@ -2128,6 +2200,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopWork",
 			Handler:    _ControlPlaneService_StopWork_Handler,
+		},
+		{
+			MethodName: "GetWorkspaceLimits",
+			Handler:    _ControlPlaneService_GetWorkspaceLimits_Handler,
+		},
+		{
+			MethodName: "SetWorkspaceLimits",
+			Handler:    _ControlPlaneService_SetWorkspaceLimits_Handler,
 		},
 		{
 			MethodName: "ListSessionEvents",

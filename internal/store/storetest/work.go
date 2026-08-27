@@ -936,3 +936,123 @@ func releasedEvent(id, workspace, project string) *work.Event {
 		OccurredAt: time.Now().UTC(),
 	}
 }
+
+// runWorkspaceLimitsConformance holds both stores to what a ceiling means.
+//
+// The one that matters is the default: a workspace nobody configured must answer with a depth of
+// zero, because that is what stops a session declaring work until an operator says otherwise. A
+// store that answered "not found" instead would make a crew that grants everything until it is
+// configured, which is the wrong direction to fail in.
+func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a workspace nobody configured allows no depth at all", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		limits, err := s.WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if limits.MaxDepth != 0 {
+			t.Fatalf("a workspace nobody configured allows depth %d, want 0", limits.MaxDepth)
+		}
+		if limits.MaxRunning != 0 || limits.BudgetTokens != 0 || limits.LeaseSeconds != 0 {
+			t.Fatalf("a workspace nobody configured carries %+v, want every limit unset", limits)
+		}
+	})
+
+	t.Run("a ceiling is written whole and read back", func(t *testing.T) {
+		open := newDataset(t)
+		s := open(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		written, err := s.SetWorkspaceLimits(ctx, work.Limits{
+			Workspace: workspace, MaxDepth: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
+		})
+		if err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+		if written.MaxDepth != 2 || written.MaxRunning != 4 || written.BudgetTokens != 5000 ||
+			written.LeaseSeconds != 90 {
+			t.Fatalf("the ceiling was written as %+v", written)
+		}
+
+		// Reopened, because a ceiling that only exists in the process that set it is not a ceiling.
+		read, err := open(t).WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if read.MaxDepth != 2 || read.MaxRunning != 4 || read.BudgetTokens != 5000 || read.LeaseSeconds != 90 {
+			t.Fatalf("the ceiling reads back as %+v", read)
+		}
+	})
+
+	t.Run("writing a ceiling again replaces it rather than adding one", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, work.Limits{Workspace: workspace, MaxDepth: 3, MaxRunning: 9}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+		written, err := s.SetWorkspaceLimits(ctx, work.Limits{Workspace: workspace, MaxDepth: 1})
+		if err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		if written.MaxDepth != 1 {
+			t.Fatalf("the depth is %d, want the one just written", written.MaxDepth)
+		}
+		if written.MaxRunning != 0 {
+			t.Fatalf("the concurrency is %d, and the whole row is written, so it should be back to unset",
+				written.MaxRunning)
+		}
+	})
+
+	t.Run("one workspace's ceiling is not another's", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+		other, err := s.CreateWorkspace(ctx, "other")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+
+		if _, err := s.SetWorkspaceLimits(ctx, work.Limits{Workspace: workspace, MaxDepth: 2}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		theirs, err := s.WorkspaceLimits(ctx, other.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if theirs.MaxDepth != 0 {
+			t.Fatalf("the other workspace allows depth %d, and nobody raised it", theirs.MaxDepth)
+		}
+	})
+
+	t.Run("the lease a workspace names is what a controller holds work for", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, work.Limits{Workspace: workspace, LeaseSeconds: 90}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+		limits, err := s.WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+
+		if got := limits.Lease(time.Minute); got != 90*time.Second {
+			t.Fatalf("a hold here lasts %s, want the 90 seconds the workspace named", got)
+		}
+		unset, _ := s.WorkspaceLimits(ctx, "nobody")
+		if got := unset.Lease(time.Minute); got != time.Minute {
+			t.Fatalf("a hold where nothing is named lasts %s, want the crew's own", got)
+		}
+	})
+}

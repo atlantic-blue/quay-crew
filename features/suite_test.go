@@ -369,12 +369,8 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
-	// The same options the real main builds the server with, so a scenario about tracing is about
-	// what the crew does and not about what the harness added.
-	w.grpcServer = grpc.NewServer(append(
-		telemetry.ServerOptions(),
-		auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...,
-	)...)
+	// The server first, because the interceptors ask it to recognise the credentials it has minted
+	// for pieces of work.
 	w.server = controlplane.NewServer(controlplane.Config{
 		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
@@ -383,6 +379,17 @@ func (w *world) serve() error {
 		StartWait: w.startWait, ExportWait: w.exportWait,
 		Headroom: w.machine, HeadroomEvery: time.Hour,
 	})
+	// The same options the real main builds the server with, so a scenario about tracing is about
+	// what the crew does and not about what the harness added.
+	w.grpcServer = grpc.NewServer(append(
+		telemetry.ServerOptions(),
+		auth.ServerOptions(auth.Policy{
+			Token: w.token, DriverToken: w.driverToken, Denied: controlplane.DeniedToDriver,
+			// The scenarios run against a crew that guards itself the way a real one does, work
+			// credentials included.
+			Grants: w.server.Grants(), DeniedToWork: controlplane.DeniedToWork,
+		})...,
+	)...)
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
 	// a session the store still calls running is settled, because its task died with the last process.
 	w.server.ReapStrays(context.Background())
@@ -558,6 +565,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkSteps(sc)
 	initializeWorkControllerSteps(sc)
 	initializeWorkLeaseSteps(sc)
+	initializeCapabilitySteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
@@ -1112,4 +1120,24 @@ func refused(w *world, want codes.Code) error {
 		return fmt.Errorf("the control plane refused it as %s, want %s", got, want)
 	}
 	return nil
+}
+
+// dialAs is a second client presenting somebody else's token, which is how a scenario makes a call
+// as a session rather than as the operator. The guard is the real one: the call goes through the
+// same interceptors the operator's does and is judged by the policy written for whoever it is from.
+func (w *world) dialAs(token string) quaycrewv1.ControlPlaneServiceClient {
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return w.listener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(auth.Credentials(token)),
+	)
+	if err != nil {
+		// A dial that cannot be built is a defect in the harness rather than a behaviour, and the
+		// step that follows says so plainly when every call fails.
+		return w.client
+	}
+	return quaycrewv1.NewControlPlaneServiceClient(conn)
 }
