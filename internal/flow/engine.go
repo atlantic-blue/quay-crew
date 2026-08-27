@@ -365,8 +365,8 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 	// can never be recorded as waiting with nothing to wake it.
 	var due DueAt
 	if next.Status == StatusWaiting && next.DueIn > 0 {
-		at := e.now().Add(next.DueIn)
-		due = &at
+		when := e.now().Add(next.DueIn)
+		due = &when
 	}
 
 	written := WorkWrite{}
