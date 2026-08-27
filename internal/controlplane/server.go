@@ -245,6 +245,10 @@ type Server struct {
 	// it the only way to end a task was to kill the client, which does not reliably end anything.
 	runningMu sync.Mutex
 	running   map[string]*running
+
+	// opened is the conversations this process has watched a model runtime open. It is what a crew
+	// that keeps no state on the host has in place of a transcript to look at.
+	opened opened
 }
 
 // NewServer builds a control plane over a durable store, a model runner (the Claude Code adapter by
@@ -1166,6 +1170,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 
+	// The conversation is named before any task runs in it, so the crew can say which conversation a
+	// session is working in while it is working rather than once it has finished. A session opened
+	// meanwhile lands in the conversation doing the work.
+	s.nameConversation(ctx, session)
+
 	// Anything that fails from here on says so on the session's row. The row exists by now, and a row
 	// left idle with no task and no container reads as a session waiting for work rather than one
 	// that never started.
@@ -1240,12 +1249,16 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		return "", sandboxError(err, "create sandbox")
 	}
 
+	// Named here as well as at dispatch, so a task always carries a conversation whatever road it
+	// arrived by, and started decides which of the two ways it is named on the command line.
+	conversation := s.nameConversation(ctx, session)
 	resp, err := s.runner.Run(ctx, box, model.Request{
-		Text:           text,
-		ModelSessionID: session.GetModelSessionId(),
-		PermissionMode: permissionModeOf(session, s.birthMode),
-		Env:            withTraceparent(ctx, s.taskEnv(ctx, session, credential)),
-		Settings:       s.settingsFor(ctx, session),
+		Text:                text,
+		ModelSessionID:      conversation,
+		ConversationStarted: s.conversationStarted(session, conversation),
+		PermissionMode:      permissionModeOf(session, s.birthMode),
+		Env:                 withTraceparent(ctx, s.taskEnv(ctx, session, credential)),
+		Settings:            s.settingsFor(ctx, session),
 	})
 	if err != nil {
 		if asked, reason := held.stopped(); asked {
@@ -1262,7 +1275,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		s.emit(ctx, session, KindSessionErrored, taskFailure(err))
 		return "", status.Errorf(codes.Internal, "run task: %v", err)
 	}
-	s.recordTask(ctx, session.GetId(), resp.ModelSessionID, StatusIdle)
+	s.recordTask(ctx, session.GetId(), s.confirmConversation(ctx, session, resp.ModelSessionID), StatusIdle)
 	s.measureTask(ctx, session, resp, StatusIdle)
 	s.landTask(ctx, session, task, StatusIdle, resp.Reply, "")
 	s.emit(ctx, session, KindSessionCompleted, resp.Reply)
@@ -1969,23 +1982,25 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 			return nil, storeError(err, "session")
 		}
 	}
-	// The crew names the conversation rather than learning what it was called afterwards. A
-	// conversation started interactively picks its own identifier and tells nobody, so before this
-	// every conversation opened from the panel was one the crew could not name: no history to read
-	// back, no tokens to count, and no way to tell one transcript in the workspace from another.
+	// Opening a session opens the conversation the session already holds. The crew names one before
+	// any task runs in it, so by the time anybody can open a session there is a name to open, and
+	// naming one here would be naming a second conversation beside the first.
 	//
-	// Assigned here rather than at creation: this is the moment a conversation starts to exist, and a
-	// session that is only dispatched to gets its identifier from the task.
-	//
-	// Every session, not only the driver. A session exists from the moment a task is dispatched, so a
-	// first task that failed leaves one holding no conversation at all, and that session sat in the
-	// listing with no way to open it.
+	// A session with no name at all is one nothing has ever been dispatched to, or one carried over
+	// from a crew that named conversations after the task rather than before it. Naming it here is
+	// what makes it openable: a first task that failed used to leave a session in the listing that
+	// nobody could open at all.
 	if session.GetModelSessionId() == "" {
-		named := store.NewConversationID()
-		if err := s.store.RecordTask(ctx, session.GetId(), named, session.GetStatus()); err != nil {
-			return nil, storeError(err, "name the conversation")
+		if session.GetStatus() == StatusRunning {
+			// The one case where naming a conversation here is the defect rather than the fix. The task
+			// is working in a conversation this crew never named and cannot know the name of until the
+			// task lands, and a name minted now would open an empty conversation beside the work.
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"session %s is running a task that named its own conversation: it lands on the session "+
+					"when the task finishes, and opening the session now would start a second conversation "+
+					"beside the one doing the work", display.ShortID(session.GetHandle()))
 		}
-		session.ModelSessionId = named
+		s.nameConversation(ctx, session)
 	}
 	// A handle can outlive what it points at, and a conversation the crew has just named has no
 	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a

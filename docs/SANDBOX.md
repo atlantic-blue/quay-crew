@@ -107,6 +107,66 @@ Continuous integration has no subscription, so this test skips there. The token 
 itself, that a value in the sandbox env reaches the process inside the container, is covered by
 `TestDockerProviderDeliversEnv`, which needs only Docker and does run in continuous integration.
 
+## Naming a conversation
+
+The crew names a session's conversation, before anything runs in it. The name is a version 4
+identifier, it is written on the session, and both roads into that conversation carry it: the task
+the crew dispatches, and the terminal an operator opens.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant YOU as "operator"
+    participant CP as "control plane"
+    participant DB as "store"
+    participant SBX as "sandbox"
+
+    YOU->>CP: "quay dispatch 'read the repository'"
+    CP->>DB: "name the conversation, before the task"
+    CP->>SBX: "claude --session-id <conversation> -p ..."
+    Note over CP,SBX: "the task is what makes the name true"
+    YOU->>CP: "quay attach <session>, while the task runs"
+    CP->>DB: "read the name the session holds"
+    CP-->>YOU: "open-conversation <conversation>"
+    Note over YOU,SBX: "the operator lands in the conversation doing the work"
+    SBX-->>CP: "the stream reports its conversation"
+    Note over CP,DB: "checked against the name the crew gave, not adopted"
+```
+
+Which flag carries the name depends on one question, and getting it wrong fails the task either way.
+A name the model runtime has never seen is **started** with `--session-id`, because resuming a name
+with nothing behind it prints "No conversation found" and exits. A name it has seen is **resumed**
+with `--resume`, because starting one it already holds is refused as a name already in use. The
+answer is the transcript: `HasConversation` in
+[`internal/sandbox/usage.go`](../internal/sandbox/usage.go) looks for
+`<store>/projects/*/<conversation>.jsonl`, and
+[`deploy/sandbox/open-conversation.sh`](../deploy/sandbox/open-conversation.sh) asks the same question
+of the same file from inside the container, so the two cannot disagree.
+
+The identifier the model reports in its output stream is a check rather than the source. It used to be
+the source, which is why it arrived too late to be any use: it is read once the task is over, and
+attaching happens while the task runs. Now, a stream naming a different conversation means the runtime
+ignored the flag, and the crew says so in a line carrying both names, keeps its own, and leaves the
+other name findable rather than quietly adopting it.
+
+### What this does not do
+
+- **A session running a task that named its own conversation cannot be opened.** That is a session
+  carried over from before this, caught mid task: the crew does not know that conversation's name and
+  cannot until the task lands. Attaching is refused, in those words, rather than naming a second
+  conversation and opening an empty one beside the work. The name lands on the session when the task
+  finishes, and attaching works from then on.
+- **A transcript written under a name a session does not hold is not deleted, and not shown either.**
+  Attaching used to name a conversation of its own while a first task was running, so a sandbox built
+  before this can hold two transcripts for one session. Both are still on the host, under
+  `~/.quay/data/workspaces/<workspace>/claude/projects/`, and the crew reads the one the session holds.
+  Open another by name from inside the container:
+  `docker exec -it quaycrew-<session id> claude --resume <conversation id>`.
+- **A crew with no data directory cannot see any transcript**, so it falls back to what this process
+  has watched a model runtime open. That memory does not survive a restart, and a session whose first
+  task ran before the restart would be told to start its conversation again. Set `QC_DATA_DIR`, which
+  `make up` does.
+
 ## Getting inside a conversation
 
 `quay dispatch` starts a task and returns, and `quay ask` waits for its answer. To sit inside the
@@ -119,8 +179,8 @@ quay attach 5d013d07
 
 or press `a` on a session in the console.
 
-This runs `claude --resume <conversation id>` inside that session's sandbox, and needs nothing from
-your shell. The control plane sets the workspace's environment on the sandbox when it creates it, so
+This runs `claude` inside that session's sandbox on the conversation the session holds, resuming it
+or starting it under that name, and needs nothing from your shell. The control plane sets the workspace's environment on the sandbox when it creates it, so
 everything started inside is already authenticated and no tool has to carry the token around.
 
 The trade is that the token is readable for the life of that container, for example through

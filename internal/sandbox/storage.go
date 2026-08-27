@@ -188,26 +188,6 @@ func (s Storage) Contexts(cfg Config) []Context {
 // directory.
 const ConversationFile = ".jsonl"
 
-// HasConversation says whether a workspace's store still holds one. A handle is a pointer into a
-// store this process does not own, so it can outlive what it points at.
-//
-// True whenever it cannot tell: refusing every attach because there is nowhere to look would be worse
-// than the failure this exists to explain.
-func (s Storage) HasConversation(workspace, conversation string) bool {
-	if s.Dir == "" || workspace == "" || conversation == "" {
-		return true
-	}
-	if usableAsPath("workspace", workspace) != nil || !plainIdentifier(conversation) {
-		return true
-	}
-	matches, err := filepath.Glob(filepath.Join(
-		s.Dir, "workspaces", workspace, "claude", "projects", "*", conversation+ConversationFile))
-	if err != nil {
-		return true
-	}
-	return len(matches) > 0
-}
-
 // plainIdentifier keeps anything with a glob character in it out of the pattern above, so a handle
 // from somewhere unexpected widens nothing.
 func plainIdentifier(id string) bool {

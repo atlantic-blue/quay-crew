@@ -50,8 +50,8 @@ func sessionByID(t *testing.T, server *Server, id string) *quaycrewv1.Session {
 // open, so a Dispatch that returns has provably not waited for it.
 func TestADetachedDispatchAnswersWhileTheTaskIsStillRunning(t *testing.T) {
 	runner := &model.FakeRunner{
-		Reply: "done", SessionID: "model-1",
-		Gate: make(chan struct{}), Started: make(chan struct{}),
+		Reply: "done",
+		Gate:  make(chan struct{}), Started: make(chan struct{}),
 	}
 	server, project := detachServer(t, runner)
 
@@ -96,8 +96,8 @@ func TestADetachedDispatchAnswersWhileTheTaskIsStillRunning(t *testing.T) {
 // thing that started it, which is the thirty second deadline all over again with a smaller number.
 func TestADetachedTaskOutlivesTheCallerThatAskedForIt(t *testing.T) {
 	runner := &model.FakeRunner{
-		Reply: "done", SessionID: "model-1",
-		Gate: make(chan struct{}), Started: make(chan struct{}),
+		Reply: "done",
+		Gate:  make(chan struct{}), Started: make(chan struct{}),
 	}
 	server, project := detachServer(t, runner)
 
@@ -136,7 +136,7 @@ func TestADetachedTaskOutlivesTheCallerThatAskedForIt(t *testing.T) {
 // A dispatch that does not detach still waits and still answers with the reply. The console changing
 // is not licence to change what the command line and the flow engine get.
 func TestADispatchThatDoesNotDetachStillWaitsForTheReply(t *testing.T) {
-	runner := &model.FakeRunner{Reply: "done", SessionID: "model-1"}
+	runner := &model.FakeRunner{Reply: "done"}
 	server, project := detachServer(t, runner)
 
 	resp, err := server.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{

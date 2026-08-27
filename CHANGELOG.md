@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The crew names a conversation before the task starts, so attaching to a running session opens the
+  conversation doing the work.** A session's first task carried no name at all, so the model runtime
+  named its own conversation and told nobody until the task was over. Attaching meanwhile found
+  nothing on the session, named a second conversation and opened that one: empty, beside the work, and
+  real enough that typing in it left two conversations in one session, with the session naming whichever
+  wrote last. Watching a task is the reason to attach, and while a task ran was the one moment it did
+  not work.
+
+  The name is minted when the task is dispatched, written on the session, and handed to the runtime as
+  `--session-id` the first time and `--resume` after that. Which of the two is decided by whether a
+  transcript is there, which is the same question `open-conversation.sh` has always asked from inside
+  the container, so a conversation reached by typing and one reached by dispatching are one
+  conversation. Attaching opens the name the session already holds and never mints one for a session
+  that is running a task.
+
+  The identifier in the output stream is a check now rather than the source. A runtime that reports a
+  different conversation ignored the flag, and the crew says so in a line carrying both names and
+  keeps its own.
+
+  One session cannot be opened: one carried over from before this and caught mid task, whose
+  conversation the crew cannot name until the task lands. It is refused in those words rather than
+  opened onto an empty conversation. Nothing on disk is lost, and `docs/SANDBOX.md` says how to reach
+  a transcript the session does not hold. Issue 420.
+
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could
   react to nothing while it waited. It writes the step down as a piece of work and returns. A

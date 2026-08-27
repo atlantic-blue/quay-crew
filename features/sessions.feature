@@ -226,6 +226,21 @@ Feature: Sessions run in isolated sandboxes
     And the command runs it inside a terminal the operator can leave
     And the answer carries no credential
 
+  # Watching a task is the reason to attach, and the one moment it did not work was while a task ran,
+  # which is every moment that matters. The crew passed no name on a session's first task, so the model
+  # runtime named that conversation itself and told nobody until the task was over. Attaching meanwhile
+  # found nothing on the session, named a second conversation and opened that one: empty, beside the
+  # work, and real enough that typing in it left two conversations in one session.
+  Scenario: The operator attaches while the first task runs and lands in the conversation doing the work
+    Given the model takes longer over a task than anybody will wait
+    And a task dispatched without waiting for it
+    And a task is under way
+    When the operator asks how to attach to the session
+    Then the crew named the conversation before the task started
+    And the command opens the conversation the task is running in
+    When the model finishes the task
+    Then the session still holds the conversation the first task started
+
   # Opening a session has to be the same session. One armed to skip permissions that asks anyway the
   # moment it is opened reads as the toggle not working.
   Scenario: Opening a session runs in the mode that session is set to
