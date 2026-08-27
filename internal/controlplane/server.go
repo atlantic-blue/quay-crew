@@ -27,6 +27,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
@@ -274,7 +275,7 @@ func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*
 			return nil, storeError(err, "list sessions")
 		}
 		for _, session := range sessions {
-			spent := s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId())
+			spent := s.storage.ConversationUsage(boxOf(session), session.GetModelSessionId())
 			if spent.Empty() {
 				continue
 			}
@@ -338,14 +339,11 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	if mount, under := s.renderHooks(ctx, session); under {
 		mounts = append(mounts, mount)
 	}
-	box, err := s.provider.Create(ctx, sandbox.Config{
-		ID:        session.GetId(),
-		Workspace: session.GetWorkspace(),
-		Project:   session.GetProject(),
-		Env:       environ(s.taskEnv(ctx, session)),
-		Mounts:    mounts,
-		Driver:    session.GetDriver(),
-	})
+	cfg := boxOf(session)
+	cfg.Env = environ(s.taskEnv(ctx, session))
+	cfg.Mounts = mounts
+	cfg.Driver = session.GetDriver()
+	box, err := s.provider.Create(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -461,10 +459,20 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 // first would hand them back the very body they were replacing, so at that one level the store wins
 // and everything else is still read back and kept.
 func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Session, settled contextLevel) {
-	dirs := s.storage.MyDirs(sandbox.Config{
-		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
-	})
+	dirs := s.storage.MyDirs(boxOf(session))
 	if len(dirs) != 2 {
+		return
+	}
+	// A session running as a role is never read back into the crew's memory.
+	//
+	// It was given a brief rather than the crew's context, so what sits in its file is not an edit of
+	// what the store holds: whoever wrote it had never seen the body it would be replacing. Reading it
+	// back is also the hole in the boundary, and the one that matters most. A role that receives no
+	// context still writes a note at the end of its file, unmarked text belongs to the last scope,
+	// and the last scope of the outer file is the workspace. One session that was given nothing would
+	// then be writing what every session in the workspace is told.
+	if session.GetRole() != "" {
+		s.renderContext(ctx, session)
 		return
 	}
 	for at, levels := range contextFiles(session) {
@@ -480,7 +488,7 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		// file's read back has to know the mark too. It goes first, never last: the last scope is where
 		// unmarked text belongs, and a note an agent appends is a note, not an index.
 		scopes := make([]string, 0, len(levels)+1)
-		scopes = append(scopes, sandbox.SkillsScope)
+		scopes = append(scopes, sandbox.SkillsScope, sandbox.RoleScope)
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
 		}
@@ -534,15 +542,30 @@ func join(kept, added string) string {
 // A conversation already running does not see it. The tool reads its memory at the start, so a change
 // lands on the next task or the next open.
 func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session) {
-	dirs := s.storage.MyDirs(sandbox.Config{
-		ID: session.GetId(), Workspace: session.GetWorkspace(), Project: session.GetProject(),
-	})
+	dirs := s.storage.MyDirs(boxOf(session))
 	if len(dirs) != 2 {
 		return
 	}
+	// What the session may be told. A role receives the crew's context only where it says so, and the
+	// brief of the role it runs as always: the brief is not context, it is the whole instruction of
+	// this session.
+	receivesContext := s.receives(ctx, session, role.MaterialContext)
+	brief := s.roleBrief(ctx, session)
 	for at, levels := range contextFiles(session) {
-		sections := make([]sandbox.Section, 0, len(levels)+1)
-		for _, level := range levels {
+		sections := make([]sandbox.Section, 0, len(levels)+2)
+		// Who the session is, first, because everything under it is read in that light. It goes in
+		// the outer file beside the workspace's context, which is the file every session reads
+		// first, and it is rendered every task and never read back.
+		if at == outerFile && brief != "" {
+			sections = append(sections, sandbox.Section{Scope: sandbox.RoleScope, Body: brief})
+		}
+		// A role that does not receive context is given none of it: the levels are not rendered, so
+		// the file holds the brief and whatever the session itself wrote, and nothing else.
+		told := levels
+		if !receivesContext {
+			told = nil
+		}
+		for _, level := range told {
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
 			if err != nil {
 				continue
@@ -1004,11 +1027,24 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, status.Error(codes.InvalidArgument, "text is required")
 	}
 
+	// The role is resolved before the session exists, so a step naming a role the workspace does not
+	// hold leaves no session and no container behind: it is refused, by name, having done nothing.
+	if named := req.GetRole(); named != "" {
+		owner, err := s.store.GetProject(ctx, req.GetProject())
+		if err != nil {
+			return nil, storeError(err, "project")
+		}
+		if _, err := s.roleFor(ctx, owner.GetWorkspace(), named); err != nil {
+			return nil, err
+		}
+	}
+
 	handle := req.GetHandle()
 	if handle == "" {
 		handle = store.NewID()
 	}
-	session, created, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle, s.birthMode)
+	session, created, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle,
+		store.Birth{Mode: s.birthMode, Role: req.GetRole()})
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
@@ -1707,7 +1743,7 @@ func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Sessi
 // those never pass through the control plane at all. A session nobody has spoken in is left without a
 // figure rather than reported as costing nothing, because those are different things.
 func (s *Server) withUsage(session *quaycrewv1.Session) {
-	spent := s.storage.ConversationUsage(session.GetWorkspace(), session.GetModelSessionId())
+	spent := s.storage.ConversationUsage(boxOf(session), session.GetModelSessionId())
 	if spent.Empty() {
 		return
 	}
@@ -1730,7 +1766,7 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 // size of is reported as a count with no size, which a listing shows as tokens rather than as a share
 // it made up.
 func (s *Server) withContextWindow(session *quaycrewv1.Session) {
-	carried := s.storage.ConversationContext(session.GetWorkspace(), session.GetModelSessionId())
+	carried := s.storage.ConversationContext(boxOf(session), session.GetModelSessionId())
 	if carried.Empty() {
 		return
 	}

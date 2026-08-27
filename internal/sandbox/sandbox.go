@@ -51,6 +51,10 @@ type Config struct {
 	// Driver joins the control plane's network and gets the host paths handed to the driver. An
 	// ordinary session gets neither.
 	Driver bool
+	// Role is the role the session runs as, empty for a session that runs as nobody in particular. It
+	// decides where the session's conversation is kept, because a role that must not see the code must
+	// not be able to read the transcript of the session that wrote it.
+	Role string
 }
 
 // Provider mints a Sandbox per session.

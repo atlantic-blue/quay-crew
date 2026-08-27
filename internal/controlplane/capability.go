@@ -9,6 +9,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/name"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -59,6 +60,16 @@ type notGiven struct {
 // start.
 func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) capability {
 	var caps capability
+	// A session running as a role holds the skills its role declares it receives, which is usually
+	// none of them. The boundary is what a role is: a session that was never given a capability
+	// cannot reach for it, and a session merely asked not to can.
+	//
+	// It answers unknown rather than known and empty. Known and empty would sweep the workspace's
+	// skills off the host, and that directory is shared by every session in the workspace, so one
+	// role session would take the skills away from all of them.
+	if !s.receives(ctx, session, role.MaterialSkills) {
+		return caps
+	}
 	attached, err := s.store.WorkspaceSkills(ctx, session.GetWorkspace())
 	if err == nil {
 		attached = s.withCrewSkills(ctx, attached)
@@ -176,4 +187,19 @@ func (s *Server) secretMissing(ctx context.Context, workspace string, one skill.
 		}
 	}
 	return ""
+}
+
+// boxOf is the sandbox configuration for a session, in one place.
+//
+// One constructor rather than a struct literal per caller, because the role decides where the
+// session's conversation is kept: a caller that built the configuration without it would read the
+// workspace's store for a session whose conversation is somewhere else, and answer that a live
+// conversation had cost nothing.
+func boxOf(session *quaycrewv1.Session) sandbox.Config {
+	return sandbox.Config{
+		ID:        session.GetId(),
+		Workspace: session.GetWorkspace(),
+		Project:   session.GetProject(),
+		Role:      session.GetRole(),
+	}
 }
