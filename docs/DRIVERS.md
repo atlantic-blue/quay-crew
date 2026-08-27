@@ -29,7 +29,9 @@ Everything else leaks. Five places, and the interactive path is the worst of the
 seam at all.
 
 1. **Task arguments.** `buildArgs` in [`internal/model/claudecode.go`](../internal/model/claudecode.go)
-   writes `-p`, `--output-format stream-json`, `--verbose`, `--permission-mode` and `--resume`.
+   writes `-p`, `--output-format stream-json`, `--verbose`, `--permission-mode`, and one of
+   `--session-id` or `--resume`, choosing between them on whether the runtime has opened that
+   conversation, exactly as the shell script in point 3 does.
 2. **Result parsing.** `parseStream` in the same file reads Claude Code's event stream, including
    where the session identifier and the cost of a task come from.
 3. **The interactive conversation.** `AttachSession` in

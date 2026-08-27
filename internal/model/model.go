@@ -12,8 +12,16 @@ import (
 // Request is one task to run against the model.
 type Request struct {
 	Text string
-	// ModelSessionID resumes an existing conversation; empty starts one.
+	// ModelSessionID is the conversation this task runs in. The crew names it before the task starts,
+	// so a task always has one. Empty leaves the naming to the runtime, which tells nobody what it
+	// chose until the task is over.
 	ModelSessionID string
+	// ConversationStarted says whether the runtime has opened that conversation already, which decides
+	// how it is named on the command line: a name the runtime has never seen is started under, and a
+	// name with a transcript behind it is resumed. The two are not interchangeable. Resuming a name
+	// that is not there prints "No conversation found" and exits, and starting a name that is there is
+	// refused as one already in use.
+	ConversationStarted bool
 	// PermissionMode is "plan", "acceptEdits" or "bypassPermissions".
 	PermissionMode string
 	Workdir        string

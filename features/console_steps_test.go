@@ -281,8 +281,14 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
+		// The conversation the task ran in, read back rather than written down: the crew names one
+		// before the task starts, and the name is a fresh identifier every time.
+		ran, err := w.conversationOfFirstTask()
+		if err != nil {
+			return err
+		}
 		line := strings.Join(c.opened.Args, " ")
-		for _, want := range []string{sandbox.ContainerName(current.sessionID), sandbox.OpenConversation, "conversation-1"} {
+		for _, want := range []string{sandbox.ContainerName(current.sessionID), sandbox.OpenConversation, ran} {
 			if !strings.Contains(line, want) {
 				return fmt.Errorf("the command is %q, want it to carry %q", line, want)
 			}

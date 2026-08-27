@@ -43,10 +43,14 @@ func anIdleSession(t *testing.T, s *controlplane.Server, project string) *quaycr
 
 func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done", SessionID: "model-1"}, provider)
+	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
+	named := session.GetModelSessionId()
+	if named == "" {
+		t.Fatal("the session holds no conversation, so there is nothing for a reclaim to keep")
+	}
 
 	reclaimed, err := s.ReclaimSession(ctx, &quaycrewv1.ReclaimSessionRequest{Id: session.GetId()})
 	if err != nil {
@@ -56,7 +60,7 @@ func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 	if reclaimed.GetSession().GetStatus() != controlplane.StatusReclaimed {
 		t.Fatalf("the session reads %q, want reclaimed", reclaimed.GetSession().GetStatus())
 	}
-	if reclaimed.GetSession().GetModelSessionId() != "model-1" {
+	if reclaimed.GetSession().GetModelSessionId() != named {
 		t.Fatalf("the conversation handle reads %q, and a reclaim must keep it: it is the only "+
 			"pointer to the transcript the next container resumes",
 			reclaimed.GetSession().GetModelSessionId())
@@ -70,7 +74,7 @@ func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 // The whole promise of reclaimed: a task sent to one starts a new container and carries on.
 func TestATaskSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	runner := &model.FakeRunner{Reply: "first", SessionID: "model-1"}
+	runner := &model.FakeRunner{Reply: "first"}
 	s := aCrewWithProvider(runner, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()

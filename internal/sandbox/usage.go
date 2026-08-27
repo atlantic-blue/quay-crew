@@ -268,3 +268,20 @@ func (s Storage) ContextWindowSize(workspace string) (int64, bool) {
 	}
 	return size, true
 }
+
+// HasConversation says whether the model runtime has opened this conversation already, which is what
+// decides whether a task starts it or resumes it.
+//
+// The transcript is the answer because the transcript is the conversation: the runtime writes one as
+// it goes, under the name it was given, into the store this session mounts. The script that opens a
+// conversation for an operator asks the same question of the same file from inside the sandbox, so
+// the two cannot disagree about whether a conversation exists.
+//
+// False for anything it cannot read, and for a crew that keeps no state on the host at all. Both mean
+// the conversation is not there as far as anything here can tell, and starting a conversation that is
+// somehow already there is refused loudly, where resuming one that is not there fails with a sentence
+// about no conversation found.
+func (s Storage) HasConversation(cfg Config, conversation string) bool {
+	_, found := s.transcript(cfg, conversation)
+	return found
+}

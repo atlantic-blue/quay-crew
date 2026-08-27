@@ -79,7 +79,7 @@ func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
 // The session survives, which is the difference between this and stopping a session.
 func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
-	runner := &model.FakeRunner{Reply: "done", SessionID: "model-1", Gate: gate, Started: started}
+	runner := &model.FakeRunner{Reply: "done", Gate: gate, Started: started}
 	provider := &sandbox.FakeProvider{}
 	s := aCrewWithProvider(runner, provider)
 	_, project := newProject(t, s)
