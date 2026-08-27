@@ -68,6 +68,17 @@ type Provider interface {
 	// Stranded lists the sessions whose sandboxes this provider still holds, so the crew can reap the
 	// ones whose sessions no longer want one.
 	Stranded(ctx context.Context) ([]string, error)
+	// Attached says whether somebody has this session's conversation open inside its sandbox.
+	//
+	// It is asked by name rather than through a handle, the way Remove and Stranded are, because the
+	// handles are a map in one process and the containers are not: after a restart the map is empty
+	// while every container runs on, and a crew that could only answer for the ones it remembers
+	// would say nobody is attached to a conversation somebody is typing into.
+	//
+	// A failure is not "nobody is attached": it is the crew being unable to tell, and the caller must
+	// read it that way. Absent is different, and answers false: a session with no container has
+	// nobody in it.
+	Attached(ctx context.Context, sessionID string) (bool, error)
 }
 
 // Mount is a directory made available inside a sandbox.

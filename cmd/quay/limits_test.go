@@ -112,3 +112,50 @@ func TestLimitsNeedsAWorkspace(t *testing.T) {
 		t.Fatal("a ceiling was read with no workspace to read it for")
 	}
 }
+
+// The two times a session's life is measured by. They ship unset, and unset has to say out loud that
+// the crew does nothing: a reader who has met a timeout before reads a missing number as a default.
+func TestTheReclaimAndArchiveTimesReadAsUnsetAndSayWhatThatMeans(t *testing.T) {
+	client := aCrewToWorkIn(t)
+
+	said := mustRun(t, client, "limits")
+
+	for _, want := range []string{
+		"reclaim        unset", "no session here gives its container back",
+		"archive        unset", "nothing here is filed away on its own",
+	} {
+		if !strings.Contains(said, want) {
+			t.Errorf("quay limits does not say %q: %q", want, said)
+		}
+	}
+}
+
+func TestTheReclaimAndArchiveTimesAreSetAndReadBack(t *testing.T) {
+	client := aCrewToWorkIn(t)
+
+	said := mustRun(t, client, "limits", "me", "--reclaim", "15m", "--archive", "24h")
+
+	for _, want := range []string{"reclaim        15m0s", "archive        24h0m0s"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("quay limits does not say %q: %q", want, said)
+		}
+	}
+	read := mustRun(t, client, "limits", "me")
+	if !strings.Contains(read, "reclaim        15m0s") {
+		t.Fatalf("the reclaim time did not survive being set: %q", read)
+	}
+	// Set, so the sentence about what unset does is gone.
+	if strings.Contains(read, "gives its container back") {
+		t.Fatalf("the answer still says what unset means over a number that is set: %q", read)
+	}
+}
+
+func TestATimeThatIsNotALengthIsRefused(t *testing.T) {
+	client := aCrewToWorkIn(t)
+
+	for _, flag := range []string{"--reclaim", "--archive"} {
+		if _, err := runQuay(t, client, "limits", "me", flag, "soon"); err == nil {
+			t.Fatalf("%s soon was accepted", flag)
+		}
+	}
+}

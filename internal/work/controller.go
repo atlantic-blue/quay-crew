@@ -107,6 +107,10 @@ type Store interface {
 	// LandWork writes what came of the work and lets go of the lease. It applies only to work that
 	// is still running.
 	LandWork(ctx context.Context, id string, landed Landing, event *Event) (*Work, error)
+	// SettledSessions is the fourth query: the sessions nothing is holding open, oldest touched
+	// first. A session is not a second resource with a declaration of its own, so what is wanted of
+	// it is derived from the work that names it, and work still in flight keeps its session alive.
+	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 }
 
 // ControlPlane is what a controller may do on the crew. It is the same interface every other caller
@@ -118,6 +122,25 @@ type ControlPlane interface {
 	// ListSessions is how a controller finds the conversation a piece of work ran in when the row
 	// does not say. The session is named after the work, so it can be found without being told.
 	ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error)
+	// ReclaimSession takes a settled session's container back and leaves everything else. Only the
+	// control plane can close a sandbox, so the controller asks rather than doing it.
+	ReclaimSession(ctx context.Context, req *quaycrewv1.ReclaimSessionRequest) (*quaycrewv1.ReclaimSessionResponse, error)
+	// ArchiveSession files a session away. It is the same call an operator makes, with no operator
+	// behind it, which is the whole of what the controller does at the end of a session's life.
+	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
+}
+
+// Attachment says whether an operator has a session's conversation open.
+//
+// It exists because the controller must never close a container somebody is typing into, and the
+// crew could not tell before this: `quay attach` hands the operator a command to run against the
+// container and then records nothing about it. The implementation asks the container itself.
+//
+// An implementation that cannot answer returns an error, and the controller reads that as attached.
+// The two mistakes are not the same size: being wrong one way holds a container a little longer, and
+// being wrong the other way closes a conversation under somebody's hands.
+type Attachment interface {
+	SessionAttached(ctx context.Context, session string) (bool, error)
 }
 
 // Spend is what one session's conversation has cost. An implementation that cannot tell answers zero.
@@ -164,6 +187,9 @@ type Controller struct {
 	spend    Spend
 	prover   Prover
 	redactor Redactor
+	// attached is how the controller asks whether an operator has a session's conversation open. Nil
+	// means the crew cannot tell, and a crew that cannot tell reclaims nothing.
+	attached Attachment
 	exporter Exporter
 	logger   *slog.Logger
 	every    time.Duration
@@ -249,6 +275,13 @@ func (c *Controller) Redacting(redactor Redactor) *Controller {
 	return c
 }
 
+// Watching returns a controller that can ask whether an operator is in a session before taking its
+// container back. Without it the controller reclaims nothing, whatever the times say.
+func (c *Controller) Watching(attached Attachment) *Controller {
+	c.attached = attached
+	return c
+}
+
 // Every sets how often the loop ticks. Zero or less leaves the default.
 func (c *Controller) Every(every time.Duration) *Controller {
 	if every > 0 {
@@ -284,6 +317,9 @@ func (c *Controller) Tick(ctx context.Context) {
 	c.recoverAbandoned(ctx)
 	c.adoptAnswers(ctx)
 	c.startDeclared(ctx)
+	// Last, so a session this tick has just dispatched into is not a candidate on the same pass. The
+	// three above decide what is wanted alive; this one acts on what is left.
+	c.putAway(ctx)
 }
 
 // startDeclared sends a task for each piece of work that has not started.
@@ -514,6 +550,12 @@ func (c *Controller) adopt(ctx context.Context, one *Work) {
 	switch {
 	case last.GetStatus() == StatusFailed:
 		landing.Phase, landing.Reason, kind = PhaseFailed, oneLine(last.GetFailure()), EventFailed
+	// An operator stopped the task, so the work stops too, carrying their reason. Work that went
+	// quiet and work that was halted must never read the same, and a stop that came back as done
+	// would have the crew report an answer nobody gave: the task ended before it had one.
+	case last.GetStatus() == StatusTaskStopped:
+		landing.Phase, landing.Answer, landing.Reason, kind =
+			PhaseStopped, "", oneLine(last.GetFailure()), EventStopped
 	default:
 		if unmet := c.unmet(ctx, one, last.GetReply()); unmet != "" {
 			landing.Phase, landing.Reason, kind = PhaseStopped, unmet, EventStopped
@@ -650,6 +692,9 @@ func SessionFor(id string) string { return "work-" + id }
 const (
 	StatusRunning = "running"
 	StatusFailed  = "failed"
+	// StatusTaskStopped is a task an operator halted. It is not a failure, and the controller must
+	// not read it as one: the work is stopped with their reason rather than failed with a crash.
+	StatusTaskStopped = "stopped"
 )
 
 // oneLine keeps a reason readable on a listing: a record is read on one line beside others.

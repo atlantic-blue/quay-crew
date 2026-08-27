@@ -24,6 +24,16 @@ const (
 	KindSessionCompleted = "session.completed"
 	KindSessionErrored   = "session.errored"
 	KindSessionStopped   = "session.stopped"
+	// KindSessionHalted is a task an operator stopped, which is not the session going down. It sits
+	// with started, completed and errored, which are the other three about one task, rather than with
+	// stopped, which is about the session: the session survives a halt, keeps its container and its
+	// conversation, and the next dispatch continues it. Writing this as session.stopped would tell a
+	// consumer a live session had been put down.
+	KindSessionHalted = "session.halted"
+	// KindSessionReclaimed is the crew taking a session's container back. It is beside stopped rather
+	// than folded into it, because a reader has to be able to tell a session somebody halted from one
+	// the crew tidied up.
+	KindSessionReclaimed = "session.reclaimed"
 	KindSessionArchived  = "session.archived"
 	KindSessionRestored  = "session.restored"
 	KindSessionDeleted   = "session.deleted"

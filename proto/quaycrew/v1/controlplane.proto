@@ -39,7 +39,8 @@ message Session {
   // continues. It is chosen by whoever starts the session, or minted when nobody did.
   string handle = 3;
   // status is where the session is: "idle" when it is waiting for you, "running" while a task is under
-  // way, "failed" when the last task did not land, and "stopped" when the session was put down.
+  // way, "failed" when the last task did not land, "reclaimed" when the crew took its container back,
+  // and "stopped" when the session was put down.
   string status = 4;
   // model_session_id is the model's own identifier for the conversation, in the model's own word,
   // used to resume it.
@@ -82,6 +83,13 @@ message Session {
   // has to hold for every task of the session, not only the first, and a sandbox is born with its
   // capabilities anyway.
   string role = 18;
+  // reclaimed_at is when the crew took this session's container back. Unset means it holds one, or
+  // never had one taken. The row, the conversation handle and the files on the host all stay, so the
+  // next task builds a fresh container over the same state and the conversation carries on.
+  //
+  // It is a stamp of its own rather than a reading of updated_at, because how long a session has been
+  // reclaimed is what the archive time is measured against, and updated_at moves on every write.
+  google.protobuf.Timestamp reclaimed_at = 19;
 }
 
 // ContextWindow is how full a conversation's context window is.
@@ -421,6 +429,43 @@ message ArchiveSessionRequest {
 }
 message ArchiveSessionResponse {
   Session session = 1;
+}
+
+// ReclaimSessionRequest takes a settled session's container back and leaves everything else.
+//
+// It is the controller's move rather than an operator's, and it is not a stop. A stop is somebody's
+// decision and reads as one; a reclaim is the crew saving memory on a session nobody is using, and
+// the next task to arrive builds a fresh container over the same conversation and the same files.
+//
+// A session with a task under way is refused, and so is one an operator already stopped: overwriting
+// a decision with bookkeeping is how a stop stops meaning anything.
+message ReclaimSessionRequest {
+  string id = 1;
+}
+message ReclaimSessionResponse {
+  Session session = 1;
+}
+
+// StopTaskRequest halts the task a session is running now and keeps the reason.
+//
+// The session survives: its conversation, its container and its history all stay, so the next
+// dispatch continues it. That is the difference between this and StopSession, which puts the whole
+// session down and takes its container away.
+//
+// The task reads "stopped" with the reason rather than "failed". An operator asking for a stop is
+// not a fault, and a stop that reports as a crash hides the real crashes.
+message StopTaskRequest {
+  string id = 1;
+  // reason is what to record against the task, in the operator's own words. Empty records that
+  // somebody stopped it and nothing about why.
+  string reason = 2;
+}
+message StopTaskResponse {
+  // stopped says whether there was a task to stop. False means nothing was running, which is not a
+  // failure: the caller asked for a state the session is already in.
+  bool stopped = 1;
+  // session is the session as it now is, so the caller does not read it back.
+  Session session = 2;
 }
 
 // ContextDir is a directory of files the model reads, kept on the host and mounted into every sandbox
@@ -1074,6 +1119,16 @@ message WorkspaceLimits {
   // lease_seconds is how long a controller holds a piece of work here before another may take it.
   // Zero takes the crew's own measured default.
   int32 lease_seconds = 5;
+  // reclaim_seconds is how long a settled session keeps its container before the crew takes it back.
+  // Zero is unset, and unset means the controller reclaims nothing here, however long it runs.
+  //
+  // The crew ships it unset and invents no number for it. Section 11 of docs/ORCHESTRATION.md names
+  // the three measurements that would set it, and the command that takes each. None of them has been
+  // run, so there is no number to write.
+  int32 reclaim_seconds = 6;
+  // archive_seconds is how long a reclaimed session waits before the crew files it away. Zero is
+  // unset, and unset means the controller archives nothing here.
+  int32 archive_seconds = 7;
 }
 
 message GetWorkspaceLimitsRequest {
@@ -1134,6 +1189,12 @@ service ControlPlaneService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
+  // StopTask halts the task a session is running and keeps the session. StopSession above puts the
+  // whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
+  rpc StopTask(StopTaskRequest) returns (StopTaskResponse);
+  // ReclaimSession takes a settled session's container back and keeps everything else. The controller
+  // calls it; nothing an operator types does.
+  rpc ReclaimSession(ReclaimSessionRequest) returns (ReclaimSessionResponse);
   rpc DrainSessions(DrainSessionsRequest) returns (DrainSessionsResponse);
   rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
   rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
