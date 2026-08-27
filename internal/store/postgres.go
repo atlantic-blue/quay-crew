@@ -46,6 +46,18 @@ func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	return &Postgres{pool: pool}, nil
 }
 
+// Probe writes one row and writes over it next time, so a caller can prove the store still takes a
+// write. It takes a connection from the pool the way every other write does, which is the half of
+// the path a read cannot speak for: a pool with nothing left to hand out answers no write at all.
+func (p *Postgres) Probe(ctx context.Context) error {
+	if _, err := p.pool.Exec(ctx,
+		`insert into health_probe (id, written_at) values (1, now())
+		 on conflict (id) do update set written_at = now()`); err != nil {
+		return fmt.Errorf("store: probe write: %w", err)
+	}
+	return nil
+}
+
 // Close releases the connection pool.
 func (p *Postgres) Close() { p.pool.Close() }
 

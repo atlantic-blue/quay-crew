@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/atlantic-blue/quay-crew/internal/store"
@@ -17,4 +18,19 @@ func TestMemoryConformance(t *testing.T) {
 		memory := store.NewMemory()
 		return func(*testing.T) store.Store { return memory }
 	})
+}
+
+// A probe that answered without writing would make a health check agree with a crew that cannot
+// write, which is the fault the check exists for, so the count is what is asserted here.
+func TestAProbeOnTheMemoryStoreWrites(t *testing.T) {
+	memory := store.NewMemory()
+	if got := memory.Probes(); got != 0 {
+		t.Fatalf("a fresh store says it took %d probes", got)
+	}
+	if err := memory.Probe(context.Background()); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	if got := memory.Probes(); got != 1 {
+		t.Fatalf("the store took %d probes, want 1", got)
+	}
 }

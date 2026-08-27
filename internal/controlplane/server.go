@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
@@ -123,6 +124,12 @@ type Config struct {
 	// DescribeEvery is how many tasks past its description a conversation goes before the crew writes
 	// it again. Zero is off.
 	DescribeEvery int
+	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
+	// first task. Zero takes startWait, which is measured from what a healthy start costs.
+	StartWait time.Duration
+	// ExportWait is how long one record's export to the event log is given before it is dropped.
+	// Zero takes exportWait.
+	ExportWait time.Duration
 }
 
 // Identity is who a commit is by.
@@ -183,8 +190,19 @@ type Server struct {
 	// telemetry provider installed does.
 	taskMetrics *telemetry.TaskMetrics
 
-	mu        sync.Mutex
-	sandboxes map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
+	// startWait is the budget from a session row to a sandbox ready for its first task, and
+	// exportWait what one export to the event log is given. Both are fields rather than constants so
+	// a test can drive a crew whose waits run out while somebody is watching.
+	startWait  time.Duration
+	exportWait time.Duration
+
+	// starts is the crew's one sandbox start at a time, held as a channel rather than a mutex
+	// because a mutex cannot be given up: a start that never ended held every later dispatch behind
+	// it with no way out. A slot taken from here is abandoned when the budget runs out.
+	starts chan struct{}
+
+	sandboxesMu sync.Mutex
+	sandboxes   map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
 }
 
 // NewServer builds a control plane over a durable store, a model runner (the Claude Code adapter by
@@ -207,6 +225,9 @@ func NewServer(cfg Config) *Server {
 		skillsHost:    cfg.SkillsHost,
 		sandboxImage:  cfg.SandboxImage,
 		sandboxes:     make(map[string]sandbox.Sandbox),
+		startWait:     orWait(cfg.StartWait, startWait),
+		exportWait:    orWait(cfg.ExportWait, exportWait),
+		starts:        make(chan struct{}, 1),
 	}
 	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
 	// in this file rather than an operator's problem. Say it and carry on unmeasured: a crew that
@@ -223,6 +244,14 @@ func NewServer(cfg Config) *Server {
 	server.flows = engine
 	server.flowPoller = flow.NewPoller(engine, 0, nil)
 	return server
+}
+
+// orWait is the budget the crew was configured with, and the measured default when it was given none.
+func orWait(configured, standard time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	return standard
 }
 
 // eventsOr is the log to publish on, and Discard when there is none, so nothing downstream has to
@@ -324,8 +353,13 @@ func storeError(err error, what string) error {
 // conversation is authenticated too. A token set after the first task does not reach the existing
 // sandbox: stop the session to get a fresh one.
 func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// One start at a time, as it has always been, and now abandonable: the crew took this as a mutex
+	// held across the whole start, so a start that never ended held every later dispatch, and every
+	// stop, behind it.
+	if err := waited(ctx, session.GetId(), waitStartAhead, s.takeStart); err != nil {
+		return nil, err
+	}
+	defer func() { <-s.starts }()
 	// Always ask the provider, never a remembered handle. What this process believes about containers
 	// and what the daemon actually has drift constantly: an upgrade reaps them, a prune removes them,
 	// a machine restart is fine but anything that removes one behind the control plane's back leaves
@@ -347,8 +381,12 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	cfg.Env = environ(s.taskEnv(ctx, session))
 	cfg.Mounts = mounts
 	cfg.Driver = session.GetDriver()
-	box, err := s.provider.Create(ctx, cfg)
-	if err != nil {
+	var box sandbox.Sandbox
+	if err := waited(ctx, session.GetId(), waitContainer, func(ctx context.Context) error {
+		made, err := s.provider.Create(ctx, cfg)
+		box = made
+		return err
+	}); err != nil {
 		return nil, err
 	}
 	// A sandbox that cannot be provisioned is closed rather than left running and untracked, so the
@@ -356,13 +394,19 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	// does not strand a container per attempt. Only a sandbox this process was not already
 	// accountable for: closing an adopted one that this process holds would take a live conversation
 	// down over a transient failure.
-	if err := s.provision(ctx, session, caps.held, box); err != nil {
-		if _, held := s.sandboxes[session.GetId()]; !held {
-			_ = box.Close(ctx)
+	if err := waited(ctx, session.GetId(), waitSetup, func(ctx context.Context) error {
+		return s.provision(ctx, session, caps.held, box)
+	}); err != nil {
+		if !s.holding(session.GetId()) {
+			// Closed with a context of its own: the one that came in here is the one that just ran
+			// out, and tearing a half made container down needs a working context to do it with.
+			closing, done := context.WithTimeout(context.WithoutCancel(ctx), tidyWait)
+			_ = box.Close(closing)
+			done()
 		}
 		return nil, err
 	}
-	s.sandboxes[session.GetId()] = box
+	s.keepSandbox(session.GetId(), box)
 	// What this sandbox was born holding, recorded so a listing can say when the workspace's
 	// skills have moved on underneath it. Only when the row holds nothing: a non empty answer
 	// means the container already existed and was adopted, and its birth set is the one already
@@ -689,10 +733,10 @@ func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 // map is a process map, so after a restart it is empty while every container runs on, which is how
 // stopping a session used to mark the row and leave the container.
 func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
-	s.mu.Lock()
+	s.sandboxesMu.Lock()
 	box, ok := s.sandboxes[sessionID]
 	delete(s.sandboxes, sessionID)
-	s.mu.Unlock()
+	s.sandboxesMu.Unlock()
 	if ok {
 		_ = box.Close(ctx)
 	}
@@ -1024,6 +1068,10 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 
 // Dispatch starts or continues a session, running one task through the model runner.
 func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
+	// Said before anything is done, because a dispatch that stopped inside this call wrote no line at
+	// all and the crew read as healthy while it answered none of them.
+	slog.InfoContext(ctx, "a dispatch arrived",
+		"project", req.GetProject(), "handle", req.GetHandle(), "detached", req.GetDetach())
 	if req.GetProject() == "" {
 		return nil, status.Error(codes.InvalidArgument, "project is required")
 	}
@@ -1063,17 +1111,21 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 
+	// Anything that fails from here on says so on the session's row. The row exists by now, and a row
+	// left idle with no task and no container reads as a session waiting for work rather than one
+	// that never started.
+	//
 	// A mode given here applies before the sandbox is built, because a sandbox is born with its
 	// capabilities and never drifts: setting it afterwards costs a restart, and a session born unable
 	// to read its own skills is the failure this prevents.
 	if mode := req.GetPermissionMode(); mode != "" {
 		if !model.KnownPermissionMode(mode) {
-			return nil, status.Errorf(codes.InvalidArgument,
+			return nil, s.startFailed(ctx, session, req.GetText(), status.Errorf(codes.InvalidArgument,
 				"%q is not a permission mode: use %s, %s or %s",
-				mode, model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
+				mode, model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass))
 		}
 		if err := s.store.SetPermissionMode(ctx, session.GetId(), mode); err != nil {
-			return nil, storeError(err, "session")
+			return nil, s.startFailed(ctx, session, req.GetText(), storeError(err, "session"))
 		}
 		session.PermissionMode = mode
 	}
@@ -1116,7 +1168,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text str
 	// detached task and a waited one are one path from this line down.
 	s.emit(ctx, session, KindSessionStarted, text)
 
-	box, err := s.sandboxFor(ctx, session)
+	box, err := s.startSandbox(ctx, session)
 	if err != nil {
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
 		failure := "the session's sandbox could not be created: " + err.Error()

@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
@@ -213,8 +214,11 @@ type world struct {
 	driverToken string
 	conn        *grpc.ClientConn
 	client      quaycrewv1.ControlPlaneServiceClient
-	provider    *sandbox.FakeProvider
-	runner      *recordingRunner
+	// health is the same interface a container health check asks, and lastHealth what it last said.
+	health     grpc_health_v1.HealthClient
+	lastHealth grpc_health_v1.HealthCheckResponse_ServingStatus
+	provider   *sandbox.FakeProvider
+	runner     *recordingRunner
 	// realRunner replaces the recording double when a scenario is about what the real one does with
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
@@ -260,6 +264,17 @@ type world struct {
 	// eventsRefuse makes the log refuse every record it is given, for the scenarios about what the
 	// crew says when an export fails.
 	eventsRefuse bool
+	// eventsStall makes the log take a record and never answer, which is the broker that held a
+	// whole crew's dispatches inside the call. Refusing and never answering are different faults and
+	// only one of them was survivable.
+	eventsStall bool
+	// storeStalls makes every health probe wait without answering, for the scenarios about a crew
+	// that reads well and cannot write.
+	storeStalls bool
+	// startWait and exportWait are the crew's budgets. A scenario about a budget running out sets
+	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
+	startWait  time.Duration
+	exportWait time.Duration
 	// storage is a real conversation store on disk, so a scenario can say what the model kept and
 	// what it did not. The scenarios that do not care about it seed every conversation they start.
 	storage sandbox.Storage
@@ -316,6 +331,9 @@ func (w *world) eventLog() messaging.EventLog {
 	if w.eventsRefuse {
 		return refusingEventLog{}
 	}
+	if w.eventsStall {
+		return stallingEventLog{}
+	}
 	if w.events == nil {
 		return nil
 	}
@@ -353,10 +371,11 @@ func (w *world) serve() error {
 		auth.ServerOptions(w.token, w.driverToken, controlplane.DeniedToDriver)...,
 	)...)
 	w.server = controlplane.NewServer(controlplane.Config{
-		Store: w.store, Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
+		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
+		StartWait: w.startWait, ExportWait: w.exportWait,
 	})
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
 	// a session the store still calls running is settled, because its task died with the last process.
@@ -369,6 +388,9 @@ func (w *world) serve() error {
 			slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, w.server)
+	// The same registration the real main makes, so a scenario asks the crew the question a container
+	// health check asks it.
+	grpc_health_v1.RegisterHealthServer(w.grpcServer, controlplane.NewHealth(w.server))
 	go func() { _ = w.grpcServer.Serve(listener) }()
 
 	conn, err := grpc.NewClient(
@@ -382,7 +404,17 @@ func (w *world) serve() error {
 	}
 	w.conn = conn
 	w.client = quaycrewv1.NewControlPlaneServiceClient(conn)
+	w.health = grpc_health_v1.NewHealthClient(conn)
 	return nil
+}
+
+// crewStore is the store the control plane is built over, wrapped when a scenario is about a crew
+// whose writes do not land.
+func (w *world) crewStore() store.Store {
+	if w.storeStalls {
+		return stallingStore{Store: w.store}
+	}
+	return w.store
 }
 
 // taskRunner is what runs a task: the recording double, unless a scenario asked for the real one.
@@ -536,6 +568,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeWaitsSteps(sc)
 	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)

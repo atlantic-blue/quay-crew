@@ -94,7 +94,7 @@ func (s *Server) exportSessionEvent(ctx context.Context, session *quaycrewv1.Ses
 			"session", session.GetId(), "kind", event.GetKind(), "error", err)
 		return
 	}
-	if err := s.events.Publish(ctx, topic, []byte(session.GetId()), value); err != nil {
+	if err := s.export(ctx, session.GetId(), topic, value); err != nil {
 		slog.WarnContext(ctx, "a session event could not be exported",
 			"session", session.GetId(), "kind", event.GetKind(), "topic", topic, "error", err)
 	}

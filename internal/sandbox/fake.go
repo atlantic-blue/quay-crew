@@ -30,7 +30,10 @@ type FakeProvider struct {
 	// Removed records every session torn down by name rather than through a handle, which is what
 	// the control plane does when its map is empty after a restart.
 	Removed []string
-	Boxes   []*FakeSandbox
+	// Hold makes every creation wait until it is closed, so a test can be a daemon that has taken
+	// the request and not answered. Nil creates straight away.
+	Hold  chan struct{}
+	Boxes []*FakeSandbox
 	// live is the sandbox each session currently has, so creating twice for one session adopts it.
 	live map[string]*FakeSandbox
 }
@@ -43,10 +46,27 @@ var _ Provider = (*FakeProvider)(nil)
 // real Docker provider adopts the container already carrying that name, and a double that is looser
 // than the thing it stands in for manufactures green: this one used to hand out two sandboxes for one
 // session, which is why the suite passed while the daemon refused the duplicate name.
-func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
+func (f *FakeProvider) Create(ctx context.Context, cfg Config) (Sandbox, error) {
+	// The request is recorded before the hold, so a test can tell that the provider was reached from
+	// one that has not been, and the context is honoured while waiting: the real provider runs the
+	// daemon through it and gives up when it is done. A double that creates whatever the caller's
+	// budget says makes a suite green over a crew that waits without end.
+	f.mu.Lock()
+	f.Calls = append(f.Calls, cfg)
+	hold := f.Hold
+	f.mu.Unlock()
+	if hold != nil {
+		select {
+		case <-hold:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Calls = append(f.Calls, cfg)
 	if box, live := f.live[cfg.ID]; live && !box.Closed {
 		return box, nil
 	}
@@ -59,6 +79,14 @@ func (f *FakeProvider) Create(_ context.Context, cfg Config) (Sandbox, error) {
 	f.live[cfg.ID] = box
 	f.Boxes = append(f.Boxes, box)
 	return box, nil
+}
+
+// Asked is how many creations this provider has been asked for, adopted or not, read under its own
+// lock for a test watching from another goroutine.
+func (f *FakeProvider) Asked() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.Calls)
 }
 
 // Remove closes and forgets the session's sandbox, held or not, the way the Docker provider removes
