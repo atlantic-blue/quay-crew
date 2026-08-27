@@ -329,7 +329,9 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// identifiers and counts are dim so they stop competing, and the mode is coloured by how much
 		// it allows, since it is the cell that costs most to misread.
 		Columns: []Column{
-			{Title: "id", Width: 10, Colour: dim},
+			// Headed session because it is the value every command takes. Under "id" it read as
+			// bookkeeping, so the operator typed the name cell back instead.
+			{Title: "session", Width: 10, Colour: dim},
 			{Title: "workspace", Width: 16, Colour: colourOfName},
 			{Title: "project", Width: 20, Colour: colourOfName},
 			// Wider than the identifier it replaced, because it holds a name now and a name cut to
@@ -352,9 +354,10 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// name, so it takes that column's three bands rather than being dimmed with the counts.
 			{Title: "age", Width: 6, Colour: colourOfAge},
 		},
-		// Ordered by session, so a session keeps its place in the list as its age and status change
-		// under it.
-		SortBy:  3,
+		// Ordered by the session column, so a session keeps its place in the list as its age, its
+		// status and its name change under it. The name column cannot hold this order: it is empty
+		// until somebody names the session, and it moves the row when they do.
+		SortBy:  0,
 		List:    sessionLister(client, live),
 		Actions: sessionActions(client),
 	}
@@ -436,7 +439,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// The same colours as the live listing, because it is the same listing: a session that was put
 		// away should not have to be read differently from one that was not.
 		Columns: []Column{
-			{Title: "id", Width: 10, Colour: dim},
+			{Title: "session", Width: 10, Colour: dim},
 			{Title: "workspace", Width: 16, Colour: colourOfName},
 			{Title: "project", Width: 20, Colour: colourOfName},
 			// The flexible column, as it is in the live view: it holds a name, and a name cut to ten
@@ -455,7 +458,9 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
 			{Title: "archived", Width: 8, Colour: dim},
 		},
-		SortBy: 3,
+		// By the session column, as the live view is, so a row keeps its place whatever changes
+		// under it.
+		SortBy: 0,
 		List:   sessionLister(client, putAway),
 		Actions: []Action{
 			{

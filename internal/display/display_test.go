@@ -39,3 +39,31 @@ func TestDisplayName(t *testing.T) {
 		})
 	}
 }
+
+// LooksLikeIdentifier decides whether one word of a command line is a session or the first word of a
+// message, so it has to be narrow at both ends: an identifier the operator copied has to be caught,
+// and an ordinary word has to be left alone.
+func TestLooksLikeIdentifier(t *testing.T) {
+	cases := []struct {
+		word string
+		want bool
+	}{
+		{"615d48dc", true},
+		{"615d48dc7702302ef7a98613", true},
+		{"FFFFFFFF", true},
+		// Shorter than the column is wide, so it cannot have come off a listing.
+		{"615d48d", false},
+		{"", false},
+		// Ordinary words, which are what the message starts with.
+		{"hello", false},
+		{"deadbeefs", false},
+		{"remember", false},
+		{"the-bills", false},
+		{"me/house-bills/615d48dc", false},
+	}
+	for _, one := range cases {
+		if got := LooksLikeIdentifier(one.word); got != one.want {
+			t.Errorf("LooksLikeIdentifier(%q) = %v, want %v", one.word, got, one.want)
+		}
+	}
+}
