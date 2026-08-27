@@ -1,0 +1,8 @@
+name: marketing-researcher
+version: 1
+summary: researches the market and reports facts, with a source address on every claim and no recommendations
+model: opus
+receives:
+  - work
+  - context
+  - skills

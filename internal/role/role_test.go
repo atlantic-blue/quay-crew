@@ -415,3 +415,90 @@ func TestTheVerbsAreTidiedTheWayTheMaterialIs(t *testing.T) {
 		t.Fatalf("the verbs read back as %q, want them sorted and once each", got)
 	}
 }
+
+// write puts a role's files in a directory of its own under root, so a test can build a set of them.
+func write(t *testing.T, root, name string, files []File) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(dir, file.Path), file.Body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestASetOfRolesReadsBackSortedByName(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "test-writer", good())
+	write(t, root, "architect", replace(good(), ManifestFile, manifestOf(
+		"name: architect", "version: 1", "summary: writes the contracts",
+		"model: opus", "receives:", "  - work",
+	)))
+
+	roles, err := All(root)
+	if err != nil {
+		t.Fatalf("reading a directory of roles: %v", err)
+	}
+	if len(roles) != 2 {
+		t.Fatalf("read %d roles and wrote 2", len(roles))
+	}
+	if roles[0].Name != "architect" || roles[1].Name != "test-writer" {
+		t.Errorf("the set is not sorted by name: %s, %s", roles[0].Name, roles[1].Name)
+	}
+	if roles[0].Dir != filepath.Join(root, "architect") {
+		t.Errorf("a role does not carry where it was read from: %q", roles[0].Dir)
+	}
+}
+
+// Finding nothing to do is indistinguishable from doing it all correctly, so a directory holding no
+// roles is an error rather than an empty set. A check on the roles a build ships would otherwise
+// report success against a directory that lost them.
+func TestADirectoryHoldingNoRolesIsRefused(t *testing.T) {
+	root := t.TempDir()
+	if _, err := All(root); err == nil {
+		t.Fatal("a directory holding no roles was read as a set of no roles")
+	} else if !strings.Contains(err.Error(), "no roles") {
+		t.Errorf("the refusal does not say the directory holds no roles: %v", err)
+	}
+}
+
+// A directory holding only files, or only directories that are not roles, is the same emptiness
+// wearing a fuller shape.
+func TestADirectoryOfThingsThatAreNotRolesIsRefused(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("roles go here"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := All(root); err == nil {
+		t.Fatal("a directory holding no role manifest was read as a set of roles")
+	}
+}
+
+// One bad role fails the set. Skipping it would ship a build whose roles/ holds twelve directories
+// and imports eleven, and the eleven would look like all of them.
+func TestOneRoleThatWillNotLoadFailsTheWholeSet(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "test-writer", good())
+	write(t, root, "architect", replace(good(), ManifestFile, manifestOf(
+		"name: architect", "version: 1", "summary: writes the contracts",
+		"model: opus", "receives:", "  - the whole repository",
+	)))
+
+	if _, err := All(root); err == nil {
+		t.Fatal("a set holding a role the crew would refuse was accepted")
+	} else if !strings.Contains(err.Error(), "the whole repository") {
+		t.Errorf("the refusal does not name what was wrong: %v", err)
+	}
+}
+
+func TestADirectoryThatIsNotThereIsRefused(t *testing.T) {
+	if _, err := All(filepath.Join(t.TempDir(), "nowhere")); err == nil {
+		t.Fatal("a directory that does not exist was read as a set of roles")
+	}
+}

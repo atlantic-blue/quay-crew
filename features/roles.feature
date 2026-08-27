@@ -120,3 +120,25 @@ Feature: A role is imported, pinned to a version, and attached at a level
   Scenario: Attaching a role the crew has not imported is refused
     When the operator attaches the "architect" role to the workspace
     Then the crew refuses the role saying "not found"
+
+  # The roles this build ships, in roles/ at the root of the repository, ported from greenlight's
+  # agents. They are read from that directory rather than from a list in the test, so a role added
+  # later is held to the same rules without anybody remembering, and a roles/ that lost its contents
+  # fails this rather than passing over nothing.
+  Scenario: The crew imports every role this build ships
+    When the operator imports every role this build ships
+    Then the crew holds every role this build ships
+    And the listing says the "test-writer" role runs on "sonnet"
+    And the listing says the "test-writer" role receives "context, skills, work"
+
+  Scenario: A role this build ships reaches a workspace
+    Given the operator imports every role this build ships
+    When the operator attaches the "implementer" role to the workspace
+    Then the workspace holds the "implementer" role
+
+  # The check that catches an invented material in a ported brief. It is a shipped role with one word
+  # changed, so it fails the way a bad port would rather than the way an invented test would.
+  Scenario: A shipped role carrying a word the crew does not hand out is refused
+    When the operator imports a shipped role receiving "the whole repository"
+    Then the crew refuses the role saying "the whole repository"
+    And the crew holds no roles
