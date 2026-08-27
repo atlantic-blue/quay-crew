@@ -49,7 +49,7 @@ func TestWhatAConversationCostIsReadFromTheModelsOwnTranscript(t *testing.T) {
 		assistant(40, 6_577, 723_404, 79_875),
 	)
 
-	got := store.ConversationUsage("ws1", "c1")
+	got := store.ConversationUsage(sandbox.Config{Workspace: "ws1"}, "c1")
 	want := sandbox.Usage{Input: 52, Output: 6_917, CacheRead: 1_723_404, CacheWritten: 87_875}
 	if got != want {
 		t.Fatalf("the conversation cost %+v, want %+v", got, want)
@@ -100,7 +100,7 @@ func TestACostIsNeverWorthFailingAListingOver(t *testing.T) {
 			if tc.write != nil {
 				tc.write()
 			}
-			if got := store.ConversationUsage(tc.workspace, tc.conversati); got != tc.want {
+			if got := store.ConversationUsage(sandbox.Config{Workspace: tc.workspace}, tc.conversati); got != tc.want {
 				t.Fatalf("it read %+v, want %+v, because %s", got, tc.want, tc.because)
 			}
 		})
@@ -114,7 +114,7 @@ func TestACostIsCountedAgainWhenTheConversationMoves(t *testing.T) {
 	store := sandbox.Storage{Dir: dir, Host: dir}
 	path := transcript(t, dir, "ws1", "c3", assistant(1, 2, 3, 4))
 
-	first := store.ConversationUsage("ws1", "c3")
+	first := store.ConversationUsage(sandbox.Config{Workspace: "ws1"}, "c3")
 	if first.Output != 2 {
 		t.Fatalf("the first read is %+v", first)
 	}
@@ -133,7 +133,7 @@ func TestACostIsCountedAgainWhenTheConversationMoves(t *testing.T) {
 		t.Fatalf("age the transcript: %v", err)
 	}
 
-	second := store.ConversationUsage("ws1", "c3")
+	second := store.ConversationUsage(sandbox.Config{Workspace: "ws1"}, "c3")
 	if second.Output != 22 {
 		t.Fatalf("after the conversation moved it reads %+v, want the new messages counted", second)
 	}
