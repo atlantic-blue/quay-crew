@@ -570,6 +570,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFlowSurfaceSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeInstallSteps(sc)
+	initializeFrontDoorSteps(sc)
 	initializeProjectSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
