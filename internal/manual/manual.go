@@ -66,6 +66,12 @@ commands:
   work show <work>                        one piece of work whole: what it is, where it got to,
                                           why it stopped, and what came back
   work stop <work> [<reason>]             halt work that has not ended, keeping the reason
+  limits [<workspace>]                    what a workspace lets its sessions declare: how deep the
+    [--max-depth <n>]                     tree of work may go, how many run at once, what a tree may
+    [--max-running <n>]                   spend, and how long a controller holds a piece of work.
+    [--budget-tokens <n>]                 Max depth starts at zero, so no session declares work
+    [--lease <duration>]                  until you raise it. A session may read none of this and
+                                          set none of it
   dispatch [<address>] <text>             start or continue a session and let go of the task. It
                                           runs in the crew, so closing the terminal does not take
                                           the work with it. quay tasks reads it back

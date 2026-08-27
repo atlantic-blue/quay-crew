@@ -105,6 +105,7 @@ var helpSpellings = map[string]bool{
 var takenFlags = map[string]map[string]bool{
 	"answer": {allAnswers: true},
 	"work":   workFlagsTaken(),
+	"limits": limitsFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -216,6 +217,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRole(ctx, client, args[1:], out)
 	case "work":
 		return runWork(ctx, client, args[1:], out)
+	case "limits":
+		return runLimits(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
 	case "repository":

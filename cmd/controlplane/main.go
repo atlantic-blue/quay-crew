@@ -228,7 +228,12 @@ func main() {
 
 	grpcServer := grpc.NewServer(append(
 		telemetry.ServerOptions(),
-		auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...,
+		auth.ServerOptions(auth.Policy{
+			Token: token, DriverToken: driverToken, Denied: controlplane.DeniedToDriver,
+			// A session running a piece of work presents a credential of its own, minted for that
+			// work and holding only the verbs its role declared.
+			Grants: server.Grants(), DeniedToWork: controlplane.DeniedToWork,
+		})...,
 	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 	// What the container health check asks. It writes rather than reads, because this crew answered

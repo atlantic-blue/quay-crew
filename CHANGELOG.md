@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A session may declare work, within limits.** A role now says what a session running as it may
+  call, in a `may` list beside `receives`: `work.create`, `work.read`, `work.answer` and `work.stop`,
+  refused at import by name for a word the crew does not know. A role that declares none may call
+  nothing, which is what every role written before this became.
+
+  A session running a piece of work is handed a credential minted for that work. It carries the verbs
+  its role declared and expires with the work, so a value read out of a container grants what that one
+  piece of work could do and only until it ends. That is strictly less than the driver's token grants.
+  It travels in the environment of one task and never at sandbox birth, because a sandbox keeps the
+  configuration it was made with: a credential written at birth would label every later task with the
+  first task's grant, and one minted afterwards would never reach the container.
+
+  The parent of anything a session declares is read from that credential and never from the request,
+  which is the whole of what makes depth bound anything: work at depth one creates at depth two, so a
+  loop of any shape stops at the ceiling.
+
+  `quay limits` reads and sets what a workspace allows: how deep the tree of work may go, how many
+  pieces run at once, what a tree may spend, and how long a controller holds a piece of work. Max
+  depth starts at zero, so no session declares work until an operator raises it, per workspace,
+  deliberately. Only depth is enforced today, and the refusal names the limit and the command that
+  raises it; nothing runs a child yet, so there is no fan out for the other two to bound.
+
+  The four hook calls join what the driver may not do. A hook is a command that runs on a session's
+  own tool use, so attaching one changes what every session in that workspace may do, and reading the
+  list is reading the map of the guard the session is under.
+
 - **The crew says how much room the machine has left.** The host ran out of memory and the kernel
   killed 18 sandboxes, three monitors and a build in one event. Nothing in quay reported it before,
   during or after. The console kept drawing a healthy crew, and every number that mattered had to be
