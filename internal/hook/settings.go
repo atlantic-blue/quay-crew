@@ -10,13 +10,31 @@ import (
 // is pointed at it explicitly rather than finding it, which is the whole reason it can live here.
 const SettingsFile = "settings.json"
 
-// settings is the runtime's settings document, carrying nothing but hooks.
+// StatusLineCommand is what the runtime runs to draw the line under the conversation. It is the tool
+// the image already carries, so this needs nothing installed and nothing configured.
+const StatusLineCommand = "quay statusline"
+
+// settings is the runtime's settings document: the hooks a session runs under, and the line the
+// runtime keeps under the conversation.
 //
 // The crew owns this file completely. The alternative was rendering into the conversation directory's
 // own settings, which the runtime writes and the operator edits, and that would mean merging on every
 // task and losing somebody's edit the first time the merge was wrong.
+//
+// The status line is here rather than in the image for a harder reason than ownership: the crew
+// mounts the workspace's own directory over the conversation directory in every sandbox, and a mount
+// hides whatever the image put at that path. Settings shipped in the image are settings no session
+// ever reads.
 type settings struct {
-	Hooks map[string][]matcherGroup `json:"hooks"`
+	Hooks      map[string][]matcherGroup `json:"hooks"`
+	StatusLine statusLine                `json:"statusLine"`
+}
+
+// statusLine is the runtime's status line configuration. A command, which is the only kind the
+// runtime runs.
+type statusLine struct {
+	Type    string `json:"type"`
+	Command string `json:"command"`
 }
 
 // matcherGroup is every hook firing on one event for one matcher. Grouped rather than one entry per
@@ -36,7 +54,8 @@ type action struct {
 	Timeout int `json:"timeout,omitempty"`
 }
 
-// Settings renders the hooks a session holds into the runtime's settings document.
+// Settings renders what the crew tells the model runtime: the hooks a session holds, and the line the
+// runtime keeps under the conversation.
 //
 // root is where the hooks are mounted as the sandbox sees them, because the command the runtime runs
 // is an absolute path inside the container and nothing here knows that path any other way.
@@ -49,7 +68,10 @@ func Settings(root string, hooks []Hook) ([]byte, error) {
 	if root == "" {
 		return nil, fmt.Errorf("hook: rendering settings needs the path the hooks are mounted at")
 	}
-	document := settings{Hooks: map[string][]matcherGroup{}}
+	document := settings{
+		Hooks:      map[string][]matcherGroup{},
+		StatusLine: statusLine{Type: "command", Command: StatusLineCommand},
+	}
 	// Where each matcher's group sits inside its event, so a second hook on the same event and matcher
 	// joins the group rather than starting another one.
 	at := map[string]int{}

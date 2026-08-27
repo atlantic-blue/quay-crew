@@ -37,11 +37,17 @@ func runTasks(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	for _, task := range resp.GetTasks() {
 		when := task.GetOccurredAt().AsTime().Local().Format("15:04:05")
 		fmt.Fprintf(out, "%s  you  %s\n", when, oneLine(task.GetPrompt()))
-		if task.GetStatus() == "failed" {
+		switch task.GetStatus() {
+		case "failed":
 			fmt.Fprintf(out, "          failed: %s\n", oneLine(task.GetFailure()))
-			continue
+		// A task is written when it starts, so the one at the end of this listing is often still
+		// working. Saying so is the difference between a task in flight and one that answered with
+		// nothing.
+		case "running":
+			fmt.Fprintf(out, "          still running\n")
+		default:
+			fmt.Fprintf(out, "          %s\n", oneLine(task.GetReply()))
 		}
-		fmt.Fprintf(out, "          %s\n", oneLine(task.GetReply()))
 	}
 	return nil
 }

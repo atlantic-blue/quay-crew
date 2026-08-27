@@ -306,21 +306,47 @@ Feature: Sessions run in isolated sandboxes
     Then the reply is "you said: and again"
     And a second sandbox has been created for that session
 
-  Scenario: An archived session cannot be attached to
+  # The row is the crew's own bookkeeping and it used to decide whether a conversation could be
+  # opened. `make upgrade` drains first, and a drain puts every live session down, so after an
+  # upgrade every session in the crew said stopped and every one of them refused to open. The row is
+  # brought up to date instead: a session somebody is talking in is not put down.
+  Scenario: A stopped session opens, and its row comes back to idle
+    Given a session started by dispatching "remember this"
+    When the operator stops the session
+    And the operator asks how to attach to the session
+    Then the control plane names the session's sandbox
+    And the command resumes the conversation the task started
+    And the session is reported as idle
+
+  # And the operator can carry on. A row still saying stopped would have the next startup reap the
+  # container out from under the conversation they are typing into.
+  Scenario: A session opened after it was stopped takes the next task
+    Given a session started by dispatching "remember this"
+    When the operator stops the session
+    And the operator asks how to attach to the session
+    Then the control plane names the session's sandbox
+    And the operator dispatches "and again" to the same session
+    And the reply is "you said: and again"
+    And both tasks ran in the same session
+
+  # Archiving sets the row to stopped as well, and the stopped answer came first, so an archived
+  # session was refused with "is stopped: restart it first". Restarting an archived session is itself
+  # refused. Attach named the one action that could not be taken.
+  Scenario: An archived session opens, and comes back into the listing
     Given a session started by dispatching "hello"
     When the operator archives the session
     And the operator asks how to attach to the session
-    Then the control plane refuses it as not yet ready
+    Then the control plane names the session's sandbox
+    And the command resumes the conversation the task started
+    And the workspace has 0 archived sessions
 
-  Scenario: A session with no conversation yet cannot be attached to
+  # A session exists from the moment a task is dispatched, so a first task that failed leaves one
+  # holding no conversation. It sat in the listing with no way to open it at all. The crew names a
+  # conversation for it, exactly as it does for the driver.
+  Scenario: A session whose first task failed opens under a conversation the crew names
     When the operator asks how to attach to a session that has never had a task
-    Then the control plane refuses it as not yet ready
-
-  Scenario: A stopped session cannot be attached to
-    Given a session started by dispatching "hello"
-    When the operator stops the session
-    And the operator asks how to attach to the session
-    Then the control plane refuses it as not yet ready
+    Then the control plane names the session's sandbox
+    And the command opens the conversation the crew holds
 
   # Every model failure read "run exited: exit status 1": the same sentence for an expired token, a
   # network failure, a missing binary in the image and the model refusing outright. The reason was
@@ -348,6 +374,17 @@ Feature: Sessions run in isolated sandboxes
     Given the sandbox fails with nothing on standard output, saying "claude: command not found"
     When the operator dispatches "hello" to the project
     Then the refusal says "claude: command not found"
+
+  # Nothing killed with signal 9 gets to say why: no last line on either stream, and the kernel log
+  # is not readable from inside a container. So exit 137 on its own read as a hang, and the operator
+  # could not tell a task that ran out of memory from one whose container an upgrade took away. Both
+  # are named now, with the command that answers which it was.
+  Scenario: A task killed for memory says so rather than showing an exit status
+    Given the sandbox is killed for memory part way through the task
+    When the operator dispatches "hello" to the project
+    Then the refusal says "a kill rather than a failure"
+    And the refusal says "quay room"
+    And the refusal says "container went away"
 
   # The console shows the crew and a conversation shows one session, and using both meant losing sight
   # of one. The panel puts them on the screen at once, half the width each, side by side.

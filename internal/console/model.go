@@ -3,6 +3,8 @@ package console
 import (
 	"context"
 	"fmt"
+	"os/exec"
+
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"sort"
 	"strings"
@@ -129,8 +131,11 @@ type (
 		parent   string
 		rows     []Row
 	}
-	// errMsg is a listing or an action that failed.
+	// errMsg is a listing that failed. The next listing to arrive clears it.
 	errMsg struct{ err error }
+	// heldErrMsg is something the operator asked for that failed. It stays on the screen until the
+	// next key, because the refresh that follows an action would otherwise blank it unread.
+	heldErrMsg struct{ err error }
 	// tickMsg is the refresh clock.
 	tickMsg struct{}
 	// actionDoneMsg is an action that finished, successfully or not. kind and made say what the
@@ -179,10 +184,16 @@ type Model struct {
 	choosing choice
 	// typing is the row a typed line will be applied to, held for the same reason a confirmation
 	// holds one: a refresh underneath must not move what the answer is about.
-	typing   pending
-	input    string
-	filter   string
-	err      error
+	typing pending
+	input  string
+	filter string
+	err    error
+	// held says the error came from something the operator did, so the next listing must leave it
+	// alone. Enter on a session that cannot open used to set the error and ask for a refresh in the
+	// same return, and the refresh blanked it before it was ever drawn: the key looked like it did
+	// nothing at all. A held error is cleared by the next key, which is the operator saying they
+	// have read it.
+	held     bool
 	stack    []crumbEntry
 	quitting bool
 	info     Info
@@ -219,7 +230,18 @@ type Model struct {
 	// conversation is the tmux pane the console opened, so the key closes the one it opened rather
 	// than whichever pane happens to be beside it now. Empty means none is open.
 	conversation string
+	// terminal is how the console hands the screen to a command it starts. Nil means the terminal
+	// library's own way, which is what runs in front of an operator.
+	terminal Terminal
 }
+
+// Terminal hands the screen to a command and turns whatever came back into a message. It is what
+// opening a conversation, shelling into a sandbox and editing a context all go through.
+type Terminal func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd
+
+// Reported is what the console is telling the operator right now, and nil when it is telling them
+// nothing. A scenario reads it to say whether a key that could not do its work said so.
+func (m Model) Reported() error { return m.err }
 
 // WithoutHeader leaves the header to the pane above.
 func (m Model) WithoutHeader() Model {
@@ -328,6 +350,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// operator is reading.
 		m.err = msg.err
 		return m, nil
+	case heldErrMsg:
+		m.err, m.held = msg.err, true
+		return m, nil
 	case actionDoneMsg:
 		// The guided setup carries on: a made workspace or project is what the later stages act
 		// on, and a refusal re-asks the stage's last question rather than abandoning the chain.
@@ -346,7 +371,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			next, cmd := m.advanceGuided()
 			return next, tea.Batch(cmd, listCmd(next.active, next.parent))
 		}
-		m.err = msg.err
+		// Held, because the refresh on the next line is what used to blank it.
+		m.err, m.held = msg.err, msg.err != nil
 		// The wizard is finished the moment the crew answers, so it closes and the refreshed list
 		// shows what it made. Left open it drew "making it" over a list it had already updated, which
 		// reads as nothing having happened at all. A refusal comes back on the list rather than
@@ -383,6 +409,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// The view can change under a key, and whoever draws the header needs to hear about it.
 		before := m.active.Name
+		// A key is the operator saying they read the last refusal, so it stops being held here rather
+		// than in each handler. The handlers that set an error set it after this line.
+		m.held = false
 		next, cmd := m.updateKey(msg)
 		if next.active.Name != before {
 			return next, tea.Batch(cmd, next.publishCmd())
@@ -399,7 +428,9 @@ func (m Model) applyRows(msg rowsMsg) Model {
 		return m
 	}
 	m.rows = msg.rows
-	m.err = nil
+	if !m.held {
+		m.err = nil
+	}
 	return m.clampSelection()
 }
 
