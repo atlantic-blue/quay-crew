@@ -116,6 +116,102 @@ flowchart LR
     loki <-->|"correlation id"| tempo
 ```
 
+## The headroom: whether the machine has room for another session
+
+The crew knew nothing about the machine it ran on. On 27 August 2026 the host ran out of memory and
+the kernel killed 18 sandboxes, three monitors and a build in one event. Nothing in quay reported it
+before, during or after: the console kept drawing a healthy crew, and every number that mattered had
+to be read from outside quay with `docker stats`. Issue 405 is that fault.
+
+So the control plane reads the daemon it already talks to, on its own timer, and everything else
+reads that last sample.
+
+```mermaid
+flowchart LR
+    D["the docker daemon"] --> S["the control plane samples, every ten seconds"]
+    S --> L["the last sample, held in the process"]
+    L --> H["the header: one figure and one word"]
+    L --> V["the room view: one line per sandbox"]
+    L --> R["quay room: the same numbers as text"]
+```
+
+**The header never reads the daemon.** It redraws every second, and `docker stats --no-stream` waits
+for the daemon to sample every container. So the sampler has a timer of its own and the header asks
+the crew, which answers from a field. A test pins it: sixty calls to the headroom answer read the
+machine once.
+
+**The limit that binds is the daemon's, never the machine's own memory.** On a Mac the daemon runs in
+a virtual machine with a cap of its own, so a Mac with 36 gigabytes and a 7.8 gigabyte cap is full at
+7.8. The figure comes from `docker info`.
+
+**The machine underneath is a different question, reported apart.** The kill on 27 August came from
+the machine while the daemon sat at less than half its cap, and the pressure that showed it was swap
+at 94 per cent. The crew names the machine it actually read, from what the daemon calls it, rather
+than claiming to know a Mac it cannot see from inside a Linux container.
+
+**Nothing is estimated.** Every figure is measured or it reads `unknown`. Unknown is never room: a
+crew that reports room it did not measure is the crew that drew a healthy header through eighteen
+kills. A read that fails never fails a command, and the answer carries the reason it knows nothing.
+
+### The three words, and why they are fractions
+
+The header carries one figure and one word: `room`, `tight` or `full`. The word is taken as a
+fraction of the limit that binds, because the limit is different on every machine and no byte count
+can be right on two of them.
+
+- `room` is below three quarters of the binding limit.
+- `tight` is from three quarters.
+- `full` is from nine tenths, and it is drawn so it can be read without reading the number.
+
+**Both fractions are provisional.** Nothing measured them. The measurement that replaces them is the
+fraction of the binding limit at which a sandbox start first fails on a machine, over the first fifty
+starts. Until that run exists these are a judgement, and they are stated here rather than buried in
+the code so that changing them is a decision somebody makes on purpose.
+
+### What a sandbox actually holds, measured
+
+Two figures, and they are three orders of magnitude apart. That spread is why the room view exists:
+a listing that does not carry it cannot answer which session to stop.
+
+- **A working sandbox: 1,206 mebibytes.** Read at 17:35:39 on 27 August 2026, from
+  `/sys/fs/cgroup/memory.current` inside a sandbox that was running this work. Its peak since it
+  started was 2,798 mebibytes. The machine underneath it read 7,837 mebibytes of memory with 3,628
+  available, and its swap was fully used, 1,024 mebibytes of 1,024.
+- **An idle sandbox: about 1.6 megabytes.** Measured during the incident on 27 August 2026 and
+  recorded in issue 405. It is not measured here: a session can read its own control group and no
+  other, so an idle sandbox cannot be read from inside a working one. This crew's own services came
+  to 93 megabytes together in that same reading.
+
+Both are one machine on one day. They set no threshold and this document sets none from them.
+
+### Reading it
+
+The header carries it while you work. The room view is one line per sandbox, largest first, with what
+each one holds, its share of one processor, how long since its last task, and what its session is
+doing. The last column matters: the largest sandbox may be the one doing the work.
+
+```
+quay room
+```
+
+Inside a sandbox that reads the machine the session stands on, which is the question a session about
+to run a gate is asking. Off a machine that keeps no such accounting, which is every Mac, it asks the
+crew instead and prints what the crew read. Both are reproduction steps rather than captured output:
+this change was written in an environment with no container runtime, so no rendering of either is
+shown here.
+
+### What this does not do
+
+- **It refuses nothing.** The crew reports a full machine and still tries to start a session on it.
+  Refusing a dispatch with a reason is the next step, and it is what issue 400 asks for.
+- **It sets no limit.** Nothing here bounds how many sandboxes run. `max_running` belongs to the
+  work controller in `docs/ORCHESTRATION.md`, and this reading is the measurement that would set it.
+- **It cannot see a Mac.** Nothing inside a Linux container reads what macOS is doing, so on a Mac
+  the machine reported is the Docker virtual machine and the crew says so by name.
+- **It stops nothing on its own.** The view answers which session to stop and the operator stops it.
+- **It keeps no history.** There is one sample, the last one. A figure that has to be read over time
+  belongs on the telemetry pipeline this document already describes.
+
 ## What you can actually look at today
 
 Follow everything:

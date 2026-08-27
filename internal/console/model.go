@@ -108,6 +108,13 @@ type Info struct {
 	// and nothing is then shown: a crew that cannot see which build its image came from should say
 	// nothing rather than accuse a good image of being old.
 	SandboxBuild string
+	// Room is what the machine has left: one figure and one word. Empty means nobody asked, and the
+	// header then says nothing rather than saying there is room it never measured. The header that
+	// drew a healthy crew through eighteen kills is why this is here at all. See issue 405.
+	Room string
+	// RoomState is that word on its own, so the header can colour it: full has to be readable
+	// without reading the figure beside it.
+	RoomState string
 }
 
 // SandboxStale says every session is running an image from a build the crew has moved on from.

@@ -72,6 +72,7 @@ const (
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
+	ControlPlaneService_GetHeadroom_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetHeadroom"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -137,6 +138,9 @@ type ControlPlaneServiceClient interface {
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
+	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+	// and never from the daemon, so the header may ask it every second.
+	GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error)
 }
 
 type controlPlaneServiceClient struct {
@@ -677,6 +681,16 @@ func (c *controlPlaneServiceClient) GetUsage(ctx context.Context, in *GetUsageRe
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHeadroomResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetHeadroom_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlPlaneServiceServer is the server API for ControlPlaneService service.
 // All implementations must embed UnimplementedControlPlaneServiceServer
 // for forward compatibility.
@@ -740,6 +754,9 @@ type ControlPlaneServiceServer interface {
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
+	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+	// and never from the daemon, so the header may ask it every second.
+	GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
 
@@ -908,6 +925,9 @@ func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoR
 }
 func (UnimplementedControlPlaneServiceServer) GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUsage not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHeadroom not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) mustEmbedUnimplementedControlPlaneServiceServer() {}
 func (UnimplementedControlPlaneServiceServer) testEmbeddedByValue()                             {}
@@ -1884,6 +1904,24 @@ func _ControlPlaneService_GetUsage_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetHeadroom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHeadroomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetHeadroom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetHeadroom_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetHeadroom(ctx, req.(*GetHeadroomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlPlaneService_ServiceDesc is the grpc.ServiceDesc for ControlPlaneService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2102,6 +2140,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUsage",
 			Handler:    _ControlPlaneService_GetUsage_Handler,
+		},
+		{
+			MethodName: "GetHeadroom",
+			Handler:    _ControlPlaneService_GetHeadroom_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

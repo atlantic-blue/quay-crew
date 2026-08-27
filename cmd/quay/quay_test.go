@@ -32,11 +32,17 @@ func testClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 
 func testClientWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
+	return testClientFor(t, controlplane.NewServer(cfg))
+}
+
+// testClientFor serves a crew somebody else built, for a test that has to do something to the server
+// before a client reaches it.
+func testClientFor(t *testing.T, srv *controlplane.Server) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
 	t.Setenv(HomeEnv, t.TempDir())
 
 	lis := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
-	srv := controlplane.NewServer(cfg)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, srv)
 	go func() { _ = grpcServer.Serve(lis) }()
 	t.Cleanup(grpcServer.Stop)

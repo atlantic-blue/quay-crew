@@ -98,6 +98,11 @@ func headerInfo(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	info.State = described.GetState()
 	info.Events = described.GetEvents()
 	info.SandboxBuild = described.GetSandboxBuild()
+	// What the machine has left. The crew answers from its last sample rather than from the daemon,
+	// so asking every second costs a field read and never a docker command. A crew that could not
+	// read the machine says unknown, and the header says unknown too: the header that drew a healthy
+	// crew through eighteen kills is why this line exists. See issue 405.
+	info.Room, info.RoomState = console.RoomFrom(ctx, client)
 	// What the crew has cost. Its own call, because it is a running total rather than configuration,
 	// and the header is redrawn every second so it stays true.
 	if spent, err := client.GetUsage(ctx, &quaycrewv1.GetUsageRequest{}); err == nil {

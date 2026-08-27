@@ -32,6 +32,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/headroom"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -271,6 +272,10 @@ type world struct {
 	// storeStalls makes every health probe wait without answering, for the scenarios about a crew
 	// that reads well and cannot write.
 	storeStalls bool
+	// machine is what the crew reads of the machine it runs on. Nil is a crew with no daemon to ask,
+	// which reports unknown. A scenario sets it and then asks the crew to read it once, because a
+	// scenario that waited for the sampler's own timer would be a scenario with a clock in it.
+	machine headroom.Source
 	// startWait and exportWait are the crew's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
 	startWait  time.Duration
@@ -376,6 +381,7 @@ func (w *world) serve() error {
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 		StartWait: w.startWait, ExportWait: w.exportWait,
+		Headroom: w.machine, HeadroomEvery: time.Hour,
 	})
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
 	// a session the store still calls running is settled, because its task died with the last process.
@@ -572,6 +578,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
 	initializeWaitsSteps(sc)
+	initializeHeadroomSteps(sc)
 	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)

@@ -49,6 +49,13 @@ type Reading struct {
 	// The pair is what says who ran out. A kill by the machine's own out of memory killer raises
 	// Kills and leaves this at zero, because the sandbox never reached a limit: there was not one.
 	AtLimit int64
+	// SwapTotal and SwapFree are the machine's swap, and SwapKnown says whether the accounting
+	// carried it at all. A machine with no swap reports a total of zero, which is a reading; a
+	// machine whose accounting does not mention swap is not the same thing, and the pressure signal
+	// on 27 August 2026 was swap at 94 per cent while memory looked fine.
+	SwapTotal int64
+	SwapFree  int64
+	SwapKnown bool
 }
 
 // Free is what this sandbox can still take: what the machine has, and never more than what is left
@@ -82,6 +89,9 @@ func Read(root fs.FS) (Reading, error) {
 		return Reading{}, fmt.Errorf("room: %s says no MemTotal, so there is nothing to report", meminfoPath)
 	}
 
+	reading.SwapTotal, reading.SwapKnown = kilobytesIf(meminfo, "SwapTotal")
+	reading.SwapFree, _ = kilobytesIf(meminfo, "SwapFree")
+
 	reading.Limit = bytes(root, "memory.max")
 	reading.Held = bytes(root, "memory.current")
 	reading.Peak = bytes(root, "memory.peak")
@@ -104,6 +114,18 @@ func bytes(root fs.FS, name string) int64 {
 		return 0
 	}
 	return value
+}
+
+// kilobytesIf reads a named line the way kilobytes does, and says whether the line was there at all.
+// Zero and absent are different answers about swap: one machine has none and the other did not say.
+func kilobytesIf(meminfo []byte, name string) (int64, bool) {
+	for _, line := range lines(meminfo) {
+		label, _, found := strings.Cut(line, ":")
+		if found && label == name {
+			return kilobytes(meminfo, name), true
+		}
+	}
+	return 0, false
 }
 
 // kilobytes reads a named line of /proc/meminfo, which states kilobytes, and returns bytes.
