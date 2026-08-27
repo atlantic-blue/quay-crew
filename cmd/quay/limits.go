@@ -16,6 +16,12 @@ const (
 	flagMaxDepth   = "--max-depth"
 	flagMaxRunning = "--max-running"
 	flagLease      = "--lease"
+	// The two times a session's life is measured by. Both ship unset, and unset means the crew takes
+	// no container back and files nothing away. No number is written for them anywhere in this
+	// repository: three measurements decide them, section 11 of docs/ORCHESTRATION.md names each and
+	// the command that would take it, and none has been run.
+	flagReclaim = "--reclaim"
+	flagArchive = "--archive"
 )
 
 // runLimits reads and sets what a workspace lets its sessions declare.
@@ -29,8 +35,9 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		return err
 	}
 	if len(rest) > 1 {
-		return fmt.Errorf("usage: quay limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] [%s <duration>]",
-			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease)
+		return fmt.Errorf("usage: quay limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] "+
+			"[%s <duration>] [%s <duration>] [%s <duration>]",
+			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -71,13 +78,23 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		given.set(number)
 		setting = true
 	}
-	if values.has(flagLease) {
-		lease, err := time.ParseDuration(values.first(flagLease))
+	for _, given := range []struct {
+		flag string
+		set  func(int32)
+	}{
+		{flagLease, func(seconds int32) { asked.LeaseSeconds = seconds }},
+		{flagReclaim, func(seconds int32) { asked.ReclaimSeconds = seconds }},
+		{flagArchive, func(seconds int32) { asked.ArchiveSeconds = seconds }},
+	} {
+		if !values.has(given.flag) {
+			continue
+		}
+		length, err := time.ParseDuration(values.first(given.flag))
 		if err != nil {
 			return fmt.Errorf("%s takes a length of time such as 60s, and %q is not one",
-				flagLease, values.first(flagLease))
+				given.flag, values.first(given.flag))
 		}
-		asked.LeaseSeconds = int32(lease.Seconds())
+		given.set(int32(length.Seconds()))
 		setting = true
 	}
 
@@ -94,6 +111,10 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "max running    %s\n", unsetOr(int64(asked.GetMaxRunning())))
 	fmt.Fprintf(out, "budget tokens  %s\n", unsetOr(asked.GetBudgetTokens()))
 	fmt.Fprintf(out, "lease          %s\n", leaseOr(asked.GetLeaseSeconds()))
+	fmt.Fprintf(out, "reclaim        %s%s\n", lengthOr(asked.GetReclaimSeconds()),
+		timeMeans(asked.GetReclaimSeconds(), "no session here gives its container back"))
+	fmt.Fprintf(out, "archive        %s%s\n", lengthOr(asked.GetArchiveSeconds()),
+		timeMeans(asked.GetArchiveSeconds(), "nothing here is filed away on its own"))
 	if !setting {
 		fmt.Fprintf(out, "\nraise one with quay limits %s %s <n>\n", located.Path, flagMaxDepth)
 	}
@@ -107,6 +128,23 @@ func depthMeans(depth int32) string {
 		return "  (no session here may declare work)"
 	}
 	return ""
+}
+
+// timeMeans says out loud what unset does, because a reader who has met a timeout before reads a
+// missing number as a default rather than as off.
+func timeMeans(seconds int32, means string) string {
+	if seconds == 0 {
+		return "  (" + means + ")"
+	}
+	return ""
+}
+
+// lengthOr reads a number of seconds as a length of time, and zero as unset.
+func lengthOr(seconds int32) string {
+	if seconds == 0 {
+		return "unset"
+	}
+	return (time.Duration(seconds) * time.Second).String()
 }
 
 func unsetOr(value int64) string {
@@ -128,5 +166,6 @@ func leaseOr(seconds int32) string {
 func limitsFlagsTaken() map[string]bool {
 	return map[string]bool{
 		flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
+		flagReclaim: true, flagArchive: true,
 	}
 }

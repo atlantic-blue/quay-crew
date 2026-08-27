@@ -51,6 +51,8 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 		{"max running", int64(asked.GetMaxRunning())},
 		{"budget", asked.GetBudgetTokens()},
 		{"lease", int64(asked.GetLeaseSeconds())},
+		{"reclaim time", int64(asked.GetReclaimSeconds())},
+		{"archive time", int64(asked.GetArchiveSeconds())},
 	} {
 		if refusal.value < 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
@@ -62,7 +64,9 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 	written, err := s.store.SetWorkspaceLimits(ctx, work.Limits{
 		Workspace: asked.GetWorkspace(), MaxDepth: int(asked.GetMaxDepth()),
 		MaxRunning: int(asked.GetMaxRunning()), BudgetTokens: asked.GetBudgetTokens(),
-		LeaseSeconds: int(asked.GetLeaseSeconds()),
+		LeaseSeconds:   int(asked.GetLeaseSeconds()),
+		ReclaimSeconds: int(asked.GetReclaimSeconds()),
+		ArchiveSeconds: int(asked.GetArchiveSeconds()),
 	})
 	if err != nil {
 		return nil, storeError(err, "set workspace limits")
@@ -75,6 +79,8 @@ func asLimits(from work.Limits) *quaycrewv1.WorkspaceLimits {
 	return &quaycrewv1.WorkspaceLimits{
 		Workspace: from.Workspace, MaxDepth: int32(from.MaxDepth),
 		MaxRunning: int32(from.MaxRunning), BudgetTokens: from.BudgetTokens,
-		LeaseSeconds: int32(from.LeaseSeconds),
+		LeaseSeconds:   int32(from.LeaseSeconds),
+		ReclaimSeconds: int32(from.ReclaimSeconds),
+		ArchiveSeconds: int32(from.ArchiveSeconds),
 	}
 }

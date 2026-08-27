@@ -34,6 +34,12 @@ type FakeProvider struct {
 	// the request and not answered. Nil creates straight away.
 	Hold  chan struct{}
 	Boxes []*FakeSandbox
+	// Watched are the sessions somebody has the conversation open in, so a scenario can be an
+	// operator typing into a container the crew is about to take back.
+	Watched map[string]bool
+	// AttachErr is the daemon refusing to answer whether anybody is attached, which is not the same
+	// answer as nobody: a crew that cannot tell must leave the container alone.
+	AttachErr error
 	// live is the sandbox each session currently has, so creating twice for one session adopts it.
 	live map[string]*FakeSandbox
 }
@@ -126,6 +132,34 @@ func (f *FakeProvider) Stranded(context.Context) ([]string, error) {
 	}
 	sort.Strings(ids)
 	return ids, nil
+}
+
+// Attached says whether somebody has this session's conversation open, the way the Docker provider
+// asks tmux inside the container.
+//
+// It answers false for a session this provider holds no sandbox for, because the real one asks a
+// container that is not there and gets a non zero exit, which means nobody rather than an error. A
+// double looser than that would let a scenario reclaim a container the real crew would leave alone.
+func (f *FakeProvider) Attached(_ context.Context, sessionID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.AttachErr != nil {
+		return false, f.AttachErr
+	}
+	if box, live := f.live[sessionID]; !live || box.Closed {
+		return false, nil
+	}
+	return f.Watched[sessionID], nil
+}
+
+// Watch makes this provider one where somebody has that session's conversation open.
+func (f *FakeProvider) Watch(sessionID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Watched == nil {
+		f.Watched = map[string]bool{}
+	}
+	f.Watched[sessionID] = true
 }
 
 // FakeSandbox is a Sandbox for tests. It records exec specs, streams a canned output, and tracks

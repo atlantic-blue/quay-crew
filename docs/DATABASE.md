@@ -98,6 +98,12 @@ sandbox. The console calls them sessions too, and `sessions` still opens that vi
   `bypassPermissions` once you press `D` in the console
 - `archived_at` is set when you put a session away with `A`. Archiving hides it from the default
   listing, stops it, and closes its sandbox. It deletes nothing
+- `reclaimed_at` is set when the crew took the container back on its own, which is the status
+  `reclaimed`. Everything else on the row stays, so the next task builds a fresh container over the
+  same conversation and carries on. It is a stamp of its own rather than a reading of `updated_at`,
+  because how long a session has been reclaimed is what the archive time is measured against, and
+  `updated_at` moves on every write. A task, a stop or a restart clears it. See section 11 of
+  `docs/ORCHESTRATION.md`, which also says why the two times that drive it ship unset
 
 **`contexts`** is the memory the model reads: `scope`, `owner`, `body`, timestamps, keyed on the first
 two columns together. `scope` is `crew`, `workspace` or `project`, and `owner` is the workspace or

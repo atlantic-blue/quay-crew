@@ -24,6 +24,10 @@ const (
 	KindSessionCompleted = "session.completed"
 	KindSessionErrored   = "session.errored"
 	KindSessionStopped   = "session.stopped"
+	// KindSessionReclaimed is the crew taking a session's container back. It is beside stopped rather
+	// than folded into it, because a reader has to be able to tell a session somebody halted from one
+	// the crew tidied up.
+	KindSessionReclaimed = "session.reclaimed"
 	KindSessionArchived  = "session.archived"
 	KindSessionRestored  = "session.restored"
 	KindSessionDeleted   = "session.deleted"

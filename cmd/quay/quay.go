@@ -188,6 +188,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runTasks(ctx, client, args[1:], out)
 	case "answer":
 		return runAnswer(ctx, client, args[1:], out)
+	case "stop":
+		return runStop(ctx, client, args[1:], out)
 	case "drain":
 		return runDrain(ctx, client, args[1:], out)
 	// The way off the old words. Refused by name rather than treated as an unknown command, because

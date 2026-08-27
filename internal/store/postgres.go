@@ -271,6 +271,10 @@ func (p *Postgres) RecordTask(ctx context.Context, id, modelSessionID, status st
 		update sessions
 		set model_session_id = case when $2 = '' then model_session_id else $2 end,
 		    status = $3,
+		    -- A task is running or has landed, so the session holds a container again and the stamp
+		    -- that said the crew took the last one back is no longer true. Left behind, the archive
+		    -- rule would go on measuring against a reclaim that a dispatch already undid.
+		    reclaimed_at = null,
 		    updated_at = now()
 		where id = $1`,
 		id, modelSessionID, status)
@@ -288,10 +292,17 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 	return p.sessionBy(ctx, `id = $1`, id)
 }
 
+// sessionColumns is every field of a session, in the order scanSession reads them. One list rather
+// than four copies of it: a column added to the row and forgotten in one of the four reads is a
+// session that scans in three places and fails in the fourth.
+const sessionColumns = `id, workspace, project, handle, status, model_session_id, created_at, ` +
+	`updated_at, archived_at, reclaimed_at, permission_mode, driver, label, description, ` +
+	`described_at_task, role`
+
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
 func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task, role
+		select `+sessionColumns+`
 		from sessions
 		where ($2 = '' or project = $2)
 		  and ($2 <> '' or $1 = '' or workspace = $1)
@@ -319,7 +330,8 @@ func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*q
 // StopSession marks a session stopped.
 func (p *Postgres) StopSession(ctx context.Context, id string) error {
 	tag, err := p.pool.Exec(ctx,
-		`update sessions set status = 'stopped', skills_fingerprint = '', updated_at = now() where id = $1`, id)
+		`update sessions set status = 'stopped', skills_fingerprint = '', reclaimed_at = null,
+		 updated_at = now() where id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("stop session: %w", err)
 	}
@@ -327,6 +339,70 @@ func (p *Postgres) StopSession(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ReclaimSession records that the crew took the session's container back.
+//
+// The stamp is written beside the status rather than read off updated_at, because the archive time is
+// measured against how long the session has been reclaimed, and updated_at moves on every write.
+//
+// The skills fingerprint goes with the container, the same way stopping clears it: the next sandbox
+// is born with the workspace's current set, so a reclaimed session is never stale.
+func (p *Postgres) ReclaimSession(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set status = 'reclaimed', skills_fingerprint = '', reclaimed_at = now(),
+		 updated_at = now() where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("reclaim session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SettledSessions is the sessions nothing is holding open, oldest touched first.
+//
+// Live, not running, and named by no piece of work in a non terminal phase. A session with a task
+// under way is not settled, and neither is one whose work is still open even though its own task has
+// landed: the work is what says the session is wanted, and the controller is about to send it another
+// task.
+//
+// Sessions an operator stopped are left out. A stop is somebody's decision, and filing away what
+// somebody halted would overwrite it with bookkeeping.
+func (p *Postgres) SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	query := `
+		select ` + sessionColumns + `
+		from sessions s
+		where s.archived_at is null
+		  and s.status = any($1)
+		  and not exists (
+		      select 1 from work w where w.session = s.id and not (w.phase = any($2))
+		  )
+		order by s.updated_at, s.id`
+	args := []any{settledStatuses(), terminalPhases()}
+	if limit > 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" limit $%d", len(args))
+	}
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("settled sessions: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]*quaycrewv1.Session, 0)
+	for rows.Next() {
+		session, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("settled sessions: %w", err)
+	}
+	return out, nil
 }
 
 // SetSessionSkills records the skill set a session's live sandbox was born with; empty clears it.
@@ -361,7 +437,7 @@ func (p *Postgres) SessionSkills(ctx context.Context, id string) (string, error)
 // is the only pointer to a conversation the model keeps on its own disk.
 func (p *Postgres) RestartSession(ctx context.Context, id string) error {
 	tag, err := p.pool.Exec(ctx,
-		`update sessions set status = 'idle', updated_at = now() where id = $1`, id)
+		`update sessions set status = 'idle', reclaimed_at = null, updated_at = now() where id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("restart session: %w", err)
 	}
@@ -481,7 +557,7 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task, role
+		select `+sessionColumns+`
 		from sessions where `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -501,15 +577,15 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	var (
 		id, workspace, project, handle, status, modelSessionID string
 		createdAt, updatedAt                                   time.Time
-		archivedAt                                             *time.Time
+		archivedAt, reclaimedAt                                *time.Time
 		permissionMode                                         string
 		driver                                                 bool
 		label, description, roleName                           string
 		describedAtTask                                        int32
 	)
 	if err := rows.Scan(&id, &workspace, &project, &handle, &status, &modelSessionID,
-		&createdAt, &updatedAt, &archivedAt, &permissionMode, &driver, &label, &description,
-		&describedAtTask, &roleName); err != nil {
+		&createdAt, &updatedAt, &archivedAt, &reclaimedAt, &permissionMode, &driver, &label,
+		&description, &describedAtTask, &roleName); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	session := &quaycrewv1.Session{
@@ -530,6 +606,9 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	}
 	if archivedAt != nil {
 		session.ArchivedAt = timestamppb.New(*archivedAt)
+	}
+	if reclaimedAt != nil {
+		session.ReclaimedAt = timestamppb.New(*reclaimedAt)
 	}
 	return session, nil
 }
@@ -683,7 +762,7 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 		return nil, fmt.Errorf("open the driver: %w", err)
 	}
 	rows, err := p.pool.Query(ctx, `
-		select id, workspace, project, handle, status, model_session_id, created_at, updated_at, archived_at, permission_mode, driver, label, description, described_at_task, role
+		select `+sessionColumns+`
 		from sessions where project = $1 and driver`, project)
 	if err != nil {
 		return nil, fmt.Errorf("open the driver: %w", err)

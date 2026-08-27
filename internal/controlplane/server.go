@@ -41,8 +41,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Where a session is. These four are the whole vocabulary of Session.status, written down here because
-// the console colours by them and a fifth invented at a call site would come out uncoloured.
+// Where a session is. These five are the whole vocabulary of Session.status, written down here because
+// the console colours by them and a sixth invented at a call site would come out uncoloured.
 const (
 	// StatusIdle is a session waiting for you: no task is running and the last one landed.
 	StatusIdle = "idle"
@@ -53,6 +53,14 @@ const (
 	StatusFailed = "failed"
 	// StatusStopped is a session that was put down. Its sandbox is gone and its history is not.
 	StatusStopped = "stopped"
+	// StatusReclaimed is a session the crew took the container back from. Its sandbox is gone and
+	// everything else it has is not, so the next task builds a fresh one over the same conversation
+	// and the same files.
+	//
+	// It is deliberately not stopped. A stop is an operator's decision and somebody reading it goes
+	// looking for who made it; a reclaim is the crew saving memory on a session nobody is using, and
+	// somebody reading it looks for nothing, because the next dispatch fixes it.
+	StatusReclaimed = store.StatusReclaimed
 )
 
 // Info is what this control plane is running, reported over the API so an operator can see which
@@ -228,6 +236,12 @@ type Server struct {
 
 	sandboxesMu sync.Mutex
 	sandboxes   map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
+
+	// running is the task each session has in flight, and how to stop it. A task runs the model
+	// through a context, so holding the cancel is what makes stopping one possible at all; without
+	// it the only way to end a task was to kill the client, which does not reliably end anything.
+	runningMu sync.Mutex
+	running   map[string]*running
 }
 
 // NewServer builds a control plane over a durable store, a model runner (the Claude Code adapter by
@@ -273,7 +287,10 @@ func NewServer(cfg Config) *Server {
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).
-		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).Redacting(server)
+		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).Redacting(server).
+		// The signal that stops a reclaim closing a container an operator is typing into. Without it
+		// the controller reclaims nothing, whatever the workspace's times say.
+		Watching(server)
 	return server
 }
 
@@ -1192,6 +1209,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
 func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string) (string, error) {
+	// Registered before anything runs, so a stop that arrives a moment after the dispatch has
+	// something to cancel. The task runs under this context from here down, which is what makes
+	// `quay stop` end the model rather than only mark a row.
+	ctx, held := s.beginRunning(ctx, session.GetId())
+	defer s.endRunning(session.GetId(), held)
 	// Both of these happen before any work does, and that is the point of them. An operator has to be
 	// able to see what a session was asked to do while it is doing it, whether or not the caller
 	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
@@ -1204,6 +1226,9 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 
 	box, err := s.startSandbox(ctx, session)
 	if err != nil {
+		if asked, reason := held.stopped(); asked {
+			return "", s.landStopped(ctx, session, task, model.Response{}, reason)
+		}
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
 		failure := "the session's sandbox could not be created: " + err.Error()
 		s.landTask(ctx, session, task, StatusFailed, "", failure)
@@ -1219,6 +1244,9 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		Settings:       s.settingsFor(ctx, session),
 	})
 	if err != nil {
+		if asked, reason := held.stopped(); asked {
+			return "", s.landStopped(ctx, session, task, resp, reason)
+		}
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
 		// A task that failed still spent what it spent, and a bill that counts only the tasks that
 		// worked understates itself in exactly the situation somebody is investigating.
