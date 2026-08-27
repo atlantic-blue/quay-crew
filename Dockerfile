@@ -12,7 +12,11 @@ RUN go mod download
 
 COPY . .
 ARG SERVICE=gateway
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/service ./cmd/${SERVICE}
+# QC_VERSION is the build this image is made from, stamped into the binary the way the install target
+# stamps the tool. A service that cannot say which build it is leaves an operator diagnosing a defect
+# that is already fixed.
+ARG QC_VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-X main.version=${QC_VERSION}" -o /out/service ./cmd/${SERVICE}
 
 # The hooks this build ships, built here so /hooks below carries an executable.
 #

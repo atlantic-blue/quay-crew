@@ -93,6 +93,10 @@ func unreachable(err error, told string, sandboxed bool) error {
 // With no terminal attached the console prints plain lines instead, so `quay | grep` still works.
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) > 0 {
+		// Before the command, so an operator watching a task run sees it rather than finding it
+		// above the answer afterwards. The console says which build the crew is in its own header,
+		// and a line drawn over a full screen view would corrupt it.
+		reportDrift(ctx, client, os.Stderr)
 		return run(ctx, client, args, os.Stdout, addr)
 	}
 	if !isatty.IsTerminal(os.Stdout.Fd()) {

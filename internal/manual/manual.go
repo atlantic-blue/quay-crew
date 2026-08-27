@@ -33,7 +33,8 @@ you work in one place at a time, and say where with an address: workspace/projec
 
 commands:
   help                                    print this, which -h and --help do too
-  version                                 print which build this is
+  version                                 which build the tool, the crew and the sandbox image are,
+                                          and where two of them differ
   features                                what this crew can do, and what proves it
   manual                                  what quay is and how to drive it, to pipe into a context
   use [<address>]                         show where you are, or move there

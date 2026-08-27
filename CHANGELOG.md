@@ -8,6 +8,21 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The crew says which build it is, and drift is reported.** `quay version` prints three builds now:
+  this tool, the crew, and the image every session runs in. Where two of them came from different
+  commits it says so and names both. Any command, not only this one, puts one line on standard error
+  when the tool and the crew are different builds, and then runs as it always did.
+
+  A crew is three parts and each is built on its own. An upgrade stops every container, so it gets
+  put off, and the three drift apart. On 27 August 2026 three defects were investigated as if they
+  were live and all three were fixed already: the tool in use was built thirteen minutes before the
+  first of those fixes landed.
+
+  The control plane binary is stamped with its build the way the tool is, and the compose stack
+  passes the commit it builds from. A crew from before this says nothing, so the tool reports the
+  build as unknown and names when a crew began to answer, rather than reporting an error. A crew
+  that cannot be reached is left to the command itself to report.
+
 - **An answer comes back out as data.** `quay answer <session>` writes the reply of the most recent
   landed task to standard output, with nothing else on it. `--all` writes every landed reply, oldest
   first, one to a line.

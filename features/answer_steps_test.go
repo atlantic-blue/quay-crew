@@ -1,40 +1,26 @@
 package features_test
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"os"
-	"os/exec"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
 )
 
-// Steps for reading an answer back out of the crew as data.
-//
-// These run the real command line tool in its own process, because what is specified is which stream
-// each thing goes to and what the exit status is, and neither of those exists inside the test process.
-// Every other scenario dials the crew over an in memory connection, which a second process cannot
-// reach, so the scenario asks the crew for a network address of its own first.
+// Steps for reading an answer back out of the crew as data. They run the real tool through the
+// harness in tool_steps_test.go, because what is specified is which stream each thing goes to.
 
 type answerKey struct{}
 
-// answerWorld is what one scenario asked for and what came back out of the tool.
+// answerWorld is what one scenario asked the crew for.
 type answerWorld struct {
-	address   string
 	sessionID string
 	handle    string
 	// replies are what the model said, oldest first, so an assertion names the value rather than
 	// repeating the double's arithmetic.
-	replies  []string
-	stdout   string
-	stderr   string
-	exitCode int
-	ran      bool
+	replies []string
 }
 
 func answerFrom(ctx context.Context) *answerWorld {
@@ -45,17 +31,6 @@ func answerFrom(ctx context.Context) *answerWorld {
 func initializeAnswerSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, answerKey{}, &answerWorld{}), nil
-	})
-
-	sc.Step(`^the crew listens on an address the tool can dial$`, func(ctx context.Context) error {
-		w, a := worldFrom(ctx), answerFrom(ctx)
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			return fmt.Errorf("listen for the tool: %w", err)
-		}
-		go func() { _ = w.grpcServer.Serve(listener) }()
-		a.address = listener.Addr().String()
-		return nil
 	})
 
 	sc.Step(`^a session that was asked "([^"]*)"$`, func(ctx context.Context, text string) error {
@@ -123,7 +98,7 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		return answerRun(ctx, "answer", session)
+		return runTool(ctx, "answer", session)
 	})
 
 	sc.Step(`^the caller asks for the answer by the handle of that session$`, func(ctx context.Context) error {
@@ -131,7 +106,7 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 		if a.handle == "" {
 			return fmt.Errorf("this scenario has no session to name by its handle")
 		}
-		return answerRun(ctx, "answer", a.handle)
+		return runTool(ctx, "answer", a.handle)
 	})
 
 	sc.Step(`^the caller asks for every answer of that session$`, func(ctx context.Context) error {
@@ -139,92 +114,52 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		return answerRun(ctx, "answer", session, "--all")
+		return runTool(ctx, "answer", session, "--all")
 	})
 
 	sc.Step(`^standard output is the reply and one newline$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
+		a, t := answerFrom(ctx), toolFrom(ctx)
 		if len(a.replies) == 0 {
 			return fmt.Errorf("this scenario recorded no reply, so there is nothing to compare against")
 		}
 		want := a.replies[len(a.replies)-1] + "\n"
-		if a.stdout != want {
-			return fmt.Errorf("standard output is %q, want %q", a.stdout, want)
+		if t.stdout != want {
+			return fmt.Errorf("standard output is %q, want %q", t.stdout, want)
 		}
 		return nil
 	})
 
 	sc.Step(`^standard output is both replies, oldest first$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
+		a, t := answerFrom(ctx), toolFrom(ctx)
 		if len(a.replies) != 2 {
 			return fmt.Errorf("this scenario recorded %d replies, want 2", len(a.replies))
 		}
 		want := a.replies[0] + "\n" + a.replies[1] + "\n"
-		if a.stdout != want {
-			return fmt.Errorf("standard output is %q, want %q", a.stdout, want)
+		if t.stdout != want {
+			return fmt.Errorf("standard output is %q, want %q", t.stdout, want)
 		}
 		return nil
 	})
 
 	sc.Step(`^standard output carries all 400 characters$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
-		if !strings.Contains(a.stdout, strings.Repeat("x", 400)) {
+		t := toolFrom(ctx)
+		if !strings.Contains(t.stdout, strings.Repeat("x", 400)) {
 			return fmt.Errorf("standard output is %d characters and does not carry the answer whole: %q",
-				len(a.stdout), a.stdout)
+				len(t.stdout), t.stdout)
 		}
 		return nil
 	})
 
 	sc.Step(`^standard output carries what went wrong$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
-		if !strings.Contains(a.stdout, "the model refused this task") {
-			return fmt.Errorf("standard output is %q, want what the task failed with", a.stdout)
-		}
-		return nil
-	})
-
-	sc.Step(`^standard output is empty$`, func(ctx context.Context) error {
-		if got := answerFrom(ctx).stdout; got != "" {
-			return fmt.Errorf("standard output carries %q, and a caller reading it would take that for the answer", got)
-		}
-		return nil
-	})
-
-	sc.Step(`^standard error says nothing$`, func(ctx context.Context) error {
-		if got := answerFrom(ctx).stderr; got != "" {
-			return fmt.Errorf("standard error says %q", got)
-		}
-		return nil
+		return says("standard output", toolFrom(ctx).stdout, "the model refused this task")
 	})
 
 	sc.Step(`^standard error says there is no landed task$`, func(ctx context.Context) error {
-		return answerStderrSays(ctx, "no landed task")
+		return says("standard error", toolFrom(ctx).stderr, "no landed task")
 	})
 
 	sc.Step(`^standard error says the task is still running$`, func(ctx context.Context) error {
-		return answerStderrSays(ctx, "still running")
-	})
-
-	sc.Step(`^the command succeeds$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
-		if !a.ran {
-			return fmt.Errorf("the command was never run")
-		}
-		if a.exitCode != 0 {
-			return fmt.Errorf("the command exited %d, saying %q", a.exitCode, a.stderr)
-		}
-		return nil
-	})
-
-	sc.Step(`^the command fails$`, func(ctx context.Context) error {
-		a := answerFrom(ctx)
-		if !a.ran {
-			return fmt.Errorf("the command was never run")
-		}
-		if a.exitCode == 0 {
-			return fmt.Errorf("the command succeeded, so a caller cannot tell the answer is missing")
-		}
-		return nil
+		return says("standard error", toolFrom(ctx).stderr, "still running")
 	})
 }
 
@@ -254,55 +189,4 @@ func answerSubject(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return last.sessionID, nil
-}
-
-func answerStderrSays(ctx context.Context, want string) error {
-	a := answerFrom(ctx)
-	if !strings.Contains(a.stderr, want) {
-		return fmt.Errorf("standard error says %q, want it to say %q", a.stderr, want)
-	}
-	return nil
-}
-
-// answerRun runs the tool the way a caller runs it, with its streams kept apart.
-//
-// The home directory is a temporary one: this tool keeps where the operator is standing on the
-// machine it runs on, and a scenario must not read or write the operator's own.
-func answerRun(ctx context.Context, args ...string) error {
-	a := answerFrom(ctx)
-	if a.address == "" {
-		return fmt.Errorf("the crew has no address the tool can dial")
-	}
-	binary, err := quayBinary()
-	if err != nil {
-		return err
-	}
-	home, err := os.MkdirTemp("", "quaycrew-answer-")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.RemoveAll(home) }()
-
-	command := exec.CommandContext(ctx, binary, args...)
-	command.Env = append(os.Environ(),
-		"QC_GRPC_ADDR="+a.address,
-		"QC_TOKEN="+worldFrom(ctx).token,
-		"QUAY_HOME="+home,
-		"HOME="+home,
-	)
-	var out, said bytes.Buffer
-	command.Stdout, command.Stderr = &out, &said
-	runErr := command.Run()
-	a.ran, a.stdout, a.stderr = true, out.String(), said.String()
-
-	var exit *exec.ExitError
-	switch {
-	case runErr == nil:
-		a.exitCode = 0
-	case errors.As(runErr, &exit):
-		a.exitCode = exit.ExitCode()
-	default:
-		return fmt.Errorf("running the tool: %w", runErr)
-	}
-	return nil
 }

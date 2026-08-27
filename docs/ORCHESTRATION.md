@@ -1780,6 +1780,10 @@ it. That is a change to where the model runs, and this design does not make it.
 
 ### A version drift warning
 
+**Shipped on 27 August 2026.** The crew reports its own build, `quay version` prints all three, and
+any command says on standard error when the tool and the crew are different builds. What follows
+describes what was true before that, and it is kept because it says why the shape is this one.
+
 **Today the client cannot learn the crew's version at all.** This was checked against the code.
 
 - `quay version` prints the tool's own stamped build and nothing else

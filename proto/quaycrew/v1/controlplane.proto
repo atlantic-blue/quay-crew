@@ -799,6 +799,11 @@ message GetInfoResponse {
   // Empty means the image says nothing about which build it came from, which is every image made
   // before this was stamped, and nothing is claimed about it either way.
   string sandbox_build = 7;
+  // version is the build of the crew this control plane was made from, for example "5bf99a0". Empty
+  // means this crew predates the field, so nothing is claimed about which build it is. The tool, the
+  // control plane and the sandbox image are built on their own and drift apart, and three defects
+  // were investigated as live on 27 August 2026 that were fixed already, because nothing said so.
+  string version = 8;
 }
 
 // GetUsageRequest asks what the crew has cost so far.

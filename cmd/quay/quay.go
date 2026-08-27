@@ -144,8 +144,7 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	}
 	switch args[0] {
 	case "version":
-		fmt.Fprintln(out, version)
-		return nil
+		return runVersion(ctx, client, out)
 	case "manual":
 		return runManual(args[1:], out)
 	case "features":
