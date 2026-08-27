@@ -141,6 +141,11 @@ func SecretFilePath(name string) string { return path.Join(SecretsPath, name) }
 
 const ContainerPrefix = "quaycrew-"
 
+// SessionIDLength is how many characters a session identifier has, which is what tells a sandbox
+// container from every other container the daemon holds. The name alone is not enough: the compose
+// project is called quaycrew too, so its own services carry the same prefix.
+const SessionIDLength = 24
+
 // ContainerName is derived here rather than rebuilt by everything that needs to reach into a session
 // from outside the provider.
 func ContainerName(sessionID string) string { return ContainerPrefix + sessionID }

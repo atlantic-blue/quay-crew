@@ -24,6 +24,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/headroom"
 	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -125,6 +126,11 @@ type Config struct {
 	// DescribeEvery is how many tasks past its description a conversation goes before the crew writes
 	// it again. Zero is off.
 	DescribeEvery int
+	// Headroom reads the machine the crew runs on. Nil means the crew cannot read it, and every
+	// figure then says unknown, which is what a crew with no daemon to ask should say.
+	Headroom headroom.Source
+	// HeadroomEvery is how often the machine is read. Zero takes headroom.Every.
+	HeadroomEvery time.Duration
 	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
 	// first task. Zero takes startWait, which is measured from what a healthy start costs.
 	StartWait time.Duration
@@ -196,6 +202,9 @@ type Server struct {
 	// taskMetrics publishes what each task spent. Nil records nothing, which is what a crew with no
 	// telemetry provider installed does.
 	taskMetrics *telemetry.TaskMetrics
+	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
+	// and never the daemon, so a slow daemon slows the sampler and never a command.
+	headroom *headroom.Sampler
 
 	// startWait is the budget from a session row to a sandbox ready for its first task, and
 	// exportWait what one export to the event log is given. Both are fields rather than constants so
@@ -232,6 +241,7 @@ func NewServer(cfg Config) *Server {
 		skillsHost:    cfg.SkillsHost,
 		sandboxImage:  cfg.SandboxImage,
 		sandboxes:     make(map[string]sandbox.Sandbox),
+		headroom:      headroom.NewSampler(cfg.Headroom, cfg.HeadroomEvery),
 		startWait:     orWait(cfg.StartWait, startWait),
 		exportWait:    orWait(cfg.ExportWait, exportWait),
 		starts:        make(chan struct{}, 1),

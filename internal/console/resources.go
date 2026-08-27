@@ -816,6 +816,62 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
+// Room is one line per sandbox: the session it belongs to, what it holds, its share of one
+// processor, and how long since its last task. Largest first.
+//
+// This is the view that answers which session to stop. On 27 August 2026 the host ran out of memory
+// and the kernel killed eighteen sandboxes in one event, and the listing showed neither which
+// session was large nor that the machine was full: one working sandbox held 1,201 megabytes and an
+// idle one held 1.6, which is three orders of magnitude the listing did not carry. See issue 405.
+//
+// The status column is here because the largest sandbox may be the one doing the work. Stopping a
+// session mid task to make room is a decision an operator should make on purpose.
+func Room(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	return Resource{
+		Name:    "room",
+		Aliases: []string{"memory", "headroom", "mem"},
+		Columns: []Column{
+			{Title: "session", Width: 26, Colour: place},
+			{Title: "holds", Width: 12},
+			{Title: "processor", Width: 12},
+			{Title: "idle", Width: 8},
+			{Title: "status", Width: 0, Colour: colourOfStatus},
+		},
+		// The control plane sorts these largest first, and a sort here would fight it: the column
+		// holds "1201 MiB" and "unknown", which do not order as text.
+		SortBy: -1,
+		List: func(ctx context.Context, _ string) ([]Row, error) {
+			answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
+			if err != nil {
+				return nil, err
+			}
+			rows := make([]Row, 0, len(answer.GetSandboxes())+1)
+			for _, box := range answer.GetSandboxes() {
+				rows = append(rows, Row{
+					ID:    box.GetSession(),
+					Label: display.ShortID(box.GetSession()),
+					Cells: []string{
+						display.ShortID(box.GetSession()), box.GetHeld(), box.GetProcessor(),
+						box.GetIdle(), sandboxStatus(box.GetStatus()),
+					},
+					State: stateFromStatus(box.GetStatus()),
+				})
+			}
+			return rows, nil
+		},
+	}
+}
+
+// sandboxStatus is what the session beside a container says it is doing. A container the crew holds
+// no session for is a stray, and saying so is more useful than an empty cell: the crew does not know
+// what it is, and nothing will ever stop it.
+func sandboxStatus(status string) string {
+	if status == "" {
+		return "stray, no session"
+	}
+	return status
+}
+
 // Keys is every key the console answers to, as a view rather than only as the overlay behind the
 // question mark. The header carries this view's own keys; the rest have to be somewhere you can leave
 // open beside what you are doing.
