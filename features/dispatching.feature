@@ -33,3 +33,20 @@ Feature: A task outlives the caller that started it
   Scenario: A caller that waits is given the answer
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
+
+  # A crew once wrote the session row, waited on something that never answered, and said nothing at
+  # all: no task, no container, no line in the log. Every listing kept answering in under a second,
+  # so the crew read as well while it started no work for an hour. A dispatch that cannot start now
+  # ends, and says which wait it gave up on.
+  Scenario: A dispatch that cannot start says what it waited for
+    Given a sandbox that never starts
+    When the operator dispatches "read the repository" to the project
+    Then the crew says it waited for "the sandbox to be created"
+    And the session left behind is not sitting idle
+
+  # The audit export is a copy of a record the store already holds, so a broker that never answers
+  # costs the export and never the work. It used to cost the whole dispatch.
+  Scenario: A task runs while the event log is not answering
+    Given an event log that never answers
+    When the operator dispatches "hello" to the project
+    Then the reply is "you said: hello"

@@ -28,9 +28,16 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
+	// Asked whether the crew beside it is serving, this binary asks and exits. It is the container
+	// health check, and it goes before anything else here because it starts nothing.
+	if len(os.Args) > 1 && os.Args[1] == healthArg {
+		os.Exit(probeHealth())
+	}
+
 	serviceName := envOr("QC_SERVICE_NAME", "controlplane")
 	logger := logging.Init(serviceName, os.Stdout)
 
@@ -198,6 +205,9 @@ func main() {
 		auth.ServerOptions(token, driverToken, controlplane.DeniedToDriver)...,
 	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
+	// What the container health check asks. It writes rather than reads, because this crew answered
+	// every read for an hour while it started no work at all.
+	grpc_health_v1.RegisterHealthServer(grpcServer, controlplane.NewHealth(server))
 
 	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {

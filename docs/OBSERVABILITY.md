@@ -209,6 +209,24 @@ In this order, because each step is pointless without the one above it.
 The one piece of #3 still open is the audit record. A task in the `tasks` table carries no trace id,
 so history and traces cannot be joined the way logs and traces now can.
 
+## Asking the crew whether it can start work
+
+The control plane serves the standard gRPC health check, and answering it writes rather than reads:
+a row in the store, and a record on the event log. Both are writes a dispatch makes before a sandbox
+is ever asked for, so a crew that answers every listing and starts nothing fails this check. That is
+the state issue 400 describes, and reading alone agreed the crew was well for an hour.
+
+The stack asks it every thirty seconds. The image carries no shell, so the check is the service
+binary in its other mode:
+
+```
+docker inspect --format '{{.State.Health.Status}}' quaycrew-controlplane-1
+docker exec quaycrew-controlplane-1 /service health
+```
+
+`serving` on standard output and an exit status of zero is a crew that can write. Anything else
+exits non zero, and the control plane's own log says which of the two writes did not land.
+
 ## Checking whether it is working
 
 The same command from the top of this document is the fastest signal, because the collector's debug

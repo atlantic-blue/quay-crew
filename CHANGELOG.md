@@ -8,6 +8,42 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A dispatch that cannot start says so instead of waiting without end.** A control plane that had
+  come back from the machine running out of memory served every listing in under a second and
+  started no work at all. `quay dispatch` wrote the session row, then stayed inside the call: no
+  task recorded, no container made, no line in the log, four attempts given up on at 45, 60, 90 and
+  120 seconds, and four sessions left sitting idle with nothing behind them. Restarting the
+  container cleared it. See issue 400.
+
+  The wait that reproduces every one of those symptoms is the export of the session record to the
+  broker. A producer holds a record for as long as it is given, and by default it is given no limit,
+  and the export deliberately carries a context detached from the caller's so a record outlives the
+  request. Nothing was left to end it. A test now stands a broker up that accepts the connection and
+  answers nothing, and the dispatch behind it is held for as long as anybody watches.
+
+  The machine ran out of memory an hour before the crew wedged. Nothing here proves that is what put
+  the broker in this state, so the trigger stays unproven and what is fixed is the wait.
+
+  Four things change. Every wait between a session row and a running sandbox is named and logged, so
+  a hang reads as "waiting for X" with no "waited for X" after it rather than as silence. The whole
+  path from the row to the sandbox has one budget of a minute, measured from what a healthy start
+  costs: about two seconds for `docker run` of the sandbox image, and under six and a half for a
+  whole first dispatch in continuous integration. A dispatch that runs out says which wait it gave
+  up on. A dispatch that fails after its row was written now says so on the row, as failed, with a
+  task carrying the reason, so nothing is left looking like a session waiting for work. And the
+  crew's one start at a time was a lock nobody could give up, so one stuck start held every later
+  dispatch and every stop behind it; it is now a wait like the others.
+
+  The export is a copy of a record the store already holds, so a broker that never answers now costs
+  the export and never the work.
+
+- **A crew is asked whether it can write, not only whether it answers.** The control plane serves
+  the standard health check, and answering it writes: a row in the store, and a record on the event
+  log. Both are writes a dispatch makes before a sandbox is ever asked for. The stack asks it every
+  thirty seconds, through the service binary's own `health` mode, because the image carries no
+  shell. A crew that reads well and cannot write reported itself healthy for an hour, and that is
+  why nobody saw the fault above.
+
 - **An answer comes back out as data.** `quay answer <session>` writes the reply of the most recent
   landed task to standard output, with nothing else on it. `--all` writes every landed reply, oldest
   first, one to a line.

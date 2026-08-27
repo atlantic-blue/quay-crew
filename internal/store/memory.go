@@ -19,7 +19,10 @@ import (
 // Memory is an in memory Store. It outlives any one control plane instance it is handed to, which
 // is what lets a test restart the server and assert that no state was hiding in the process.
 type Memory struct {
-	mu         sync.RWMutex
+	mu sync.RWMutex
+	// probed counts the health probes this store has taken, so a test can say the write path was
+	// exercised rather than that the call did not complain.
+	probed     int
 	workspaces map[string]*quaycrewv1.Workspace
 	deleted    map[string]bool
 	channels   map[string][]*quaycrewv1.Channel
@@ -601,6 +604,27 @@ func (m *Memory) newestSkill(name string) (Imported, bool) {
 }
 
 func skillKey(name string, version int) string { return name + "\x00" + strconv.Itoa(version) }
+
+// Probe takes the store's own lock and writes, which is what proves this store still takes a write:
+// the lock is the only thing here that another caller can be holding.
+func (m *Memory) Probe(ctx context.Context) error {
+	// The context is read even though nothing here blocks on it, because a double that answers what
+	// the real store refuses makes a suite green over a store that cannot write.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.probed++
+	return nil
+}
+
+// Probes is how many times this store took a probe.
+func (m *Memory) Probes() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.probed
+}
 
 // Close is a no op for the in memory store.
 func (m *Memory) Close() {}
