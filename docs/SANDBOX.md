@@ -21,41 +21,42 @@ You need Docker and a Claude subscription.
 
    This prints a token. Treat it like a password: it can spend your subscription.
 
-2. Build the sandbox image:
+2. Install the crew. This is one command:
 
    ```
-   make sandbox-image
+   make install
    ```
 
-   This builds `quaycrew-sandbox-claude:local` from `deploy/sandbox/claude.Dockerfile` (Node, Go,
-   the Claude Code CLI, git, and ripgrep, running as a non-root user).
+   It writes `~/.quay/env` if there is none, builds the command line tool over whatever `quay` your
+   shell runs, builds the hooks and the sandbox image, and brings the stack up. It then prints the
+   commands in step 3, because it cannot mint your credential for you.
 
-3. Say which model and image the stack runs, once, then start it:
+   ```mermaid
+   flowchart TD
+       ONE["make install"] --> CONFIG["config: write ~/.quay/env if there is none"]
+       CONFIG --> TOOL["tool: build quay over the copy your shell runs"]
+       TOOL --> HOOKS["hooks: build what every session runs under"]
+       HOOKS --> IMAGE["sandbox-image: build the container a session is"]
+       IMAGE --> ASK{"is this crew already up?"}
+       ASK -- "no" --> UP["up: bring the stack up"]
+       ASK -- "yes" --> COST["say what replacing the services costs, and wait"]
+       COST -- "quay typed, or YES=1" --> UP
+       COST -- "anything else" --> REFUSE["refuse, and exit non zero"]
+       UP --> NEXT["print the commands it cannot run for you"]
+   ```
+
+   Run it again whenever you want. It never writes over the configuration file you edited. It never
+   replaces the services under a crew that is already working without telling you what that costs
+   and waiting for you to agree, because a task in flight ends with the control plane that runs it.
+
+   The four pieces still work on their own. `make tool` builds the command line tool. `make hooks`
+   builds the hooks. `make sandbox-image` builds the image. `make up` brings the stack up.
+   `make rebuild` is the three builds together and leaves a running crew alone, which is what to
+   type when you want a new build and not a restart.
+
+3. Create a workspace, a project, and give it the token:
 
    ```
-   make config
-   make up
-   ```
-
-   `make config` writes `~/.quay/env` from `deploy/env.example`, and the stack reads it on every
-   command, so `make upgrade` cannot bring the stack back as something else. The two variables can still be given on the command line for a one off. Without
-   either, the stack uses a lightweight image and an echo backend, which is what continuous integration
-   runs, because it has no subscription.
-
-   Three keys decide what a task is. `QC_MODEL` is the backend: `claude-code` runs the real thing on
-   your subscription, `echo` runs `echo` in the sandbox instead. `QC_CLAUDE_MODEL` is which model that
-   backend runs against, either an alias for the newest of a tier (`opus`, `sonnet`) or a full name
-   (`claude-opus-5`, which is what a crew gets when it says nothing). `QC_SANDBOX_IMAGE` is the
-   container it all runs in.
-
-   Say nothing about the model and the command line tool chooses for itself, and it chooses Sonnet.
-   That is worth knowing, because a crew configured for Claude Code, holding an Opus subscription,
-   was running every session on Sonnet and nothing anywhere said so.
-
-4. Install the CLI, create a workspace, and give it the token:
-
-   ```
-   make install          # installs over the quay your shell runs
    quay workspace create demo
    quay project create house-bills
    quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
@@ -66,7 +67,7 @@ You need Docker and a Claude subscription.
    project. The control plane reads the secret when running a task and injects it into that
    session's sandbox; it is never part of the message or the event log.
 
-5. Ask something and get a real reply:
+4. Ask something and get a real reply:
 
    ```
    quay ask "say pong"
@@ -81,6 +82,36 @@ You need Docker and a Claude subscription.
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first task and is reused for the
    rest of the session. A second task on the same session continues the same conversation.
+
+### Which model and which image a task runs
+
+`make install` writes `~/.quay/env` from `deploy/env.example` and never touches it again. Edit that
+file to change what a task is, then run `make up` to bring the stack back on it. The stack reads the
+file on every command, so `make upgrade` cannot quietly bring it back as something else. The
+variables can still be given on the command line for a one off.
+
+Three keys decide what a task is. `QC_MODEL` is the backend: `claude-code` runs the real thing on
+your subscription, `echo` runs `echo` in the sandbox instead, which is what continuous integration
+runs because it has no subscription. `QC_CLAUDE_MODEL` is which model that backend runs against,
+either an alias for the newest of a tier (`opus`, `sonnet`) or a full name (`claude-opus-5`, which is
+what a crew gets when it says nothing). `QC_SANDBOX_IMAGE` is the container it all runs in.
+
+Say nothing about the model and the command line tool chooses for itself, and it chooses Sonnet.
+That is worth knowing, because a crew configured for Claude Code, holding an Opus subscription, was
+running every session on Sonnet and nothing anywhere said so.
+
+### What one command does not do
+
+It does not mint your model credential, which is why step 1 is yours and step 3 names it again.
+
+It does not upgrade a crew. `make upgrade` is that, and it does more: it fetches, it puts every live
+session down cleanly first, and it clears the sandbox containers the crew has forgotten. Running
+`make install` on a checkout you have just pulled builds the new code and restarts the stack, and it
+leaves those sessions to be ended by the replacement rather than put down.
+
+It does not check that the stack came up healthy. It exits when compose has started the containers,
+which is not the same as Postgres accepting connections. `make ps` and `quay version` say whether the
+crew is answering.
 
 ## The gated integration test
 

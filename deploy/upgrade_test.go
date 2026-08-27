@@ -33,7 +33,7 @@ func TestUpgradeBuildsEverythingASessionRuns(t *testing.T) {
 	}
 
 	built := prerequisites(t, "rebuild")
-	for _, one := range []string{"install", "hooks", "sandbox-image"} {
+	for _, one := range []string{"tool", "hooks", "sandbox-image"} {
 		if !strings.Contains(built, one) {
 			t.Errorf("make rebuild never builds %s, so an upgrade leaves it on the build before:\n%s",
 				one, built)
@@ -146,8 +146,8 @@ func TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers(t *testing.T) {
 	}
 	// The tool has to be the one that knows how to drain. Draining with the copy from before the
 	// upgrade asks an older binary for a command it may not have.
-	install := strings.Index(recipe, "--no-print-directory install")
-	if install < 0 || install > drain {
+	built := strings.Index(recipe, "--no-print-directory tool")
+	if built < 0 || built > drain {
 		t.Errorf("make upgrade drains before it builds the tool, so it drains with the build from "+
 			"before:\n%s", recipe)
 	}

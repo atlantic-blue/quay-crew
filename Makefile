@@ -37,7 +37,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install test features lint fmt tidy sandbox-image image rebuild config home-check env-check hooks help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -84,6 +84,42 @@ up: home-check config
 ## start: alias for up
 start: up
 
+## up-check: say what bringing a running crew up again costs, and make the operator agree to it
+#
+# `make install` is the one command a first run needs, so it is also the command somebody types on a
+# crew that is already working. Compose replaces the services whose build moved, and the control
+# plane is one of them: a task in flight is executing inside a sandbox through that process, so
+# replacing it ends the task the way `make upgrade` ends one when it takes a container away.
+#
+# Nothing else is at risk. Conversations, workspaces, secrets and the store are on disk and in
+# Postgres, and the sandbox containers are not compose's to replace.
+#
+# A crew that is not up has nothing to lose, so this passes in silence and the first run is still one
+# command with no question in it. Typing the crew's name back is the guard `quay workspace delete`
+# uses, and for the same reason: this Makefile takes no flags a person would think to look for.
+# YES=1 goes over it without being asked, which is what a script gives.
+up-check: config
+	@running="$$($(COMPOSE) ps --status running --quiet 2>/dev/null | grep -c . || true)"; \
+	if [ "$$running" = "0" ]; then exit 0; fi; \
+	echo "this crew is already up, in $$running containers."; \
+	echo "Bringing it up again replaces the services this build moved. A task in flight ends with"; \
+	echo "them. Conversations, workspaces, secrets and the store are untouched."; \
+	echo ""; \
+	echo "  make tool      build the command line tool only, and leave the crew alone"; \
+	echo "  make rebuild   build the tool, the hooks and the image, and leave the crew alone"; \
+	echo "  make install YES=1   restart it without being asked"; \
+	echo ""; \
+	if [ -n "$(YES)" ]; then \
+		echo "YES was given, so the crew is being brought up over what is running."; \
+		exit 0; \
+	fi; \
+	printf "type quay to bring it up anyway: "; \
+	read typed || typed=""; \
+	if [ "$$typed" != "quay" ]; then \
+		echo "that is not quay, so the crew is still running and nothing was replaced."; \
+		exit 1; \
+	fi
+
 ## rebuild: build everything this machine runs: the tool, the hooks and the sandbox image
 #
 # One command, because these three go together and remembering the third is not a job for a person.
@@ -93,7 +129,7 @@ start: up
 #
 # `make upgrade` runs this after fetching. Run it directly while working on a branch, where upgrade
 # refuses because it would build a half finished checkout into the stack.
-rebuild: install hooks sandbox-image
+rebuild: tool hooks sandbox-image
 
 ## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
 sandbox-image:
@@ -151,7 +187,7 @@ upgrade:
 	@echo "building the tool first, so the sessions are put down by the build that knows how. It is"
 	@echo "built again below with everything else, which costs nothing and keeps one list of what an"
 	@echo "upgrade builds."
-	@$(MAKE) --no-print-directory install
+	@$(MAKE) --no-print-directory tool
 	@$(MAKE) --no-print-directory drain
 	@echo "rebuilding the tool, the hooks and the sandbox image. Sessions run whatever the image holds,"
 	@echo "so leaving it behind means upgrading the tool and the stack while every conversation keeps"
@@ -223,22 +259,58 @@ proto:
 build:
 	go build ./...
 
-## install: build the quay CLI from this checkout and install it over the copy your shell runs
+## install: everything a first run needs, in one command: configuration, the builds, and the crew up
+#
+# A first run used to be four commands, and the order mattered. Miss `make config` and compose reads
+# a file that is not there. Miss `make sandbox-image` and the first task fails on a missing image,
+# which reads as a broken crew rather than a missing step. So this is the whole first run, and the
+# four commands underneath it stay callable on their own for anybody rebuilding one part.
+#
+# Each step is a sub make rather than a prerequisite, because the order is the point and a parallel
+# make is free to run prerequisites in any order it likes. Make stops on the first recipe line that
+# fails, so nothing below a refusal runs and nothing prints "the crew is up" over a build that did
+# not happen.
+#
+# Running it twice is safe. `config` writes nothing over a configuration file that exists, the builds
+# are builds, and `up-check` is where a crew that is already working gets a say before compose
+# replaces the services under it.
+#
+# What it cannot do is mint the model credential, so it ends by printing the commands that are the
+# operator's, in full, rather than sending them to a document.
 install:
+	@$(MAKE) --no-print-directory home-check
+	@$(MAKE) --no-print-directory config
+	@$(MAKE) --no-print-directory rebuild
+	@$(MAKE) --no-print-directory env-check
+	@$(MAKE) --no-print-directory up-check
+	@$(MAKE) --no-print-directory up
+	@echo ""
+	@echo "the crew is up, and quay is on your path."
+	@echo ""
+	@echo "This cannot mint your model credential. Get one with claude setup-token."
+	@echo "Then run these four commands:"
+	@echo ""
+	@echo "  quay workspace create <name>"
+	@echo "  quay project create <name>"
+	@echo "  quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>"
+	@echo "  quay ask \"say pong\""
+
+## tool: build the quay command line tool and install it over the copy your shell runs
+tool:
 	@dir="$$(eval echo "$(BINDIR)")"; \
 	if [ -z "$$dir" ]; then \
 		existing="$$(command -v quay 2>/dev/null || true)"; \
 		if [ -n "$$existing" ]; then dir="$$(dirname "$$existing")"; else dir="$(GOBIN)"; fi; \
 	fi; \
 	mkdir -p "$$dir"; \
-	go build -ldflags "-X main.version=$(VERSION)" -o "$$dir/quay" ./cmd/quay; \
+	go build -ldflags "-X main.version=$(VERSION)" -o "$$dir/quay" ./cmd/quay || exit 1; \
 	echo "installed quay to $$dir/quay, built from $(VERSION)"; \
 	found="$$(command -v quay 2>/dev/null || true)"; \
 	if [ -z "$$found" ]; then \
 		echo "note: $$dir is not on your PATH, so run $$dir/quay directly or add it"; \
 	elif [ ! "$$found" -ef "$$dir/quay" ]; then \
 		echo "warning: your shell still runs $$found, which is a different binary."; \
-		echo "         install over that one with: make install BINDIR=$$(dirname "$$found")"; \
+		echo "         install over that one with: make tool BINDIR=$$(dirname "$$found")"; \
 	fi
 
 ## hooks: build the entry point of every hook this build ships
