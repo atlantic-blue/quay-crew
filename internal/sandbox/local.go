@@ -34,6 +34,11 @@ func (LocalProvider) Remove(context.Context, string) error { return nil }
 // Stranded is empty for the same reason: nothing was created, so nothing strays.
 func (LocalProvider) Stranded(context.Context) ([]string, error) { return nil, nil }
 
+// Attached is false because there is nothing to attach to. A local sandbox is the host, so the
+// conversation an operator opens is a process on their own machine rather than one inside a
+// container, and no container exists for the crew to reclaim either.
+func (LocalProvider) Attached(context.Context, string) (bool, error) { return false, nil }
+
 type localSandbox struct{ env []string }
 
 var _ Sandbox = localSandbox{}

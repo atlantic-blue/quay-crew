@@ -94,7 +94,13 @@ The kinds, and each is something that happened rather than a state the session i
 - `session.started`, work began in it, and the detail is what was asked
 - `session.completed`, the work landed, and the detail is what came back
 - `session.errored`, the work did not land, and the detail is why
+- `session.halted`, an operator stopped the task with `quay stop`, and the detail is their reason.
+  The session survives, so this is not `session.stopped`: it keeps its container and its
+  conversation, and the next dispatch continues it
 - `session.stopped`, it was put down and its container with it
+- `session.reclaimed`, the crew took its container back on its own. Nothing else went, so a task
+  sent to it builds a fresh container over the same conversation. See section 11 of
+  `docs/ORCHESTRATION.md`
 - `session.archived` and `session.restored`
 - `session.deleted`, with its project or its workspace
 

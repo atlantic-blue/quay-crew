@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +12,8 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/work"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // A controller reads what is declared, compares it against the world, and closes the gap. These
@@ -30,12 +33,66 @@ type crew struct {
 	sessions []*quaycrewv1.Session
 	// refuse makes the next dispatch fail, which is a crew that could not make a sandbox.
 	refuse error
+	// store is the rows this crew writes through, the way the real control plane writes a reclaim or
+	// an archive into the store rather than keeping it in the process. Nil leaves the two calls
+	// recording what they were asked and changing nothing, which is enough for the tests that do not
+	// read a session back.
+	store *rows
+	// reclaims and archives are what the controller asked for, in order.
+	reclaims, archives []string
+	// refuseReclaim makes the first reclaim fail, which is a session that moved between the query
+	// that found it and the write that would have taken its container.
+	refuseReclaim error
 	// seen is the context the last dispatch arrived under, so a test can say which trace the task
 	// ran in rather than assume the controller passed one on.
 	seen context.Context
 }
 
 func newCrew() *crew { return &crew{tasks: map[string][]*quaycrewv1.Task{}} }
+
+// ReclaimSession takes a session's container back, the way the control plane does.
+func (c *crew) ReclaimSession(_ context.Context, req *quaycrewv1.ReclaimSessionRequest) (
+	*quaycrewv1.ReclaimSessionResponse, error) {
+	c.mu.Lock()
+	if c.refuseReclaim != nil {
+		refused := c.refuseReclaim
+		c.refuseReclaim = nil
+		c.mu.Unlock()
+		return nil, refused
+	}
+	c.reclaims = append(c.reclaims, req.GetId())
+	store := c.store
+	c.mu.Unlock()
+	if store != nil {
+		store.reclaimSession(req.GetId())
+	}
+	return &quaycrewv1.ReclaimSessionResponse{}, nil
+}
+
+// ArchiveSession files a session away, the way the control plane does.
+func (c *crew) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest) (
+	*quaycrewv1.ArchiveSessionResponse, error) {
+	c.mu.Lock()
+	c.archives = append(c.archives, req.GetId())
+	store := c.store
+	c.mu.Unlock()
+	if store != nil {
+		store.archiveSession(req.GetId())
+	}
+	return &quaycrewv1.ArchiveSessionResponse{}, nil
+}
+
+func (c *crew) reclaimed() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.reclaims...)
+}
+
+func (c *crew) archived() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.archives...)
+}
 
 func (c *crew) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	c.mu.Lock()
@@ -149,10 +206,98 @@ type rows struct {
 	beforeTakeOver func()
 	// limits is what each workspace allows, for the tests about a hold as long as the workspace says.
 	limits map[string]work.Limits
+	// sessions are the conversations the crew holds, which the fourth query reads.
+	sessions map[string]*quaycrewv1.Session
+	// sessionOrder keeps them in the order they were added, so a listing is stable.
+	sessionOrder []string
 }
 
 func newRows() *rows {
-	return &rows{held: map[string]*work.Work{}, events: map[string][]*work.Event{}}
+	return &rows{
+		held: map[string]*work.Work{}, events: map[string][]*work.Event{},
+		sessions: map[string]*quaycrewv1.Session{},
+	}
+}
+
+// allow sets what a workspace permits, which is where the reclaim and archive times come from.
+func (r *rows) allow(limits work.Limits) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.limits == nil {
+		r.limits = map[string]work.Limits{}
+	}
+	r.limits[limits.Workspace] = limits
+}
+
+// addSession puts a conversation in the store.
+func (r *rows) addSession(session *quaycrewv1.Session) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessions[session.GetId()] = session
+	r.sessionOrder = append(r.sessionOrder, session.GetId())
+}
+
+func (r *rows) sessionStatus(id string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.sessions[id].GetStatus()
+}
+
+// reclaimSession is what the control plane writes when it takes a container back.
+func (r *rows) reclaimSession(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := timestamppb.New(time.Now().UTC())
+	if session, held := r.sessions[id]; held {
+		session.Status, session.ReclaimedAt, session.UpdatedAt = work.StatusReclaimed, now, now
+	}
+}
+
+// archiveSession is what the control plane writes when it files one away.
+func (r *rows) archiveSession(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if session, held := r.sessions[id]; held {
+		session.ArchivedAt = timestamppb.New(time.Now().UTC())
+		session.Status = "stopped"
+	}
+}
+
+// reclaimedAgo moves a session's reclaim stamp back, which is a later tick arriving.
+func (r *rows) reclaimedAgo(id string, ago time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessions[id].ReclaimedAt = timestamppb.New(time.Now().UTC().Add(-ago))
+}
+
+// SettledSessions is the sessions nothing is holding open, oldest touched first. It is the same rule
+// the real stores are held to: live, not running, and named by no work in a non terminal phase.
+func (r *rows) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	open := map[string]bool{}
+	for _, one := range r.held {
+		if one.Session != "" && !work.Terminal(one.Phase) {
+			open[one.Session] = true
+		}
+	}
+	settled := map[string]bool{"idle": true, "failed": true, work.StatusReclaimed: true}
+
+	out := []*quaycrewv1.Session{}
+	for _, id := range r.sessionOrder {
+		session := r.sessions[id]
+		if session.GetArchivedAt() != nil || !settled[session.GetStatus()] || open[id] {
+			continue
+		}
+		out = append(out, proto.Clone(session).(*quaycrewv1.Session))
+		if limit > 0 && len(out) == limit {
+			break
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].GetUpdatedAt().AsTime().Before(out[j].GetUpdatedAt().AsTime())
+	})
+	return out, nil
 }
 
 func (r *rows) add(one *work.Work) *work.Work {

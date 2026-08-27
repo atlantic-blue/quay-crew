@@ -1034,6 +1034,44 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if limits.MaxRunning != 0 || limits.BudgetTokens != 0 || limits.LeaseSeconds != 0 {
 			t.Fatalf("a workspace nobody configured carries %+v, want every limit unset", limits)
 		}
+		// The rule this slice ships on. Both times are absent, and absent means the controller takes
+		// no container back and files nothing away. A default written here would be a number nobody
+		// measured deciding how long an operator may leave a conversation open.
+		if limits.ReclaimSeconds != 0 || limits.ArchiveSeconds != 0 {
+			t.Fatalf("a workspace nobody configured reclaims after %ds and archives after %ds, "+
+				"and both ship unset because no measurement has set either",
+				limits.ReclaimSeconds, limits.ArchiveSeconds)
+		}
+		if limits.Reclaim() != 0 || limits.Archive() != 0 {
+			t.Fatalf("the times read as %s and %s, and unset has to read as zero so the controller "+
+				"does nothing", limits.Reclaim(), limits.Archive())
+		}
+	})
+
+	t.Run("the reclaim and archive times are written whole and read back", func(t *testing.T) {
+		open := newDataset(t)
+		s := open(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, work.Limits{
+			Workspace: workspace, ReclaimSeconds: 900, ArchiveSeconds: 86400,
+		}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		read, err := open(t).WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if read.Reclaim() != 15*time.Minute {
+			t.Fatalf("the reclaim time reads back as %s, want the 900 seconds that were written",
+				read.Reclaim())
+		}
+		if read.Archive() != 24*time.Hour {
+			t.Fatalf("the archive time reads back as %s, want the 86400 seconds that were written",
+				read.Archive())
+		}
 	})
 
 	t.Run("a ceiling is written whole and read back", func(t *testing.T) {

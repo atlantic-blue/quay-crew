@@ -44,6 +44,8 @@ const (
 	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
 	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
 	ControlPlaneService_StopSession_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopSession"
+	ControlPlaneService_StopTask_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/StopTask"
+	ControlPlaneService_ReclaimSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ReclaimSession"
 	ControlPlaneService_DrainSessions_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DrainSessions"
 	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
 	ControlPlaneService_ArchiveSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
@@ -108,6 +110,12 @@ type ControlPlaneServiceClient interface {
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
 	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
 	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
+	// StopTask halts the task a session is running and keeps the session. StopSession above puts the
+	// whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
+	StopTask(ctx context.Context, in *StopTaskRequest, opts ...grpc.CallOption) (*StopTaskResponse, error)
+	// ReclaimSession takes a settled session's container back and keeps everything else. The controller
+	// calls it; nothing an operator types does.
+	ReclaimSession(ctx context.Context, in *ReclaimSessionRequest, opts ...grpc.CallOption) (*ReclaimSessionResponse, error)
 	DrainSessions(ctx context.Context, in *DrainSessionsRequest, opts ...grpc.CallOption) (*DrainSessionsResponse, error)
 	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
 	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
@@ -401,6 +409,26 @@ func (c *controlPlaneServiceClient) StopSession(ctx context.Context, in *StopSes
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StopSessionResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_StopSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) StopTask(ctx context.Context, in *StopTaskRequest, opts ...grpc.CallOption) (*StopTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopTaskResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StopTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReclaimSession(ctx context.Context, in *ReclaimSessionRequest, opts ...grpc.CallOption) (*ReclaimSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReclaimSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReclaimSession_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -748,6 +776,12 @@ type ControlPlaneServiceServer interface {
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
 	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
 	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
+	// StopTask halts the task a session is running and keeps the session. StopSession above puts the
+	// whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
+	StopTask(context.Context, *StopTaskRequest) (*StopTaskResponse, error)
+	// ReclaimSession takes a settled session's container back and keeps everything else. The controller
+	// calls it; nothing an operator types does.
+	ReclaimSession(context.Context, *ReclaimSessionRequest) (*ReclaimSessionResponse, error)
 	DrainSessions(context.Context, *DrainSessionsRequest) (*DrainSessionsResponse, error)
 	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
 	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
@@ -871,6 +905,12 @@ func (UnimplementedControlPlaneServiceServer) AttachSession(context.Context, *At
 }
 func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) StopTask(context.Context, *StopTaskRequest) (*StopTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopTask not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReclaimSession(context.Context, *ReclaimSessionRequest) (*ReclaimSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReclaimSession not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) DrainSessions(context.Context, *DrainSessionsRequest) (*DrainSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DrainSessions not implemented")
@@ -1432,6 +1472,42 @@ func _ControlPlaneService_StopSession_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).StopSession(ctx, req.(*StopSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_StopTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).StopTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_StopTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).StopTask(ctx, req.(*StopTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReclaimSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReclaimSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReclaimSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReclaimSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReclaimSession(ctx, req.(*ReclaimSessionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2100,6 +2176,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopSession",
 			Handler:    _ControlPlaneService_StopSession_Handler,
+		},
+		{
+			MethodName: "StopTask",
+			Handler:    _ControlPlaneService_StopTask_Handler,
+		},
+		{
+			MethodName: "ReclaimSession",
+			Handler:    _ControlPlaneService_ReclaimSession_Handler,
 		},
 		{
 			MethodName: "DrainSessions",

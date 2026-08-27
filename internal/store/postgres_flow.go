@@ -186,17 +186,6 @@ func (p *Postgres) LandedFlowSteps(ctx context.Context, limit int) ([]flow.Lande
 	return landed, nil
 }
 
-// terminalPhases is the phases nothing moves work out of, as a value a query can match against.
-func terminalPhases() []string {
-	out := make([]string, 0, 3)
-	for _, phase := range work.Phases() {
-		if work.Terminal(phase) {
-			out = append(out, phase)
-		}
-	}
-	return out
-}
-
 // AdvanceFlowRun moves a run, appends the transition, and claims the dispatch key, in one
 // transaction: either the run moved and the record and the claim exist, or nothing happened. A
 // dispatch key already claimed refuses the whole movement, which is what keeps the same task from

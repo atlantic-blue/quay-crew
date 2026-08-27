@@ -1939,6 +1939,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runWorkControllerConformance(t, newDataset)
 	runWorkLeaseConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
+	runSessionLifecycleConformance(t, newDataset)
 }
 
 // carrierFor is the piece of work that carries a run, the way the flow engine writes one. A run

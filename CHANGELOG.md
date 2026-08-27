@@ -44,6 +44,43 @@ read, or run with `make features`.
   `advance.go` is unchanged. The reducer never learns that work exists: the engine puts a run back to
   running before it feeds a step's result in. This is slice 2 of issue 399 and slice 8 of the
   delivery order in `docs/ORCHESTRATION.md`. The trigger node is slice 9 and is not here.
+- **A session gives its container back and keeps its history.** Nothing in the crew ever put a
+  session away on its own, so a session that answered one question in March still held its container
+  in August unless somebody restarted the crew. A session now has a fifth state, `reclaimed`: the
+  container is gone and everything else stays, so a task sent to one builds a fresh container over
+  the same conversation and the same files and carries on. Reclaimed is not stopped, deliberately. A
+  stop is somebody's decision and a reader goes looking for who made it; a reclaim is the crew saving
+  memory, and the next dispatch fixes it.
+
+  The controller that runs work reads a fourth query each tick: the sessions nothing is holding open,
+  meaning live, not running, and named by no piece of work still in flight. `quay limits <workspace>
+  --reclaim <duration> --archive <duration>` says how long one of those keeps its container, and how
+  long a reclaimed one waits before it is filed away.
+
+  **Both times ship unset, and unset means the controller does nothing at all.** No number is written
+  anywhere: not in a default, not in a comment, not in this entry. Three measurements decide them and
+  none has been taken. Section 11 of `docs/ORCHESTRATION.md` names each one and the command that
+  would take it. A crew upgraded to this build behaves exactly as the one before it, and there is a
+  scenario that proves an unset time changes nothing however long the loop runs.
+
+  A container an operator is typing into is never taken. The crew could not tell before: `quay
+  attach` hands the operator a command to run against the container and records nothing afterwards.
+  It now asks the container whether the `quay` tmux session inside it has a client. A crew that
+  cannot get an answer reads that as attached, so an unreachable daemon costs a container held longer
+  rather than a conversation closed under somebody's hands.
+
+- **A running session can be stopped, and it survives.** `quay stop <session> [<reason>]` halts the
+  task a session is running and keeps the session: its conversation, its container and its history
+  all stay, and the next dispatch continues it. The task record reads `stopped` with the reason
+  rather than `failed`, because an operator asking for a stop is not a fault and a stop that reports
+  as a crash hides the real crashes. A piece of work running in that session is stopped with the same
+  reason. A stop while nothing is running says so and changes nothing, and the command answers only
+  once the task has actually ended. See issue 395.
+
+  What people reached for before this was killing the dispatch client, which is not an interface and
+  does not reliably end anything: on 27 August 2026 the same kill ended one task at once and left
+  another working for sixteen more minutes, merging two pull requests after the operator believed it
+  had stopped.
 
 - **Every movement of a piece of work is on the record, and carries its trace.** Each movement was
   already written to `work_events` in the same transaction as the row it describes. Now it is also

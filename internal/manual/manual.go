@@ -67,12 +67,16 @@ commands:
   work show <work>                        one piece of work whole: what it is, where it got to,
                                           why it stopped, and what came back
   work stop <work> [<reason>]             halt work that has not ended, keeping the reason
-  limits [<workspace>]                    what a workspace lets its sessions declare: how deep the
-    [--max-depth <n>]                     tree of work may go, how many run at once, what a tree may
-    [--max-running <n>]                   spend, and how long a controller holds a piece of work.
-    [--budget-tokens <n>]                 Max depth starts at zero, so no session declares work
-    [--lease <duration>]                  until you raise it. A session may read none of this and
-                                          set none of it
+  limits [<workspace>]                    what a workspace lets its sessions declare, and how long
+    [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
+    [--max-running <n>]                   work may go, how many run at once, what a tree may spend,
+    [--budget-tokens <n>]                 how long a controller holds a piece of work, and how long
+    [--lease <duration>]                  a settled session keeps its container before the crew
+    [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
+    [--archive <duration>]                zero, so no session declares work until you raise it. The
+                                          reclaim and archive times start unset, and unset means the
+                                          crew does nothing. A session may read none of this and set
+                                          none of it
   dispatch [<address>] <text>             start or continue a session and let go of the task. It
                                           runs in the crew, so closing the terminal does not take
                                           the work with it. quay tasks reads it back
@@ -83,6 +87,11 @@ commands:
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
+  stop <session> [<reason>]               halt the task one session is running, keeping the reason.
+                                          The session survives: its conversation, its container and
+                                          its history all stay, so the next dispatch continues it.
+                                          A stop while nothing is running says so and changes
+                                          nothing
   drain [anyway]                          put every live session down, so an upgrade does not take
                                           their containers away underneath them. Refuses while a
                                           task is working, and anyway drains over it

@@ -262,6 +262,9 @@ func (m *Memory) RecordTask(_ context.Context, id, modelSessionID, status string
 		session.ModelSessionId = modelSessionID
 	}
 	session.Status = status
+	// A task is running or has landed, so the session holds a container again and the stamp that said
+	// the crew took the last one back is no longer true.
+	session.ReclaimedAt = nil
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }
@@ -310,11 +313,70 @@ func (m *Memory) StopSession(_ context.Context, id string) error {
 		return ErrNotFound
 	}
 	session.Status = "stopped"
+	session.ReclaimedAt = nil
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	// Stopping closes the sandbox, and with it goes what it was born holding: the next one is born
 	// with the current set, so a stopped session is never stale.
 	delete(m.skillsBorn, id)
 	return nil
+}
+
+// ReclaimSession records that the crew took the session's container back. The stamp is its own,
+// because the archive time is measured against how long the session has been reclaimed and
+// UpdatedAt moves on every write.
+func (m *Memory) ReclaimSession(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	now := timestamppb.New(time.Now().UTC())
+	session.Status = StatusReclaimed
+	session.ReclaimedAt = now
+	session.UpdatedAt = now
+	// The sandbox goes with the reclaim, so what it was born holding goes too: the next one is born
+	// with the current set, and a reclaimed session is never stale.
+	delete(m.skillsBorn, id)
+	return nil
+}
+
+// SettledSessions is the sessions nothing is holding open, oldest touched first: live, not running,
+// and named by no piece of work in a non terminal phase.
+func (m *Memory) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// The sessions work is still holding open, gathered once rather than scanned per session.
+	held := map[string]bool{}
+	for _, one := range m.work {
+		if one.Session != "" && !work.Terminal(one.Phase) {
+			held[one.Session] = true
+		}
+	}
+	settled := map[string]bool{}
+	for _, status := range settledStatuses() {
+		settled[status] = true
+	}
+
+	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
+	for id, session := range m.sessions {
+		if session.GetArchivedAt() != nil || !settled[session.GetStatus()] || held[id] {
+			continue
+		}
+		out = append(out, clone(session))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left, right := out[i].GetUpdatedAt().AsTime(), out[j].GetUpdatedAt().AsTime()
+		if left.Equal(right) {
+			return out[i].GetId() < out[j].GetId()
+		}
+		return left.Before(right)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 // SetSessionSkills records the skill set a session's live sandbox was born with; empty clears it.
@@ -352,6 +414,7 @@ func (m *Memory) RestartSession(_ context.Context, id string) error {
 		return ErrNotFound
 	}
 	session.Status = "idle"
+	session.ReclaimedAt = nil
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }

@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -162,6 +163,38 @@ func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
 		}
 	}
 	return ids, nil
+}
+
+// Attached asks the container whether the operator's conversation has anybody watching it.
+//
+// `quay attach` runs `docker exec --interactive --tty <container> tmux new-session -A -s quay ...`,
+// so the conversation an operator types into is a tmux session called AttachedSessionName inside the
+// container, and tmux itself already knows whether a client is on it. This is the same question asked
+// from outside, through one more exec against the same tmux server.
+//
+// No state is written and nothing has to be refreshed, which is the reason this signal was chosen
+// over stamping the session's row on attach: a stamp needs somebody to keep it fresh while a pane is
+// open, and how often is a number, and no measurement has set one.
+//
+// What each answer means:
+//   - a client listed, so somebody is attached.
+//   - the command ran and exited non zero, so there is no tmux server, no such conversation, or no
+//     such container. In every one of those, nobody is typing into it.
+//   - the command could not be run at all, so the daemon is unreachable and the crew cannot tell. The
+//     error is returned rather than swallowed, because a caller must not read it as nobody.
+func (d DockerProvider) Attached(ctx context.Context, sessionID string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID),
+		"tmux", "list-clients", "-t", AttachedSessionName, "-F", "#{client_name}")
+	out, err := cmd.Output()
+	if err != nil {
+		var exited *exec.ExitError
+		if errors.As(err, &exited) {
+			return false, nil
+		}
+		return false, fmt.Errorf("sandbox: ask %s whether anybody is attached: %w",
+			ContainerName(sessionID), err)
+	}
+	return strings.TrimSpace(string(out)) != "", nil
 }
 
 // Close removes the session's container.
