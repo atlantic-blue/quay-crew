@@ -1,0 +1,142 @@
+package features_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/cucumber/godog"
+)
+
+// The front door's scenarios read README.md and check it against the things it makes claims about.
+// They touch no control plane: what a reader is promised, and whether the crew can deliver it, is a
+// behaviour somebody sees the moment they type the first line.
+//
+// The checks themselves live in frontdoor_test.go, next to the plain Go cases that run them without
+// the Gherkin. One implementation, two ways in.
+
+type frontDoorWorld struct {
+	// body is the front door as the reader has it.
+	body string
+}
+
+type frontDoorKey struct{}
+
+func frontDoorFrom(ctx context.Context) *frontDoorWorld {
+	f, _ := ctx.Value(frontDoorKey{}).(*frontDoorWorld)
+	return f
+}
+
+func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
+	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+		return context.WithValue(ctx, frontDoorKey{}, &frontDoorWorld{}), nil
+	})
+
+	sc.Step(`^a reader opens the front door$`, func(ctx context.Context) error {
+		body, err := os.ReadFile(theFrontDoor)
+		if err != nil {
+			return err
+		}
+		frontDoorFrom(ctx).body = string(body)
+		return nil
+	})
+
+	sc.Step(`^every command it says to run is one the crew has$`, func(ctx context.Context) error {
+		commands, err := quayCommands()
+		if err != nil {
+			return err
+		}
+		named := namedAfter("quay", codeIn(frontDoorFrom(ctx).body))
+		if len(named) == 0 {
+			return fmt.Errorf("the front door names no command at all, so this proved nothing")
+		}
+		var missing []string
+		for _, one := range named {
+			if !commands[one] {
+				missing = append(missing, "quay "+one)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("it tells a reader to run %s, and the crew has no such command",
+				strings.Join(missing, ", "))
+		}
+		return nil
+	})
+
+	sc.Step(`^every make target it says to run is one the Makefile declares$`, func(ctx context.Context) error {
+		targets, err := makeTargets()
+		if err != nil {
+			return err
+		}
+		named := namedAfter("make", codeIn(frontDoorFrom(ctx).body))
+		if len(named) == 0 {
+			return fmt.Errorf("the front door names no target at all, so this proved nothing")
+		}
+		var missing []string
+		for _, one := range named {
+			if !targets[one] {
+				missing = append(missing, "make "+one)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("it tells a reader to run %s, and there is no such target",
+				strings.Join(missing, ", "))
+		}
+		return nil
+	})
+
+	sc.Step(`^every document it points at is there$`, func(ctx context.Context) error {
+		links := linkedFiles(frontDoorFrom(ctx).body)
+		if len(links) == 0 {
+			return fmt.Errorf("the front door points at nothing, so this proved nothing")
+		}
+		for _, link := range links {
+			if _, err := os.Stat(filepath.Join("..", link)); err != nil {
+				return fmt.Errorf("it points a reader at %s, which is not there", link)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the quick start is one command to a running crew$`, func(ctx context.Context) error {
+		quickStart, err := sectionOf(frontDoorFrom(ctx).body, "## Quick start")
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(quickStart, "make install") {
+			return fmt.Errorf("the quick start does not name make install:\n%s", quickStart)
+		}
+		for _, retired := range []string{"make config", "make sandbox-image", "make up\n"} {
+			if strings.Contains(quickStart, retired) {
+				return fmt.Errorf("the quick start still says to run %q, so a first run is more than "+
+					"one command again", strings.TrimSpace(retired))
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^it shows a piece of work through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
+		diagram, err := diagramIn(frontDoorFrom(ctx).body)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(diagram, "flowchart") {
+			return fmt.Errorf("the diagram is not a flowchart:\n%s", diagram)
+		}
+		for _, through := range []string{"controller", "lease", "session", "role"} {
+			if !strings.Contains(strings.ToLower(diagram), through) {
+				return fmt.Errorf("the diagram never shows the %s:\n%s", through, diagram)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^it holds no blockquote, no table and no dash used as punctuation$`, func(ctx context.Context) error {
+		if found := unreusableMarkdownIn(frontDoorFrom(ctx).body); len(found) > 0 {
+			return fmt.Errorf("a reader cannot copy this back out:\n%s", strings.Join(found, "\n"))
+		}
+		return nil
+	})
+}

@@ -8,6 +8,33 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The front door says what the crew does today.** The README's list of what works predated
+  seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
+  the shape of the product rather than with a feature list: you declare a piece of work, the crew
+  writes it down, a controller makes reality match the record, the work outlives the controller that
+  started it, it runs as a named role with only what that role receives, and every movement is
+  exported carrying the trace the whole tree belongs to. There is a diagram of one piece of work from
+  declared to done, and `docs/ORCHESTRATION.md` is the long version.
+
+  The quick start is the single `make install`. The status paragraph was checked against the code
+  before it was rewritten: chat channels still do not exist and the gateway is still a skeleton that
+  boots and waits, there is still no admin dashboard, and nothing still consumes the event log. What
+  was no longer true is the telemetry stack, which starts with the crew and carries logs, what each
+  task cost, and traces of the crew's own calls.
+
+  The blockquote is gone, and nothing brings it back. A reader who wants to copy a paragraph out had
+  to strip a `>` from every line of it first.
+
+  **The front door is now tested.** Three things it claims have an answer elsewhere in this
+  repository, so they are checked against it rather than reread by hand: every `quay` command it
+  names is one the tool this checkout builds actually lists, every `make` target it names is one the
+  Makefile declares, and every document it points at is there. The quick start is held to one
+  command, the diagram is held to showing a piece of work through the controller, the lease, the
+  session and the role, and the whole file is swept for a blockquote, a table or a dash used as
+  punctuation. What none of that says is whether a sentence is true: a bullet claiming a capability
+  in words that name no command passes every case. `features/` is what says whether a capability is
+  real.
+
 - **A first run is one command.** It was four, and the order mattered: `make config`,
   `make sandbox-image`, `make up`, `make install`. Miss one and the failure arrived somewhere else.
   Compose read a configuration file that was not there, or a first task was refused for a missing
