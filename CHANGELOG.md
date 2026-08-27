@@ -62,6 +62,42 @@ read, or run with `make features`.
   A failed `go build` inside that target used to print "installed quay to ..." and exit 0, because a
   shell command list exits with the status of its last command. It exits non zero now.
 
+- **Twelve roles ship, ported from greenlight.** Quay had the role mechanism and no roles, so
+  `roles/` at the root of the repository now holds `architect`, `assessor`, `codebase-mapper`,
+  `debugger`, `designer`, `implementer`, `marketing`, `marketing-researcher`, `security`,
+  `test-writer`, `verifier` and `wrapper`, ported from the twelve agents in
+  [`atlantic-blue/greenlight`](https://github.com/atlantic-blue/greenlight/tree/main/src/agents) as
+  they were on 27 August 2026. Import one with `quay role import roles/<name>`. A fresh crew is
+  seeded with none of them.
+
+  Each agent's body is already an instruction, so it became the `ROLE.md`. The frontmatter did not
+  carry over: a greenlight agent declares `tools:` and quay has no word for a tool or a file, so
+  nothing was invented to stand in for it. The `gl-` prefix came off. Each role keeps greenlight's own
+  model, and the wrapper, whose model greenlight resolves at run time, names sonnet here and says so.
+
+  **A role cannot be told which files it may not touch, and eleven of these twelve briefs ask for
+  exactly that.** `test-writer` says it never sees implementation code, `implementer` says it never
+  edits a test file, `verifier` and `assessor` and `codebase-mapper` say they are read only. Quay
+  enforces none of it: `receives` is `work`, `context` and `skills`, and none of the three is about
+  the contents of a repository. So every role opens with a line saying what its brief asks that the
+  crew does not hold it to, and names the greenlight paths and commands it mentions that do not exist
+  here. `docs/ROLES.md` says it once for all twelve.
+
+  All twelve receive `work`, `context` and `skills`. Only the assessor declares a `may` list,
+  `work.create` and `work.read`, because its brief spawns a security review and reads the answer.
+
+  Two briefs did not fit. A brief may be 16,384 bytes and greenlight's architect is 17,993 and its
+  assessor 18,126, so both were refused at import as they stood. Restated lists and the sample of the
+  message greenlight's orchestrator sends came out of those two, nothing either asks the role to do
+  was removed, and `docs/ROLES.md` lists every cut. The ceiling was sized on an estimate that these
+  roles "run to about twelve thousand bytes", and two of them are eighteen thousand, so raising it is
+  worth a look.
+
+  `role.All` reads a directory of roles and refuses one holding none, so the test that every shipped
+  role imports reads `roles/` rather than a list somebody has to remember to extend, and a `roles/`
+  that lost its contents fails rather than reporting a clean run over nothing.
+
+
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could
   react to nothing while it waited. It writes the step down as a piece of work and returns. A

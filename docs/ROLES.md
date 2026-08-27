@@ -223,6 +223,116 @@ session's is not. It was given a brief rather than the crew's context, so what i
 an edit of what the store holds, and reading it back would let a session that was given nothing
 write what every session in the workspace is told.
 
+## The roles this build ships
+
+Twelve roles live in [`roles/`](../roles) at the root of this repository, one directory each. They
+are ported from the twelve agents in
+[`atlantic-blue/greenlight`](https://github.com/atlantic-blue/greenlight/tree/main/src/agents), read
+on 27 August 2026. Each agent's body is already an instruction, so it became the `ROLE.md`. The `gl-`
+prefix belongs to that product and came off, so `gl-test-writer` is `test-writer` here.
+
+```mermaid
+flowchart LR
+    GL["greenlight agent<br/>frontmatter: name, description, tools, model"] --> BODY["the body, which is the instruction"]
+    GL --> FM["the frontmatter"]
+    BODY --> BRIEF["ROLE.md<br/>the honest line, then the brief"]
+    FM --> YAML["role.yaml<br/>name, version, summary, model, receives, may"]
+    FM --> DROP["tools: dropped.<br/>Quay has no word for a tool or a file,<br/>and the importer refuses one by name"]
+```
+
+The design phase, in order, and the model each one was ported with:
+
+- `designer` on opus, then `architect` on opus, which writes the contracts and the dependency graph.
+- `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
+  the code that makes them pass.
+- `security` on sonnet reviews the change and writes a failing test for each defect, `verifier` on
+  sonnet checks the slice against its contracts, and `debugger` on sonnet finds a cause and fixes it.
+- For a codebase that already exists: `codebase-mapper` on sonnet documents it, `assessor` on sonnet
+  reports its coverage, contracts and risks, and `wrapper` on sonnet locks an existing boundary with
+  tests.
+- `marketing-researcher` on opus finds facts with sources, and `marketing` on opus turns them into a
+  plan.
+
+`model` is greenlight's own default for that agent, kept rather than chosen. Greenlight resolves the
+wrapper's model at run time and names no default, so this port names sonnet and the role's own file
+says so.
+
+Every one of the twelve receives `work`, `context` and `skills`. Only the assessor declares a `may`
+list, `work.create` and `work.read`, because its brief spawns a security review and reads what came
+back. Nothing else in the twelve spawns anything, and default deny is what makes the assessor's grant
+mean something.
+
+`skills` goes to all twelve because each brief works inside a repository, and a repository reaches a
+session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
+away the brief and the mounted directory and leave the workspace's secrets in the environment
+regardless, so it would break a role rather than fence one.
+
+### What a brief asks that quay does not enforce
+
+**Every one of these briefs describes a boundary about files, and quay has no word for a file.** A
+role cannot be told which files it may not touch, may not read, or may not write. `receives` is three
+words, `work`, `context` and `skills`, and none of the three is about the contents of a repository.
+So `test-writer` saying it never sees implementation code, `implementer` saying it never edits a test
+file, `verifier` and `assessor` and `codebase-mapper` saying they are read only, `wrapper` saying it
+writes to `tests/locking/` and nowhere else, and `security` saying it writes the failing test rather
+than the fix, are each a promise the model keeps or does not. The crew cannot hold a session to any
+of them, and every role's own file says so at the top under `## What quay does not enforce`.
+
+Two more limits fall out of the same gap. A role session cannot put a question to the operator, so
+the interactive parts of `designer` and `marketing` have nothing behind them here. And this crew
+ships no web search skill, so the research `marketing-researcher` and `designer` are told to do has
+no tool behind it.
+
+Every file path and command these briefs name is greenlight's: `CLAUDE.md`, `.greenlight/DESIGN.md`,
+`.greenlight/CONTRACTS.md`, `.greenlight/GRAPH.json`, `.greenlight/ASSESS.md`,
+`.greenlight/MARKETING.md`, `references/deviation-rules.md`, `references/circuit-breaker.md`,
+`/gl:init`, `/gl:slice`, `/gl:ship` and the rest. None of them exists here. The port names them
+rather than inventing a quay equivalent, because a made up path sends a session looking for a file
+that is not there.
+
+### Two briefs were trimmed to fit, and here is exactly what came out
+
+A brief may be 16,384 bytes. The greenlight architect is 17,993 and the assessor is 18,126, so both
+were refused at import as they stood. Nothing either brief asks the role to do was removed. What came
+out is listed here so it can be checked or put back:
+
+- `architect`: the sample of the message the greenlight orchestrator sends, under **What You
+  Receive**; the **Invariants** list under **Verification Tier Fields**, which restates the **Field
+  rules** above it item for item; the **Error states** and **Invariants** lists under **Verification
+  Tier Selection**, which restate the guidance above them and the output checklist below them; and
+  the **Rule of thumb** line under **Minimal Surface Area**, which restates the paragraph above it.
+- `assessor`: the sample of the message the orchestrator sends, under **What You Receive**; the
+  `NoCoverageCommand`, `SecurityAgentFailure` and `ContextBudgetExceeded` entries under **Expected
+  Errors and Responses**, each of which restates a response already written in **Coverage Command**,
+  **Security Findings** and **Context Budget Awareness**; **Thoroughness vs Context Budget**, which
+  restates **Context Budget Awareness** a third time; and **Prioritization Criteria**, whose five
+  criteria are restated as the three tier definitions immediately below it.
+
+The other ten are the greenlight body word for word. Runs of blank lines were collapsed to one across all twelve, which changed a single line in `wrapper` and nothing anywhere else.
+
+The ceiling is worth a second look rather than a second trim. `internal/role/role.go` says it was
+sized because "the roles this shape was taken from run to about twelve thousand bytes", and these are
+those roles: ten of the twelve fit under twelve thousand, and two are eighteen thousand. Raising the
+ceiling is the change that would let those two ship word for word, and it is the operator's to make.
+
+### What this does not do
+
+- **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
+  and it is the reason every one of the twelve carries a line saying so.
+- A fresh crew is seeded with none of them. Skills and hooks are seeded and roles are not, so an
+  operator runs `quay role import roles/<name>` from a checkout, once per role.
+- Nothing chooses one. A flow graph names a role, or a caller names one when it declares work, and
+  the workspace has to hold it already.
+- The twelve are ported, not adapted. Each still describes greenlight's phases, its orchestrator and
+  its files, because changing what a brief asks for is a different piece of work from moving it.
+- The briefs are a snapshot of greenlight as it was on 27 August 2026. Nothing here notices when the
+  agent it came from changes.
+
+The scenarios that hold this up are in [`features/roles.feature`](../features/roles.feature), which
+imports every role in `roles/` and refuses a directory holding none, and in
+[`features/workcontroller.feature`](../features/workcontroller.feature), which runs a piece of work as
+one of them.
+
 ## What is not built
 
 - No product manager role, so nothing chooses a team while a run is under way.
