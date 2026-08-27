@@ -53,6 +53,19 @@ commands:
   flow show <run>                         where one run got to, what it cost, why it stopped
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
+  work create [<address>]                 declare a piece of work: what it is, and what has to
+    --title "..." --brief "..."           happen. The crew keeps it, so the intent outlives the
+    [--role <name>] [--mode <mode>]       terminal that asked for it. Nothing runs it yet
+    [--after <work>] [--label k=v]
+    [--budget-tokens <n>] [--deadline <t>]
+    [--expect-file <path>]
+    [--expect-contains "..."]
+  work list [<address>]                   what work there is, newest first. Narrow it with
+    [--phase <phase>] [--label k=v]       --phase, --label, --parent or --roots
+    [--parent <work>] [--roots]
+  work show <work>                        one piece of work whole: what it is, where it got to,
+                                          why it stopped, and what came back
+  work stop <work> [<reason>]             halt work that has not ended, keeping the reason
   dispatch [<address>] <text>             start or continue a session and let go of the task. It
                                           runs in the crew, so closing the terminal does not take
                                           the work with it. quay tasks reads it back

@@ -65,6 +65,10 @@ const (
 	ControlPlaneService_AttachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachRole"
 	ControlPlaneService_DetachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachRole"
 	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
+	ControlPlaneService_CreateWork_FullMethodName               = "/quaycrew.v1.ControlPlaneService/CreateWork"
+	ControlPlaneService_GetWork_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetWork"
+	ControlPlaneService_ListWork_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/ListWork"
+	ControlPlaneService_StopWork_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/StopWork"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
@@ -122,6 +126,12 @@ type ControlPlaneServiceClient interface {
 	AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error)
 	DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	// Work is declared intent the crew keeps. A caller writes it, and a controller makes reality
+	// match it. Nothing here dispatches anything.
+	CreateWork(ctx context.Context, in *CreateWorkRequest, opts ...grpc.CallOption) (*CreateWorkResponse, error)
+	GetWork(ctx context.Context, in *GetWorkRequest, opts ...grpc.CallOption) (*GetWorkResponse, error)
+	ListWork(ctx context.Context, in *ListWorkRequest, opts ...grpc.CallOption) (*ListWorkResponse, error)
+	StopWork(ctx context.Context, in *StopWorkRequest, opts ...grpc.CallOption) (*StopWorkResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -597,6 +607,46 @@ func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasks
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) CreateWork(ctx context.Context, in *CreateWorkRequest, opts ...grpc.CallOption) (*CreateWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateWorkResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CreateWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetWork(ctx context.Context, in *GetWorkRequest, opts ...grpc.CallOption) (*GetWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWorkResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListWork(ctx context.Context, in *ListWorkRequest, opts ...grpc.CallOption) (*ListWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWorkResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) StopWork(ctx context.Context, in *StopWorkRequest, opts ...grpc.CallOption) (*StopWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopWorkResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StopWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSessionEventsResponse)
@@ -679,6 +729,12 @@ type ControlPlaneServiceServer interface {
 	AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error)
 	DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	// Work is declared intent the crew keeps. A caller writes it, and a controller makes reality
+	// match it. Nothing here dispatches anything.
+	CreateWork(context.Context, *CreateWorkRequest) (*CreateWorkResponse, error)
+	GetWork(context.Context, *GetWorkRequest) (*GetWorkResponse, error)
+	ListWork(context.Context, *ListWorkRequest) (*ListWorkResponse, error)
+	StopWork(context.Context, *StopWorkRequest) (*StopWorkResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
@@ -831,6 +887,18 @@ func (UnimplementedControlPlaneServiceServer) DetachRole(context.Context, *Detac
 }
 func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CreateWork(context.Context, *CreateWorkRequest) (*CreateWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateWork not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetWork(context.Context, *GetWorkRequest) (*GetWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWork not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListWork(context.Context, *ListWorkRequest) (*ListWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListWork not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) StopWork(context.Context, *StopWorkRequest) (*StopWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopWork not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessionEvents not implemented")
@@ -1690,6 +1758,78 @@ func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_CreateWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CreateWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CreateWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CreateWork(ctx, req.(*CreateWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetWork(ctx, req.(*GetWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListWork(ctx, req.(*ListWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_StopWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).StopWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_StopWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).StopWork(ctx, req.(*StopWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListSessionEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSessionEventsRequest)
 	if err := dec(in); err != nil {
@@ -1934,6 +2074,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTasks",
 			Handler:    _ControlPlaneService_ListTasks_Handler,
+		},
+		{
+			MethodName: "CreateWork",
+			Handler:    _ControlPlaneService_CreateWork_Handler,
+		},
+		{
+			MethodName: "GetWork",
+			Handler:    _ControlPlaneService_GetWork_Handler,
+		},
+		{
+			MethodName: "ListWork",
+			Handler:    _ControlPlaneService_ListWork_Handler,
+		},
+		{
+			MethodName: "StopWork",
+			Handler:    _ControlPlaneService_StopWork_Handler,
 		},
 		{
 			MethodName: "ListSessionEvents",

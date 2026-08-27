@@ -12,6 +12,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -68,6 +69,10 @@ type Memory struct {
 	// taskSeen does for tasks.
 	sessionEvents []*quaycrewv1.SessionEvent
 	eventSeen     map[string]bool
+	// work is the declared intent the crew holds, and workEvents is what happened to each piece of
+	// it, keyed by the event identifier so writing one twice leaves one.
+	work       map[string]*work.Work
+	workEvents map[string]*work.Event
 }
 
 var _ Store = (*Memory)(nil)

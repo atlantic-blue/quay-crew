@@ -842,6 +842,137 @@ message ListTasksResponse {
   repeated Task tasks = 1;
 }
 
+// Work is one piece of declared intent. A caller writes it, and a controller makes reality match it.
+//
+// The record is the point: intent lives in a row rather than in a process, so it outlives the caller
+// that asked for it, the session that runs it and the crew that was restarted underneath it.
+message Work {
+  string id = 1;
+  string workspace = 2;
+  string project = 3;
+
+  // What the caller declared.
+  // title is the one line a listing shows. brief is what the session is asked to do.
+  string title = 4;
+  string brief = 5;
+  // role names how the work is done, empty for work that runs as nobody in particular, and
+  // role_version is the version pinned at the moment of the write so editing a role cannot change
+  // work already declared.
+  string role = 6;
+  int32 role_version = 7;
+  // mode is what this work's tasks may do without asking. Empty leaves the session as it is born.
+  string mode = 8;
+  // expect_file is a path that must be in the working directory after the task, relative to it.
+  // expect_contains is a string the answer must carry. Where either is set, work that does not meet
+  // its claim stops rather than reporting success.
+  string expect_file = 9;
+  string expect_contains = 10;
+  // after names other work this work waits for. It is the whole ordering primitive: no condition, no
+  // branch, no expression.
+  repeated string after = 11;
+  // deadline is the moment after which the work is stopped rather than started. Work already running
+  // is not killed.
+  google.protobuf.Timestamp deadline = 12;
+  // budget_tokens is what this work and everything under it may spend. Zero draws from the parent.
+  int64 budget_tokens = 13;
+  // labels are free text pairs, so a caller finds its own work later.
+  map<string, string> labels = 14;
+
+  // What the crew assigned, and the caller may not.
+  // parent is which piece of work asked for this one, read from the credential the caller presented
+  // and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
+  string parent = 15;
+  int32 depth = 16;
+  // version rises on every write to a declared field, so a status can be told current from stale.
+  int32 version = 17;
+
+  // What the controller writes, and nobody else.
+  // phase is where the work is: pending, waiting, running, asking, done, failed or stopped. The last
+  // three are terminal.
+  string phase = 18;
+  // session is the conversation the work runs in, empty until one exists. It is what quay attach
+  // takes.
+  string session = 19;
+  int32 attempts = 20;
+  // answer is what came back, whole. A listing leaves it out, because a listing of a hundred answers
+  // is a listing nobody can read.
+  string answer = 21;
+  // reason says why stopped or failed work ended. question is what asking work waits to be told.
+  string reason = 22;
+  string question = 23;
+  int64 spent_tokens = 24;
+  // observed_version is the version of the declaration the status describes. A controller that has
+  // not caught up leaves this behind the version above.
+  int32 observed_version = 25;
+
+  google.protobuf.Timestamp created_at = 26;
+  google.protobuf.Timestamp updated_at = 27;
+  google.protobuf.Timestamp started_at = 28;
+  google.protobuf.Timestamp finished_at = 29;
+}
+
+// CreateWorkRequest declares a piece of work. Every rule is checked here, while the caller is
+// looking, rather than hours later inside a run with nothing pointing back at the declaration.
+message CreateWorkRequest {
+  // project is where the work runs. A piece of work needs one, because a dispatch needs one.
+  string project = 1;
+  string title = 2;
+  string brief = 3;
+  string role = 4;
+  string mode = 5;
+  string expect_file = 6;
+  string expect_contains = 7;
+  repeated string after = 8;
+  google.protobuf.Timestamp deadline = 9;
+  int64 budget_tokens = 10;
+  map<string, string> labels = 11;
+  // id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
+  // the parent is read from the credential the caller presented: a caller that could set its own
+  // parent could set its own depth, and the depth limit would bound nothing.
+  string id = 12;
+  string parent = 13;
+}
+message CreateWorkResponse {
+  Work work = 1;
+}
+
+message GetWorkRequest {
+  string id = 1;
+}
+message GetWorkResponse {
+  Work work = 1;
+}
+
+// ListWorkRequest narrows a listing. The zero value is everything the crew holds.
+message ListWorkRequest {
+  // project wins over workspace when both are set, being the narrower.
+  string workspace = 1;
+  string project = 2;
+  // parent narrows to the children of one piece of work, and roots_only to work with no parent,
+  // which cannot be said with parent alone because empty means do not narrow.
+  string parent = 3;
+  bool roots_only = 4;
+  string phase = 5;
+  // label_key with no label_value matches any value, which is how a caller finds everything it
+  // labelled at all.
+  string label_key = 6;
+  string label_value = 7;
+}
+message ListWorkResponse {
+  // Each piece of work without its answer. Read one with GetWork to get the answer whole.
+  repeated Work work = 1;
+}
+
+// StopWorkRequest halts work that has not ended. The reason is kept, because work that went quiet
+// and work somebody halted must never read the same.
+message StopWorkRequest {
+  string id = 1;
+  string reason = 2;
+}
+message StopWorkResponse {
+  Work work = 1;
+}
+
 // ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
 // session left out asks for the whole crew's, which is what a view of what is going on reads.
 message ListSessionEventsRequest {
@@ -909,6 +1040,13 @@ service ControlPlaneService {
   rpc DetachRole(DetachRoleRequest) returns (DetachRoleResponse);
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // Work is declared intent the crew keeps. A caller writes it, and a controller makes reality
+  // match it. Nothing here dispatches anything.
+  rpc CreateWork(CreateWorkRequest) returns (CreateWorkResponse);
+  rpc GetWork(GetWorkRequest) returns (GetWorkResponse);
+  rpc ListWork(ListWorkRequest) returns (ListWorkResponse);
+  rpc StopWork(StopWorkRequest) returns (StopWorkResponse);
   rpc ListSessionEvents(ListSessionEventsRequest) returns (ListSessionEventsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);

@@ -22,6 +22,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/google/uuid"
 )
 
@@ -303,6 +304,25 @@ type Store interface {
 	// refused rather than overwritten: the record of how it ended is the useful part.
 	StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error)
 	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
+	// Work is declared intent, kept as a row so it outlives the caller that asked for it. A caller
+	// writes a piece of work and a controller makes reality match it.
+	//
+	// CreateWork writes the work and the record of its declaration in one transaction. A row with no
+	// record of how it came to exist, and a record of a declaration that is not there, are both
+	// states nothing can explain afterwards.
+	CreateWork(ctx context.Context, declared *work.Work, event *work.Event) error
+	// GetWork reads one piece of work back, whole, its answer included.
+	GetWork(ctx context.Context, id string) (*work.Work, error)
+	// ListWork returns what matches, newest first and without answers, because a listing of a hundred
+	// answers is a listing nobody can read. A caller that wants an answer asks for one piece of work.
+	ListWork(ctx context.Context, filter work.Filter) ([]*work.Work, error)
+	// StopWork halts work that has not ended, keeping the reason, and writes the record of the stop
+	// beside it. Work that already ended is refused rather than overwritten: how it ended is the
+	// useful part.
+	StopWork(ctx context.Context, id, reason string, event *work.Event) (*work.Work, error)
+	// ListWorkEvents returns one piece of work's own history, oldest first.
+	ListWorkEvents(ctx context.Context, id string) ([]*work.Event, error)
+
 	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.
 	ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error)

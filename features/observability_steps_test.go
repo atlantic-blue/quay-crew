@@ -146,6 +146,9 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		return fmt.Errorf("the crew never said the task could not be exported; it wrote %d lines", len(lines))
 	})
 
+	// The span is waited for, for the reason the step above gives: a stats handler sees the end of a
+	// call after the status has gone back to the caller, so a line that exists is not evidence that
+	// the span carrying its id has landed. Reading the set once fails whenever the machine is busy.
 	sc.Step(`^that line carries the correlation id of the call it happened under$`, func(ctx context.Context) error {
 		o := observabilityFrom(ctx)
 		if o.line == nil {
@@ -155,12 +158,18 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		if id == "" {
 			return fmt.Errorf("the line carries no correlation id: %v", o.line)
 		}
-		for _, ended := range spans.GetSpans() {
-			if ended.SpanContext.TraceID().String() == id {
-				return nil
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			for _, ended := range spans.GetSpans() {
+				if ended.SpanContext.TraceID().String() == id {
+					return nil
+				}
 			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("the line's correlation id %q belongs to no recorded call, so a log line and a trace cannot be joined", id)
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-		return fmt.Errorf("the line's correlation id %q belongs to no recorded call, so a log line and a trace cannot be joined", id)
 	})
 
 	sc.Step(`^the crew logs on its way up$`, func(ctx context.Context) error {
