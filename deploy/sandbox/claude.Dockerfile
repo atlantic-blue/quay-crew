@@ -145,14 +145,6 @@ RUN useradd --create-home --shell /bin/bash agent
 USER agent
 WORKDIR /home/agent/workspace
 
-# Get the first run out of the way.
-#
-# A task is non interactive and skips all of this, but attaching to a conversation is interactive, and
-# a sandbox is a fresh container every time. Without this the operator lands in the theme picker and
-# then the workspace trust prompt instead of their conversation, which reads as "the token is not
-# working" because nothing ever gets far enough to authenticate.
-#
-# The CLI rewrites this file as it runs; these are only the starting values.
 # The terminal an open conversation runs in. The configuration is a file in the repository rather than
 # a printf here, so a test can read the same thing the image ships.
 COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
@@ -168,6 +160,18 @@ COPY --chmod=0755 deploy/sandbox/open-conversation.sh /usr/local/bin/open-conver
 # writes to it at sandbox birth.
 COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 
+# Get the first run out of the way.
+#
+# A task is non interactive and skips all of this, but attaching to a conversation is interactive, and
+# a sandbox is a fresh container every time. Without this the operator lands in the theme picker and
+# then the workspace trust prompt instead of their conversation, which reads as "the token is not
+# working" because nothing ever gets far enough to authenticate. The runtime rewrites this file as it
+# runs; these are only the starting values.
+#
+# The directory is made here, as the sandbox user, and nothing else is put in it. The crew mounts the
+# workspace's own directory over this path in every sandbox, so a file the image writes here is a file
+# no session ever reads: what the runtime is told, beyond this first run, is rendered by the crew and
+# mounted read only somewhere the mount cannot hide. Everything the runtime keeps about a conversation
+# lands in this directory, the transcripts among them, so it has to be the sandbox user's.
 RUN mkdir -p /home/agent/.claude \
-    && printf '%s\n' '{"theme":"dark"}' > /home/agent/.claude/settings.json \
     && printf '%s\n' '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true,"hasCompletedProjectOnboarding":true}}}' > /home/agent/.claude.json

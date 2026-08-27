@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -586,10 +588,10 @@ func drive(t *testing.T, config Config, payload string, answer string, files map
 			return tick
 		},
 		Facts: func(cwd string) Facts { return Facts{Cwd: cwd} },
-		Ask: func(system, user string) string {
+		Ask: func(system, user string) (string, string) {
 			run.calls++
 			run.system, run.asked = system, user
-			return answer
+			return answer, ""
 		},
 	})
 
@@ -669,7 +671,7 @@ func TestAModelThatSaysNothingStillLetsTheMessageThrough(t *testing.T) {
 	if strings.Contains(run.out, "hookSpecificOutput") {
 		t.Errorf("a failed analysis reached the session: %q", run.out)
 	}
-	if !strings.Contains(run.out, "no answer") {
+	if !strings.Contains(run.out, "the model answered with nothing") {
 		t.Errorf("the terminal was told nothing about the failure: %q", run.out)
 	}
 	if !strings.Contains(run.lastRun, string(NoAnswer)) {
@@ -769,5 +771,90 @@ func TestTaskingOffTheLastRunFileStillLetsTheMessageThrough(t *testing.T) {
 	}
 	if len(run.fs.written) != 0 {
 		t.Errorf("something was written with the last run file turned off: %v", run.fs.written)
+	}
+}
+
+// The failure every sandbox hits. It must name the cause and the next move, because the hook fails
+// open and a silent failure is indistinguishable from a hook with nothing to add. This one ran that
+// way in every sandbox from the day it shipped.
+func TestNotBeingLoggedInSaysSoAndSaysWhatToDo(t *testing.T) {
+	// What the child actually prints, captured from the sandbox: standard output, then exit 1.
+	trouble := Trouble(nil, errors.New("exit status 1"), "Not logged in · Please run /login", Default("/home/agent"))
+
+	if !strings.Contains(trouble, "not logged in") {
+		t.Errorf("it does not say what is wrong: %q", trouble)
+	}
+	if !strings.Contains(trouble, "quay hook detach crew prompt-analyser") {
+		t.Errorf("it does not say what to do next: %q", trouble)
+	}
+	// The reason it is confusing is worth saying: the token is there, it just does not come down.
+	if !strings.Contains(trouble, "not what the session starts") {
+		t.Errorf("it does not explain why a token that exists does not reach the hook: %q", trouble)
+	}
+}
+
+func TestATimeoutSaysHowLongItWaitedAndWhatToChange(t *testing.T) {
+	config := Default("/home/agent")
+
+	trouble := Trouble(context.DeadlineExceeded, errors.New("signal: killed"), "", config)
+
+	if !strings.Contains(trouble, config.Timeout.String()) {
+		t.Errorf("it does not say how long it waited: %q", trouble)
+	}
+	if !strings.Contains(trouble, "timeoutMs") {
+		t.Errorf("it does not name the setting to change: %q", trouble)
+	}
+}
+
+func TestAMissingClaudeSaysTheBinaryIsNotThere(t *testing.T) {
+	trouble := Trouble(nil, errors.New(`exec: "claude": executable file not found in $PATH`), "", Default("/home/agent"))
+
+	if !strings.Contains(trouble, "no claude on the path") {
+		t.Errorf("it does not name the missing binary: %q", trouble)
+	}
+}
+
+// Whatever the child said, rather than a guess at it. A failure nobody predicted still has to reach
+// the person, or the next unknown failure is another silent one.
+func TestAnUnknownFailureRepeatsWhatTheChildSaid(t *testing.T) {
+	trouble := Trouble(nil, errors.New("exit status 1"), "Overloaded: try again later\nstack trace here", Default("/home/agent"))
+
+	if !strings.Contains(trouble, "Overloaded: try again later") {
+		t.Errorf("it does not repeat what the child said: %q", trouble)
+	}
+	if strings.Contains(trouble, "stack trace") {
+		t.Errorf("it dumped more than one line into the terminal: %q", trouble)
+	}
+}
+
+// The whole point: what the person sees changes from a shrug to an instruction.
+func TestTheTerminalIsToldTheCauseRatherThanThatSomethingWentWrong(t *testing.T) {
+	config := testConfig()
+	fs := newFakeFS(map[string]string{})
+	out := &strings.Builder{}
+	tick := time.Date(2026, 8, 20, 9, 0, 0, 0, time.UTC)
+
+	Run(Options{
+		Config: config,
+		Stdin:  strings.NewReader(`{"prompt":"fix it","cwd":"/home/agent"}`),
+		Stdout: out,
+		FS:     fs,
+		Now:    func() time.Time { tick = tick.Add(time.Second); return tick },
+		Facts:  func(cwd string) Facts { return Facts{Cwd: cwd} },
+		Ask:    func(system, user string) (string, string) { return "", NotLoggedIn },
+	})
+
+	if strings.Contains(out.String(), "no answer, carrying on") {
+		t.Errorf("still the old shrug: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "not logged in") {
+		t.Errorf("the terminal was not told the cause: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "quay hook detach") {
+		t.Errorf("the terminal was not told what to do: %s", out.String())
+	}
+	// It still fails open. The message must get through whatever the hook could not do.
+	if strings.Contains(out.String(), "hookSpecificOutput") {
+		t.Errorf("a failed analysis reached the session: %s", out.String())
 	}
 }

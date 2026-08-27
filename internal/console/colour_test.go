@@ -246,3 +246,27 @@ func lineWith(t *testing.T, view, text string) string {
 	t.Fatalf("no line contains %q in:\n%s", text, view)
 	return ""
 }
+
+// The context cell warns at the same share the line under the prompt warns at. An operator who reads
+// one and then the other should not have to work out which of them means something.
+func TestTheContextCellWarnsWhereTheLineUnderThePromptWarns(t *testing.T) {
+	for _, tc := range []struct {
+		cell string
+		warn bool
+	}{
+		{cell: "12%", warn: false},
+		{cell: "29%", warn: false},
+		{cell: "30%", warn: true},
+		{cell: "97%", warn: true},
+		// A window nothing has measured, so there is no share yet to act on.
+		{cell: "258k", warn: false},
+		{cell: "", warn: false},
+	} {
+		t.Run(tc.cell, func(t *testing.T) {
+			if warned := colourOfContext(tc.cell) == ansiYellowCode; warned != tc.warn {
+				t.Errorf("%q is coloured %q, warning=%v, want warning=%v",
+					tc.cell, colourOfContext(tc.cell), warned, tc.warn)
+			}
+		})
+	}
+}

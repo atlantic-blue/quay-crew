@@ -38,10 +38,14 @@ func (s Storage) WorkspaceHooksHost(workspace string) (string, bool) {
 //
 // The settings go in the same directory as the hooks and not in the conversation directory, which is
 // written by the runtime and edited by the operator. One directory the crew owns entirely means no
-// merge, and no losing somebody's edit the first time a merge is wrong.
+// merge, and no losing somebody's edit the first time a merge is wrong. It is also the only place the
+// crew can say anything to the runtime at all: the conversation directory is a mount, and a mount
+// hides whatever the image put under it.
 //
-// Detaching removes the directory. A hook left behind is a constraint the operator believes they took
-// off, which is worse than one they know is there.
+// Detaching removes the hook's own files and stops the settings binding it. A hook left behind is a
+// constraint the operator believes they took off, which is worse than one they know is there. The
+// directory itself stays, holding settings that bind nothing, because they carry the status line too
+// and a session under no hooks needs that as much as any other.
 func WriteHooks(root string, hooks []hook.Hook) error {
 	held := make(map[string]bool, len(hooks))
 	for _, one := range hooks {
@@ -61,16 +65,6 @@ func WriteHooks(root string, hooks []hook.Hook) error {
 		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
 			return fmt.Errorf("sandbox: remove %s: %w", filepath.Join(root, entry.Name()), err)
 		}
-	}
-
-	if len(hooks) == 0 {
-		// Nothing held means no directory at all, rather than one holding a settings file that binds
-		// nothing. A mount source that exists is a mount, and an empty one reads as a crew that has
-		// hooks and simply is not running them.
-		if err := os.RemoveAll(root); err != nil {
-			return fmt.Errorf("sandbox: remove %s: %w", root, err)
-		}
-		return nil
 	}
 
 	for _, one := range hooks {

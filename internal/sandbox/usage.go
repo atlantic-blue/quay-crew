@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -43,6 +45,13 @@ func (u Usage) Total() int64 {
 	return u.Input + u.Output + u.CacheRead + u.CacheWritten
 }
 
+// Carried is the context a task sent: everything in, and nothing that came back. The model's own
+// status line counts it the same way, so what the console says and what the operator reads under the
+// prompt cannot disagree.
+func (u Usage) Carried() int64 {
+	return u.Input + u.CacheRead + u.CacheWritten
+}
+
 // Empty says nothing has been spent, which is a conversation nobody has had rather than one that cost
 // nothing.
 func (u Usage) Empty() bool {
@@ -51,8 +60,14 @@ func (u Usage) Empty() bool {
 
 // transcriptLine is the part of a conversation record this cares about. The model's command line tool
 // writes one record per line and carries the usage on the assistant's messages.
+//
+// IsSidechain marks a record belonging to a sub agent rather than to the conversation itself. A sub
+// agent has a context window of its own, so its messages say nothing about how full this one is,
+// and the last record in a live transcript is often one of them.
 type transcriptLine struct {
-	Message struct {
+	Type        string `json:"type"`
+	IsSidechain bool   `json:"isSidechain"`
+	Message     struct {
 		Usage struct {
 			Input        int64 `json:"input_tokens"`
 			Output       int64 `json:"output_tokens"`
@@ -79,7 +94,27 @@ func (s Storage) ConversationUsage(cfg Config, conversation string) Usage {
 	if !found {
 		return Usage{}
 	}
-	return usageCache.of(path)
+	return usageCache.of(path).usage
+}
+
+// ConversationContext is how full the model's context window is, which is what the last answer in the
+// conversation carried: everything sent on it, including what was read back from the cache.
+//
+// Not the total this conversation has cost, which is a different question with a much larger number:
+// cost only grows, and the window empties again when the model compacts. Only the last answer counts,
+// because everything before it was sent again as part of it.
+//
+// It takes the session's configuration for the same reason ConversationUsage does: a session running
+// as a role keeps its own conversation store, and reading the workspace's store for it would answer
+// that a full window was empty.
+//
+// Zero for a conversation nobody has spoken in, and for anything this cannot read.
+func (s Storage) ConversationContext(cfg Config, conversation string) Usage {
+	path, found := s.transcript(cfg, conversation)
+	if !found {
+		return Usage{}
+	}
+	return usageCache.of(path).carried
 }
 
 // transcript is where the model keeps a conversation, and whether it is there. The working directory
@@ -131,8 +166,11 @@ var usageCache = &transcripts{read: map[string]counted{}}
 // is appended to and never rewritten, so its size and time answer whether the total still holds.
 type counted struct {
 	usage Usage
-	size  int64
-	when  int64
+	// carried is what the last answer in the conversation sent, which is how full the window is now
+	// rather than what the whole conversation has cost.
+	carried Usage
+	size    int64
+	when    int64
 }
 
 type transcripts struct {
@@ -140,39 +178,40 @@ type transcripts struct {
 	read map[string]counted
 }
 
-func (t *transcripts) of(path string) Usage {
+func (t *transcripts) of(path string) counted {
 	info, err := os.Stat(path)
 	if err != nil {
-		return Usage{}
+		return counted{}
 	}
 
 	t.mu.Lock()
 	cached, known := t.read[path]
 	t.mu.Unlock()
 	if known && cached.size == info.Size() && cached.when == info.ModTime().UnixNano() {
-		return cached.usage
+		return cached
 	}
 
-	total := sum(path)
+	total, carried := sum(path)
+	read := counted{usage: total, carried: carried, size: info.Size(), when: info.ModTime().UnixNano()}
 	t.mu.Lock()
-	t.read[path] = counted{usage: total, size: info.Size(), when: info.ModTime().UnixNano()}
+	t.read[path] = read
 	t.mu.Unlock()
-	return total
+	return read
 }
 
-// sum reads a transcript and adds up what every message in it cost.
+// sum reads a transcript once and answers two questions: what the whole conversation cost, and what
+// its last answer carried.
 //
 // A line it cannot read is skipped rather than failing the file. The tool writes this as it goes, so
 // the last line of a live conversation is regularly half written, and refusing to count a whole
 // conversation because of that would mean the number only ever appeared when nothing was happening.
-func sum(path string) Usage {
+func sum(path string) (total, carried Usage) {
 	file, err := os.Open(path)
 	if err != nil {
-		return Usage{}
+		return Usage{}, Usage{}
 	}
 	defer func() { _ = file.Close() }()
 
-	var total Usage
 	lines := bufio.NewScanner(file)
 	// A conversation record carries whole messages, so the default limit is not enough.
 	lines.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
@@ -181,12 +220,51 @@ func sum(path string) Usage {
 		if err := json.Unmarshal(lines.Bytes(), &record); err != nil {
 			continue
 		}
-		total = total.Add(Usage{
+		spent := Usage{
 			Input:        record.Message.Usage.Input,
 			Output:       record.Message.Usage.Output,
 			CacheRead:    record.Message.Usage.CacheRead,
 			CacheWritten: record.Message.Usage.CacheWritten,
-		})
+		}
+		total = total.Add(spent)
+		// The last answer the conversation itself had. A sub agent's answer is skipped: it fills a
+		// window of its own, and saying it filled this one would report a conversation as nearly full
+		// while the operator is still typing into an empty one.
+		if record.Type == assistantRecord && !record.IsSidechain && !spent.Empty() {
+			carried = spent
+		}
 	}
-	return total
+	return total, carried
+}
+
+// assistantRecord is the record type carrying what an answer cost. A user record and a summary carry
+// no usage at all, so reading every record as an answer would leave the window at whatever the last
+// record that happened to have numbers on it said.
+const assistantRecord = "assistant"
+
+// ContextWindowFile is where a session writes down how big the model's context window is, inside the
+// conversation directory the crew mounts into every sandbox.
+//
+// The crew cannot work the size out for itself: it is not in the transcript, and a list of models in
+// the code would be right today and quietly wrong at the next one. The model runtime knows it and
+// says it to the status line, so the status line writes it down where the crew already reads.
+const ContextWindowFile = "context-window"
+
+// ContextWindowSize is how big the model's context window is for a workspace, and whether anything
+// has said. It is a property of the model the crew runs rather than of one conversation, so the last
+// session to be told answers for all of them.
+func (s Storage) ContextWindowSize(workspace string) (int64, bool) {
+	if s.Dir == "" || usableAsPath("workspace", workspace) != nil {
+		return 0, false
+	}
+	at := filepath.Join(s.Dir, "workspaces", workspace, "claude", ContextWindowFile)
+	said, err := os.ReadFile(at) //nolint:gosec // a path built from the crew's own data directory
+	if err != nil {
+		return 0, false
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(string(said)), 10, 64)
+	if err != nil || size <= 0 {
+		return 0, false
+	}
+	return size, true
 }

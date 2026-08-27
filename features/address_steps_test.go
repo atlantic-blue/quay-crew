@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
@@ -48,6 +49,70 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		return resolveAddress(ctx, fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, current.handle[:8]))
+	})
+
+	// The id, taken off the listing the way the operator takes it: shortened to what the column
+	// shows, and pasted back into an address.
+	sc.Step(`^the operator addresses the session by the id in the listing$`, func(ctx context.Context) error {
+		typed, err := addressAtTheListedID(ctx)
+		if err != nil {
+			return err
+		}
+		return resolveAddress(ctx, typed)
+	})
+
+	sc.Step(`^the operator labels the session "([^"]*)"$`, func(ctx context.Context, label string) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		_, err = w.client.SetSessionLabel(ctx, &quaycrewv1.SetSessionLabelRequest{
+			Id: current.sessionID, Label: label,
+		})
+		return err
+	})
+
+	// The next thing the operator does with an address, rather than the resolving on its own: a
+	// resolver that answers and a dispatch that lands are two different claims.
+	sc.Step(`^the operator dispatches "([^"]*)" to the session at the id in the listing$`,
+		func(ctx context.Context, text string) error {
+			w := worldFrom(ctx)
+			typed, err := addressAtTheListedID(ctx)
+			if err != nil {
+				return err
+			}
+			path, err := workspace.ParsePath(typed)
+			if err != nil {
+				return err
+			}
+			located, err := workspace.ResolvePath(ctx, w.client, path)
+			if err != nil {
+				return fmt.Errorf("the address %q was refused: %w", typed, err)
+			}
+			return w.dispatch(ctx, located.ProjectID, located.SessionID, text)
+		})
+
+	sc.Step(`^the refusal offers the identifier the listing prints$`, func(ctx context.Context) error {
+		w, a := worldFrom(ctx), addressFrom(ctx)
+		if a.err == nil {
+			return fmt.Errorf("the address resolved, expected a refusal")
+		}
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		said := a.err.Error()
+		if !strings.Contains(said, current.sessionID[:8]) {
+			return fmt.Errorf("the refusal is %q, want it to offer %q", said, current.sessionID[:8])
+		}
+		// And not the handle, which no column of the listing carries. Offering it sent the operator
+		// looking for a value they cannot see.
+		if strings.Contains(said, current.handle[:8]) {
+			return fmt.Errorf("the refusal is %q, and it offers the handle %q, which is nowhere on the screen",
+				said, current.handle[:8])
+		}
+		return nil
 	})
 
 	sc.Step(`^the address reaches the project$`, func(ctx context.Context) error {
@@ -115,6 +180,17 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// addressAtTheListedID is the session written the way the operator reads it off the listing: the
+// workspace, the project, and the shortened id from the first column.
+func addressAtTheListedID(ctx context.Context) (string, error) {
+	w := worldFrom(ctx)
+	current, err := w.lastTask()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s/%s", w.workspaceName, w.projectName, current.sessionID[:8]), nil
 }
 
 // resolveAddress parses and resolves an address, recording whichever of the two failed.

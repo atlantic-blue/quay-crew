@@ -16,6 +16,10 @@ type Options struct {
 	Network string
 	// DriverMounts are host paths only the driver gets, each "host:container[:ro]".
 	DriverMounts []string
+	// Memory is how much memory one session may take, as the daemon spells it, for example "4g".
+	// Empty gives a session no limit of its own, so it advertises the whole machine to everything
+	// running in it.
+	Memory string
 }
 
 // Kinds of sandbox. The default isolates each session in its own container.

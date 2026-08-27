@@ -669,12 +669,40 @@ func TestEnterOnASessionWithNoConversationSaysWhy(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("enter produced no command")
 	}
-	msg, isErr := cmd().(errMsg)
+	msg, isErr := cmd().(heldErrMsg)
 	if !isErr {
 		t.Fatalf("enter returned %#v, want the control plane's reason", cmd())
 	}
 	if !strings.Contains(msg.err.Error(), "no conversation yet") {
 		t.Fatalf("the reason did not reach the operator: %v", msg.err)
+	}
+}
+
+// TestAReasonEnterCouldNotOpenSurvivesTheRefresh: the reason was set and then blanked by the listing
+// that the same return asked for, so the key read as doing nothing at all.
+func TestAReasonEnterCouldNotOpenSurvivesTheRefresh(t *testing.T) {
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
+	model := newTestModel(t, Sessions(client))
+	row := Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "", "idle", "1m"}}
+	model, _ = update(t, model, rowsFor(model, row))
+
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ = update(t, model, cmd())
+	if model.err == nil {
+		t.Fatal("enter left no reason on the screen")
+	}
+
+	// The refresh every action asks for, and the one the clock asks for a moment later.
+	model, _ = update(t, model, rowsFor(model, row))
+	if model.err == nil || !strings.Contains(model.err.Error(), "no conversation yet") {
+		t.Fatalf("the refresh blanked the reason: %v", model.err)
+	}
+
+	// The next key is the operator saying they have read it.
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	model, _ = update(t, model, rowsFor(model, row))
+	if model.err != nil {
+		t.Fatalf("the reason outlived the next key: %v", model.err)
 	}
 }
 

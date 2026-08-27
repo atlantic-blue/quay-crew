@@ -16,8 +16,11 @@ import (
 // the console had ten columns and the command line four, so a session's cost, its mode and how long
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
+// The first column is headed "session" rather than "id" because it is the value every command takes.
+// Under "id" it read as bookkeeping, and the operator reached for the name cell instead, which held
+// the other identifier.
 func SessionColumns() []string {
-	return []string{"id", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
+	return []string{"session", "workspace", "project", "name", "status", "mode", "ctx", "in", "out", "cache", "age"}
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
@@ -26,15 +29,52 @@ func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string
 		ShortID(session.GetId()),
 		Name(workspaceName, session.GetWorkspace()),
 		Name(projectName, session.GetProject()),
-		SessionName(session),
+		SessionLabel(session),
 		StatusLabel(session),
 		PermissionLabel(session.GetPermissionMode()),
+		ContextLabel(session),
 		Tokens(session.GetUsage().GetInput()),
 		Tokens(session.GetUsage().GetOutput()),
 		Tokens(session.GetUsage().GetCacheRead()),
 		// How long ago it was put away where it was, and how long ago it was touched otherwise. A
 		// live session has no archived stamp, so one rule covers both.
 		Age(LastMoved(session)),
+	}
+}
+
+// ContextLabel is how full the model's context window is: a share where the crew knows how big the
+// window is, and the count on its own where nothing has told it yet.
+//
+// The count rather than a guessed share, because a share is what an operator acts on and a wrong one
+// is worse than none. The crew learns the size from the model runtime the first time anybody attaches
+// to a session in that workspace.
+//
+// Blank for a conversation nobody has spoken in, the way the token columns are: a session with no
+// conversation behind it has not filled anything.
+func ContextLabel(session *quaycrewv1.Session) string {
+	window := session.GetContextWindow()
+	if window.GetUsed() <= 0 {
+		return ""
+	}
+	if window.GetSize() <= 0 {
+		return Tokens(window.GetUsed())
+	}
+	return strconv.FormatInt(Share(window.GetUsed(), window.GetSize()), 10) + "%"
+}
+
+// Share is what part of the window is used, as a whole number out of a hundred.
+//
+// It stops at a hundred: a window reported as more than full is a conversation the runtime is about
+// to compact, and a hundred and four per cent reads as a defect in the crew. Nothing is multiplied
+// above that ceiling, so a nonsense count cannot overflow into a nonsense share.
+func Share(used, size int64) int64 {
+	switch {
+	case used <= 0 || size <= 0:
+		return 0
+	case used >= size:
+		return 100
+	default:
+		return (used*100 + size/2) / size
 	}
 }
 
@@ -158,18 +198,27 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 	out.WriteString("\n")
 }
 
-// SessionName is what to call a session in a listing: the name the operator gave it, then the one the
-// crew wrote for itself, then the identifier.
+// SessionName is what to call a session where one word has to stand for it: the name the operator
+// gave it, then the one the crew wrote for itself, then the identifier a listing prints.
 //
 // The operator's name wins because a name somebody picked beats a name a machine wrote. The
-// identifier is last because it is the thing nobody remembers, and it is still in the id column
-// beside this one, so nothing is hidden by preferring a name.
+// identifier is last, and it is the id rather than the handle: the id is the value the session column
+// carries, so a breadcrumb falling back to it falls back to something the operator can type.
 func SessionName(session *quaycrewv1.Session) string {
+	if named := SessionLabel(session); named != "" {
+		return named
+	}
+	return ShortID(session.GetId())
+}
+
+// SessionLabel is what a session is called, and nothing else. Empty until somebody names it.
+//
+// The name cell used to fall back to the handle, which put a raw identifier under the heading "name"
+// and took it off the screen again the moment the session was labelled. Two identifiers were on the
+// screen and neither was in a column that said so.
+func SessionLabel(session *quaycrewv1.Session) string {
 	if label := strings.TrimSpace(session.GetLabel()); label != "" {
 		return label
 	}
-	if described := strings.TrimSpace(session.GetDescription()); described != "" {
-		return described
-	}
-	return ShortID(session.GetHandle())
+	return strings.TrimSpace(session.GetDescription())
 }
