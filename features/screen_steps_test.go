@@ -177,7 +177,10 @@ func quayBinary() (string, error) {
 			return
 		}
 		built = filepath.Join(dir, "quay")
-		out, err := exec.Command("go", "build", "-o", built, "../cmd/quay").CombinedOutput()
+		// Stamped the way the install target stamps it, so a scenario can say the tool and the crew
+		// are different builds and have the tool actually report one.
+		out, err := exec.Command("go", "build", "-ldflags", "-X main.version="+toolBuild,
+			"-o", built, "../cmd/quay").CombinedOutput()
 		if err != nil {
 			builtErr = fmt.Errorf("building quay: %w: %s", err, out)
 		}

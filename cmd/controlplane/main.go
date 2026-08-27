@@ -30,6 +30,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// version is the build this control plane is, stamped in at build time by the image build. A crew
+// that cannot say which build it is leaves an operator diagnosing a defect that is already fixed.
+var version = "dev"
+
 func main() {
 	serviceName := envOr("QC_SERVICE_NAME", "controlplane")
 	logger := logging.Init(serviceName, os.Stdout)
@@ -170,6 +174,9 @@ func main() {
 			// What the sandboxes are running, so the tool can say when the crew has moved on and
 			// they have not.
 			SandboxBuild: sandboxBuild,
+			// Which build this control plane is, so the tool can say when it and the crew are
+			// different builds. Stamped in at build time, the way the tool is.
+			Version: version,
 		},
 	})
 	// Waits that came due while the crew was down are resumed on the way up, and every one after
