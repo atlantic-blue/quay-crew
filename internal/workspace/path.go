@@ -118,29 +118,37 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 
 // resolveSession tasks a session reference into a session id within one project. Listings shorten
 // identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
+//
+// Both identifiers reach the session. A listing prints the id in its own column and the handle in the
+// name column, and the name column gives way to a label or a description the moment the session has
+// one. So on a session anybody has named, the id is the only identifier on the screen, and it was the
+// one form an address refused.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID, reference string) (string, error) {
 	resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: projectID})
 	if err != nil {
 		return "", fmt.Errorf("workspace: list sessions: %w", err)
 	}
 
+	// The handle either way: it is what every caller of an address goes on to dispatch against, so
+	// taking the id here is about what the operator may type, not about what an address returns.
 	matches := make([]string, 0, 1)
 	for _, session := range resp.GetSessions() {
-		if session.GetHandle() == reference {
-			return reference, nil
+		if session.GetHandle() == reference || session.GetId() == reference {
+			return session.GetHandle(), nil
 		}
-		if strings.HasPrefix(session.GetHandle(), reference) {
+		if strings.HasPrefix(session.GetHandle(), reference) || strings.HasPrefix(session.GetId(), reference) {
 			matches = append(matches, session.GetHandle())
 		}
 	}
 
 	switch len(matches) {
 	case 0:
-		// Shortened, because a listing prints them shortened and that is what gets typed back.
+		// Both identifiers, shortened the way the listing prints them. Naming only the handle sent
+		// the operator to look for a value their screen does not carry.
 		return "", &NotFoundError{
 			What: "session", Name: reference,
 			Have: namesOf(resp.GetSessions(), func(i int) string {
-				return display.ShortID(resp.GetSessions()[i].GetHandle())
+				return identifiersOf(resp.GetSessions()[i])
 			}),
 			Make: `start one with quay dispatch "..."`,
 		}
@@ -150,4 +158,11 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		sort.Strings(matches)
 		return "", &AmbiguousError{What: "sessions", Name: reference, IDs: matches}
 	}
+}
+
+// identifiersOf writes a session the way its listing does: the id in the first column, then the
+// handle that the name column carries until a label or a description takes that place.
+func identifiersOf(session *quaycrewv1.Session) string {
+	return fmt.Sprintf("%s (session %s)",
+		display.ShortID(session.GetId()), display.ShortID(session.GetHandle()))
 }

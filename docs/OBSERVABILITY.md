@@ -190,7 +190,7 @@ Two things to know before you spend time in there:
 
 So all three signals are real end to end, and what is left is what you make of them.
 
-## What would task it on
+## What would switch it on
 
 In this order, because each step is pointless without the one above it.
 

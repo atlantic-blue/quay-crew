@@ -17,7 +17,7 @@ import (
 // ago it was touched were visible in one place and invisible in the other. Whichever surface an
 // operator learns first should teach them the other.
 func SessionColumns() []string {
-	return []string{"id", "workspace", "project", "name", "status", "mode", "in", "out", "cache", "age"}
+	return []string{"id", "workspace", "project", "name", "status", "mode", "ctx", "in", "out", "cache", "age"}
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
@@ -29,12 +29,49 @@ func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string
 		SessionName(session),
 		StatusLabel(session),
 		PermissionLabel(session.GetPermissionMode()),
+		ContextLabel(session),
 		Tokens(session.GetUsage().GetInput()),
 		Tokens(session.GetUsage().GetOutput()),
 		Tokens(session.GetUsage().GetCacheRead()),
 		// How long ago it was put away where it was, and how long ago it was touched otherwise. A
 		// live session has no archived stamp, so one rule covers both.
 		Age(LastMoved(session)),
+	}
+}
+
+// ContextLabel is how full the model's context window is: a share where the crew knows how big the
+// window is, and the count on its own where nothing has told it yet.
+//
+// The count rather than a guessed share, because a share is what an operator acts on and a wrong one
+// is worse than none. The crew learns the size from the model runtime the first time anybody attaches
+// to a session in that workspace.
+//
+// Blank for a conversation nobody has spoken in, the way the token columns are: a session with no
+// conversation behind it has not filled anything.
+func ContextLabel(session *quaycrewv1.Session) string {
+	window := session.GetContextWindow()
+	if window.GetUsed() <= 0 {
+		return ""
+	}
+	if window.GetSize() <= 0 {
+		return Tokens(window.GetUsed())
+	}
+	return strconv.FormatInt(Share(window.GetUsed(), window.GetSize()), 10) + "%"
+}
+
+// Share is what part of the window is used, as a whole number out of a hundred.
+//
+// It stops at a hundred: a window reported as more than full is a conversation the runtime is about
+// to compact, and a hundred and four per cent reads as a defect in the crew. Nothing is multiplied
+// above that ceiling, so a nonsense count cannot overflow into a nonsense share.
+func Share(used, size int64) int64 {
+	switch {
+	case used <= 0 || size <= 0:
+		return 0
+	case used >= size:
+		return 100
+	default:
+		return (used*100 + size/2) / size
 	}
 }
 

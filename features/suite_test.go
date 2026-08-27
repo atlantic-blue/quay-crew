@@ -237,6 +237,10 @@ type world struct {
 	lastDrain *quaycrewv1.DrainSessionsResponse
 	// release lets go of a task a scenario is holding open, and is nil when none is held.
 	release func()
+	// waited carries what a dispatch the scenario is not watching came back with. A waited dispatch
+	// does not return until its task lands, so a scenario about what is true while one runs has to
+	// start it behind itself and pick the answer up afterwards.
+	waited chan waitedDispatch
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
 	// attachment does and does not reach.
 	otherWorkspaceID string
@@ -506,6 +510,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
+	initializeSessionEventsSteps(sc)
 	initializeObservabilitySteps(sc)
 	initializeMetricsSteps(sc)
 	initializeTasksSteps(sc)
@@ -528,6 +533,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
@@ -538,6 +544,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFailureSteps(sc)
 	initializePanelSteps(sc)
 	initializeRenderSteps(sc)
+	initializeStatusLineSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {

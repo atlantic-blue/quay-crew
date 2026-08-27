@@ -32,11 +32,13 @@ type sessionsPage struct {
 }
 
 // taskRow is one exchange. A task that failed carries its failure instead of a reply, and says so,
-// because a blank reply and a refused task must never read the same.
+// because a blank reply and a refused task must never read the same. A task still running has no
+// reply yet, for the same reason: an empty box reads as a task that answered nothing.
 type taskRow struct {
 	When    string
 	Prompt  string
 	Reply   string
+	Running bool
 	Failed  bool
 	Failure string
 }
@@ -104,12 +106,12 @@ func (v *view) session(w http.ResponseWriter, r *http.Request) {
 }
 
 func task(turn *quaycrewv1.Task) taskRow {
-	failed := turn.GetStatus() == "failed"
 	return taskRow{
 		When:    turn.GetOccurredAt().AsTime().Local().Format("15:04:05"),
 		Prompt:  turn.GetPrompt(),
 		Reply:   turn.GetReply(),
-		Failed:  failed,
+		Running: turn.GetStatus() == "running",
+		Failed:  turn.GetStatus() == "failed",
 		Failure: turn.GetFailure(),
 	}
 }

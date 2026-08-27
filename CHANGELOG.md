@@ -6,6 +6,93 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 22 August 2026
+
+- **A session says what happened to it, and every record carries a kind.** The crew emitted one
+  event, a finished task, and that record has no kind at all: the only thing that varied was
+  `status`, which is `idle` or `failed`. So nothing could tell that a session had been made, that
+  work had begun, or that one had been put away, and nothing could react to a change. A workflow
+  trigger has nothing to match on when there is nothing to match.
+
+  Eight kinds now, on a stream of their own: `session.created`, `session.started`,
+  `session.completed`, `session.errored`, `session.stopped`, `session.archived`, `session.restored`
+  and `session.deleted`. Each names something that happened, in the past tense, at one moment.
+  `idle` and `running` are deliberately not among them: they are what the row says now, which is the
+  fold of the events, and a consumer handed a state learns nothing about what changed.
+
+  Each event lands in the store in the same breath as the thing it describes, and is exported to
+  `<workspace>.sessions` after, keyed by session so one session's records stay in order on one
+  partition. That is the split the crew decided on 9 August: the store is the truth, so
+  `quay` and the console can read the lifecycle whether or not a broker is up, and an export that
+  cannot land is dropped rather than failing what already happened. The detail each event carries
+  goes through the same redactor a task does, because what came back and what failed can both hold
+  something the operator pasted.
+
+  `ListSessionEvents` reads them back, for one session or for the whole crew. The console's own view
+  of them, and the kinds the flow engine should emit for a run, are the next two pieces.
+  ([#349](https://github.com/atlantic-blue/quay-crew/issues/349))
+
+- **The console says how full each session's context window is.** A new `ctx` column, beside what the
+  conversation cost, holding `26%`. It turns yellow at thirty per cent, where the line under the
+  prompt turns yellow, and both work the share out in one place so they cannot disagree about the same
+  conversation.
+
+  How full the window is is not what the conversation cost, and the difference matters: cost only
+  grows, while the window empties again when the model compacts. So the column reads what the last
+  answer carried, out of the transcript the model keeps, and skips a sub agent's answer because that
+  fills a window of its own.
+
+  The size of the window is nowhere in the transcript, and a list of models in the crew's own code
+  would be right today and quietly wrong at the next one. Only the model runtime knows it, and it says
+  it to the status line. So a session writes it down in the conversation directory the crew already
+  mounts, and the crew reads it from there. Until some session in a workspace is attached to once, the
+  column shows the count instead, for example `258k`. A count is true; a share worked out from a
+  guessed window is not.
+
+## 21 August 2026
+
+- **The status line reaches a session, which yesterday it did not.** The setting was shipped in the
+  sandbox image, at `/home/agent/.claude/settings.json`. The crew mounts the workspace's own directory
+  over that exact path in every sandbox, and a mount hides whatever the image put underneath it, so no
+  session ever read it. The feature was green in every gate and did nothing.
+
+  The crew says it now, in the settings file it already renders for hooks and mounts read only. That
+  file is the only thing the crew can say to the runtime that a mount cannot hide. Two things follow.
+  Every session is given that file, holding no hook where there are none, rather than only the
+  sessions running under a hook. And the image writes no settings at all: a test refuses the whole
+  class, because nothing here builds that image and nothing would have caught it again.
+
+  A task is told to load the file only when the file is on disk. The runtime refuses to start on
+  settings that are missing, saying only `Settings file not found`, and that would be every task on
+  the crew rather than one.
+
+- **An attached conversation says how much of the context window it has used.** Attaching puts you in
+  the conversation with the model, and the one number that decides whether that conversation is still
+  worth continuing was nowhere on the screen. Not in the console, not in the panel's header, and
+  asking the model for it costs a task and fills a little more of the window to answer.
+
+  The model runtime keeps a line under the prompt and redraws it every time the conversation moves.
+  The crew points that line at `quay statusline` (it shipped pointing there from the sandbox image,
+  which no session reads; see the entry above):
+
+  ```
+  context 12% used (124k of 1M)
+  context 34% used (340k of 1M), over the 30% mark
+  ```
+
+  The second one is yellow. Thirty per cent rather than something closer to full, because what you do
+  about a filling window (finish the task, compact it, or open a fresh session) is much cheaper
+  decided at thirty than at ninety.
+
+  How big the window is, and how much of it the next task carries, are the runtime's to report rather
+  than this build's to remember. A runtime that reports neither says so on the line instead of
+  guessing, because a guessed window is a confident wrong number and a blank line reads as the crew
+  being broken. A session that runs under hooks keeps the line: the hooks file is additional settings
+  rather than settings instead.
+
+  A sandbox keeps what it was made with, so this reaches a session that is already running only after
+  `make rebuild`, and then stopping that session and dispatching again.
+
 ## 20 August 2026
 
 - **`quay dispatch` lets go of the task, and `quay ask` waits for the answer.** The command line held
@@ -27,6 +114,62 @@ read, or run with `make features`.
   swallowed into the message: `quay dispatch wait for the build` would have meant something the
   operator did not type. `--detach`, `--wait` and `--no-wait` are each refused by name and say which
   word to type instead.
+
+- **A task is recorded when it starts, so you can see what a session is working on.** A task was
+  written to history only when it ended, and only a detached dispatch marked its session `running`. A
+  dispatch typed at a terminal is not detached, so a session working for half an hour read `idle`
+  with nothing in its history: three sessions ran real work for over thirty minutes each and every
+  one of them read that way. One of them showed two finished tasks from three days earlier while the
+  task burning its tokens was invisible, its counters climbing from 592 in and 158 thousand out to
+  1.2 thousand in and 278.2 thousand out.
+
+  Now every path records the task as it starts, marks the session `running` while it works, and
+  writes the reply or the failure into that same record when it lands. `quay tasks` says `still
+  running` for a task in flight, the web view says the same where the reply will go, and the
+  console's history view carries the status it already had a column for.
+
+  One record per task, not two: the landing closes the row the start opened, so the prompt and the
+  time the operator asked stay as they were written. The export to the event log is unchanged, one
+  record per task at the end, because a consumer handed the same task twice would have to work out
+  which of the two to believe.
+
+  A crew that restarts mid task now says which task died with it, rather than recording a failure
+  with no prompt on it.
+
+- **Every identifier a listing prints reaches the session, in an address too.** A listing prints two
+  of them. The id has a column of its own, and the handle sits in the name column until a label or a
+  description takes that place. So on a session anybody has named, the id is the only identifier on
+  the operator's screen, and it was the one form an address refused:
+
+  ```
+  quay attach a4db600a                     # worked
+  quay attach me/house-bills/a4db600a      # this crew has no session "a4db600a"
+  ```
+
+  The address resolver takes either identifier now, whole or shortened, and it still answers with the
+  handle, so nothing downstream of an address changes. Every session scoped command shares that
+  resolver, which is `quay attach`, `quay dispatch`, `quay tasks`, `quay mode` and `quay label`. A
+  refusal names both identifiers, because naming only the handle sent the operator to look for a
+  value their screen does not carry. Closes #365, and part of #380.
+
+- **A conversation opens whatever the session's row says.** The row is the crew's own bookkeeping. It
+  used to decide whether the operator could open a session at all, and it refused three states.
+
+  A stopped session was refused with "restart it first". That is the one an operator meets most,
+  because `make upgrade` drains before it rebuilds, and a drain puts every live session down. After
+  an upgrade the whole crew read stopped, so every session in it refused to open.
+
+  An archived session was refused with the same sentence, because archiving sets the row to stopped
+  as well and that answer came first. Restarting an archived session is itself refused, so attach
+  named the one action that could not be taken.
+
+  A session whose first task failed holds no conversation, and that was refused too. It sat in the
+  listing with nothing that could open it.
+
+  All three open now. The row is then brought up to date rather than obeyed: the session comes back
+  to idle, an archived one comes back into the listing, and a session with no conversation is given
+  one, the way the driver already was. A row that still said stopped would have the next startup reap
+  the container out from under the conversation. See issue #380.
 
 ## 19 August 2026
 

@@ -35,16 +35,22 @@ key land on one partition, which is what keeps a session's records in the order 
 
 1. You run `quay ask "read the package file"`. The command line calls `Dispatch` on the control
    plane over gRPC.
-2. The control plane finds or creates the session row, then builds or reuses that session's sandbox
-   container.
-3. It runs the task through the model inside that sandbox, and waits for the reply.
-4. It records the session's new status, then calls `recordHistory` in
-   `internal/controlplane/events.go`.
-5. `recordHistory` detaches the context, redacts the payload, stamps an identifier and the workspace,
-   the project, the handle and the time, and writes one row into the `tasks` table. This write is the
-   truth, and it happens whether or not a broker exists.
-6. It then calls `exportTask`, which reads the workspace name, names the topic, encodes the event as
-   protobuf and publishes it to the broker under the session identifier.
+2. The control plane finds or creates the session row, marks the session `running`, and calls
+   `beginTask` in `internal/controlplane/events.go`.
+3. `beginTask` detaches the context, redacts the prompt, stamps an identifier and the workspace, the
+   project, the handle and the time, and writes one row into the `tasks` table with the status
+   `running`. The row is written now rather than at the end, because a task takes minutes and an
+   operator has to be able to see what a session was asked while it works on it.
+4. It builds or reuses that session's sandbox container, and runs the task through the model inside
+   it.
+5. It records the session's new status, then calls `landTask`, which writes the reply or the failure
+   into the row `beginTask` opened. The prompt and the time it started are left as they were, so the
+   history says when the operator asked. This write is the truth, and it happens whether or not a
+   broker exists.
+6. `landTask` then calls `exportTask`, which reads the workspace name, names the topic, encodes the
+   event as protobuf and publishes it to the broker under the session identifier. The export is one
+   record per task, at the end: a consumer handed the same task twice would have to work out which of
+   the two to believe.
 7. Nothing reads the topic. `quay tasks` and the console read the `tasks` table.
 
 ```mermaid
@@ -59,9 +65,11 @@ sequenceDiagram
 
     YOU->>CLI: quay ask "read the package file"
     CLI->>CP: Dispatch (gRPC)
+    CP->>DB: write the task as running
+    Note over CP,DB: visible while the work happens
     CP->>SBX: run the task
     SBX-->>CP: reply
-    CP->>DB: write the redacted task
+    CP->>DB: write what it came to, into that task
     Note over CP,DB: the truth, on a detached context
     CP->>LOG: publish to workspace.tasks, keyed by session
     Note over CP,LOG: dropped when no seeds are set
@@ -71,8 +79,9 @@ sequenceDiagram
 
 ## What is written, and where
 
-- **One row in `tasks`**: what was asked, what came back, the status, the failure if there was one,
-  and when it happened. `quay tasks <session>` and the console's history view read this.
+- **One row in `tasks`**, written when the task starts and closed when it lands: what was asked, what
+  came back, the status, the failure if there was one, and when it started. A row that still reads
+  `running` is a task in flight. `quay tasks <session>` and the console's history view read this.
 - **The session row moves**: its status, its conversation identifier, and the count the describer
   reads to decide whether to name the session again.
 - **One record on `<workspace>.tasks`**, when seeds are set. The value is a protobuf `TaskEvent`, so
