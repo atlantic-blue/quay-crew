@@ -227,7 +227,8 @@ func TestEveryMovementIsOnTheRecordInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListWorkEvents: %v", err)
 	}
-	want := []string{work.EventDeclared, work.EventStarted, work.EventAnswered}
+	// The claim comes before the start: a controller takes the work in hand before it sends anything.
+	want := []string{work.EventDeclared, work.EventClaimed, work.EventStarted, work.EventAnswered}
 	if len(events) != len(want) {
 		t.Fatalf("%d records exist, want %v", len(events), want)
 	}
