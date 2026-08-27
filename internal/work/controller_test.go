@@ -30,13 +30,17 @@ type crew struct {
 	sessions []*quaycrewv1.Session
 	// refuse makes the next dispatch fail, which is a crew that could not make a sandbox.
 	refuse error
+	// seen is the context the last dispatch arrived under, so a test can say which trace the task
+	// ran in rather than assume the controller passed one on.
+	seen context.Context
 }
 
 func newCrew() *crew { return &crew{tasks: map[string][]*quaycrewv1.Task{}} }
 
-func (c *crew) Dispatch(_ context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
+func (c *crew) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.seen = ctx
 	if c.refuse != nil {
 		refused := c.refuse
 		c.refuse = nil
@@ -102,6 +106,16 @@ func (c *crew) ListSessions(_ context.Context, _ *quaycrewv1.ListSessionsRequest
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return &quaycrewv1.ListSessionsResponse{Sessions: append([]*quaycrewv1.Session(nil), c.sessions...)}, nil
+}
+
+// lastContext is what the last dispatch arrived under.
+func (c *crew) lastContext() context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.seen == nil {
+		return context.Background()
+	}
+	return c.seen
 }
 
 func (c *crew) sent() int {

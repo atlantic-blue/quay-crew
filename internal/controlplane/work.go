@@ -59,6 +59,7 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		// nothing mints one yet, so depth stays zero and the depth limit has nothing to bound.
 		Version: 1, Phase: work.PhasePending,
 	}
+	s.traceWork(ctx, declared, nil)
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, err
 	}
@@ -66,9 +67,13 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		return nil, err
 	}
 
-	if err := s.store.CreateWork(ctx, declared, s.workEvent(ctx, declared, work.EventDeclared, declared.Title)); err != nil {
+	declaredEvent := s.workEvent(ctx, declared, work.EventDeclared, declared.Title)
+	if err := s.store.CreateWork(ctx, declared, declaredEvent); err != nil {
 		return nil, storeError(err, "create work")
 	}
+	// After the transaction, never inside it. The store is the truth and the log is the copy, so an
+	// export that cannot land is dropped and the record stands.
+	s.ExportWork(ctx, declaredEvent)
 	// Read back rather than answered from memory, so the caller is given what the store holds,
 	// stamped with the store's own clock.
 	kept, err := s.store.GetWork(ctx, declared.ID)
@@ -184,7 +189,8 @@ func (s *Server) StopWork(ctx context.Context, req *quaycrewv1.StopWorkRequest) 
 		return nil, storeError(err, "work")
 	}
 
-	stopped, err := s.store.StopWork(ctx, found.ID, reason, s.workEvent(ctx, found, work.EventStopped, reason))
+	stoppedEvent := s.workEvent(ctx, found, work.EventStopped, reason)
+	stopped, err := s.store.StopWork(ctx, found.ID, reason, stoppedEvent)
 	if err != nil {
 		if strings.Contains(err.Error(), "already ended") {
 			return nil, status.Errorf(codes.FailedPrecondition,
@@ -192,6 +198,7 @@ func (s *Server) StopWork(ctx context.Context, req *quaycrewv1.StopWorkRequest) 
 		}
 		return nil, storeError(err, "stop work")
 	}
+	s.ExportWork(ctx, stoppedEvent)
 	return &quaycrewv1.StopWorkResponse{Work: asWork(stopped)}, nil
 }
 
@@ -205,6 +212,7 @@ func (s *Server) workEvent(ctx context.Context, of *work.Work, kind, detail stri
 		ID: store.NewID(), Kind: kind, Work: of.ID,
 		Workspace: of.Workspace, Project: of.Project, Parent: of.Parent, Depth: of.Depth,
 		Detail:     oneShortLine(model.Redact(detail, s.sealedForWorkspace(ctx, of.Workspace))),
+		TraceID:    of.TraceID,
 		OccurredAt: timestamppb.Now().AsTime(),
 	}
 }
@@ -220,6 +228,7 @@ func asWork(from *work.Work) *quaycrewv1.Work {
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question,
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
+		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
 	}
 	if from.Deadline != nil {

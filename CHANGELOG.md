@@ -8,6 +8,37 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **Every movement of a piece of work is on the record, and carries its trace.** Each movement was
+  already written to `work_events` in the same transaction as the row it describes. Now it is also
+  offered to `<workspace>.work` after that transaction commits, keyed by the work identifier so one
+  piece of work's records stay in order on one partition. Six kinds are a contract another service
+  may depend on: `work.declared`, `work.started`, `work.answered`, `work.failed`, `work.stopped` and
+  `work.asked`. Two are internal and nothing outside should read them: `work.claimed` and
+  `work.released`.
+
+  Nothing about the rule changes. The store is the source of truth, the log is an audit export, a
+  crew with no broker loses the export and nothing else, and a broker that refuses every record costs
+  the copy and never the work. There is still no consumer.
+
+  A piece of work now carries `trace_id` and `parent_span_id` as columns. The trace is minted at the
+  root and inherited unchanged by every descendant, so one identifier joins a piece of work, its
+  children, the tasks they ran and the spans around them. The `tasks` row carries the same field,
+  which closes issue 346: before it, the durable record of what the crew did joined to neither the
+  trace nor the log lines, and weeks later the logs are gone and the row is all that is left.
+
+  Both are columns rather than something a process holds, and that is the point of them. A controller
+  that picks up work somebody else started reads the trace off the row and goes on being part of it,
+  which is what makes a trace survive the controller that died.
+
+  A task carries its trace context to the container as `QC_TRACEPARENT`, on the task and never on the
+  sandbox. A sandbox is born with its environment and is then reused, so a value written at birth
+  would label the tenth task with the first task's span. Nothing inside the container reads it yet,
+  which `docs/OBSERVABILITY.md` says plainly.
+
+  Two spans: `work.attempt` for one attempt and `work` for the whole life of a piece of work. Both
+  are recorded once the crew knows both ends rather than held open in memory, because a span held
+  across a controller that died would be lost with it.
+
 - **The crew says how much room the machine has left.** The host ran out of memory and the kernel
   killed 18 sandboxes, three monitors and a build in one event. Nothing in quay reported it before,
   during or after. The console kept drawing a healthy crew, and every number that mattered had to be

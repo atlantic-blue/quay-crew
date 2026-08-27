@@ -101,6 +101,16 @@ type Work struct {
 	LeaseOwner string
 	LeaseUntil *time.Time
 
+	// TraceID is the trace this whole tree belongs to, minted at the root and inherited unchanged by
+	// every descendant. ParentSpanID is the span the caller was inside when it declared this work,
+	// empty for a root nothing was tracing.
+	//
+	// Both are on the row rather than in a process, which is what makes a trace survive the
+	// controller that started the work: the context is in the declaration, the way a wait is a column
+	// rather than a timer.
+	TraceID      string
+	ParentSpanID string
+
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	StartedAt  *time.Time
@@ -119,7 +129,10 @@ type Event struct {
 	Depth     int
 	// Detail is a short line about what happened. It goes through the crew's redactor before it is
 	// written.
-	Detail     string
+	Detail string
+	// TraceID is the trace this happened in, and the same value the work carries. A reader holding
+	// one record reaches the trace without reading the work row first.
+	TraceID    string
 	OccurredAt time.Time
 }
 
@@ -135,7 +148,25 @@ const (
 	EventAnswered = "work.answered"
 	EventFailed   = "work.failed"
 	EventStopped  = "work.stopped"
+	// EventAsked is written when a piece of work puts a question to a person. Nothing writes it yet:
+	// asking is the slice that gives a session a credential to ask with. It is named here because the
+	// kinds are a contract another service may switch on, and a consumer written against a list that
+	// grows later has to be changed twice.
+	EventAsked = "work.asked"
 )
+
+// Contract says whether a kind is one another service may depend on.
+//
+// The split is the useful part. A dashboard counting work must never break because the crew changed
+// how it leases, and a dashboard counting leases has taken a dependency it was told not to take.
+func Contract(kind string) bool {
+	switch kind {
+	case EventClaimed, EventReleased:
+		return false
+	default:
+		return true
+	}
+}
 
 // Filter narrows a listing. The zero value is every piece of work the crew holds.
 type Filter struct {

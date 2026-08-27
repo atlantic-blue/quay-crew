@@ -6558,8 +6558,12 @@ type Task struct {
 	// status is the session's status after the task: "idle" when it worked, "failed" when it did not.
 	Status string `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	// failure says what went wrong, empty on a task that worked.
-	Failure       string                 `protobuf:"bytes,6,opt,name=failure,proto3" json:"failure,omitempty"`
-	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	Failure    string                 `protobuf:"bytes,6,opt,name=failure,proto3" json:"failure,omitempty"`
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// trace_id is the trace the call that ran this task belonged to, and empty for a task nothing was
+	// tracing. A reader holding it can open the trace, and it is the same value the piece of work that
+	// dispatched the task carries, so the two join. See issue 346.
+	TraceId       string `protobuf:"bytes,8,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6641,6 +6645,13 @@ func (x *Task) GetOccurredAt() *timestamppb.Timestamp {
 		return x.OccurredAt
 	}
 	return nil
+}
+
+func (x *Task) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
 }
 
 // ListTasksRequest asks for one session's history, most recent last, so a conversation reads the way
@@ -6802,13 +6813,22 @@ type Work struct {
 	SpentTokens int64  `protobuf:"varint,24,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
 	// observed_version is the version of the declaration the status describes. A controller that has
 	// not caught up leaves this behind the version above.
-	ObservedVersion int32                  `protobuf:"varint,25,opt,name=observed_version,json=observedVersion,proto3" json:"observed_version,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,26,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	StartedAt       *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt      *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	ObservedVersion int32 `protobuf:"varint,25,opt,name=observed_version,json=observedVersion,proto3" json:"observed_version,omitempty"`
+	// trace_id is the trace this whole tree belongs to, minted at the root and inherited unchanged by
+	// every descendant, so one identifier joins a piece of work, its children, the tasks they ran and
+	// the spans around them. parent_span_id is the span the caller was inside when it declared this
+	// work, empty for a root nothing was tracing.
+	//
+	// Both are columns rather than something a process holds, which is what makes a trace survive a
+	// controller that died: the context is in the declaration.
+	TraceId       string                 `protobuf:"bytes,30,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	ParentSpanId  string                 `protobuf:"bytes,31,opt,name=parent_span_id,json=parentSpanId,proto3" json:"parent_span_id,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,26,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Work) Reset() {
@@ -7014,6 +7034,20 @@ func (x *Work) GetObservedVersion() int32 {
 		return x.ObservedVersion
 	}
 	return 0
+}
+
+func (x *Work) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+func (x *Work) GetParentSpanId() string {
+	if x != nil {
+		return x.ParentSpanId
+	}
+	return ""
 }
 
 func (x *Work) GetCreatedAt() *timestamppb.Timestamp {
@@ -8075,7 +8109,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fGetUsageRequest\"X\n" +
 	"\x10GetUsageResponse\x12(\n" +
 	"\x05total\x18\x01 \x01(\v2\x12.quaycrew.v1.UsageR\x05total\x12\x1a\n" +
-	"\bsessions\x18\x02 \x01(\x03R\bsessions\"\xcd\x01\n" +
+	"\bsessions\x18\x02 \x01(\x03R\bsessions\"\xe8\x01\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\asession\x18\x02 \x01(\tR\asession\x12\x16\n" +
@@ -8084,12 +8118,13 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x18\n" +
 	"\afailure\x18\x06 \x01(\tR\afailure\x12;\n" +
 	"\voccurred_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAt\"B\n" +
+	"occurredAt\x12\x19\n" +
+	"\btrace_id\x18\b \x01(\tR\atraceId\"B\n" +
 	"\x10ListTasksRequest\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x90\b\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xd1\b\n" +
 	"\x04Work\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -8117,7 +8152,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x06reason\x18\x16 \x01(\tR\x06reason\x12\x1a\n" +
 	"\bquestion\x18\x17 \x01(\tR\bquestion\x12!\n" +
 	"\fspent_tokens\x18\x18 \x01(\x03R\vspentTokens\x12)\n" +
-	"\x10observed_version\x18\x19 \x01(\x05R\x0fobservedVersion\x129\n" +
+	"\x10observed_version\x18\x19 \x01(\x05R\x0fobservedVersion\x12\x19\n" +
+	"\btrace_id\x18\x1e \x01(\tR\atraceId\x12$\n" +
+	"\x0eparent_span_id\x18\x1f \x01(\tR\fparentSpanId\x129\n" +
 	"\n" +
 	"created_at\x18\x1a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
