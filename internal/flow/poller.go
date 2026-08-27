@@ -59,8 +59,30 @@ func (p *Poller) Run(ctx context.Context) {
 // Tick resumes every run that is due right now. Exported so a test can drive one tick rather than
 // waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (p *Poller) Tick(ctx context.Context) {
+	p.carryWorked(ctx)
 	p.startScheduled(ctx)
 	p.resumeWaiting(ctx)
+}
+
+// carryWorked carries on every run whose step has ended.
+//
+// This is what replaced the engine holding its own dispatch open. A run out with a piece of work is
+// a row rather than a goroutine, so a crew restarted while twenty steps were running picks all
+// twenty up on its next tick rather than losing them.
+func (p *Poller) carryWorked(ctx context.Context) {
+	landed, err := p.engine.store.LandedFlowSteps(ctx, pollBatch)
+	if err != nil {
+		p.logger.Warn("could not read which flow runs have a step that ended", "error", err)
+		return
+	}
+	for _, one := range landed {
+		if _, err := p.engine.Worked(ctx, one.Run, one.Step); err != nil {
+			// One run that cannot move must not stop the others: a graph edited into something
+			// unparseable, or a run whose project is gone, is that run's problem.
+			p.logger.Warn("a flow run could not be carried on from the work its step did",
+				"run", one.Run.ID, "work", one.Step.ID, "error", err)
+		}
+	}
 }
 
 // startScheduled begins a run of every graph whose schedule has come due.
@@ -118,7 +140,11 @@ func (e *Engine) Answer(ctx context.Context, run Run, answer string) (Run, error
 	if err != nil {
 		return run, err
 	}
-	return e.advance(ctx, graph, run, Event{Kind: EventAnswered, Node: run.Node, Answer: answer})
+	carrier, err := e.store.FlowRunCarrier(ctx, run.ID)
+	if err != nil {
+		return run, err
+	}
+	return e.advance(ctx, graph, run, where{carrier: carrier}, Event{Kind: EventAnswered, Node: run.Node, Answer: answer})
 }
 
 // Resume carries a waiting run on from the wait it was sitting on, and drives it until it stops
@@ -135,5 +161,9 @@ func (e *Engine) Resume(ctx context.Context, run Run) (Run, error) {
 	if err != nil {
 		return run, err
 	}
-	return e.advance(ctx, graph, run, Event{Kind: EventDue, Node: run.Node})
+	carrier, err := e.store.FlowRunCarrier(ctx, run.ID)
+	if err != nil {
+		return run, err
+	}
+	return e.advance(ctx, graph, run, where{carrier: carrier}, Event{Kind: EventDue, Node: run.Node})
 }

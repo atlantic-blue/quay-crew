@@ -124,6 +124,17 @@ func (c *crew) sent() int {
 	return len(c.dispatched)
 }
 
+// lastDispatch is the task the crew was last asked for, whole, so a test can read what travelled
+// with it rather than only that something did.
+func (c *crew) lastDispatch() *quaycrewv1.DispatchRequest {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.dispatched) == 0 {
+		return &quaycrewv1.DispatchRequest{}
+	}
+	return c.dispatched[len(c.dispatched)-1]
+}
+
 // rows is a store double: the smallest set of rows a controller reads and writes.
 type rows struct {
 	mu     sync.Mutex
@@ -184,7 +195,7 @@ func (r *rows) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.matching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhasePending && one.Parent == "" && one.Role == "" && len(one.After) == 0
+		return one.Phase == work.PhasePending && len(one.After) == 0
 	}), nil
 }
 
@@ -662,30 +673,61 @@ func TestWhatTheWorkSpentIsWrittenOntoTheRecord(t *testing.T) {
 
 // Root work only in this slice. Everything else is a later one, and picking it up early would run
 // work whose ordering, role or budget nothing here honours.
-func TestOnlyRootWorkIsRun(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		shape func(*work.Work)
-	}{
-		{"work that waits for something", func(w *work.Work) { w.After = []string{"work-0"} }},
-		{"work in a role", func(w *work.Work) { w.Role, w.RoleVersion = "backlog-clearer", 1 }},
-		{"work under a parent", func(w *work.Work) { w.Parent, w.Depth = "work-0", 1 }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			controller, kept, plane := aController(t)
-			declared := declaredWork("read the electricity bill")
-			tc.shape(declared)
-			one := kept.add(declared)
+// Ordering is the one thing still not honoured, so work that waits is the one thing left alone. A
+// controller that ran it would run it out of order, which is the whole of what after means.
+func TestWorkThatWaitsForSomethingIsLeftAlone(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := declaredWork("read the electricity bill")
+	declared.After = []string{"work-0"}
+	one := kept.add(declared)
 
-			controller.Tick(context.Background())
+	controller.Tick(context.Background())
 
-			if plane.sent() != 0 {
-				t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
-			}
-			if got := kept.get(one.ID); got.Phase != work.PhasePending {
-				t.Fatalf("the work is %q, want left pending", got.Phase)
-			}
-		})
+	if plane.sent() != 0 {
+		t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
+	}
+	if got := kept.get(one.ID); got.Phase != work.PhasePending {
+		t.Fatalf("the work is %q, want left pending", got.Phase)
+	}
+}
+
+// Work under a parent runs. It has to: a flow run declares every step under the run's own work, so a
+// controller that started roots only would leave every step of every automation pending forever.
+func TestWorkUnderAParentIsRun(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := declaredWork("write the tests")
+	declared.Parent, declared.Depth = "work-0", 1
+	one := kept.add(declared)
+
+	controller.Tick(context.Background())
+
+	if plane.sent() != 1 {
+		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
+	}
+	if got := kept.get(one.ID); got.Phase != work.PhaseRunning {
+		t.Fatalf("the work is %q, want it running", got.Phase)
+	}
+}
+
+// Work in a role runs in a session of that role. The role travels on the dispatch, which is what
+// makes the boundary real: a new session in a new container that has read nothing anybody else was
+// told.
+func TestWorkInARoleRunsAsThatRole(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := declaredWork("clear the backlog")
+	declared.Role, declared.RoleVersion = "backlog-clearer", 1
+	one := kept.add(declared)
+
+	controller.Tick(context.Background())
+
+	if plane.sent() != 1 {
+		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
+	}
+	if got := plane.lastDispatch().GetRole(); got != "backlog-clearer" {
+		t.Fatalf("the task went out as role %q, want the role the work names", got)
+	}
+	if got := kept.get(one.ID); got.Phase != work.PhaseRunning {
+		t.Fatalf("the work is %q, want it running", got.Phase)
 	}
 }
 

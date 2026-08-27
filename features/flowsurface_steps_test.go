@@ -121,31 +121,16 @@ edges:
 		return nil
 	})
 
-	sc.Step(`^the run's session was asked no more than (\d+) tasks$`, func(ctx context.Context, most int) error {
+	sc.Step(`^the run's steps were asked no more than (\d+) tasks$`, func(ctx context.Context, most int) error {
 		w := worldFrom(ctx)
-		run, err := readFlowRun(ctx, w)
+		asked, err := flowRunTaskCount(ctx, w)
 		if err != nil {
 			return err
 		}
-		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
-		if err != nil {
-			return err
+		if asked > most {
+			return fmt.Errorf("the run dispatched %d tasks, want no more than %d: the cap did not hold", asked, most)
 		}
-		for _, session := range listed.GetSessions() {
-			if !strings.HasPrefix(session.GetHandle(), run.GetGraphName()+"-") {
-				continue
-			}
-			tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
-			if err != nil {
-				return err
-			}
-			if len(tasks.GetTasks()) > most {
-				return fmt.Errorf("the run dispatched %d tasks, want no more than %d: the cap did not hold",
-					len(tasks.GetTasks()), most)
-			}
-			return nil
-		}
-		return fmt.Errorf("no session carries the run's handle")
+		return nil
 	})
 
 	sc.Step(`^a task takes a moment$`, func(ctx context.Context) error {
@@ -178,7 +163,7 @@ edges:
 		return nil
 	})
 
-	sc.Step(`^the run's session stops being asked, well short of the cap$`, func(ctx context.Context) error {
+	sc.Step(`^the run's steps stop being asked, well short of the cap$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		// The task already under way when the stop landed finishes, by design, so this waits for
 		// the count to settle rather than expecting it to be frozen the instant the stop returns.
@@ -298,35 +283,30 @@ func settledTaskCount(ctx context.Context, w *world) (int, error) {
 	return 0, fmt.Errorf("the run's task count never settled; it is still dispatching")
 }
 
-// flowRunTaskCount is how many tasks the run's own session has been asked, live or archived.
+// flowRunTaskCount is how many tasks the run's steps have been asked, across every session they ran
+// in, live or archived.
 //
-// No session at all is none of them, not a failure. A run owns its session and the session is created by
-// the first dispatch, so a run stopped before the poller got that far leaves nothing carrying its
-// handle. Reading that as an error made the whole suite depend on losing a race: on a loaded runner
-// the stop lands first, and a scenario asserting the run halted then failed for having halted sooner
-// than expected.
+// No session at all is none of them, not a failure. A step's session is made when its work starts, so
+// a run stopped before a controller got that far ran nothing. Reading that as an error made the whole
+// suite depend on losing a race: on a loaded runner the stop lands first, and a scenario asserting the
+// run halted then failed for having halted sooner than expected.
 func flowRunTaskCount(ctx context.Context, w *world) (int, error) {
-	run, err := readFlowRun(ctx, w)
+	if w.flowRunID == "" {
+		return 0, fmt.Errorf("no run was started")
+	}
+	sessions, err := sessionsOfRun(ctx, w, w.flowRunID)
 	if err != nil {
 		return 0, err
 	}
-	for _, archived := range []bool{false, true} {
-		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Archived: archived})
+	asked := 0
+	for _, session := range sessions {
+		tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
 		if err != nil {
 			return 0, err
 		}
-		for _, session := range listed.GetSessions() {
-			if !strings.HasPrefix(session.GetHandle(), run.GetGraphName()+"-") {
-				continue
-			}
-			tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
-			if err != nil {
-				return 0, err
-			}
-			return len(tasks.GetTasks()), nil
-		}
+		asked += len(tasks.GetTasks())
 	}
-	return 0, nil
+	return asked, nil
 }
 
 // startFlowRun is the shared body of the two ways a scenario starts a run: the operator's, and the
@@ -360,6 +340,11 @@ func waitForFlowRun(ctx context.Context, w *world, want string) error {
 	deadline := time.Now().Add(10 * time.Second)
 	var last string
 	for time.Now().Before(deadline) {
+		// The crew is driven rather than waited for: a run declares its step and returns, so nothing
+		// moves it until the work controller and the poller tick.
+		if err := driveTheCrew(ctx); err != nil {
+			return err
+		}
 		run, err := readFlowRun(ctx, w)
 		if err != nil {
 			return err

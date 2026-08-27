@@ -109,6 +109,26 @@ func initializeWorkControllerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The role is the whole of the boundary: a session made as that role is a new session in a new
+	// container that has read nothing anybody else was told.
+	sc.Step(`^the task went out as the role "([^"]*)"$`, func(ctx context.Context, role string) error {
+		one, err := readWork(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetSession() == "" {
+			return fmt.Errorf("the work does not say which session did it, so there is no role to read")
+		}
+		session, err := worldFrom(ctx).client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: one.GetSession()})
+		if err != nil {
+			return err
+		}
+		if session.GetSession().GetRole() != role {
+			return fmt.Errorf("the task ran in a session of role %q, want %q", session.GetSession().GetRole(), role)
+		}
+		return nil
+	})
+
 	sc.Step(`^the work says which session did it$`, func(ctx context.Context) error {
 		one, err := readWork(ctx, 0)
 		if err != nil {

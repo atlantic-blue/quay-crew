@@ -7,7 +7,9 @@ Feature: A controller makes declared work happen
   The loop never waits on a model. It sends the task and lets go, and reads the answer off the record
   on a later tick, so a task that takes an hour costs the loop nothing.
 
-  It runs root work only in this slice: work with no parent, no role and nothing it waits for.
+  It runs pending work with nothing outstanding. Work under a parent and work in a role both run,
+  because a flow declares every step under the run and a step may name a role. Work that waits for
+  something else is left alone, because nothing honours ordering yet.
 
   Background:
     Given a running control plane
@@ -61,7 +63,7 @@ Feature: A controller makes declared work happen
     Then the crew was asked to run 0 tasks
     And the work is stopped, and the reason is "the bill is not due yet"
 
-  # The rest of the loop is later slices. What this one runs is a root and nothing else.
+  # Ordering is the one thing still not honoured, so this is the one thing left alone.
   Scenario: Work that waits for something else is left for a later slice
     Given a piece of work titled "read the electricity bill"
     And a piece of work titled "pay the electricity bill" after the first
@@ -70,12 +72,13 @@ Feature: A controller makes declared work happen
     Then the work titled "pay the electricity bill" is pending
     And the crew was asked to run 1 task
 
-  Scenario: Work in a role is left for a later slice
+  Scenario: Work in a role runs, in a session of that role
     Given the workspace holds the role "backlog-clearer" at version 1
     And a piece of work titled "clear the backlog" in the role "backlog-clearer"
     When the controller ticks
-    Then the crew was asked to run 0 tasks
-    And the work is pending
+    Then the crew was asked to run 1 task
+    And the task went out as the role "backlog-clearer"
+    And the work is running
 
   Scenario: Every movement is on the record
     Given a piece of work titled "read the electricity bill"

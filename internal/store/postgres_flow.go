@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -74,20 +75,126 @@ func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run,
 	return scanFlowRuns(rows)
 }
 
-// CreateFlowRun writes a fresh run.
-func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run) error {
+// CreateFlowRun writes a fresh run and the piece of work that carries it, in one transaction.
+//
+// One transaction because a run outside the work tree is a run neither the depth limit nor the
+// budget counts, and a piece of work carrying a run that was never written is a row nothing explains.
+func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error {
 	state, attempts, err := runJSON(run)
 	if err != nil {
 		return err
 	}
-	if _, err := p.pool.Exec(ctx, `
-		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts, transitions, spent, reason, question)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("create flow run: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := insertWork(ctx, tx, carrier); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts, transitions, spent, reason, question, work)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		run.ID, run.Workspace, run.Project, run.GraphName, run.GraphVersion,
-		run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason, run.Question); err != nil {
+		run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason, run.Question,
+		carrier.ID); err != nil {
+		return fmt.Errorf("create flow run: %w", err)
+	}
+	if err := appendRunRecords(ctx, tx, records); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("create flow run: %w", err)
 	}
 	return nil
+}
+
+// FlowRunCarrier is the piece of work that carries a run.
+func (p *Postgres) FlowRunCarrier(ctx context.Context, run string) (string, error) {
+	var carrier string
+	err := p.pool.QueryRow(ctx,
+		`select coalesce(work, '') from flow_runs where id = $1`, run).Scan(&carrier)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("flow run carrier: %w", err)
+	}
+	return carrier, nil
+}
+
+// LandedFlowSteps are the runs whose step has ended: working runs whose step reached a terminal
+// phase. The poller reads these and nothing else, so a crew with a thousand finished runs does the
+// work of the few that are out with a step.
+//
+// The step is read back by identifier rather than joined, because a join of two tables that both
+// carry id, status, workspace and project has to qualify every column, and one wrong prefix in that
+// list reads the wrong row silently. There are only ever as many rows here as there are runs with a
+// step that just ended.
+func (p *Postgres) LandedFlowSteps(ctx context.Context, limit int) ([]flow.Landed, error) {
+	query := `
+		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
+		       transitions, spent, reason, due_at, question, step_work
+		from flow_runs
+		where status = $1 and step_work is not null
+		  and exists (select 1 from work w where w.id = flow_runs.step_work and w.phase = any($2))
+		order by updated_at`
+	if limit > 0 {
+		query += fmt.Sprintf(" limit %d", limit)
+	}
+	rows, err := p.pool.Query(ctx, query, flow.StatusWorking, terminalPhases())
+	if err != nil {
+		return nil, fmt.Errorf("landed flow steps: %w", err)
+	}
+	steps := map[string]string{}
+	runs, err := func() ([]*flow.Run, error) {
+		defer rows.Close()
+		out := make([]*flow.Run, 0)
+		for rows.Next() {
+			var run flow.Run
+			var state, attempts []byte
+			var step string
+			if err := rows.Scan(&run.ID, &run.Workspace, &run.Project, &run.GraphName, &run.GraphVersion,
+				&run.Node, &run.Status, &state, &attempts,
+				&run.Transitions, &run.Spent, &run.Reason, &run.DueAt, &run.Question, &step); err != nil {
+				return nil, fmt.Errorf("scan landed flow step: %w", err)
+			}
+			if err := json.Unmarshal(state, &run.State); err != nil {
+				return nil, fmt.Errorf("read flow run state: %w", err)
+			}
+			if err := json.Unmarshal(attempts, &run.Attempts); err != nil {
+				return nil, fmt.Errorf("read flow run attempts: %w", err)
+			}
+			steps[run.ID] = step
+			out = append(out, &run)
+		}
+		return out, rows.Err()
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	landed := make([]flow.Landed, 0, len(runs))
+	for _, run := range runs {
+		step, err := p.GetWork(ctx, steps[run.ID])
+		if err != nil {
+			return nil, fmt.Errorf("landed flow step %s: %w", steps[run.ID], err)
+		}
+		landed = append(landed, flow.Landed{Run: *run, Step: step})
+	}
+	return landed, nil
+}
+
+// terminalPhases is the phases nothing moves work out of, as a value a query can match against.
+func terminalPhases() []string {
+	out := make([]string, 0, 3)
+	for _, phase := range work.Phases() {
+		if work.Terminal(phase) {
+			out = append(out, phase)
+		}
+	}
+	return out
 }
 
 // AdvanceFlowRun moves a run, appends the transition, and claims the dispatch key, in one
@@ -105,21 +212,32 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Only a run the database still holds as running moves. That condition is what makes stopping
-	// one take effect: the operator's stop lands first, and this finds nothing to update rather
-	// than setting the run back to running underneath them.
+	// The step this movement declares, or nothing where it dispatched nothing, which also clears the
+	// step the run was out with.
+	step := ""
+	if transition.Work.Declared != nil {
+		step = transition.Work.Declared.ID
+		if err := insertWork(ctx, tx, transition.Work.Declared); err != nil {
+			return err
+		}
+	}
+	// Only a live run moves, and only one still out with the step this movement answers. The first
+	// condition is what makes stopping a run take effect: the operator's stop lands first, and this
+	// finds nothing to update rather than setting the run back to running underneath them. The second
+	// is what makes two pollers reading one landed step move the run once.
 	tag, err := tx.Exec(ctx, `
 		update flow_runs set node = $2, status = $3, state = $4, attempts = $5,
-		    transitions = $6, spent = $7, reason = $8, due_at = $9, question = $10, updated_at = now()
-		where id = $1 and status in ($11, $12, $13)`,
+		    transitions = $6, spent = $7, reason = $8, due_at = $9, question = $10,
+		    step_work = nullif($13, ''), updated_at = now()
+		where id = $1 and status = any($11) and ($12 = '' or coalesce(step_work, '') = $12)`,
 		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason,
-		transition.Due, run.Question, flow.StatusRunning, flow.StatusWaiting, flow.StatusAsking)
+		transition.Due, run.Question, liveRunStatuses(), transition.Answers, step)
 	if err != nil {
 		return fmt.Errorf("advance flow run: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		// Which of the two it is decides what the caller should do, so it is asked rather than
-		// guessed: a run that is gone is an error, a run that was halted is an answer.
+		// guessed: a run that is gone is an error, a run that moved on is an answer.
 		var status string
 		if err := p.pool.QueryRow(ctx, `select status from flow_runs where id = $1`, run.ID).Scan(&status); err != nil {
 			return ErrNotFound
@@ -145,8 +263,42 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 			return fmt.Errorf("claim flow dispatch: %w", err)
 		}
 	}
+	if on := transition.Work.Carrier; on != nil {
+		if _, err := tx.Exec(ctx, `
+			update work set phase = $2, question = $3,
+			    answer = case when $4 = '' then answer else $4 end,
+			    reason = case when $5 = '' then reason else $5 end,
+			    finished_at = case when $6 then coalesce(finished_at, now()) else finished_at end,
+			    updated_at = now()
+			where id = $1`,
+			on.Work, on.Phase, on.Question, on.Answer, on.Reason, work.Terminal(on.Phase)); err != nil {
+			return fmt.Errorf("advance the work carrying a flow run: %w", err)
+		}
+	}
+	if err := appendRunRecords(ctx, tx, transition.Work.Records); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("advance flow run: %w", err)
+	}
+	return nil
+}
+
+// liveRunStatuses is every status a run still moves out of. A run that ended is not moved, because a
+// movement written over that would undo the record of how it ended.
+func liveRunStatuses() []string {
+	return []string{flow.StatusRunning, flow.StatusWaiting, flow.StatusAsking, flow.StatusWorking}
+}
+
+// appendRunRecords writes the records of one movement of a run, in the transaction that moved it.
+func appendRunRecords(ctx context.Context, tx pgx.Tx, records []*work.Event) error {
+	for _, record := range records {
+		if record == nil {
+			continue
+		}
+		if err := appendWorkEvent(ctx, tx, record); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -156,8 +308,8 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 func (p *Postgres) StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error) {
 	tag, err := p.pool.Exec(ctx, `
 		update flow_runs set status = $2, reason = $3, updated_at = now()
-		where id = $1 and status in ($4, $5, $6)`,
-		id, flow.StatusStopped, reason, flow.StatusRunning, flow.StatusWaiting, flow.StatusAsking)
+		where id = $1 and status = any($4)`,
+		id, flow.StatusStopped, reason, liveRunStatuses())
 	if err != nil {
 		return nil, fmt.Errorf("stop flow run: %w", err)
 	}

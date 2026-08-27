@@ -50,7 +50,8 @@ commands:
   flow schedule [<address>] <graph>       let it run on its own, as often as it says
   flow unschedule [<address>] <graph>     stop it running on its own
   flow list [<address>]                   what has run, newest first
-  flow show <run>                         where one run got to, what it cost, why it stopped
+  flow show <run>                         where one run got to, what it cost, why it stopped,
+                                          and how to read the work its steps went out as
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
   work create [<address>]                 declare a piece of work: what it is, and what has to

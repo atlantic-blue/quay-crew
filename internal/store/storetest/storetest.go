@@ -18,6 +18,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -1043,7 +1044,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			GraphName: "fix-red", GraphVersion: 1, Node: "", Status: flow.StatusRunning,
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
-		if err := s.CreateFlowRun(ctx, run); err != nil {
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1095,7 +1097,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			GraphName: "loop", GraphVersion: 1, Status: flow.StatusRunning,
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
-		if err := s.CreateFlowRun(ctx, run); err != nil {
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1146,7 +1149,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			GraphName: "loop", GraphVersion: 1, Node: "begin", Status: flow.StatusRunning,
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
-		if err := s.CreateFlowRun(ctx, run); err != nil {
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1209,7 +1213,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			GraphName: "patient", GraphVersion: 1, Node: "ask", Status: flow.StatusRunning,
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
-		if err := s.CreateFlowRun(ctx, run); err != nil {
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1275,7 +1280,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			GraphName: "careful", GraphVersion: 1, Node: "fix", Status: flow.StatusRunning,
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
-		if err := s.CreateFlowRun(ctx, run); err != nil {
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1307,6 +1313,130 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if kept.Status != flow.StatusAsking || kept.Question != "push?" {
 			t.Fatalf("the asking run reads back as %q asking %q", kept.Status, kept.Question)
+		}
+	})
+
+	// A flow run is carried by a piece of work, and every step it takes is a piece of work under
+	// that one. Both stores have to write the run, the work and the record of it together, because a
+	// step written without its movement is paid for twice and a movement written without its step is a
+	// run waiting on something nobody declared.
+	t.Run("a run hangs under a piece of work, and its step is another under that", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		if err := s.ImportFlowGraph(ctx, "fix-red", 1, "the definition"); err != nil {
+			t.Fatalf("ImportFlowGraph: %v", err)
+		}
+		run := &flow.Run{
+			ID: "run-carried", Workspace: workspace, Project: project,
+			GraphName: "fix-red", GraphVersion: 1, Status: flow.StatusRunning,
+			State: map[string]string{}, Attempts: map[string]int{},
+		}
+		carrier, records := carrierFor(run)
+		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+			t.Fatalf("CreateFlowRun: %v", err)
+		}
+
+		// The run knows where it sits in the tree, off the row rather than out of a process.
+		read, err := s.FlowRunCarrier(ctx, run.ID)
+		if err != nil {
+			t.Fatalf("FlowRunCarrier: %v", err)
+		}
+		if read != carrier.ID {
+			t.Fatalf("the run is carried by %q, want %q", read, carrier.ID)
+		}
+		if _, err := s.GetWork(ctx, carrier.ID); err != nil {
+			t.Fatalf("the work carrying the run is not there: %v", err)
+		}
+		// And the record of the run starting landed with it.
+		history, err := s.ListWorkEvents(ctx, carrier.ID)
+		if err != nil || len(history) != len(records) {
+			t.Fatalf("the run's own work has %d records (%v), want %d", len(history), err, len(records))
+		}
+
+		// One movement: the run goes to a dispatch node, the step is written down under it, and the
+		// run's own work is moved to say it is out with something.
+		step := &work.Work{
+			ID: "step-fix", Workspace: workspace, Project: project,
+			Title: "fix-red step fix", Brief: "fix the build",
+			Parent: carrier.ID, Depth: carrier.Depth + 1, Version: 1, Phase: work.PhasePending,
+			Labels: map[string]string{"flow.run": run.ID, "flow.node": "fix"},
+		}
+		run.Node, run.Status, run.Attempts = "fix", flow.StatusWorking, map[string]int{"fix": 1}
+		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
+			Event: flow.EventStarted, Node: "fix",
+			Dispatch: &flow.Command{Kind: flow.CommandDispatch, Node: "fix", Attempt: 1, Prompt: "fix the build"},
+			Work: flow.WorkWrite{
+				Declared: step,
+				Carrier:  &flow.Carrier{Work: carrier.ID, Phase: work.PhaseWaiting},
+				Records:  []*work.Event{declaredEvent(step)},
+			},
+		}); err != nil {
+			t.Fatalf("AdvanceFlowRun: %v", err)
+		}
+		written, err := s.GetWork(ctx, step.ID)
+		if err != nil {
+			t.Fatalf("the step was not written with the movement: %v", err)
+		}
+		if written.Parent != carrier.ID || written.Depth != carrier.Depth+1 {
+			t.Fatalf("the step hangs under %q at depth %d, want under the run one deeper", written.Parent, written.Depth)
+		}
+
+		// Nothing to carry on yet: the step has not ended.
+		landed, err := s.LandedFlowSteps(ctx, 0)
+		if err != nil {
+			t.Fatalf("LandedFlowSteps: %v", err)
+		}
+		if len(landed) != 0 {
+			t.Fatalf("%d runs read as having a step that ended while the step is pending", len(landed))
+		}
+
+		// The step ends, through the same calls a controller makes.
+		if _, err := s.StartWork(ctx, step.ID, work.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)},
+			[]*work.Event{declaredEvent(step)}); err != nil {
+			t.Fatalf("StartWork: %v", err)
+		}
+		if _, err := s.LandWork(ctx, step.ID, work.Landing{Phase: work.PhaseDone, Answer: "fixed it"},
+			declaredEvent(step)); err != nil {
+			t.Fatalf("LandWork: %v", err)
+		}
+
+		landed, err = s.LandedFlowSteps(ctx, 0)
+		if err != nil {
+			t.Fatalf("LandedFlowSteps: %v", err)
+		}
+		if len(landed) != 1 || landed[0].Run.ID != run.ID || landed[0].Step.ID != step.ID {
+			t.Fatalf("the runs with a step that ended are %+v, want the one", landed)
+		}
+		if landed[0].Step.Answer != "fixed it" {
+			t.Fatalf("the step comes back answering %q", landed[0].Step.Answer)
+		}
+
+		// The movement that answers a step applies only to a run still out with it, so two pollers
+		// reading one landed step move the run once.
+		run.Node, run.Status = "done", flow.StatusDone
+		answering := flow.Transition{
+			Event: flow.EventTaskFinished, Node: "done", Answers: step.ID,
+			Work: flow.WorkWrite{Carrier: &flow.Carrier{
+				Work: carrier.ID, Phase: work.PhaseDone, Answer: "fixed it",
+			}},
+		}
+		if err := s.AdvanceFlowRun(ctx, run, answering); err != nil {
+			t.Fatalf("AdvanceFlowRun: %v", err)
+		}
+		if err := s.AdvanceFlowRun(ctx, run, answering); !errors.Is(err, flow.ErrRunHalted) {
+			t.Fatalf("the same landed step moved the run twice: %v", err)
+		}
+		// And the run's own work says what the run came to, so a person reads one record.
+		ended, err := s.GetWork(ctx, carrier.ID)
+		if err != nil {
+			t.Fatalf("GetWork: %v", err)
+		}
+		if ended.Phase != work.PhaseDone || ended.Answer != "fixed it" {
+			t.Fatalf("the run's own work is %q answering %q, want done with the run's answer", ended.Phase, ended.Answer)
+		}
+		if ended.FinishedAt == nil {
+			t.Fatal("the run's own work ended and carries no finishing time")
 		}
 	})
 
@@ -1809,6 +1939,21 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runWorkControllerConformance(t, newDataset)
 	runWorkLeaseConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
+}
+
+// carrierFor is the piece of work that carries a run, the way the flow engine writes one. A run
+// hangs inside the work tree rather than beside it, so a store that writes a run without one is a
+// store the engine cannot use.
+func carrierFor(run *flow.Run) (*work.Work, []*work.Event) {
+	carrier := &work.Work{
+		ID: "carrier-" + run.ID, Workspace: run.Workspace, Project: run.Project,
+		Title: "flow " + run.GraphName, Brief: "carries the run of " + run.GraphName,
+		Version: 1, Phase: work.PhaseWaiting, TraceID: "trace-" + run.ID,
+	}
+	return carrier, []*work.Event{{
+		ID: "declared-" + run.ID, Kind: work.EventDeclared, Work: carrier.ID,
+		Workspace: run.Workspace, Project: run.Project, OccurredAt: time.Now().UTC(),
+	}}
 }
 
 // aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two

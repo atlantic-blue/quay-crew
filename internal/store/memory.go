@@ -61,6 +61,12 @@ type Memory struct {
 	flowTransitions map[string][]flow.RecordedTransition
 	flowDispatches  map[string]bool
 	flowSchedules   map[string]*schedule
+	// flowRunWork is the piece of work that carries each run, and flowRunStep is the piece of work
+	// its current step is out with. They are the two columns the Postgres store keeps on the run row,
+	// held here as maps because a flow.Run carries neither: the reducer has no business knowing where
+	// a run sits in the work tree.
+	flowRunWork map[string]string
+	flowRunStep map[string]string
 	// tasks is a session's history, oldest first, and taskSeen is what makes writing the
 	// same record twice harmless.
 	tasks    []*quaycrewv1.Task

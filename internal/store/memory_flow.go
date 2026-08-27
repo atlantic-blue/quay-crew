@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // ImportFlowGraph stores a graph at a version. A version that exists is refused rather than
@@ -73,8 +74,9 @@ func (m *Memory) DueFlowRuns(_ context.Context, now time.Time) ([]*flow.Run, err
 	return out, nil
 }
 
-// CreateFlowRun writes a fresh run.
-func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run) error {
+// CreateFlowRun writes a fresh run and the piece of work that carries it, together under one lock,
+// which is what one transaction means here.
+func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.flowRuns == nil {
@@ -83,9 +85,55 @@ func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run) error {
 	if _, held := m.flowRuns[run.ID]; held {
 		return fmt.Errorf("store: run %s already exists", run.ID)
 	}
+	if err := m.writeWork(carrier); err != nil {
+		return err
+	}
+	for _, record := range records {
+		if err := m.appendWorkEvent(record); err != nil {
+			return err
+		}
+	}
 	kept := cloneRun(*run)
 	m.flowRuns[run.ID] = &kept
+	if m.flowRunWork == nil {
+		m.flowRunWork = map[string]string{}
+	}
+	m.flowRunWork[run.ID] = carrier.ID
 	return nil
+}
+
+// FlowRunCarrier is the piece of work that carries a run.
+func (m *Memory) FlowRunCarrier(_ context.Context, run string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, held := m.flowRuns[run]; !held {
+		return "", ErrNotFound
+	}
+	return m.flowRunWork[run], nil
+}
+
+// LandedFlowSteps are the runs whose step has ended: working runs whose step reached a terminal
+// phase. This is what carries a run on now that it does not hold its own dispatch open.
+func (m *Memory) LandedFlowSteps(_ context.Context, limit int) ([]flow.Landed, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]flow.Landed, 0)
+	for id, run := range m.flowRuns {
+		if run.Status != flow.StatusWorking {
+			continue
+		}
+		step, held := m.work[m.flowRunStep[id]]
+		if !held || !work.Terminal(step.Phase) {
+			continue
+		}
+		ended := cloneWork(*step)
+		out = append(out, flow.Landed{Run: cloneRun(*run), Step: &ended})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Run.ID < out[b].Run.ID })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 // StopFlowRun halts a run that is still running, keeping the reason.
@@ -96,9 +144,10 @@ func (m *Memory) StopFlowRun(_ context.Context, id, reason string) (*flow.Run, e
 	if !held {
 		return nil, ErrNotFound
 	}
-	// Running, waiting and asking are all live, so any of them can be stopped. A run that ended is
-	// not stopped again, because how it ended is the useful part.
-	if run.Status != flow.StatusRunning && run.Status != flow.StatusWaiting && run.Status != flow.StatusAsking {
+	// Every live status can be stopped, working included: a run out with a piece of work is as
+	// stoppable as one sitting on a wait. A run that ended is not stopped again, because how it
+	// ended is the useful part.
+	if !liveRun(run.Status) {
 		return nil, fmt.Errorf("store: run %s is %s, and a run that already ended is not stopped again", id, run.Status)
 	}
 	run.Status, run.Reason = flow.StatusStopped, reason
@@ -116,10 +165,15 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 	if !found {
 		return ErrNotFound
 	}
-	// Running and waiting are both live: a waiting run is one the poller will carry on, so it
-	// moves. Anything else has ended, and a movement written over that would undo the record of
+	// Running, waiting, asking and working are all live: each is a run something will carry on, so
+	// each moves. Anything else has ended, and a movement written over that would undo the record of
 	// how it ended.
-	if held.Status != flow.StatusRunning && held.Status != flow.StatusWaiting && held.Status != flow.StatusAsking {
+	if !liveRun(held.Status) {
+		return flow.ErrRunHalted
+	}
+	// A movement answering a step moves only a run still out with that step, so two pollers reading
+	// one landed step move the run once.
+	if transition.Answers != "" && m.flowRunStep[run.ID] != transition.Answers {
 		return flow.ErrRunHalted
 	}
 	if transition.Dispatch != nil {
@@ -132,11 +186,22 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 		}
 		m.flowDispatches[key] = true
 	}
+	if err := m.writeMovementWork(transition.Work); err != nil {
+		return err
+	}
 	kept := cloneRun(*run)
 	// The due time lands with the position it belongs to, so a run recorded as waiting can never
 	// be left with nothing to wake it.
 	kept.DueAt = transition.Due
 	m.flowRuns[run.ID] = &kept
+	if m.flowRunStep == nil {
+		m.flowRunStep = map[string]string{}
+	}
+	// The step the run is out with, or nothing where this movement dispatched nothing.
+	m.flowRunStep[run.ID] = ""
+	if transition.Work.Declared != nil {
+		m.flowRunStep[run.ID] = transition.Work.Declared.ID
+	}
 	if m.flowTransitions == nil {
 		m.flowTransitions = map[string][]flow.RecordedTransition{}
 	}
@@ -182,6 +247,50 @@ func (m *Memory) ListFlowTransitions(_ context.Context, run string) ([]flow.Reco
 	out := append([]flow.RecordedTransition(nil), m.flowTransitions[run]...)
 	sort.Slice(out, func(a, b int) bool { return out[a].Seq < out[b].Seq })
 	return out, nil
+}
+
+// liveRun says whether a run is one something will carry on. The four live statuses move; anything
+// else has ended.
+func liveRun(status string) bool {
+	switch status {
+	case flow.StatusRunning, flow.StatusWaiting, flow.StatusAsking, flow.StatusWorking:
+		return true
+	default:
+		return false
+	}
+}
+
+// writeMovementWork applies the work tree's side of one movement, under the lock the movement holds.
+// The caller holds the lock, which is what makes this the same transaction as the movement.
+func (m *Memory) writeMovementWork(written flow.WorkWrite) error {
+	if written.Declared != nil {
+		if err := m.writeWork(written.Declared); err != nil {
+			return err
+		}
+	}
+	if on := written.Carrier; on != nil {
+		carried, held := m.work[on.Work]
+		if !held {
+			return fmt.Errorf("store: work %s carries a run and is not here", on.Work)
+		}
+		now := time.Now().UTC()
+		carried.Phase, carried.Question, carried.UpdatedAt = on.Phase, on.Question, now
+		if on.Answer != "" {
+			carried.Answer = on.Answer
+		}
+		if on.Reason != "" {
+			carried.Reason = on.Reason
+		}
+		if work.Terminal(on.Phase) && carried.FinishedAt == nil {
+			carried.FinishedAt = &now
+		}
+	}
+	for _, record := range written.Records {
+		if err := m.appendWorkEvent(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // cloneRun copies a run so a caller's later edits cannot reach the stored one.

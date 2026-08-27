@@ -14,6 +14,15 @@ import (
 func (m *Memory) CreateWork(_ context.Context, declared *work.Work, event *work.Event) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.writeWork(declared); err != nil {
+		return err
+	}
+	return m.appendWorkEvent(event)
+}
+
+// writeWork puts one piece of work in the store. The caller holds the lock, which is what lets a
+// declaration land in the same transaction as whatever asked for it.
+func (m *Memory) writeWork(declared *work.Work) error {
 	if m.work == nil {
 		m.work = map[string]*work.Work{}
 	}
@@ -30,7 +39,7 @@ func (m *Memory) CreateWork(_ context.Context, declared *work.Work, event *work.
 		kept.UpdatedAt = kept.CreatedAt
 	}
 	m.work[declared.ID] = &kept
-	return m.appendWorkEvent(event)
+	return nil
 }
 
 // GetWork reads one piece of work back, whole.
@@ -183,13 +192,13 @@ func cloneTime(at *time.Time) *time.Time {
 	return &copied
 }
 
-// RunnableWork is the work a controller may start: pending, with no parent, no role and nothing it
-// waits for, oldest declared first.
+// RunnableWork is the work a controller may start: pending with nothing it waits for, oldest
+// declared first.
 func (m *Memory) RunnableWork(_ context.Context, limit int) ([]*work.Work, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.workMatching(limit, func(one *work.Work) bool {
-		return one.Phase == work.PhasePending && one.Parent == "" && one.Role == "" && len(one.After) == 0
+		return one.Phase == work.PhasePending && len(one.After) == 0
 	}), nil
 }
 

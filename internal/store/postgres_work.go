@@ -23,19 +23,35 @@ const workColumns = `id, workspace, project, title, brief, role, role_version, m
 // to exist, or a record of a declaration that is not there, are both states nothing can explain
 // afterwards.
 func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *work.Event) error {
-	labels, err := json.Marshal(labelsOrEmpty(declared.Labels))
-	if err != nil {
-		return fmt.Errorf("create work: %w", err)
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("create work: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// The whole record, status fields included, because the store keeps what it is handed. Writing
-	// only the declared half would leave the two stores disagreeing about the same call, which is how
-	// a double that accepts more than the real thing manufactures a green suite.
+	if err := insertWork(ctx, tx, declared); err != nil {
+		return err
+	}
+	if err := appendWorkEvent(ctx, tx, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("create work: %w", err)
+	}
+	return nil
+}
+
+// insertWork writes one piece of work inside a transaction somebody else owns, which is what lets a
+// declaration land with whatever asked for it: a caller's call, or the movement of a flow run.
+//
+// The whole record, status fields included, because the store keeps what it is handed. Writing only
+// the declared half would leave the two stores disagreeing about the same call, which is how a double
+// that accepts more than the real thing manufactures a green suite.
+func insertWork(ctx context.Context, tx pgx.Tx, declared *work.Work) error {
+	labels, err := json.Marshal(labelsOrEmpty(declared.Labels))
+	if err != nil {
+		return fmt.Errorf("create work: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_work, deadline, budget_tokens, labels, parent, depth, version, phase,
@@ -50,12 +66,6 @@ func (p *Postgres) CreateWork(ctx context.Context, declared *work.Work, event *w
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
-		return fmt.Errorf("create work: %w", err)
-	}
-	if err := appendWorkEvent(ctx, tx, event); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("create work: %w", err)
 	}
 	return nil
@@ -281,15 +291,17 @@ func nullIfEmpty(value string) any {
 	return value
 }
 
-// RunnableWork is the work a controller may start: pending, with no parent, no role and nothing it
-// waits for, oldest declared first.
+// RunnableWork is the work a controller may start: pending with nothing it waits for, oldest
+// declared first.
 //
-// The shape is deliberately narrow. Work that waits for something, work in a role and work under a
-// parent are each a later slice, and offering them to a controller that honours none of those would
-// run them with their ordering, their boundary and their budget ignored.
+// Work under a parent and work in a role are both started, because both are needed the moment a flow
+// step is a piece of work: every step hangs under the run and a step may name a role. What is still
+// left alone is work that waits for something, because nothing honours ordering yet. The tree budget
+// is not enforced for these and is not enforced for a root either, so nothing is honoured less here
+// than anywhere else.
 func (p *Postgres) RunnableWork(ctx context.Context, limit int) ([]*work.Work, error) {
 	return p.workMatching(ctx, `
-		where phase = $1 and parent is null and role = '' and cardinality(after_work) = 0
+		where phase = $1 and cardinality(after_work) = 0
 		order by created_at, id`, limit, work.PhasePending)
 }
 

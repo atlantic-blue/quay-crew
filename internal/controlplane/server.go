@@ -137,6 +137,9 @@ type Config struct {
 	// ExportWait is how long one record's export to the event log is given before it is dropped.
 	// Zero takes exportWait.
 	ExportWait time.Duration
+	// FlowPollEvery is how often the flow poller looks for runs to carry on: a wait that came due, a
+	// schedule that fired, a step whose work ended. Zero takes flow.DefaultPollEvery.
+	FlowPollEvery time.Duration
 	// WorkTickEvery is how often the work controller looks at the work the crew holds. Zero takes
 	// work.DefaultTickEvery.
 	WorkTickEvery time.Duration
@@ -269,7 +272,7 @@ func NewServer(cfg Config) *Server {
 	// reaches nothing the caller could not, because these are the same two methods.
 	engine := flow.NewEngine(cfg.Store, server, server, server)
 	server.flows = engine
-	server.flowPoller = flow.NewPoller(engine, 0, nil)
+	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil)
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).

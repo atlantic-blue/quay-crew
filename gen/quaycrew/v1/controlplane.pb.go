@@ -1236,8 +1236,8 @@ func (x *ListProjectsResponse) GetProjects() []*Project {
 }
 
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
-// time. Its session is named after the graph and the run, so a listing reads as what the run is
-// doing.
+// time. It is carried by a piece of work, and every step it takes is a piece of work under that one,
+// so a run sits inside the work tree rather than beside it.
 type FlowRun struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	Id           string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1260,7 +1260,11 @@ type FlowRun struct {
 	Question string `protobuf:"bytes,14,opt,name=question,proto3" json:"question,omitempty"`
 	// reason says why a stopped run stopped. Empty on one that is running or that finished: a run
 	// that went quiet and a run that was halted must never read the same.
-	Reason        string `protobuf:"bytes,13,opt,name=reason,proto3" json:"reason,omitempty"`
+	Reason string `protobuf:"bytes,13,opt,name=reason,proto3" json:"reason,omitempty"`
+	// work is the piece of work that carries this run. There is one tree and it is the work tree, so a
+	// run hangs inside it rather than beside it: that is what makes the depth limit and the tree budget
+	// bound a run at all. Every step the run takes is another piece of work under this one.
+	Work          string `protobuf:"bytes,15,opt,name=work,proto3" json:"work,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1389,6 +1393,13 @@ func (x *FlowRun) GetQuestion() string {
 func (x *FlowRun) GetReason() string {
 	if x != nil {
 		return x.Reason
+	}
+	return ""
+}
+
+func (x *FlowRun) GetWork() string {
+	if x != nil {
+		return x.Work
 	}
 	return ""
 }
@@ -8057,7 +8068,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x13ListProjectsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"H\n" +
 	"\x14ListProjectsResponse\x120\n" +
-	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\x94\x04\n" +
+	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\xa8\x04\n" +
 	"\aFlowRun\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -8076,7 +8087,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\vtransitions\x18\v \x01(\x05R\vtransitions\x12\x14\n" +
 	"\x05spent\x18\f \x01(\x03R\x05spent\x12\x1a\n" +
 	"\bquestion\x18\x0e \x01(\tR\bquestion\x12\x16\n" +
-	"\x06reason\x18\r \x01(\tR\x06reason\x1a8\n" +
+	"\x06reason\x18\r \x01(\tR\x06reason\x12\x12\n" +
+	"\x04work\x18\x0f \x01(\tR\x04work\x1a8\n" +
 	"\n" +
 	"StateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

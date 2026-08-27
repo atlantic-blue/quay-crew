@@ -74,8 +74,8 @@ type Landing struct {
 // Store is the rows a controller reads and writes. Every write takes the event that describes it, so
 // the row and the record of how it moved land in one transaction or neither does.
 type Store interface {
-	// RunnableWork is the work this controller may start: pending, with no parent, no role and
-	// nothing it waits for, oldest declared first.
+	// RunnableWork is the work this controller may start: pending with nothing it waits for, oldest
+	// declared first.
 	RunnableWork(ctx context.Context, limit int) ([]*Work, error)
 	// HeldWork is the work this controller is holding: running, with a session, under a lease that
 	// is this controller's and has not run out. Another controller's work is not this one's to move.
@@ -334,6 +334,9 @@ func (c *Controller) start(ctx context.Context, one *Work) {
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 		Project: claimed.Project, Handle: handle, Text: claimed.Brief,
 		PermissionMode: claimed.Mode, Detach: true,
+		// Who does it. A piece of work in a role runs in a session of that role, which is a new
+		// session in a new container that has read nothing anybody else was told.
+		Role: claimed.Role,
 		// Which piece of work this task runs, so the crew mints the credential for it and puts it in
 		// the environment of this task alone.
 		Work: claimed.ID,
