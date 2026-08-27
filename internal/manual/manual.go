@@ -59,6 +59,9 @@ commands:
                                           question, where the reply is the point
   sessions [<address>]                    list sessions, which session and sessions also do
   tasks <session>                          what a session was asked to do, and what came back
+  answer <session> [--all]                 what a session came back with, and nothing else, so a
+                                          caller can pipe it. The most recent answer, or with --all
+                                          every one of them, oldest first
   drain [anyway]                          put every live session down, so an upgrade does not take
                                           their containers away underneath them. Refuses while a
                                           task is working, and anyway drains over it
