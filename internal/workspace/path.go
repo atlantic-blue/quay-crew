@@ -144,7 +144,7 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return "", &NotFoundError{
 			What: "session", Name: reference,
 			Have: identifiersOf(resp.GetSessions()),
-			Make: `start one with quay dispatch "..."`,
+			Make: `start one with quay task "..."`,
 		}
 	case 1:
 		return matches[0].GetHandle(), nil

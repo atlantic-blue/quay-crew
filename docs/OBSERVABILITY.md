@@ -306,7 +306,7 @@ The shortest way to see it working, from a cold start:
 
 ```
 make up
-quay ask <workspace>/<project> "remember the number"
+quay task <workspace>/<project> "remember the number"
 ```
 
 Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The task is one span, named

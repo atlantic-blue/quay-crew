@@ -363,7 +363,7 @@ func TestShowingAFinishedRunPrintsAWorkingWayToReadItsTasks(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	typed := typedCommandIn(t, shown, "quay tasks ")
+	typed := typedCommandIn(t, shown, "quay task list ")
 	read, err := runQuay(t, client, typed[1:]...)
 	if err != nil {
 		t.Fatalf("the run said to type %q, and that was refused: %v", strings.Join(typed, " "), err)

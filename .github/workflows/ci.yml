@@ -238,7 +238,7 @@ jobs:
           go run ./cmd/quay project create bills
           test "$(go run ./cmd/quay use)" = "smoke/bills"
 
-          out=$(go run ./cmd/quay ask "hello from ci")
+          out=$(go run ./cmd/quay task "hello from ci")
           echo "$out"
           test "$(printf '%s' "$out" | head -1)" = "hello from ci"
 
@@ -248,7 +248,7 @@ jobs:
           # A second task on the same session reuses that one sandbox.
           handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
           test -n "$handle"
-          go run ./cmd/quay ask "smoke/bills/$handle" "second task" >/dev/null
+          go run ./cmd/quay task "smoke/bills/$handle" "second task" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
 
       # Tasks have now run, so the signals have to have moved. This is the check docs/OBSERVABILITY.md
@@ -313,7 +313,7 @@ jobs:
           workspace=$(go run ./cmd/quay workspace create durable | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
           test -n "$workspace"
           go run ./cmd/quay project create bills
-          out=$(go run ./cmd/quay ask "remember this")
+          out=$(go run ./cmd/quay task "remember this")
           session=$(printf '%s' "$out" | sed -n 's/.*(session \([a-f0-9]*\),.*/\1/p')
           test -n "$session"
 
@@ -355,7 +355,7 @@ jobs:
           set -euo pipefail
           go run ./cmd/quay workspace create durable-state
           go run ./cmd/quay project create bills
-          out=$(go run ./cmd/quay ask "first task")
+          out=$(go run ./cmd/quay task "first task")
           session=$(printf '%s' "$out" | sed -n 's/.*session \([a-f0-9]*\),.*/\1/p')
           handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
           test -n "$session" && test -n "$handle"
@@ -374,7 +374,7 @@ jobs:
             sleep 2
           done
 
-          go run ./cmd/quay ask "durable-state/bills/$handle" "second task" >/dev/null
+          go run ./cmd/quay task "durable-state/bills/$handle" "second task" >/dev/null
           kept=$(docker exec "quaycrew-$session" cat /home/agent/.claude/note)
           context=$(docker exec "quaycrew-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"

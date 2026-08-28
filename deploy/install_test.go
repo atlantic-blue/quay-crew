@@ -109,7 +109,7 @@ func TestAFirstRunSaysWhatItCannotDo(t *testing.T) {
 		"quay workspace create <name>",
 		"quay project create <name>",
 		"quay secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`quay ask \"say pong\"`,
+		`quay task \"say pong\"`,
 	} {
 		if !strings.Contains(recipe, said) {
 			t.Errorf("a first run never says %q, so the operator is left with a crew and no next step:\n%s",
@@ -237,7 +237,7 @@ func TestOneCommandLeavesARunningCrewAndAQuayOnThePath(t *testing.T) {
 		"quay workspace create <name>",
 		"quay project create <name>",
 		"quay secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`quay ask "say pong"`,
+		`quay task "say pong"`,
 	} {
 		if !strings.Contains(crew.said, next) {
 			t.Errorf("a first run never printed %q:\n%s", next, crew.said)

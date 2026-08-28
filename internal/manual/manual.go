@@ -28,8 +28,8 @@ press : to switch resource, / to filter, enter to drill in, s to shell into a se
 you work in one place at a time, and say where with an address: workspace/project/session.
 
   quay use me/house-bills
-  quay ask "when is the electricity bill due"
-  quay dispatch "read the repository and write the migration"
+  quay task "when is the electricity bill due"
+  quay task --dispatch "read the repository and write the migration"
 
 commands:
   help                                    print this, which -h and --help do too
@@ -78,19 +78,19 @@ commands:
                                           reclaim and archive times start unset, and unset means the
                                           crew does nothing. A session may read none of this and set
                                           none of it
-  dispatch [<address>] <text>             start or continue a session and let go of the task. It
-                                          runs in the crew, so closing the terminal does not take
-                                          the work with it. quay tasks reads it back
-  ask [<address>] <text>                  the same, and wait here for the answer. For a short
-                                          question, where the reply is the point
+  task [<address>] <text>                 start or continue a session, and wait here for the
+                                          answer. For a short question, where the reply is the
+                                          point
+  task --dispatch [<address>] <text>      the same, and let go of the task. It runs in the crew, so
+                                          closing the terminal does not take the work with it
+  task list <session>                     what a session was asked to do, and what came back
   sessions [<address>]                    list sessions, which session and sessions also do
-  tasks <session>                          what a session was asked to do, and what came back
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
   stop <session> [<reason>]               halt the task one session is running, keeping the reason.
                                           The session survives: its conversation, its container and
-                                          its history all stay, so the next dispatch continues it.
+                                          its history all stay, so the next task continues it.
                                           A stop while nothing is running says so and changes
                                           nothing
   drain [anyway]                          put every live session down, so an upgrade does not take
@@ -100,7 +100,7 @@ commands:
                                           conversations rather than identifiers. No text reads it,
                                           and "" clears it
   mode <session> [<mode>]                  what a session's tasks may do without asking: plan, edits
-                                          or dangerous. A dispatched task has nobody to approve
+                                          or dangerous. A task nobody waits for has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
   context set [<address>] < file          write what a level says, from standard input. Say crew

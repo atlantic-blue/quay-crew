@@ -225,7 +225,7 @@ func runWorkShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		fmt.Fprintf(out, "\nanswer:\n%s\n", one.GetAnswer())
 	}
 	if one.GetSession() != "" {
-		fmt.Fprintf(out, "\nread what it did with quay tasks %s\n", display.ShortID(one.GetSession()))
+		fmt.Fprintf(out, "\nread what it did with quay task list %s\n", display.ShortID(one.GetSession()))
 	}
 	return nil
 }

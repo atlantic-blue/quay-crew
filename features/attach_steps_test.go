@@ -256,7 +256,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		// A refusal that only says no leaves the operator staring at a session they cannot open, and one
 		// written in the crew's own vocabulary leaves them asking what it means. It says what to do
 		// instead, in words that appear on their screen.
-		for _, want := range []string{"no conversation left", "quay dispatch"} {
+		for _, want := range []string{"no conversation left", "quay task"} {
 			if !strings.Contains(a.err.Error(), want) {
 				return fmt.Errorf("the refusal is %q, want it to say %q", a.err.Error(), want)
 			}

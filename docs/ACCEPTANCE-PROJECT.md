@@ -21,10 +21,10 @@ The operator declares one piece of work. After that the operator only answers qu
 `quay work answer` and `quay flow answer`. The crew asks, the operator replies, the run continues.
 
 **Driving** is anything else the operator types that changes the work. A second `quay work create`
-is driving. A `quay dispatch` is driving. A `quay work stop` is driving. An edit to a file is
+is driving. A `quay task --dispatch` is driving. A `quay work stop` is driving. An edit to a file is
 driving. A push is driving.
 
-**Reading is free.** The operator may read anything at any moment. `quay work list`, `quay tasks`,
+**Reading is free.** The operator may read anything at any moment. `quay work list`, `quay task list`,
 `quay answer`, the console, the panel and the web view are all reads. A read is never a finding.
 
 Every time the operator drives, that is a finding. The page can still ship. The test still fails.
@@ -329,7 +329,7 @@ than remembered.
     is an attempt two that starts blind.
 26. **Dispatch.** The controller dispatches every piece of work. A failure is a dispatch that blocks
     without an end, which is the fault issue 400 fixed.
-27. **Ask.** The operator uses `quay ask` once, to ask the crew a question about its own state. That
+27. **Ask.** The operator uses `quay task` once, to ask the crew a question about its own state. That
     is a read and not a finding. A failure is a reply that never arrives.
 28. **Answer.** The orchestrator reads each child's answer with `quay answer` or `quay work show`. A
     failure is an answer that only a person can read.

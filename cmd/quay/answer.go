@@ -72,7 +72,7 @@ func lastAnswer(tasks []*quaycrewv1.Task, session string, out io.Writer) error {
 	last := tasks[len(tasks)-1]
 	if last.GetStatus() == statusRunning {
 		return fmt.Errorf("the task on %s is still running, so it has no answer yet"+
-			"\n\nwatch it with quay tasks %s", display.ShortID(session), display.ShortID(session))
+			"\n\nwatch it with quay task list %s", display.ShortID(session), display.ShortID(session))
 	}
 	writeAnswer(out, answerOf(last))
 	if last.GetStatus() == statusFailed {
@@ -114,5 +114,5 @@ func writeAnswer(out io.Writer, answer string) {
 
 func noLandedTask(session string) error {
 	return fmt.Errorf("%s has no landed task, so there is no answer to give"+
-		"\n\nstart one with quay dispatch %s \"...\"", display.ShortID(session), display.ShortID(session))
+		"\n\nstart one with quay task %s \"...\"", display.ShortID(session), display.ShortID(session))
 }
