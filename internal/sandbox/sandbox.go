@@ -79,6 +79,22 @@ type Provider interface {
 	// read it that way. Absent is different, and answers false: a session with no container has
 	// nobody in it.
 	Attached(ctx context.Context, sessionID string) (bool, error)
+	// RuntimeRunning says whether a model runtime is up inside this session's sandbox.
+	//
+	// It sits beside Attached rather than inside it because they are different states and only one of
+	// them was ever visible. A conversation somebody opened, worked in, and detached from leaves the
+	// runtime answering with nobody watching it, and the crew read that as an empty container: on 28
+	// August 2026, six of eighteen sandboxes held a running runtime and every one of them listed as
+	// idle.
+	//
+	// Asked by name, for the same reason Attached is: the handles are a map in one process and the
+	// containers are not, so a question that built a sandbox to answer would start the very container
+	// it is asked about taking away.
+	//
+	// A failure is not "nothing is running": it is the crew being unable to tell, and the caller must
+	// read it that way. Absent is different, and answers false: a session with no container is running
+	// nothing.
+	RuntimeRunning(ctx context.Context, sessionID string) (bool, error)
 }
 
 // Mount is a directory made available inside a sandbox.
@@ -131,6 +147,10 @@ const (
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
 	// opening a session twice lands in the one already running.
 	AttachedSessionName = "quay"
+	// RuntimeBinary is what the model runtime is called inside a sandbox, which is what says a session
+	// is holding a conversation rather than sitting empty. A property of the image: the Dockerfile
+	// installs it and every task and every attached conversation runs it by this name.
+	RuntimeBinary = "claude"
 	// MemoryFile is the model's own convention, not ours.
 	MemoryFile = "CLAUDE.md"
 	// OpenConversation keeps the terminal alive when a conversation ends, so ending one does not take

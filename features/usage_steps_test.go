@@ -46,15 +46,9 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 				session.GetSession().GetModelSessionId(), in, out, cached)
 		})
 
-	sc.Step(`^the operator lists the sessions$`, func(ctx context.Context) error {
-		world, u := worldFrom(ctx), usageFrom(ctx)
-		listed, err := world.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
-		if err != nil {
-			return err
-		}
-		u.listed = listed.GetSessions()
-		return nil
-	})
+	// Listing the sessions is one step, defined beside the presence scenarios, because there is one
+	// listing and it asks each sandbox what is in it the way `quay sessions` does. It leaves the rows
+	// here too, so a scenario about what a conversation cost reads the listing an operator reads.
 
 	sc.Step(`^the session reports (\d+) tokens in and (\d+) out$`, func(ctx context.Context, in, out int) error {
 		spent, err := onlySpender(ctx)

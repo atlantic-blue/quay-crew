@@ -1861,6 +1861,11 @@ const grpcAddrEnv = "QC_GRPC_ADDR"
 const crewOwnPrefix = "QC_"
 
 // ListSessions lists sessions, optionally filtered by workspace.
+//
+// A request that asks for presence gets each idle session's sandbox read as well, which is what
+// lets a listing tell a conversation nobody is watching from an empty container. It is asked for
+// rather than always done because the answer costs a question to the sandbox per row, and the
+// callers that resolve an address or find a session by name have no use for it.
 func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{
 		Workspace: req.GetWorkspace(),
@@ -1875,6 +1880,9 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 		s.withContextWindow(session)
 	}
 	s.withStaleness(ctx, sessions)
+	if req.GetPresence() {
+		s.withPresence(ctx, sessions)
+	}
 	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
 }
 

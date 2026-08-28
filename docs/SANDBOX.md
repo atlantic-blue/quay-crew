@@ -238,6 +238,22 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
 
+### What the crew can ask a sandbox about itself
+
+Two questions, both asked of the container by name and neither needing anything written down:
+
+- **is a client on the conversation** (`tmux list-clients -t quay`), so a reclaim never closes a
+  container somebody is typing into.
+- **is a model runtime in the process table** (`/proc`), so a conversation answering with nobody
+  watching it is not read as an empty container.
+
+A listing turns the pair into the word it prints, and the four words and what they cost are in
+`docs/ORCHESTRATION.md`, section 11, under "What a listing says, which is not what the row says".
+
+Neither question is asked through a handle this process holds, and neither creates a sandbox to
+answer. The handles are a map in one process and the containers are not, so a question that built one
+would start the very container it is asked about taking away.
+
 ## Seeing what you built
 
 A session used to have no eyes. A change with a visual result was delivered on the strength of a
