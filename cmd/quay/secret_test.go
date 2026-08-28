@@ -53,7 +53,7 @@ func TestAPipedSecretReachesTheSessionUnchanged(t *testing.T) {
 		t.Error("the listing printed the value")
 	}
 
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 	got, given := carried(boxes, "GH_TOKEN")
 	if !given {
 		t.Fatal("the session was not given GH_TOKEN at all")
@@ -70,7 +70,7 @@ func TestATrailingNewlineIsNotPartOfTheSecret(t *testing.T) {
 
 	saying(t, "ghp-with-a-newline\n")
 	mustRun(t, client, "secret", "set", "GH_TOKEN")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	if got, _ := carried(boxes, "GH_TOKEN"); got != "ghp-with-a-newline" {
 		t.Fatalf("the session was given %q, so the newline travelled with it", got)
@@ -103,7 +103,7 @@ func TestAValueAsAnArgumentStillWorks(t *testing.T) {
 
 	mustRun(t, client, "secret", "set", "GH_TOKEN", "ghp-typed")
 	mustRun(t, client, "secret", "set", "me", "OTHER", "also-typed")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	if got, _ := carried(boxes, "GH_TOKEN"); got != "ghp-typed" {
 		t.Errorf("the two argument form broke: %q", got)
@@ -167,7 +167,7 @@ func TestASecretSetOnTheCrewReachesAWorkspaceMadeAfterwards(t *testing.T) {
 	// Made after the secret was set, which is the case that used to cost a round of setting up.
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	got, given := carried(boxes, "GH_TOKEN")
 	if !given {

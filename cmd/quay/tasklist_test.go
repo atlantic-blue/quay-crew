@@ -18,7 +18,7 @@ func TestAnArchivedSessionsHistoryIsStillReadable(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "ask", "read the package file")
+	mustRun(t, client, "task", "read the package file")
 
 	session := onlySession(t, client)
 	if _, err := client.ArchiveSession(context.Background(), &quaycrewv1.ArchiveSessionRequest{
@@ -27,9 +27,9 @@ func TestAnArchivedSessionsHistoryIsStillReadable(t *testing.T) {
 		t.Fatalf("archive the session: %v", err)
 	}
 
-	read, err := runQuay(t, client, "tasks", session.GetId()[:8])
+	read, err := runQuay(t, client, "task", "list", session.GetId()[:8])
 	if err != nil {
-		t.Fatalf("quay tasks on an archived session: %v", err)
+		t.Fatalf("quay task list on an archived session: %v", err)
 	}
 	if !strings.Contains(read, "read the package file") {
 		t.Fatalf("the history says %q, want the task that was asked", read)
@@ -42,7 +42,7 @@ func TestAnArchivedSessionAnswersToItsHandle(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "ask", "remember this")
+	mustRun(t, client, "task", "remember this")
 
 	session := onlySession(t, client)
 	if _, err := client.ArchiveSession(context.Background(), &quaycrewv1.ArchiveSessionRequest{
@@ -51,9 +51,9 @@ func TestAnArchivedSessionAnswersToItsHandle(t *testing.T) {
 		t.Fatalf("archive the session: %v", err)
 	}
 
-	read, err := runQuay(t, client, "tasks", session.GetHandle()[:8])
+	read, err := runQuay(t, client, "task", "list", session.GetHandle()[:8])
 	if err != nil {
-		t.Fatalf("quay tasks by handle on an archived session: %v", err)
+		t.Fatalf("quay task list by handle on an archived session: %v", err)
 	}
 	if !strings.Contains(read, "remember this") {
 		t.Fatalf("the history says %q, want the task that was asked", read)
@@ -67,9 +67,9 @@ func TestASessionNobodyHasIsStillRefused(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
-	_, err := runQuay(t, client, "tasks", "nosuchsession")
+	_, err := runQuay(t, client, "task", "list", "nosuchsession")
 	if err == nil {
 		t.Fatal("a session nobody has was resolved to something")
 	}

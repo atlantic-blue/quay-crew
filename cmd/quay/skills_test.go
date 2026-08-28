@@ -24,7 +24,7 @@ func TestSkillListOfASessionSaysWhatItActuallyHolds(t *testing.T) {
 
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	handle := sessionFrom(t, mustRun(t, client, "ask", "hello"))
+	handle := sessionFrom(t, mustRun(t, client, "task", "hello"))
 
 	listed := mustRun(t, client, "skill", "list", "me/house-bills/"+handle[:8])
 	if !strings.Contains(listed, "git") {

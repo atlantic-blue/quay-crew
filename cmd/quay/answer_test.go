@@ -76,7 +76,7 @@ func aCrewRunning(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServ
 func aSessionThatAnswered(t *testing.T, reply string) (quaycrewv1.ControlPlaneServiceClient, *quaycrewv1.Session) {
 	t.Helper()
 	client := aCrewRunning(t, &model.FakeRunner{Reply: reply})
-	mustRun(t, client, "ask", "when is the electricity bill due")
+	mustRun(t, client, "task", "when is the electricity bill due")
 	return client, onlySession(t, client)
 }
 
@@ -116,16 +116,16 @@ func aSessionHoldingATask(t *testing.T, after int) (quaycrewv1.ControlPlaneServi
 	session := ""
 	for landed := 0; landed < after; landed++ {
 		if session == "" {
-			mustRun(t, client, "ask", "first")
+			mustRun(t, client, "task", "first")
 			session = onlySession(t, client).GetHandle()
 			continue
 		}
-		mustRun(t, client, "ask", "me/house-bills/"+session[:8], "again")
+		mustRun(t, client, "task", "me/house-bills/"+session[:8], "again")
 	}
 	if session == "" {
-		mustRun(t, client, "dispatch", "read the repository")
+		mustRun(t, client, "task", flagDispatch, "read the repository")
 	} else {
-		mustRun(t, client, "dispatch", "me/house-bills/"+session[:8], "read the repository")
+		mustRun(t, client, "task", flagDispatch, "me/house-bills/"+session[:8], "read the repository")
 	}
 	select {
 	case <-runner.started:
@@ -259,7 +259,7 @@ func TestATaskStillRunningIsRefusedEvenWhenAnEarlierOneLanded(t *testing.T) {
 // exit status is what tells a caller it is reading a failure.
 func TestAFailedTasksFailureIsTheAnswerAndTheCommandFails(t *testing.T) {
 	client := aCrewRunning(t, &model.FakeRunner{Err: errTheModelRefused})
-	if _, err := runQuay(t, client, "ask", "read the repository"); err == nil {
+	if _, err := runQuay(t, client, "task", "read the repository"); err == nil {
 		t.Fatal("the task was expected to fail and did not")
 	}
 	session := onlySession(t, client)
@@ -276,9 +276,9 @@ func TestAFailedTasksFailureIsTheAnswerAndTheCommandFails(t *testing.T) {
 // Oldest first, one record per line, so a caller reads them in the order they happened.
 func TestEveryAnswerIsPrintedOldestFirst(t *testing.T) {
 	client := aCrewRunning(t, &countingRunner{})
-	mustRun(t, client, "ask", "first")
+	mustRun(t, client, "task", "first")
 	session := onlySession(t, client)
-	mustRun(t, client, "ask", "me/house-bills/"+session.GetHandle()[:8], "second")
+	mustRun(t, client, "task", "me/house-bills/"+session.GetHandle()[:8], "second")
 
 	printed, err := runQuay(t, client, "answer", session.GetId(), "--all")
 	if err != nil {

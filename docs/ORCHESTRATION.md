@@ -919,24 +919,23 @@ node.
 
 ### 8a. One session
 
-**The answer: a single piece of work should not go through the orchestrator, and `quay dispatch`
-stays the right command.**
+**The answer: a single piece of work should not go through the orchestrator, and
+`quay task --dispatch` stays the right command.**
 
-The reason is cost against gain. `quay dispatch` is one call, one row in `tasks`, and the reply comes
-back on the same connection. A piece of work is one row in `work`, at least three rows in
+The reason is cost against gain. `quay task --dispatch` is one call, one row in `tasks`, and the
+reply comes back on the same connection. A piece of work is one row in `work`, at least three rows in
 `work_events`, a controller tick before anything starts, the same task row, and a second read to get
 the answer. Every one of those buys durability, and durability is worth nothing while a person is
 sitting there watching the reply arrive.
 
-**A correction, forced by reading the code on 27 August 2026.** `quay dispatch` no longer waits.
-Merged pull request 378 made it let go. `cmd/quay/quay.go:683` passes the let go flag, `dispatchTask`
-sets `Detach` on the request, the control
-plane runs the task in a goroutine (`internal/controlplane/server.go:1077`), and the command prints
-"started. the crew has it, and nothing here is waiting for it." `quay ask` is the command that waits
-and prints the reply. So a person watching a reply arrive types `quay ask`, and the paragraph above
-holds for that command. `quay dispatch` is now closer to declaring work than it was: it starts a
-task and reads nothing back, which is exactly why the read path in section 7 matters more than the
-first draft of this document assumed.
+**A correction, forced by reading the code on 27 August 2026.** Letting go is a flag rather than the
+default. Merged pull request 378 made a second command let go, and the one word that replaced the
+three carries it as `--dispatch`. `sendTask` in `cmd/quay/task.go` sets `Detach` on the request, the
+control plane runs the task in a goroutine, and the command prints "started. the crew has it, and
+nothing here is waiting for it." `quay task` with no flag waits and prints the reply. So a person
+watching a reply arrive types `quay task`, and the paragraph above holds for that. `quay task
+--dispatch` is closer to declaring work than it was: it starts a task and reads nothing back, which
+is exactly why the read path in section 7 matters more than the first draft of this document assumed.
 
 **The rule.** A person at a terminal dispatches. Anything that is not a person, or anything whose
 answer must outlive the caller, declares work.
@@ -946,11 +945,11 @@ from, a task that must run at a deadline, or a task another piece of work waits 
 
 **The records, the commands and what the operator sees, today.** All of this is built.
 
-The operator runs `quay dispatch me/house-bills "read the package file"`. The control plane finds or
-creates the session, writes the task row as `running`, builds or reuses the sandbox, runs the model,
-and writes the reply into the row it opened. The reply comes back down the connection.
+The operator runs `quay task --dispatch me/house-bills "read the package file"`. The control plane
+finds or creates the session, writes the task row as `running`, builds or reuses the sandbox, runs
+the model, and writes the reply into the row it opened. The reply comes back down the connection.
 
-Status at each step, read from `quay sessions` and `quay tasks <session>`:
+Status at each step, read from `quay sessions` and `quay task list <session>`:
 
 - before: the session does not exist, or reads `idle`.
 - during: the session reads `running`, and the task listing shows the prompt with `still running`
@@ -991,10 +990,10 @@ Nothing measures how long the task took. `quay-crew#333` is that gap.
 
 **What a person opens.**
 
-- *Where is this now.* `quay sessions` for the status, `quay tasks <session>` for the prompt and
+- *Where is this now.* `quay sessions` for the status, `quay task list <session>` for the prompt and
   whether it is still running. Both exist. The console's `sessions` and `tasks` views show the same
   thing.
-- *Why did it stop.* `quay tasks <session>` prints `failed:` and the reason. Exists.
+- *Why did it stop.* `quay task list <session>` prints `failed:` and the reason. Exists.
 - *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.
   Exists, with no dashboard on it. The console's `stats` view shows what the crew and a session have
   cost.
@@ -1783,11 +1782,11 @@ then time a second task against the warm container. The difference is the resume
 
 ```
 docker rm -f quaycrew-<session id>
-time quay ask <session id> "reply with ok"
-time quay ask <session id> "reply with ok"
+time quay task <session id> "reply with ok"
+time quay task <session id> "reply with ok"
 ```
 
-`quay ask` waits for the answer and prints it, so both numbers include one model call. The
+`quay task` waits for the answer and prints it, so both numbers include one model call. The
 subtraction removes it.
 
 **Three, what a reclaim buys.** The memory an idle container holds.
@@ -2413,9 +2412,9 @@ standard output with nothing else on it. `--all` writes the history. No new tabl
 controller.
 
 *Removes blocker two, entirely, on its own.* It is one command and about thirty lines, and after it a
-caller outside quay can already read an answer as data. Ship it first for that reason. `quay ask`
+caller outside quay can already read an answer as data. Ship it first for that reason. `quay task`
 already prints the reply of a task it waited for. This closes the other half, which is reading back
-an answer the caller did not wait for. That is now the default for `quay dispatch`.
+an answer the caller did not wait for. That is now the default for `quay task --dispatch`.
 
 **2. The crew says which build it is.** A `version` field on `GetInfoResponse`, stamped into the
 control plane binary at build time. `quay version` prints the tool, the crew and the sandbox image,

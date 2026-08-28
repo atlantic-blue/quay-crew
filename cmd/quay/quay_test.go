@@ -101,7 +101,7 @@ func TestCreateMovesYouAndTalkingFollows(t *testing.T) {
 		t.Fatalf("quay use says %q, want me/house-bills", where)
 	}
 
-	replied := mustRun(t, client, "ask", "hello", "there")
+	replied := mustRun(t, client, "task", "hello", "there")
 	if !strings.Contains(replied, "ok") {
 		t.Fatalf("asking with no address did not run: %q", replied)
 	}
@@ -126,7 +126,7 @@ func TestAddressOnTheCommandLineDoesNotMoveYou(t *testing.T) {
 	mustRun(t, client, "project", "create", "gardening")
 	mustRun(t, client, "use", "me/house-bills")
 
-	if replied := mustRun(t, client, "ask", "me/gardening", "order the bulbs"); !strings.Contains(replied, "ok") {
+	if replied := mustRun(t, client, "task", "me/gardening", "order the bulbs"); !strings.Contains(replied, "ok") {
 		t.Fatalf("asking at an explicit address did not run: %q", replied)
 	}
 	if where := mustRun(t, client, "use"); strings.TrimSpace(where) != "me/house-bills" {
@@ -140,7 +140,7 @@ func TestUseASessionContinuesThatConversation(t *testing.T) {
 
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	first := mustRun(t, client, "dispatch", "hello")
+	first := mustRun(t, client, "task", flagDispatch, "hello")
 	session := sessionFrom(t, first)
 
 	// The shortened identifier is what a listing prints, so typing that back has to work.
@@ -149,7 +149,7 @@ func TestUseASessionContinuesThatConversation(t *testing.T) {
 		t.Fatalf("use of a session said %q", moved)
 	}
 
-	second := mustRun(t, client, "dispatch", "and again")
+	second := mustRun(t, client, "task", flagDispatch, "and again")
 	if got := sessionFrom(t, second); got != session {
 		t.Fatalf("the second task ran in session %s, want the one the context named, %s", got, session)
 	}
@@ -173,7 +173,7 @@ func TestDispatchFromAWorkspaceSaysWhichProjectsItHolds(t *testing.T) {
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "use", "me")
 
-	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard, "")
+	err := run(context.Background(), client, []string{"task", flagDispatch, "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("dispatching from a workspace succeeded, want a refusal")
 	}
@@ -185,7 +185,7 @@ func TestDispatchFromAWorkspaceSaysWhichProjectsItHolds(t *testing.T) {
 
 func TestDispatchWithNowhereToGoExplainsItself(t *testing.T) {
 	client := testClient(t)
-	err := run(context.Background(), client, []string{"dispatch", "hello"}, io.Discard, "")
+	err := run(context.Background(), client, []string{"task", flagDispatch, "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("dispatch with no context succeeded, want a refusal")
 	}
@@ -202,7 +202,7 @@ func TestAMessageIsNotAnAddress(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	replied := mustRun(t, client, "ask", "hello", "there")
+	replied := mustRun(t, client, "task", "hello", "there")
 	if !strings.Contains(replied, "ok") {
 		t.Fatalf("a two word message was not dispatched: %q", replied)
 	}
@@ -293,10 +293,10 @@ func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
 	mustRun(t, client, "project", "create", "default")
 
 	for _, invocation := range [][]string{
-		{"dispatch", "--project", "default", "remember the number"},
-		{"dispatch", "--project=default", "remember the number"},
+		{"task", flagDispatch, "--project", "default", "remember the number"},
+		{"task", flagDispatch, "--project=default", "remember the number"},
 		{"sessions", "--workspace", "demo"},
-		{"dispatch", "--session", "abc123", "hello"},
+		{"task", flagDispatch, "--session", "abc123", "hello"},
 		{"secret", "set", "--workspace", "demo", "KEY", "value"},
 	} {
 		err := run(context.Background(), client, invocation, io.Discard, "")
@@ -312,7 +312,7 @@ func TestTheOldFlagsAreRefusedRatherThanSwallowed(t *testing.T) {
 
 // TestAnyOtherFlagIsRefusedToo, so the next thing that gets replaced by an address cannot repeat this.
 func TestAnyOtherFlagIsRefusedToo(t *testing.T) {
-	err := run(context.Background(), testClient(t), []string{"dispatch", "--force", "hello"}, io.Discard, "")
+	err := run(context.Background(), testClient(t), []string{"task", flagDispatch, "--force", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("an unknown flag was accepted")
 	}
@@ -327,7 +327,7 @@ func TestAMessageIsStillAMessage(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "demo")
 	mustRun(t, client, "project", "create", "default")
 
-	if replied := mustRun(t, client, "dispatch", "the well-known -5 degrees case"); !strings.Contains(replied, "handle ") {
+	if replied := mustRun(t, client, "task", flagDispatch, "the well-known -5 degrees case"); !strings.Contains(replied, "handle ") {
 		t.Fatalf("a message with hyphens in it was refused: %q", replied)
 	}
 }
@@ -356,7 +356,7 @@ func TestAnIdWorksWhereverANameDoes(t *testing.T) {
 	}
 
 	address := created.GetWorkspace().GetId() + "/" + project.GetProject().GetId()
-	if replied := mustRun(t, client, "ask", address, "hello"); !strings.Contains(replied, "ok") {
+	if replied := mustRun(t, client, "task", address, "hello"); !strings.Contains(replied, "ok") {
 		t.Fatalf("asking by id: %q", replied)
 	}
 }

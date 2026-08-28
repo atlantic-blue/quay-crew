@@ -13,7 +13,7 @@ moment it is dispatched to the records it leaves in the store and on the log, is
 **Every task is written to the store synchronously.** The dispatch path writes the redacted task
 into the `tasks` table in the same breath as the task itself, on a context detached from the
 request's, so a client hanging up cannot lose the record and a broker being down cannot either.
-`quay tasks <session>` and `l` on a session in the console read that table.
+`quay task list <session>` and `l` on a session in the console read that table.
 
 **When an export is configured, the control plane also publishes each task to the log**, on
 `<workspace>.tasks`, keyed by session so one session's events stay in order on one partition. A
@@ -249,10 +249,10 @@ docker exec -it quaycrew-redpanda-1 rpk cluster health  is the broker itself wel
 docker exec -it quaycrew-redpanda-1 rpk cluster info    brokers and addresses
 ```
 
-One task through `quay dispatch` creates the topic and puts a record on it, so `rpk topic list` shows
-`<workspace>.tasks`. The topic is created by the publisher on first use rather than provisioned ahead
-of time, because a workspace's stream is named after a workspace nobody knew about yet. `rpk group
-list` still prints no groups, because nothing reads.
+One task through `quay task --dispatch` creates the topic and puts a record on it, so
+`rpk topic list` shows `<workspace>.tasks`. The topic is created by the publisher on first use
+rather than provisioned ahead of time, because a workspace's stream is named after a workspace
+nobody knew about yet. `rpk group list` still prints no groups, because nothing reads.
 
 This is how you watch tasks go by, live:
 

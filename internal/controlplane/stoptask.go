@@ -148,7 +148,7 @@ func (s *Server) StopTask(ctx context.Context, req *quaycrewv1.StopTaskRequest) 
 		// Said rather than reported as done. An operator who reads success stops watching, so a stop
 		// the crew could not confirm has to come back as one it could not confirm.
 		return nil, status.Errorf(codes.DeadlineExceeded,
-			"session %s was asked to stop and its task has not ended yet: watch it with quay tasks %s",
+			"session %s was asked to stop and its task has not ended yet: watch it with quay task list %s",
 			display.ShortID(session.GetHandle()), display.ShortID(session.GetHandle()))
 	}
 }

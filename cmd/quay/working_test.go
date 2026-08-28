@@ -36,7 +36,7 @@ func TestWhatTheOperatorSeesWhileATaskRuns(t *testing.T) {
 	go func() {
 		var out bytes.Buffer
 		dispatched <- run(context.Background(), client,
-			[]string{"ask", "when is the electricity bill due"}, &out, "")
+			[]string{"task", "when is the electricity bill due"}, &out, "")
 	}()
 	select {
 	case <-runner.Started:
@@ -51,7 +51,7 @@ func TestWhatTheOperatorSeesWhileATaskRuns(t *testing.T) {
 
 	// The identifier is copied off the screen, the way the operator copies it.
 	identifier := identifierFromListing(t, listed)
-	history := mustRun(t, client, "tasks", identifier)
+	history := mustRun(t, client, "task", "list", identifier)
 	if !strings.Contains(history, "when is the electricity bill due") {
 		t.Fatalf("the history does not say what the session was asked:\n%s", history)
 	}
@@ -65,7 +65,7 @@ func TestWhatTheOperatorSeesWhileATaskRuns(t *testing.T) {
 	}
 
 	// And it is the same task, with its answer in it, rather than a second one underneath.
-	landed := mustRun(t, client, "tasks", identifier)
+	landed := mustRun(t, client, "task", "list", identifier)
 	if strings.Contains(landed, "still running") {
 		t.Fatalf("the task still reads as working after it landed:\n%s", landed)
 	}
@@ -100,7 +100,7 @@ func TestASessionWithNoTaskInItReadsIdle(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	if got := onlySession(t, client).GetStatus(); got != "idle" {
 		t.Fatalf("a session between tasks reads %q, want idle", got)

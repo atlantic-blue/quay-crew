@@ -26,13 +26,41 @@ read, or run with `make features`.
   only a limit on length, because every section that made the old file unreadable went in one at a
   time and each one was defensible on its own. Two scenarios followed their subject out of the
   README and now hold the document it sends a reader to: the picture of a piece of work, and the
-  difference between a task and a piece of work. Nine scenarios where there were seven, and 547 in
-  the suite where there were 545.
+  difference between a task and a piece of work. Nine scenarios where there were seven, and 554 in
+  the suite where there were 552.
 
   The rule about the difference got stronger on the way. It asked whether the section contained the
   words "a piece of work is" anywhere, and a sentence about the pair rather than a definition of
   either satisfied it while the definition beside it had been rewritten away. It asks for a
   paragraph that opens with each definition now, which the mutation proved.
+- **One word for a task.** `ask`, `dispatch` and `tasks` were three top level commands for one
+  entity, while `work` and `flow` were each one word with verbs under it. Reading the command list
+  gave no clue that the three were one thing, so the first question a new operator has, "I want this
+  done, what do I type", had three answers and no shape between them.
+
+  There is one word now:
+
+  ```
+  quay task [<address>] <text>              send a task and wait here for the answer
+  quay task --dispatch [<address>] <text>   send it and let go. quay task list reads it back
+  quay task list <session>                  what a session was asked, and what came back
+  ```
+
+  Waiting and letting go differ in one thing, whether anybody holds the connection open, so letting
+  go is a flag rather than a second word. The flag is read in first position only: anywhere else it
+  is part of a sentence somebody meant to send.
+
+  **The three words that went each refuse, exit non zero, and name what to type.** None of them is a
+  quiet alias, because a word that still works keeps two spellings alive for one thing. None of them
+  is an unknown command either, because that reads as the tool being broken. They refuse by being
+  absent from the command table and present in one table of removed words, so the next word removed
+  cannot forget to say anything, and `threads`, `turns`, `repository` and `panel` moved into that
+  same table. `quay task <session>` is refused too: it used to print a history, and under one word it
+  would send the session's own identifier to the model as a message.
+
+  The `dispatch` node type in a flow graph keeps its name, and so does the `Dispatch` method on the
+  control plane. This is the command line only.
+
 - **A flow run can start because something happened.** A run could only ever start three ways: a
   person asked for one, a schedule came due, or a wait finished. All three are the crew talking to
   itself. A graph may now begin at a `trigger` node, something writes one `pending_triggers` row

@@ -178,7 +178,7 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	// of it. The two can disagree, so the way to read the tasks is printed rather than left to be
 	// worked out from an identifier in the state. Every session, because each step has its own.
 	for _, session := range flow.SessionsIn(run.GetState()) {
-		fmt.Fprintf(out, "read what it did with quay tasks %s\n", display.ShortID(session))
+		fmt.Fprintf(out, "read what it did with quay task list %s\n", display.ShortID(session))
 	}
 	return nil
 }

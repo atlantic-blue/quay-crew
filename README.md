@@ -27,7 +27,7 @@ It cannot mint your model credential. So it ends by printing these four commands
 quay workspace create me
 quay project create house-bills
 quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
-quay ask "say pong"
+quay task "say pong"
 ```
 
 Then run `quay` with no arguments to open the console. `make help` lists every other target.

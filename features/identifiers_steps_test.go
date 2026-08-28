@@ -448,7 +448,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 // nameCell is where the name sits in a session row, which is the cell the handle used to occupy.
 const nameCell = 3
 
-// typeAtDispatch runs `quay dispatch` over two typed words the way the command does: split them, read
+// typeAtDispatch runs `quay task` over two typed words the way the command does: split them, read
 // the first as a session if that is what it is, and dispatch the rest.
 func typeAtDispatch(ctx context.Context, first, second string) error {
 	w, held := worldFrom(ctx), identifiersFrom(ctx)

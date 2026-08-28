@@ -58,7 +58,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		newest, found := newestOpenable(listed.GetSessions())
 		if !found {
 			p.err = fmt.Errorf("there is no conversation to put beside the console yet: " +
-				"start one with `quay dispatch \"hello\"`, then open the panel again")
+				"start one with `quay task \"hello\"`, then open the panel again")
 			return nil
 		}
 		p.commands, p.err = panel.Layout{
@@ -162,7 +162,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		if p.err == nil {
 			return fmt.Errorf("nothing was refused")
 		}
-		if !strings.Contains(p.err.Error(), "quay dispatch") {
+		if !strings.Contains(p.err.Error(), "quay task") {
 			return fmt.Errorf("the refusal is %q, and never says what to type", p.err)
 		}
 		return nil
