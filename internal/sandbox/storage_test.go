@@ -151,14 +151,17 @@ func TestStoragePrepareRefusesWhatItCannotPlace(t *testing.T) {
 	}
 }
 
-// TestHasConversationFindsWhatTheModelKeeps is the check that stops attach handing back a resume for
-// a conversation that died with a container built before state was kept on the host.
+// TestHasConversationFindsWhatTheModelKeeps: whether the runtime has opened a conversation decides
+// how the next task names it, so a wrong answer here fails the task either way. Resuming a name that
+// is not there prints "No conversation found" and exits, and starting a name that is there is refused
+// as one already in use.
 func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
 	dir := t.TempDir()
 	storage := sandbox.Storage{Dir: dir, Host: dir}
 
-	const workspace, conversation = "ws1", "d713b6d1-7873-4376-8ffe-cd5c734a9733"
-	kept := filepath.Join(dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
+	const conversation = "d713b6d1-7873-4376-8ffe-cd5c734a9733"
+	cfg := sandbox.Config{ID: "sess1", Workspace: "ws1", Project: "prj1"}
+	kept := filepath.Join(dir, "workspaces", cfg.Workspace, "claude", "projects", "-home-agent-workspace")
 	if err := os.MkdirAll(kept, 0o777); err != nil {
 		t.Fatalf("seeding the conversation store: %v", err)
 	}
@@ -166,33 +169,66 @@ func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
 		t.Fatalf("writing the conversation: %v", err)
 	}
 
-	if !storage.HasConversation(workspace, conversation) {
-		t.Fatal("the conversation is on disk and was not found")
+	if !storage.HasConversation(cfg, conversation) {
+		t.Fatal("the conversation is on disk and was not found, so the next task would start it again")
 	}
-	if storage.HasConversation(workspace, "37b8f60b-7ef1-4834-9820-2a62b9937faf") {
-		t.Fatal("a conversation that is not on disk was reported as kept")
+	if storage.HasConversation(cfg, "37b8f60b-7ef1-4834-9820-2a62b9937faf") {
+		t.Fatal("a conversation that is not on disk was reported as opened, so the next task would resume nothing")
 	}
-	if storage.HasConversation("other-workspace", conversation) {
+	other := sandbox.Config{ID: "sess2", Workspace: "other-workspace", Project: "prj1"}
+	if storage.HasConversation(other, conversation) {
 		t.Fatal("a conversation was found in a workspace that does not hold it")
 	}
 }
 
-// TestHasConversationSaysYesWhenItCannotTell: a store that keeps nothing on the host has nowhere to
-// look, and refusing every attach would be worse than the failure this exists to explain.
-func TestHasConversationSaysYesWhenItCannotTell(t *testing.T) {
+// A session running as a role keeps its own conversation store, so the transcript is not where a
+// workspace's are. Reading the workspace's store for it would say every one of its conversations was
+// unopened, and every task it ever ran would be told to start the conversation again.
+func TestHasConversationReadsTheStoreARoleKeepsItsOwn(t *testing.T) {
+	dir := t.TempDir()
+	storage := sandbox.Storage{Dir: dir, Host: dir}
+
+	const conversation = "9a1e7d3b-2c4f-4b8a-9d6e-1f0a3b5c7d9e"
+	cfg := sandbox.Config{ID: "sess1", Workspace: "ws1", Project: "prj1", Role: "reviewer"}
+	// Where a role session's conversation store is, which is the same layout Prepare mounts from.
+	kept := filepath.Join(dir, "workspaces", cfg.Workspace, "projects", cfg.Project,
+		"sessions", cfg.ID, "claude", "projects", "-home-agent-workspace")
+	if err := os.MkdirAll(kept, 0o777); err != nil {
+		t.Fatalf("seeding the conversation store: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kept, conversation+".jsonl"), []byte("{}\n"), 0o666); err != nil {
+		t.Fatalf("writing the conversation: %v", err)
+	}
+
+	if !storage.HasConversation(cfg, conversation) {
+		t.Fatal("the role's own conversation was not found where the role keeps it")
+	}
+	plain := sandbox.Config{ID: "sess1", Workspace: "ws1", Project: "prj1"}
+	if storage.HasConversation(plain, conversation) {
+		t.Fatal("the role's conversation was found in the workspace's store, which does not hold it")
+	}
+}
+
+// TestHasConversationSaysNoWhenItCannotTell: a crew that keeps nothing on the host has nowhere to
+// look. Saying no starts the conversation under the name the crew gave it, which is the answer that
+// leaves the name true; saying yes would resume a name nothing has written.
+func TestHasConversationSaysNoWhenItCannotTell(t *testing.T) {
 	tests := map[string]struct {
-		storage                 sandbox.Storage
-		workspace, conversation string
+		storage      sandbox.Storage
+		config       sandbox.Config
+		conversation string
 	}{
-		"no data directory":          {sandbox.Storage{}, "ws1", "c1"},
-		"no workspace":               {sandbox.Storage{Dir: t.TempDir()}, "", "c1"},
-		"no conversation":            {sandbox.Storage{Dir: t.TempDir()}, "ws1", ""},
-		"a handle with a glob in it": {sandbox.Storage{Dir: t.TempDir()}, "ws1", "*"},
+		"no data directory": {sandbox.Storage{}, sandbox.Config{Workspace: "ws1"}, "c1"},
+		"no workspace":      {sandbox.Storage{Dir: t.TempDir()}, sandbox.Config{}, "c1"},
+		"no conversation":   {sandbox.Storage{Dir: t.TempDir()}, sandbox.Config{Workspace: "ws1"}, ""},
+		"a name with a glob in it": {
+			sandbox.Storage{Dir: t.TempDir()}, sandbox.Config{Workspace: "ws1"}, "*",
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if !test.storage.HasConversation(test.workspace, test.conversation) {
-				t.Fatal("want it to say yes when it cannot tell")
+			if test.storage.HasConversation(test.config, test.conversation) {
+				t.Fatal("want it to say no when it cannot tell")
 			}
 		})
 	}

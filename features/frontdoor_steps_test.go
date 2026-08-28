@@ -30,6 +30,8 @@ func frontDoorFrom(ctx context.Context) *frontDoorWorld {
 }
 
 func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
+	initializeFrontDoorDifferenceSteps(sc)
+
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, frontDoorKey{}, &frontDoorWorld{}), nil
 	})
@@ -142,6 +144,21 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^it holds no blockquote, no table and no dash used as punctuation$`, func(ctx context.Context) error {
 		if found := unreusableMarkdownIn(frontDoorFrom(ctx).body); len(found) > 0 {
 			return fmt.Errorf("a reader cannot copy this back out:\n%s", strings.Join(found, "\n"))
+		}
+		return nil
+	})
+}
+
+// The steps below are registered from initializeFrontDoorSteps, and are kept here rather than inside
+// it so the rule they hold up reads on its own.
+
+// initializeFrontDoorDifferenceSteps holds the front door to sending a reader somewhere that answers
+// the question they ask first: not what a piece of work is, but how it differs from the task they
+// already know how to send. The answer itself lives in the document, not in the front door.
+func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the document it names for the words tells a task and a piece of work apart$`, func(ctx context.Context) error {
+		if wrong := theDifferenceBetweenATaskAndAPieceOfWork(frontDoorFrom(ctx).body); len(wrong) > 0 {
+			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil
 	})

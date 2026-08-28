@@ -505,3 +505,90 @@ func unreusableMarkdownIn(text string) []string {
 	}
 	return found
 }
+
+// theWordsDocumentLink is the document that tells a task and a piece of work apart, and it is one of
+// the documents the front door points at. The section used to be in the front door itself.
+const theWordsDocumentLink = "docs/TASKS.md"
+
+// theSectionThatTellsThemApart is the heading under which a task and a piece of work are defined
+// against each other. It is named here rather than searched for, because a rule that accepted any
+// section would pass on the two words landing in unrelated paragraphs.
+const theSectionThatTellsThemApart = "## Two things you can ask for"
+
+// whatATaskAndAPieceOfWorkAre returns that section of the document that holds it.
+func whatATaskAndAPieceOfWorkAre() (string, error) {
+	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", theWordsDocumentLink, err)
+	}
+	return sectionOf(string(body), theSectionThatTellsThemApart)
+}
+
+// theDifferenceBetweenATaskAndAPieceOfWork returns everything wrong with where a reader is sent for
+// it, or nothing.
+//
+// A reader who has sent a task asks how work is different before they ask what work is. That answer
+// was in the front door, which is one of the reasons the front door was long. It moved to the
+// document that names the words that get used for each other, so what is held now is that a reader
+// is still sent somewhere that gives it, and that it is the first thing that document says.
+//
+// Two of the rules it was held to in the front door are gone with it, and deliberately: it may carry
+// a diagram now, and it is not capped at four paragraphs. Both were a budget on the front door
+// rather than a rule about the answer.
+func theDifferenceBetweenATaskAndAPieceOfWork(frontDoor string) []string {
+	if !slices.Contains(linkedFiles(frontDoor), theWordsDocumentLink) {
+		return []string{fmt.Sprintf("the front door sends nobody to %s, so a reader is never told "+
+			"which of the two things they can ask for they want", theWordsDocumentLink)}
+	}
+
+	said, err := whatATaskAndAPieceOfWorkAre()
+	if err != nil {
+		return []string{fmt.Sprintf("%v, so a reader is never told which of the two they want", err)}
+	}
+
+	var wrong []string
+	for _, both := range []string{"a task", "a piece of work"} {
+		if !strings.Contains(strings.ToLower(said), both) {
+			wrong = append(wrong, fmt.Sprintf("it never names %q, so a reader has only one of the two "+
+				"things they can ask for", both))
+		}
+	}
+	// A definition has to open a paragraph. Anywhere in the section is too weak: "a piece of work is
+	// not a second kind of task" is a sentence about the pair rather than a definition of either, and
+	// it satisfied a substring check while the definition beside it had been rewritten away.
+	opens := map[string]bool{}
+	for _, block := range strings.Split(strings.TrimSpace(said), "\n\n") {
+		for _, defined := range []string{"a task is", "a piece of work is"} {
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(block)), defined) {
+				opens[defined] = true
+			}
+		}
+	}
+	for _, defined := range []string{"a task is", "a piece of work is"} {
+		if !opens[defined] {
+			wrong = append(wrong, fmt.Sprintf("no paragraph of it opens by saying what %s, so it names "+
+				"the two without telling anybody which they want:\n%s",
+				strings.TrimSuffix(defined, " is"), said))
+		}
+	}
+
+	// It has to be the first thing the document says. An answer underneath the thing it explains is
+	// an answer nobody reaches, which is why it sat above the long section on work in the front door.
+	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
+	if err != nil {
+		return append(wrong, fmt.Sprintf("reading %s: %v", theWordsDocumentLink, err))
+	}
+	if first := headingsIn(string(body)); len(first) == 0 || "## "+first[0] != theSectionThatTellsThemApart {
+		wrong = append(wrong, fmt.Sprintf("%s opens on %v rather than on %q, so a reader meets the "+
+			"answer to their second question before the answer to their first",
+			theWordsDocumentLink, first, theSectionThatTellsThemApart))
+	}
+	return wrong
+}
+
+// TestTheDifferenceBetweenATaskAndAPieceOfWorkIsWhereTheFrontDoorSendsAReader.
+func TestTheDifferenceBetweenATaskAndAPieceOfWorkIsWhereTheFrontDoorSendsAReader(t *testing.T) {
+	for _, wrong := range theDifferenceBetweenATaskAndAPieceOfWork(frontDoor(t)) {
+		t.Error(wrong)
+	}
+}

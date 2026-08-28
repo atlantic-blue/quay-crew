@@ -4,30 +4,35 @@ A task is one request to one session. You ask for something, the model works in 
 sandbox, and a reply comes back. Minutes is normal, not seconds.
 
 This document follows one task from the moment it is dispatched to the records it leaves behind. It
-starts with the two words that get used for each other most, a task and a piece of work. Then it
-names the rest.
+starts by telling a task apart from a piece of work, because those two get used for each other most.
+Then it names the rest of the words.
 
 `docs/EVENTS.md` describes the log itself and how to inspect it. `docs/DATABASE.md` describes the
 tables. This is the path between them.
 
-## A task and a piece of work are not the same thing
+## Two things you can ask for
 
-You used to tell the crew to do a thing, and watch it. That is a task. The intent lives in your
-terminal, so it dies with your terminal.
+A task is a message. You send text, a session answers, and that is the whole life of it.
 
-A piece of work is the other half. You declare it and the crew writes it down. A controller loop then
-makes reality match that record. The work outlives the controller that started it. It runs as a named
-role with only what that role receives. Every movement it makes is on the record, with the trace it
-happened in.
+A piece of work is a job. You write down what you want done and the crew keeps that record, so it has
+a phase you can read at any moment: pending, running, done, failed or stopped. It can run as a named
+role, carry a budget and a deadline, and declare work of its own. Two more phases are written down
+and nothing reaches them yet: `waiting`, because no controller honours ordering, and `asking`, which
+today only a flow run gets to.
 
-A piece of work is not a second kind of task. A controller sends the brief as a task, into a session,
-the same way you do. So the rest of this document is what happens inside a piece of work too.
-`docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
+The test is one question. If you would ever ask where that is up to, it is work. If you would not, it
+is a task.
+
+A flow is work with its plan drawn in advance. A session is the conversation a task happens in.
+
+Declaring work does not replace sending a task. A controller sends the brief as a task, into a
+session, the same way you do. So the rest of this document is what happens inside a piece of work
+too. `docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
 
 ```mermaid
 flowchart LR
-    YOU(["you"]) -->|"quay ask, quay dispatch"| TASK["a task:<br/>one request to one session"]
-    YOU -->|"quay work create"| WORK["a piece of work:<br/>a row the crew keeps"]
+    YOU(["you"]) -->|"quay ask, quay dispatch"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
+    YOU -->|"quay work create"| WORK["a piece of work:<br/>a job the crew keeps<br/>a readable phase for"]
     WORK --> CTL["a controller reads the row"]
     CTL -->|"sends the brief"| TASK
     TASK --> SESSION["a session, in its own container"]
@@ -61,8 +66,10 @@ key land on one partition, which is what keeps a session's records in the order 
 
 1. You run `quay ask "read the package file"`. The command line calls `Dispatch` on the control
    plane over gRPC.
-2. The control plane finds or creates the session row, marks the session `running`, and calls
-   `beginTask` in `internal/controlplane/events.go`.
+2. The control plane finds or creates the session row, names its conversation if it does not have one
+   yet, marks the session `running`, and calls `beginTask` in `internal/controlplane/events.go`. The
+   name comes before the task rather than after it, so an operator can open the conversation the task
+   is working in while it works. See [`SANDBOX.md`](SANDBOX.md).
 3. `beginTask` detaches the context, redacts the prompt, stamps an identifier and the workspace, the
    project, the handle and the time, and writes one row into the `tasks` table with the status
    `running`. The row is written now rather than at the end, because a task takes minutes and an
@@ -108,8 +115,9 @@ sequenceDiagram
 - **One row in `tasks`**, written when the task starts and closed when it lands: what was asked, what
   came back, the status, the failure if there was one, and when it started. A row that still reads
   `running` is a task in flight. `quay tasks <session>` and the console's history view read this.
-- **The session row moves**: its status, its conversation identifier, and the count the describer
-  reads to decide whether to name the session again.
+- **The session row moves**: its status, and the count the describer reads to decide whether to name
+  the session again. Its conversation identifier was written here and is written before the task now;
+  what happens at the end is a check that the runtime used the name it was given.
 - **One record on `<workspace>.tasks`**, when seeds are set. The value is a protobuf `TaskEvent`, so
   it reads as binary in a terminal; the key is legible, because it is the session identifier.
 

@@ -50,3 +50,10 @@ Feature: The front door says what the crew is and how to start it
   Scenario: Everything in it can be copied back out
     When a reader opens the front door
     Then it holds no blockquote, no table and no dash used as punctuation
+
+  # A reader's first question is not what work is. It is how work differs from the task they already
+  # know how to send. The front door used to answer it and now points at the document that does, so
+  # what is held is that a reader is still sent somewhere that gives them the answer.
+  Scenario: It sends a reader somewhere that says how a task and a piece of work differ
+    When a reader opens the front door
+    Then the document it names for the words tells a task and a piece of work apart

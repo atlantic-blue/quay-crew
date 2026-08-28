@@ -9,8 +9,8 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-// echoModelSessionID is the session id EchoRunner reports, so a resumed task is distinguishable from
-// a new one in tests and smoke runs.
+// echoModelSessionID is the conversation EchoRunner reports when it was given no name, so a resumed
+// task is distinguishable from a new one in tests and smoke runs.
 const echoModelSessionID = "echo-session"
 
 // EchoRunner runs `echo` inside the session's sandbox and returns what it printed.
@@ -43,5 +43,16 @@ func (EchoRunner) Run(ctx context.Context, box sandbox.Sandbox, req Request) (Re
 		return Response{}, fmt.Errorf("model: read output: %w", readErr)
 	}
 
-	return Response{Reply: strings.TrimRight(string(out), "\n"), ModelSessionID: echoModelSessionID}, nil
+	return Response{Reply: strings.TrimRight(string(out), "\n"), ModelSessionID: conversationOf(req, echoModelSessionID)}, nil
+}
+
+// conversationOf is the conversation this task ran in, as a runtime that honours the flag reports it,
+// falling back to a name of its own when it was given none. The crew names a conversation
+// before the task starts, so a double that answered with its own name regardless would be looser than
+// the thing it stands in for: every task would read as the runtime having ignored the flag.
+func conversationOf(req Request, fallback string) string {
+	if req.ModelSessionID != "" {
+		return req.ModelSessionID
+	}
+	return fallback
 }
