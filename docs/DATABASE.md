@@ -214,7 +214,7 @@ left join sessions s on s.project = p.id
 group by 1 order by 1;
 ```
 
-A session's history, which is the same thing `quay tasks` prints:
+A session's history, which is the same thing `quay task list` prints:
 
 ```sql
 select occurred_at, status, left(prompt, 60) as asked, left(reply, 60) as answered

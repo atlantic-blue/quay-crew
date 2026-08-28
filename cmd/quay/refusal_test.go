@@ -63,7 +63,7 @@ func TestAMissingWorkspaceSaysWhatTheCrewHas(t *testing.T) {
 
 func TestAMissingSessionSaysWhatTheProjectHas(t *testing.T) {
 	client := aCrew(t)
-	mustRun(t, client, "dispatch", "itv/fe-player", "hello")
+	mustRun(t, client, "task", flagDispatch, "itv/fe-player", "hello")
 
 	err := refused(t, client, "use", "itv/fe-player/ffffffff")
 	for _, want := range []string{"no session", "ffffffff"} {
@@ -90,7 +90,7 @@ func TestAnEmptyLevelSaysHowToMakeOneRatherThanListingNothing(t *testing.T) {
 // change without every caller changing with it.
 func TestEveryLevelIsStillRecognisedAsNotFound(t *testing.T) {
 	client := aCrew(t)
-	mustRun(t, client, "dispatch", "itv/fe-player", "hello")
+	mustRun(t, client, "task", flagDispatch, "itv/fe-player", "hello")
 
 	for _, address := range []string{"nope", "itv/nope", "itv/fe-player/ffffffff"} {
 		if err := refused(t, client, "use", address); !errors.Is(err, workspace.ErrNotFound) {
@@ -113,7 +113,7 @@ func TestStandingSomewhereTheCrewNoLongerHasSaysSo(t *testing.T) {
 	// Every command that defaults to where you are, not just the one that was noticed. A listing and
 	// a dispatch resolve the address by different roads, and the first version of this fix only
 	// covered one of them, which a mutation caught.
-	for _, command := range [][]string{{"sessions"}, {"dispatch", "hello"}, {"context"}} {
+	for _, command := range [][]string{{"sessions"}, {"task", flagDispatch, "hello"}, {"context"}} {
 		err := refused(t, client, command...)
 		if !strings.Contains(err.Error(), "standing in ghost/gone") {
 			t.Errorf("quay %s does not say where you are standing: %s", strings.Join(command, " "), err)

@@ -1,7 +1,8 @@
 // Command quay is the command line channel, a client of the control plane. You create workspaces,
-// start a task and list sessions. Dispatching lets go of the task and asking waits for its answer,
-// which is the one difference between the two ways of talking to a session. Async chat channels use
-// the event log instead; this tool talks to the ControlPlaneService gRPC API directly.
+// start a task and list sessions. `quay task` waits here for the answer and `quay task --dispatch`
+// lets go of it, which is the one difference between the two ways of talking to a session. Async
+// chat channels use the event log instead; this tool talks to the ControlPlaneService gRPC API
+// directly.
 package main
 
 import (
@@ -62,19 +63,19 @@ func mentions(feature features.Feature, needle string) bool {
 }
 
 // removedFlags are the flags this tool used to take. They are refused by name rather than ignored,
-// because ignoring one is worse than not having it: `quay dispatch --project default "hello"` reads
+// because ignoring one is worse than not having it: `quay task --project default "hello"` reads
 // as a perfectly good command, and what actually happened was that the flag and its value became the
 // first three words of the message.
 // Each entry carries the whole of its own advice, because what to do instead differs: the three that
 // addresses replaced are answered by an address, and the fourth is answered by a different command.
 var removedFlags = map[string]string{
-	"--project": "an address names the project: quay dispatch <workspace>/<project> \"...\"" +
+	"--project": "an address names the project: quay task <workspace>/<project> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--workspace": "an address names the workspace: quay sessions <workspace>" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
-	"--session": "an address names the session: quay dispatch <workspace>/<project>/<session> \"...\"" +
+	"--session": "an address names the session: quay task <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
-	"--thread": "an address names the session: quay dispatch <workspace>/<project>/<session> \"...\"" +
+	"--thread": "an address names the session: quay task <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
 		"with quay skill attach <workspace> git and ask the session to clone what it works on",
@@ -82,13 +83,46 @@ var removedFlags = map[string]string{
 	// "say where with an address instead" was advice that could not be acted on, since neither is
 	// asking where anything is.
 	"--version": "which build this is: quay version",
-	// Both halves of dispatching are a word of their own, so neither is a flag and neither can be
-	// quietly swallowed into the message.
-	"--detach": "quay dispatch already lets go: the task runs in the crew and quay tasks <session> " +
+	// Letting go is one flag on one word now, so every other spelling of it names that flag, and
+	// none of them can be quietly swallowed into the message.
+	"--detach": "letting go is quay task --dispatch [<address>] \"...\", and quay task list <session> " +
 		"reads it back",
-	"--wait": "waiting for the answer is its own command: quay ask [<address>] \"...\"",
-	"--no-wait": "letting go is what dispatch does: quay dispatch [<address>] \"...\"" +
-		"\n\nand quay ask waits for the answer instead",
+	"--wait": "quay task waits for the answer already: quay task [<address>] \"...\"",
+	"--no-wait": "letting go is quay task --dispatch [<address>] \"...\"" +
+		"\n\nand quay task on its own waits for the answer instead",
+}
+
+// removedCommands are the words this tool used to take, each against what to type now.
+//
+// A removed command refuses by being absent from the table in run and present here, rather than by a
+// case of its own, so the next word removed cannot forget to say anything. The three that one word
+// replaced are why: ask, dispatch and tasks were three top level commands for one entity, while work
+// and flow were each one noun with verbs under it.
+//
+// None of these is a quiet alias. A word that still works keeps two spellings alive for one thing, a
+// word that becomes an unknown command reads as the tool being broken, and a word absorbed into the
+// next argument is worse than both, because the command then succeeds. Every entry here leaves run
+// holding an error, so the process exits non zero and a caller reading the status cannot take a
+// refusal for a success.
+var removedCommands = map[string]string{
+	"ask": "a task is one word now, and waiting here for the answer is what it does" +
+		"\n\n  quay task [<address>] \"...\"",
+	"dispatch": "a task is one word now, and letting go of one is a flag on it" +
+		"\n\n  quay task --dispatch [<address>] \"...\"",
+	"tasks": "a task is one word now, and reading a session's history back is a verb under it" +
+		"\n\n  quay task list <session>",
+	"threads": "a thread is called a session now, because the crew has one word for a conversation " +
+		"and this was the second. Use quay sessions",
+	"thread": "a thread is called a session now, because the crew has one word for a conversation " +
+		"and this was the second. Use quay sessions",
+	"turns": "a turn is called a task now, because a turn is a word from conversation analysis and " +
+		"nothing about it said how long it takes. Use quay task list <session>",
+	"turn": "a turn is called a task now, because a turn is a word from conversation analysis and " +
+		"nothing about it said how long it takes. Use quay task list <session>",
+	"repository": "a repository is cloned in conversation now, following the git skill. Import it " +
+		"once with quay skill import skills/git, attach it with quay skill attach <workspace> git, " +
+		"and ask the session to clone what it works on",
+	"panel": "`quay` on its own opens the crew, and p shows or hides the conversation beside it",
 }
 
 // helpSpellings are every way somebody asks what this tool does. Asking for help is the one thing
@@ -100,17 +134,19 @@ var helpSpellings = map[string]bool{
 
 // takenFlags are the flags a command genuinely takes, against the command that takes them.
 //
-// One entry, and it is deliberate: everything a flag used to say here is said with an address, and
-// this one says what shape the output takes rather than where anything is.
+// Almost none, and that is deliberate: everything a flag used to say here is said with an address.
+// The ones that remain say what shape the output takes, or which of two things a word does, rather
+// than where anything is.
 var takenFlags = map[string]map[string]bool{
 	"answer": {allAnswers: true},
+	"task":   {flagDispatch: true},
 	"work":   workFlagsTaken(),
 	"limits": limitsFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
 // flag that is quietly ignored is worse than one that never existed, because
-// `quay dispatch --project default "hello"` reads as a good command and what actually happened was
+// `quay task --project default "hello"` reads as a good command and what actually happened was
 // that both words became the start of the message.
 func refuseFlags(args []string) error {
 	taken := takenFlags[args[0]]
@@ -141,6 +177,11 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		fmt.Fprintln(out, usage)
 		return nil
 	}
+	// Before the flags, because a flag on a word that no longer exists is not what the operator has
+	// to fix: naming the flag would send them to correct one part of a command that is gone whole.
+	if instead, removed := removedCommands[args[0]]; removed {
+		return fmt.Errorf("there is no %s command: %s", args[0], instead)
+	}
 	if err := refuseFlags(args); err != nil {
 		return err
 	}
@@ -157,10 +198,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runWorkspace(ctx, client, args[1:], out)
 	case "project":
 		return runProject(ctx, client, args[1:], out)
-	case "dispatch":
-		return runDispatch(ctx, client, args[1:], out)
-	case "ask":
-		return runAsk(ctx, client, args[1:], out)
+	case "task":
+		return runTask(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":
@@ -169,11 +208,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRender(args[1:], out)
 	case "room":
 		return runRoom(ctx, client, out)
-	case "panel":
-		// The way off the command that used to open this. `quay` opens the crew itself now, so this
-		// is refused loudly rather than being taken for an address or an unknown word.
-		return fmt.Errorf("there is no panel command: `quay` on its own opens the crew, and p shows " +
-			"or hides the conversation beside it")
 	// Internal: the panes quay opens run these, and the model runtime in a sandbox runs the last of
 	// them. Not in the usage, because they are not commands anybody types.
 	case "header":
@@ -184,25 +218,12 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions", "session":
 		return runSessions(ctx, client, args[1:], out)
-	case "tasks", "task":
-		return runTasks(ctx, client, args[1:], out)
 	case "answer":
 		return runAnswer(ctx, client, args[1:], out)
 	case "stop":
 		return runStop(ctx, client, args[1:], out)
 	case "drain":
 		return runDrain(ctx, client, args[1:], out)
-	// The way off the old words. Refused by name rather than treated as an unknown command, because
-	// they are still in fingers, in scripts and in notes, and a command that silently stops existing
-	// reads as the tool being broken.
-	case "threads", "thread":
-		return fmt.Errorf(
-			"there is no threads command: a thread is called a session now, because the crew has one " +
-				"word for a conversation and this was the second. Use quay sessions")
-	case "turns", "turn":
-		return fmt.Errorf(
-			"there is no turns command: a turn is called a task now, because a turn is a word from " +
-				"conversation analysis and nothing about it said how long it takes. Use quay tasks <session>")
 	case "mode":
 		return runMode(ctx, client, args[1:], out)
 	case "label":
@@ -223,13 +244,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runLimits(ctx, client, args[1:], out)
 	case "flow":
 		return runFlow(ctx, client, args[1:], out)
-	case "repository":
-		// The way off the commands that used to be here. Refused by name rather than treated as an
-		// unknown word, because they are still in somebody's fingers, their scripts and their notes.
-		return fmt.Errorf(
-			"there are no repository commands: a repository is cloned in conversation now, following " +
-				"the git skill. Import it once with quay skill import skills/git, attach it with " +
-				"quay skill attach <workspace> git, and ask the session to clone what it works on")
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}
@@ -274,7 +288,7 @@ func addressFrom(typed string) (workspace.Path, error) {
 	}
 	if current.IsZero() {
 		return workspace.Path{}, fmt.Errorf(
-			"you are nowhere yet: run `quay use <workspace>/<project>`, or give an address, for example `quay dispatch me/house-bills \"hello\"`")
+			"you are nowhere yet: run `quay use <workspace>/<project>`, or give an address, for example `quay task me/house-bills \"hello\"`")
 	}
 	return current, nil
 }
@@ -690,92 +704,6 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		names[p.GetId()] = p.GetName()
 	}
 	return names
-}
-
-// runDispatch starts a task and lets go of it. The crew runs it, and this command comes back as soon
-// as the session exists.
-//
-// Letting go is the default because a task takes as long as the work takes, which is minutes and
-// sometimes an hour, and holding it in the client makes the terminal the weakest part of the crew: a
-// dispatch killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
-// nothing about why, and the work was gone. The control plane has always been able to do this. Only
-// the console could ask for it.
-func runDispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	return dispatchTask(ctx, client, args, "dispatch", true, out)
-}
-
-// runAsk starts a task and waits for the answer, which is what somebody typing a short question
-// wants: they are looking at the terminal and the reply is the point.
-func runAsk(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	return dispatchTask(ctx, client, args, "ask", false, out)
-}
-
-// dispatchTask is the road both of them take. One request, one difference: whether anybody waits.
-func dispatchTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string,
-	command string, letGo bool, out io.Writer) error {
-	typed, words := workspace.SplitSession(args)
-	text := strings.TrimSpace(strings.Join(words, " "))
-	if text == "" {
-		return fmt.Errorf("usage: quay %s [<address>] <text>", command)
-	}
-
-	project, handle := "", ""
-	switch {
-	case typed == "" || strings.Contains(typed, workspace.Separator):
-		// No address at all is where the operator is standing, which may already name a session.
-		located, err := locate(ctx, client, typed)
-		if err != nil {
-			return err
-		}
-		if !located.HasProject() {
-			return needsAProject(ctx, client, located)
-		}
-		project, handle = located.ProjectID, located.SessionID
-	default:
-		// One bare identifier, read off the session column. The crew's own call takes a project and a
-		// handle, so both are read from the session the operator named rather than worked out again.
-		session, err := workspace.Session(ctx, client, typed)
-		if err != nil {
-			return fmt.Errorf("%w\n\nto send %q as the message instead, quote the whole message", err, typed)
-		}
-		project, handle = session.GetProject(), session.GetHandle()
-	}
-
-	resp, err := client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: project, Handle: handle, Text: text, Detach: letGo,
-	})
-	if err != nil {
-		return err
-	}
-	// Said out loud, because an empty line where a reply used to be reads as a task that answered
-	// nothing. It names both ways back in: the history, and the conversation itself.
-	if letGo {
-		fmt.Fprintf(out, "started. the crew has it, and nothing here is waiting for it.\n")
-		fmt.Fprintf(out, "read it back with quay tasks %s, or sit in it with quay attach %s\n",
-			display.ShortID(resp.GetHandle()), display.ShortID(resp.GetHandle()))
-	} else {
-		fmt.Fprintln(out, resp.GetReply())
-	}
-	fmt.Fprintf(out, "(session %s, handle %s)\n", resp.GetId(), resp.GetHandle())
-	return nil
-}
-
-// needsAProject explains an address that stops at a workspace and lists what it holds, because the
-// next thing the operator needs is the name of one of those projects.
-func needsAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, located workspace.Location) error {
-	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: located.WorkspaceID})
-	if err != nil {
-		return fmt.Errorf("%s is a workspace: a task runs in a project inside it", located.Path.Workspace)
-	}
-	if len(resp.GetProjects()) == 0 {
-		return fmt.Errorf("%s holds no projects yet: create one with `quay project create <name>`", located.Path.Workspace)
-	}
-	names := make([]string, 0, len(resp.GetProjects()))
-	for _, project := range resp.GetProjects() {
-		names = append(names, project.GetName())
-	}
-	return fmt.Errorf("%s is a workspace: a task runs in a project inside it, one of %s",
-		located.Path.Workspace, strings.Join(names, ", "))
 }
 
 // runContext says where the files the model reads live. It asks the control plane rather than working

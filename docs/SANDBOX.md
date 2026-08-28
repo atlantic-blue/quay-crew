@@ -70,15 +70,15 @@ You need Docker and a Claude subscription.
 4. Ask something and get a real reply:
 
    ```
-   quay ask "say pong"
+   quay task "say pong"
    ```
 
    You are already in `demo/house-bills`, so nothing needs saying twice. To reach somewhere else for
-   one task without moving, put the address first: `quay ask demo/gardening "order the bulbs"`.
+   one task without moving, put the address first: `quay task demo/gardening "order the bulbs"`.
 
-   `quay ask` waits for the answer, which is what a short question wants. Real work takes minutes, so
-   `quay dispatch` starts the task and lets go of it: the crew runs it, and `quay tasks <session>`
-   reads it back.
+   `quay task` waits for the answer, which is what a short question wants. Real work takes minutes, so
+   `quay task --dispatch` starts the task and lets go of it: the crew runs it, and
+   `quay task list <session>` reads it back.
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first task and is reused for the
    rest of the session. A second task on the same session continues the same conversation.
@@ -152,7 +152,7 @@ sequenceDiagram
     participant DB as "store"
     participant SBX as "sandbox"
 
-    YOU->>CP: "quay dispatch 'read the repository'"
+    YOU->>CP: "quay task --dispatch 'read the repository'"
     CP->>DB: "name the conversation, before the task"
     CP->>SBX: "claude --session-id <conversation> -p ..."
     Note over CP,SBX: "the task is what makes the name true"
@@ -200,8 +200,8 @@ other name findable rather than quietly adopting it.
 
 ## Getting inside a conversation
 
-`quay dispatch` starts a task and returns, and `quay ask` waits for its answer. To sit inside the
-conversation, with its history, and keep typing:
+`quay task` waits for its answer, and `quay task --dispatch` starts a task and returns. To sit inside
+the conversation, with its history, and keep typing:
 
 ```
 quay sessions

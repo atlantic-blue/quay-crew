@@ -34,7 +34,7 @@ Feature: A first run is one command
       | quay workspace create <name>            |
       | quay project create <name>              |
       | quay secret set CLAUDE_CODE_OAUTH_TOKEN |
-      | quay ask "say pong"                     |
+      | quay task "say pong"                    |
 
   Scenario: Running it again keeps the configuration the operator edited
     Given a machine with no crew on it

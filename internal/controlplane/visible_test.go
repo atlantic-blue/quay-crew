@@ -35,7 +35,7 @@ func waitFor(t *testing.T, started <-chan struct{}, what string) {
 	}
 }
 
-// The defect itself. The caller waits, which is what `quay dispatch` does, so nothing about this
+// The defect itself. The caller waits, which is what `quay task` does, so nothing about this
 // task is detached and nothing about it was visible either.
 func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 	runner := &model.FakeRunner{

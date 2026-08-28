@@ -56,7 +56,7 @@ func TestAMountedFileReachesTheSessionByteForByte(t *testing.T) {
 		t.Fatalf("mounting echoed what is in the file: %q", said)
 	}
 
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 	got, given := writtenInto(boxes, "/run/secrets/gitconfig")
 	if !given {
 		t.Fatal("the session was given no file at /run/secrets/gitconfig")
@@ -73,7 +73,7 @@ func TestMountingDoesNotTrimTheWayASecretDoes(t *testing.T) {
 
 	saying(t, aGitConfig)
 	mustRun(t, client, "secret", "mount", "gitconfig")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	got, _ := writtenInto(boxes, "/run/secrets/gitconfig")
 	if got != aGitConfig {
@@ -88,7 +88,7 @@ func TestAMountedSecretIsNotAlsoInTheEnvironment(t *testing.T) {
 
 	saying(t, aGitConfig)
 	mustRun(t, client, "secret", "mount", "gitconfig")
-	mustRun(t, client, "ask", "hello")
+	mustRun(t, client, "task", "hello")
 
 	if got, given := carried(boxes, "gitconfig"); given {
 		t.Fatalf("the session carries gitconfig=%q in its environment", got)

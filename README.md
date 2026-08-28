@@ -70,10 +70,10 @@ can run with `make features`, or read from the binary itself with `quay features
 - **A session is a conversation in its own container.** It starts on the first task, is reused for
   every task after it, and runs the Claude Code command line tool on your subscription, so a task
   costs no API credit.
-- **You address the crew by path.** `quay use me/house-bills`, then `quay dispatch "..."` to start
-  work and let go of it, or `quay ask "..."` to wait here for the answer. Creating a workspace or a
-  project moves you into it. An address typed on a command applies to that command only, and a
-  session is the third level, so standing in one continues that conversation.
+- **You address the crew by path.** `quay use me/house-bills`, then `quay task "..."` to wait here
+  for the answer, or `quay task --dispatch "..."` to start work and let go of it. Creating a
+  workspace or a project moves you into it. An address typed on a command applies to that command
+  only, and a session is the third level, so standing in one continues that conversation.
 - **You declare work with `quay work create --title "..." --brief "..."`.** Every rule is checked at
   the write, so a refusal reaches you while you are still looking, and each one says what to do
   instead. `quay work list`, `quay work show` and `quay work stop` read it back and halt it.
@@ -136,7 +136,7 @@ make install     # writes ~/.quay/env, builds the tool, the hooks and the image,
 quay workspace create me
 quay project create house-bills
 quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
-quay ask "say pong"
+quay task "say pong"
 ```
 
 `make install` is the whole first run, and running it again is safe. It never writes over the

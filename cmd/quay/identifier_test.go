@@ -51,16 +51,16 @@ func TestTasksTakesTheHandleAndTheAddressToo(t *testing.T) {
 	session := onlySession(t, client)
 
 	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8], addressOf(t, client)} {
-		said := mustRun(t, client, "tasks", typed)
+		said := mustRun(t, client, "task", "list", typed)
 		if !strings.Contains(said, "hello") {
-			t.Fatalf("quay tasks %s said %q, want the task that was dispatched", typed, said)
+			t.Fatalf("quay task list %s said %q, want the task that was sent", typed, said)
 		}
 	}
 }
 
 // The way off the old word, not only the way onto the new one.
 //
-// quay tasks is in fingers, in scripts and in notes. A command that simply stops existing reads as
+// quay turns is in fingers, in scripts and in notes. A command that simply stops existing reads as
 // the tool being broken, and the refusal has to name what to type instead or it is no better.
 func TestTheOldTurnsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
@@ -69,7 +69,7 @@ func TestTheOldTurnsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
 		if err == nil {
 			t.Fatalf("quay %s was accepted, and it no longer does anything", typed)
 		}
-		if !strings.Contains(err.Error(), "quay tasks") {
+		if !strings.Contains(err.Error(), "quay task list") {
 			t.Fatalf("the refusal for quay %s does not say what to type instead: %v", typed, err)
 		}
 	}
@@ -94,7 +94,7 @@ func TestTheOldThreadsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
 // The flag the address replaced keeps being refused under its old name too, for the same reason.
 func TestTheOldThreadFlagIsRefusedAndNamesTheAddress(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
-	err := run(context.Background(), client, []string{"dispatch", "--thread", "x", "hello"}, io.Discard, "")
+	err := run(context.Background(), client, []string{"task", flagDispatch, "--thread", "x", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("--thread was accepted, and it no longer does anything")
 	}
@@ -110,7 +110,7 @@ func TestTheNextTaskRunsInTheModeSetThroughTheHandle(t *testing.T) {
 	handle := onlySession(t, client).GetHandle()[:8]
 
 	mustRun(t, client, "mode", handle, "dangerous")
-	mustRun(t, client, "ask", addressOf(t, client), "and again")
+	mustRun(t, client, "task", addressOf(t, client), "and again")
 
 	if was := runner.LastReq.PermissionMode; was != "bypassPermissions" {
 		t.Fatalf("the task after the change ran in %q, want bypassPermissions", was)
@@ -175,7 +175,7 @@ func TestASessionScopedCommandTakesAnAddressCarryingTheId(t *testing.T) {
 }
 
 // Dispatch is the command an operator types most, and it was the one that took neither identifier.
-// The word was not refused, it was joined to the message: `quay dispatch 615d48dc "and again"` sent
+// The word was not refused, it was joined to the message: `quay task 615d48dc "and again"` sent
 // "615d48dc and again" to a session nobody asked for. These run the real command.
 
 func TestDispatchTakesTheIdentifierTheListingPrints(t *testing.T) {
@@ -183,13 +183,13 @@ func TestDispatchTakesTheIdentifierTheListingPrints(t *testing.T) {
 	session := onlySession(t, client)
 
 	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8], addressOf(t, client)} {
-		said := mustRun(t, client, "dispatch", typed, "and again")
+		said := mustRun(t, client, "task", flagDispatch, typed, "and again")
 		if !strings.Contains(said, "(session "+session.GetId()+",") {
-			t.Fatalf("quay dispatch %s said %q, want the session the listing named", typed, said)
+			t.Fatalf("quay task %s said %q, want the session the listing named", typed, said)
 		}
-		history := mustRun(t, client, "tasks", session.GetId()[:8])
+		history := mustRun(t, client, "task", "list", session.GetId()[:8])
 		if strings.Contains(history, typed+" and again") {
-			t.Fatalf("quay dispatch %s put the identifier into the message:\n%s", typed, history)
+			t.Fatalf("quay task %s put the identifier into the message:\n%s", typed, history)
 		}
 	}
 }
@@ -201,10 +201,10 @@ func TestDispatchTakesTheIdentifierOfASessionSomebodyHasNamed(t *testing.T) {
 	session := onlySession(t, client)
 	mustRun(t, client, "label", session.GetId()[:8], "the bills")
 
-	said := mustRun(t, client, "dispatch", session.GetId()[:8], "and again")
+	said := mustRun(t, client, "task", flagDispatch, session.GetId()[:8], "and again")
 
 	if !strings.Contains(said, "(session "+session.GetId()+",") {
-		t.Fatalf("quay dispatch said %q, want the session the listing named", said)
+		t.Fatalf("quay task said %q, want the session the listing named", said)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 	session := onlySession(t, client)
 
-	err := refused(t, client, "dispatch", "ffffffffff", "and again")
+	err := refused(t, client, "task", flagDispatch, "ffffffffff", "and again")
 
 	said := err.Error()
 	if !strings.Contains(said, session.GetId()[:8]) {
@@ -234,12 +234,12 @@ func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
 func TestAnOrdinaryFirstWordIsStillTheMessage(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 
-	said := mustRun(t, client, "ask", "hello", "there")
+	said := mustRun(t, client, "task", "hello", "there")
 
 	if !strings.Contains(said, "ok") {
-		t.Fatalf("quay ask hello there said %q, want the reply to a message", said)
+		t.Fatalf("quay task hello there said %q, want the reply to a message", said)
 	}
 	if strings.Contains(said, "no session") {
-		t.Fatalf("quay ask hello there was read as a session: %q", said)
+		t.Fatalf("quay task hello there was read as a session: %q", said)
 	}
 }

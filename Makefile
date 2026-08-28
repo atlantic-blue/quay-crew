@@ -293,7 +293,7 @@ install:
 	@echo "  quay workspace create <name>"
 	@echo "  quay project create <name>"
 	@echo "  quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>"
-	@echo "  quay ask \"say pong\""
+	@echo "  quay task \"say pong\""
 
 ## tool: build the quay command line tool and install it over the copy your shell runs
 tool:
