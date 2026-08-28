@@ -110,6 +110,54 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// While the task runs, not after it. Read off the task itself rather than off the session, so this
+	// says the operator lands where the work is happening rather than only that two of the crew's own
+	// fields agree with each other.
+	sc.Step(`^the command opens the conversation the task is running in$`, func(ctx context.Context) error {
+		w, a := worldFrom(ctx), attachFrom(ctx)
+		if a.err != nil {
+			return fmt.Errorf("attaching was refused: %w", a.err)
+		}
+		running, err := w.conversationOfFirstTask()
+		if err != nil {
+			return err
+		}
+		if got := conversationIn(a.spec); got != running {
+			return fmt.Errorf("the command opens conversation %q and the task is running in %q, "+
+				"so the operator is watching an empty conversation beside the work", got, running)
+		}
+		return nil
+	})
+
+	// The name came from the crew, before the task, which is what makes it knowable while the task
+	// runs. A task that resumed instead would be asking for a conversation nothing has written yet.
+	sc.Step(`^the crew named the conversation before the task started$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		first, found := w.runner.task(0)
+		if !found {
+			return fmt.Errorf("no task has reached the model runner")
+		}
+		if first.ModelSessionID == "" {
+			return fmt.Errorf("the task is running in a conversation nobody named")
+		}
+		if first.ConversationStarted {
+			return fmt.Errorf("the task resumed conversation %q, which nothing has written yet: "+
+				"the model exits saying no conversation was found", first.ModelSessionID)
+		}
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
+		if err != nil {
+			return err
+		}
+		if got := resp.GetSession().GetModelSessionId(); got != first.ModelSessionID {
+			return fmt.Errorf("the session holds conversation %q while its task runs in %q", got, first.ModelSessionID)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator asks how to attach to a session that has never had a task$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
 		// A session exists only once a task creates it, so a failing runner gives us one with no
@@ -147,14 +195,19 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the command resumes the conversation the task started$`, func(ctx context.Context) error {
-		a := attachFrom(ctx)
+		w, a := worldFrom(ctx), attachFrom(ctx)
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
-		line := strings.Join(a.spec.GetArgv(), " ")
-		// conversation-1 is what the recording runner hands back for a first task.
-		if !strings.Contains(line, "conversation-1") {
-			return fmt.Errorf("the command is %q, want it to resume the task's conversation", line)
+		// The conversation the task itself ran in, read off the task rather than off the session, so
+		// this says the operator lands where the work happened rather than only that two of the crew's
+		// own fields agree.
+		ran, err := w.conversationOfFirstTask()
+		if err != nil {
+			return err
+		}
+		if got := conversationIn(a.spec); got != ran {
+			return fmt.Errorf("the command opens conversation %q and the task ran in %q", got, ran)
 		}
 		return nil
 	})

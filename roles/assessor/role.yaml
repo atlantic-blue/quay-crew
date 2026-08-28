@@ -1,0 +1,11 @@
+name: assessor
+version: 1
+summary: reads an existing codebase and reports its test coverage, its contracts, its risks and its gaps against the standards
+model: sonnet
+receives:
+  - work
+  - context
+  - skills
+may:
+  - work.create
+  - work.read

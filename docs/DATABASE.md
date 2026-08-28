@@ -144,6 +144,18 @@ landed is adopted rather than asked for a second time.
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
 copy going outward rather than a source it could be rebuilt from.
 
+**`pending_triggers`** is the queue a flow run starts from when something happens: one row per
+trigger, carrying the flow to run, the project to run it in, what the trigger carried as a payload,
+the piece of work that caused it where one did, and the claim a poller takes on it. `status` is
+`pending`, `started` or `failed`, and a failed row keeps the sentence saying why on `reason`, which
+is the only place that failure is ever read.
+
+It is beside `work_events` rather than inside it, and the two look alike on purpose. An audit record
+is never claimed, so marking one consumed would rewrite the history; a trigger has to be claimed
+exactly once, because the claim is what stops two pollers starting two runs from one thing happening.
+Nothing writes a row from outside the control plane's own process yet. See section 14 of
+`docs/ORCHESTRATION.md`.
+
 **`schema_migrations`** is one row per applied migration, with the timestamp it was applied.
 
 ```mermaid
@@ -155,6 +167,8 @@ erDiagram
     contexts   }o..o| projects : "renders into (scope and owner, no key)"
     projects   ||--o{ work : "holds declared work"
     work       ||--o{ work_events : "records what happened"
+    projects   ||--o{ pending_triggers : "holds what happened, waiting to start a run"
+    work       |o--o{ pending_triggers : "caused"
 ```
 
 ## Queries worth knowing

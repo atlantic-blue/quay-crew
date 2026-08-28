@@ -380,3 +380,37 @@ func plain(value string) bool {
 	}
 	return true
 }
+
+// All reads every role under a directory, and refuses a directory holding none.
+//
+// Refusing empty is the point of it. A loader that answers "no roles, no error" is how a check on
+// the roles a build ships reports success against a directory that lost them: finding nothing to do
+// looks exactly like doing it all correctly. So the caller asking for a set of roles is told when
+// there is not one, and the shipped set is held up by a test that reads this directory rather than a
+// list somebody typed out and has to remember to extend.
+func All(dir string) ([]Role, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("role: read %s: %w", dir, err)
+	}
+	roles := make([]Role, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		at := filepath.Join(dir, entry.Name())
+		if _, err := os.Stat(filepath.Join(at, ManifestFile)); err != nil {
+			continue
+		}
+		loaded, err := One(at)
+		if err != nil {
+			return nil, err
+		}
+		roles = append(roles, loaded)
+	}
+	if len(roles) == 0 {
+		return nil, fmt.Errorf("role: %s holds no roles, and a directory with nothing in it is not a set of roles", dir)
+	}
+	sort.Slice(roles, func(i, j int) bool { return roles[i].Name < roles[j].Name })
+	return roles, nil
+}

@@ -256,6 +256,15 @@ func settle(graph Graph, run Run, at string) (Run, []Command, error) {
 			// Put down the way a wait is, but woken by a person rather than by the clock.
 			run.Status, run.Question = StatusAsking, render(node.Text, run.State)
 			return run, nil, nil
+		case NodeTrigger:
+			// Pure, and the run walks straight through it. The trigger arrived before the run
+			// existed and its payload is already the run's opening state, so there is nothing left
+			// here to wait for. It is the entry marker, not a step.
+			next, err := follow(graph, at, "")
+			if err != nil {
+				return run, nil, err
+			}
+			at = next
 		case NodeChoice:
 			answer := "true"
 			for key, want := range node.On {

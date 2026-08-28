@@ -2224,7 +2224,73 @@ left for somebody to find:
   transition cap. Checking each step against the ceiling would have meant no flow could run at all
   until an operator raised a limit, because the default is zero.
 
-The trigger node and `pending_triggers` are still slice 9, and nothing in this delivery touched them.
+### What of the trigger node shipped, 27 August 2026
+
+Slice 9, the first slice of `quay-crew#399`. A run can now start because something happened.
+
+**The `trigger` node type.** It is the node a graph begins at, and a graph may have one. A trigger
+node anywhere else is refused at import, because a node a run walks onto after the thing that
+triggered it already happened reads as reacting and is not. It declares nothing: what a trigger
+carries is decided by whoever raises one, and the row names the graph rather than a node. The reducer
+walks straight through it onto the first node that does work, so passing through costs no transition
+out of the graph's cap.
+
+```yaml
+name: fix-red
+version: 1
+nodes:
+  arrived: { type: trigger }
+  fix:     { type: dispatch, prompt: "the build at {{url}} is red. Fix it." }
+edges:
+  - [arrived, fix]
+  - [fix, done]
+```
+
+**The `pending_triggers` table**, migration `0035`, with the shape section 14 gives it above: the
+graph to run, where to run it, what the trigger carried, what caused it, and the claim. The payload
+becomes the run's opening state, which is what `{{url}}` above reads.
+
+**An in process source.** `flow.Engine.Raise` writes one row. A caller inside the control plane's own
+process calls it, and it is one statement, so it can sit in the transaction of whatever caused it.
+
+**The poller claims and starts.** A fourth thing its tick does, beside carrying worked steps on,
+starting scheduled runs and resuming waits. The latency is the poll interval, five seconds.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> pending: a claim runs out, so another poller takes the row
+    pending --> started: claimed, and the run written in the same transaction
+    pending --> failed: no such flow, or a graph that does not begin at a trigger node
+    started --> [*]
+    failed --> [*]
+```
+
+**Exactly one run per trigger, and two writes make it so.** The claim is a conditional update in one
+statement, the same lease discipline the work controller holds a piece of work under, so two pollers
+reading one pending row leave one holder. Then the run, the piece of work carrying it and the row
+saying started land in one transaction, so a poller that dies after writing the run leaves a row that
+says started rather than one the next poller starts again. Either alone stops a second run in the
+ordinary race; both are needed for the crash.
+
+**A trigger that starts nothing fails loudly and keeps the sentence.** A flow nobody imported, or a
+graph that does not begin at a trigger node, marks the row `failed` with the words that say what to
+do about it, and the poller logs it once. It is not retried: a trigger read, refused and logged every
+five seconds forever would still leave a row saying pending, which reads exactly like a trigger
+nobody has got to yet.
+
+**A triggered run is carried by a piece of work like any other**, and its own work carries the label
+`flow.trigger`, so `quay work list --label flow.trigger=<id>` says why a run nobody started exists.
+Where the trigger names the work that caused it, the run's own work hangs under that work, which is
+what makes the depth limit bound a flow that triggers itself.
+
+**What it does not do.** Nothing outside this process can raise a trigger. There is no ingress and no
+broker: `QC_KAFKA_SEEDS` is untouched, a crew with it unset loses the export and nothing else, and
+reading the event log to write a trigger row is slice 3 of the issue. Nothing in the crew raises one
+either: a piece of work reaching a terminal phase does not write a trigger row yet, because which
+flows a finished piece of work should trigger is a matching rule this slice does not decide. There is
+no command that lists triggers or shows why one failed, so a failed row is read from the log line or
+from the database. `quay flow` is unchanged.
 
 ### Trigger rows and work events: one mechanism, two tables
 
@@ -2391,6 +2457,11 @@ log has ever had.
 
 *Removes nothing of the three blockers, and it is the difference between an automation you set off
 and an automation that reacts.* This is slices 1 and 3 of `quay-crew#399`. Neither needs a broker.
+
+**Slice 1 shipped, 27 August 2026.** The node type, the table, the in process source and the poller
+that claims a row and starts the run. See the delivery note under section 14 for what it does and
+what it does not: nothing outside this process raises a trigger yet, and no piece of work raises one
+when it finishes. The ingress is the rest of this slice.
 
 **10. Roles on work.** A piece of work names a role, the session runs as it, and `receives` is
 enforced at dispatch. This is `quay-crew#354` slices 2, 3 and 5, and it is the reason the substrate

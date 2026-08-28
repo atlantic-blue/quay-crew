@@ -69,8 +69,11 @@ func buildArgs(req Request, model string) []string {
 	if model != "" {
 		args = append(args, "--model", model)
 	}
+	// Which conversation, and which of the two ways of naming one. A first task used to carry neither,
+	// so the runtime named the conversation itself and told nobody until the task was over, and a
+	// session opened while it worked opened an empty conversation beside the one doing the work.
 	if req.ModelSessionID != "" {
-		args = append(args, "--resume", req.ModelSessionID)
+		args = append(args, conversationFlag(req.ConversationStarted), req.ModelSessionID)
 	}
 	// Additional settings, so the operator's own file inside the sandbox still applies and the crew's
 	// hooks are added to it rather than replacing it. Left off when there are none, because a path to
@@ -295,3 +298,30 @@ func parseStream(r io.Reader) (Response, string, string, error) {
 // unparsedKept bounds what is remembered of output that was not a stream event, so a command that
 // prints megabytes of something else cannot be held in memory whole.
 const unparsedKept = 4 << 10
+
+// conversationFlag is how a conversation is named on the command line: started under a name the
+// runtime has not seen, resumed when it has. The sandbox script that opens a conversation for an
+// operator chooses between the same two, on the same question, so a conversation reached by typing
+// and a conversation reached by dispatching a task are one conversation.
+func conversationFlag(started bool) string {
+	if started {
+		return "--resume"
+	}
+	return "--session-id"
+}
+
+// ConversationCheck compares the conversation the crew named with the one the runtime reported in its
+// output stream, and returns what to say when they differ. Empty means nothing to say.
+//
+// The identifier in the stream used to be where the name came from, which is why it arrived too late
+// to be any use. It is a check now: the crew hands the name down before the task starts, so a stream
+// carrying a different one means the runtime ignored the flag, and everything the crew reports about
+// that session afterwards, its history and what it cost, is being read from a transcript nobody wrote.
+// Both names are in the sentence, because the work is under the second one.
+func ConversationCheck(asked, reported string) string {
+	if asked == "" || reported == "" || asked == reported {
+		return ""
+	}
+	return fmt.Sprintf("the crew asked the model runtime for conversation %s and it used %s instead, "+
+		"so the flag was ignored and this session's history is under %s", asked, reported, reported)
+}

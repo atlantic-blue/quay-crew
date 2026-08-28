@@ -79,7 +79,7 @@ func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run,
 //
 // One transaction because a run outside the work tree is a run neither the depth limit nor the
 // budget counts, and a piece of work carrying a run that was never written is a row nothing explains.
-func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error {
+func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
 	state, attempts, err := runJSON(run)
 	if err != nil {
 		return err
@@ -103,6 +103,21 @@ func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *wo
 	}
 	if err := appendRunRecords(ctx, tx, records); err != nil {
 		return err
+	}
+	// The trigger this run answers is marked started here rather than after the commit, which is
+	// what makes one trigger start exactly one run: a poller that died in the gap would otherwise
+	// leave a run written and a row still pending, and the next poller would start a second run.
+	if trigger != "" {
+		tag, err := tx.Exec(ctx, `
+			update pending_triggers set status = $2, run = $3, updated_at = now()
+			where id = $1 and status = $4`,
+			trigger, flow.TriggerStarted, run.ID, flow.TriggerPending)
+		if err != nil {
+			return fmt.Errorf("mark a trigger started: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("store: trigger %s is no longer waiting to start a run, so this run was not written", trigger)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("create flow run: %w", err)

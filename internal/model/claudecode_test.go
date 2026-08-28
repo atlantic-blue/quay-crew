@@ -59,12 +59,101 @@ func TestBuildArgs(t *testing.T) {
 }
 
 func TestBuildArgsResumeAndMode(t *testing.T) {
-	got := strings.Join(buildArgs(Request{Text: "go on", ModelSessionID: "sess-1", PermissionMode: "acceptEdits"}, ""), " ")
+	got := strings.Join(buildArgs(Request{
+		Text: "go on", ModelSessionID: "sess-1", ConversationStarted: true, PermissionMode: "acceptEdits",
+	}, ""), " ")
 	if !strings.Contains(got, "--permission-mode acceptEdits") {
 		t.Fatalf("missing permission mode: %q", got)
 	}
 	if !strings.Contains(got, "--resume sess-1") {
 		t.Fatalf("missing resume: %q", got)
+	}
+}
+
+// The pair. A conversation the runtime has never seen is started under the name the crew gave it, and
+// one it has seen is resumed by that name. Both, because getting either wrong fails the task: resuming
+// a name with nothing behind it prints "No conversation found" and exits, and starting a name that is
+// already there is refused as one in use.
+//
+// The first of the two is the defect this pair exists for. A first task carried no name at all, so the
+// runtime named its own conversation and told nobody until the task was over, and anybody opening the
+// session while it worked opened an empty conversation beside the work.
+func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		started bool
+		want    string
+		absent  string
+		because string
+	}{
+		{
+			name: "the crew has named it and nothing has opened it", started: false,
+			want: "--session-id sess-1", absent: "--resume",
+			because: "the task is what makes the name true, and there is no transcript to resume",
+		},
+		{
+			name: "the runtime has opened it already", started: true,
+			want: "--resume sess-1", absent: "--session-id",
+			because: "it is the same conversation and the task continues it",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := strings.Join(buildArgs(Request{
+				Text: "go on", ModelSessionID: "sess-1", ConversationStarted: tc.started,
+			}, ""), " ")
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("the task is %q, want it to carry %q, because %s", got, tc.want, tc.because)
+			}
+			if strings.Contains(got, tc.absent) {
+				t.Errorf("the task is %q, and it must not carry %q, because %s", got, tc.absent, tc.because)
+			}
+		})
+	}
+}
+
+// A task with no conversation at all names none, which leaves the runtime to name its own. It is what
+// a crew that could not name one falls back to, and it must stay a fallback: nothing that runs a task
+// through the control plane arrives here, because the crew names the conversation first.
+func TestBuildArgsNamesNoConversationWhenItHasNone(t *testing.T) {
+	got := strings.Join(buildArgs(Request{Text: "go on"}, ""), " ")
+	for _, absent := range []string{"--session-id", "--resume"} {
+		if strings.Contains(got, absent) {
+			t.Fatalf("the task is %q, and it names a conversation nobody chose with %q", got, absent)
+		}
+	}
+}
+
+// What the runtime says it used, checked against what the crew asked for. The identifier in the output
+// stream was where the name came from, which is why it arrived too late to be any use; it is a check
+// now, and a runtime that ignored the flag is worth a sentence naming both, because the session's
+// history is under the name the crew did not choose.
+func TestConversationCheckSpeaksUpOnlyWhenTheRuntimeIgnoredTheName(t *testing.T) {
+	for _, tc := range []struct {
+		name, asked, reported string
+		says                  bool
+	}{
+		{name: "the runtime used the name it was given", asked: "sess-1", reported: "sess-1"},
+		{name: "the runtime said nothing at all", asked: "sess-1", reported: ""},
+		{name: "the crew named nothing, so there is nothing to check", asked: "", reported: "sess-9"},
+		{name: "the runtime used a name of its own", asked: "sess-1", reported: "sess-9", says: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			said := ConversationCheck(tc.asked, tc.reported)
+			if tc.says && said == "" {
+				t.Fatal("the runtime ignored the name and nothing was said about it")
+			}
+			if !tc.says && said != "" {
+				t.Fatalf("nothing is wrong and it said %q", said)
+			}
+			if !tc.says {
+				return
+			}
+			for _, want := range []string{tc.asked, tc.reported} {
+				if !strings.Contains(said, want) {
+					t.Errorf("it said %q, want it to name %q so the transcript can be found", said, want)
+				}
+			}
+		})
 	}
 }
 

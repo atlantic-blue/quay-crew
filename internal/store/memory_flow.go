@@ -76,7 +76,7 @@ func (m *Memory) DueFlowRuns(_ context.Context, now time.Time) ([]*flow.Run, err
 
 // CreateFlowRun writes a fresh run and the piece of work that carries it, together under one lock,
 // which is what one transaction means here.
-func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error {
+func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.flowRuns == nil {
@@ -84,6 +84,12 @@ func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.W
 	}
 	if _, held := m.flowRuns[run.ID]; held {
 		return fmt.Errorf("store: run %s already exists", run.ID)
+	}
+	// Under the same lock as the run, which is what makes one trigger start exactly one run: a
+	// trigger somebody else already acted on takes the whole write down with it rather than leaving
+	// a second run of it.
+	if trigger != "" && !m.startTrigger(trigger, run.ID) {
+		return fmt.Errorf("store: trigger %s is no longer waiting to start a run, so this run was not written", trigger)
 	}
 	if err := m.writeWork(carrier); err != nil {
 		return err

@@ -39,8 +39,8 @@ func waitFor(t *testing.T, started <-chan struct{}, what string) {
 // task is detached and nothing about it was visible either.
 func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 	runner := &model.FakeRunner{
-		Reply: "it is a control plane", SessionID: "model-1",
-		Gate: make(chan struct{}), Started: make(chan struct{}),
+		Reply: "it is a control plane",
+		Gate:  make(chan struct{}), Started: make(chan struct{}),
 	}
 	server, project := detachServer(t, runner)
 

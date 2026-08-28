@@ -14,6 +14,7 @@ package flow
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,14 +27,19 @@ import (
 // because every graph ends and making each author write the same node out teaches nothing.
 const DoneNode = "done"
 
-// Node types. Slice one ships the three that need no external event source: dispatch sends a task
-// to the run's own session, choice branches on state without a side effect, and done ends the run.
-// wait and ask arrive with their delivery mechanisms.
+// Node types. Dispatch sends a task, choice branches on state without a side effect, wait puts the
+// run down until its time comes, ask puts a question to a person, and done ends the run.
+//
+// NodeTrigger is the entry node of a graph that reacts. A run of such a graph begins because
+// something happened rather than because a person or a schedule started it, and what the trigger
+// carried is the run's opening state. It does nothing itself: by the time a run exists the trigger
+// has already arrived, so the run settles through it onto the first node that does work.
 const (
 	NodeDispatch = "dispatch"
 	NodeChoice   = "choice"
 	NodeWait     = "wait"
 	NodeAsk      = "ask"
+	NodeTrigger  = "trigger"
 	NodeDone     = "done"
 )
 
@@ -241,8 +247,11 @@ func Parse(source []byte) (Graph, error) {
 			if strings.TrimSpace(node.Text) == "" {
 				return Graph{}, fmt.Errorf("flow: ask node %s has no `text`, so the operator would be shown an empty question", name)
 			}
+		case NodeTrigger:
+			// Nothing to declare. What a trigger carries is decided by whoever raises one, and the
+			// row it is raised on names the graph, so the node says only that this graph reacts.
 		default:
-			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, DoneNode)
+			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, NodeTrigger, DoneNode)
 		}
 
 		// A role belongs to a dispatch, because a role is who does work and nothing else in a graph
@@ -312,12 +321,46 @@ func Parse(source []byte) (Graph, error) {
 		return Graph{}, fmt.Errorf("flow: graph %s has %d nodes nothing points into (%s), so which one starts is ambiguous", file.Name, len(starts), strings.Join(starts, ", "))
 	}
 
+	if err := usableTrigger(graph); err != nil {
+		return Graph{}, err
+	}
 	for name, node := range graph.Nodes {
 		if err := usableEdges(graph, name, node); err != nil {
 			return Graph{}, err
 		}
 	}
 	return graph, nil
+}
+
+// StartsOnTrigger says whether a run of this graph begins because something happened. It is the
+// question the crew asks of a graph a trigger names, so a trigger cannot start an automation whose
+// author never said it reacts.
+func (g Graph) StartsOnTrigger() bool {
+	return g.Nodes[g.Start].Type == NodeTrigger
+}
+
+// usableTrigger refuses a graph whose trigger node is not where a run of it begins.
+//
+// A trigger node in the middle would be a node a run walks onto after the thing that triggered it
+// already happened, which is a graph that reads as reacting and does not. A second one is the same
+// mistake twice: a graph has one way in, because a trigger row names the graph rather than a node.
+func usableTrigger(graph Graph) error {
+	var triggers []string
+	for name, node := range graph.Nodes {
+		if node.Type == NodeTrigger {
+			triggers = append(triggers, name)
+		}
+	}
+	sort.Strings(triggers)
+	if len(triggers) > 1 {
+		return fmt.Errorf("flow: graph %s has %d trigger nodes (%s), and a run begins at one node; keep the one a trigger arrives at",
+			graph.Name, len(triggers), strings.Join(triggers, ", "))
+	}
+	if len(triggers) == 1 && triggers[0] != graph.Start {
+		return fmt.Errorf("flow: graph %s begins at %s, and its trigger node %s has an edge into it; a trigger node is where a run begins, because the trigger arrived before the run existed",
+			graph.Name, graph.Start, triggers[0])
+	}
+	return nil
 }
 
 // usableEdges refuses a node whose outgoing edges cannot be followed: a dispatch with anything but
@@ -330,7 +373,7 @@ func usableEdges(graph Graph, name string, node Node) error {
 		}
 	}
 	switch node.Type {
-	case NodeDispatch, NodeWait, NodeAsk:
+	case NodeDispatch, NodeWait, NodeAsk, NodeTrigger:
 		if len(out) != 1 || out[0].When != "" {
 			return fmt.Errorf("flow: %s node %s needs exactly one unlabeled edge out, and has %d", node.Type, name, len(out))
 		}

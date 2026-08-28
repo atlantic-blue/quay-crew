@@ -78,8 +78,10 @@ because a view name wins there. `task list <session>` and anything longer is han
 
 1. You run `quay task "read the package file"`. The command line calls `Dispatch` on the control
    plane over gRPC.
-2. The control plane finds or creates the session row, marks the session `running`, and calls
-   `beginTask` in `internal/controlplane/events.go`.
+2. The control plane finds or creates the session row, names its conversation if it does not have one
+   yet, marks the session `running`, and calls `beginTask` in `internal/controlplane/events.go`. The
+   name comes before the task rather than after it, so an operator can open the conversation the task
+   is working in while it works. See [`SANDBOX.md`](SANDBOX.md).
 3. `beginTask` detaches the context, redacts the prompt, stamps an identifier and the workspace, the
    project, the handle and the time, and writes one row into the `tasks` table with the status
    `running`. The row is written now rather than at the end, because a task takes minutes and an
@@ -125,8 +127,9 @@ sequenceDiagram
 - **One row in `tasks`**, written when the task starts and closed when it lands: what was asked, what
   came back, the status, the failure if there was one, and when it started. A row that still reads
   `running` is a task in flight. `quay task list <session>` and the console's history view read this.
-- **The session row moves**: its status, its conversation identifier, and the count the describer
-  reads to decide whether to name the session again.
+- **The session row moves**: its status, and the count the describer reads to decide whether to name
+  the session again. Its conversation identifier was written here and is written before the task now;
+  what happens at the end is a check that the runtime used the name it was given.
 - **One record on `<workspace>.tasks`**, when seeds are set. The value is a protobuf `TaskEvent`, so
   it reads as binary in a terminal; the key is legible, because it is the session identifier.
 

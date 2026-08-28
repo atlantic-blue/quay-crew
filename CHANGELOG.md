@@ -36,6 +36,83 @@ read, or run with `make features`.
   The `dispatch` node type in a flow graph keeps its name, and so does the `Dispatch` method on the
   control plane. This is the command line only.
 
+- **A flow run can start because something happened.** A run could only ever start three ways: a
+  person asked for one, a schedule came due, or a wait finished. All three are the crew talking to
+  itself. A graph may now begin at a `trigger` node, something writes one `pending_triggers` row
+  saying what should run and what it carried, and the poller claims that row on its next tick and
+  starts the run. The payload becomes the run's opening state, so the first step is asked about the
+  thing that happened. The delay is one poll interval, five seconds.
+
+  A trigger starts exactly one run. The claim is a conditional update in one statement, the same
+  lease discipline the work controller holds a piece of work under, and the run, the piece of work
+  carrying it and the row saying started land in one transaction. A trigger the crew cannot start a
+  run from, naming a flow nobody imported or a graph that does not begin at a trigger node, is marked
+  failed with the sentence saying what to do about it, rather than quietly doing nothing.
+
+  **Nothing outside the control plane's process can raise one yet.** There is no ingress and no
+  broker: `QC_KAFKA_SEEDS` is untouched, and a crew with it unset loses the export and nothing else.
+  Nothing in the crew raises one either, so a piece of work reaching a terminal phase does not start a
+  flow today. There is no command for triggers, and `quay flow` is unchanged. Reading the event log
+  and writing a trigger row from it is the next slice of `quay-crew#399`.
+- **The crew names a conversation before the task starts, so attaching to a running session opens the
+  conversation doing the work.** A session's first task carried no name at all, so the model runtime
+  named its own conversation and told nobody until the task was over. Attaching meanwhile found
+  nothing on the session, named a second conversation and opened that one: empty, beside the work, and
+  real enough that typing in it left two conversations in one session, with the session naming whichever
+  wrote last. Watching a task is the reason to attach, and while a task ran was the one moment it did
+  not work.
+
+  The name is minted when the task is dispatched, written on the session, and handed to the runtime as
+  `--session-id` the first time and `--resume` after that. Which of the two is decided by whether a
+  transcript is there, which is the same question `open-conversation.sh` has always asked from inside
+  the container, so a conversation reached by typing and one reached by dispatching are one
+  conversation. Attaching opens the name the session already holds and never mints one for a session
+  that is running a task.
+
+  The identifier in the output stream is a check now rather than the source. A runtime that reports a
+  different conversation ignored the flag, and the crew says so in a line carrying both names and
+  keeps its own.
+
+  One session cannot be opened: one carried over from before this and caught mid task, whose
+  conversation the crew cannot name until the task lands. It is refused in those words rather than
+  opened onto an empty conversation. Nothing on disk is lost, and `docs/SANDBOX.md` says how to reach
+  a transcript the session does not hold. Issue 420.
+
+- **The front door says how a task and a piece of work differ.** It is the question a reader asks
+  before they ask what work is, and the README answered it nowhere. A short section near the top says
+  it: a task is a message and its life ends with the reply, a piece of work is a job the crew keeps a
+  readable phase for, and the test is whether you would ever ask where it is up to. It names the two
+  phases that are written down and not yet reached, `waiting` and `asking`, rather than promising
+  them. A scenario holds the section to defining both against each other, to sitting above the long
+  explanation of work, and to staying four paragraphs with no diagram in it.
+
+- **The front door says what the crew does today.** The README's list of what works predated
+  seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
+  the shape of the product rather than with a feature list: you declare a piece of work, the crew
+  writes it down, a controller makes reality match the record, the work outlives the controller that
+  started it, it runs as a named role with only what that role receives, and every movement is
+  exported carrying the trace the whole tree belongs to. There is a diagram of one piece of work from
+  declared to done, and `docs/ORCHESTRATION.md` is the long version.
+
+  The quick start is the single `make install`. The status paragraph was checked against the code
+  before it was rewritten: chat channels still do not exist and the gateway is still a skeleton that
+  boots and waits, there is still no admin dashboard, and nothing still consumes the event log. What
+  was no longer true is the telemetry stack, which starts with the crew and carries logs, what each
+  task cost, and traces of the crew's own calls.
+
+  The blockquote is gone, and nothing brings it back. A reader who wants to copy a paragraph out had
+  to strip a `>` from every line of it first.
+
+  **The front door is now tested.** Three things it claims have an answer elsewhere in this
+  repository, so they are checked against it rather than reread by hand: every `quay` command it
+  names is one the tool this checkout builds actually lists, every `make` target it names is one the
+  Makefile declares, and every document it points at is there. The quick start is held to one
+  command, the diagram is held to showing a piece of work through the controller, the lease, the
+  session and the role, and the whole file is swept for a blockquote, a table or a dash used as
+  punctuation. What none of that says is whether a sentence is true: a bullet claiming a capability
+  in words that name no command passes every case. `features/` is what says whether a capability is
+  real.
+
 - **A first run is one command.** It was four, and the order mattered: `make config`,
   `make sandbox-image`, `make up`, `make install`. Miss one and the failure arrived somewhere else.
   Compose read a configuration file that was not there, or a first task was refused for a missing
@@ -62,6 +139,42 @@ read, or run with `make features`.
 
   A failed `go build` inside that target used to print "installed quay to ..." and exit 0, because a
   shell command list exits with the status of its last command. It exits non zero now.
+
+- **Twelve roles ship, ported from greenlight.** Quay had the role mechanism and no roles, so
+  `roles/` at the root of the repository now holds `architect`, `assessor`, `codebase-mapper`,
+  `debugger`, `designer`, `implementer`, `marketing`, `marketing-researcher`, `security`,
+  `test-writer`, `verifier` and `wrapper`, ported from the twelve agents in
+  [`atlantic-blue/greenlight`](https://github.com/atlantic-blue/greenlight/tree/main/src/agents) as
+  they were on 27 August 2026. Import one with `quay role import roles/<name>`. A fresh crew is
+  seeded with none of them.
+
+  Each agent's body is already an instruction, so it became the `ROLE.md`. The frontmatter did not
+  carry over: a greenlight agent declares `tools:` and quay has no word for a tool or a file, so
+  nothing was invented to stand in for it. The `gl-` prefix came off. Each role keeps greenlight's own
+  model, and the wrapper, whose model greenlight resolves at run time, names sonnet here and says so.
+
+  **A role cannot be told which files it may not touch, and eleven of these twelve briefs ask for
+  exactly that.** `test-writer` says it never sees implementation code, `implementer` says it never
+  edits a test file, `verifier` and `assessor` and `codebase-mapper` say they are read only. Quay
+  enforces none of it: `receives` is `work`, `context` and `skills`, and none of the three is about
+  the contents of a repository. So every role opens with a line saying what its brief asks that the
+  crew does not hold it to, and names the greenlight paths and commands it mentions that do not exist
+  here. `docs/ROLES.md` says it once for all twelve.
+
+  All twelve receive `work`, `context` and `skills`. Only the assessor declares a `may` list,
+  `work.create` and `work.read`, because its brief spawns a security review and reads the answer.
+
+  Two briefs did not fit. A brief may be 16,384 bytes and greenlight's architect is 17,993 and its
+  assessor 18,126, so both were refused at import as they stood. Restated lists and the sample of the
+  message greenlight's orchestrator sends came out of those two, nothing either asks the role to do
+  was removed, and `docs/ROLES.md` lists every cut. The ceiling was sized on an estimate that these
+  roles "run to about twelve thousand bytes", and two of them are eighteen thousand, so raising it is
+  worth a look.
+
+  `role.All` reads a directory of roles and refuses one holding none, so the test that every shipped
+  role imports reads `roles/` rather than a list somebody has to remember to extend, and a `roles/`
+  that lost its contents fails rather than reporting a clean run over nothing.
+
 
 - **A flow run declares work instead of waiting on it.** A run used to call `Dispatch` and read the
   reply from the same statement, so starting one lasted as long as the model did and the run could

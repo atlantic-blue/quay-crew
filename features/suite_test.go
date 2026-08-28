@@ -145,6 +145,11 @@ var _ model.Runner = (*recordingRunner)(nil)
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
 	takes, gate, started, work := r.takes, r.gate, r.started, r.onTask
+	// Recorded on arrival rather than on the way out. A scenario about what is true *while* a task
+	// runs, which is what attaching to a running session is, cannot read a task that is only written
+	// down once it is over.
+	r.requests = append(r.requests, req)
+	asked := len(r.requests)
 	r.mu.Unlock()
 	// Outside the lock: what the model does may ask the crew something.
 	if work != nil {
@@ -169,14 +174,16 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.requests = append(r.requests, req)
 	if r.failNext {
 		r.failNext = false
 		return model.Response{}, fmt.Errorf("the model refused this task")
 	}
 	return model.Response{
-		Reply:          "you said: " + req.Text,
-		ModelSessionID: fmt.Sprintf("conversation-%d", len(r.requests)),
+		Reply: "you said: " + req.Text,
+		// The conversation it was given comes back, which is what a runtime that honours the name does.
+		// A double that answered with a name of its own would be looser than the thing it stands in for:
+		// the crew would read every task as the runtime ignoring the name it was handed.
+		ModelSessionID: conversationOf(req, fmt.Sprintf("conversation-%d", asked)),
 		Usage:          r.usage,
 		CostUSD:        r.cost,
 		UsageReported:  r.usageReported,
@@ -244,6 +251,8 @@ type world struct {
 	gitAuthor controlplane.Identity
 	// flowRun is the run the last flow step started.
 	flowRun flow.Run
+	// trigger is the last trigger something raised, so a Then step can read what became of it.
+	trigger flow.Trigger
 	// flowRunID is the run the operator surface steps started, and driverErr what the driver was
 	// told when it tried something.
 	flowRunID string
@@ -472,6 +481,29 @@ func (w *world) lastTask() (task, error) {
 	return w.tasks[len(w.tasks)-1], nil
 }
 
+// conversationOfFirstTask is the conversation the session's first task ran in. The crew names a
+// conversation before the task starts and the name is a fresh identifier each time, so a scenario
+// reads it back from the task rather than expecting a name it could write down.
+func (w *world) conversationOfFirstTask() (string, error) {
+	first, found := w.runner.task(0)
+	if !found {
+		return "", fmt.Errorf("no task has reached the model runner, so no conversation was named")
+	}
+	if first.ModelSessionID == "" {
+		return "", fmt.Errorf("the first task ran in no conversation the crew could name")
+	}
+	return first.ModelSessionID, nil
+}
+
+// conversationOf is what a model runtime that honours the name it was given reports, falling back to
+// a name of its own when it was given none.
+func conversationOf(req model.Request, fallback string) string {
+	if req.ModelSessionID != "" {
+		return req.ModelSessionID
+	}
+	return fallback
+}
+
 // dispatch runs one task and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
 func (w *world) dispatch(ctx context.Context, project, session, text string) error {
@@ -570,6 +602,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFlowSurfaceSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeInstallSteps(sc)
+	initializeFrontDoorSteps(sc)
 	initializeProjectSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
@@ -586,6 +619,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkMaterialSteps(sc)
 	initializeWorkControllerSteps(sc)
 	initializeWorkRoleSteps(sc)
+	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
 	initializeWorkEventsSteps(sc)
 	initializeWorkLeaseSteps(sc)
@@ -617,6 +651,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
 	initializeRoleSteps(sc)
+	initializeShippedRoleSteps(sc)
 	initializeRoleSessionSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
@@ -909,11 +944,20 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		first, _ := w.runner.task(0)
 		second, _ := w.runner.task(1)
-		if first.ModelSessionID != "" {
-			return fmt.Errorf("the first task asked to resume %q, expected it to start a new conversation", first.ModelSessionID)
+		if first.ModelSessionID == "" {
+			return fmt.Errorf("the first task ran in no conversation the crew could name")
 		}
-		if second.ModelSessionID != "conversation-1" {
-			return fmt.Errorf("the second task resumed %q, want the first task's conversation-1", second.ModelSessionID)
+		if first.ConversationStarted {
+			return fmt.Errorf("the first task resumed a conversation nothing had written yet, "+
+				"which exits saying there is no conversation found: %q", first.ModelSessionID)
+		}
+		if second.ModelSessionID != first.ModelSessionID {
+			return fmt.Errorf("the second task ran in conversation %q and the first in %q",
+				second.ModelSessionID, first.ModelSessionID)
+		}
+		if !second.ConversationStarted {
+			return fmt.Errorf("the second task started conversation %q again rather than continuing it",
+				second.ModelSessionID)
 		}
 		return nil
 	})
@@ -964,10 +1008,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		// The handle points at a conversation the model keeps on its own disk. Lose it and that
+		// The name points at a conversation the model keeps on its own disk. Lose it and that
 		// conversation still exists but can never be reached again.
-		if got := resp.GetSession().GetModelSessionId(); got != "conversation-1" {
-			return fmt.Errorf("the session holds conversation %q, want conversation-1", got)
+		ran, err := w.conversationOfFirstTask()
+		if err != nil {
+			return err
+		}
+		if got := resp.GetSession().GetModelSessionId(); got != ran {
+			return fmt.Errorf("the session holds conversation %q and its first task ran in %q", got, ran)
 		}
 		return nil
 	})
