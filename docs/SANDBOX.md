@@ -138,6 +138,27 @@ Continuous integration has no subscription, so this test skips there. The token 
 itself, that a value in the sandbox env reaches the process inside the container, is covered by
 `TestDockerProviderDeliversEnv`, which needs only Docker and does run in continuous integration.
 
+### A tagged test that nothing ran is not a passing test
+
+Everything behind `-tags integration` is invisible to an untagged run, and that is the trap in this
+repository rather than a curiosity. `go build ./...`, `go vet ./...` and `go test ./...` all report a
+clean tree with those files missing from it. Adding the tag to the vet (`go vet -tags integration
+./...`) proves they compile, and compiling is not running: a test whose fixture cannot be built fails
+at the first line of the daemon's answer, and nothing local says so.
+
+Two rules follow, and they cost nothing:
+
+- **A fixture proves itself before the test measures anything.** `aCrewOverRealContainers` asks the
+  daemon which containers it holds and names each session it needs, so a helper that built nothing
+  fails on the fixture rather than on a measurement that quietly says the crew is empty.
+- **A tier that did not run gets reported as unrun, never as green.** On a machine with no daemon the
+  only run is the `integration` job in continuous integration, so the number to read is in that job's
+  log, and the job has to have finished before anything is claimed from it.
+
+(28 August 2026, pull request 432: three tests here built their sandbox configuration with the
+session identifier alone. Storage refuses one that cannot say which workspace to keep state for, so
+all three died in the helper. They compiled, they vetted, and they had never once run.)
+
 ## Naming a conversation
 
 The crew names a session's conversation, before anything runs in it. The name is a version 4

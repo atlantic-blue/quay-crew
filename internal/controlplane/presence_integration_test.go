@@ -58,6 +58,10 @@ func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
 
 	// The rows first, then a container for each, which is the state a crew is in after a restart: the
 	// process holds no handles and every container is still running.
+	//
+	// The configuration carries the workspace and the project as well as the session, because a
+	// session's state does not all sit at one level and the storage refuses a sandbox that cannot say
+	// where to keep it. A container made with the session alone never gets made at all.
 	sessions := make([]*quaycrewv1.Session, 0, count)
 	for index := range count {
 		made, _, err := held.FindOrCreateSession(ctx, project.GetProject().GetId(),
@@ -65,11 +69,36 @@ func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
 		if err != nil {
 			t.Fatalf("make a session: %v", err)
 		}
-		if _, err := provider.Create(ctx, sandbox.Config{ID: made.GetId()}); err != nil {
+		if _, err := provider.Create(ctx, sandbox.Config{
+			ID:        made.GetId(),
+			Workspace: made.GetWorkspace(),
+			Project:   made.GetProject(),
+		}); err != nil {
 			t.Fatalf("make a container: %v", err)
 		}
 		t.Cleanup(func() { _ = provider.Remove(context.Background(), made.GetId()) })
 		sessions = append(sessions, made)
+	}
+	// The fixture itself is checked, because everything below reads a container that has to be there.
+	// A helper that failed halfway would otherwise leave a test measuring an empty crew.
+	if len(sessions) != count {
+		t.Fatalf("the crew has %d sessions, want %d", len(sessions), count)
+	}
+	standing, err := provider.Stranded(ctx)
+	if err != nil {
+		t.Fatalf("ask the daemon which containers it holds: %v", err)
+	}
+	holds := make(map[string]bool, len(standing))
+	for _, id := range standing {
+		holds[id] = true
+	}
+	for _, session := range sessions {
+		// Each one by name rather than a count of them. A count passes on somebody else's containers,
+		// and this test reads these.
+		if !holds[session.GetId()] {
+			t.Fatalf("the daemon holds no container for session %s, so nothing below this measures "+
+				"what it says it measures", session.GetId())
+		}
 	}
 	return server, provider, sessions
 }
@@ -89,7 +118,11 @@ func TestWhatOneListingOfTwentySessionsCosts(t *testing.T) {
 	// One of them is holding a conversation. Adopting the container that is already there rather than
 	// making one, which is what the provider does for a session whose sandbox this process holds no
 	// handle to.
-	box, err := provider.Create(ctx, sandbox.Config{ID: sessions[0].GetId()})
+	box, err := provider.Create(ctx, sandbox.Config{
+		ID:        sessions[0].GetId(),
+		Workspace: sessions[0].GetWorkspace(),
+		Project:   sessions[0].GetProject(),
+	})
 	if err != nil {
 		t.Fatalf("reach the first session's container: %v", err)
 	}
