@@ -43,6 +43,56 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **A flow run can start because something happened.** A run could only ever start three ways: a
+  person asked for one, a schedule came due, or a wait finished. All three are the crew talking to
+  itself. A graph may now begin at a `trigger` node, something writes one `pending_triggers` row
+  saying what should run and what it carried, and the poller claims that row on its next tick and
+  starts the run. The payload becomes the run's opening state, so the first step is asked about the
+  thing that happened. The delay is one poll interval, five seconds.
+
+  A trigger starts exactly one run. The claim is a conditional update in one statement, the same
+  lease discipline the work controller holds a piece of work under, and the run, the piece of work
+  carrying it and the row saying started land in one transaction. A trigger the crew cannot start a
+  run from, naming a flow nobody imported or a graph that does not begin at a trigger node, is marked
+  failed with the sentence saying what to do about it, rather than quietly doing nothing.
+
+  **Nothing outside the control plane's process can raise one yet.** There is no ingress and no
+  broker: `QC_KAFKA_SEEDS` is untouched, and a crew with it unset loses the export and nothing else.
+  Nothing in the crew raises one either, so a piece of work reaching a terminal phase does not start a
+  flow today. There is no command for triggers, and `quay flow` is unchanged. Reading the event log
+  and writing a trigger row from it is the next slice of `quay-crew#399`.
+- **The crew names a conversation before the task starts, so attaching to a running session opens the
+  conversation doing the work.** A session's first task carried no name at all, so the model runtime
+  named its own conversation and told nobody until the task was over. Attaching meanwhile found
+  nothing on the session, named a second conversation and opened that one: empty, beside the work, and
+  real enough that typing in it left two conversations in one session, with the session naming whichever
+  wrote last. Watching a task is the reason to attach, and while a task ran was the one moment it did
+  not work.
+
+  The name is minted when the task is dispatched, written on the session, and handed to the runtime as
+  `--session-id` the first time and `--resume` after that. Which of the two is decided by whether a
+  transcript is there, which is the same question `open-conversation.sh` has always asked from inside
+  the container, so a conversation reached by typing and one reached by dispatching are one
+  conversation. Attaching opens the name the session already holds and never mints one for a session
+  that is running a task.
+
+  The identifier in the output stream is a check now rather than the source. A runtime that reports a
+  different conversation ignored the flag, and the crew says so in a line carrying both names and
+  keeps its own.
+
+  One session cannot be opened: one carried over from before this and caught mid task, whose
+  conversation the crew cannot name until the task lands. It is refused in those words rather than
+  opened onto an empty conversation. Nothing on disk is lost, and `docs/SANDBOX.md` says how to reach
+  a transcript the session does not hold. Issue 420.
+
+- **The front door says how a task and a piece of work differ.** It is the question a reader asks
+  before they ask what work is, and the README answered it nowhere. A short section near the top says
+  it: a task is a message and its life ends with the reply, a piece of work is a job the crew keeps a
+  readable phase for, and the test is whether you would ever ask where it is up to. It names the two
+  phases that are written down and not yet reached, `waiting` and `asking`, rather than promising
+  them. A scenario holds the section to defining both against each other, to sitting above the long
+  explanation of work, and to staying four paragraphs with no diagram in it.
+
 - **The front door says what the crew does today.** The README's list of what works predated
   seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
   the shape of the product rather than with a feature list: you declare a piece of work, the crew

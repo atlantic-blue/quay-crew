@@ -469,9 +469,9 @@ type watchingStore struct {
 	writtenAs string
 }
 
-func (w *watchingStore) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event) error {
+func (w *watchingStore) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
 	w.writtenAs = carrier.Phase
-	return w.Store.CreateFlowRun(ctx, run, carrier, records)
+	return w.Store.CreateFlowRun(ctx, run, carrier, records, trigger)
 }
 
 func TestARunsOwnWorkIsNeverOfferedToAController(t *testing.T) {

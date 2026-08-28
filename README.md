@@ -16,15 +16,27 @@ view of the crew to a browser on your own machine. Nothing consumes the event lo
 [`CHANGELOG.md`](CHANGELOG.md) is the honest list of what has landed, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is where the whole plan lives.
 
+## Two things you can ask for
+
+A task is a message. You send text, a session answers, and that is the whole life of it.
+
+A piece of work is a job. You write down what you want done and the crew keeps that record, so it has
+a phase you can read at any moment: pending, running, done, failed or stopped. It can run as a named
+role, carry a budget and a deadline, and declare work of its own. Two more phases are written down
+and nothing reaches them yet: `waiting`, because no controller honours ordering, and `asking`, which
+today only a flow run gets to.
+
+The test is one question. If you would ever ask where that is up to, it is work. If you would not, it
+is a task.
+
+A flow is work with its plan drawn in advance. A session is the conversation a task happens in.
+
 ## Work is a record the crew keeps
 
-This is the shape of the product now, so read it first.
+This is the shape of the product now, so read it after the section above.
 
-You used to tell the crew to do a thing, and watch it. The intent lived in your terminal, so it died
-with your terminal. Now you declare a piece of work and the crew writes it down. A controller loop
-makes reality match that record. The work outlives the controller that started it, it runs as a
-named role with only what that role receives, and every movement it makes is on the record with the
-trace it happened in.
+A controller loop makes reality match the record. The work outlives the controller that started it,
+and every movement it makes is on the record with the trace it happened in.
 
 ```mermaid
 flowchart TD
@@ -62,10 +74,9 @@ can run with `make features`, or read from the binary itself with `quay features
   work and let go of it, or `quay ask "..."` to wait here for the answer. Creating a workspace or a
   project moves you into it. An address typed on a command applies to that command only, and a
   session is the third level, so standing in one continues that conversation.
-- **You declare work and the crew keeps it.** `quay work create --title "..." --brief "..."` writes
-  the intent down, so it outlives the terminal that asked for it. Every rule is checked at the write,
-  and each refusal says what to do instead. `quay work list`, `quay work show` and `quay work stop`
-  read it back and halt it.
+- **You declare work with `quay work create --title "..." --brief "..."`.** Every rule is checked at
+  the write, so a refusal reaches you while you are still looking, and each one says what to do
+  instead. `quay work list`, `quay work show` and `quay work stop` read it back and halt it.
 - **A controller makes declared work happen.** It reads the rows, sends the brief as a task, lets go,
   and later writes the answer, the reason or the failure back onto the row. Two controllers racing
   over one row leave one task, because the claim is a single conditional statement.

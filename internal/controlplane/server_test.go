@@ -54,7 +54,7 @@ func TestGetWorkspaceNotFound(t *testing.T) {
 }
 
 func TestDispatchStartsAndContinuesSession(t *testing.T) {
-	runner := &model.FakeRunner{Reply: "done", SessionID: "model-1"}
+	runner := &model.FakeRunner{Reply: "done"}
 	s := newServer(runner)
 	ctx := context.Background()
 
@@ -68,8 +68,22 @@ func TestDispatchStartsAndContinuesSession(t *testing.T) {
 	if first.GetReply() != "done" || first.GetHandle() == "" {
 		t.Fatalf("bad dispatch response: %+v", first)
 	}
-	if runner.LastReq.ModelSessionID != "" {
-		t.Fatalf("first task should not resume, got %q", runner.LastReq.ModelSessionID)
+	// The crew names the conversation before the task starts, and the first task starts it rather than
+	// resuming it. Both halves matter: a first task that carried no name left the runtime to name its
+	// own conversation and tell nobody until the task was over.
+	named := runner.LastReq.ModelSessionID
+	if named == "" {
+		t.Fatal("the first task carries no conversation, so the runtime names one the crew cannot see")
+	}
+	if runner.LastReq.ConversationStarted {
+		t.Fatal("the first task resumes a conversation nothing has written, which exits saying there is none")
+	}
+	held, err := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: first.GetId()})
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got := held.GetSession().GetModelSessionId(); got != named {
+		t.Fatalf("the session holds conversation %q and its task ran in %q", got, named)
 	}
 
 	// Continue the same session: the runner should be asked to resume the model session.
@@ -80,8 +94,12 @@ func TestDispatchStartsAndContinuesSession(t *testing.T) {
 	if second.GetId() != first.GetId() {
 		t.Fatalf("continue should reuse session: %q vs %q", second.GetId(), first.GetId())
 	}
-	if runner.LastReq.ModelSessionID != "model-1" {
-		t.Fatalf("continue should resume model-1, got %q", runner.LastReq.ModelSessionID)
+	if runner.LastReq.ModelSessionID != named {
+		t.Fatalf("the second task runs in conversation %q, want the first task's %q",
+			runner.LastReq.ModelSessionID, named)
+	}
+	if !runner.LastReq.ConversationStarted {
+		t.Fatal("the second task starts the conversation again, which is refused as a name already in use")
 	}
 }
 
@@ -269,7 +287,7 @@ func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 	ctx, hangUp := context.WithCancel(context.Background())
 	defer hangUp()
 
-	runner := &hangsUpRunner{FakeRunner: model.FakeRunner{Reply: "done", SessionID: "model-1"}, hangUp: hangUp}
+	runner := &hangsUpRunner{FakeRunner: model.FakeRunner{Reply: "done"}, hangUp: hangUp}
 	s := controlplane.NewServer(controlplane.Config{
 		Store:    contextHonouringStore{Store: store.NewMemory()},
 		Runner:   runner,
