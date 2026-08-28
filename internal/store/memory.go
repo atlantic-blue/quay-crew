@@ -67,6 +67,9 @@ type Memory struct {
 	// a run sits in the work tree.
 	flowRunWork map[string]string
 	flowRunStep map[string]string
+	// triggers is the pending trigger queue: something that happened, waiting to start a run. Its
+	// own map for the reason it is its own table, which the migration says.
+	triggers map[string]*flow.Trigger
 	// tasks is a session's history, oldest first, and taskSeen is what makes writing the
 	// same record twice harmless.
 	tasks    []*quaycrewv1.Task

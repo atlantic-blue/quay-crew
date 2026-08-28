@@ -154,8 +154,9 @@ type Config struct {
 	// WorkLease is how long a controller holds a piece of work before another may take it. Zero takes
 	// work.DefaultLease, which is derived from what a tick costs rather than chosen.
 	WorkLease time.Duration
-	// ControllerName is what this crew writes on the leases it takes. Empty mints one, which is right
-	// for a test and wrong for a crew an investigator has to read a record from.
+	// ControllerName is what this crew writes on the leases it takes, on a piece of work and on a
+	// trigger alike. Empty mints one, which is right for a test and wrong for a crew an investigator
+	// has to read a record from.
 	ControllerName string
 }
 
@@ -290,7 +291,9 @@ func NewServer(cfg Config) *Server {
 	// reaches nothing the caller could not, because these are the same two methods.
 	engine := flow.NewEngine(cfg.Store, server, server, server)
 	server.flows = engine
-	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil)
+	// The same name the work controller writes on its leases, because both claims are this crew's and
+	// an investigator reading either wants to know which crew took it.
+	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil).Owned(cfg.ControllerName)
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
 	server.workController = work.NewController(cfg.Store, server, server, server, nil).

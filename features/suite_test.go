@@ -251,6 +251,8 @@ type world struct {
 	gitAuthor controlplane.Identity
 	// flowRun is the run the last flow step started.
 	flowRun flow.Run
+	// trigger is the last trigger something raised, so a Then step can read what became of it.
+	trigger flow.Trigger
 	// flowRunID is the run the operator surface steps started, and driverErr what the driver was
 	// told when it tried something.
 	flowRunID string
@@ -616,6 +618,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWorkMaterialSteps(sc)
 	initializeWorkControllerSteps(sc)
 	initializeWorkRoleSteps(sc)
+	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
 	initializeWorkEventsSteps(sc)
 	initializeWorkLeaseSteps(sc)

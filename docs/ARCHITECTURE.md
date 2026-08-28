@@ -346,12 +346,16 @@ it, which is the same opacity the model already has. A graph answers statically:
 it, the operator can read it before it runs and see which node a run is sitting on while it does.
 Power is not what is wanted at this layer, legibility is.
 
-Five node types, and a sixth needs an argument:
+Six node types:
 
 - `dispatch` sends a task to the run's own session and waits for the result.
 - `wait` waits for an external event, a timer or a webhook or a channel message.
 - `ask` puts a question to the operator through the gated outbound and waits for the reply.
 - `choice` branches on state, pure, no side effect.
+- `trigger` is the node a graph that reacts begins at. A run of it starts because something happened,
+  and what the trigger carried is the run's opening state. Shipped 27 August 2026 as slice 9 of the
+  orchestration delivery; the mechanism, its bounds and what it still cannot do are in section 14 of
+  [`ORCHESTRATION.md`](ORCHESTRATION.md).
 - `done` ends the run.
 
 Every node either waits on something or is pure, so the reducer never blocks and there is no

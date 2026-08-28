@@ -1045,7 +1045,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1098,7 +1098,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1150,7 +1150,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1214,7 +1214,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1281,7 +1281,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1333,7 +1333,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			State: map[string]string{}, Attempts: map[string]int{},
 		}
 		carrier, records := carrierFor(run)
-		if err := s.CreateFlowRun(ctx, run, carrier, records); err != nil {
+		if err := s.CreateFlowRun(ctx, run, carrier, records, ""); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
@@ -1940,6 +1940,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runWorkLeaseConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
+	runTriggerConformance(t, newDataset)
 }
 
 // carrierFor is the piece of work that carries a run, the way the flow engine writes one. A run

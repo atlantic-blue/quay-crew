@@ -78,7 +78,29 @@ type Store interface {
 	LandedFlowSteps(ctx context.Context, limit int) ([]Landed, error)
 	// CreateFlowRun writes a fresh run and the piece of work that carries it, in one transaction.
 	// Its transitions are the events; creation is the row itself.
-	CreateFlowRun(ctx context.Context, run *Run, carrier *work.Work, records []*work.Event) error
+	//
+	// trigger is the pending trigger this run answers, empty for a run nothing triggered, and it is
+	// marked started in the same transaction. That is what makes one trigger start exactly one run:
+	// a poller that dies after this lands finds a row that says started when it comes back, and one
+	// that dies before it finds a row nobody acted on.
+	CreateFlowRun(ctx context.Context, run *Run, carrier *work.Work, records []*work.Event, trigger string) error
+	// RaiseTrigger writes down that something happened. The row is the queue entry a run starts
+	// from, and it is written in one statement so it can sit in the transaction of whatever caused
+	// it.
+	RaiseTrigger(ctx context.Context, trigger *Trigger) error
+	// PendingTriggers are the triggers nothing has started a run from and nobody is holding: pending,
+	// under no live claim, oldest first. The poller reads these and nothing else.
+	PendingTriggers(ctx context.Context, limit int) ([]*Trigger, error)
+	// ClaimTrigger takes a lease on one trigger row, in the same statement as the condition, so two
+	// pollers reading one pending trigger leave one holder. A row somebody else holds, or one that
+	// has already been acted on, answers ErrTriggerTaken.
+	ClaimTrigger(ctx context.Context, id string, lease work.Lease) (*Trigger, error)
+	// FailTrigger records that a claimed trigger started no run, and why. The reason is the whole
+	// point of the row surviving: a trigger that did nothing must not read the same as one nobody
+	// raised.
+	FailTrigger(ctx context.Context, id, reason string) error
+	// GetTrigger reads one trigger back, which is where what became of it is read.
+	GetTrigger(ctx context.Context, id string) (*Trigger, error)
 	// AdvanceFlowRun writes the run's next position, appends the transition that took it there,
 	// claims the dispatch's key where the transition dispatched, and writes the work that movement
 	// declares. One transaction, so there is no gap for a crash to hide in: either the run moved and
@@ -245,7 +267,7 @@ func NewEngine(store Store, plane ControlPlane, spend Spend, works Works) *Engin
 // answering. The trigger's payload arrives as the run's opening state, which is what prompt
 // templates read.
 func (e *Engine) Start(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, error) {
-	run, carrier, graph, err := e.create(ctx, graphName, workspace, project, state)
+	run, carrier, graph, err := e.create(ctx, starting{graph: graphName, workspace: workspace, project: project, state: state})
 	if err != nil {
 		return Run{}, err
 	}
@@ -258,7 +280,7 @@ func (e *Engine) Start(ctx context.Context, graphName, workspace, project string
 // minutes. It is still detached from the caller's context: a command line that has printed the run's
 // identifier and exited must not take the run's first movement down with it.
 func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, error) {
-	run, carrier, graph, err := e.create(ctx, graphName, workspace, project, state)
+	run, carrier, graph, err := e.create(ctx, starting{graph: graphName, workspace: workspace, project: project, state: state})
 	if err != nil {
 		return Run{}, err
 	}
@@ -283,7 +305,8 @@ func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string
 // credential the caller presented: an operator starts a root, and a session that starts a flow puts
 // the whole run one level below its own work, which is what makes a run something the depth limit
 // bounds.
-func (e *Engine) create(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, string, Graph, error) {
+func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph, error) {
+	graphName := from.graph
 	version, definition, err := e.store.LatestFlowGraph(ctx, graphName)
 	if err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: start %s: %w", graphName, err)
@@ -292,29 +315,41 @@ func (e *Engine) create(ctx context.Context, graphName, workspace, project strin
 	if err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: graph %s version %d no longer parses, which should have been refused at import: %w", graphName, version, err)
 	}
+	// A trigger starts a graph whose author said it reacts, and nothing else. Refused rather than
+	// run, because a graph that begins with a dispatch begins when a person or a schedule says so,
+	// and a trigger starting it would be an automation running for a reason its file does not carry.
+	if from.trigger != "" && !graph.StartsOnTrigger() {
+		return Run{}, "", Graph{}, fmt.Errorf("the flow %s version %d begins at %s, which is a %s node, so a trigger starts nothing; give the graph a %s node as the node it begins at",
+			graphName, version, graph.Start, graph.Nodes[graph.Start].Type, NodeTrigger)
+	}
 	if e.works == nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: this crew cannot declare work, so it cannot run a flow: a run is carried by a piece of work")
 	}
 
+	state := from.state
 	if state == nil {
 		state = map[string]string{}
 	}
 	run := Run{
 		ID:           newRunID(),
-		Workspace:    workspace,
-		Project:      project,
+		Workspace:    from.workspace,
+		Project:      from.project,
 		GraphName:    graphName,
 		GraphVersion: version,
 		Status:       StatusRunning,
 		State:        state,
 		Attempts:     map[string]int{},
 	}
-	carrier, declared, err := e.works.PrepareWork(ctx, "", work.Declaration{
-		Workspace: workspace, Project: project,
+	labels := map[string]string{labelRun: run.ID, labelGraph: graphName}
+	if from.trigger != "" {
+		labels[labelTrigger] = from.trigger
+	}
+	carrier, declared, err := e.works.PrepareWork(ctx, from.under, work.Declaration{
+		Workspace: from.workspace, Project: from.project,
 		Title: fmt.Sprintf("flow %s version %d", graphName, version),
 		Brief: fmt.Sprintf("carries the run of flow %s, version %d. Its steps hang under it, and it "+
 			"ends when the run does.", graphName, version),
-		Labels: map[string]string{labelRun: run.ID, labelGraph: graphName},
+		Labels: labels,
 	})
 	if err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: start %s: %w", graphName, err)
@@ -326,7 +361,7 @@ func (e *Engine) create(ctx context.Context, graphName, workspace, project strin
 
 	records := []*work.Event{declared, e.record(carrier, EventRunStarted,
 		fmt.Sprintf("run %s of %s version %d", run.ID, graphName, version))}
-	if err := e.store.CreateFlowRun(ctx, &run, carrier, records); err != nil {
+	if err := e.store.CreateFlowRun(ctx, &run, carrier, records, from.trigger); err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: create run of %s: %w", graphName, err)
 	}
 	e.exported(ctx, records...)
@@ -543,7 +578,28 @@ const (
 	labelGraph   = "flow.graph"
 	labelNode    = "flow.node"
 	labelAttempt = "flow.attempt"
+	// labelTrigger is on the work carrying a run that something triggered, and on nothing else, so
+	// the tree says why a run nobody started exists.
+	labelTrigger = "flow.trigger"
 )
+
+// starting is what a new run is made from.
+//
+// A struct rather than five arguments, because three of them are only ever set by a trigger, and a
+// call site passing two empty strings to say "nobody triggered this" reads as an oversight.
+type starting struct {
+	graph     string
+	workspace string
+	project   string
+	// state is what the run opens knowing: what a trigger carried, or what an operator passed.
+	state map[string]string
+	// trigger is the row this run answers, marked started in the transaction that writes the run,
+	// empty for a run a person or a schedule asked for.
+	trigger string
+	// under is the piece of work the run's own work hangs under. Empty means the parent comes from
+	// the credential the caller presented, which is what a run started by a person wants.
+	under string
+}
 
 // where is a run's place in the work tree at the moment of a movement: the piece of work that
 // carries the run, and the step this movement answers. It is a parameter rather than two fields on
