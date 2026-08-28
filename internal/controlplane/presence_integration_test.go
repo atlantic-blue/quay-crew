@@ -86,23 +86,19 @@ func TestWhatOneListingOfTwentySessionsCosts(t *testing.T) {
 
 	server, provider, sessions := aCrewOverRealContainers(ctx, t, listingSessions)
 
-	// One of them is holding a conversation. busybox has no model runtime in it, so the runtime is
-	// stood in for by a process of that name, which is what the container's process table shows and
-	// all this reads.
-	// Adopting the container that is already there rather than making one, which is what the provider
-	// does for a session whose sandbox this process holds no handle to.
+	// One of them is holding a conversation. Adopting the container that is already there rather than
+	// making one, which is what the provider does for a session whose sandbox this process holds no
+	// handle to.
 	box, err := provider.Create(ctx, sandbox.Config{ID: sessions[0].GetId()})
 	if err != nil {
 		t.Fatalf("reach the first session's container: %v", err)
 	}
-	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
-		"cp /bin/sleep /tmp/" + sandbox.RuntimeBinary + " && /tmp/" + sandbox.RuntimeBinary + " 240 &"}})
-	if err != nil {
+	if err := startsSomethingCalledTheRuntime(ctx, t, box); err != nil {
 		t.Fatalf("start something that looks like the runtime: %v", err)
 	}
-	if err := proc.Wait(); err != nil {
-		t.Fatalf("start something that looks like the runtime: %v: %s", err, proc.Stderr())
-	}
+	// Proved before anything is timed, because a measurement over a container that never started the
+	// process would be fast, green on the clock, and worthless.
+	waitUntilRunning(ctx, t, provider, sessions[0].GetId())
 
 	began := time.Now()
 	listed, err := server.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Presence: true})
@@ -190,4 +186,46 @@ func TestASessionWithNoContainerAtAllReadsIdle(t *testing.T) {
 	if running {
 		t.Fatal("a session with no container is running a model runtime")
 	}
+}
+
+// startsSomethingCalledTheRuntime leaves a long lived process in the container whose command line
+// reads the way the model runtime's does.
+//
+// A script rather than a copy of a binary. busybox decides which applet to be from the name it was
+// run as, so a copy of `sleep` under the runtime's name exits at once with "applet not found", and
+// the container would be empty while the test believed it was busy. A script gives the same shape
+// the real runtime gives when npm installs it behind an interpreter: the interpreter first and the
+// runtime's name after it.
+//
+// Its output goes to /dev/null. A background process holding the exec's own pipe open would keep the
+// exec from ever finishing, and the test would hang here rather than measure anything.
+func startsSomethingCalledTheRuntime(ctx context.Context, t *testing.T, box sandbox.Sandbox) error {
+	t.Helper()
+	at := "/tmp/" + sandbox.RuntimeBinary
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c",
+		"printf '#!/bin/sh\\nsleep 240\\n' > " + at + "; chmod +x " + at + "; " + at + " >/dev/null 2>&1 &"}})
+	if err != nil {
+		return err
+	}
+	if err := proc.Wait(); err != nil {
+		return fmt.Errorf("%w: %s", err, proc.Stderr())
+	}
+	return nil
+}
+
+// waitUntilRunning holds until the container says the runtime is up, so nothing after it is racing
+// the process starting. It fails rather than carrying on, because everything below depends on it.
+func waitUntilRunning(ctx context.Context, t *testing.T, provider sandbox.DockerProvider, session string) {
+	t.Helper()
+	for range 50 {
+		running, err := provider.RuntimeRunning(ctx, session)
+		if err != nil {
+			t.Fatalf("ask the container what it is running: %v", err)
+		}
+		if running {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("the container never reported the process this test started, so nothing below it means anything")
 }
