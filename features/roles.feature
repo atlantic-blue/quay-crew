@@ -121,10 +121,10 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator attaches the "architect" role to the workspace
     Then the crew refuses the role saying "not found"
 
-  # The roles this build ships, in roles/ at the root of the repository, ported from greenlight's
-  # agents. They are read from that directory rather than from a list in the test, so a role added
-  # later is held to the same rules without anybody remembering, and a roles/ that lost its contents
-  # fails this rather than passing over nothing.
+  # The roles this build ships, in roles/ at the root of the repository. They are read from that
+  # directory rather than from a list in the test, so a role added later is held to the same rules
+  # without anybody remembering, and a roles/ that lost its contents fails this rather than passing
+  # over nothing.
   Scenario: The crew imports every role this build ships
     When the operator imports every role this build ships
     Then the crew holds every role this build ships

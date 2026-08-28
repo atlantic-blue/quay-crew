@@ -291,6 +291,21 @@ func roleNamed(ctx context.Context, workspace, name string) (*quaycrewv1.Role, e
 const shippedRoles = "../roles"
 
 func initializeShippedRoleSteps(sc *godog.ScenarioContext) {
+	// One shipped role rather than all twelve, so a scenario whose background already holds a role
+	// under a name this build also ships does not collide with it at import.
+	sc.Step(`^the operator imports the "([^"]*)" role this build ships$`,
+		func(ctx context.Context, name string) error {
+			files, err := roleFilesFrom(filepath.Join(shippedRoles, name))
+			if err != nil {
+				return err
+			}
+			_, err = worldFrom(ctx).client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files})
+			if err != nil {
+				return fmt.Errorf("the crew refused the %s role, which ships with it: %w", name, err)
+			}
+			return nil
+		})
+
 	sc.Step(`^the operator imports every role this build ships$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		ships, err := role.All(shippedRoles)

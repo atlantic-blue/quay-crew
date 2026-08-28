@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -14,6 +15,15 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/cucumber/godog"
 )
+
+// notOurs is a name a brief this build ships must not carry: the name itself, the prefix it put on
+// the front of its own agents, and the prefix its own commands took. The roles are quay's own, and a
+// session told to run a command that is not here goes looking for it.
+var notOurs = regexp.MustCompile(`(?i)greenlight|\bgl-|/gl:`)
+
+// briefIsAtLeast is a floor on the memory file, not a measurement. An empty file names no product at
+// all, so without this the check reads a session that was told nothing as a session told correctly.
+const briefIsAtLeast = 512
 
 // A step of a flow that runs as a role, driven over the same road everything else takes: the graph
 // is imported, the run is started, and what the role's session was given is read off the host.
@@ -120,6 +130,27 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 		if strings.Contains(body, absent) {
 			return fmt.Errorf("the role's memory file carries %q, which its role does not receive:\n%s",
 				absent, body)
+		}
+		return nil
+	})
+
+	// The brief a session is finally told to work by. It is read out of the memory file rather than
+	// out of roles/, because what a session reads has been through the store and the renderer, and a
+	// brief that arrived empty would satisfy any check that only asks what is absent.
+	sc.Step(`^the role's memory file names no product but quay$`, func(ctx context.Context) error {
+		body, err := roleMemory(ctx)
+		if err != nil {
+			return err
+		}
+		if len(body) < briefIsAtLeast {
+			return fmt.Errorf("the role's memory file is %d bytes, so there is no brief in it to check:\n%s",
+				len(body), body)
+		}
+		for at, line := range strings.Split(body, "\n") {
+			if notOurs.MatchString(line) {
+				return fmt.Errorf("line %d of the role's memory file names a product that is not quay: %s",
+					at+1, strings.TrimSpace(line))
+			}
 		}
 		return nil
 	})

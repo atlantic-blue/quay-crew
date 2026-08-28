@@ -10,9 +10,9 @@ import (
 // shipped is where the roles this build ships live, from this package's directory.
 const shipped = "../../roles"
 
-// The load bearing check of the port: every role in roles/ answers to the rules an imported role
-// answers to. It reads the directory rather than a list written here, so a role added tomorrow is
-// covered without anybody remembering to add it, and All refuses an empty directory, so a roles/
+// The load bearing check: every role in roles/ answers to the rules an imported role answers to. It
+// reads the directory rather than a list written here, so a role added tomorrow is covered without
+// anybody remembering to add it, and All refuses an empty directory, so a roles/
 // that lost its contents fails rather than reporting a clean run over nothing.
 //
 // A first party role that does not import is worse than none: it is the example everybody copies.
@@ -52,7 +52,7 @@ func TestEveryShippedRoleImports(t *testing.T) {
 	}
 }
 
-// The line the port owes a reader. Each brief describes a boundary quay does not hold a session to,
+// The line every brief owes a reader. Each one describes a boundary quay does not hold a session to,
 // and a role whose file does not say so implies an isolation that is not there.
 func TestEveryShippedRoleSaysWhatQuayDoesNotEnforce(t *testing.T) {
 	roles, err := All(shipped)
@@ -64,16 +64,12 @@ func TestEveryShippedRoleSaysWhatQuayDoesNotEnforce(t *testing.T) {
 			t.Errorf("%s does not open by saying what quay does not enforce, so its brief reads as a boundary the crew keeps",
 				one.Name)
 		}
-		if !strings.Contains(one.Brief, "greenlight") {
-			t.Errorf("%s never names greenlight, and a brief written for another product that does not say so sends a session looking for files that are not here",
-				one.Name)
-		}
 	}
 }
 
-// The port keeps greenlight's own model choice, and a role that names none is refused at import, so
-// this holds the twelve to what they were ported from rather than to a default.
-func TestTheShippedRolesRunOnTheModelsTheyWerePortedWith(t *testing.T) {
+// A role that names no model is refused at import, so every one of the twelve names one. This holds
+// each of them to the model it was written for rather than to a default that could quietly move.
+func TestTheShippedRolesRunOnTheModelsTheyWereWrittenFor(t *testing.T) {
 	want := map[string]string{
 		"architect": "opus", "assessor": "sonnet", "codebase-mapper": "sonnet",
 		"debugger": "sonnet", "designer": "opus", "implementer": "sonnet",
@@ -94,7 +90,7 @@ func TestTheShippedRolesRunOnTheModelsTheyWerePortedWith(t *testing.T) {
 			continue
 		}
 		if one.Model != expected {
-			t.Errorf("%s runs on %q and greenlight ran it on %q", one.Name, one.Model, expected)
+			t.Errorf("%s runs on %q and this build ships it on %q", one.Name, one.Model, expected)
 		}
 	}
 }
