@@ -50,7 +50,9 @@ type sessionPage struct {
 }
 
 func (v *view) sessions(w http.ResponseWriter, r *http.Request) {
-	listed, err := v.reader.ListSessions(r.Context(), &quaycrewv1.ListSessionsRequest{})
+	// Presence, so this page says the same thing the console and the command line say about a session
+	// holding a live conversation. It costs a question to each idle session's sandbox.
+	listed, err := v.reader.ListSessions(r.Context(), &quaycrewv1.ListSessionsRequest{Presence: true})
 	if err != nil {
 		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
 		return

@@ -39,6 +39,11 @@ func (LocalProvider) Stranded(context.Context) ([]string, error) { return nil, n
 // container, and no container exists for the crew to reclaim either.
 func (LocalProvider) Attached(context.Context, string) (bool, error) { return false, nil }
 
+// RuntimeRunning is false for the same reason Attached is: a local sandbox is the host. A command
+// runs as the operator's own process rather than inside a container of this session's, so there is no
+// process table belonging to one session to read, and no container for anybody to take away either.
+func (LocalProvider) RuntimeRunning(context.Context, string) (bool, error) { return false, nil }
+
 type localSandbox struct{ env []string }
 
 var _ Sandbox = localSandbox{}

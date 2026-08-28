@@ -90,6 +90,39 @@ message Session {
   // It is a stamp of its own rather than a reading of updated_at, because how long a session has been
   // reclaimed is what the archive time is measured against, and updated_at moves on every write.
   google.protobuf.Timestamp reclaimed_at = 19;
+  // presence is what the crew found inside this session's sandbox, and it is the half of "is anything
+  // happening here" that status never knew. status only says whether a dispatched task is open, so a
+  // session holding a conversation somebody started by hand read idle, and idle is the word that
+  // invites a restart, a drain or a reclaim.
+  //
+  // Set only when the request asked for it, because the answer costs a question to the sandbox. Unset
+  // means nobody asked, which is not the same as nothing being there.
+  SessionPresence presence = 20;
+}
+
+// SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
+// rather than from anything the crew wrote down.
+//
+// Read from the sandbox because a stamp needs somebody to keep it fresh, how often is a number, and
+// no measurement has set one. The sandbox already knows: its own process table says whether a model
+// runtime is up, and its own tmux says whether a client is on the conversation.
+//
+// The order matters to a reader. Anything but EMPTY means something in that container is somebody's,
+// so a caller deciding whether to take a container away treats every other value as "leave it alone".
+enum SessionPresence {
+  // Nobody asked. It is not an answer, and a caller that reads it as "nothing is there" is making
+  // the mistake this field exists to stop.
+  SESSION_PRESENCE_UNSPECIFIED = 0;
+  // The crew asked and found nothing: no model runtime, and nobody attached. The only real idle.
+  SESSION_PRESENCE_EMPTY = 1;
+  // A model runtime is up inside the sandbox with nobody watching it. A conversation somebody
+  // started and walked away from is here, and so is one still answering.
+  SESSION_PRESENCE_AWAKE = 2;
+  // Somebody has the conversation open.
+  SESSION_PRESENCE_ATTACHED = 3;
+  // The crew asked and could not be told: the daemon did not answer. Never idle, because a caller
+  // reads idle as licence to close a container.
+  SESSION_PRESENCE_UNTOLD = 4;
 }
 
 // ContextWindow is how full a conversation's context window is.
@@ -372,6 +405,13 @@ message ListSessionsRequest {
   // mixed: a listing is one or the other, because the default view must not quietly grow the sessions
   // somebody deliberately hid.
   bool archived = 3;
+  // presence asks each session's own sandbox what is in it, so a listing can tell a session holding a
+  // live conversation from one holding nothing at all.
+  //
+  // It costs one question to the sandbox per row that would otherwise read idle, so it is asked for
+  // rather than always done: the surfaces an operator reads set it, and the machinery that resolves
+  // an address or finds a session by name does not pay for it.
+  bool presence = 4;
 }
 message ListSessionsResponse {
   repeated Session sessions = 1;

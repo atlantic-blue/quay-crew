@@ -40,6 +40,15 @@ type FakeProvider struct {
 	// AttachErr is the daemon refusing to answer whether anybody is attached, which is not the same
 	// answer as nobody: a crew that cannot tell must leave the container alone.
 	AttachErr error
+	// Running are the sessions whose sandbox holds a model runtime with nobody watching it, so a
+	// scenario can be a conversation answering while the listing decides what to call it.
+	Running map[string]bool
+	// RuntimeErr is the daemon refusing to say what a container is running, which is not the same
+	// answer as nothing: a crew that cannot tell must not report the session as idle.
+	RuntimeErr error
+	// questions counts what has been asked about the inside of a sandbox, attachment and runtime
+	// alike, so a test can hold how much one listing costs.
+	questions int
 	// live is the sandbox each session currently has, so creating twice for one session adopts it.
 	live map[string]*FakeSandbox
 }
@@ -95,6 +104,15 @@ func (f *FakeProvider) Asked() int {
 	return len(f.Calls)
 }
 
+// Questions is how many times a sandbox has been asked what is inside it, counting both the
+// attachment question and the runtime one. A test holds the cost rule with it: a listing asks once
+// per row that would otherwise read idle, and nothing at all for any other row.
+func (f *FakeProvider) Questions() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.questions
+}
+
 // Remove closes and forgets the session's sandbox, held or not, the way the Docker provider removes
 // a container by its deterministic name. Absent is success there, so it is success here.
 func (f *FakeProvider) Remove(_ context.Context, sessionID string) error {
@@ -143,6 +161,7 @@ func (f *FakeProvider) Stranded(context.Context) ([]string, error) {
 func (f *FakeProvider) Attached(_ context.Context, sessionID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.questions++
 	if f.AttachErr != nil {
 		return false, f.AttachErr
 	}
@@ -160,6 +179,35 @@ func (f *FakeProvider) Watch(sessionID string) {
 		f.Watched = map[string]bool{}
 	}
 	f.Watched[sessionID] = true
+}
+
+// RuntimeRunning says whether a model runtime is up in this session's sandbox, the way the Docker
+// provider reads the container's own process table.
+//
+// False for a session this provider holds no sandbox for, because the real one asks a container that
+// is not there and gets a non zero exit, which means nothing is running rather than an error.
+func (f *FakeProvider) RuntimeRunning(_ context.Context, sessionID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.questions++
+	if f.RuntimeErr != nil {
+		return false, f.RuntimeErr
+	}
+	if box, live := f.live[sessionID]; !live || box.Closed {
+		return false, nil
+	}
+	return f.Running[sessionID], nil
+}
+
+// Wake makes this provider one where that session's sandbox holds a running model runtime, which is
+// a conversation answering with nobody watching it.
+func (f *FakeProvider) Wake(sessionID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Running == nil {
+		f.Running = map[string]bool{}
+	}
+	f.Running[sessionID] = true
 }
 
 // FakeSandbox is a Sandbox for tests. It records exec specs, streams a canned output, and tracks

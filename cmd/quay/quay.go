@@ -966,7 +966,10 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		typed = args[0]
 	}
 
-	request := &quaycrewv1.ListSessionsRequest{}
+	// Presence, because this listing is what an operator reads before they stop, restart or drain
+	// something. It costs a question to each idle session's sandbox and it is what tells a
+	// conversation running with nobody watching it from an empty container.
+	request := &quaycrewv1.ListSessionsRequest{Presence: true}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
 	// nowhere lists everything, because then the question was about the crew rather than a place.
 	path, err := addressFrom(typed)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -195,6 +196,80 @@ func (d DockerProvider) Attached(ctx context.Context, sessionID string) (bool, e
 			ContainerName(sessionID), err)
 	}
 	return strings.TrimSpace(string(out)) != "", nil
+}
+
+// processTable dumps the command line of everything running in the sandbox, one process per line,
+// read from the container's own /proc.
+//
+// It carries no part of the runtime's name on purpose. The shell that runs this is itself a process
+// in that container, so a reader that named what it was looking for would find its own command line
+// and report every sandbox as running the runtime. The matching happens in Go, where it can be
+// tested, and this only gathers.
+//
+// Every failure inside is swallowed and the script always succeeds: a process that exits between the
+// glob and the read is ordinary, and it must not come back as the sandbox being unreachable. What
+// does fail here is docker itself, which is the answer the caller needs.
+//
+// The arguments arrive separated by a zero byte, which is how the kernel writes them, and they are
+// left that way. Translating them here would put one more command between the crew and the answer,
+// and a sandbox image whose translation flag behaved differently would report every container as
+// empty. Go splits them instead.
+const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; echo; done; exit 0`
+
+// RuntimeRunning asks the container's own process table whether a model runtime is up in it.
+//
+// This is the state the crew could not see. `quay attach` opens the conversation in tmux inside the
+// sandbox, and detaching leaves the runtime answering with nobody watching it, so the tmux question
+// says nobody is there and the row says no task is open, and both are true while a conversation is
+// mid answer.
+//
+// Nothing is written and nothing has to be kept fresh, which is why it is asked rather than stamped:
+// a stamp needs somebody to refresh it while a conversation runs, and how often is a number nobody
+// has measured.
+//
+// What each answer means, which is Attached's contract on purpose:
+//   - a matching command line, so a runtime is up.
+//   - the command ran and exited non zero, so there is no container, or no shell in it. Nothing is
+//     running in either.
+//   - the command could not be run at all, so the daemon is unreachable and the crew cannot tell. The
+//     error is returned rather than swallowed, because a caller must not read it as nothing.
+func (d DockerProvider) RuntimeRunning(ctx context.Context, sessionID string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID), "sh", "-c", processTable)
+	out, err := cmd.Output()
+	if err != nil {
+		var exited *exec.ExitError
+		if errors.As(err, &exited) {
+			return false, nil
+		}
+		return false, fmt.Errorf("sandbox: ask %s what it is running: %w",
+			ContainerName(sessionID), err)
+	}
+	return runtimeAmong(string(out)), nil
+}
+
+// runtimeAmong says whether any of these command lines is the model runtime.
+//
+// A line counts when any word in it names the runtime, by base name, so the runtime is found whether
+// it was started as `claude --resume ...` or through the interpreter an npm install puts in front of
+// it. Which of those a sandbox shows depends on how the package was installed, and a reader that
+// only knew one shape would call a live conversation empty on the other.
+//
+// It is wider than it needs to be, and deliberately so: a session running `grep claude` is read as a
+// runtime for as long as the grep lasts. The two mistakes are not the same size. Reading a live
+// conversation as empty invites a drain, a restart or a reclaim over the top of it; reading an empty
+// container as busy holds it a little longer, and the next listing corrects itself.
+func runtimeAmong(dump string) bool {
+	// The zero byte the kernel puts between one process's arguments becomes a space, so a command
+	// line splits into the words it was made of rather than into one long word that names nothing.
+	dump = strings.ReplaceAll(dump, "\x00", " ")
+	for line := range strings.SplitSeq(dump, "\n") {
+		for _, word := range strings.Fields(line) {
+			if path.Base(word) == RuntimeBinary {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Close removes the session's container.

@@ -3,6 +3,9 @@ package console
 import (
 	"strings"
 	"testing"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
 // A listing of thirty sessions was one colour, so reading it meant reading every character of every
@@ -268,5 +271,43 @@ func TestTheContextCellWarnsWhereTheLineUnderThePromptWarns(t *testing.T) {
 					tc.cell, colourOfContext(tc.cell), warned, tc.warn)
 			}
 		})
+	}
+}
+
+// TestASessionHoldingAConversationIsNotColouredReady. Green is the console's word for "nothing is
+// happening here, act on it if you like", and it is exactly the wrong thing to say over a container
+// running somebody's conversation. The word and the colour have to agree.
+func TestASessionHoldingAConversationIsNotColouredReady(t *testing.T) {
+	ready := colourOfStatus(display.StatusIdle)
+	for _, holding := range []string{display.StatusAwake, display.StatusAttached} {
+		if colourOfStatus(holding) == ready {
+			t.Errorf("%q is drawn the same as idle, so a listing invites an operator to take a "+
+				"container somebody is using", holding)
+		}
+		if stateFromStatus(holding) != StateBusy {
+			t.Errorf("a %q session does not read as busy, and something is running in it", holding)
+		}
+	}
+	// The stale mark rides on the same cell here too.
+	if colourOfStatus(display.StatusAwake+" stale") != colourOfStatus(display.StatusAwake) {
+		t.Error("a stale awake session loses its colour")
+	}
+	// Unknown is the crew saying it could not tell, so it is left uncoloured rather than dressed as
+	// ready or as busy.
+	if colourOfStatus(display.StatusUnknown) != "" {
+		t.Error("a session the crew could not read is being coloured, which is a guess shown as a fact")
+	}
+}
+
+// TestTheRowsColourFollowsTheWordTheRowPrints. The cell and the row are coloured by two different
+// paths, and a row that reads awake in green would say the opposite of its own word.
+func TestTheRowsColourFollowsTheWordTheRowPrints(t *testing.T) {
+	session := &quaycrewv1.Session{
+		Id:       "5d013d07b9bcc8c05a1f437a",
+		Status:   display.StatusIdle,
+		Presence: quaycrewv1.SessionPresence_SESSION_PRESENCE_AWAKE,
+	}
+	if got := sessionRow(session, "acme", "house-bills").State; got != StateBusy {
+		t.Fatalf("a session running a conversation is drawn as state %v, want busy", got)
 	}
 }

@@ -78,14 +78,62 @@ func Share(used, size int64) int64 {
 	}
 }
 
+// The words a listing shows for a session whose row says idle, once the crew has read what is
+// actually inside its sandbox.
+//
+// They exist because idle used to cover all four. The row's status only ever said whether a
+// dispatched task was open, so a conversation somebody opened by hand and left answering read the
+// same as an empty container, and idle is the word that invites a restart, a drain or a reclaim.
+//
+// Why these words:
+//
+//   - Awake, not thinking or busy. The crew reads a runtime process, which is up both while it
+//     answers and while it waits at a prompt, so thinking claims more than was measured. Busy is
+//     what running already means to an operator, and this is not a task.
+//   - Attached, because it is what the operator typed to get there: `quay attach`.
+//   - Unknown, because the crew asked and was not told. It is not idle, and it must never read as
+//     idle: a listing that guesses empty here is the defect this set of words was written for.
+//   - Idle keeps its word and finally earns it: nothing is running and nobody is in there.
+const (
+	StatusIdle     = "idle"
+	StatusAwake    = "awake"
+	StatusAttached = "attached"
+	StatusUnknown  = "unknown"
+)
+
+// SessionStatus is the one word a listing shows for where a session is.
+//
+// It is the row's own status, except where that status is idle and the crew has read the sandbox. A
+// row that says anything else is left alone: running, failed, stopped and reclaimed each carry
+// something this cannot say, and overwriting failed with awake would lose that the last task did not
+// land.
+//
+// A session nobody asked about reads exactly as it did before, which is what a caller that has not
+// asked for presence should get.
+func SessionStatus(session *quaycrewv1.Session) string {
+	if session.GetStatus() != StatusIdle {
+		return session.GetStatus()
+	}
+	switch session.GetPresence() {
+	case quaycrewv1.SessionPresence_SESSION_PRESENCE_ATTACHED:
+		return StatusAttached
+	case quaycrewv1.SessionPresence_SESSION_PRESENCE_AWAKE:
+		return StatusAwake
+	case quaycrewv1.SessionPresence_SESSION_PRESENCE_UNTOLD:
+		return StatusUnknown
+	default:
+		return StatusIdle
+	}
+}
+
 // StatusLabel is the status cell, carrying the stale mark when the session's live sandbox was born
 // before the workspace's current skills: the cue that stopping and restarting it gets a sandbox born
 // current.
 func StatusLabel(session *quaycrewv1.Session) string {
 	if session.GetStale() {
-		return session.GetStatus() + " stale"
+		return SessionStatus(session) + " stale"
 	}
-	return session.GetStatus()
+	return SessionStatus(session)
 }
 
 // PermissionLabel never leaves the cell blank: a session from before the mode existed runs
