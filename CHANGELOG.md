@@ -8,6 +8,26 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The front door says what it is and how to start it, and nothing else.** The README was 253
+  lines: a forty item list of what works, a principles list, a stack list, a roadmap and a page of
+  prior art. Nobody read it. It is 52 lines now, and it holds three things. What the crew is, one
+  quick start, and where to read next.
+
+  Nothing was deleted. Every section that left was already written down in `docs/`, and the two that
+  existed nowhere else moved there. The picture of one piece of work is the overview in section 3 of
+  `docs/ORCHESTRATION.md`, beside the long version it belonged with. The difference between a task
+  and a piece of work opens `docs/TASKS.md`, which is the document that names the words that get
+  used for each other, and it arrived with a diagram of the two paths. Section 9 of
+  `docs/ORCHESTRATION.md` said the file held ten diagrams and it held fifteen; it now says sixteen,
+  and every one of the sixteen was parsed by mermaid's own parser.
+
+  **The front door's scenarios say what it now promises.** Two are new. It holds those three
+  sections and no others, and it is under eighty lines. The sections are an exact list rather than
+  only a limit on length, because every section that made the old file unreadable went in one at a
+  time and each one was defensible on its own. The scenario that held the diagram in the README now
+  holds the document the README sends a reader to for it, so the picture is still somewhere a reader
+  is pointed. Eight scenarios where there were six, and 540 in the suite where there were 538.
+
 - **The front door says what the crew does today.** The README's list of what works predated
   seventeen pull requests that merged on 27 August 2026, and named none of them. It now leads with
   the shape of the product rather than with a feature list: you declare a piece of work, the crew

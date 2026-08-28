@@ -1,13 +1,39 @@
 # The life of a task
 
-A task is one piece of work in one session. You ask for something, the model works in that session's
-own sandbox, and a reply comes back. Minutes is normal, not seconds.
+A task is one request to one session. You ask for something, the model works in that session's own
+sandbox, and a reply comes back. Minutes is normal, not seconds.
 
 This document follows one task from the moment it is dispatched to the records it leaves behind. It
-names the words first, because four of them get used for each other and mean different things.
+starts with the two words that get used for each other most, a task and a piece of work. Then it
+names the rest.
 
 `docs/EVENTS.md` describes the log itself and how to inspect it. `docs/DATABASE.md` describes the
 tables. This is the path between them.
+
+## A task and a piece of work are not the same thing
+
+You used to tell the crew to do a thing, and watch it. That is a task. The intent lives in your
+terminal, so it dies with your terminal.
+
+A piece of work is the other half. You declare it and the crew writes it down. A controller loop then
+makes reality match that record. The work outlives the controller that started it. It runs as a named
+role with only what that role receives. Every movement it makes is on the record, with the trace it
+happened in.
+
+A piece of work is not a second kind of task. A controller sends the brief as a task, into a session,
+the same way you do. So the rest of this document is what happens inside a piece of work too.
+`docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
+
+```mermaid
+flowchart LR
+    YOU(["you"]) -->|"quay ask, quay dispatch"| TASK["a task:<br/>one request to one session"]
+    YOU -->|"quay work create"| WORK["a piece of work:<br/>a row the crew keeps"]
+    WORK --> CTL["a controller reads the row"]
+    CTL -->|"sends the brief"| TASK
+    TASK --> SESSION["a session, in its own container"]
+    SESSION --> LANDED["what came back, written down"]
+    LANDED --> CTL
+```
 
 ## The words
 

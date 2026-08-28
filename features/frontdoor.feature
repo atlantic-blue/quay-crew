@@ -1,18 +1,31 @@
-Feature: The front door says what the crew can actually do
+Feature: The front door says what the crew is and how to start it
 
   The README is the first and often the only thing anybody reads. A reader takes it at its word,
   types what it says, and when that fails they conclude the product is broken rather than the
-  sentence. Its list of what works once predated a whole day of merged work, and nothing anywhere
-  said so.
+  sentence. It once ran to 253 lines: a forty item list of what works, a principles list, a stack
+  list, a roadmap and a page of prior art. Nobody read any of it, and the list of what works had
+  already gone stale.
 
-  So the front door is held to the three things it can be checked against: the commands the tool
-  actually has, the targets the Makefile actually declares, and the documents that are actually
-  there. It is also held to being one command to a running crew, to carrying the picture of a piece
-  of work, and to using no markdown a reader cannot copy back out.
+  So it is held to three things and no more. What the crew is, one quick start, and where to read
+  next. Everything else it used to hold lives in the documents it points at, and the scenarios in
+  this directory say what the crew actually does.
+
+  Each promise it makes is checked against something with an answer elsewhere in this repository:
+  the commands the tool actually has, the targets the Makefile actually declares, and the documents
+  that are actually there. It is also held to a length a person reads, and to using no markdown a
+  reader cannot copy back out.
 
   What none of this says is whether a sentence is true. A bullet that claims a capability in words
   naming no command passes every scenario here. The rest of this directory is what says whether a
   capability is real; these say the front door points at it.
+
+  Scenario: It says what the crew is, how to start it, and where to read next
+    When a reader opens the front door
+    Then it holds those three parts and no other section
+
+  Scenario: It is short enough that somebody reads it
+    When a reader opens the front door
+    Then it is shorter than the length a person gives it
 
   Scenario: It names no command the crew does not have
     When a reader opens the front door
@@ -30,9 +43,9 @@ Feature: The front door says what the crew can actually do
     When a reader opens the front door
     Then the quick start is one command to a running crew
 
-  Scenario: It carries the picture of a piece of work
+  Scenario: The picture of a piece of work is where it sends a reader for it
     When a reader opens the front door
-    Then it shows a piece of work through the controller, the lease, the session and the role
+    Then the document it names for the work carries a picture of one, through the controller, the lease, the session and the role
 
   Scenario: Everything in it can be copied back out
     When a reader opens the front door
