@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -17,6 +18,11 @@ import (
 // things it can be wrong about. What commands exist, what make targets exist, and what documents
 // exist are all questions with an answer somewhere else in this repository.
 //
+// It is held to a shape as well as to its claims. It ran to 253 lines of feature list, principles,
+// stack, roadmap and prior art, all of it already written down in docs/ and in features/, and none
+// of it read. So the sections are an exact list rather than a minimum, and there is a line limit
+// underneath that.
+//
 // What none of this checks is whether a sentence is true. A bullet claiming a capability the crew
 // does not have, in words that name no command, passes every case here. The scenarios in this
 // directory are what say whether a capability is real; this says the front door points at them.
@@ -26,6 +32,26 @@ const theFrontDoor = "../README.md"
 
 // theMakefile is the other file the front door makes claims about.
 const theFrontDoorsMakefile = "../Makefile"
+
+// theWorkDocumentLink is where the picture of one piece of work lives, and it is one of the
+// documents the front door points at. The picture used to be in the front door itself.
+const theWorkDocumentLink = "docs/ORCHESTRATION.md"
+
+// theFrontDoorsSections is every section the front door carries, in order. It answers what the crew
+// is before the first one, then those, and stops.
+//
+// The list is exact rather than a minimum, because a limit on length alone is satisfied by a shorter
+// version of the same sprawl: every section that made the old one unreadable was added one at a
+// time, each of them defensible on its own.
+var theFrontDoorsSections = []string{"Quick start", "Where to read next", "License"}
+
+// theFewestWordsThatSayWhatItIs. The lead is the answer to "what is this", and it sits before any
+// heading, so an empty lead is a front door that opens on an install command.
+const theFewestWordsThatSayWhatItIs = 40
+
+// theLongestFrontDoorWorthReading, in lines. The one this replaced was 253, and the reason it was
+// rewritten is that nobody reached the bottom of it.
+const theLongestFrontDoorWorthReading = 80
 
 // codeIn returns everything the front door marks as something to type: every inline code span, and
 // every line inside a fenced block. Prose is left out on purpose, because "quay is on your path" is
@@ -166,6 +192,26 @@ func frontDoor(t *testing.T) string {
 	return string(body)
 }
 
+// TestTheFrontDoorHoldsThreeThingsAndNoOthers.
+//
+// What the crew is, how to start it, and where to read next. The forty item feature list, the
+// principles, the stack, the roadmap and the prior art all say something already said in docs/ or in
+// features/, and every one of them made the file longer than the reader it was written for.
+func TestTheFrontDoorHoldsThreeThingsAndNoOthers(t *testing.T) {
+	for _, wrong := range theShapeOf(frontDoor(t)) {
+		t.Error(wrong)
+	}
+}
+
+// TestTheFrontDoorIsShortEnoughToRead. The section list above stops a new section going in; this
+// stops one that is already there growing until nobody reaches the bottom.
+func TestTheFrontDoorIsShortEnoughToRead(t *testing.T) {
+	if held := linesIn(frontDoor(t)); held > theLongestFrontDoorWorthReading {
+		t.Errorf("the front door is %d lines, and nobody reads more than %d of them",
+			held, theLongestFrontDoorWorthReading)
+	}
+}
+
 // TestEveryCommandTheFrontDoorNamesExists, checked against the tool this checkout builds.
 //
 // This is the one that catches the front door going stale, from either end: a command named before
@@ -222,7 +268,7 @@ func TestTheQuickStartIsOneCommand(t *testing.T) {
 	}
 	// The three that used to come before it. Naming them in a quick start is naming a first run that
 	// takes four commands again.
-	for _, retired := range []string{"make config", "make sandbox-image", "make up\n"} {
+	for _, retired := range []string{"make config", "make sandbox-image", "make up"} {
 		if strings.Contains(quickStart, retired) {
 			t.Errorf("the quick start still tells a reader to run %q, so a first run reads as more "+
 				"than one command", strings.TrimSpace(retired))
@@ -246,31 +292,15 @@ func TestEveryDocumentTheFrontDoorPointsAtExists(t *testing.T) {
 	}
 }
 
-// TestTheFrontDoorCarriesThePictureOfAPieceOfWork.
+// TestThePictureOfAPieceOfWorkIsWhereTheFrontDoorSendsAReader.
 //
-// Work as a declared resource is the shape of the product, and it is the thing a paragraph explains
-// worst. The diagram is required to exist, to be a flowchart, and to have every label quoted, which
-// is what stops a parenthesis or a slash breaking the parse where nobody renders it.
-func TestTheFrontDoorCarriesThePictureOfAPieceOfWork(t *testing.T) {
-	diagram, err := diagramIn(frontDoor(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(diagram, "flowchart") {
-		t.Errorf("the diagram is not a flowchart:\n%s", diagram)
-	}
-	for _, through := range []string{"controller", "lease", "role", "session"} {
-		if !strings.Contains(strings.ToLower(diagram), through) {
-			t.Errorf("the diagram never shows the %s, so it does not follow a piece of work through:\n%s",
-				through, diagram)
-		}
-	}
-
-	// A label with an unquoted parenthesis, slash or colon does not parse, and nothing on this
-	// machine renders one, so the quoting is checked rather than assumed.
-	for _, label := range regexp.MustCompile(`[\[{(]+([^"\[\]{}()]*[(/:][^"\[\]{}()]*)[\]})]+`).FindAllStringSubmatch(diagram, -1) {
-		t.Errorf("the diagram has an unquoted label %q, which does not parse", strings.TrimSpace(label[1]))
+// Work as a record the crew keeps is the shape of the product, and it is the thing a paragraph
+// explains worst. The picture used to be in the front door, which is one of the reasons the front
+// door was long. It moved to the document that already held the long version, so what is held now is
+// that a reader is still sent somewhere that has it.
+func TestThePictureOfAPieceOfWorkIsWhereTheFrontDoorSendsAReader(t *testing.T) {
+	for _, wrong := range thePictureOfAPieceOfWork(frontDoor(t)) {
+		t.Error(wrong)
 	}
 }
 
@@ -314,18 +344,137 @@ func sectionOf(text, heading string) (string, error) {
 	return section, nil
 }
 
-// diagramIn returns the first mermaid block, which is the picture of a piece of work.
-func diagramIn(text string) (string, error) {
+// headingsIn returns the front door's sections in the order it holds them. A heading inside a fenced
+// block is something to type rather than a section.
+func headingsIn(text string) []string {
+	var headings []string
+	fenced := false
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			fenced = !fenced
+			continue
+		}
+		if !fenced && strings.HasPrefix(line, "## ") {
+			headings = append(headings, strings.TrimSpace(strings.TrimPrefix(line, "## ")))
+		}
+	}
+	return headings
+}
+
+// leadIn returns the prose between the title and the first section, which is where the front door
+// answers what the crew is.
+func leadIn(text string) string {
+	var lead []string
+	for n, line := range strings.Split(text, "\n") {
+		if n == 0 && strings.HasPrefix(line, "# ") {
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		lead = append(lead, line)
+	}
+	return strings.TrimSpace(strings.Join(lead, "\n"))
+}
+
+// linesIn counts the front door as a reader scrolls it, so a file that ends in a newline is not one
+// line longer than it looks.
+func linesIn(text string) int {
+	trimmed := strings.TrimRight(text, "\n")
+	if trimmed == "" {
+		return 0
+	}
+	return len(strings.Split(trimmed, "\n"))
+}
+
+// theShapeOf returns everything wrong with the front door's three parts, or nothing. Each of these
+// fails on an empty file, which is the point: a rule that only forbids sections is satisfied by a
+// file with nothing in it.
+func theShapeOf(text string) []string {
+	var wrong []string
+
+	if !strings.HasPrefix(text, "# ") {
+		wrong = append(wrong, "the front door opens with no title, so a reader does not know what they opened")
+	}
+	if words := len(strings.Fields(leadIn(text))); words < theFewestWordsThatSayWhatItIs {
+		wrong = append(wrong, fmt.Sprintf("the front door says what the crew is in %d words, and %d is "+
+			"the fewest that says anything at all", words, theFewestWordsThatSayWhatItIs))
+	}
+	if held := headingsIn(text); !slices.Equal(held, theFrontDoorsSections) {
+		wrong = append(wrong, fmt.Sprintf("the front door holds the sections %v, and it holds %v and "+
+			"nothing else: what the crew is, how to start it, and where to read next. Everything a "+
+			"new section would say belongs in docs/ or in features/", held, theFrontDoorsSections))
+	}
+	return wrong
+}
+
+// diagramsIn returns every mermaid block in a document.
+func diagramsIn(text string) []string {
 	const opener = "```mermaid"
-	opened := strings.Index(text, opener)
-	if opened < 0 {
-		return "", fmt.Errorf("the front door carries no diagram, so the shape of the product is prose only")
+	var diagrams []string
+	rest := text
+	for {
+		opened := strings.Index(rest, opener)
+		if opened < 0 {
+			return diagrams
+		}
+		rest = rest[opened+len(opener):]
+		closed := strings.Index(rest, "```")
+		if closed < 0 {
+			return diagrams
+		}
+		diagrams = append(diagrams, rest[:closed])
+		rest = rest[closed:]
 	}
-	closed := strings.Index(text[opened+len(opener):], "```")
-	if closed < 0 {
-		return "", fmt.Errorf("the front door's diagram is never closed")
+}
+
+// thePictureOfAPieceOfWork returns everything wrong with the picture the front door sends a reader
+// to, or nothing.
+//
+// The picture is required to be a flowchart, to follow a piece of work through the controller, the
+// lease, the session and the role, and to have every label quoted, which is what stops a parenthesis
+// or a slash breaking the parse where nobody renders it.
+func thePictureOfAPieceOfWork(frontDoor string) []string {
+	if !slices.Contains(linkedFiles(frontDoor), theWorkDocumentLink) {
+		return []string{fmt.Sprintf("the front door sends nobody to %s, so the picture of a piece of "+
+			"work is nowhere a reader is pointed", theWorkDocumentLink)}
 	}
-	return text[opened : opened+len(opener)+closed], nil
+
+	body, err := os.ReadFile(filepath.Join("..", theWorkDocumentLink))
+	if err != nil {
+		return []string{fmt.Sprintf("reading %s: %v", theWorkDocumentLink, err)}
+	}
+
+	through := []string{"controller", "lease", "session", "role"}
+	picture := ""
+	for _, diagram := range diagramsIn(string(body)) {
+		if !strings.Contains(diagram, "flowchart") {
+			continue
+		}
+		follows := true
+		for _, one := range through {
+			if !strings.Contains(strings.ToLower(diagram), one) {
+				follows = false
+				break
+			}
+		}
+		if follows {
+			picture = diagram
+			break
+		}
+	}
+	if picture == "" {
+		return []string{fmt.Sprintf("%s holds no flowchart following a piece of work through the %s, "+
+			"so the picture the front door gave up carrying is not there either",
+			theWorkDocumentLink, strings.Join(through, ", the "))}
+	}
+
+	var wrong []string
+	for _, label := range regexp.MustCompile(`[\[{(]+([^"\[\]{}()]*[(/:][^"\[\]{}()]*)[\]})]+`).FindAllStringSubmatch(picture, -1) {
+		wrong = append(wrong, fmt.Sprintf("the picture has an unquoted label %q, which does not parse",
+			strings.TrimSpace(label[1])))
+	}
+	return wrong
 }
 
 // unreusableMarkdownIn returns every line carrying a construct a reader cannot copy back out. A
@@ -357,59 +506,89 @@ func unreusableMarkdownIn(text string) []string {
 	return found
 }
 
-// theSectionThatTellsThemApart is the heading under which the front door defines a task and a piece
-// of work against each other. It is named here rather than searched for, because a rule that
-// accepted any section would pass on the two words landing in unrelated paragraphs.
+// theWordsDocumentLink is the document that tells a task and a piece of work apart, and it is one of
+// the documents the front door points at. The section used to be in the front door itself.
+const theWordsDocumentLink = "docs/TASKS.md"
+
+// theSectionThatTellsThemApart is the heading under which a task and a piece of work are defined
+// against each other. It is named here rather than searched for, because a rule that accepted any
+// section would pass on the two words landing in unrelated paragraphs.
 const theSectionThatTellsThemApart = "## Two things you can ask for"
 
-// whatATaskAndAPieceOfWorkAre returns that section.
-func whatATaskAndAPieceOfWorkAre(text string) (string, error) {
-	return sectionOf(text, theSectionThatTellsThemApart)
+// whatATaskAndAPieceOfWorkAre returns that section of the document that holds it.
+func whatATaskAndAPieceOfWorkAre() (string, error) {
+	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", theWordsDocumentLink, err)
+	}
+	return sectionOf(string(body), theSectionThatTellsThemApart)
 }
 
-// TestTheFrontDoorSaysHowATaskAndAPieceOfWorkDiffer.
+// theDifferenceBetweenATaskAndAPieceOfWork returns everything wrong with where a reader is sent for
+// it, or nothing.
 //
-// A reader who has sent a task asks how work is different before they ask what work is, and the
-// front door answered that nowhere. It also has to come before the long explanation of work, because
-// an answer underneath the thing it explains is an answer nobody reaches.
-func TestTheFrontDoorSaysHowATaskAndAPieceOfWorkDiffer(t *testing.T) {
-	body := frontDoor(t)
+// A reader who has sent a task asks how work is different before they ask what work is. That answer
+// was in the front door, which is one of the reasons the front door was long. It moved to the
+// document that names the words that get used for each other, so what is held now is that a reader
+// is still sent somewhere that gives it, and that it is the first thing that document says.
+//
+// Two of the rules it was held to in the front door are gone with it, and deliberately: it may carry
+// a diagram now, and it is not capped at four paragraphs. Both were a budget on the front door
+// rather than a rule about the answer.
+func theDifferenceBetweenATaskAndAPieceOfWork(frontDoor string) []string {
+	if !slices.Contains(linkedFiles(frontDoor), theWordsDocumentLink) {
+		return []string{fmt.Sprintf("the front door sends nobody to %s, so a reader is never told "+
+			"which of the two things they can ask for they want", theWordsDocumentLink)}
+	}
 
-	said, err := whatATaskAndAPieceOfWorkAre(body)
+	said, err := whatATaskAndAPieceOfWorkAre()
 	if err != nil {
-		t.Fatalf("%v, so a reader is never told which of the two they want", err)
+		return []string{fmt.Sprintf("%v, so a reader is never told which of the two they want", err)}
+	}
+
+	var wrong []string
+	for _, both := range []string{"a task", "a piece of work"} {
+		if !strings.Contains(strings.ToLower(said), both) {
+			wrong = append(wrong, fmt.Sprintf("it never names %q, so a reader has only one of the two "+
+				"things they can ask for", both))
+		}
+	}
+	// A definition has to open a paragraph. Anywhere in the section is too weak: "a piece of work is
+	// not a second kind of task" is a sentence about the pair rather than a definition of either, and
+	// it satisfied a substring check while the definition beside it had been rewritten away.
+	opens := map[string]bool{}
+	for _, block := range strings.Split(strings.TrimSpace(said), "\n\n") {
+		for _, defined := range []string{"a task is", "a piece of work is"} {
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(block)), defined) {
+				opens[defined] = true
+			}
+		}
 	}
 	for _, defined := range []string{"a task is", "a piece of work is"} {
-		if !strings.Contains(strings.ToLower(said), defined) {
-			t.Errorf("it never says what %s:\n%s", strings.TrimSuffix(defined, " is"), said)
+		if !opens[defined] {
+			wrong = append(wrong, fmt.Sprintf("no paragraph of it opens by saying what %s, so it names "+
+				"the two without telling anybody which they want:\n%s",
+				strings.TrimSuffix(defined, " is"), said))
 		}
 	}
 
-	tellsApart := strings.Index(body, theSectionThatTellsThemApart)
-	explains := strings.Index(body, "## Work is a record the crew keeps")
-	if explains < 0 {
-		t.Fatal("the front door no longer explains what work is at all")
+	// It has to be the first thing the document says. An answer underneath the thing it explains is
+	// an answer nobody reaches, which is why it sat above the long section on work in the front door.
+	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
+	if err != nil {
+		return append(wrong, fmt.Sprintf("reading %s: %v", theWordsDocumentLink, err))
 	}
-	if tellsApart > explains {
-		t.Errorf("the difference is explained after the long section on work, so a reader meets the " +
-			"answer to their second question before the answer to their first")
+	if first := headingsIn(string(body)); len(first) == 0 || "## "+first[0] != theSectionThatTellsThemApart {
+		wrong = append(wrong, fmt.Sprintf("%s opens on %v rather than on %q, so a reader meets the "+
+			"answer to their second question before the answer to their first",
+			theWordsDocumentLink, first, theSectionThatTellsThemApart))
 	}
+	return wrong
+}
 
-	// No diagram in it. The picture below already carries the shape, and a second one this early
-	// costs a reader more than it gives them.
-	if strings.Contains(said, "```mermaid") {
-		t.Errorf("the section that tells them apart carries a diagram:\n%s", said)
-	}
-
-	// Short, because this is the front door. Four paragraphs, and the heading is not one of them.
-	paragraphs := 0
-	for _, block := range strings.Split(strings.TrimSpace(said), "\n\n") {
-		if strings.TrimSpace(block) != "" && !strings.HasPrefix(strings.TrimSpace(block), "#") {
-			paragraphs++
-		}
-	}
-	if paragraphs > 4 {
-		t.Errorf("the section that tells them apart runs to %d paragraphs, and the front door gets 4",
-			paragraphs)
+// TestTheDifferenceBetweenATaskAndAPieceOfWorkIsWhereTheFrontDoorSendsAReader.
+func TestTheDifferenceBetweenATaskAndAPieceOfWorkIsWhereTheFrontDoorSendsAReader(t *testing.T) {
+	for _, wrong := range theDifferenceBetweenATaskAndAPieceOfWork(frontDoor(t)) {
+		t.Error(wrong)
 	}
 }

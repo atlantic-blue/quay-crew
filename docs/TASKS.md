@@ -1,13 +1,44 @@
 # The life of a task
 
-A task is one piece of work in one session. You ask for something, the model works in that session's
-own sandbox, and a reply comes back. Minutes is normal, not seconds.
+A task is one request to one session. You ask for something, the model works in that session's own
+sandbox, and a reply comes back. Minutes is normal, not seconds.
 
 This document follows one task from the moment it is dispatched to the records it leaves behind. It
-names the words first, because four of them get used for each other and mean different things.
+starts by telling a task apart from a piece of work, because those two get used for each other most.
+Then it names the rest of the words.
 
 `docs/EVENTS.md` describes the log itself and how to inspect it. `docs/DATABASE.md` describes the
 tables. This is the path between them.
+
+## Two things you can ask for
+
+A task is a message. You send text, a session answers, and that is the whole life of it.
+
+A piece of work is a job. You write down what you want done and the crew keeps that record, so it has
+a phase you can read at any moment: pending, running, done, failed or stopped. It can run as a named
+role, carry a budget and a deadline, and declare work of its own. Two more phases are written down
+and nothing reaches them yet: `waiting`, because no controller honours ordering, and `asking`, which
+today only a flow run gets to.
+
+The test is one question. If you would ever ask where that is up to, it is work. If you would not, it
+is a task.
+
+A flow is work with its plan drawn in advance. A session is the conversation a task happens in.
+
+Declaring work does not replace sending a task. A controller sends the brief as a task, into a
+session, the same way you do. So the rest of this document is what happens inside a piece of work
+too. `docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
+
+```mermaid
+flowchart LR
+    YOU(["you"]) -->|"quay task"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
+    YOU -->|"quay work create"| WORK["a piece of work:<br/>a job the crew keeps<br/>a readable phase for"]
+    WORK --> CTL["a controller reads the row"]
+    CTL -->|"sends the brief"| TASK
+    TASK --> SESSION["a session, in its own container"]
+    SESSION --> LANDED["what came back, written down"]
+    LANDED --> CTL
+```
 
 ## The words
 

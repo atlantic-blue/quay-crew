@@ -8,6 +8,31 @@ read, or run with `make features`.
 
 ## 27 August 2026
 
+- **The front door says what it is and how to start it, and nothing else.** The README was 253
+  lines: a forty item list of what works, a principles list, a stack list, a roadmap and a page of
+  prior art. Nobody read it. It is 52 lines now, and it holds three things. What the crew is, one
+  quick start, and where to read next.
+
+  Nothing was deleted. Every section that left was already written down in `docs/`, in `features/`
+  or in `make help`, and the two that existed nowhere else moved. The picture of one piece of work
+  is the overview in section 3 of `docs/ORCHESTRATION.md`, beside the long version it belonged with.
+  Two things you can ask for, which landed in the README hours earlier, opens `docs/TASKS.md`, which
+  is the document that names the words that get used for each other, and it arrived with a diagram
+  of the two paths. Section 9 of `docs/ORCHESTRATION.md` said the file held ten diagrams and it held
+  fifteen; it says seventeen now, and every one of the seventeen was parsed by mermaid's own parser.
+
+  **The front door's scenarios say what it now promises.** Two are new. It holds those three
+  sections and no others, and it is under eighty lines. The sections are an exact list rather than
+  only a limit on length, because every section that made the old file unreadable went in one at a
+  time and each one was defensible on its own. Two scenarios followed their subject out of the
+  README and now hold the document it sends a reader to: the picture of a piece of work, and the
+  difference between a task and a piece of work. Nine scenarios where there were seven, and 554 in
+  the suite where there were 552.
+
+  The rule about the difference got stronger on the way. It asked whether the section contained the
+  words "a piece of work is" anywhere, and a sentence about the pair rather than a definition of
+  either satisfied it while the definition beside it had been rewritten away. It asks for a
+  paragraph that opens with each definition now, which the mutation proved.
 - **One word for a task.** `ask`, `dispatch` and `tasks` were three top level commands for one
   entity, while `work` and `flow` were each one word with verbs under it. Reading the command list
   gave no clue that the three were one thing, so the first question a new operator has, "I want this

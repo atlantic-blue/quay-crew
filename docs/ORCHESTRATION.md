@@ -137,6 +137,32 @@ work first.
 
 A caller writes a piece of work. A controller makes reality match it. Nothing dispatches.
 
+### One piece of work, end to end
+
+This is the overview. The loop that does each step is section 4, and the lease that makes the
+controller disposable is in it.
+
+```mermaid
+flowchart TD
+    DECLARE["you declare a piece of work:<br/>a title, a brief, a role, what it hands"]
+    DECLARE --> ROW["the crew writes the row, phase pending.<br/>Every rule is checked here, so a refusal<br/>reaches you while you are still looking"]
+    ROW --> CLAIM{"a controller claims it<br/>and takes a lease"}
+    CLAIM -->|"another controller won the race"| ROW
+    CLAIM -->|"claimed"| RECEIVES{"does the role receive<br/>everything this work hands?"}
+    RECEIVES -->|"no"| STOPPED(["stopped, naming the role and the<br/>material. No container is ever built"])
+    RECEIVES -->|"yes, or it names no role"| SESSION["a session in its own container, running as<br/>the role: told its brief, given what the role<br/>receives, holding a credential for its verbs"]
+    SESSION --> RENEW["the controller renews the lease<br/>on every tick while the task is open"]
+    RENEW --> LANDED{"has the task landed?"}
+    LANDED -->|"not yet"| RENEW
+    LANDED -->|"the controller died"| TAKEOVER["the lease runs out. Another controller reads<br/>the task row first and takes over, so the<br/>work is never sent or paid for twice"]
+    TAKEOVER --> LANDED
+    LANDED -->|"it answered"| DONE(["done, with the answer on the row"])
+    LANDED -->|"it did not finish"| FAILED(["failed, with the reason"])
+    DONE --> RECORD[["every movement is exported, carrying<br/>the trace the whole tree belongs to"]]
+    FAILED --> RECORD
+    STOPPED --> RECORD
+```
+
 ### What a caller declares
 
 Every field below is a column on the `work` table. Types are Postgres types. Every one is validated
@@ -1446,18 +1472,20 @@ replaced. Every fact above comes from a row or from a trace.
 
 ## 9. Diagrams
 
-Three, and each is inline where it belongs rather than gathered at the end.
+Four, and each is inline where it belongs rather than gathered at the end.
 
-- **The controller loop**, in section 4.
+- **One piece of work end to end**, in section 3.
 - **The resource lifecycle with its status transitions**, in section 3.
+- **The controller loop**, in section 4.
 - **The third scenario end to end**, below.
 
-Sections 11 to 14 were added later and each carries its own, which takes the total in this file to
-ten. Every one of the ten was rendered through the mermaid command line tool before this
-document was finished, with `PUPPETEER_EXECUTABLE_PATH` set to the browser the sandbox image already
-carries at `/opt/playwright/chromium_headless_shell-1234/chrome-linux/headless_shell`, and with the
-output written to a file ending in `.svg`. The reproduction step, from this repository's own working
-directory:
+Sections 11 to 14 were added later and each carries its own, which takes the file to seventeen. An
+earlier version of this paragraph said ten, and the count had gone stale.
+
+Every one of the seventeen was parsed by mermaid's own parser on the day the overview in section 3
+moved here from the README. That says each one is valid mermaid, and it is not the same thing as a
+render: the machine it moved on could not download a browser for the rendering tool to drive. The
+reproduction step for a render, from this repository's own working directory:
 
 ```
 PUPPETEER_EXECUTABLE_PATH=/opt/playwright/chromium_headless_shell-1234/chrome-linux/headless_shell \

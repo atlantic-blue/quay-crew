@@ -45,6 +45,21 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^it holds those three parts and no other section$`, func(ctx context.Context) error {
+		if wrong := theShapeOf(frontDoorFrom(ctx).body); len(wrong) > 0 {
+			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
+		}
+		return nil
+	})
+
+	sc.Step(`^it is shorter than the length a person gives it$`, func(ctx context.Context) error {
+		if held := linesIn(frontDoorFrom(ctx).body); held > theLongestFrontDoorWorthReading {
+			return fmt.Errorf("it is %d lines, and nobody reads more than %d of them",
+				held, theLongestFrontDoorWorthReading)
+		}
+		return nil
+	})
+
 	sc.Step(`^every command it says to run is one the crew has$`, func(ctx context.Context) error {
 		commands, err := quayCommands()
 		if err != nil {
@@ -110,7 +125,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		if !strings.Contains(quickStart, "make install") {
 			return fmt.Errorf("the quick start does not name make install:\n%s", quickStart)
 		}
-		for _, retired := range []string{"make config", "make sandbox-image", "make up\n"} {
+		for _, retired := range []string{"make config", "make sandbox-image", "make up"} {
 			if strings.Contains(quickStart, retired) {
 				return fmt.Errorf("the quick start still says to run %q, so a first run is more than "+
 					"one command again", strings.TrimSpace(retired))
@@ -119,18 +134,9 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^it shows a piece of work through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
-		diagram, err := diagramIn(frontDoorFrom(ctx).body)
-		if err != nil {
-			return err
-		}
-		if !strings.Contains(diagram, "flowchart") {
-			return fmt.Errorf("the diagram is not a flowchart:\n%s", diagram)
-		}
-		for _, through := range []string{"controller", "lease", "session", "role"} {
-			if !strings.Contains(strings.ToLower(diagram), through) {
-				return fmt.Errorf("the diagram never shows the %s:\n%s", through, diagram)
-			}
+	sc.Step(`^the document it names for the work carries a picture of one, through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
+		if wrong := thePictureOfAPieceOfWork(frontDoorFrom(ctx).body); len(wrong) > 0 {
+			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil
 	})
@@ -143,36 +149,16 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// The two steps below are registered from initializeFrontDoorSteps, and are kept here rather than
-// inside it so the rule they hold up reads on its own.
+// The steps below are registered from initializeFrontDoorSteps, and are kept here rather than inside
+// it so the rule they hold up reads on its own.
 
-// initializeFrontDoorDifferenceSteps holds the front door to answering the question a reader asks
-// first: not what a piece of work is, but how it differs from the task they already know how to send.
+// initializeFrontDoorDifferenceSteps holds the front door to sending a reader somewhere that answers
+// the question they ask first: not what a piece of work is, but how it differs from the task they
+// already know how to send. The answer itself lives in the document, not in the front door.
 func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^it names both a task and a piece of work$`, func(ctx context.Context) error {
-		body := frontDoorFrom(ctx).body
-		for _, both := range []string{"a task", "a piece of work"} {
-			if !strings.Contains(body, both) {
-				return fmt.Errorf("the front door never names %q, so a reader has only one of the two "+
-					"things they can ask for", both)
-			}
-		}
-		return nil
-	})
-
-	sc.Step(`^it says what the difference between them is$`, func(ctx context.Context) error {
-		said, err := whatATaskAndAPieceOfWorkAre(frontDoorFrom(ctx).body)
-		if err != nil {
-			return err
-		}
-		// Naming both somewhere is not saying how they differ. What the rule wants is one place that
-		// defines each of them against the other, so a reader gets the answer without assembling it
-		// from a feature list.
-		for _, defined := range []string{"a task is", "a piece of work is"} {
-			if !strings.Contains(strings.ToLower(said), defined) {
-				return fmt.Errorf("the front door never says what %s, so it names the two without "+
-					"telling anybody which they want:\n%s", strings.TrimSuffix(defined, " is"), said)
-			}
+	sc.Step(`^the document it names for the words tells a task and a piece of work apart$`, func(ctx context.Context) error {
+		if wrong := theDifferenceBetweenATaskAndAPieceOfWork(frontDoorFrom(ctx).body); len(wrong) > 0 {
+			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil
 	})
