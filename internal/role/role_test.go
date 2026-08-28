@@ -207,8 +207,8 @@ func TestABriefLongerThanFourPagesIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("a brief over the limit was accepted")
 	}
-	// A brief the size of the ones this shape was taken from is not over the limit, which is the
-	// point of the number.
+	// A brief the size of the ones this build ships is not over the limit, which is the point of the
+	// number.
 	if _, err := FromFiles(replace(good(), BriefFile, strings.Repeat("a", 12000))); err != nil {
 		t.Errorf("a brief of twelve thousand bytes was refused: %v", err)
 	}

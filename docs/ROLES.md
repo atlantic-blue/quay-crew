@@ -225,22 +225,25 @@ write what every session in the workspace is told.
 
 ## The roles this build ships
 
-Twelve roles live in [`roles/`](../roles) at the root of this repository, one directory each. They
-are ported from the twelve agents in
-[`atlantic-blue/greenlight`](https://github.com/atlantic-blue/greenlight/tree/main/src/agents), read
-on 27 August 2026. Each agent's body is already an instruction, so it became the `ROLE.md`. The `gl-`
-prefix belongs to that product and came off, so `gl-test-writer` is `test-writer` here.
+Twelve roles live in [`roles/`](../roles) at the root of this repository, one directory each. Between
+them they are a design phase: a way of working from a design to a shipped slice where each step runs
+as a session of its own, given only what its role declares.
 
 ```mermaid
 flowchart LR
-    GL["greenlight agent<br/>frontmatter: name, description, tools, model"] --> BODY["the body, which is the instruction"]
-    GL --> FM["the frontmatter"]
-    BODY --> BRIEF["ROLE.md<br/>the honest line, then the brief"]
-    FM --> YAML["role.yaml<br/>name, version, summary, model, receives, may"]
-    FM --> DROP["tools: dropped.<br/>Quay has no word for a tool or a file,<br/>and the importer refuses one by name"]
+    subgraph FRESH["a slice, built from a design"]
+        DESIGNER["designer"] --> ARCHITECT["architect"] --> TESTWRITER["test-writer"] --> IMPLEMENTER["implementer"] --> SECURITY["security"] --> VERIFIER["verifier"] --> DEBUGGER["debugger"]
+    end
+    subgraph EXISTING["a codebase that already exists"]
+        MAPPER["codebase-mapper"] --> ASSESSOR["assessor"] --> WRAPPER["wrapper"]
+    end
+    subgraph MARKET["the market it ships into"]
+        RESEARCHER["marketing-researcher"] --> MARKETING["marketing"]
+    end
+    ASSESSOR --> DESIGNER
 ```
 
-The design phase, in order, and the model each one was ported with:
+The design phase, in order, and the model each one runs on:
 
 - `designer` on opus, then `architect` on opus, which writes the contracts and the dependency graph.
 - `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
@@ -253,14 +256,13 @@ The design phase, in order, and the model each one was ported with:
 - `marketing-researcher` on opus finds facts with sources, and `marketing` on opus turns them into a
   plan.
 
-`model` is greenlight's own default for that agent, kept rather than chosen. Greenlight resolves the
-wrapper's model at run time and names no default, so this port names sonnet and the role's own file
-says so.
+The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
+team is worth the larger model and writing one file to a specification is not.
 
 Every one of the twelve receives `work`, `context` and `skills`. Only the assessor declares a `may`
-list, `work.create` and `work.read`, because its brief spawns a security review and reads what came
-back. Nothing else in the twelve spawns anything, and default deny is what makes the assessor's grant
-mean something.
+list, `work.create` and `work.read`, because its brief declares a security review and reads what came
+back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
+grant mean something.
 
 `skills` goes to all twelve because each brief works inside a repository, and a repository reaches a
 session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
@@ -283,37 +285,18 @@ the interactive parts of `designer` and `marketing` have nothing behind them her
 ships no web search skill, so the research `marketing-researcher` and `designer` are told to do has
 no tool behind it.
 
-Every file path and command these briefs name is greenlight's: `CLAUDE.md`, `.greenlight/DESIGN.md`,
-`.greenlight/CONTRACTS.md`, `.greenlight/GRAPH.json`, `.greenlight/ASSESS.md`,
-`.greenlight/MARKETING.md`, `references/deviation-rules.md`, `references/circuit-breaker.md`,
-`/gl:init`, `/gl:slice`, `/gl:ship` and the rest. None of them exists here. The port names them
-rather than inventing a quay equivalent, because a made up path sends a session looking for a file
-that is not there.
+A brief also names documents the crew does not create: `CLAUDE.md`, `docs/DESIGN.md`,
+`docs/CONTRACTS.md`, `docs/GRAPH.json`, `docs/ASSESS.md`, `docs/MARKETING.md`,
+`references/deviation-rules.md` and the rest. Nothing seeds any of them into a repository. The role
+that reads one is the role after the role that writes it, so a phase run out of order finds nothing
+there, and each brief says which document it writes.
 
-### Two briefs were trimmed to fit, and here is exactly what came out
+### The two longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. The greenlight architect is 17,993 and the assessor is 18,126, so both
-were refused at import as they stood. Nothing either brief asks the role to do was removed. What came
-out is listed here so it can be checked or put back:
-
-- `architect`: the sample of the message the greenlight orchestrator sends, under **What You
-  Receive**; the **Invariants** list under **Verification Tier Fields**, which restates the **Field
-  rules** above it item for item; the **Error states** and **Invariants** lists under **Verification
-  Tier Selection**, which restate the guidance above them and the output checklist below them; and
-  the **Rule of thumb** line under **Minimal Surface Area**, which restates the paragraph above it.
-- `assessor`: the sample of the message the orchestrator sends, under **What You Receive**; the
-  `NoCoverageCommand`, `SecurityAgentFailure` and `ContextBudgetExceeded` entries under **Expected
-  Errors and Responses**, each of which restates a response already written in **Coverage Command**,
-  **Security Findings** and **Context Budget Awareness**; **Thoroughness vs Context Budget**, which
-  restates **Context Budget Awareness** a third time; and **Prioritization Criteria**, whose five
-  criteria are restated as the three tier definitions immediately below it.
-
-The other ten are the greenlight body word for word. Runs of blank lines were collapsed to one across all twelve, which changed a single line in `wrapper` and nothing anywhere else.
-
-The ceiling is worth a second look rather than a second trim. `internal/role/role.go` says it was
-sized because "the roles this shape was taken from run to about twelve thousand bytes", and these are
-those roles: ten of the twelve fit under twelve thousand, and two are eighteen thousand. Raising the
-ceiling is the change that would let those two ship word for word, and it is the operator's to make.
+A brief may be 16,384 bytes. Ten of the twelve fit under thirteen thousand, and `architect` at
+16,360 and `assessor` at 16,257 are both within two hundred bytes of the ceiling, so a sentence
+added to either has to come out somewhere else. Both say so at the top. Raising the ceiling is the
+change that would give those two room, and it is the operator's to make.
 
 ### What this does not do
 
@@ -323,10 +306,11 @@ ceiling is the change that would let those two ship word for word, and it is the
   operator runs `quay role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares work, and
   the workspace has to hold it already.
-- The twelve are ported, not adapted. Each still describes greenlight's phases, its orchestrator and
-  its files, because changing what a brief asks for is a different piece of work from moving it.
-- The briefs are a snapshot of greenlight as it was on 27 August 2026. Nothing here notices when the
-  agent it came from changes.
+- Nothing runs the phase. The twelve describe an order and the crew does not keep it: a role names
+  the role that comes next in its own output, and it is the operator who writes that order into a
+  flow graph or declares the next piece of work.
+- Nothing hands one role's output to the next. Each writes a document into the repository, and the
+  next role reads it from there, so a role whose predecessor never ran says so and stops.
 
 The scenarios that hold this up are in [`features/roles.feature`](../features/roles.feature), which
 imports every role in `roles/` and refuses a directory holding none, and in

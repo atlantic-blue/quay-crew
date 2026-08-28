@@ -28,9 +28,9 @@ func filesOf(t *testing.T, dir string) []*quaycrewv1.RoleFile {
 	return files
 }
 
-// The check the port exists to pass, run against the real store and the real control plane rather
-// than against the reader alone. A role that loads in this process and is refused on the other side
-// of ImportRole is not ported, and this is the only place that difference shows.
+// The check run against the real store and the real control plane rather than against the reader
+// alone. A role that loads in this process and is refused on the other side of ImportRole does not
+// ship, and this is the only place that difference shows.
 func TestEveryShippedRoleImportsIntoTheCrew(t *testing.T) {
 	roles, err := role.All(shippedRoles)
 	if err != nil {
@@ -100,8 +100,8 @@ func TestAShippedRoleAttachesToAWorkspaceAndIsHeldThere(t *testing.T) {
 	}
 }
 
-// The sad path the port is most likely to break: a role whose manifest names material or a verb the
-// crew does not hand out. It is refused by name on the far side too, not only by the reader here.
+// The sad path an edit to a shipped role is most likely to reach: a manifest naming material or a
+// verb the crew does not hand out. It is refused by name on the far side too, not only by the reader.
 func TestARoleCarryingAWordTheCrewDoesNotKnowIsRefusedOnImport(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	ctx := context.Background()

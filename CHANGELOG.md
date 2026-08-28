@@ -6,6 +6,41 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 28 August 2026
+
+- **The roles are quay's own words now.** The twelve in `roles/` arrived as a port and read like one:
+  every brief opened by naming another product, and between them they named its files, its slash
+  commands and its agents by their `gl-` prefix. This repository is going open source, so a reader
+  would have taken all of that for a dependency, and a session running as one of these roles would
+  have gone looking for a command that is not here.
+
+  Nothing about what a role is for changed. Every mention came out of `roles/`, out of `docs/ROLES.md`
+  and out of the scenarios, and what it named was replaced with quay's own: a brief that said it was
+  spawned by a slash command now says a flow step or a piece of work names this role, which is how a
+  role session actually starts. A brief that told the model to run another product's command now
+  names the quay role that does that job, so the assessor declares a piece of work for the `security`
+  role rather than spawning `gl-security`. Documents a brief writes and reads moved from that
+  product's dot directory to plain `docs/` paths in the repository the role is working in.
+
+  Where quay has no equivalent, the brief says so rather than inventing one. Every command written
+  into these briefs was checked against `quay help`.
+
+  **The honest lines stay honest.** Each brief still opens with what quay does not enforce, because
+  none of that changed: a role cannot be told which files it may not touch, and a role session cannot
+  put a question to the operator. The two sentences are just written without leaning on another
+  product's name to carry them.
+
+  **A guard, so this cannot come back.** A test reads `roles/`, `docs/` and the scenario files as
+  directories rather than as a list, and fails on the name, on a `gl-` prefixed agent, or on a slash
+  command of that shape. It refuses a directory that is not there and it reports how many files it
+  opened, because a sweep that opens nothing finds nothing and finding nothing is what a clean tree
+  looks like. Over the database, the briefs are read back out of Postgres and held to the same rule
+  and to the file they came from, since a brief that came back empty would pass any check that only
+  asks what is absent. A scenario runs a flow step as the shipped `architect` and reads the memory
+  file that session is finally told to work by.
+
+  The entry below for 27 August 2026 is left as it was written. It says what shipped that day.
+
 ## 27 August 2026
 
 - **The front door says what the crew does today.** The README's list of what works predated

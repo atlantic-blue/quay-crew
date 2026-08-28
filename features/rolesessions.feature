@@ -104,3 +104,23 @@ Feature: A step of a flow runs as a role, in its own session
     When the operator starts the flow "write-tests" in the project
     Then the flow run is done
     And every session the run started is archived
+
+  # The roles this build ships are quay's own, and the brief is the whole instruction of the session
+  # running as one. A brief still naming the product it was written for would send that session
+  # looking for a file, a command or an agent that is not here. The unit tier sweeps every file in
+  # roles/; this carries one of them through the crew to the memory file the session actually reads.
+  Scenario: A session running as a role this build ships is told a brief that names no other product
+    Given the operator imports the "architect" role this build ships
+    And the operator attached the "architect" role to the workspace
+    And the crew holds this flow graph:
+      """
+      name: write-contracts
+      version: 1
+      nodes:
+        contracts: { type: dispatch, role: architect, prompt: "write the contracts" }
+      edges:
+        - [contracts, done]
+      """
+    When the operator starts the flow "write-contracts" in the project
+    Then the role's memory file carries "You are the architect."
+    And the role's memory file names no product but quay

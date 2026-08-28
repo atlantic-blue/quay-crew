@@ -40,7 +40,7 @@ const SummaryLimit = 200
 // on every conversation, so it is held to a sentence. A role's brief reaches one session, once, and
 // that session exists to do this one job, so the detail it needs is the point rather than an
 // overhead. The ceiling is still here because a brief nobody can read is a brief nobody follows, and
-// because the roles this shape was taken from run to about twelve thousand bytes.
+// because the roles this build ships run to between five and sixteen thousand bytes.
 const BriefLimit = 16384
 
 // Material is what a role may declare it receives. An allow list rather than free text.
