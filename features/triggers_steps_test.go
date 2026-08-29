@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/cucumber/godog"
 )
 
@@ -95,26 +95,26 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's own work is labelled with the trigger that caused it$`, func(ctx context.Context) error {
+	sc.Step(`^the run's own job is labelled with the trigger that caused it$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		carrying, err := runCarrier(ctx, w)
 		if err != nil {
 			return err
 		}
 		if carrying.Labels["flow.trigger"] != w.trigger.ID {
-			return fmt.Errorf("the run's own work is labelled %v, want it to name trigger %s",
+			return fmt.Errorf("the run's own job is labelled %v, want it to name trigger %s",
 				carrying.Labels, w.trigger.ID)
 		}
 		return nil
 	})
 
-	sc.Step(`^the run's steps hang under the run's own work$`, func(ctx context.Context) error {
+	sc.Step(`^the run's steps hang under the run's own job$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		carrying, err := runCarrier(ctx, w)
 		if err != nil {
 			return err
 		}
-		steps, err := w.store.ListWork(ctx, work.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
+		steps, err := w.store.ListJobs(ctx, job.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
 		if err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 			}
 			found++
 			if step.Parent != carrying.ID {
-				return fmt.Errorf("step %q hangs under %q, want the run's own work %q",
+				return fmt.Errorf("step %q hangs under %q, want the run's own job %q",
 					step.Title, step.Parent, carrying.ID)
 			}
 			if step.Depth != carrying.Depth+1 {

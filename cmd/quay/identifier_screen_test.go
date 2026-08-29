@@ -38,7 +38,7 @@ func TestAnAddressCarriesTheWholeSessionId(t *testing.T) {
 		}
 	}
 	// One session throughout. An address that started a second conversation would be worse than a
-	// refusal, because nothing on the screen would say the work had gone somewhere else.
+	// refusal, because nothing on the screen would say the job had gone somewhere else.
 	if reached := onlySession(t, client); reached.GetId() != id {
 		t.Fatalf("the address reached session %s, want %s", reached.GetId(), id)
 	}

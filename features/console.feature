@@ -194,7 +194,7 @@ Feature: The operator sees the crew from the console
     And the crew has 1 workspace
     And the crew has 1 project
 
-  # A task takes as long as the work takes, which is minutes, and the console has a screen to draw.
+  # A task takes as long as the job takes, which is minutes, and the console has a screen to draw.
   # The wizard waited for one anyway: it held every key while it waited, gave up at thirty seconds,
   # and left behind a session with a container, a row, and no conversation in it. The operator saw a
   # frozen "making it" and then an error, and read the freeze as the container being slow to start.

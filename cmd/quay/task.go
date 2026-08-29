@@ -25,7 +25,7 @@ const taskUsage = "usage: quay task [--dispatch] [<address>] <text>" +
 
 // runTask is the one word for a task: send one, or read back what a session was sent.
 //
-// A task is an entity like work and like a flow, so it reads like them: one noun, verbs under it.
+// A task is an entity like a job and like a flow, so it reads like them: one noun, verbs under it.
 // It used to be three top level commands, ask, dispatch and tasks, and reading the command list gave
 // no clue that the three were one thing.
 func runTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
@@ -64,10 +64,10 @@ func lettingGo(args []string) (letGo bool, rest []string, err error) {
 
 // sendTask starts a task, and either waits for the answer here or lets go of it.
 //
-// Letting go is what real work wants, because a task takes as long as the work takes, which is
+// Letting go is what real work wants, because a task takes as long as the job takes, which is
 // minutes and sometimes an hour, and holding it in the client makes the terminal the weakest part of
 // the crew: a task killed at seventeen minutes recorded "failed: model: run exited: signal: killed",
-// said nothing about why, and the work was gone. Waiting is what a short question wants, because the
+// said nothing about why, and the job was gone. Waiting is what a short question wants, because the
 // person typing it is looking at the terminal and the reply is the point.
 func sendTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string,
 	letGo bool, out io.Writer) error {

@@ -7,8 +7,8 @@ import (
 
 // TestEverySandboxJoinsTheNetworkThatReachesTheCrew.
 //
-// A session running a piece of work is handed the crew's address and a credential minted for that
-// work. Both are worthless in a container with no route to the address, which is what an ordinary
+// A session running a job is handed the crew's address and a credential minted for that job.
+// Both are worthless in a container with no route to the address, which is what an ordinary
 // session had: every call died resolving the name, so the verb boundary refused nothing and a
 // permission system that has never refused anything cannot be told from one that is not wired up.
 //

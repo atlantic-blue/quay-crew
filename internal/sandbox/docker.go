@@ -32,8 +32,8 @@ type DockerProvider struct {
 	// broker and no dashboard.
 	//
 	// Reaching the crew is not permission to do anything there. A session is refused every call until
-	// it presents a credential the crew minted for the piece of work it is running, and that
-	// credential carries the verbs its role declared and expires with the work. So this decides what
+	// it presents a credential the crew minted for the job it is running, and that credential
+	// carries the verbs its role declared and expires with the job. So this decides what
 	// a session can address, and the credential decides what it may do.
 	//
 	// Empty leaves a sandbox on the daemon's default network, where the control plane cannot be

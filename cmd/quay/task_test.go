@@ -18,9 +18,9 @@ import (
 // One word sends a task. It waits for the answer, and --dispatch lets go of it.
 //
 // Letting go used to be a word of its own, and before that it did not exist at all: the task was
-// held in the client for as long as the work took, so the terminal was the weakest part of the crew.
+// held in the client for as long as the job took, so the terminal was the weakest part of the crew.
 // A task killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
-// nothing about why, and the work was gone.
+// nothing about why, and the job was gone.
 //
 // The tests below hold the model open rather than timing it. What is being tested is whether a
 // command comes back before its task does, and a test that waits a duration for that passes on a
@@ -120,7 +120,7 @@ func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
 	}
 }
 
-// The work is the crew's now, so a caller that goes away does not take it. This is the failure that
+// The job is the crew's now, so a caller that goes away does not take it. This is the failure that
 // started it: seventeen minutes of work lost with the terminal that asked for it.
 func TestATaskOutlivesTheCommandThatStartedIt(t *testing.T) {
 	client, runner := aHeldCrew(t)

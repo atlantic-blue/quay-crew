@@ -10,33 +10,33 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // These drive the engine against the real in memory store rather than a double of it, because what
-// this slice changed is mostly what lands in a row: a run hangs under a piece of work, a step is a
-// piece of work, and a movement writes both in one breath. A mock store would agree with whatever
+// this slice changed is mostly what lands in a row: a run hangs under a job, a step is a
+// job, and a movement writes both in one breath. A mock store would agree with whatever
 // the engine did. The in memory store is held to the same conformance suite Postgres is.
 //
 // The crew below is a double, of the two things the engine asks the control plane for: preparing a
-// declaration and putting a session away. It applies the same rules the control plane's PrepareWork
+// declaration and putting a session away. It applies the same rules the control plane's PrepareJob
 // does, and the whole road through the real one is proved in features/flows.feature.
 
 // crew is the control plane as the engine sees it.
 type crew struct {
 	store    store.Store
 	maxDepth int
-	// refuse is what PrepareWork answers instead, once the run itself has been declared, for the case
+	// refuse is what PrepareJob answers instead, once the run itself has been declared, for the case
 	// where the crew will not take a step: too deep, a role the workspace does not hold.
 	refuse   error
 	prepared int
 	// exported is every record offered to the log, and archived every session put away.
-	exported []*work.Event
+	exported []*job.Event
 	archived []string
 }
 
-func (c *crew) PrepareWork(ctx context.Context, under string, declaration work.Declaration) (*work.Work, *work.Event, error) {
+func (c *crew) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
 	c.prepared++
 	if c.refuse != nil && c.prepared > 1 {
 		return nil, nil, c.refuse
@@ -45,30 +45,30 @@ func (c *crew) PrepareWork(ctx context.Context, under string, declaration work.D
 		return nil, nil, err
 	}
 	tidy := declaration.Tidied()
-	declared := &work.Work{
+	declared := &job.Job{
 		ID: store.NewID(), Workspace: tidy.Workspace, Project: tidy.Project,
 		Title: tidy.Title, Brief: tidy.Brief, Role: tidy.Role, Mode: tidy.Mode,
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains, Labels: tidy.Labels,
-		Version: 1, Phase: work.PhasePending, TraceID: "trace-of-the-tree",
+		Version: 1, Phase: job.PhasePending, TraceID: "trace-of-the-tree",
 	}
 	if under != "" {
-		parent, err := c.store.GetWork(ctx, under)
+		parent, err := c.store.GetJob(ctx, under)
 		if err != nil {
 			return nil, nil, err
 		}
 		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
 	}
 	if declared.Depth > c.maxDepth {
-		return nil, nil, fmt.Errorf("this workspace allows work no deeper than %d, and this would be at depth %d",
+		return nil, nil, fmt.Errorf("this workspace allows job no deeper than %d, and this would be at depth %d",
 			c.maxDepth, declared.Depth)
 	}
-	return declared, &work.Event{
-		ID: store.NewID(), Kind: work.EventDeclared, Work: declared.ID,
+	return declared, &job.Event{
+		ID: store.NewID(), Kind: job.EventDeclared, Job: declared.ID,
 		Workspace: declared.Workspace, Project: declared.Project, OccurredAt: time.Now().UTC(),
 	}, nil
 }
 
-func (c *crew) ExportWork(_ context.Context, events ...*work.Event) {
+func (c *crew) ExportJob(_ context.Context, events ...*job.Event) {
 	c.exported = append(c.exported, events...)
 }
 
@@ -97,7 +97,7 @@ func aCrew(t *testing.T, graph string) (*flow.Engine, *crew, string, string) {
 	if err := kept.ImportFlowGraph(ctx, parsed.Name, parsed.Version, graph); err != nil {
 		t.Fatalf("ImportFlowGraph: %v", err)
 	}
-	// Deep enough that a run and its steps fit: the run's own work sits at the top and every step
+	// Deep enough that a run and its steps fit: the run's own job sits at the top and every step
 	// one below it.
 	it := &crew{store: kept, maxDepth: 4}
 	return flow.NewEngine(kept, it, nil, it), it, workspace.GetId(), project.GetId()
@@ -113,53 +113,53 @@ func started(t *testing.T, engine *flow.Engine, it *crew, graph, workspace, proj
 	return run
 }
 
-// stepOf is the piece of work a run's current step went out as. It is found by the labels every step
-// carries, which is the road a person takes too: quay work list --label flow.run=<run>.
-func stepOf(t *testing.T, it *crew, run flow.Run) *work.Work {
+// stepOf is the job a run's current step went out as. It is found by the labels every step
+// carries, which is the road a person takes too: quay job list --label flow.run=<run>.
+func stepOf(t *testing.T, it *crew, run flow.Run) *job.Job {
 	t.Helper()
-	listed, err := it.store.ListWork(context.Background(), work.Filter{
+	listed, err := it.store.ListJobs(context.Background(), job.Filter{
 		LabelKey: "flow.run", LabelValue: run.ID,
 	})
 	if err != nil {
-		t.Fatalf("ListWork: %v", err)
+		t.Fatalf("ListJob: %v", err)
 	}
 	for _, one := range listed {
-		if one.Labels["flow.node"] == run.Node && one.Phase == work.PhasePending {
-			whole, err := it.store.GetWork(context.Background(), one.ID)
+		if one.Labels["flow.node"] == run.Node && one.Phase == job.PhasePending {
+			whole, err := it.store.GetJob(context.Background(), one.ID)
 			if err != nil {
-				t.Fatalf("GetWork: %v", err)
+				t.Fatalf("GetJob: %v", err)
 			}
 			return whole
 		}
 	}
-	t.Fatalf("the run is on %s and no piece of work is out for it", run.Node)
+	t.Fatalf("the run is on %s and no job is out for it", run.Node)
 	return nil
 }
 
-// lands writes what came of a step, through the same three calls the work controller makes, so the
+// lands writes what came of a step, through the same three calls the job controller makes, so the
 // row the engine then reads is the row a real landing leaves.
-func lands(t *testing.T, it *crew, step *work.Work, session string, landed work.Landing) *work.Work {
+func lands(t *testing.T, it *crew, step *job.Job, session string, landed job.Landing) *job.Job {
 	t.Helper()
 	ctx := context.Background()
-	lease := work.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)}
-	if _, err := it.store.StartWork(ctx, step.ID, lease, []*work.Event{aRecord(step, work.EventStarted)}); err != nil {
-		t.Fatalf("StartWork: %v", err)
+	lease := job.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)}
+	if _, err := it.store.StartJob(ctx, step.ID, lease, []*job.Event{aRecord(step, job.EventStarted)}); err != nil {
+		t.Fatalf("StartJob: %v", err)
 	}
 	if session != "" {
-		if err := it.store.RecordWorkSession(ctx, step.ID, session); err != nil {
-			t.Fatalf("RecordWorkSession: %v", err)
+		if err := it.store.RecordJobSession(ctx, step.ID, session); err != nil {
+			t.Fatalf("RecordJobSession: %v", err)
 		}
 	}
-	ended, err := it.store.LandWork(ctx, step.ID, landed, aRecord(step, work.EventAnswered))
+	ended, err := it.store.LandJob(ctx, step.ID, landed, aRecord(step, job.EventAnswered))
 	if err != nil {
-		t.Fatalf("LandWork: %v", err)
+		t.Fatalf("LandJob: %v", err)
 	}
 	return ended
 }
 
-func aRecord(of *work.Work, kind string) *work.Event {
-	return &work.Event{
-		ID: store.NewID(), Kind: kind, Work: of.ID,
+func aRecord(of *job.Job, kind string) *job.Event {
+	return &job.Event{
+		ID: store.NewID(), Kind: kind, Job: of.ID,
 		Workspace: of.Workspace, Project: of.Project, OccurredAt: time.Now().UTC(),
 	}
 }
@@ -176,6 +176,6 @@ func ticked(t *testing.T, engine *flow.Engine, it *crew, run flow.Run) flow.Run 
 }
 
 // answered is a step that did what it was asked.
-func answered(reply string) work.Landing {
-	return work.Landing{Phase: work.PhaseDone, Answer: reply}
+func answered(reply string) job.Landing {
+	return job.Landing{Phase: job.PhaseDone, Answer: reply}
 }

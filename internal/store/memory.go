@@ -11,8 +11,8 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -61,11 +61,11 @@ type Memory struct {
 	flowTransitions map[string][]flow.RecordedTransition
 	flowDispatches  map[string]bool
 	flowSchedules   map[string]*schedule
-	// flowRunWork is the piece of work that carries each run, and flowRunStep is the piece of work
+	// flowRunJob is the job that carries each run, and flowRunStep is the job
 	// its current step is out with. They are the two columns the Postgres store keeps on the run row,
 	// held here as maps because a flow.Run carries neither: the reducer has no business knowing where
-	// a run sits in the work tree.
-	flowRunWork map[string]string
+	// a run sits in the job tree.
+	flowRunJob  map[string]string
 	flowRunStep map[string]string
 	// triggers is the pending trigger queue: something that happened, waiting to start a run. Its
 	// own map for the reason it is its own table, which the migration says.
@@ -78,13 +78,13 @@ type Memory struct {
 	// taskSeen does for tasks.
 	sessionEvents []*quaycrewv1.SessionEvent
 	eventSeen     map[string]bool
-	// work is the declared intent the crew holds, and workEvents is what happened to each piece of
-	// it, keyed by the event identifier so writing one twice leaves one.
-	work       map[string]*work.Work
-	workEvents map[string]*work.Event
+	// jobs is the declared intent the crew holds, and jobEvents is what happened to each of
+	// them, keyed by the event identifier so writing one twice leaves one.
+	jobs      map[string]*job.Job
+	jobEvents map[string]*job.Event
 	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
 	// defaults, which grant nothing.
-	limits map[string]work.Limits
+	limits map[string]job.Limits
 }
 
 var _ Store = (*Memory)(nil)
@@ -345,15 +345,15 @@ func (m *Memory) ReclaimSession(_ context.Context, id string) error {
 }
 
 // SettledSessions is the sessions nothing is holding open, oldest touched first: live, not running,
-// and named by no piece of work in a non terminal phase.
+// and named by no job in a non terminal phase.
 func (m *Memory) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// The sessions work is still holding open, gathered once rather than scanned per session.
+	// The sessions job is still holding open, gathered once rather than scanned per session.
 	held := map[string]bool{}
-	for _, one := range m.work {
-		if one.Session != "" && !work.Terminal(one.Phase) {
+	for _, one := range m.jobs {
+		if one.Session != "" && !job.Terminal(one.Phase) {
 			held[one.Session] = true
 		}
 	}
@@ -831,7 +831,7 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		Project:   project,
 		Handle:    NewID(),
 		Status:    "idle",
-		// The driver acts for the operator rather than doing work of its own, and a driver that stops
+		// The driver acts for the operator rather than doing job of its own, and a driver that stops
 		// to ask before every step describes the task instead of doing it. What bounds it is the
 		// sandbox, which is the same boundary it would have either way.
 		PermissionMode: model.PermissionBypass,

@@ -45,7 +45,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^it holds those three parts and no other section$`, func(ctx context.Context) error {
+	sc.Step(`^it holds those four parts and no other section$`, func(ctx context.Context) error {
 		if wrong := theShapeOf(frontDoorFrom(ctx).body); len(wrong) > 0 {
 			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
@@ -56,6 +56,13 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		if held := linesIn(frontDoorFrom(ctx).body); held > theLongestFrontDoorWorthReading {
 			return fmt.Errorf("it is %d lines, and nobody reads more than %d of them",
 				held, theLongestFrontDoorWorthReading)
+		}
+		return nil
+	})
+
+	sc.Step(`^it defines the eleven resources, in order, and says which of them are not resources$`, func(ctx context.Context) error {
+		if wrong := theWordsFor(frontDoorFrom(ctx).body); len(wrong) > 0 {
+			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil
 	})
@@ -134,8 +141,8 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the document it names for the work carries a picture of one, through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
-		if wrong := thePictureOfAPieceOfWork(frontDoorFrom(ctx).body); len(wrong) > 0 {
+	sc.Step(`^the document it names for the job carries a picture of one, through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
+		if wrong := thePictureOfAJob(frontDoorFrom(ctx).body); len(wrong) > 0 {
 			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil
@@ -153,11 +160,11 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 // it so the rule they hold up reads on its own.
 
 // initializeFrontDoorDifferenceSteps holds the front door to sending a reader somewhere that answers
-// the question they ask first: not what a piece of work is, but how it differs from the task they
+// the question they ask first: not what a job is, but how it differs from the task they
 // already know how to send. The answer itself lives in the document, not in the front door.
 func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the document it names for the words tells a task and a piece of work apart$`, func(ctx context.Context) error {
-		if wrong := theDifferenceBetweenATaskAndAPieceOfWork(frontDoorFrom(ctx).body); len(wrong) > 0 {
+	sc.Step(`^the document it names for the words tells a task and a job apart$`, func(ctx context.Context) error {
+		if wrong := theDifferenceBetweenATaskAndAJob(frontDoorFrom(ctx).body); len(wrong) > 0 {
 			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
 		return nil

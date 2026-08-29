@@ -28,8 +28,8 @@ edges:
 `
 
 // flowCrew is a crew with its two loops running, which is what a flow needs now: a run declares its
-// step as a piece of work and returns, the work controller sends the task, and the poller carries the
-// run on when the work ends. A crew with the loops stopped holds a run at its first step forever.
+// step as a job and returns, the job controller sends the task, and the poller carries the
+// run on when the job ends. A crew with the loops stopped holds a run at its first step forever.
 func flowCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	return flowCrewWith(t, controlplane.Config{
@@ -42,12 +42,12 @@ func flowCrewWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlane
 	t.Helper()
 	// Faster than the crew ticks in production, because these tests poll for an answer and the real
 	// five seconds would be five seconds of sleeping per step.
-	cfg.WorkTickEvery, cfg.FlowPollEvery = 5*time.Millisecond, 5*time.Millisecond
+	cfg.JobTickEvery, cfg.FlowPollEvery = 5*time.Millisecond, 5*time.Millisecond
 	srv := controlplane.NewServer(cfg)
 	client := testClientFor(t, srv)
 	running, stop := context.WithCancel(context.Background())
 	t.Cleanup(stop)
-	go srv.RunWorkController(running)
+	go srv.RunJobController(running)
 	go srv.RunFlowPoller(running)
 	return client
 }
@@ -247,7 +247,7 @@ edges:
 		t.Fatalf("answering said %q", answered)
 	}
 	// Polled for the same reason: the answer moves the run to its next step, and that step is a
-	// piece of work a controller runs rather than a call the answer waits on.
+	// a job a controller runs rather than a call the answer waits on.
 	after := showWhen(t, client, fields[0], "done")
 	if !strings.Contains(after, "done") {
 		t.Fatalf("after the answer the run reads %q, want it carried on to the end", after)
@@ -389,9 +389,9 @@ func typedCommandIn(t *testing.T, output, starting string) []string {
 	return nil
 }
 
-// The pointer a run prints to its own work has to be a command that works, so this types it.
+// The pointer a run prints to its own job has to be a command that works, so this types it.
 //
-// A run is carried by a piece of work and every step is another under it, which is where a step's
+// A run is carried by a job and every step is another under it, which is where a step's
 // answer is a field rather than a line of a transcript. That is worth nothing if reading a run does
 // not say how to get there.
 func TestShowingARunPrintsAWorkingWayToReadItsSteps(t *testing.T) {
@@ -418,14 +418,14 @@ func TestShowingARunPrintsAWorkingWayToReadItsSteps(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	typed := typedCommandIn(t, shown, "quay work list ")
+	typed := typedCommandIn(t, shown, "quay job list ")
 	read, err := runQuay(t, client, typed[1:]...)
 	if err != nil {
 		t.Fatalf("the run said to type %q, and that was refused: %v", strings.Join(typed, " "), err)
 	}
-	// The run's own work and the one step it took, both under the label the run carries.
+	// The run's own job and the one step it took, both under the label the run carries.
 	if !strings.Contains(read, "greet") {
-		t.Fatalf("%q answered %q, want the run's own work and its step", strings.Join(typed, " "), read)
+		t.Fatalf("%q answered %q, want the run's own job and its step", strings.Join(typed, " "), read)
 	}
 	if !strings.Contains(read, "step say") {
 		t.Fatalf("%q answered %q, want the step the graph dispatched", strings.Join(typed, " "), read)

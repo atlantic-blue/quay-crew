@@ -8,6 +8,62 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **Declared intent is a job, and `quay work` is `quay job`.** The vocabulary was confusing to the
+  person who has to use it, and that has now cost real time twice. Kubernetes already solved this,
+  and the crew had borrowed half of its words already: a `Lease`, a `Phase`, a `Role`, verbs on a
+  resource. The one it had not borrowed was the name of the resource itself.
+
+  A Kubernetes Job is declared intent, run to completion, watched by a controller, with a disposable
+  container underneath. That is what this is, down to the phase field and the lease. So it is a job.
+
+  `quay work create|list|show|stop` is `quay job create|list|show|stop`, and `--after <work>` is
+  `--after <job>`. The Go package, the types, the fields, the errors and the log lines follow, and so
+  do the protobuf messages: `Work` is `Job`, `CreateWork` is `CreateJob`, and `ListWork` is
+  `ListJobs`, which is what every other listing on this service was already called.
+
+  **A session is deliberately not a Pod.** A Pod is disposable and interchangeable with its
+  replacement: kill one, another takes its place, and nothing is lost. A session's whole value is the
+  history it holds, so killing one loses the conversation that made it worth having. Borrowing a word
+  whose contract the crew does not honour is worse than breaking the pattern on purpose.
+  `docs/TASKS.md` says this where the words are defined, because it is the obvious next question.
+
+  **The verbs a role may call.** `work.create`, `work.read`, `work.answer` and `work.stop` are
+  `job.create`, `job.read`, `job.answer` and `job.stop`. The material a role receives moves with them,
+  so `receives: work` is `receives: job`: the material names the resource, the same way the verbs do,
+  and leaving it would have kept the old word in every manifest. All five old spellings are refused at
+  import by name, against one table, so a stale manifest fails at the door and reads what it should
+  say instead. Nothing about the boundary changed.
+
+  **The way off the old word.** `quay work create` refuses, exits non zero, and names `quay job
+  create`. It is not a quiet alias and it is never absorbed into the next argument, which is the
+  failure that makes a removed word worse than one that never existed: the command reads as one that
+  worked and the operator finds out from the record later. The word joins the table the tool already
+  keeps for removed commands, so it is covered by the guard over the whole class rather than by a case
+  of its own, and a new test refuses any word that is in both the removed table and the live commands.
+
+  **Jobs already in the store.** Migration 0037 renames `work` to `jobs` and `work_events` to
+  `job_events`, with the columns, the indexes and the sequence. A job declared before today keeps its
+  identifier, its phase, its answer and its history, and reads back whole under the new name. The
+  kinds move with the rows, so `work.declared` becomes `job.declared`: a history that answers in two
+  vocabularies would make every consumer switch on both spellings forever, and a kind is the crew's
+  own word for what happened rather than anything a person typed.
+
+  **The crew's configuration.** `QC_WORK_LEASE` is `QC_JOB_LEASE`. The old name is still read where
+  the new one says nothing, so an operator who tuned the lease keeps the number they chose, and the
+  control plane says on startup which line to rename.
+
+  **The front door now defines all eleven resources.** Workspaces, projects, jobs, sessions, tasks,
+  flows, roles, skills, hooks, secrets and context, one short paragraph each, above the quick start,
+  with the limits named as settings rather than resources. A reader who meets a word for the first
+  time inside a command guesses at it. The README grew a fourth section and its line ceiling moved
+  from 80 to 120 for it, once, and a scenario holds the list exact so a twelfth resource is defined
+  in the change that adds it.
+
+  **What a session declares says where it goes.** The slice merged just before this one taught a
+  session to declare without naming a project, because a session cannot resolve an address and its
+  credential already says which project it is in. That reads `whereTheJobRuns` now, and the scenario
+  and the refusal say job.
+
 - **A job's session can reach the control plane, and only the control plane.** The crew handed a
   session running a piece of work the address of the crew and a credential minted for that work, and
   its container had no route to that address. Every call died with `name resolver error: produced

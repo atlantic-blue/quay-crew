@@ -51,30 +51,30 @@ commands:
   flow unschedule [<address>] <graph>     stop it running on its own
   flow list [<address>]                   what has run, newest first
   flow show <run>                         where one run got to, what it cost, why it stopped,
-                                          and how to read the work its steps went out as
+                                          and how to read the job its steps went out as
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
   flow answer <run> <answer>              tell a run waiting on you what you decided
-  work create [<address>]                 declare a piece of work: what it is, and what has to
+  job create [<address>]                  declare a job: what it is, and what has to
     --title "..." --brief "..."           happen. The crew keeps it, so the intent outlives the
     [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it as
-    [--requires <material>]               the role it names. --requires says what the work cannot be
-    [--after <work>] [--label k=v]        done without, one of work, context or skills, and a role
-    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the work
+    [--requires <material>]               the role it names. --requires says what the job cannot be
+    [--after <job>] [--label k=v]         done without, one of job, context or skills, and a role
+    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job
     [--expect-file <path>]
     [--expect-contains "..."]
-  work list [<address>]                   what work there is, newest first. Narrow it with
+  job list [<address>]                    the jobs there are, newest first. Narrow it with
     [--phase <phase>] [--label k=v]       --phase, --label, --parent or --roots
-    [--parent <work>] [--roots]
-  work show <work>                        one piece of work whole: what it is, where it got to,
+    [--parent <job>] [--roots]
+  job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
-  work stop <work> [<reason>]             halt work that has not ended, keeping the reason
+  job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   limits [<workspace>]                    what a workspace lets its sessions declare, and how long
     [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
-    [--max-running <n>]                   work may go, how many run at once, what a tree may spend,
-    [--budget-tokens <n>]                 how long a controller holds a piece of work, and how long
+    [--max-running <n>]                   jobs may go, how many run at once, what a tree may spend,
+    [--budget-tokens <n>]                 how long a controller holds a job, and how long
     [--lease <duration>]                  a settled session keeps its container before the crew
     [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
-    [--archive <duration>]                zero, so no session declares work until you raise it. The
+    [--archive <duration>]                zero, so no session declares a job until you raise it. The
                                           reclaim and archive times start unset, and unset means the
                                           crew does nothing. A session may read none of this and set
                                           none of it
@@ -201,6 +201,8 @@ The ` + "`quay`" + ` command drives it. If it is on your path, you can use it.
 
   workspace   who you are, for example "me" or an organisation. Secrets attach here.
   project     a body of work inside a workspace, for example "house bills" or a ticket.
+  job         what somebody wants done. A row the crew keeps, so the intent outlives the
+              terminal that asked for it, and a controller runs it. It is a Kubernetes Job.
   session      one conversation. A task runs in a project.
   task        one instruction and the work it caused. You ask for something, the crew works
               until it has an answer, and the whole of that is one task. Minutes is normal.

@@ -16,12 +16,12 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/grpc"
 )
 
@@ -50,20 +50,20 @@ func TestASessionIsRefusedAVerbItsRoleDoesNotCarry(t *testing.T) {
 	defer cancel()
 	crew := aCrewWhoseSessionsCanReachIt(ctx, t)
 
-	job := crew.declare(ctx, t, "clear the backlog", assessorRole)
-	said := crew.run(ctx, t, job, "quay work stop "+job+" \"I have had enough\" 2>&1")
+	declared := crew.declare(ctx, t, "clear the backlog", assessorRole)
+	said := crew.run(ctx, t, declared, "quay job stop "+declared+" \"I have had enough\" 2>&1")
 
-	// The role carries work.create and work.read and not work.stop, so the crew names the verb and
+	// The role carries job.create and job.read and not job.stop, so the crew names the verb and
 	// says where a verb comes from. A session that was refused has to know what to ask for.
-	for _, want := range []string{role.VerbWorkStop, "may not", "may list", "attaching it"} {
+	for _, want := range []string{role.VerbJobStop, "may not", "may list", "attaching it"} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("the session was told %q, want the crew's refusal naming %q", said, want)
 		}
 	}
-	// And the refusal is a refusal. A sentence that reads like one over work that stopped anyway is
+	// And the refusal is a refusal. A sentence that reads like one over job that stopped anyway is
 	// worse than no boundary at all.
-	if phase := crew.phaseOf(ctx, t, job); phase == work.PhaseStopped {
-		t.Fatalf("the work is %q: the session was told it may not stop work, and the work stopped", phase)
+	if phase := crew.phaseOf(ctx, t, declared); phase == job.PhaseStopped {
+		t.Fatalf("the job is %q: the session was told it may not stop a job, and the job stopped", phase)
 	}
 }
 
@@ -77,17 +77,17 @@ func TestASessionDeclaresASubJobAndTheCrewRunsItInASessionOfItsOwn(t *testing.T)
 	defer cancel()
 	crew := aCrewWhoseSessionsCanReachIt(ctx, t)
 
-	job := crew.declare(ctx, t, "clear the backlog", assessorRole)
-	parentSession := crew.run(ctx, t, job, `quay work create `+
+	declared := crew.declare(ctx, t, "clear the backlog", assessorRole)
+	parentSession := crew.run(ctx, t, declared, `quay job create `+
 		`--title "write the migration" --brief "add the column" --role `+implementerRole+` 2>&1`)
 
-	children := crew.children(ctx, t, job)
+	children := crew.children(ctx, t, declared)
 	if len(children) != 1 {
-		t.Fatalf("the session declared %d pieces of work, want 1. It said:\n%s", len(children), parentSession)
+		t.Fatalf("the session declared %d jobs, want 1. It said:\n%s", len(children), parentSession)
 	}
 	child := children[0]
-	if child.GetParent() != job {
-		t.Fatalf("the sub job hangs under %q, want the work the session was running, %q", child.GetParent(), job)
+	if child.GetParent() != declared {
+		t.Fatalf("the sub job hangs under %q, want the job the session was running, %q", child.GetParent(), declared)
 	}
 	if child.GetDepth() != 1 {
 		t.Fatalf("the sub job is at depth %d, want 1: depth comes from the parent, and the parent from the credential",
@@ -99,9 +99,9 @@ func TestASessionDeclaresASubJobAndTheCrewRunsItInASessionOfItsOwn(t *testing.T)
 
 	// One tick of the controller, rather than waiting for its ticker: a wait is slow when it passes
 	// and flaky when it does not.
-	crew.server.TickWork(ctx)
+	crew.server.TickJob(ctx)
 
-	ran := crew.workNamed(ctx, t, child.GetId())
+	ran := crew.jobNamed(ctx, t, child.GetId())
 	if ran.GetSession() == "" {
 		t.Fatalf("the sub job is %q and has no session, so nothing ran it", ran.GetPhase())
 	}
@@ -148,9 +148,9 @@ func TestASessionCannotOpenAConnectionToPostgres(t *testing.T) {
 	crew := aCrewWhoseSessionsCanReachIt(ctx, t)
 
 	where := crew.postgresOnTheCrewsNetwork(ctx, t)
-	job := crew.declare(ctx, t, "clear the backlog", assessorRole)
+	declared := crew.declare(ctx, t, "clear the backlog", assessorRole)
 
-	said := crew.run(ctx, t, job, connects+strings.Join([]string{
+	said := crew.run(ctx, t, declared, connects+strings.Join([]string{
 		`echo "by name: $(getent hosts postgres || echo unresolved)"`,
 		`echo "by address: $(reach ` + where + `:5432)"`,
 		`echo "the crew: $(reach "$QC_GRPC_ADDR")"`,
@@ -176,7 +176,7 @@ const connects = `reach() {
 }
 `
 
-// The roles this file imports. One carries work.create and work.read, which is what the assessor role
+// The roles this file imports. One carries job.create and job.read, which is what the assessor role
 // this crew ships carries; the other carries neither, and exists to be named by a sub job.
 const (
 	assessorRole    = "assessor-under-test"
@@ -218,17 +218,17 @@ func aCrewWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachableC
 		Runner:   &shellRunner{},
 		Secrets:  secrets.NewMemory(),
 		Provider: sandbox.DockerProvider{Image: image, SessionNetwork: sessionNetwork},
-		// What the crew tells a session running a piece of work, beside the credential it mints for
-		// that work. The two together are the whole of what a session is given.
+		// What the crew tells a session running a job, beside the credential it mints for
+		// that job. The two together are the whole of what a session is given.
 		Reachable: fmt.Sprintf("%s:%d", gateway, port),
 	})
 
 	// The guard the composed crew runs behind, and the reason this is worth doing over a container:
 	// the refusal has to come from the interceptor and the policy rather than from a test.
 	grpcServer := grpc.NewServer(auth.ServerOptions(auth.Policy{
-		Token:        "the-operator's-token",
-		Grants:       server.Grants(),
-		DeniedToWork: controlplane.DeniedToWork,
+		Token:       "the-operator's-token",
+		Grants:      server.Grants(),
+		DeniedToJob: controlplane.DeniedToJob,
 	})...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 	go func() { _ = grpcServer.Serve(listener) }()
@@ -257,16 +257,16 @@ func aCrewWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachableC
 	}); err != nil {
 		t.Fatalf("raise the ceiling: %v", err)
 	}
-	crew.holdRole(ctx, t, assessorRole, role.VerbWorkCreate, role.VerbWorkRead)
-	crew.holdRole(ctx, t, implementerRole, role.VerbWorkRead)
+	crew.holdRole(ctx, t, assessorRole, role.VerbJobCreate, role.VerbJobRead)
+	crew.holdRole(ctx, t, implementerRole, role.VerbJobRead)
 	return crew
 }
 
 // holdRole imports a role declaring the verbs named and attaches it to the workspace. A role is what
-// grants: work running as none holds a credential that may call nothing.
+// grants: job running as none holds a credential that may call nothing.
 func (c *reachableCrew) holdRole(ctx context.Context, t *testing.T, name string, verbs ...string) {
 	t.Helper()
-	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - work\nmay:\n",
+	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nmay:\n",
 		name)
 	for _, verb := range verbs {
 		manifest += "  - " + verb + "\n"
@@ -286,27 +286,27 @@ func (c *reachableCrew) holdRole(ctx context.Context, t *testing.T, name string,
 	}
 }
 
-// declare records a piece of work as the operator does, and hands back its identifier.
+// declare records a job as the operator does, and hands back its identifier.
 func (c *reachableCrew) declare(ctx context.Context, t *testing.T, title, named string) string {
 	t.Helper()
-	declared, err := c.server.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := c.server.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: c.projectID, Title: title, Brief: "read the open pull requests", Role: named,
 	})
 	if err != nil {
-		t.Fatalf("declare the work: %v", err)
+		t.Fatalf("declare the job: %v", err)
 	}
-	return declared.GetWork().GetId()
+	return declared.GetJob().GetId()
 }
 
-// run dispatches a task for a piece of work and returns what the session said.
+// run dispatches a task for a job and returns what the session said.
 //
 // The script runs inside the session's container, in the environment the crew built for that one
 // task, which is where the address and the credential are: a sandbox keeps what it was born with, so
 // a credential written at birth would label every later task with the first task's grant.
-func (c *reachableCrew) run(ctx context.Context, t *testing.T, job, script string) string {
+func (c *reachableCrew) run(ctx context.Context, t *testing.T, declared, script string) string {
 	t.Helper()
 	dispatched, err := c.server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: c.projectID, Text: script, Work: job,
+		Project: c.projectID, Text: script, Job: declared,
 	})
 	if err != nil {
 		t.Fatalf("dispatch the task: %v", err)
@@ -316,28 +316,28 @@ func (c *reachableCrew) run(ctx context.Context, t *testing.T, job, script strin
 	return dispatched.GetReply()
 }
 
-func (c *reachableCrew) phaseOf(ctx context.Context, t *testing.T, job string) string {
+func (c *reachableCrew) phaseOf(ctx context.Context, t *testing.T, declared string) string {
 	t.Helper()
-	return c.workNamed(ctx, t, job).GetPhase()
+	return c.jobNamed(ctx, t, declared).GetPhase()
 }
 
-func (c *reachableCrew) workNamed(ctx context.Context, t *testing.T, id string) *quaycrewv1.Work {
+func (c *reachableCrew) jobNamed(ctx context.Context, t *testing.T, id string) *quaycrewv1.Job {
 	t.Helper()
-	held, err := c.server.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: id})
+	held, err := c.server.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
 	if err != nil {
-		t.Fatalf("read the work back: %v", err)
+		t.Fatalf("read the job back: %v", err)
 	}
-	return held.GetWork()
+	return held.GetJob()
 }
 
-// children is what one piece of work has hanging under it.
-func (c *reachableCrew) children(ctx context.Context, t *testing.T, parent string) []*quaycrewv1.Work {
+// children is what one job has hanging under it.
+func (c *reachableCrew) children(ctx context.Context, t *testing.T, parent string) []*quaycrewv1.Job {
 	t.Helper()
-	listed, err := c.server.ListWork(ctx, &quaycrewv1.ListWorkRequest{Project: c.projectID, Parent: parent})
+	listed, err := c.server.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: c.projectID, Parent: parent})
 	if err != nil {
-		t.Fatalf("list what hangs under the work: %v", err)
+		t.Fatalf("list what hangs under the job: %v", err)
 	}
-	return listed.GetWork()
+	return listed.GetJobs()
 }
 
 // postgresOnTheCrewsNetwork starts a real store where the composed stack keeps it, on the crew's own

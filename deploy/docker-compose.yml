@@ -90,7 +90,7 @@ services:
       #
       # A session can address this service and nothing else of the crew's. It may still do nothing
       # here: every call is refused until the session presents the credential the crew minted for the
-      # piece of work it is running, and that credential carries the verbs its role declared.
+      # job it is running, and that credential carries the verbs its role declared.
       QC_SESSION_NETWORK: ${QC_SESSION_NETWORK:-quaycrew_sessions}
       QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-controlplane:50051}
       # How much memory one session may take, as the daemon spells it, for example 4g. Unset gives
@@ -126,8 +126,13 @@ services:
       # How many tasks past its description a conversation goes before the crew writes it again.
       # "off" tasks it off, which a crew paying for automation runs wants.
       QC_DESCRIBE_EVERY: ${QC_DESCRIBE_EVERY:-}
-      # How long the work controller holds a piece of work before another controller may take it.
+      # How long the job controller holds a job before another controller may take it.
       # Unset takes the measured default, which is a minute.
+      QC_JOB_LEASE: ${QC_JOB_LEASE:-}
+      # The name it had before declared intent was called a job. Forwarded so a configuration file
+      # written before the rename keeps the lease the operator chose, and the control plane says on
+      # startup that the line should be renamed. Compose fills a key nobody set with an empty string,
+      # which reads here as nothing to fall back to.
       QC_WORK_LEASE: ${QC_WORK_LEASE:-}
       # A workspace's conversation store and a project's files live here, on the host, rather than
       # inside the sandbox container, so replacing a container does not destroy the conversation the

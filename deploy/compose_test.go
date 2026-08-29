@@ -155,7 +155,7 @@ func TestACrewToldWhereItIsPutsItsSessionsWhereTheyCanReachIt(t *testing.T) {
 	address := unsetGives(environment["QC_SANDBOX_CONTROL_PLANE"])
 	network := unsetGives(environment["QC_SESSION_NETWORK"])
 	if address == "" {
-		t.Fatal("a crew nobody configured tells a session no address, so a session running work holds a credential it cannot spend")
+		t.Fatal("a crew nobody configured tells a session no address, so a session running a job holds a credential it cannot spend")
 	}
 	if network == "" {
 		t.Fatalf("a crew nobody configured hands out %q and puts no session on a network that reaches it", address)

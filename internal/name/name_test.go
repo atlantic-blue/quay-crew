@@ -61,7 +61,7 @@ func TestSlugifySuggestsSomethingUsable(t *testing.T) {
 	}
 }
 
-func TestValidateNamesWhatWouldWork(t *testing.T) {
+func TestValidateNamesWhatWouldJob(t *testing.T) {
 	if err := name.Validate("workspace", "house-bills"); err != nil {
 		t.Fatalf("Validate rejected a slug: %v", err)
 	}

@@ -79,7 +79,7 @@ func TestThePackageLevelSlogIsTheCrewsLogger(t *testing.T) {
 	}
 }
 
-// Task and flow work is detached from the request that started it, so the id has to survive the
+// Task and flow job is detached from the request that started it, so the id has to survive the
 // detaching or the interesting half of a task is uncorrelated.
 func TestTheCorrelationIDSurvivesADetachedContext(t *testing.T) {
 	var out bytes.Buffer

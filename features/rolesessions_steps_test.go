@@ -28,11 +28,11 @@ const briefIsAtLeast = 512
 // A step of a flow that runs as a role, driven over the same road everything else takes: the graph
 // is imported, the run is started, and what the role's session was given is read off the host.
 func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the operator imported the "([^"]*)" role, which receives only work$`,
+	sc.Step(`^the operator imported the "([^"]*)" role, which receives only the job material$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			_, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{
-				Files: roleFiles(name, 1, roleManifest{model: "opus", receives: []string{"work"}}),
+				Files: roleFiles(name, 1, roleManifest{model: "opus", receives: []string{"job"}}),
 			})
 			w.lastErr = err
 			return err

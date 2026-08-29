@@ -125,7 +125,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // has met one before and here it means the opposite.
 func depthMeans(depth int32) string {
 	if depth == 0 {
-		return "  (no session here may declare work)"
+		return "  (no session here may declare a job)"
 	}
 	return ""
 }

@@ -286,7 +286,7 @@ func settledTaskCount(ctx context.Context, w *world) (int, error) {
 // flowRunTaskCount is how many tasks the run's steps have been asked, across every session they ran
 // in, live or archived.
 //
-// No session at all is none of them, not a failure. A step's session is made when its work starts, so
+// No session at all is none of them, not a failure. A step's session is made when its job starts, so
 // a run stopped before a controller got that far ran nothing. Reading that as an error made the whole
 // suite depend on losing a race: on a loaded runner the stop lands first, and a scenario asserting the
 // run halted then failed for having halted sooner than expected.
@@ -341,7 +341,7 @@ func waitForFlowRun(ctx context.Context, w *world, want string) error {
 	var last string
 	for time.Now().Before(deadline) {
 		// The crew is driven rather than waited for: a run declares its step and returns, so nothing
-		// moves it until the work controller and the poller tick.
+		// moves it until the job controller and the poller tick.
 		if err := driveTheCrew(ctx); err != nil {
 			return err
 		}

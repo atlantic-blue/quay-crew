@@ -49,9 +49,9 @@ const BriefLimit = 16384
 // means nothing looks exactly like one that holds. Refusing at import is the only moment somebody is
 // looking. These three are what the crew puts in front of a session today.
 var Material = []string{
-	// Work is the piece of work the role was given. Every role receives it: a task without its work
+	// Job is the job the role was given. Every role receives it: a task without its job
 	// is not a task.
-	MaterialWork,
+	MaterialJob,
 	// Context is what the crew, the workspace and the project know, as the memory files carry it.
 	MaterialContext,
 	// Skills are the skills the workspace holds, their index and their files.
@@ -59,7 +59,7 @@ var Material = []string{
 }
 
 const (
-	MaterialWork    = "work"
+	MaterialJob     = "job"
 	MaterialContext = "context"
 	MaterialSkills  = "skills"
 )
@@ -71,23 +71,46 @@ const (
 // creates a workspace, a project, a secret, a skill, a hook or a role: a session that could grant
 // itself a capability could write itself a way of working nobody approved and then run as it.
 var Verbs = []string{
-	// VerbWorkCreate declares a piece of work. The parent comes from the credential, never from the
+	// VerbJobCreate declares a job. The parent comes from the credential, never from the
 	// caller, which is what keeps the depth count honest.
-	VerbWorkCreate,
-	// VerbWorkRead reads work and its answer.
-	VerbWorkRead,
-	// VerbWorkAnswer answers a question a piece of work asked.
-	VerbWorkAnswer,
-	// VerbWorkStop stops a piece of work.
-	VerbWorkStop,
+	VerbJobCreate,
+	// VerbJobRead reads job and its answer.
+	VerbJobRead,
+	// VerbJobAnswer answers a question a job asked.
+	VerbJobAnswer,
+	// VerbJobStop stops a job.
+	VerbJobStop,
 }
 
 const (
-	VerbWorkCreate = "work.create"
-	VerbWorkRead   = "work.read"
-	VerbWorkAnswer = "work.answer"
-	VerbWorkStop   = "work.stop"
+	VerbJobCreate = "job.create"
+	VerbJobRead   = "job.read"
+	VerbJobAnswer = "job.answer"
+	VerbJobStop   = "job.stop"
 )
+
+// Retired is every word a manifest used to carry, against what it is called now.
+//
+// A role is a file in somebody's repository, so a word the crew stopped using is still in their
+// manifests, their notes and their fingers. Each one is refused at import by name. An unknown word
+// says only that the crew does not have it, which sends the author looking; a word quietly ignored
+// is worse than both, because the boundary then means nothing and reads exactly like one that holds.
+//
+// One table for both lists, rather than a case per word, so the next rename cannot forget half of
+// them: materials are plain words and verbs are dotted, so the two cannot collide.
+var Retired = map[string]string{
+	"work":        MaterialJob,
+	"work.create": VerbJobCreate,
+	"work.read":   VerbJobRead,
+	"work.answer": VerbJobAnswer,
+	"work.stop":   VerbJobStop,
+}
+
+// RetiredWord says what a word is called now, and whether it is one the crew retired.
+func RetiredWord(word string) (string, bool) {
+	instead, retired := Retired[strings.TrimSpace(word)]
+	return instead, retired
+}
 
 // A Role is one way of working, as it was written down.
 type Role struct {
@@ -99,7 +122,7 @@ type Role struct {
 	// Summary is one line, for a listing.
 	Summary string
 	// Model is which model a session running as this role uses, as a tier ("opus") or a full name
-	// ("claude-opus-5"). Declared per role because the work differs: naming a team is worth the
+	// ("claude-opus-5"). Declared per role because the job differs: naming a team is worth the
 	// larger model and writing one file to a specification is not.
 	Model string
 	// Receives is the material this role is given, sorted, drawn from Material.
@@ -307,23 +330,33 @@ func (r Role) check(directory string) error {
 			directory, len(r.Brief), BriefLimit)
 	case len(r.Receives) == 0:
 		return fmt.Errorf("role: %s says nothing about what it receives; a role is its boundary, so say at least %s and list what else it may see: %s",
-			directory, MaterialWork, strings.Join(Material, ", "))
+			directory, MaterialJob, strings.Join(Material, ", "))
 	}
 	for _, material := range r.Receives {
+		if instead, retired := RetiredWord(material); retired {
+			return fmt.Errorf("role: %s receives %q, which is called %q now: declared intent is a job, "+
+				"the way it is in Kubernetes. Write %s and import it again",
+				directory, material, instead, instead)
+		}
 		if !known(material) {
 			return fmt.Errorf("role: %s receives %q, which is not material the crew hands out; it is one of: %s",
 				directory, material, strings.Join(Material, ", "))
 		}
 	}
 	for _, verb := range r.May_ {
+		if instead, retired := RetiredWord(verb); retired {
+			return fmt.Errorf("role: %s may %q, which is called %q now: declared intent is a job, "+
+				"the way it is in Kubernetes. Write %s and import it again",
+				directory, verb, instead, instead)
+		}
 		if !knownVerb(verb) {
 			return fmt.Errorf("role: %s may %q, which is not a verb the crew grants; it is one of: %s",
 				directory, verb, strings.Join(Verbs, ", "))
 		}
 	}
-	if !r.Gets(MaterialWork) {
-		return fmt.Errorf("role: %s does not receive %s, and a session with no work to do is not a task; add %s to what it receives",
-			directory, MaterialWork, MaterialWork)
+	if !r.Gets(MaterialJob) {
+		return fmt.Errorf("role: %s does not receive %s, and a session with no job to do is not a task; add %s to what it receives",
+			directory, MaterialJob, MaterialJob)
 	}
 	return nil
 }

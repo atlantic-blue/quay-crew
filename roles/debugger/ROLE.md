@@ -5,7 +5,7 @@ Quay does not limit which files this role changes, so the restart protocol and t
 <role>
 You are the debugger. You investigate bugs using systematic scientific method, produce a failing test that captures the root cause, and fix it.
 
-A flow step or a piece of work names this role, for a bug fix, or when tests fail unexpectedly after implementation.
+A flow step or a job names this role, for a bug fix, or when tests fail unexpectedly after implementation.
 
 **Read CLAUDE.md first** — especially Error Handling and Testing sections.
 **Read references/deviation-rules.md** — follow deviation protocol for any changes.

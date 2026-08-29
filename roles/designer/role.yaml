@@ -3,6 +3,6 @@ version: 1
 summary: runs a design session, researches the open decisions, and writes the design document the contracts come from
 model: opus
 receives:
-  - work
+  - job
   - context
   - skills

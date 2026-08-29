@@ -75,7 +75,7 @@ func inAContainer() bool {
 // address the operator did not choose and cannot fix, which reads as the crew being down. What is
 // actually true is that nothing told this session where to go, and that cannot be set from in here.
 //
-// A task is told where the crew is when it runs a piece of work, so the ordinary reason to see this
+// A task is told where the crew is when it runs a job, so the ordinary reason to see this
 // is a task that is running none. The other reason is a crew whose own address is unset.
 func unreachable(err error, told string, sandboxed bool) error {
 	if err == nil || !sandboxed || told != "" {
@@ -85,9 +85,9 @@ func unreachable(err error, told string, sandboxed bool) error {
 		return err
 	}
 	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
-		"address it fell back to. A task is told where the crew is when it runs a piece of work, and "+
-		"what it may do there comes from that work's role. So either this task is running none, or "+
-		"the crew has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
+		"address it fell back to. A task is told where the crew is when it runs a job, and what "+
+		"it may do there comes from that job's role. So either this task is running none, or the "+
+		"crew has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
 		"the crew's configuration file, ~/.quay/env on a compose stack. (%w)", err)
 }
 

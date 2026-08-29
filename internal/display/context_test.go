@@ -51,7 +51,7 @@ func TestTheContextCellSaysAShareOrACount(t *testing.T) {
 }
 
 // The column and the line under the prompt answer the same question about the same conversation, and
-// the operator reads both. They work the share out in one place so they cannot disagree at the edges.
+// the operator reads both. They job the share out in one place so they cannot disagree at the edges.
 func TestTheColumnAndTheLineAgreeOnTheShare(t *testing.T) {
 	// From a conversation that has been spoken in. At nothing at all the two answer different
 	// questions on purpose: the line is drawn inside a session that exists, and the column is a row

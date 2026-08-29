@@ -81,19 +81,19 @@ func TokenAt(path string) (string, error) {
 // operator's token is refused nothing here.
 type Deny func(fullMethod string, request any) error
 
-// Grant is what a work credential carries: the piece of work it is bound to, where that work lives,
+// Grant is what a job credential carries: the job it is bound to, where that job lives,
 // what it may call, and when it stops working.
 //
-// It is minted per piece of work rather than per session, so a credential that leaks out of a
-// sandbox grants only what that one piece of work could do, and only until it ends. That is strictly
+// It is minted per job rather than per session, so a credential that leaks out of a
+// sandbox grants only what that one job could do, and only until it ends. That is strictly
 // less than the driver's token grants.
 type Grant struct {
-	// Work is the piece of work this credential is bound to. It is the parent of anything the caller
+	// Job is the job this credential is bound to. It is the parent of anything the caller
 	// declares, which is what keeps a caller from naming its own parent and escaping the depth count.
-	Work      string
+	Job       string
 	Workspace string
 	Project   string
-	// Verbs are what the work's role declared it may call. Empty may call nothing.
+	// Verbs are what the job's role declared it may call. Empty may call nothing.
 	Verbs []string
 	// ExpiresAt is when the credential stops working. Zero never expires, which is what a test wants
 	// and what a crew should not have.
@@ -118,15 +118,15 @@ func (g Grant) expired(now time.Time) bool {
 	return !g.ExpiresAt.IsZero() && !g.ExpiresAt.After(now)
 }
 
-// Grants is what recognises a work token. The crew holds the minted ones; this package only asks.
+// Grants is what recognises a job token. The crew holds the minted ones; this package only asks.
 type Grants interface {
 	Grant(token string) (Grant, bool)
 }
 
-// WorkDeny is the policy over what a piece of work may call. It sees the method, the request and the
-// grant, and returns the refusal or nil. A nil policy refuses a work caller everything, because a
+// JobDeny is the policy over what a job may call. It sees the method, the request and the
+// grant, and returns the refusal or nil. A nil policy refuses a job caller everything, because a
 // credential nobody judges is a credential that grants everything.
-type WorkDeny func(fullMethod string, request any, grant Grant) error
+type JobDeny func(fullMethod string, request any, grant Grant) error
 
 // Policy is who the crew recognises, and what each of them may do.
 type Policy struct {
@@ -135,15 +135,15 @@ type Policy struct {
 	// DriverToken is the driver's, judged by Denied.
 	DriverToken string
 	Denied      Deny
-	// Grants recognises a work credential, and DeniedToWork judges it.
-	Grants       Grants
-	DeniedToWork WorkDeny
+	// Grants recognises a job credential, and DeniedToJob judges it.
+	Grants      Grants
+	DeniedToJob JobDeny
 }
 
 // grantKey is how a recognised grant travels to the handler.
 type grantKey struct{}
 
-// WithGrant puts a grant on a context, which is how a handler learns which piece of work is calling.
+// WithGrant puts a grant on a context, which is how a handler learns which job is calling.
 func WithGrant(ctx context.Context, grant Grant) context.Context {
 	return context.WithValue(ctx, grantKey{}, grant)
 }
@@ -175,11 +175,11 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 						return nil, err
 					}
 				}
-			case callerWork:
-				if err := policy.judgeWork(info.FullMethod, req, grant); err != nil {
+			case callerJob:
+				if err := policy.judgeJob(info.FullMethod, req, grant); err != nil {
 					return nil, err
 				}
-				// The grant travels with the call, so the handler reads which piece of work is
+				// The grant travels with the call, so the handler reads which job is
 				// calling rather than being told by whoever called it.
 				ctx = WithGrant(ctx, grant)
 			}
@@ -200,8 +200,8 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 						return err
 					}
 				}
-			case callerWork:
-				if err := policy.judgeWork(info.FullMethod, nil, grant); err != nil {
+			case callerJob:
+				if err := policy.judgeJob(info.FullMethod, nil, grant); err != nil {
 					return err
 				}
 			}
@@ -210,14 +210,14 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 	}
 }
 
-// judgeWork puts a work credential through the policy written for it. No policy refuses everything:
+// judgeJob puts a job credential through the policy written for it. No policy refuses everything:
 // a credential nobody judges is a credential that grants everything.
-func (p Policy) judgeWork(fullMethod string, request any, grant Grant) error {
-	if p.DeniedToWork == nil {
+func (p Policy) judgeJob(fullMethod string, request any, grant Grant) error {
+	if p.DeniedToJob == nil {
 		return status.Error(codes.PermissionDenied,
-			"this crew judges no work credential, so a piece of work may call nothing")
+			"this crew judges no job credential, so a job may call nothing")
 	}
-	return p.DeniedToWork(fullMethod, request, grant)
+	return p.DeniedToJob(fullMethod, request, grant)
 }
 
 // caller is who a recognised token says is calling.
@@ -226,12 +226,12 @@ type caller int
 const (
 	callerOperator caller = iota
 	callerDriver
-	callerWork
+	callerJob
 )
 
 // recognise says who a call is from by the token it carries, or why it is refused.
 //
-// The operator first, then the driver, then the work credentials the crew has minted. A crew holding
+// The operator first, then the driver, then the job credentials the crew has minted. A crew holding
 // no token of its own recognises nobody, because a guard that fails open is the one thing this
 // package exists to prevent.
 func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
@@ -253,7 +253,7 @@ func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
 	}
 	if p.Grants != nil {
 		if grant, minted := p.Grants.Grant(presented); minted && !grant.expired(time.Now()) {
-			return callerWork, grant, nil
+			return callerJob, grant, nil
 		}
 	}
 	return 0, Grant{}, status.Error(codes.Unauthenticated, "the token this call carries is not this crew's")

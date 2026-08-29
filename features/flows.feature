@@ -6,8 +6,8 @@ Feature: A flow runs a graph across sessions
   starts, moving one node at a time with every movement recorded in the same transaction as the
   position it describes.
 
-  A run holds nothing while it works. Each step is a piece of work: the run writes it down and
-  returns, a controller sends its task, and the run carries on when that work ends. So a step owns
+  A run holds nothing while it works. Each step is a job: the run writes it down and
+  returns, a controller sends its task, and the run carries on when that job ends. So a step owns
   its own session, the session is put away the moment the step ends, and a run waiting on a person
   holds no container at all.
 
@@ -43,7 +43,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "fix-red" in the project, without driving the crew
     Then the flow run is working
     And the crew was asked to run 0 tasks
-    And the run's step is a piece of work under the run, one level deeper
+    And the run's step is a job under the run, one level deeper
 
   Scenario: A run whose step is running holds no call open
     Given the model takes longer over a task than anybody will wait
@@ -57,7 +57,7 @@ Feature: A flow runs a graph across sessions
     Then the flow run is done
 
   # The trap issue 354 names by name: a run that waits or asks used to hold its container for the
-  # whole wait, because it closed its session only at the end. The step's work ended when it
+  # whole wait, because it closed its session only at the end. The step's job ended when it
   # answered, so the run asks its question holding nothing.
   Scenario: A run waiting on a person holds no container
     Given the crew holds this flow graph:
@@ -74,22 +74,22 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "careful" in the project
     Then the flow run is asking "fixed it locally. push?"
     And no session the run started is still live
-    And no piece of work of the run is still open
+    And no job of the run is still open
 
   # A step's answer used to land in the run's state as result.reply, where quay flow show truncated
-  # it. It is a field on a piece of work now, so a caller reads it as data.
+  # it. It is a field on a job now, so a caller reads it as data.
   Scenario: Every step's answer is a field a caller can read
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
     And each of the run's steps carries the answer its own task gave
-    And the run's own work carries what the run came to
+    And the run's own job carries what the run came to
 
-  # The four records issue 349 named and nothing ever wrote. They are written against the piece of
-  # work that carries the run, so a reader has one history rather than two.
+  # The four records issue 349 named and nothing ever wrote. They are written against the
+  # job that carries the run, so a reader has one history rather than two.
   Scenario: A run writes the record of its own life
     When the operator starts the flow "fix-red" in the project
     Then the flow run is done
-    And the run's own work records "flow.run.started" and then "flow.run.finished"
+    And the run's own job records "flow.run.started" and then "flow.run.finished"
 
   Scenario: Every movement of the run is recorded, in order
     When the operator starts the flow "fix-red" in the project
@@ -329,13 +329,13 @@ Feature: A flow runs a graph across sessions
     Then the flow run is pinned to version 2
 
   # The first flow ever run against a real crew finished at done, reported four transitions and read
-  # back as a success. None of the work happened: the repository was not there, every task said so,
+  # back as a success. None of the job happened: the repository was not there, every task said so,
   # and the run took the success edge anyway, because `result.failed` says the model did not error
   # and nothing else. A task that could not do the work is not a failed task.
   #
   # So a dispatch node says what will show it worked, and the crew checks that rather than reading
   # the model's account of itself.
-  Scenario: A run stops when the work a node said it would do did not happen
+  Scenario: A run stops when the job a node said it would do did not happen
     Given the crew holds this flow graph:
       """
       name: site-check
@@ -354,7 +354,7 @@ Feature: A flow runs a graph across sessions
 
   # The other direction. A check that stops every run would satisfy the scenario above and be worth
   # nothing, so this one is the same graph against a model that does the work.
-  Scenario: A run carries on when the work did happen
+  Scenario: A run carries on when the job did happen
     Given the model writes "package.json" while it works
     And the crew holds this flow graph:
       """
@@ -371,7 +371,7 @@ Feature: A flow runs a graph across sessions
     Then the flow run is done
     And the run's steps were asked 2 tasks
 
-  # The weaker check, for work that leaves no file behind. It is still the model's own prose, and it
+  # The weaker check, for a job that leaves no file behind. It is still the model's own prose, and it
   # is here because a graph that runs a command and reads its answer has nothing else to point at.
   Scenario: A run stops when the reply does not carry what the node said it would
     Given the crew holds this flow graph:
@@ -387,7 +387,7 @@ Feature: A flow runs a graph across sessions
     Then the flow run is stopped
     And reading the run back says it stopped over "all green"
 
-  # A step's session is made when its work starts, so there is nothing to set a mode on beforehand and
+  # A step's session is made when its job starts, so there is nothing to set a mode on beforehand and
   # `quay mode` has nothing to point at. Every automation therefore ran in the mode a session is born
   # in, and a graph whose first step is "clone this" could not take it: cloning needs the network, and
   # a dispatched task has nobody to ask for permission.

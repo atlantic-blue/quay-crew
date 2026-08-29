@@ -6,9 +6,9 @@ Feature: The front door says what the crew is and how to start it
   list, a roadmap and a page of prior art. Nobody read any of it, and the list of what works had
   already gone stale.
 
-  So it is held to three things and no more. What the crew is, one quick start, and where to read
-  next. Everything else it used to hold lives in the documents it points at, and the scenarios in
-  this directory say what the crew actually does.
+  So it is held to four things and no more. What the crew is, the words for what it holds, one quick
+  start, and where to read next. Everything else it used to hold lives in the documents it points at,
+  and the scenarios in this directory say what the crew actually does.
 
   Each promise it makes is checked against something with an answer elsewhere in this repository:
   the commands the tool actually has, the targets the Makefile actually declares, and the documents
@@ -19,9 +19,9 @@ Feature: The front door says what the crew is and how to start it
   naming no command passes every scenario here. The rest of this directory is what says whether a
   capability is real; these say the front door points at it.
 
-  Scenario: It says what the crew is, how to start it, and where to read next
+  Scenario: It says what the crew is, the words for what it holds, how to start it, and where to read next
     When a reader opens the front door
-    Then it holds those three parts and no other section
+    Then it holds those four parts and no other section
 
   Scenario: It is short enough that somebody reads it
     When a reader opens the front door
@@ -43,17 +43,24 @@ Feature: The front door says what the crew is and how to start it
     When a reader opens the front door
     Then the quick start is one command to a running crew
 
-  Scenario: The picture of a piece of work is where it sends a reader for it
+  Scenario: The picture of a job is where it sends a reader for it
     When a reader opens the front door
-    Then the document it names for the work carries a picture of one, through the controller, the lease, the session and the role
+    Then the document it names for the job carries a picture of one, through the controller, the lease, the session and the role
+
+  # A word a reader meets for the first time inside a command is a word they guess at. The eleven are
+  # the whole of what the crew holds, so the list is exact: the twelfth resource is defined here in
+  # the change that adds it, or a reader finds it in the help text and has to work out what it is.
+  Scenario: It defines every resource the crew keeps
+    When a reader opens the front door
+    Then it defines the eleven resources, in order, and says which of them are not resources
 
   Scenario: Everything in it can be copied back out
     When a reader opens the front door
     Then it holds no blockquote, no table and no dash used as punctuation
 
-  # A reader's first question is not what work is. It is how work differs from the task they already
+  # A reader's first question is not what a job is. It is how a job differs from the task they already
   # know how to send. The front door used to answer it and now points at the document that does, so
   # what is held is that a reader is still sent somewhere that gives them the answer.
-  Scenario: It sends a reader somewhere that says how a task and a piece of work differ
+  Scenario: It sends a reader somewhere that says how a task and a job differ
     When a reader opens the front door
-    Then the document it names for the words tells a task and a piece of work apart
+    Then the document it names for the words tells a task and a job apart

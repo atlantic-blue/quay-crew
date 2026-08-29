@@ -8,7 +8,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/cucumber/godog"
 )
 
@@ -170,14 +170,14 @@ func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 		return stopTask(ctx, current.sessionID, reason)
 	})
 
-	sc.Step(`^the operator stops the session the work is running in saying "([^"]*)"$`,
+	sc.Step(`^the operator stops the session the job is running in saying "([^"]*)"$`,
 		func(ctx context.Context, reason string) error {
-			one, err := readWork(ctx, 0)
+			one, err := readJob(ctx, 0)
 			if err != nil {
 				return err
 			}
 			if one.GetSession() == "" {
-				return fmt.Errorf("the work says no session, so there is nothing to stop")
+				return fmt.Errorf("the job says no session, so there is nothing to stop")
 			}
 			return stopTask(ctx, one.GetSession(), reason)
 		})
@@ -221,29 +221,29 @@ func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 	})
 
 	// Read off the crew rather than off what the scenario declared, because what is being specified
-	// is where the controller moved the work to after the task was stopped.
-	sc.Step(`^the work reads stopped, saying "([^"]*)"$`, func(ctx context.Context, reason string) error {
-		one, err := readWork(ctx, 0)
+	// is where the controller moved the job to after the task was stopped.
+	sc.Step(`^the job reads stopped, saying "([^"]*)"$`, func(ctx context.Context, reason string) error {
+		one, err := readJob(ctx, 0)
 		if err != nil {
 			return err
 		}
-		if one.GetPhase() != work.PhaseStopped {
-			return fmt.Errorf("the work is %q, want stopped: an operator halting a task is not the "+
+		if one.GetPhase() != job.PhaseStopped {
+			return fmt.Errorf("the job is %q, want stopped: an operator halting a task is not the "+
 				"model failing, and the two must never read the same", one.GetPhase())
 		}
 		if !strings.Contains(one.GetReason(), reason) {
-			return fmt.Errorf("the work says %q, want the operator's own reason %q", one.GetReason(), reason)
+			return fmt.Errorf("the job says %q, want the operator's own reason %q", one.GetReason(), reason)
 		}
 		return nil
 	})
 
-	sc.Step(`^the work carries no answer$`, func(ctx context.Context) error {
-		one, err := readWork(ctx, 0)
+	sc.Step(`^the job carries no answer$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
 		if err != nil {
 			return err
 		}
 		if one.GetAnswer() != "" {
-			return fmt.Errorf("the stopped work carries the answer %q, and the task ended before it "+
+			return fmt.Errorf("the stopped job carries the answer %q, and the task ended before it "+
 				"had one: reporting an answer nobody gave is worse than reporting none", one.GetAnswer())
 		}
 		return nil

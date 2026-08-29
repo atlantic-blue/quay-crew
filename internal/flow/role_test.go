@@ -6,7 +6,7 @@ import (
 )
 
 // The graph these tests drive: one step in the run's own session, one step as a role. A role is
-// what makes a step somebody else's work rather than the next thing this conversation does.
+// what makes a step somebody else's job rather than the next thing this conversation does.
 const teamGraph = `
 name: write-tests
 version: 1
@@ -33,7 +33,7 @@ func TestADispatchCanNameARole(t *testing.T) {
 
 // A role on anything but a dispatch is refused rather than dropped. Dropped, it reads as a boundary
 // that is in force, and a boundary that is not in force looks exactly like one that is.
-func TestOnlyAStepThatDoesWorkMayNameARole(t *testing.T) {
+func TestOnlyAStepThatDoesJobMayNameARole(t *testing.T) {
 	_, err := Parse([]byte(`
 name: confused
 version: 1
@@ -74,7 +74,7 @@ edges:
 // counts as spent both come from this list.
 func TestARunKnowsEverySessionItStarted(t *testing.T) {
 	run := Run{State: map[string]string{
-		// A run made before its steps were work kept its own session under this key, and reading one
+		// A run made before its steps were job kept its own session under this key, and reading one
 		// back has to still reach it.
 		SessionKey:      "own-session",
 		"session.tests": "tests-session",

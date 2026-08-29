@@ -103,7 +103,7 @@ type recordingRunner struct {
 	usage         sandbox.Usage
 	cost          float64
 	usageReported bool
-	// onTask runs before the double answers, so a scenario can be a model that did the work rather
+	// onTask runs before the double answers, so a scenario can be a model that did the job rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
 	onTask func()
 }
@@ -144,7 +144,7 @@ var _ model.Runner = (*recordingRunner)(nil)
 // about stopping a task would hang against it while the real crew stopped the task at once.
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, started, work := r.takes, r.gate, r.started, r.onTask
+	takes, gate, started, onTask := r.takes, r.gate, r.started, r.onTask
 	// Recorded on arrival rather than on the way out. A scenario about what is true *while* a task
 	// runs, which is what attaching to a running session is, cannot read a task that is only written
 	// down once it is over.
@@ -152,8 +152,8 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	asked := len(r.requests)
 	r.mu.Unlock()
 	// Outside the lock: what the model does may ask the crew something.
-	if work != nil {
-		work()
+	if onTask != nil {
+		onTask()
 	}
 	if started != nil {
 		r.once.Do(func() { close(started) })
@@ -397,7 +397,7 @@ func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
 	// The server first, because the interceptors ask it to recognise the credentials it has minted
-	// for pieces of work.
+	// for jobs.
 	w.server = controlplane.NewServer(controlplane.Config{
 		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
@@ -412,9 +412,9 @@ func (w *world) serve() error {
 		telemetry.ServerOptions(),
 		auth.ServerOptions(auth.Policy{
 			Token: w.token, DriverToken: w.driverToken, Denied: controlplane.DeniedToDriver,
-			// The scenarios run against a crew that guards itself the way a real one does, work
+			// The scenarios run against a crew that guards itself the way a real one does, job
 			// credentials included.
-			Grants: w.server.Grants(), DeniedToWork: controlplane.DeniedToWork,
+			Grants: w.server.Grants(), DeniedToJob: controlplane.DeniedToJob,
 		})...,
 	)...)
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
@@ -614,15 +614,16 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeToolSteps(sc)
 	initializeAnswerSteps(sc)
 	initializeTaskWordSteps(sc)
+	initializeJobWordSteps(sc)
 	initializeVersionSteps(sc)
-	initializeWorkSteps(sc)
-	initializeWorkMaterialSteps(sc)
-	initializeWorkControllerSteps(sc)
-	initializeWorkRoleSteps(sc)
+	initializeJobSteps(sc)
+	initializeJobMaterialSteps(sc)
+	initializeJobControllerSteps(sc)
+	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
-	initializeWorkEventsSteps(sc)
-	initializeWorkLeaseSteps(sc)
+	initializeJobEventsSteps(sc)
+	initializeJobLeaseSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)

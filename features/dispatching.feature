@@ -1,9 +1,9 @@
 Feature: A task outlives the caller that started it
 
-  Work is started with a dispatch that lets go of it. The crew runs the task, which takes as long as
-  the work takes, so nothing on the operator's machine has to stay alive for it. Holding a task in
+  A task is started with a dispatch that lets go of it. The crew runs the task, which takes as long as
+  the job takes, so nothing on the operator's machine has to stay alive for it. Holding a task in
   the client made the terminal the weakest part of the crew: a dispatch killed at seventeen minutes
-  recorded "failed: model: run exited: signal: killed", said nothing about why, and the work was
+  recorded "failed: model: run exited: signal: killed", said nothing about why, and the job was
   gone.
 
   A short question is the other case. There the caller waits, because the person typing it is looking
@@ -45,7 +45,7 @@ Feature: A task outlives the caller that started it
     And the session left behind is not sitting idle
 
   # The audit export is a copy of a record the store already holds, so a broker that never answers
-  # costs the export and never the work. It used to cost the whole dispatch.
+  # costs the export and never the job. It used to cost the whole dispatch.
   Scenario: A task runs while the event log is not answering
     Given an event log that never answers
     When the operator dispatches "hello" to the project

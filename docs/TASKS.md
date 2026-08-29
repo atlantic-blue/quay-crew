@@ -4,7 +4,7 @@ A task is one request to one session. You ask for something, the model works in 
 sandbox, and a reply comes back. Minutes is normal, not seconds.
 
 This document follows one task from the moment it is dispatched to the records it leaves behind. It
-starts by telling a task apart from a piece of work, because those two get used for each other most.
+starts by telling a task apart from a job, because those two get used for each other most.
 Then it names the rest of the words.
 
 `docs/EVENTS.md` describes the log itself and how to inspect it. `docs/DATABASE.md` describes the
@@ -14,26 +14,36 @@ tables. This is the path between them.
 
 A task is a message. You send text, a session answers, and that is the whole life of it.
 
-A piece of work is a job. You write down what you want done and the crew keeps that record, so it has
+A job is declared intent. You write down what you want done and the crew keeps that record, so it has
 a phase you can read at any moment: pending, running, done, failed or stopped. It can run as a named
-role, carry a budget and a deadline, and declare work of its own. Two more phases are written down
+role, carry a budget and a deadline, and declare jobs of its own. Two more phases are written down
 and nothing reaches them yet: `waiting`, because no controller honours ordering, and `asking`, which
 today only a flow run gets to.
 
-The test is one question. If you would ever ask where that is up to, it is work. If you would not, it
-is a task.
+The test is one question. If you would ever ask where that is up to, it is a job. If you would not,
+it is a task.
 
-A flow is work with its plan drawn in advance. A session is the conversation a task happens in.
+A flow is a job with its plan drawn in advance. A session is the conversation a task happens in.
 
-Declaring work does not replace sending a task. A controller sends the brief as a task, into a
-session, the same way you do. So the rest of this document is what happens inside a piece of work
-too. `docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
+Declaring a job does not replace sending a task. A controller sends the brief as a task, into a
+session, the same way you do. So the rest of this document is what happens inside a job too.
+`docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
+
+The words come from Kubernetes, which the crew already borrows from: a Lease, a Phase, a Role, and
+verbs on a resource. A job is a Kubernetes Job. Declared intent, run to completion, watched by a
+controller, with a disposable container underneath, which is this down to the phase field.
+
+**A session is deliberately not a Pod**, and that is the obvious next question. A Pod is disposable
+and interchangeable with its replacement: kill one, another takes its place, and nothing is lost. A
+session is the opposite. Its value is the history it holds, so killing one loses the conversation
+that made it worth having. Borrowing a word whose contract the crew does not honour would be worse
+than breaking the pattern on purpose, so the pattern is broken on purpose.
 
 ```mermaid
 flowchart LR
     YOU(["you"]) -->|"quay task"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
-    YOU -->|"quay work create"| WORK["a piece of work:<br/>a job the crew keeps<br/>a readable phase for"]
-    WORK --> CTL["a controller reads the row"]
+    YOU -->|"quay job create"| JOB["a job:<br/>a record the crew keeps<br/>a readable phase for"]
+    JOB --> CTL["a controller reads the row"]
     CTL -->|"sends the brief"| TASK
     TASK --> SESSION["a session, in its own container"]
     SESSION --> LANDED["what came back, written down"]
@@ -64,7 +74,7 @@ key land on one partition, which is what keeps a session's records in the order 
 
 ## One word, and what each shape of it does
 
-A task is one word on the command line, the way a piece of work and a flow are each one word:
+A task is one word on the command line, the way a job and a flow are each one word:
 
 ```
 quay task [<address>] <text>              send a task, and wait here for the answer
@@ -142,7 +152,7 @@ sequenceDiagram
     YOU->>CLI: quay task "read the package file"
     CLI->>CP: Dispatch (gRPC)
     CP->>DB: write the task as running
-    Note over CP,DB: visible while the work happens
+    Note over CP,DB: visible while the job happens
     CP->>SBX: run the task
     SBX-->>CP: reply
     CP->>DB: write what it came to, into that task

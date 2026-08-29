@@ -206,7 +206,7 @@ other name findable rather than quietly adopting it.
 - **A session running a task that named its own conversation cannot be opened.** That is a session
   carried over from before this, caught mid task: the crew does not know that conversation's name and
   cannot until the task lands. Attaching is refused, in those words, rather than naming a second
-  conversation and opening an empty one beside the work. The name lands on the session when the task
+  conversation and opening an empty one beside the job. The name lands on the session when the task
   finishes, and attaching works from then on.
 - **A transcript written under a name a session does not hold is not deleted, and not shown either.**
   Attaching used to name a conversation of its own while a first task was running, so a sandbox built
@@ -387,15 +387,15 @@ which is also why a change here needs the session started again rather than a ta
 
 **The network is not the permission.** Reaching the control plane buys nothing on its own. Every call
 is refused until the caller presents a credential, and the only credential a session ever holds is
-the one the crew mints for the piece of work that task is running: bound to that work, carrying the
-verbs the work's role declared, expiring with the work. A session on the network holding no
+the one the crew mints for the job that task is running: bound to that job, carrying the
+verbs the job's role declared, expiring with the job. A session on the network holding no
 credential can do nothing at all, which is what an ordinary task is. See `docs/ORCHESTRATION.md`
 section 5 for what a role grants and `internal/controlplane/deny.go` for the refusals.
 
 **Nothing is configured for this.** The compose file creates the network and puts the control plane
 on it, and the makefile names it after the stack, so two stacks on one machine do not share one.
 `QC_SANDBOX_CONTROL_PLANE` is the address a session dials, `controlplane:50051` in the composed
-stack. Unset it and the crew tells a session nothing, and a session running a piece of work then
+stack. Unset it and the crew tells a session nothing, and a session running a job then
 holds a credential it cannot spend. The control plane says so on startup when the two disagree.
 
 **The driver is the one deliberate widening, and it is off.** `QC_SANDBOX_NETWORK` names the crew's
@@ -578,7 +578,7 @@ session that ever worked in a repository.
 `QC_DATA_HOST` moves the directory somewhere else, for example a disk with more room:
 
 ```
-QC_DATA_HOST=/Volumes/work/quaycrew make up
+QC_DATA_HOST=/Volumes/job/quaycrew make up
 ```
 
 Compose gives the control plane its own view of that directory and tells it the host path as well,

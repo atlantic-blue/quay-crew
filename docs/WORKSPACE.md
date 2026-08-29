@@ -5,7 +5,7 @@ hooks that every session inside it is born with.
 
 The quick start in the [README](../README.md) makes a workspace in four commands. This page is the
 long version. Follow it when you move a real body of work into the crew, and a session must read a
-repository, commit as you, and hold the credentials the work needs.
+repository, commit as you, and hold the credentials the job needs.
 
 The examples use a workspace called `acme` and a project called `billing`. Replace both.
 
@@ -19,7 +19,7 @@ flowchart LR
   end
   subgraph box["one session's sandbox"]
     claude["/home/agent/.claude<br/>crew and workspace context"]
-    work["/home/agent/workspace<br/>project and session context"]
+    wd["/home/agent/workspace<br/>project and session context"]
     shared["/home/agent/shared<br/>the workspace volume"]
     skills["/home/agent/skills<br/>read only"]
     hooks["/home/agent/hooks<br/>read only"]
@@ -27,7 +27,7 @@ flowchart LR
     env["the environment<br/>one variable per secret"]
   end
   store --> claude
-  store --> work
+  store --> wd
   store --> shared
   store --> skills
   store --> hooks

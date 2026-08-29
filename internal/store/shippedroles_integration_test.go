@@ -100,7 +100,7 @@ func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
 	t.Logf("read %d briefs back out of the database", checked)
 }
 
-// The sad path, and the proof the rule above is doing work. A brief edited to carry the name is
+// The sad path, and the proof the rule above is doing job. A brief edited to carry the name is
 // refused by this check on the far side of the database, so the guard cannot be satisfied by a read
 // that returns nothing.
 func TestABriefCarryingAnotherProductIsCaughtAfterTheDatabaseRoundTrip(t *testing.T) {
@@ -116,7 +116,7 @@ func TestABriefCarryingAnotherProductIsCaughtAfterTheDatabaseRoundTrip(t *testin
 		body := file.Body
 		if file.Path == role.BriefFile {
 			body = []byte(strings.Replace(string(body),
-				"A flow step or a piece of work names this role.", "You are spawned by /gl:slice.", 1))
+				"A flow step or a job names this role.", "You are spawned by /gl:slice.", 1))
 		}
 		files = append(files, &quaycrewv1.RoleFile{Path: file.Path, Body: body})
 	}

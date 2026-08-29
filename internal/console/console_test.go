@@ -3053,7 +3053,7 @@ func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
 }
 
 // TestTheHeaderCarriesWhatTheCrewHasCost, beside the build, where the operator is looking while they
-// work rather than only when they go and look at the listing.
+// job rather than only when they go and look at the listing.
 func TestTheHeaderCarriesWhatTheCrewHasCost(t *testing.T) {
 	registry, err := NewDefaultRegistry(&fakeClient{})
 	if err != nil {

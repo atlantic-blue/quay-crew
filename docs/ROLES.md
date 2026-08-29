@@ -35,31 +35,31 @@ Nothing chooses the role. The operator writes it into the graph and the workspac
 already, or the run stops at that step and says which role is missing. Choosing a team while the run
 is under way is the product manager's job and is not built.
 
-And a piece of work runs as one. A caller names a role when it declares work, and the controller runs
-that work in a session running as that role:
+And a job runs as one. A caller names a role when it declares job, and the controller runs
+that job in a session running as that role:
 
 ```
-quay work create me/quay-crew --role backlog-clearer \
+quay job create me/quay-crew --role backlog-clearer \
   --title "clear the open pull request backlog" \
-  --brief "Read the open pull requests. For each one, declare a piece of work." \
+  --brief "Read the open pull requests. For each one, declare a job." \
   --requires context
 ```
 
 The role is on the record, never on the call that runs the task. A caller that could name its own
-role could name one granting more than the work was declared with, and the credential the crew mints
+role could name one granting more than the job was declared with, and the credential the crew mints
 for that task carries what the role's `may` list declares.
 
-`--requires` is the other side of `receives`: it says what this piece of work cannot be done without.
-Where the role does not receive it, the work is refused, and no container is ever built for it.
+`--requires` is the other side of `receives`: it says what this job cannot be done without.
+Where the role does not receive it, the job is refused, and no container is ever built for it.
 
-The two words read correctly in both directions, which is why they are these two words. This work
+The two words read correctly in both directions, which is why they are these two words. This job
 requires context. The architect role receives context. The flag was called `--hands` until August
 2026, and it needed explaining every time somebody read it; `--hands` now refuses and names
 `--requires`.
 
 ```mermaid
 flowchart LR
-    WORK["a piece of work<br/>role backlog-clearer<br/>requires context"] --> CHECK{"does the role receive<br/>everything the work requires?"}
+    JOB["a job<br/>role backlog-clearer<br/>requires context"] --> CHECK{"does the role receive<br/>everything the job requires?"}
     CHECK -->|"no"| STOPPED["phase stopped.<br/>The refusal names the role,<br/>the material, and both ways out"]
     CHECK -->|"yes"| SESSION["a session running as the role,<br/>in its own container"]
     SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its may list"]
@@ -67,17 +67,17 @@ flowchart LR
 
 The check happens twice, and the second one is the one that matters. At the write, so the refusal
 reaches whoever wrote the declaration. And again at the dispatch, because a role can be detached,
-imported at a new version and attached again while work sits pending, so what the crew would put in
+imported at a new version and attached again while a job sits pending, so what the crew would put in
 front of a session is only settled at the moment it hands it over.
 
 Refused rather than withheld, and that is the difference from a flow step. A flow step naming a role
 that receives no context is given none, silently, because the operator wrote the boundary into the
-graph and meant it. A piece of work that says it cannot be done without the context is saying the
+graph and meant it. A job that says it cannot be done without the context is saying the
 opposite, so running it without would leave a session answering plausibly instead of stopping.
 
 ## Why the boundary, not the persona
 
-A flow sends work to one session, and every step lands in the same conversation. The session that
+A flow sends a job to one session, and every step lands in the same conversation. The session that
 writes the code has already read everything the session that planned it said, so it agrees with the
 plan. A second opinion that read the first opinion is not a second opinion.
 
@@ -95,10 +95,10 @@ A role is a directory holding two files, the shape a skill and a hook already ha
 ```yaml
 name: test-writer
 version: 1
-summary: writes the tests for a piece of work, from the work alone
+summary: writes the tests for a job, from the job alone
 model: opus
 receives:
-  - work
+  - job
   - context
 ```
 
@@ -109,7 +109,7 @@ repository makes a new version, so it cannot change under a session already runn
 workspace moves by attaching again.
 
 `model` is a tier such as `opus` or a full name such as `claude-opus-5`. It is declared per role
-because the work differs: naming a team is worth the larger model and writing one file to a
+because the job differs: naming a team is worth the larger model and writing one file to a
 specification is not. The crew does not check the name against a list, because a tier the model's own
 tool stops accepting would otherwise fail every task with nothing an operator could configure around
 it.
@@ -117,8 +117,8 @@ it.
 `receives` is the boundary. It is one of three words today, and a fourth is refused at import by
 name:
 
-- `work` is the piece of work the role was given. Every role receives it, because a session with no
-  work to do is not a task.
+- `job` is the job the role was given. Every role receives it, because a session with no
+  job to do is not a task.
 - `context` is what the crew, the workspace and the project know, as the memory files carry it.
 - `skills` are the skills the workspace holds.
 
@@ -135,20 +135,20 @@ version: 1
 summary: clears the open pull request backlog
 model: opus
 receives:
-  - work
+  - job
 may:
-  - work.create
-  - work.read
+  - job.create
+  - job.read
 ```
 
 Four verbs, refused at import by name the way a material is, and no more, because a verb nobody uses
 is a boundary that means nothing:
 
-- `work.create` declares a piece of work. The parent comes from the credential, never from the
+- `job.create` declares a job. The parent comes from the credential, never from the
   caller.
-- `work.read` reads work and its answer.
-- `work.answer` answers a question a piece of work asked.
-- `work.stop` stops a piece of work.
+- `job.read` reads job and its answer.
+- `job.answer` answers a question a job asked.
+- `job.stop` stops a job.
 
 A role that declares no `may` list may call nothing, which is what every role written before this
 became. Default deny, so a boundary is something an author wrote rather than something they forgot.
@@ -159,15 +159,15 @@ it, which is the same reason those calls are already refused to the driver.
 
 **The grant is half of what a session holds.** The other half is the workspace's ceiling, and the two
 mean different things: the role says what a session may do, and the workspace says how much of it.
-The effective capability is the intersection, so a role granting `work.create` in a workspace whose
+The effective capability is the intersection, so a role granting `job.create` in a workspace whose
 `max_depth` is zero creates nothing. Read and set the ceiling with `quay limits`, and see section 5
 of `docs/ORCHESTRATION.md` for why capability is split across the two.
 
 ```mermaid
 flowchart LR
-    ROLE["the role: may work.create"] --> AND{"both, or neither"}
+    ROLE["the role: may job.create"] --> AND{"both, or neither"}
     LIMITS["the workspace: max depth 2"] --> AND
-    AND -->|"declared at depth 1"| YES["the work is written"]
+    AND -->|"declared at depth 1"| YES["the job is written"]
     AND -->|"declared at depth 2"| NO["refused, naming the workspace limit"]
 ```
 
@@ -206,7 +206,7 @@ them.
 A session running as a role is a new session in a new container, and what it holds is what its role
 declares:
 
-- **`work`** is the prompt of the step that named the role. Every role receives it.
+- **`job`** is the prompt of the step that named the role. Every role receives it.
 - **`context`** is the crew's, the workspace's, the project's and the session's context, as the
   memory files carry it. A role without it is told its brief and nothing else.
 - **`skills`** are the skills the workspace holds. A role without them holds none: no index in its
@@ -264,8 +264,8 @@ The design phase, in order, and the model each one runs on:
 The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
 team is worth the larger model and writing one file to a specification is not.
 
-Every one of the twelve receives `work`, `context` and `skills`. Only the assessor declares a `may`
-list, `work.create` and `work.read`, because its brief declares a security review and reads what came
+Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `may`
+list, `job.create` and `job.read`, because its brief declares a security review and reads what came
 back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
 grant mean something.
 
@@ -278,7 +278,7 @@ regardless, so it would break a role rather than fence one.
 
 **Every one of these briefs describes a boundary about files, and quay has no word for a file.** A
 role cannot be told which files it may not touch, may not read, or may not write. `receives` is three
-words, `work`, `context` and `skills`, and none of the three is about the contents of a repository.
+words, `job`, `context` and `skills`, and none of the three is about the contents of a repository.
 So `test-writer` saying it never sees implementation code, `implementer` saying it never edits a test
 file, `verifier` and `assessor` and `codebase-mapper` saying they are read only, `wrapper` saying it
 writes to `tests/locking/` and nowhere else, and `security` saying it writes the failing test rather
@@ -309,17 +309,17 @@ change that would give those two room, and it is the operator's to make.
   and it is the reason every one of the twelve carries a line saying so.
 - A fresh crew is seeded with none of them. Skills and hooks are seeded and roles are not, so an
   operator runs `quay role import roles/<name>` from a checkout, once per role.
-- Nothing chooses one. A flow graph names a role, or a caller names one when it declares work, and
+- Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
   the workspace has to hold it already.
 - Nothing runs the phase. The twelve describe an order and the crew does not keep it: a role names
   the role that comes next in its own output, and it is the operator who writes that order into a
-  flow graph or declares the next piece of work.
+  flow graph or declares the next job.
 - Nothing hands one role's output to the next. Each writes a document into the repository, and the
   next role reads it from there, so a role whose predecessor never ran says so and stops.
 
 The scenarios that hold this up are in [`features/roles.feature`](../features/roles.feature), which
 imports every role in `roles/` and refuses a directory holding none, and in
-[`features/workcontroller.feature`](../features/workcontroller.feature), which runs a piece of work as
+[`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as
 one of them.
 
 ## What is not built
@@ -330,16 +330,16 @@ one of them.
   at once.
 - A session running as a role emits no event when it finishes.
 - No event starts a flow.
-- A piece of work pins the version of the role it was declared against, and the session is built from
+- A job pins the version of the role it was declared against, and the session is built from
   the version the workspace holds now. The pin is on the record and nothing reads it back yet, so a
-  role narrowed after the work was declared stops that work rather than running it as it was
+  role narrowed after the job was declared stops that job rather than running it as it was
   written.
-- Work in a role is root work only. Work under a parent and work that waits for something are each
+- A job in a role is a root job only. A job under a parent and a job that waits for something are each
   their own slice, whether or not they name a role.
 
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),
 [`features/rolesessions.feature`](../features/rolesessions.feature),
-[`features/work.feature`](../features/work.feature) and
-[`features/workcontroller.feature`](../features/workcontroller.feature). If a behaviour is not there,
+[`features/job.feature`](../features/job.feature) and
+[`features/jobcontroller.feature`](../features/jobcontroller.feature). If a behaviour is not there,
 it is not built.

@@ -54,7 +54,7 @@ var mountedOnly = map[string]bool{
 // mounts a key, and off when it does not.
 //
 // A session commits as the operator. Where a repository requires verified signatures, a session that
-// cannot sign produces a branch the operator cannot merge, which is most of the work the session was
+// cannot sign produces a branch the operator cannot merge, which is most of the job the session was
 // for.
 //
 // The key is already in the sandbox by the time this runs, written as a file by readySecretFiles, so

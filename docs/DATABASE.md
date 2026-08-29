@@ -126,37 +126,69 @@ It is not disposable. It is the only copy of what a session has done, and the ex
 is minted where the row is written, so the same identifier travels outward on the export. See
 `docs/TASKS.md` for the whole path and `docs/EVENTS.md` for the export.
 
-**`work`** is declared intent: one row per piece of work a caller asked for. It carries what the
+**`jobs`** is declared intent: one row per job a caller asked for. It carries what the
 caller declared (the title, the brief, the role and the version it was pinned to, the material it
 requires of that role, the mode, what the answer must carry, what it waits for, a deadline, a budget
 and its labels), what the crew assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
 answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
-process, so it outlives the caller. `quay work list` and `quay work show` read it.
+process, so it outlives the caller. `quay job list` and `quay job show` read it.
 
-It also carries the lease: `lease_owner` and `lease_until`, which say which controller is holding the
-work and until when. Those two are the only fields on the row a reader should ignore. They are how a
+It also carries the lease: `lease_owner` and `lease_until`, which say which controller is holding
+the job and until when. Those two are the only fields on the row a reader should ignore. They are how a
 controller is made disposable: a hold that stops moving is the signal its holder went away, and the
 controller that finds it reads the task record before it does anything, so an answer that already
 landed is adopted rather than asked for a second time.
 
-**`work_events`** is what happened to each piece of work, one row per event, written in the same
+**`job_events`** is what happened to each job, one row per event, written in the same
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
 copy going outward rather than a source it could be rebuilt from.
 
 **`pending_triggers`** is the queue a flow run starts from when something happens: one row per
 trigger, carrying the flow to run, the project to run it in, what the trigger carried as a payload,
-the piece of work that caused it where one did, and the claim a poller takes on it. `status` is
+the job that caused it where one did, and the claim a poller takes on it. `status` is
 `pending`, `started` or `failed`, and a failed row keeps the sentence saying why on `reason`, which
 is the only place that failure is ever read.
 
-It is beside `work_events` rather than inside it, and the two look alike on purpose. An audit record
+It is beside `job_events` rather than inside it, and the two look alike on purpose. An audit record
 is never claimed, so marking one consumed would rewrite the history; a trigger has to be claimed
 exactly once, because the claim is what stops two pollers starting two runs from one thing happening.
 Nothing writes a row from outside the control plane's own process yet. See section 14 of
 `docs/ORCHESTRATION.md`.
 
 **`schema_migrations`** is one row per applied migration, with the timestamp it was applied.
+
+### What happened to rows written before jobs were called jobs
+
+The tables were `work` and `work_events` until migration 0037. It renames them rather than adding a
+second pair, because two would then disagree and every read would have to say which one wins. A
+rename carries its rows, so a job declared before the rename keeps its identifier, its phase, its
+answer and its history, and reads back whole under the new name.
+
+The kinds move with the rows: `work.declared` becomes `job.declared`, and the same for started,
+answered, failed, asked, stopped, claimed and released. Leaving them reads well as an argument, since
+a record says what happened at the time, and it costs the reader everything: the crew has one
+vocabulary and a history that answers in two makes every consumer switch on both spellings forever.
+A kind is the crew word for what happened rather than anything a person typed, so nothing somebody
+wrote is being changed.
+
+```mermaid
+flowchart LR
+    subgraph BEFORE["before 0037"]
+        W["table work"]
+        WE["table work_events<br/>kind work.declared"]
+        W --> WE
+    end
+    BEFORE -->|"migration 0037, renames in place"| AFTER
+    subgraph AFTER["after 0037"]
+        J["table jobs<br/>after_work becomes after_jobs"]
+        JE["table job_events<br/>column work becomes job<br/>kind job.declared"]
+        J --> JE
+    end
+```
+
+The down file reverses every step of it. The control plane never applies one: migrations are forward
+only there, and a down file is for an operator going back deliberately.
 
 ```mermaid
 erDiagram
@@ -165,10 +197,10 @@ erDiagram
     projects   ||--o{ sessions : "holds sessions"
     sessions }o--|| workspaces : "belongs to"
     contexts   }o..o| projects : "renders into (scope and owner, no key)"
-    projects   ||--o{ work : "holds declared work"
-    work       ||--o{ work_events : "records what happened"
+    projects   ||--o{ jobs : "holds declared intent"
+    jobs       ||--o{ job_events : "records what happened"
     projects   ||--o{ pending_triggers : "holds what happened, waiting to start a run"
-    work       |o--o{ pending_triggers : "caused"
+    jobs      |o--o{ pending_triggers : "caused"
 ```
 
 ## Queries worth knowing

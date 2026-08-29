@@ -23,13 +23,13 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator imports the "([^"]*)" role$`, func(ctx context.Context, name string) error {
 		return importRole(ctx, roleFiles(name, 1, roleManifest{
-			model: "opus", receives: []string{"work", "context"},
+			model: "opus", receives: []string{"job", "context"},
 		}))
 	})
 
 	sc.Step(`^the operator imported the "([^"]*)" role$`, func(ctx context.Context, name string) error {
 		if err := importRole(ctx, roleFiles(name, 1, roleManifest{
-			model: "opus", receives: []string{"work", "context"},
+			model: "opus", receives: []string{"job", "context"},
 		})); err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator imports version (\d+) of the "([^"]*)" role$`,
 		func(ctx context.Context, version int, name string) error {
 			return importRole(ctx, roleFiles(name, version, roleManifest{
-				model: "opus", receives: []string{"work", "context"},
+				model: "opus", receives: []string{"job", "context"},
 			}))
 		})
 
@@ -49,20 +49,20 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator imports a different "([^"]*)" role at the same version$`,
 		func(ctx context.Context, name string) error {
 			return importRole(ctx, roleFiles(name, 1, roleManifest{
-				model: "opus", receives: []string{"work"}, brief: "Write the code instead.",
+				model: "opus", receives: []string{"job"}, brief: "Write the code instead.",
 			}))
 		})
 
 	sc.Step(`^the operator imports a role receiving "([^"]*)"$`,
 		func(ctx context.Context, material string) error {
 			return importRole(ctx, roleFiles("test-writer", 1, roleManifest{
-				model: "opus", receives: []string{"work", material},
+				model: "opus", receives: []string{"job", material},
 			}))
 		})
 
 	sc.Step(`^the operator imports a role naming no model$`, func(ctx context.Context) error {
 		return importRole(ctx, roleFiles("test-writer", 1, roleManifest{
-			receives: []string{"work"},
+			receives: []string{"job"},
 		}))
 	})
 
@@ -72,7 +72,7 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator imports a role with no version$`, func(ctx context.Context) error {
 		return importRole(ctx, roleFiles("test-writer", 0, roleManifest{
-			model: "opus", receives: []string{"work"},
+			model: "opus", receives: []string{"job"},
 		}))
 	})
 
@@ -220,7 +220,7 @@ func roleFiles(name string, version int, said roleManifest) []*quaycrewv1.RoleFi
 	if version > 0 {
 		fmt.Fprintf(&manifest, "version: %d\n", version)
 	}
-	manifest.WriteString("summary: writes the tests for a piece of work, from the work alone\n")
+	manifest.WriteString("summary: writes the tests for a job, from the job alone\n")
 	if said.model != "" {
 		fmt.Fprintf(&manifest, "model: %s\n", said.model)
 	}

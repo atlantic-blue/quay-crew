@@ -38,13 +38,13 @@ Feature: A flow run starts because something happened
     And the run's steps were asked "the build at https://ci.test/9 is red. Fix it."
     And the trigger reads back as started, naming the run
 
-  # One tree, and it is the work tree. A run nobody started is still a piece of work, so stopping
-  # that work stops the run and the tree budget counts what it spends.
-  Scenario: The run a trigger started is a piece of work in the tree
+  # One tree, and it is the job tree. A run nobody started is still a job, so stopping
+  # that job stops the run and the tree budget counts what it spends.
+  Scenario: The run a trigger started is a job in the tree
     When something happens and raises a trigger of "fix-red" carrying "url" as "https://ci.test/9"
     And the crew ticks
-    Then the run's own work is labelled with the trigger that caused it
-    And the run's steps hang under the run's own work
+    Then the run's own job is labelled with the trigger that caused it
+    And the run's steps hang under the run's own job
 
   # The failure this exists to stop: a trigger that does nothing and says nothing, which reads
   # exactly like a trigger nobody has got to yet.

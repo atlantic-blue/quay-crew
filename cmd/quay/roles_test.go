@@ -29,10 +29,10 @@ func aRoleDir(t *testing.T, name, manifest string) string {
 
 const testWriterManifest = `name: test-writer
 version: 1
-summary: writes the tests for a piece of work, from the work alone
+summary: writes the tests for a job, from the job alone
 model: opus
 receives:
-  - work
+  - job
   - context
 `
 
@@ -41,7 +41,7 @@ func TestARoleIsImportedFromItsDirectoryAndSaysHowToAttachIt(t *testing.T) {
 	dir := aRoleDir(t, "test-writer", testWriterManifest)
 
 	printed := mustRun(t, client, "role", "import", dir)
-	for _, want := range []string{"imported test-writer version 1", "opus", "context, work",
+	for _, want := range []string{"imported test-writer version 1", "opus", "context, job",
 		"quay role attach test-writer"} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("the import does not say %q: %q", want, printed)
@@ -56,7 +56,7 @@ func TestTheRoleListingSaysTheModelAndTheBoundary(t *testing.T) {
 	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
 
 	printed := mustRun(t, client, "role", "list")
-	for _, want := range []string{"test-writer", "v1", "runs on opus", "receives context, work"} {
+	for _, want := range []string{"test-writer", "v1", "runs on opus", "receives context, job"} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("the listing does not say %q: %q", want, printed)
 		}

@@ -3,6 +3,6 @@ version: 1
 summary: writes the integration and edge case tests from the contracts alone, and writes no implementation code
 model: sonnet
 receives:
-  - work
+  - job
   - context
   - skills

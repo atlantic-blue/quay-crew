@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // A run that begins because something happened. The trigger's payload is the run's opening state,
@@ -73,9 +73,9 @@ func TestATriggerStartsARunOnTheNextTick(t *testing.T) {
 	}
 }
 
-// One tree, and it is the work tree. A run something triggered is carried by a piece of work like
-// any other, so stopping that work stops the run and the tree budget counts what it spends.
-func TestATriggeredRunIsCarriedByAPieceOfWork(t *testing.T) {
+// One tree, and it is the job tree. A run something triggered is carried by a job like
+// any other, so stopping that job stops the run and the tree budget counts what it spends.
+func TestATriggeredRunIsCarriedByAJob(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, reactingGraph)
 	ctx := context.Background()
 
@@ -87,41 +87,41 @@ func TestATriggeredRunIsCarriedByAPieceOfWork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlowRunCarrier: %v", err)
 	}
-	carrying, err := it.store.GetWork(ctx, carrier)
+	carrying, err := it.store.GetJob(ctx, carrier)
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if carrying.Phase != work.PhaseWaiting {
-		t.Errorf("the run's own work is %q, want it held back so no controller sends it as a task", carrying.Phase)
+	if carrying.Phase != job.PhaseWaiting {
+		t.Errorf("the run's own job is %q, want it held back so no controller sends it as a task", carrying.Phase)
 	}
-	// The label is how a person finds why a run nobody started exists: quay work list
+	// The label is how a person finds why a run nobody started exists: quay job list
 	// --label flow.trigger=<trigger>.
 	if carrying.Labels["flow.trigger"] != raised.ID {
-		t.Errorf("the run's own work is labelled %v, want it to name the trigger that caused it", carrying.Labels)
+		t.Errorf("the run's own job is labelled %v, want it to name the trigger that caused it", carrying.Labels)
 	}
 	if step := stepOf(t, it, *run); step.Parent != carrier {
-		t.Errorf("the step hangs under %q, want the run's own work", step.Parent)
+		t.Errorf("the step hangs under %q, want the run's own job", step.Parent)
 	}
 }
 
-// A trigger that names the piece of work that caused it puts the whole run under that work, so a
-// flow started by work that finished is bounded by the same depth limit as everything else in the
+// A trigger that names the job that caused it puts the whole run under that job, so a
+// flow started by job that finished is bounded by the same depth limit as everything else in the
 // tree. This is what stops a flow that triggers itself running forever.
-func TestARunHangsUnderTheWorkThatCausedItsTrigger(t *testing.T) {
+func TestARunHangsUnderTheJobThatCausedItsTrigger(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, reactingGraph)
 	ctx := context.Background()
 
-	cause, _, err := it.PrepareWork(ctx, "", work.Declaration{
+	cause, _, err := it.PrepareJob(ctx, "", job.Declaration{
 		Workspace: workspace, Project: project, Title: "review the release", Brief: "read it",
 	})
 	if err != nil {
-		t.Fatalf("PrepareWork: %v", err)
+		t.Fatalf("PrepareJob: %v", err)
 	}
-	if err := it.store.CreateWork(ctx, cause, &work.Event{
-		ID: store.NewID(), Kind: work.EventDeclared, Work: cause.ID,
+	if err := it.store.CreateJob(ctx, cause, &job.Event{
+		ID: store.NewID(), Kind: job.EventDeclared, Job: cause.ID,
 		Workspace: workspace, Project: project,
 	}); err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
 
 	raise(t, engine, flow.Trigger{
@@ -134,15 +134,15 @@ func TestARunHangsUnderTheWorkThatCausedItsTrigger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlowRunCarrier: %v", err)
 	}
-	carrying, err := it.store.GetWork(ctx, carrier)
+	carrying, err := it.store.GetJob(ctx, carrier)
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
 	if carrying.Parent != cause.ID {
-		t.Fatalf("the run's own work hangs under %q, want the work that caused the trigger", carrying.Parent)
+		t.Fatalf("the run's own job hangs under %q, want the job that caused the trigger", carrying.Parent)
 	}
 	if carrying.Depth != cause.Depth+1 {
-		t.Errorf("the run's own work is at depth %d and the work that caused it at %d, want one deeper",
+		t.Errorf("the run's own job is at depth %d and the job that caused it at %d, want one deeper",
 			carrying.Depth, cause.Depth)
 	}
 }

@@ -43,8 +43,8 @@ func TestEveryShippedRoleImports(t *testing.T) {
 		if one.Name != filepath.Base(one.Dir) {
 			t.Errorf("%s calls itself %q, and a role is the directory it lives in", one.Dir, one.Name)
 		}
-		if !one.Gets(MaterialWork) {
-			t.Errorf("%s does not receive %s, and a session with no work to do is not a task", one.Name, MaterialWork)
+		if !one.Gets(MaterialJob) {
+			t.Errorf("%s does not receive %s, and a session with no job to do is not a task", one.Name, MaterialJob)
 		}
 		if len(one.Brief) > BriefLimit {
 			t.Errorf("%s has a brief of %d bytes and the ceiling is %d", one.Name, len(one.Brief), BriefLimit)
@@ -98,7 +98,7 @@ func TestTheShippedRolesRunOnTheModelsTheyWereWrittenFor(t *testing.T) {
 // Default deny is the rule, so a verb in a shipped role is something its brief actually asks for.
 // The assessor's brief spawns a security review and reads what came back; nothing else spawns
 // anything, and a role that quietly gained a verb would go unnoticed without this.
-func TestOnlyTheAssessorMayDeclareWork(t *testing.T) {
+func TestOnlyTheAssessorMayDeclareJob(t *testing.T) {
 	roles, err := All(shipped)
 	if err != nil {
 		t.Fatalf("loading the roles this build ships: %v", err)
@@ -106,13 +106,13 @@ func TestOnlyTheAssessorMayDeclareWork(t *testing.T) {
 	for _, one := range roles {
 		switch one.Name {
 		case "assessor":
-			for _, verb := range []string{VerbWorkCreate, VerbWorkRead} {
+			for _, verb := range []string{VerbJobCreate, VerbJobRead} {
 				if !one.May(verb) {
 					t.Errorf("the assessor may not %s, and its brief spawns a security review and reads the result", verb)
 				}
 			}
-			if one.May(VerbWorkStop) || one.May(VerbWorkAnswer) {
-				t.Error("the assessor may stop or answer work, and its brief asks for neither")
+			if one.May(VerbJobStop) || one.May(VerbJobAnswer) {
+				t.Error("the assessor may stop or answer job, and its brief asks for neither")
 			}
 		default:
 			if len(one.May_) != 0 {
