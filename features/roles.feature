@@ -142,3 +142,42 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator imports a shipped role receiving "the whole repository"
     Then the crew refuses the role saying "the whole repository"
     And the crew holds no roles
+
+  # The three roles the acceptance run used, which were written outside this repository, so nobody
+  # could read them, review them or change them. They ship in roles/ now, and this is what each one
+  # is: what reaches its container, and what its credential lets it ask the crew for.
+  #
+  # A push is not a deploy. What runs a pipeline is a merge, so the merge is the operator's gate, and
+  # every one of these receives skills because a role that cannot push is a role whose work nobody
+  # can see until it ends.
+  Scenario: The roles the acceptance run used ship in the repository
+    When the operator imports every role this build ships
+    Then the listing says the "orchestrator" role receives "context, job, skills"
+    And the listing says the "orchestrator" role runs on "opus"
+    And the listing says the "infrastructure-writer" role receives "context, job, skills"
+    And the listing says the "infrastructure-writer" role runs on "opus"
+    And the listing says the "releaser" role receives "job, skills"
+    And the listing says the "releaser" role runs on "sonnet"
+
+  Scenario: The orchestrator declares the children that do the work
+    Given the workspace allows jobs down to depth 2
+    And a job running as the "orchestrator" role this build ships
+    When that session declares a job running as the "test-writer" role
+    Then the new job hangs under the job that declared it, one level deeper
+
+  # The other direction, and the reason the lists differ: a session that can push and can also fan
+  # work out could spend a whole budget on pushes nobody reviewed.
+  Scenario: The releaser releases what it was given and declares nothing
+    Given the workspace allows jobs down to depth 2
+    And a job running as the "releaser" role this build ships
+    When that session declares a job running as the "test-writer" role
+    Then the crew refuses it and names the verb it lacks
+
+  # A boundary in the direction that costs money. The infrastructure writer declares its own
+  # children, and it cannot stop a job, which is the one verb an orchestrator holds and it does not.
+  Scenario: The infrastructure writer declares children and stops none
+    Given the workspace allows jobs down to depth 2
+    And a job running as the "infrastructure-writer" role this build ships
+    When that session declares a job running as the "implementer" role
+    Then the new job hangs under the job that declared it, one level deeper
+    And that session may not stop a job

@@ -383,3 +383,85 @@ func roleFilesFrom(dir string) ([]*quaycrewv1.RoleFile, error) {
 	}
 	return files, nil
 }
+
+// What a role this build ships may actually do, driven through the credential a job running as it
+// carries. A listing cannot answer this: it says what a role receives and not what it may call, and
+// what the crew holds a session to is the credential.
+func initializeShippedRoleVerbSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^a job running as the "([^"]*)" role this build ships$`,
+		func(ctx context.Context, name string) error {
+			w := worldFrom(ctx)
+			if err := importAndAttachShipped(ctx, name); err != nil {
+				return err
+			}
+			declared, err := w.client.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+				Project: w.projectID, Title: "deliver the page",
+				Brief: "turn this brief into the tree that delivers it", Role: name,
+			})
+			if err != nil {
+				return err
+			}
+			scenario := capabilityFrom(ctx)
+			scenario.running = declared.GetJob().GetId()
+			token, minted := w.server.JobCredentialForTest(ctx, scenario.running)
+			if !minted {
+				return fmt.Errorf("the crew minted no credential for the job running as %s", name)
+			}
+			scenario.token = token
+			return nil
+		})
+
+	sc.Step(`^that session declares a job running as the "([^"]*)" role$`,
+		func(ctx context.Context, name string) error {
+			w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+			if err := importAndAttachShipped(ctx, name); err != nil {
+				return err
+			}
+			declared, err := w.dialAs(scenario.token).CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+				Project: w.projectID, Title: "write the tests",
+				Brief: "from the contract alone", Role: name,
+			})
+			w.lastErr = err
+			if err != nil {
+				return nil
+			}
+			scenario.declared = append(scenario.declared, declared.GetJob())
+			return nil
+		})
+
+	// The verb the orchestrator holds and this role does not, asked the way a session asks: through
+	// the credential. Reading it off the manifest would prove only what the file says.
+	sc.Step(`^that session may not stop a job$`, func(ctx context.Context) error {
+		w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+		_, err := w.dialAs(scenario.token).StopJob(ctx, &quaycrewv1.StopJobRequest{
+			Id: scenario.running, Reason: "changed my mind",
+		})
+		if err == nil {
+			return fmt.Errorf("the crew let it stop a job, and its role grants no %s", role.VerbJobStop)
+		}
+		if !strings.Contains(err.Error(), role.VerbJobStop) {
+			return fmt.Errorf("the refusal does not name %s: %v", role.VerbJobStop, err)
+		}
+		return nil
+	})
+}
+
+// importAndAttachShipped puts a role from roles/ in front of the workspace, importing it if the
+// scenario has not already. Importing the same revision twice is harmless, which is what lets a
+// scenario name two roles without caring which was named first.
+func importAndAttachShipped(ctx context.Context, name string) error {
+	w := worldFrom(ctx)
+	files, err := roleFilesFrom(filepath.Join(shippedRoles, name))
+	if err != nil {
+		return err
+	}
+	if _, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files}); err != nil {
+		return fmt.Errorf("the crew refused the %s role, which ships with it: %w", name, err)
+	}
+	if _, err := w.client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{
+		Workspace: w.workspaceID, Name: name,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
