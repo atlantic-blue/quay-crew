@@ -841,6 +841,26 @@ message DetachRoleRequest {
 }
 message DetachRoleResponse {}
 
+// GetRoleRequest asks for one role whole, the brief included, so what a session running as it is
+// told can be read out of the crew rather than out of the directory it was imported from.
+message GetRoleRequest {
+  // workspace reads the version that workspace pinned. Empty reads what the crew has imported.
+  string workspace = 1;
+  string name = 2;
+}
+message GetRoleResponse {
+  Role role = 1;
+  // brief is the whole instruction a session running as this role is given. It travels here and
+  // nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
+  string brief = 2;
+  // may is what a session running as this role may call, sorted. Empty is a role that may call
+  // nothing, which is the default.
+  repeated string may = 3;
+  // held_by names every workspace that attached this role for itself, sorted. A role the crew holds
+  // says so on the role and reaches every workspace without being named here.
+  repeated string held_by = 4;
+}
+
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
   string project = 1;
@@ -1286,6 +1306,9 @@ service ControlPlaneService {
   rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
   rpc AttachRole(AttachRoleRequest) returns (AttachRoleResponse);
   rpc DetachRole(DetachRoleRequest) returns (DetachRoleResponse);
+  // GetRole reads one role back whole, the brief included, which is the only way to audit what a
+  // session running as it was told.
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse);
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
 
