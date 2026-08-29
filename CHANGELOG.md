@@ -8,6 +8,36 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A job's credential lasts as long as its job, and the crew takes it back when the job ends.** It
+  lasted sixty seconds. The acceptance run's root job ran for twenty nine minutes, held a valid
+  credential for the first one, and declared none of its three children: from three minutes in, every
+  call it made came back `the token this call carries is not this crew's`. The session read that as a
+  bad credential, did the whole job in one sandbox, and said so. Nothing that needs a tree of jobs
+  could be exercised at all (`quay-crew#449`).
+
+  The cause was two lifetimes tied to one constant. `jobTokenLife = job.DefaultLease` made the
+  credential in a sandbox as long as the controller's hold on the job, and those are not the same
+  thing: a hold is renewed on every tick, and a credential is handed over once at dispatch and never
+  refreshed, because refreshing it would mean re entering a running container.
+
+  A credential is now minted for the job's own deadline where the job names one, and for twelve hours
+  where it does not. Expiry is the backstop rather than the control: the crew revokes the credentials
+  minted for a job the moment that job reaches a phase nothing moves it out of, whether the controller
+  wrote the end or an operator stopped it, so a session stops being able to call because its job is
+  over. Twelve hours is what is left for a job whose end this process never saw, and a grant is held
+  in the process, so a restart takes every one of them with it anyway.
+
+  **Each refusal now names its own cause.** An expired credential says it ran out and says when, one
+  the crew took back names the job that ended and the phase it ended in, and a token nobody minted is
+  still told it is not this crew's. A credential that stopped working is kept for an hour rather than
+  dropped at once, because a credential the crew cannot find is refused as a forgery, and that is the
+  refusal this whole change exists to stop.
+
+  **`quay limits --lease` says what it is not.** The setting is the crew's hold on a job, it is
+  renewed on every tick, and it does not reach the credential a session runs under. An operator who
+  read the two as one number set the lease to fifteen minutes to cover their work and got no change at
+  all. The line `quay limits` prints now says so next to the number, and the manual says it too.
+
 - **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
   and the last column showed how long ago the session was last touched, or put away. So the two
   disagreed: a session made a week ago and used an hour ago sat below one made yesterday and untouched

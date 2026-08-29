@@ -175,6 +175,15 @@ type Roles interface {
 	RoleFor(ctx context.Context, workspace, named string) (Receiver, error)
 }
 
+// Revoker takes back the credentials the crew minted for a job, once that job has ended.
+//
+// It is what ends a session's credential in a working crew: a session stops being able to call
+// because its job is over, and the credential's own expiry is only the backstop behind that. A crew
+// with no revoker leans on the clock and nothing else.
+type Revoker interface {
+	RevokeJobCredentials(job, phase string)
+}
+
 // Prover answers what a job said would show its task did the job.
 //
 // An implementation that cannot answer says so, and the job stops. A check that quietly passes when
@@ -203,9 +212,12 @@ type Controller struct {
 	// means the crew cannot tell, and a crew that cannot tell reclaims nothing.
 	attached Attachment
 	exporter Exporter
-	logger   *slog.Logger
-	every    time.Duration
-	batch    int
+	// revoker takes a job's credentials back when the job ends. Nil takes none back, and then a
+	// credential lasts until it runs out.
+	revoker Revoker
+	logger  *slog.Logger
+	every   time.Duration
+	batch   int
 	// owner is what this controller writes on a lease. Two controllers must not share one, or
 	// neither could tell its own job from the other's.
 	owner string
@@ -292,6 +304,23 @@ func (c *Controller) exported(ctx context.Context, events ...*Event) {
 func (c *Controller) Redacting(redactor Redactor) *Controller {
 	c.redactor = redactor
 	return c
+}
+
+// Revoking returns a controller that takes a job's credentials back as it writes the end of that
+// job. Without one a credential outlives its job, until it runs out on its own.
+func (c *Controller) Revoking(revoker Revoker) *Controller {
+	c.revoker = revoker
+	return c
+}
+
+// revoked takes back the credentials minted for a job that has ended, after the end is in the store.
+// After rather than before, because a credential taken back over a write that then failed would
+// leave a session that is still working unable to call.
+func (c *Controller) revoked(ended *Job) {
+	if c.revoker == nil || ended == nil || !Terminal(ended.Phase) {
+		return
+	}
+	c.revoker.RevokeJobCredentials(ended.ID, ended.Phase)
 }
 
 // Watching returns a controller that can ask whether an operator is in a session before taking its
@@ -648,6 +677,7 @@ func (c *Controller) land(ctx context.Context, one *Job, landed Landing, kind st
 		return
 	}
 	c.exported(ctx, record)
+	c.revoked(ended)
 	c.drawSpans(ctx, ended)
 }
 
