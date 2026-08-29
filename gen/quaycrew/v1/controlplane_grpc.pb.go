@@ -66,6 +66,7 @@ const (
 	ControlPlaneService_ListRoles_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListRoles"
 	ControlPlaneService_AttachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachRole"
 	ControlPlaneService_DetachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachRole"
+	ControlPlaneService_GetRole_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetRole"
 	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
 	ControlPlaneService_CreateJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/CreateJob"
 	ControlPlaneService_GetJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/GetJob"
@@ -136,6 +137,9 @@ type ControlPlaneServiceClient interface {
 	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
 	AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error)
 	DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error)
+	// GetRole reads one role back whole, the brief included, which is the only way to audit what a
+	// session running as it was told.
+	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
 	// Job is declared intent the crew keeps. A caller writes it, and a controller makes reality
 	// match it. Nothing here dispatches anything.
@@ -635,6 +639,16 @@ func (c *controlPlaneServiceClient) DetachRole(ctx context.Context, in *DetachRo
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRoleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListTasksResponse)
@@ -802,6 +816,9 @@ type ControlPlaneServiceServer interface {
 	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
 	AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error)
 	DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error)
+	// GetRole reads one role back whole, the brief included, which is the only way to audit what a
+	// session running as it was told.
+	GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
 	// Job is declared intent the crew keeps. A caller writes it, and a controller makes reality
 	// match it. Nothing here dispatches anything.
@@ -971,6 +988,9 @@ func (UnimplementedControlPlaneServiceServer) AttachRole(context.Context, *Attac
 }
 func (UnimplementedControlPlaneServiceServer) DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DetachRole not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRole not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
@@ -1872,6 +1892,24 @@ func _ControlPlaneService_DetachRole_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRole(ctx, req.(*GetRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListTasksRequest)
 	if err := dec(in); err != nil {
@@ -2264,6 +2302,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DetachRole",
 			Handler:    _ControlPlaneService_DetachRole_Handler,
+		},
+		{
+			MethodName: "GetRole",
+			Handler:    _ControlPlaneService_GetRole_Handler,
 		},
 		{
 			MethodName: "ListTasks",

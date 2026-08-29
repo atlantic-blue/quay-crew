@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A role reads back out of the crew.** `quay role show [<workspace>] <name>` prints the summary,
+  the version, the model, what the role receives, what it may call, who holds it, and the brief in
+  full. A bare name reads what the current address can see; a workspace level address reads the
+  version that workspace pinned.
+
+  The brief is the role. It is the several hundred words that decide how a session behaves, and once
+  a role was imported there was no way to read it back: an operator could not diff what the crew
+  holds against the file it came from, and could not tell whether the crew was running the version
+  they edited an hour ago. The acceptance run turned on one clause of the orchestrator brief, and
+  the only way to find that clause was to open a file on the host disk the crew knows nothing about.
+
+  The brief travels on `GetRole` and nowhere else. A listing was asked what the crew holds, not for
+  a copy of every instruction, so `quay role list` still carries none of it.
+
+  A name nothing holds is refused with the names that are there: the near spellings when there are
+  any, and everything held when there are not, because a short list of real names is more use than a
+  correct silence.
+
+  **What this found.** The `roles` table carried no `may` column, so the verbs a manifest declares
+  were dropped on the way into the database and every role read back allowed to call nothing. The
+  shipped `assessor` role declares `job.create` and `job.read`, and on a crew running Postgres it
+  could call neither. The in memory store keeps the whole struct and the shared conformance suite
+  never asked, which is how the two stayed agreeing. Reading a role back is what surfaced it, and it
+  is fixed in [#459](https://github.com/atlantic-blue/quay-crew/pull/459) rather than here, because
+  making the column exist changes what a session is permitted to do.
+
 - **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
   and the last column showed how long ago the session was last touched, or put away. So the two
   disagreed: a session made a week ago and used an hour ago sat below one made yesterday and untouched
