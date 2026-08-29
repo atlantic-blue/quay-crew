@@ -7,8 +7,8 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // runSessionLifecycleConformance holds both stores to what reclaiming a session means, and to the
@@ -200,30 +200,30 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		}
 	})
 
-	t.Run("work still open holds its session out of the settled ones", func(t *testing.T) {
+	t.Run("job still open holds its session out of the settled ones", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 		busy, _, _ := s.FindOrCreateSession(ctx, project, "busy", store.Birth{})
 		finished, _, _ := s.FindOrCreateSession(ctx, project, "finished", store.Birth{})
 
-		open := declaredWork(t, s, workspace, project, "still going")
-		if err := s.RecordWorkSession(ctx, open, busy.GetId()); err != nil {
-			t.Fatalf("RecordWorkSession: %v", err)
+		open := declaredJob(t, s, workspace, project, "still going")
+		if err := s.RecordJobSession(ctx, open, busy.GetId()); err != nil {
+			t.Fatalf("RecordJobSession: %v", err)
 		}
-		if _, err := s.StartWork(ctx, open, aLease("controller-1"), nil); err != nil {
-			t.Fatalf("StartWork: %v", err)
+		if _, err := s.StartJob(ctx, open, aLease("controller-1"), nil); err != nil {
+			t.Fatalf("StartJob: %v", err)
 		}
-		ended := declaredWork(t, s, workspace, project, "over")
-		if err := s.RecordWorkSession(ctx, ended, finished.GetId()); err != nil {
-			t.Fatalf("RecordWorkSession: %v", err)
+		ended := declaredJob(t, s, workspace, project, "over")
+		if err := s.RecordJobSession(ctx, ended, finished.GetId()); err != nil {
+			t.Fatalf("RecordJobSession: %v", err)
 		}
-		if _, err := s.StartWork(ctx, ended, aLease("controller-1"), nil); err != nil {
-			t.Fatalf("StartWork: %v", err)
+		if _, err := s.StartJob(ctx, ended, aLease("controller-1"), nil); err != nil {
+			t.Fatalf("StartJob: %v", err)
 		}
-		if _, err := s.LandWork(ctx, ended, work.Landing{Phase: work.PhaseDone, Answer: "done"},
+		if _, err := s.LandJob(ctx, ended, job.Landing{Phase: job.PhaseDone, Answer: "done"},
 			answeredEvent(ended, workspace, project)); err != nil {
-			t.Fatalf("LandWork: %v", err)
+			t.Fatalf("LandJob: %v", err)
 		}
 
 		settled, err := s.SettledSessions(ctx, 0)
@@ -231,10 +231,10 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			t.Fatalf("SettledSessions: %v", err)
 		}
 		if holds(idsOf(settled), busy.GetId()) {
-			t.Fatalf("the settled sessions carry one a piece of work is still running in: %v", idsOf(settled))
+			t.Fatalf("the settled sessions carry one a job is still running in: %v", idsOf(settled))
 		}
 		if !holds(idsOf(settled), finished.GetId()) {
-			t.Fatalf("the settled sessions are %v, and the one whose work is done is nothing's to hold",
+			t.Fatalf("the settled sessions are %v, and the one whose job is done is nothing's to hold",
 				idsOf(settled))
 		}
 	})

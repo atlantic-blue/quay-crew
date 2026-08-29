@@ -20,7 +20,7 @@ const healthStream = "health"
 // costs nothing: the record carries no workspace and nothing consumes it.
 const healthWorkspace = "crew"
 
-// Health says whether this crew can start work, which is not the same question as whether its
+// Health says whether this crew can start job, which is not the same question as whether its
 // process is up.
 //
 // A control plane served every listing in under a second and dispatched nothing for an hour. Every

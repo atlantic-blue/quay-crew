@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
 // DefaultPollEvery is how often the crew looks for waits that have come due.
@@ -41,7 +41,7 @@ func NewPoller(engine *Engine, every time.Duration, logger *slog.Logger) *Poller
 	if logger == nil {
 		logger = slog.Default()
 	}
-	// A name of its own, minted rather than asked for, for the reason the work controller mints one.
+	// A name of its own, minted rather than asked for, for the reason the job controller mints one.
 	return &Poller{engine: engine, every: every, logger: logger, owner: "poller-" + newEventID()[:8]}
 }
 
@@ -101,7 +101,7 @@ func (p *Poller) startTriggered(ctx context.Context) {
 	}
 	for _, trigger := range pending {
 		claimed, err := p.engine.store.ClaimTrigger(ctx, trigger.ID,
-			work.Lease{Owner: p.owner, Until: p.engine.now().Add(TriggerLease)})
+			job.Lease{Owner: p.owner, Until: p.engine.now().Add(TriggerLease)})
 		if errors.Is(err, ErrTriggerTaken) {
 			// Another poller has it. Its run is that poller's to start.
 			continue
@@ -130,7 +130,7 @@ func (p *Poller) startTriggered(ctx context.Context) {
 
 // carryWorked carries on every run whose step has ended.
 //
-// This is what replaced the engine holding its own dispatch open. A run out with a piece of work is
+// This is what replaced the engine holding its own dispatch open. A run out with a job is
 // a row rather than a goroutine, so a crew restarted while twenty steps were running picks all
 // twenty up on its next tick rather than losing them.
 func (p *Poller) carryWorked(ctx context.Context) {
@@ -143,8 +143,8 @@ func (p *Poller) carryWorked(ctx context.Context) {
 		if _, err := p.engine.Worked(ctx, one.Run, one.Step); err != nil {
 			// One run that cannot move must not stop the others: a graph edited into something
 			// unparseable, or a run whose project is gone, is that run's problem.
-			p.logger.Warn("a flow run could not be carried on from the work its step did",
-				"run", one.Run.ID, "work", one.Step.ID, "error", err)
+			p.logger.Warn("a flow run could not be carried on from the job its step did",
+				"run", one.Run.ID, "job", one.Step.ID, "error", err)
 		}
 	}
 }

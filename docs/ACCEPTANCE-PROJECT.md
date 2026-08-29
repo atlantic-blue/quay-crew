@@ -1,6 +1,6 @@
 # The acceptance project
 
-One idea, twenty four hours, one declared piece of work. The operator only answers questions.
+One idea, twenty four hours, one declared job. The operator only answers questions.
 
 This document describes a project to run once the orchestration slices land. It is not a feature and
 it is not a plan for a feature. It is quay's own acceptance test, written before the run so that
@@ -15,16 +15,16 @@ the run is scored.
 
 ## 1. The rule of the test
 
-The operator declares one piece of work. After that the operator only answers questions.
+The operator declares one job. After that the operator only answers questions.
 
 **Answering** is a reply to a question the crew asked. There are two commands for it,
-`quay work answer` and `quay flow answer`. The crew asks, the operator replies, the run continues.
+`quay job answer` and `quay flow answer`. The crew asks, the operator replies, the run continues.
 
-**Driving** is anything else the operator types that changes the work. A second `quay work create`
-is driving. A `quay task --dispatch` is driving. A `quay work stop` is driving. An edit to a file is
+**Driving** is anything else the operator types that changes the job. A second `quay job create`
+is driving. A `quay task --dispatch` is driving. A `quay job stop` is driving. An edit to a file is
 driving. A push is driving.
 
-**Reading is free.** The operator may read anything at any moment. `quay work list`, `quay task list`,
+**Reading is free.** The operator may read anything at any moment. `quay job list`, `quay task list`,
 `quay answer`, the console, the panel and the web view are all reads. A read is never a finding.
 
 Every time the operator drives, that is a finding. The page can still ship. The test still fails.
@@ -38,7 +38,7 @@ it during the run and not afterwards, because the detail is gone by the morning.
 Each issue carries six things:
 
 - the moment, as a clock time, so the trace and the events can be found;
-- the work identifier, or the run identifier;
+- the job identifier, or the run identifier;
 - what the operator typed;
 - what the operator expected to answer instead;
 - what the crew showed at that moment, quoted from the terminal;
@@ -58,7 +58,7 @@ a schedule. It shows whether each one is up.
 It needs every part of quay for its own reasons:
 
 - It has three deliverables that different sessions can write at the same time. The infrastructure,
-  the check service and the page. That is a real fan out, so the work tree is real.
+  the check service and the page. That is a real fan out, so the job tree is real.
 - The infrastructure deploys through the pipeline on merge. So the piece that writes the
   infrastructure must not be the piece that pushes it. That is a real capability boundary.
 - It checks on a schedule, so it needs a schedule.
@@ -68,7 +68,7 @@ It needs every part of quay for its own reasons:
 - It has one decision no data answers. Section 7.
 - It must run while the operator sleeps. So the intent must live in a row and not in a conversation.
 
-**A contrived alternative looks like this.** A work tree with children that exist only to reach
+**A contrived alternative looks like this.** A job tree with children that exist only to reach
 depth two. A secret that is set and never read. A second role whose `may` list differs by one verb
 that nothing calls. A schedule that runs a task which prints the date. An ask node that asks
 "continue?" and always gets yes.
@@ -78,7 +78,7 @@ exists to exercise it, so a capability that half works still passes. The status 
 instead. If the capability boundary is wrong, the wrong session pushes to the default branch, and
 the operator sees it in the pull request list.
 
-## 3. The work tree
+## 3. The job tree
 
 The workspace is `me`. The project is `status-page`. The operator declares one root.
 
@@ -98,11 +98,11 @@ The root runs as `orchestrator`. Its session reads the brief, reads `quay manual
 three children at depth one. It declares nothing else. It then goes to `waiting`, because a parent
 with open children waits.
 
-The infrastructure work runs as `infrastructure-writer`. Its session declares three children of its
+The infrastructure job runs as `infrastructure-writer`. Its session declares three children of its
 own at depth two, because the schedule, the table and the public address are three separate
 deliverables with three separate reviews.
 
-The check service work tries to declare a child at depth three. The crew refuses it. The refusal
+The check service job tries to declare a child at depth three. The crew refuses it. The refusal
 names the limit, the current depth and the command that raises it. **That refusal is a step of the
 test and not an accident.** The session then does the work itself, which is what the design says a
 model does when it reads the refusal.
@@ -116,16 +116,16 @@ with `quay limits` before the run starts.
 Three roles. Each is a directory with a manifest, imported with `quay role import` and attached to
 the workspace by the operator.
 
-**`orchestrator`.** `receives: work, context, skills`. `may: work.create, work.read, work.stop`.
+**`orchestrator`.** `receives: job, context, skills`. `may: job.create, job.read, job.stop`.
 It declares the three children, reads their answers, and writes the summary at the end. It holds the
 skills, so it can read the repository. It does not push.
 
-**`infrastructure-writer`.** `receives: work, context`. `may: work.create, work.read`. It writes the
+**`infrastructure-writer`.** `receives: job, context`. `may: job.create, job.read`. It writes the
 infrastructure code into the working tree and declares its own three children. It does not receive
 skills, so it holds no git skill and no token. It cannot push and it cannot open a pull request.
 
-**`releaser`.** `receives: work, skills`. `may: work.read`. It holds the git skill and the token. It
-commits, pushes and opens the pull request. It cannot declare work.
+**`releaser`.** `receives: job, skills`. `may: job.read`. It holds the git skill and the token. It
+commits, pushes and opens the pull request. It cannot declare job.
 
 ### Why the lists must differ
 
@@ -134,7 +134,7 @@ default branch runs the pipeline, and the pipeline deploys. So a session that wr
 and can also push can put unreviewed infrastructure into production from one wrong answer. Two roles
 make the deploy a separate step with a separate record.
 
-The second difference is the opposite direction. `releaser` cannot declare work. A session that can
+The second difference is the opposite direction. `releaser` cannot declare job. A session that can
 push and can also fan out could spend the whole budget on pushes that nobody reviewed. It holds the
 narrower list because it holds the more dangerous tool.
 
@@ -165,7 +165,7 @@ flowchart LR
 
 What each node type proves:
 
-- **The dispatch node proves that a step is its own piece of work.** After slice 8 it declares work
+- **The dispatch node proves that a step is its own job.** After slice 8 it declares job
   and does not hold the call open. So each step gets its own session, its own answer field and its
   own row. A failure looks like a run that holds a container while it waits.
 - **The choice node proves that the run branches on data.** It reads the field the step returned. It
@@ -205,13 +205,13 @@ flowchart TD
     PIPE["the pipeline finishes the deploy"] --> REC["one record on the event log"]
     REC --> ING["the ingress writes a pending trigger row"]
     ING --> POLL["the poller claims the row"]
-    POLL --> RUN["a run starts, under the work that finished"]
+    POLL --> RUN["a run starts, under the job that finished"]
     RUN --> CHECK["dispatch: read the public address and confirm the page is live"]
 ```
 
-There is a second source, and it is inside the crew. A piece of work reaches a terminal phase and
+There is a second source, and it is inside the crew. A job reaches a terminal phase and
 writes a trigger row in the same transaction. The run that confirms the deploy starts that way when
-the release work finishes.
+the release job finishes.
 
 **What the trigger proves, and nothing else in this test proves it.** A run can start because the
 world changed. The schedule proves that a run can start because time passed. A manual start proves
@@ -259,12 +259,12 @@ that sets it later.
   of concurrent sandboxes at which the host memory pressure first appears. Issue 405 asks for that
   measurement, and section 10 of this document takes it during the run.
 - **`budget_tokens` on the root.** The operator sets it from what one day of model use costs today.
-  The measurement that sets it next time is the median `quaycrew.tokens` for a completed piece of
-  work over the first fifty, which `docs/ORCHESTRATION.md` section 5 already names. This run
+  The measurement that sets it next time is the median `quaycrew.tokens` for a completed
+  job over the first fifty, which `docs/ORCHESTRATION.md` section 5 already names. This run
   produces the first fifty.
 - **The lease length.** The operator sets it before the run, because the crew refuses to start with
-  it unset. The measurement that sets it is the ninety fifth percentile of `quaycrew.work.duration`
-  over the first fifty completed pieces of work. This run produces that too.
+  it unset. The measurement that sets it is the ninety fifth percentile of `quaycrew.job.duration`
+  over the first fifty completed jobs. This run produces that too.
 
 The run records the real figure for each one. That is the point of running it: after this test the
 next crew derives these numbers instead of guessing them.
@@ -285,28 +285,28 @@ than remembered.
    the listing shows and the address refuses.
 5. **use, the address.** Every command in the run leans on it. A failure is a session identifier
    from a listing that the address will not take.
-6. **work create.** The operator declares the root. Every other declaration comes from a session. A
+6. **job create.** The operator declares the root. Every other declaration comes from a session. A
    failure is a declaration the crew accepts and no controller ever claims.
-7. **work list.** The operator reads the eight rows to see where the run is. A failure is a listing
+7. **job list.** The operator reads the eight rows to see where the run is. A failure is a listing
    that does not show the tree, so eleven rows read as eleven unrelated things.
-8. **work show.** The operator reads one answer, one question and one reason. A failure is an answer
+8. **job show.** The operator reads one answer, one question and one reason. A failure is an answer
    that is truncated, because then the read path is prose again.
-9. **work stop.** The operator stops nothing during the run, because stopping is driving. The step
-   that exercises it is the budget: work stopped by the budget must read `stopped` with a reason
-   naming the budget. A failure is stopped work that reads the same as work that went quiet.
-10. **The work tree and its depth limit.** The check service declares at depth three and is refused.
+9. **job stop.** The operator stops nothing during the run, because stopping is driving. The step
+   that exercises it is the budget: job stopped by the budget must read `stopped` with a reason
+   naming the budget. A failure is stopped job that reads the same as job that went quiet.
+10. **The job tree and its depth limit.** The check service declares at depth three and is refused.
     A failure is a declaration at depth three that succeeds, or a refusal that does not name the
     limit and the command that raises it.
 11. **The budget.** The root declares it and every child draws from it. A failure is a tree that
     spends past its root, or a dispatch made after the line was crossed.
-12. **The lease.** Section 10 kills the controller on purpose while a child runs. A failure is work
-    that is dispatched twice, or work that never moves again.
+12. **The lease.** Section 10 kills the controller on purpose while a child runs. A failure is a job
+    that is dispatched twice, or one that never moves again.
 13. **Roles: import, list, attach.** Three roles, imported and attached before the run. A failure is
     a role that imports and grants nothing.
 14. **Roles: detach.** The operator detaches `releaser` from the workspace after the release lands.
     A failure is a session that still holds the token afterwards.
 15. **The `may` list.** `infrastructure-writer` tries to declare at depth three, and `releaser`
-    tries to declare at all. A failure is a session that declares work its role does not grant.
+    tries to declare at all. A failure is a session that declares a job its role does not grant.
 16. **The `receives` list.** `infrastructure-writer` has no git skill in its sandbox. A failure is a
     push from that session.
 17. **Skills: import, list, attach.** The git skill and the github skill reach the sessions that
@@ -327,21 +327,21 @@ than remembered.
     failure is two children that build two different shapes.
 25. **Context at the session level.** What one child learned that the next attempt needs. A failure
     is an attempt two that starts blind.
-26. **Dispatch.** The controller dispatches every piece of work. A failure is a dispatch that blocks
+26. **Dispatch.** The controller dispatches every job. A failure is a dispatch that blocks
     without an end, which is the fault issue 400 fixed.
 27. **Ask.** The operator uses `quay task` once, to ask the crew a question about its own state. That
     is a read and not a finding. A failure is a reply that never arrives.
-28. **Answer.** The orchestrator reads each child's answer with `quay answer` or `quay work show`. A
+28. **Answer.** The orchestrator reads each child's answer with `quay answer` or `quay job show`. A
     failure is an answer that only a person can read.
 29. **Tasks.** The operator reads what a session was asked and what came back. A failure is a
     running task that reads as no tasks recorded.
 30. **Label.** The operator labels nothing. The crew describes each session itself. A failure is a
     listing of eleven identifiers with no names.
-31. **Mode.** Each role's work declares its mode, so a dispatched task has room to work. A failure
+31. **Mode.** Each role's job declares its mode, so a dispatched task has room to work. A failure
     is a task that stops to ask permission with nobody there.
 32. **Flows: import.** Two flows, imported by the operator before the run. A failure is a graph that
     imports and then fails at the first movement.
-33. **Flows: start.** The release flow starts from the work that finished, not from a person. A
+33. **Flows: start.** The release flow starts from the job that finished, not from a person. A
     failure is a flow that only a person can start.
 34. **Flows: show.** The operator reads where a run got to and why it stopped. A failure is a run
     that halted and a run that went quiet reading the same.
@@ -357,18 +357,18 @@ than remembered.
     flow that keeps running after it was unscheduled.
 40. **Triggers.** The deploy starts the confirmation run. Section 6. A failure is a deploy that
     starts nothing, or one event that starts two runs.
-41. **Sessions.** Eleven sessions exist across the run. A failure is a session with no work that
+41. **Sessions.** Eleven sessions exist across the run. A failure is a session with no job that
     names it and nothing that says why.
 42. **Attach.** The operator opens one child's conversation to read it. A failure is an attach that
     silently restores an archived session, which the design records as a known trap.
-43. **The console.** The operator watches the work tree in the left half for the whole run. A
+43. **The console.** The operator watches the job tree in the left half for the whole run. A
     failure is a console that shows a flat session list, because then eleven sessions read as
     eleven unrelated things.
 44. **The panel.** The operator sits in the panel: the header, the console and the driver's
-    conversation. A failure is a panel where the operator has to leave to read the work.
+    conversation. A failure is a panel where the operator has to leave to read the job.
 45. **The web view.** The operator reads the crew from a browser once during the run. A failure is a
     view that shows a session and not what it was asked.
-46. **Render.** The page work draws the page it built and looks at the picture. A failure is a
+46. **Render.** The page job draws the page it built and looks at the picture. A failure is a
     session that reports a page it never saw.
 47. **Room.** A session reads how much memory it actually has before it runs the gates. A failure is
     a session that sizes a build against the whole machine and is killed.
@@ -379,7 +379,7 @@ than remembered.
 50. **Version drift.** After the upgrade the tool, the crew and the sandbox image are compared. A
     failure is a stale build that reports nothing.
 51. **Events.** Every movement writes a row. At the end the operator reads the whole run from
-    `work_events` and `session_events`. A failure is a state change that emits nothing.
+    `job_events` and `session_events`. A failure is a state change that emits nothing.
 52. **Tracing.** One trace covers the root and every child, because `trace_id` is a column. A
     failure is eleven unrelated traces.
 53. **Features and manual.** The orchestrator session reads `quay manual` to learn how to drive the
@@ -400,25 +400,25 @@ because both need a real machine, real time and real work in flight.
 cost of the old answer, which was that a fix sat uninstalled for five days because taking it meant
 losing twenty running sessions.
 
-**How to run it.** At hour twelve, with at least one piece of work in `running` and the release
+**How to run it.** At hour twelve, with at least one job in `running` and the release
 flow inside its wait node, the operator merges a small change to `main` and runs `make upgrade`.
 
 **How it is measured.** Five numbers, all read from rows and not from memory:
 
-- work rows before and after. The two counts must be equal. A row that is gone is a lost intent.
-- the phase of every row before and after. Work in a terminal phase must not move.
-- `attempts` on the work that was running. It may increase by one. Two is a failure.
+- job rows before and after. The two counts must be equal. A row that is gone is a lost intent.
+- the phase of every row before and after. A job in a terminal phase must not move.
+- `attempts` on the job that was running. It may increase by one. Two is a failure.
 - the minutes from the upgrade to the next answer that lands. That is the real cost of the upgrade.
 - whether the run inside the wait node still comes due. The wait is a column, so it must.
 
-**What a failure looks like.** A work row that no controller ever claims again. A conversation that
+**What a failure looks like.** A job row that no controller ever claims again. A conversation that
 does not continue. A run whose wait never comes due. Any of those means the intent lived in the
 process after all.
 
 The controller death is measured in the same hour, and it is a separate action. The operator stops
-the controller while a child runs, and confirms two things from the record: the work is dispatched
+the controller while a child runs, and confirms two things from the record: the job is dispatched
 once, and `quaycrew.controller.leases.expired` goes up by one. The evidence is the absence of a
-second `work.started` event.
+second `job.started` event.
 
 ### Whether twenty four hours of work fits inside the machine
 
@@ -449,9 +449,9 @@ Named plainly, and any one of them is a failure.
 - **The operator had to drive.** Any finding of the class in section 1. **A run that needs the
   operator to drive is a failure even if the status page ships.** This is the first rule and it is
   the whole point of the test.
-- **A piece of work was lost.** A row that no controller moved again, or a row that vanished across
+- **A job was lost.** A row that no controller moved again, or a row that vanished across
   the upgrade.
-- **Work was paid for twice.** Two `work.started` events for one attempt, or two dispatches from one
+- **Job was paid for twice.** Two `job.started` events for one attempt, or two dispatches from one
   trigger row.
 - **A dispatch blocked without an end.** That is issue 400 coming back.
 - **The depth limit did not hold.** A declaration at depth three that succeeded.
@@ -466,7 +466,7 @@ Named plainly, and any one of them is a failure.
   container is gone.
 - **The upgrade cost the intent.** Section 10.
 
-A page that does not ship is not automatically a failure. If the crew carried the work honestly, and
+A page that does not ship is not automatically a failure. If the crew carried the job honestly, and
 the operator only answered, and the model simply did not finish in twenty four hours, that is a
 result about the model and about the size of the idea. Record it as such. The crew is what is under
 test here.
@@ -492,7 +492,7 @@ Every document names its own edges. These are this one's.
   at the attempt. The design already names that gap and this test does not close it.
 - **Cost accuracy.** The crew reports what the published prices say. The run does not compare that
   against the bill.
-- **The quality of the code the model wrote.** The test measures whether the crew carried the work.
+- **The quality of the code the model wrote.** The test measures whether the crew carried the job.
   It does not measure whether the status page is well built. A page that works and reads badly still
   passes.
 - **Whether the status page is correct.** The page reports what its own checks return. Nothing here

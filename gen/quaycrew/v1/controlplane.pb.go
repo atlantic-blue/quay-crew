@@ -1338,8 +1338,8 @@ func (x *ListProjectsResponse) GetProjects() []*Project {
 }
 
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
-// time. It is carried by a piece of work, and every step it takes is a piece of work under that one,
-// so a run sits inside the work tree rather than beside it.
+// time. It is carried by a job, and every step it takes is a job under that one,
+// so a run sits inside the job tree rather than beside it.
 type FlowRun struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	Id           string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1363,10 +1363,10 @@ type FlowRun struct {
 	// reason says why a stopped run stopped. Empty on one that is running or that finished: a run
 	// that went quiet and a run that was halted must never read the same.
 	Reason string `protobuf:"bytes,13,opt,name=reason,proto3" json:"reason,omitempty"`
-	// work is the piece of work that carries this run. There is one tree and it is the work tree, so a
+	// job is the job that carries this run. There is one tree and it is the job tree, so a
 	// run hangs inside it rather than beside it: that is what makes the depth limit and the tree budget
-	// bound a run at all. Every step the run takes is another piece of work under this one.
-	Work          string `protobuf:"bytes,15,opt,name=work,proto3" json:"work,omitempty"`
+	// bound a run at all. Every step the run takes is another job under this one.
+	Job           string `protobuf:"bytes,15,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1499,9 +1499,9 @@ func (x *FlowRun) GetReason() string {
 	return ""
 }
 
-func (x *FlowRun) GetWork() string {
+func (x *FlowRun) GetJob() string {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return ""
 }
@@ -2592,7 +2592,7 @@ type DispatchRequest struct {
 	// back empty, because there is not one yet: the session reads "running" until the task lands, and
 	// its tasks say what came back.
 	//
-	// It is what a surface that draws a screen needs. A task takes as long as the work takes, which is
+	// It is what a surface that draws a screen needs. A task takes as long as the job takes, which is
 	// minutes, and a caller that waits for one is a caller that is not drawing anything. The console
 	// waited, gave up at thirty seconds, and left a session whose conversation never happened.
 	Detach bool `protobuf:"varint,5,opt,name=detach,proto3" json:"detach,omitempty"`
@@ -2601,13 +2601,13 @@ type DispatchRequest struct {
 	// A workspace that does not hold the named role is refused by name, because a step that names a
 	// role nobody attached must fail with a sentence rather than half run.
 	Role string `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`
-	// work is the piece of work this task runs for, and only the operator may name one. The crew mints
-	// a credential bound to that work for this task and puts it in the environment of this task alone.
+	// job is the job this task runs for, and only the operator may name one. The crew mints
+	// a credential bound to that job for this task and puts it in the environment of this task alone.
 	//
 	// Per task rather than at sandbox birth, because a sandbox is born with its configuration and keeps
 	// it: a credential written at birth would label every later task with the first task's grant, and a
 	// grant made after birth would never reach the container at all.
-	Work          string `protobuf:"bytes,7,opt,name=work,proto3" json:"work,omitempty"`
+	Job           string `protobuf:"bytes,7,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2684,9 +2684,9 @@ func (x *DispatchRequest) GetRole() string {
 	return ""
 }
 
-func (x *DispatchRequest) GetWork() string {
+func (x *DispatchRequest) GetJob() string {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return ""
 }
@@ -6915,7 +6915,7 @@ type Task struct {
 	Failure    string                 `protobuf:"bytes,6,opt,name=failure,proto3" json:"failure,omitempty"`
 	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
 	// trace_id is the trace the call that ran this task belonged to, and empty for a task nothing was
-	// tracing. A reader holding it can open the trace, and it is the same value the piece of work that
+	// tracing. A reader holding it can open the trace, and it is the same value the job that
 	// dispatched the task carries, so the two join. See issue 346.
 	TraceId       string `protobuf:"bytes,8,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -7108,11 +7108,11 @@ func (x *ListTasksResponse) GetTasks() []*Task {
 	return nil
 }
 
-// Work is one piece of declared intent. A caller writes it, and a controller makes reality match it.
+// Job is one piece of declared intent. A caller writes it, and a controller makes reality match it.
 //
 // The record is the point: intent lives in a row rather than in a process, so it outlives the caller
 // that asked for it, the session that runs it and the crew that was restarted underneath it.
-type Work struct {
+type Job struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Workspace string                 `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -7121,51 +7121,51 @@ type Work struct {
 	// title is the one line a listing shows. brief is what the session is asked to do.
 	Title string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
 	Brief string `protobuf:"bytes,5,opt,name=brief,proto3" json:"brief,omitempty"`
-	// role names how the work is done, empty for work that runs as nobody in particular, and
+	// role names how the job is done, empty for a job that runs as nobody in particular, and
 	// role_version is the version pinned at the moment of the write so editing a role cannot change
-	// work already declared.
+	// a job already declared.
 	Role        string `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`
 	RoleVersion int32  `protobuf:"varint,7,opt,name=role_version,json=roleVersion,proto3" json:"role_version,omitempty"`
-	// mode is what this work's tasks may do without asking. Empty leaves the session as it is born.
+	// mode is what this job's tasks may do without asking. Empty leaves the session as it is born.
 	Mode string `protobuf:"bytes,8,opt,name=mode,proto3" json:"mode,omitempty"`
 	// expect_file is a path that must be in the working directory after the task, relative to it.
-	// expect_contains is a string the answer must carry. Where either is set, work that does not meet
+	// expect_contains is a string the answer must carry. Where either is set, a job that does not meet
 	// its claim stops rather than reporting success.
 	ExpectFile     string `protobuf:"bytes,9,opt,name=expect_file,json=expectFile,proto3" json:"expect_file,omitempty"`
 	ExpectContains string `protobuf:"bytes,10,opt,name=expect_contains,json=expectContains,proto3" json:"expect_contains,omitempty"`
-	// after names other work this work waits for. It is the whole ordering primitive: no condition, no
+	// after names other jobs this job waits for. It is the whole ordering primitive: no condition, no
 	// branch, no expression.
 	After []string `protobuf:"bytes,11,rep,name=after,proto3" json:"after,omitempty"`
-	// deadline is the moment after which the work is stopped rather than started. Work already running
+	// deadline is the moment after which the job is stopped rather than started. A job already running
 	// is not killed.
 	Deadline *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=deadline,proto3" json:"deadline,omitempty"`
-	// budget_tokens is what this work and everything under it may spend. Zero draws from the parent.
+	// budget_tokens is what this job and everything under it may spend. Zero draws from the parent.
 	BudgetTokens int64 `protobuf:"varint,13,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
-	// labels are free text pairs, so a caller finds its own work later.
+	// labels are free text pairs, so a caller finds its own job later.
 	Labels map[string]string `protobuf:"bytes,14,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// requires is the material this work cannot be done without: the same words a role receives,
-	// drawn from work, context and skills. Work that requires material its role does not receive is
+	// requires is the material this job cannot be done without: the same words a role receives,
+	// drawn from job, context and skills. A job that requires material its role does not receive is
 	// refused at dispatch, before a container starts, rather than run blind.
 	Requires []string `protobuf:"bytes,32,rep,name=requires,proto3" json:"requires,omitempty"`
 	// What the crew assigned, and the caller may not.
-	// parent is which piece of work asked for this one, read from the credential the caller presented
+	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
 	Parent string `protobuf:"bytes,15,opt,name=parent,proto3" json:"parent,omitempty"`
 	Depth  int32  `protobuf:"varint,16,opt,name=depth,proto3" json:"depth,omitempty"`
 	// version rises on every write to a declared field, so a status can be told current from stale.
 	Version int32 `protobuf:"varint,17,opt,name=version,proto3" json:"version,omitempty"`
 	// What the controller writes, and nobody else.
-	// phase is where the work is: pending, waiting, running, asking, done, failed or stopped. The last
+	// phase is where the job is: pending, waiting, running, asking, done, failed or stopped. The last
 	// three are terminal.
 	Phase string `protobuf:"bytes,18,opt,name=phase,proto3" json:"phase,omitempty"`
-	// session is the conversation the work runs in, empty until one exists. It is what quay attach
+	// session is the conversation the job runs in, empty until one exists. It is what quay attach
 	// takes.
 	Session  string `protobuf:"bytes,19,opt,name=session,proto3" json:"session,omitempty"`
 	Attempts int32  `protobuf:"varint,20,opt,name=attempts,proto3" json:"attempts,omitempty"`
 	// answer is what came back, whole. A listing leaves it out, because a listing of a hundred answers
 	// is a listing nobody can read.
 	Answer string `protobuf:"bytes,21,opt,name=answer,proto3" json:"answer,omitempty"`
-	// reason says why stopped or failed work ended. question is what asking work waits to be told.
+	// reason says why a stopped or failed job ended. question is what an asking job waits to be told.
 	Reason      string `protobuf:"bytes,22,opt,name=reason,proto3" json:"reason,omitempty"`
 	Question    string `protobuf:"bytes,23,opt,name=question,proto3" json:"question,omitempty"`
 	SpentTokens int64  `protobuf:"varint,24,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
@@ -7173,9 +7173,9 @@ type Work struct {
 	// not caught up leaves this behind the version above.
 	ObservedVersion int32 `protobuf:"varint,25,opt,name=observed_version,json=observedVersion,proto3" json:"observed_version,omitempty"`
 	// trace_id is the trace this whole tree belongs to, minted at the root and inherited unchanged by
-	// every descendant, so one identifier joins a piece of work, its children, the tasks they ran and
+	// every descendant, so one identifier joins a job, its children, the tasks they ran and
 	// the spans around them. parent_span_id is the span the caller was inside when it declared this
-	// work, empty for a root nothing was tracing.
+	// job, empty for a root nothing was tracing.
 	//
 	// Both are columns rather than something a process holds, which is what makes a trace survive a
 	// controller that died: the context is in the declaration.
@@ -7189,20 +7189,20 @@ type Work struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Work) Reset() {
-	*x = Work{}
+func (x *Job) Reset() {
+	*x = Job{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Work) String() string {
+func (x *Job) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Work) ProtoMessage() {}
+func (*Job) ProtoMessage() {}
 
-func (x *Work) ProtoReflect() protoreflect.Message {
+func (x *Job) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7214,240 +7214,240 @@ func (x *Work) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Work.ProtoReflect.Descriptor instead.
-func (*Work) Descriptor() ([]byte, []int) {
+// Deprecated: Use Job.ProtoReflect.Descriptor instead.
+func (*Job) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{121}
 }
 
-func (x *Work) GetId() string {
+func (x *Job) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *Work) GetWorkspace() string {
+func (x *Job) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
 	}
 	return ""
 }
 
-func (x *Work) GetProject() string {
+func (x *Job) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *Work) GetTitle() string {
+func (x *Job) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *Work) GetBrief() string {
+func (x *Job) GetBrief() string {
 	if x != nil {
 		return x.Brief
 	}
 	return ""
 }
 
-func (x *Work) GetRole() string {
+func (x *Job) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *Work) GetRoleVersion() int32 {
+func (x *Job) GetRoleVersion() int32 {
 	if x != nil {
 		return x.RoleVersion
 	}
 	return 0
 }
 
-func (x *Work) GetMode() string {
+func (x *Job) GetMode() string {
 	if x != nil {
 		return x.Mode
 	}
 	return ""
 }
 
-func (x *Work) GetExpectFile() string {
+func (x *Job) GetExpectFile() string {
 	if x != nil {
 		return x.ExpectFile
 	}
 	return ""
 }
 
-func (x *Work) GetExpectContains() string {
+func (x *Job) GetExpectContains() string {
 	if x != nil {
 		return x.ExpectContains
 	}
 	return ""
 }
 
-func (x *Work) GetAfter() []string {
+func (x *Job) GetAfter() []string {
 	if x != nil {
 		return x.After
 	}
 	return nil
 }
 
-func (x *Work) GetDeadline() *timestamppb.Timestamp {
+func (x *Job) GetDeadline() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Deadline
 	}
 	return nil
 }
 
-func (x *Work) GetBudgetTokens() int64 {
+func (x *Job) GetBudgetTokens() int64 {
 	if x != nil {
 		return x.BudgetTokens
 	}
 	return 0
 }
 
-func (x *Work) GetLabels() map[string]string {
+func (x *Job) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
 	}
 	return nil
 }
 
-func (x *Work) GetRequires() []string {
+func (x *Job) GetRequires() []string {
 	if x != nil {
 		return x.Requires
 	}
 	return nil
 }
 
-func (x *Work) GetParent() string {
+func (x *Job) GetParent() string {
 	if x != nil {
 		return x.Parent
 	}
 	return ""
 }
 
-func (x *Work) GetDepth() int32 {
+func (x *Job) GetDepth() int32 {
 	if x != nil {
 		return x.Depth
 	}
 	return 0
 }
 
-func (x *Work) GetVersion() int32 {
+func (x *Job) GetVersion() int32 {
 	if x != nil {
 		return x.Version
 	}
 	return 0
 }
 
-func (x *Work) GetPhase() string {
+func (x *Job) GetPhase() string {
 	if x != nil {
 		return x.Phase
 	}
 	return ""
 }
 
-func (x *Work) GetSession() string {
+func (x *Job) GetSession() string {
 	if x != nil {
 		return x.Session
 	}
 	return ""
 }
 
-func (x *Work) GetAttempts() int32 {
+func (x *Job) GetAttempts() int32 {
 	if x != nil {
 		return x.Attempts
 	}
 	return 0
 }
 
-func (x *Work) GetAnswer() string {
+func (x *Job) GetAnswer() string {
 	if x != nil {
 		return x.Answer
 	}
 	return ""
 }
 
-func (x *Work) GetReason() string {
+func (x *Job) GetReason() string {
 	if x != nil {
 		return x.Reason
 	}
 	return ""
 }
 
-func (x *Work) GetQuestion() string {
+func (x *Job) GetQuestion() string {
 	if x != nil {
 		return x.Question
 	}
 	return ""
 }
 
-func (x *Work) GetSpentTokens() int64 {
+func (x *Job) GetSpentTokens() int64 {
 	if x != nil {
 		return x.SpentTokens
 	}
 	return 0
 }
 
-func (x *Work) GetObservedVersion() int32 {
+func (x *Job) GetObservedVersion() int32 {
 	if x != nil {
 		return x.ObservedVersion
 	}
 	return 0
 }
 
-func (x *Work) GetTraceId() string {
+func (x *Job) GetTraceId() string {
 	if x != nil {
 		return x.TraceId
 	}
 	return ""
 }
 
-func (x *Work) GetParentSpanId() string {
+func (x *Job) GetParentSpanId() string {
 	if x != nil {
 		return x.ParentSpanId
 	}
 	return ""
 }
 
-func (x *Work) GetCreatedAt() *timestamppb.Timestamp {
+func (x *Job) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
 }
 
-func (x *Work) GetUpdatedAt() *timestamppb.Timestamp {
+func (x *Job) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
 	}
 	return nil
 }
 
-func (x *Work) GetStartedAt() *timestamppb.Timestamp {
+func (x *Job) GetStartedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.StartedAt
 	}
 	return nil
 }
 
-func (x *Work) GetFinishedAt() *timestamppb.Timestamp {
+func (x *Job) GetFinishedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.FinishedAt
 	}
 	return nil
 }
 
-// CreateWorkRequest declares a piece of work. Every rule is checked here, while the caller is
+// CreateJobRequest declares a job. Every rule is checked here, while the caller is
 // looking, rather than hours later inside a run with nothing pointing back at the declaration.
-type CreateWorkRequest struct {
+type CreateJobRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// project is where the work runs. A piece of work needs one, because a dispatch needs one.
+	// project is where the job runs. A job needs one, because a dispatch needs one.
 	Project        string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
 	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
 	Brief          string                 `protobuf:"bytes,3,opt,name=brief,proto3" json:"brief,omitempty"`
@@ -7459,7 +7459,7 @@ type CreateWorkRequest struct {
 	Deadline       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=deadline,proto3" json:"deadline,omitempty"`
 	BudgetTokens   int64                  `protobuf:"varint,10,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
 	Labels         map[string]string      `protobuf:"bytes,11,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// requires is the material this work cannot be done without, drawn from work, context and
+	// requires is the material this job cannot be done without, drawn from job, context and
 	// skills. A word the crew does not hand out is refused by name.
 	Requires []string `protobuf:"bytes,14,rep,name=requires,proto3" json:"requires,omitempty"`
 	// id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
@@ -7471,20 +7471,20 @@ type CreateWorkRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateWorkRequest) Reset() {
-	*x = CreateWorkRequest{}
+func (x *CreateJobRequest) Reset() {
+	*x = CreateJobRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateWorkRequest) String() string {
+func (x *CreateJobRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateWorkRequest) ProtoMessage() {}
+func (*CreateJobRequest) ProtoMessage() {}
 
-func (x *CreateWorkRequest) ProtoReflect() protoreflect.Message {
+func (x *CreateJobRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7496,130 +7496,130 @@ func (x *CreateWorkRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateWorkRequest.ProtoReflect.Descriptor instead.
-func (*CreateWorkRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateJobRequest.ProtoReflect.Descriptor instead.
+func (*CreateJobRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{122}
 }
 
-func (x *CreateWorkRequest) GetProject() string {
+func (x *CreateJobRequest) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetTitle() string {
+func (x *CreateJobRequest) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetBrief() string {
+func (x *CreateJobRequest) GetBrief() string {
 	if x != nil {
 		return x.Brief
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetRole() string {
+func (x *CreateJobRequest) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetMode() string {
+func (x *CreateJobRequest) GetMode() string {
 	if x != nil {
 		return x.Mode
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetExpectFile() string {
+func (x *CreateJobRequest) GetExpectFile() string {
 	if x != nil {
 		return x.ExpectFile
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetExpectContains() string {
+func (x *CreateJobRequest) GetExpectContains() string {
 	if x != nil {
 		return x.ExpectContains
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetAfter() []string {
+func (x *CreateJobRequest) GetAfter() []string {
 	if x != nil {
 		return x.After
 	}
 	return nil
 }
 
-func (x *CreateWorkRequest) GetDeadline() *timestamppb.Timestamp {
+func (x *CreateJobRequest) GetDeadline() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Deadline
 	}
 	return nil
 }
 
-func (x *CreateWorkRequest) GetBudgetTokens() int64 {
+func (x *CreateJobRequest) GetBudgetTokens() int64 {
 	if x != nil {
 		return x.BudgetTokens
 	}
 	return 0
 }
 
-func (x *CreateWorkRequest) GetLabels() map[string]string {
+func (x *CreateJobRequest) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
 	}
 	return nil
 }
 
-func (x *CreateWorkRequest) GetRequires() []string {
+func (x *CreateJobRequest) GetRequires() []string {
 	if x != nil {
 		return x.Requires
 	}
 	return nil
 }
 
-func (x *CreateWorkRequest) GetId() string {
+func (x *CreateJobRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *CreateWorkRequest) GetParent() string {
+func (x *CreateJobRequest) GetParent() string {
 	if x != nil {
 		return x.Parent
 	}
 	return ""
 }
 
-type CreateWorkResponse struct {
+type CreateJobResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Work          *Work                  `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
+	Job           *Job                   `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateWorkResponse) Reset() {
-	*x = CreateWorkResponse{}
+func (x *CreateJobResponse) Reset() {
+	*x = CreateJobResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateWorkResponse) String() string {
+func (x *CreateJobResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateWorkResponse) ProtoMessage() {}
+func (*CreateJobResponse) ProtoMessage() {}
 
-func (x *CreateWorkResponse) ProtoReflect() protoreflect.Message {
+func (x *CreateJobResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7631,39 +7631,39 @@ func (x *CreateWorkResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateWorkResponse.ProtoReflect.Descriptor instead.
-func (*CreateWorkResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateJobResponse.ProtoReflect.Descriptor instead.
+func (*CreateJobResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{123}
 }
 
-func (x *CreateWorkResponse) GetWork() *Work {
+func (x *CreateJobResponse) GetJob() *Job {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return nil
 }
 
-type GetWorkRequest struct {
+type GetJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetWorkRequest) Reset() {
-	*x = GetWorkRequest{}
+func (x *GetJobRequest) Reset() {
+	*x = GetJobRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetWorkRequest) String() string {
+func (x *GetJobRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetWorkRequest) ProtoMessage() {}
+func (*GetJobRequest) ProtoMessage() {}
 
-func (x *GetWorkRequest) ProtoReflect() protoreflect.Message {
+func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7675,39 +7675,39 @@ func (x *GetWorkRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetWorkRequest.ProtoReflect.Descriptor instead.
-func (*GetWorkRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetJobRequest.ProtoReflect.Descriptor instead.
+func (*GetJobRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{124}
 }
 
-func (x *GetWorkRequest) GetId() string {
+func (x *GetJobRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetWorkResponse struct {
+type GetJobResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Work          *Work                  `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
+	Job           *Job                   `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetWorkResponse) Reset() {
-	*x = GetWorkResponse{}
+func (x *GetJobResponse) Reset() {
+	*x = GetJobResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetWorkResponse) String() string {
+func (x *GetJobResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetWorkResponse) ProtoMessage() {}
+func (*GetJobResponse) ProtoMessage() {}
 
-func (x *GetWorkResponse) ProtoReflect() protoreflect.Message {
+func (x *GetJobResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7719,25 +7719,25 @@ func (x *GetWorkResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetWorkResponse.ProtoReflect.Descriptor instead.
-func (*GetWorkResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetJobResponse.ProtoReflect.Descriptor instead.
+func (*GetJobResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{125}
 }
 
-func (x *GetWorkResponse) GetWork() *Work {
+func (x *GetJobResponse) GetJob() *Job {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return nil
 }
 
-// ListWorkRequest narrows a listing. The zero value is everything the crew holds.
-type ListWorkRequest struct {
+// ListJobsRequest narrows a listing. The zero value is everything the crew holds.
+type ListJobsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// project wins over workspace when both are set, being the narrower.
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	// parent narrows to the children of one piece of work, and roots_only to work with no parent,
+	// parent narrows to the children of one job, and roots_only to jobs with no parent,
 	// which cannot be said with parent alone because empty means do not narrow.
 	Parent    string `protobuf:"bytes,3,opt,name=parent,proto3" json:"parent,omitempty"`
 	RootsOnly bool   `protobuf:"varint,4,opt,name=roots_only,json=rootsOnly,proto3" json:"roots_only,omitempty"`
@@ -7750,20 +7750,20 @@ type ListWorkRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListWorkRequest) Reset() {
-	*x = ListWorkRequest{}
+func (x *ListJobsRequest) Reset() {
+	*x = ListJobsRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListWorkRequest) String() string {
+func (x *ListJobsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListWorkRequest) ProtoMessage() {}
+func (*ListJobsRequest) ProtoMessage() {}
 
-func (x *ListWorkRequest) ProtoReflect() protoreflect.Message {
+func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7775,82 +7775,82 @@ func (x *ListWorkRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListWorkRequest.ProtoReflect.Descriptor instead.
-func (*ListWorkRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListJobsRequest.ProtoReflect.Descriptor instead.
+func (*ListJobsRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{126}
 }
 
-func (x *ListWorkRequest) GetWorkspace() string {
+func (x *ListJobsRequest) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
 	}
 	return ""
 }
 
-func (x *ListWorkRequest) GetProject() string {
+func (x *ListJobsRequest) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *ListWorkRequest) GetParent() string {
+func (x *ListJobsRequest) GetParent() string {
 	if x != nil {
 		return x.Parent
 	}
 	return ""
 }
 
-func (x *ListWorkRequest) GetRootsOnly() bool {
+func (x *ListJobsRequest) GetRootsOnly() bool {
 	if x != nil {
 		return x.RootsOnly
 	}
 	return false
 }
 
-func (x *ListWorkRequest) GetPhase() string {
+func (x *ListJobsRequest) GetPhase() string {
 	if x != nil {
 		return x.Phase
 	}
 	return ""
 }
 
-func (x *ListWorkRequest) GetLabelKey() string {
+func (x *ListJobsRequest) GetLabelKey() string {
 	if x != nil {
 		return x.LabelKey
 	}
 	return ""
 }
 
-func (x *ListWorkRequest) GetLabelValue() string {
+func (x *ListJobsRequest) GetLabelValue() string {
 	if x != nil {
 		return x.LabelValue
 	}
 	return ""
 }
 
-type ListWorkResponse struct {
+type ListJobsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Each piece of work without its answer. Read one with GetWork to get the answer whole.
-	Work          []*Work `protobuf:"bytes,1,rep,name=work,proto3" json:"work,omitempty"`
+	// Each job without its answer. Read one with GetJob to get the answer whole.
+	Jobs          []*Job `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListWorkResponse) Reset() {
-	*x = ListWorkResponse{}
+func (x *ListJobsResponse) Reset() {
+	*x = ListJobsResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListWorkResponse) String() string {
+func (x *ListJobsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListWorkResponse) ProtoMessage() {}
+func (*ListJobsResponse) ProtoMessage() {}
 
-func (x *ListWorkResponse) ProtoReflect() protoreflect.Message {
+func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7862,21 +7862,21 @@ func (x *ListWorkResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListWorkResponse.ProtoReflect.Descriptor instead.
-func (*ListWorkResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListJobsResponse.ProtoReflect.Descriptor instead.
+func (*ListJobsResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{127}
 }
 
-func (x *ListWorkResponse) GetWork() []*Work {
+func (x *ListJobsResponse) GetJobs() []*Job {
 	if x != nil {
-		return x.Work
+		return x.Jobs
 	}
 	return nil
 }
 
-// StopWorkRequest halts work that has not ended. The reason is kept, because work that went quiet
-// and work somebody halted must never read the same.
-type StopWorkRequest struct {
+// StopJobRequest halts a job that has not ended. The reason is kept, because a job that went quiet
+// and a job somebody halted must never read the same.
+type StopJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
@@ -7884,20 +7884,20 @@ type StopWorkRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StopWorkRequest) Reset() {
-	*x = StopWorkRequest{}
+func (x *StopJobRequest) Reset() {
+	*x = StopJobRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopWorkRequest) String() string {
+func (x *StopJobRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopWorkRequest) ProtoMessage() {}
+func (*StopJobRequest) ProtoMessage() {}
 
-func (x *StopWorkRequest) ProtoReflect() protoreflect.Message {
+func (x *StopJobRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7909,46 +7909,46 @@ func (x *StopWorkRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopWorkRequest.ProtoReflect.Descriptor instead.
-func (*StopWorkRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopJobRequest.ProtoReflect.Descriptor instead.
+func (*StopJobRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{128}
 }
 
-func (x *StopWorkRequest) GetId() string {
+func (x *StopJobRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *StopWorkRequest) GetReason() string {
+func (x *StopJobRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
 	}
 	return ""
 }
 
-type StopWorkResponse struct {
+type StopJobResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Work          *Work                  `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
+	Job           *Job                   `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StopWorkResponse) Reset() {
-	*x = StopWorkResponse{}
+func (x *StopJobResponse) Reset() {
+	*x = StopJobResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopWorkResponse) String() string {
+func (x *StopJobResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopWorkResponse) ProtoMessage() {}
+func (*StopJobResponse) ProtoMessage() {}
 
-func (x *StopWorkResponse) ProtoReflect() protoreflect.Message {
+func (x *StopJobResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7960,19 +7960,19 @@ func (x *StopWorkResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopWorkResponse.ProtoReflect.Descriptor instead.
-func (*StopWorkResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopJobResponse.ProtoReflect.Descriptor instead.
+func (*StopJobResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{129}
 }
 
-func (x *StopWorkResponse) GetWork() *Work {
+func (x *StopJobResponse) GetJob() *Job {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return nil
 }
 
-// WorkspaceLimits is the ceiling a workspace puts on the work its sessions declare.
+// WorkspaceLimits is the ceiling a workspace puts on the jobs its sessions declare.
 //
 // The workspace carries the ceiling and a role carries the grant, and the two mean different things:
 // a role says what a session may do, and the workspace says how much of it. The effective capability
@@ -7981,15 +7981,15 @@ func (x *StopWorkResponse) GetWork() *Work {
 type WorkspaceLimits struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Workspace string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	// max_depth is how deep the tree of work may go. Zero, the default, means no session in this
-	// workspace may declare work at all: default deny, raised deliberately and per workspace.
+	// max_depth is how deep the tree of jobs may go. Zero, the default, means no session in this
+	// workspace may declare a job at all: default deny, raised deliberately and per workspace.
 	MaxDepth int32 `protobuf:"varint,2,opt,name=max_depth,json=maxDepth,proto3" json:"max_depth,omitempty"`
-	// max_running is how many pieces of work may run at once in this workspace. Zero is unset, and the
+	// max_running is how many jobs may run at once in this workspace. Zero is unset, and the
 	// crew ships it unset because no measurement has set it yet.
 	MaxRunning int32 `protobuf:"varint,3,opt,name=max_running,json=maxRunning,proto3" json:"max_running,omitempty"`
-	// budget_tokens is what a tree of work may spend when its root declares none. Zero is unset.
+	// budget_tokens is what a tree of jobs may spend when its root declares none. Zero is unset.
 	BudgetTokens int64 `protobuf:"varint,4,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
-	// lease_seconds is how long a controller holds a piece of work here before another may take it.
+	// lease_seconds is how long a controller holds a job here before another may take it.
 	// Zero takes the crew's own measured default.
 	LeaseSeconds int32 `protobuf:"varint,5,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
 	// reclaim_seconds is how long a settled session keeps its container before the crew takes it back.
@@ -8444,7 +8444,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x13ListProjectsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"H\n" +
 	"\x14ListProjectsResponse\x120\n" +
-	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\xa8\x04\n" +
+	"\bprojects\x18\x01 \x03(\v2\x14.quaycrew.v1.ProjectR\bprojects\"\xa6\x04\n" +
 	"\aFlowRun\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -8463,8 +8463,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\vtransitions\x18\v \x01(\x05R\vtransitions\x12\x14\n" +
 	"\x05spent\x18\f \x01(\x03R\x05spent\x12\x1a\n" +
 	"\bquestion\x18\x0e \x01(\tR\bquestion\x12\x16\n" +
-	"\x06reason\x18\r \x01(\tR\x06reason\x12\x12\n" +
-	"\x04work\x18\x0f \x01(\tR\x04work\x1a8\n" +
+	"\x06reason\x18\r \x01(\tR\x06reason\x12\x10\n" +
+	"\x03job\x18\x0f \x01(\tR\x03job\x1a8\n" +
 	"\n" +
 	"StateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -8530,15 +8530,15 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"projection\x18\x04 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
 	"projection\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\"\x13\n" +
-	"\x11SetSecretResponse\"\xc0\x01\n" +
+	"\x11SetSecretResponse\"\xbe\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12'\n" +
 	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\x12\x16\n" +
 	"\x06detach\x18\x05 \x01(\bR\x06detach\x12\x12\n" +
-	"\x04role\x18\x06 \x01(\tR\x04role\x12\x12\n" +
-	"\x04work\x18\a \x01(\tR\x04work\"P\n" +
+	"\x04role\x18\x06 \x01(\tR\x04role\x12\x10\n" +
+	"\x03job\x18\a \x01(\tR\x03job\"P\n" +
 	"\x10DispatchResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x14\n" +
@@ -8805,8 +8805,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xed\b\n" +
-	"\x04Work\x12\x0e\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xeb\b\n" +
+	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x03 \x01(\tR\aproject\x12\x14\n" +
@@ -8821,8 +8821,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	" \x01(\tR\x0eexpectContains\x12\x14\n" +
 	"\x05after\x18\v \x03(\tR\x05after\x126\n" +
 	"\bdeadline\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12#\n" +
-	"\rbudget_tokens\x18\r \x01(\x03R\fbudgetTokens\x125\n" +
-	"\x06labels\x18\x0e \x03(\v2\x1d.quaycrew.v1.Work.LabelsEntryR\x06labels\x12\x1a\n" +
+	"\rbudget_tokens\x18\r \x01(\x03R\fbudgetTokens\x124\n" +
+	"\x06labels\x18\x0e \x03(\v2\x1c.quaycrew.v1.Job.LabelsEntryR\x06labels\x12\x1a\n" +
 	"\brequires\x18  \x03(\tR\brequires\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
@@ -8847,8 +8847,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"finishedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x04\n" +
-	"\x11CreateWorkRequest\x12\x18\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xff\x03\n" +
+	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
 	"\x05brief\x18\x03 \x01(\tR\x05brief\x12\x12\n" +
@@ -8860,21 +8860,21 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05after\x18\b \x03(\tR\x05after\x126\n" +
 	"\bdeadline\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12#\n" +
 	"\rbudget_tokens\x18\n" +
-	" \x01(\x03R\fbudgetTokens\x12B\n" +
-	"\x06labels\x18\v \x03(\v2*.quaycrew.v1.CreateWorkRequest.LabelsEntryR\x06labels\x12\x1a\n" +
+	" \x01(\x03R\fbudgetTokens\x12A\n" +
+	"\x06labels\x18\v \x03(\v2).quaycrew.v1.CreateJobRequest.LabelsEntryR\x06labels\x12\x1a\n" +
 	"\brequires\x18\x0e \x03(\tR\brequires\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
-	"\x12CreateWorkResponse\x12%\n" +
-	"\x04work\x18\x01 \x01(\v2\x11.quaycrew.v1.WorkR\x04work\" \n" +
-	"\x0eGetWorkRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
-	"\x0fGetWorkResponse\x12%\n" +
-	"\x04work\x18\x01 \x01(\v2\x11.quaycrew.v1.WorkR\x04work\"\xd4\x01\n" +
-	"\x0fListWorkRequest\x12\x1c\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"7\n" +
+	"\x11CreateJobResponse\x12\"\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\x1f\n" +
+	"\rGetJobRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
+	"\x0eGetJobResponse\x12\"\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xd4\x01\n" +
+	"\x0fListJobsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\tR\x06parent\x12\x1d\n" +
@@ -8883,14 +8883,14 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05phase\x18\x05 \x01(\tR\x05phase\x12\x1b\n" +
 	"\tlabel_key\x18\x06 \x01(\tR\blabelKey\x12\x1f\n" +
 	"\vlabel_value\x18\a \x01(\tR\n" +
-	"labelValue\"9\n" +
-	"\x10ListWorkResponse\x12%\n" +
-	"\x04work\x18\x01 \x03(\v2\x11.quaycrew.v1.WorkR\x04work\"9\n" +
-	"\x0fStopWorkRequest\x12\x0e\n" +
+	"labelValue\"8\n" +
+	"\x10ListJobsResponse\x12$\n" +
+	"\x04jobs\x18\x01 \x03(\v2\x10.quaycrew.v1.JobR\x04jobs\"8\n" +
+	"\x0eStopJobRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"9\n" +
-	"\x10StopWorkResponse\x12%\n" +
-	"\x04work\x18\x01 \x01(\v2\x11.quaycrew.v1.WorkR\x04work\"\x89\x02\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"5\n" +
+	"\x0fStopJobResponse\x12\"\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\x89\x02\n" +
 	"\x0fWorkspaceLimits\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tmax_depth\x18\x02 \x01(\x05R\bmaxDepth\x12\x1f\n" +
@@ -8922,7 +8922,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x10SecretProjection\x12!\n" +
 	"\x1dSECRET_PROJECTION_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SECRET_PROJECTION_ENV\x10\x01\x12\x1a\n" +
-	"\x16SECRET_PROJECTION_FILE\x10\x022\x8f&\n" +
+	"\x16SECRET_PROJECTION_FILE\x10\x022\x86&\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
 	"\fGetWorkspace\x12 .quaycrew.v1.GetWorkspaceRequest\x1a!.quaycrew.v1.GetWorkspaceResponse\x12Y\n" +
@@ -8984,12 +8984,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"AttachRole\x12\x1e.quaycrew.v1.AttachRoleRequest\x1a\x1f.quaycrew.v1.AttachRoleResponse\x12M\n" +
 	"\n" +
 	"DetachRole\x12\x1e.quaycrew.v1.DetachRoleRequest\x1a\x1f.quaycrew.v1.DetachRoleResponse\x12J\n" +
-	"\tListTasks\x12\x1d.quaycrew.v1.ListTasksRequest\x1a\x1e.quaycrew.v1.ListTasksResponse\x12M\n" +
-	"\n" +
-	"CreateWork\x12\x1e.quaycrew.v1.CreateWorkRequest\x1a\x1f.quaycrew.v1.CreateWorkResponse\x12D\n" +
-	"\aGetWork\x12\x1b.quaycrew.v1.GetWorkRequest\x1a\x1c.quaycrew.v1.GetWorkResponse\x12G\n" +
-	"\bListWork\x12\x1c.quaycrew.v1.ListWorkRequest\x1a\x1d.quaycrew.v1.ListWorkResponse\x12G\n" +
-	"\bStopWork\x12\x1c.quaycrew.v1.StopWorkRequest\x1a\x1d.quaycrew.v1.StopWorkResponse\x12e\n" +
+	"\tListTasks\x12\x1d.quaycrew.v1.ListTasksRequest\x1a\x1e.quaycrew.v1.ListTasksResponse\x12J\n" +
+	"\tCreateJob\x12\x1d.quaycrew.v1.CreateJobRequest\x1a\x1e.quaycrew.v1.CreateJobResponse\x12A\n" +
+	"\x06GetJob\x12\x1a.quaycrew.v1.GetJobRequest\x1a\x1b.quaycrew.v1.GetJobResponse\x12G\n" +
+	"\bListJobs\x12\x1c.quaycrew.v1.ListJobsRequest\x1a\x1d.quaycrew.v1.ListJobsResponse\x12D\n" +
+	"\aStopJob\x12\x1b.quaycrew.v1.StopJobRequest\x1a\x1c.quaycrew.v1.StopJobResponse\x12e\n" +
 	"\x12GetWorkspaceLimits\x12&.quaycrew.v1.GetWorkspaceLimitsRequest\x1a'.quaycrew.v1.GetWorkspaceLimitsResponse\x12e\n" +
 	"\x12SetWorkspaceLimits\x12&.quaycrew.v1.SetWorkspaceLimitsRequest\x1a'.quaycrew.v1.SetWorkspaceLimitsResponse\x12b\n" +
 	"\x11ListSessionEvents\x12%.quaycrew.v1.ListSessionEventsRequest\x1a&.quaycrew.v1.ListSessionEventsResponse\x12D\n" +
@@ -9136,15 +9135,15 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*Task)(nil),                             // 120: quaycrew.v1.Task
 	(*ListTasksRequest)(nil),                 // 121: quaycrew.v1.ListTasksRequest
 	(*ListTasksResponse)(nil),                // 122: quaycrew.v1.ListTasksResponse
-	(*Work)(nil),                             // 123: quaycrew.v1.Work
-	(*CreateWorkRequest)(nil),                // 124: quaycrew.v1.CreateWorkRequest
-	(*CreateWorkResponse)(nil),               // 125: quaycrew.v1.CreateWorkResponse
-	(*GetWorkRequest)(nil),                   // 126: quaycrew.v1.GetWorkRequest
-	(*GetWorkResponse)(nil),                  // 127: quaycrew.v1.GetWorkResponse
-	(*ListWorkRequest)(nil),                  // 128: quaycrew.v1.ListWorkRequest
-	(*ListWorkResponse)(nil),                 // 129: quaycrew.v1.ListWorkResponse
-	(*StopWorkRequest)(nil),                  // 130: quaycrew.v1.StopWorkRequest
-	(*StopWorkResponse)(nil),                 // 131: quaycrew.v1.StopWorkResponse
+	(*Job)(nil),                              // 123: quaycrew.v1.Job
+	(*CreateJobRequest)(nil),                 // 124: quaycrew.v1.CreateJobRequest
+	(*CreateJobResponse)(nil),                // 125: quaycrew.v1.CreateJobResponse
+	(*GetJobRequest)(nil),                    // 126: quaycrew.v1.GetJobRequest
+	(*GetJobResponse)(nil),                   // 127: quaycrew.v1.GetJobResponse
+	(*ListJobsRequest)(nil),                  // 128: quaycrew.v1.ListJobsRequest
+	(*ListJobsResponse)(nil),                 // 129: quaycrew.v1.ListJobsResponse
+	(*StopJobRequest)(nil),                   // 130: quaycrew.v1.StopJobRequest
+	(*StopJobResponse)(nil),                  // 131: quaycrew.v1.StopJobResponse
 	(*WorkspaceLimits)(nil),                  // 132: quaycrew.v1.WorkspaceLimits
 	(*GetWorkspaceLimitsRequest)(nil),        // 133: quaycrew.v1.GetWorkspaceLimitsRequest
 	(*GetWorkspaceLimitsResponse)(nil),       // 134: quaycrew.v1.GetWorkspaceLimitsResponse
@@ -9154,8 +9153,8 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*ListSessionEventsResponse)(nil),        // 138: quaycrew.v1.ListSessionEventsResponse
 	nil,                                      // 139: quaycrew.v1.FlowRun.StateEntry
 	nil,                                      // 140: quaycrew.v1.StartFlowRequest.StateEntry
-	nil,                                      // 141: quaycrew.v1.Work.LabelsEntry
-	nil,                                      // 142: quaycrew.v1.CreateWorkRequest.LabelsEntry
+	nil,                                      // 141: quaycrew.v1.Job.LabelsEntry
+	nil,                                      // 142: quaycrew.v1.CreateJobRequest.LabelsEntry
 	(*timestamppb.Timestamp)(nil),            // 143: google.protobuf.Timestamp
 	(*SessionEvent)(nil),                     // 144: quaycrew.v1.SessionEvent
 }
@@ -9226,18 +9225,18 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	7,   // 63: quaycrew.v1.GetUsageResponse.total:type_name -> quaycrew.v1.Usage
 	143, // 64: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
 	120, // 65: quaycrew.v1.ListTasksResponse.tasks:type_name -> quaycrew.v1.Task
-	143, // 66: quaycrew.v1.Work.deadline:type_name -> google.protobuf.Timestamp
-	141, // 67: quaycrew.v1.Work.labels:type_name -> quaycrew.v1.Work.LabelsEntry
-	143, // 68: quaycrew.v1.Work.created_at:type_name -> google.protobuf.Timestamp
-	143, // 69: quaycrew.v1.Work.updated_at:type_name -> google.protobuf.Timestamp
-	143, // 70: quaycrew.v1.Work.started_at:type_name -> google.protobuf.Timestamp
-	143, // 71: quaycrew.v1.Work.finished_at:type_name -> google.protobuf.Timestamp
-	143, // 72: quaycrew.v1.CreateWorkRequest.deadline:type_name -> google.protobuf.Timestamp
-	142, // 73: quaycrew.v1.CreateWorkRequest.labels:type_name -> quaycrew.v1.CreateWorkRequest.LabelsEntry
-	123, // 74: quaycrew.v1.CreateWorkResponse.work:type_name -> quaycrew.v1.Work
-	123, // 75: quaycrew.v1.GetWorkResponse.work:type_name -> quaycrew.v1.Work
-	123, // 76: quaycrew.v1.ListWorkResponse.work:type_name -> quaycrew.v1.Work
-	123, // 77: quaycrew.v1.StopWorkResponse.work:type_name -> quaycrew.v1.Work
+	143, // 66: quaycrew.v1.Job.deadline:type_name -> google.protobuf.Timestamp
+	141, // 67: quaycrew.v1.Job.labels:type_name -> quaycrew.v1.Job.LabelsEntry
+	143, // 68: quaycrew.v1.Job.created_at:type_name -> google.protobuf.Timestamp
+	143, // 69: quaycrew.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
+	143, // 70: quaycrew.v1.Job.started_at:type_name -> google.protobuf.Timestamp
+	143, // 71: quaycrew.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
+	143, // 72: quaycrew.v1.CreateJobRequest.deadline:type_name -> google.protobuf.Timestamp
+	142, // 73: quaycrew.v1.CreateJobRequest.labels:type_name -> quaycrew.v1.CreateJobRequest.LabelsEntry
+	123, // 74: quaycrew.v1.CreateJobResponse.job:type_name -> quaycrew.v1.Job
+	123, // 75: quaycrew.v1.GetJobResponse.job:type_name -> quaycrew.v1.Job
+	123, // 76: quaycrew.v1.ListJobsResponse.jobs:type_name -> quaycrew.v1.Job
+	123, // 77: quaycrew.v1.StopJobResponse.job:type_name -> quaycrew.v1.Job
 	132, // 78: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
 	132, // 79: quaycrew.v1.SetWorkspaceLimitsRequest.limits:type_name -> quaycrew.v1.WorkspaceLimits
 	132, // 80: quaycrew.v1.SetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
@@ -9290,10 +9289,10 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	101, // 127: quaycrew.v1.ControlPlaneService.AttachRole:input_type -> quaycrew.v1.AttachRoleRequest
 	103, // 128: quaycrew.v1.ControlPlaneService.DetachRole:input_type -> quaycrew.v1.DetachRoleRequest
 	121, // 129: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
-	124, // 130: quaycrew.v1.ControlPlaneService.CreateWork:input_type -> quaycrew.v1.CreateWorkRequest
-	126, // 131: quaycrew.v1.ControlPlaneService.GetWork:input_type -> quaycrew.v1.GetWorkRequest
-	128, // 132: quaycrew.v1.ControlPlaneService.ListWork:input_type -> quaycrew.v1.ListWorkRequest
-	130, // 133: quaycrew.v1.ControlPlaneService.StopWork:input_type -> quaycrew.v1.StopWorkRequest
+	124, // 130: quaycrew.v1.ControlPlaneService.CreateJob:input_type -> quaycrew.v1.CreateJobRequest
+	126, // 131: quaycrew.v1.ControlPlaneService.GetJob:input_type -> quaycrew.v1.GetJobRequest
+	128, // 132: quaycrew.v1.ControlPlaneService.ListJobs:input_type -> quaycrew.v1.ListJobsRequest
+	130, // 133: quaycrew.v1.ControlPlaneService.StopJob:input_type -> quaycrew.v1.StopJobRequest
 	133, // 134: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:input_type -> quaycrew.v1.GetWorkspaceLimitsRequest
 	135, // 135: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:input_type -> quaycrew.v1.SetWorkspaceLimitsRequest
 	137, // 136: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
@@ -9348,10 +9347,10 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	102, // 185: quaycrew.v1.ControlPlaneService.AttachRole:output_type -> quaycrew.v1.AttachRoleResponse
 	104, // 186: quaycrew.v1.ControlPlaneService.DetachRole:output_type -> quaycrew.v1.DetachRoleResponse
 	122, // 187: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
-	125, // 188: quaycrew.v1.ControlPlaneService.CreateWork:output_type -> quaycrew.v1.CreateWorkResponse
-	127, // 189: quaycrew.v1.ControlPlaneService.GetWork:output_type -> quaycrew.v1.GetWorkResponse
-	129, // 190: quaycrew.v1.ControlPlaneService.ListWork:output_type -> quaycrew.v1.ListWorkResponse
-	131, // 191: quaycrew.v1.ControlPlaneService.StopWork:output_type -> quaycrew.v1.StopWorkResponse
+	125, // 188: quaycrew.v1.ControlPlaneService.CreateJob:output_type -> quaycrew.v1.CreateJobResponse
+	127, // 189: quaycrew.v1.ControlPlaneService.GetJob:output_type -> quaycrew.v1.GetJobResponse
+	129, // 190: quaycrew.v1.ControlPlaneService.ListJobs:output_type -> quaycrew.v1.ListJobsResponse
+	131, // 191: quaycrew.v1.ControlPlaneService.StopJob:output_type -> quaycrew.v1.StopJobResponse
 	134, // 192: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:output_type -> quaycrew.v1.GetWorkspaceLimitsResponse
 	136, // 193: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:output_type -> quaycrew.v1.SetWorkspaceLimitsResponse
 	138, // 194: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse

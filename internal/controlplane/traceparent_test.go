@@ -28,7 +28,7 @@ func TestTheTraceContextRidesTheTaskAndNotTheSandbox(t *testing.T) {
 	})
 	_, project := newProject(t, server)
 
-	// Under a trace, the way a controller runs a piece of work: the context comes off the row.
+	// Under a trace, the way a controller runs a job: the context comes off the row.
 	ctx := telemetry.Under(context.Background(),
 		"4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7")
 	if _, err := server.Dispatch(ctx, &quaycrewv1.DispatchRequest{

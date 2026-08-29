@@ -305,7 +305,7 @@ func TestTheShippedBrowserSkillLoads(t *testing.T) {
 		}
 	}
 	if !named {
-		t.Error("the browser skill does not declare the browser it needs, so a session on an older image discovers it has none halfway through a piece of work rather than being refused with a sentence")
+		t.Error("the browser skill does not declare the browser it needs, so a session on an older image discovers it has none halfway through a job rather than being refused with a sentence")
 	}
 
 	// The three things the brief exists to say. Drawing the picture is the easy part; looking at it

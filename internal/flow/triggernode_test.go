@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// The graph these drive: a run that begins because something happened, and then does one piece of
-// work with what the trigger carried.
+// The graph these drive: a run that begins because something happened, and then does one
+// job with what the trigger carried.
 const reactingGraph = `
 name: fix-red
 version: 1
@@ -113,7 +113,7 @@ edges:
 	}
 }
 
-// A role is who does work, and a trigger does none.
+// A role is who does the work, and a trigger does none.
 func TestATriggerNodeNamingARoleIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: roled

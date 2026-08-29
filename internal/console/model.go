@@ -247,7 +247,7 @@ type Model struct {
 type Terminal func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd
 
 // Reported is what the console is telling the operator right now, and nil when it is telling them
-// nothing. A scenario reads it to say whether a key that could not do its work said so.
+// nothing. A scenario reads it to say whether a key that could not do its job said so.
 func (m Model) Reported() error { return m.err }
 
 // WithoutHeader leaves the header to the pane above.

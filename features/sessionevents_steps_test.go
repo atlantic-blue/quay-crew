@@ -112,7 +112,7 @@ func initializeSessionEventsSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		}
-		return fmt.Errorf("no event says the work completed: %v", kindsOf(events))
+		return fmt.Errorf("no event says the job completed: %v", kindsOf(events))
 	})
 
 	sc.Step(`^the errored event says why$`, func(ctx context.Context) error {
@@ -129,7 +129,7 @@ func initializeSessionEventsSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		}
-		return fmt.Errorf("no event says the work errored: %v", kindsOf(events))
+		return fmt.Errorf("no event says the job errored: %v", kindsOf(events))
 	})
 
 	sc.Step(`^no event's kind is "([^"]*)" or "([^"]*)"$`, func(ctx context.Context, first, second string) error {

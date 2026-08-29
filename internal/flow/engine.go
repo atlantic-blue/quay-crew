@@ -12,10 +12,10 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
-// StatusWorking is a run whose step is out with a piece of work.
+// StatusWorking is a run whose step is out with a job.
 //
 // It sits beside waiting and asking: a live run that costs the engine nothing, because what moves it
 // is a row a poller reads rather than a call somebody is holding open. The reducer never sees this
@@ -24,8 +24,8 @@ import (
 const StatusWorking = "working"
 
 // The records a run writes about itself, which quay-crew#349 named and nothing ever wrote. They are
-// work events against the piece of work that carries the run, so a reader has one history to read
-// rather than two, and the export they reach is the one `<workspace>.work` already carries.
+// job events against the job that carries the run, so a reader has one history to read
+// rather than two, and the export they reach is the one `<workspace>.job` already carries.
 const (
 	EventRunStarted  = "flow.run.started"
 	EventRunAsked    = "flow.run.asked"
@@ -54,12 +54,12 @@ type Store interface {
 	// GetFlowRun reads a run back, which the engine needs to answer with the stopped run rather
 	// than with what it held before the stop landed.
 	GetFlowRun(ctx context.Context, id string) (*Run, error)
-	// FlowRunCarrier is the piece of work that carries a run. Read from the row rather than kept in
+	// FlowRunCarrier is the job that carries a run. Read from the row rather than kept in
 	// a process, so a run picked up after a restart is still in the same place in the tree.
 	FlowRunCarrier(ctx context.Context, run string) (string, error)
-	// GetWork reads one piece of work back. The engine reads the work carrying a run to write a
+	// GetJob reads one job back. The engine reads the job carrying a run to write a
 	// record against it, because a record has to agree with the row it describes.
-	GetWork(ctx context.Context, id string) (*work.Work, error)
+	GetJob(ctx context.Context, id string) (*job.Job, error)
 	// ScheduleFlow records that a graph runs in a project every so often, from now. Re-recording
 	// the same pair moves its schedule rather than making a second one.
 	ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error
@@ -71,19 +71,19 @@ type Store interface {
 	// starting the run, so a start that fails does not leave the schedule firing every tick.
 	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
 	// DueFlowRuns are the waiting runs whose time has come. The poller asks for these and nothing
-	// else, so a crew with a thousand finished runs and one waiting does one row's work per tick.
+	// else, so a crew with a thousand finished runs and one waiting does one row's job per tick.
 	DueFlowRuns(ctx context.Context, now time.Time) ([]*Run, error)
-	// LandedFlowSteps are the runs whose step has ended: working runs whose step's work reached a
+	// LandedFlowSteps are the runs whose step has ended: working runs whose step's job reached a
 	// terminal phase. This is what moves a run now that it does not hold its own dispatch open.
 	LandedFlowSteps(ctx context.Context, limit int) ([]Landed, error)
-	// CreateFlowRun writes a fresh run and the piece of work that carries it, in one transaction.
+	// CreateFlowRun writes a fresh run and the job that carries it, in one transaction.
 	// Its transitions are the events; creation is the row itself.
 	//
 	// trigger is the pending trigger this run answers, empty for a run nothing triggered, and it is
 	// marked started in the same transaction. That is what makes one trigger start exactly one run:
 	// a poller that dies after this lands finds a row that says started when it comes back, and one
 	// that dies before it finds a row nobody acted on.
-	CreateFlowRun(ctx context.Context, run *Run, carrier *work.Work, records []*work.Event, trigger string) error
+	CreateFlowRun(ctx context.Context, run *Run, carrier *job.Job, records []*job.Event, trigger string) error
 	// RaiseTrigger writes down that something happened. The row is the queue entry a run starts
 	// from, and it is written in one statement so it can sit in the transaction of whatever caused
 	// it.
@@ -94,7 +94,7 @@ type Store interface {
 	// ClaimTrigger takes a lease on one trigger row, in the same statement as the condition, so two
 	// pollers reading one pending trigger leave one holder. A row somebody else holds, or one that
 	// has already been acted on, answers ErrTriggerTaken.
-	ClaimTrigger(ctx context.Context, id string, lease work.Lease) (*Trigger, error)
+	ClaimTrigger(ctx context.Context, id string, lease job.Lease) (*Trigger, error)
 	// FailTrigger records that a claimed trigger started no run, and why. The reason is the whole
 	// point of the row surviving: a trigger that did nothing must not read the same as one nobody
 	// raised.
@@ -102,9 +102,9 @@ type Store interface {
 	// GetTrigger reads one trigger back, which is where what became of it is read.
 	GetTrigger(ctx context.Context, id string) (*Trigger, error)
 	// AdvanceFlowRun writes the run's next position, appends the transition that took it there,
-	// claims the dispatch's key where the transition dispatched, and writes the work that movement
+	// claims the dispatch's key where the transition dispatched, and writes the job that movement
 	// declares. One transaction, so there is no gap for a crash to hide in: either the run moved and
-	// the claim and the work exist, or none of them does.
+	// the claim and the job exist, or none of them does.
 	// A dispatch key already claimed refuses the whole transition.
 	//
 	// It moves only a run the database still holds as live, which is what makes stopping one take
@@ -127,11 +127,11 @@ type Schedule struct {
 	Every     time.Duration
 }
 
-// Landed is a run whose step has ended, with the piece of work it ended as. The step's parent is the
-// run's own work, so nothing else has to be read to know where in the tree the run sits.
+// Landed is a run whose step has ended, with the job it ended as. The step's parent is the
+// run's own job, so nothing else has to be read to know where in the tree the run sits.
 type Landed struct {
 	Run  Run
-	Step *work.Work
+	Step *job.Job
 }
 
 // DueAt is when a waiting run should be looked at again, or nil for a run that is not waiting. It
@@ -153,30 +153,30 @@ type Transition struct {
 	// store moves only a run still out with it, so two pollers reading one landed step move the run
 	// once.
 	Answers string
-	// Work is what this movement does to the work tree, written in the same transaction as the
+	// Job is what this movement does to the job tree, written in the same transaction as the
 	// movement itself.
-	Work WorkWrite
+	Job JobWrite
 }
 
-// WorkWrite is the work tree's side of one movement.
+// JobWrite is the job tree's side of one movement.
 //
 // Both halves land in the transaction that moves the run, which is what makes a step exactly once:
-// a piece of work written before the movement would be paid for by a movement that was then refused,
+// a job written before the movement would be paid for by a movement that was then refused,
 // and one written after would be lost by a crash in between.
-type WorkWrite struct {
-	// Declared is the piece of work this movement's step goes out as, and it becomes the step the
+type JobWrite struct {
+	// Declared is the job this movement's step goes out as, and it becomes the step the
 	// run is out with. Nil on a movement that dispatches nothing, which also clears that step.
-	Declared *work.Work
-	// Carrier is what this movement writes onto the piece of work that carries the run.
+	Declared *job.Job
+	// Carrier is what this movement writes onto the job that carries the run.
 	Carrier *Carrier
-	// Records are the movements to write against the work, in the order they happened.
-	Records []*work.Event
+	// Records are the movements to write against the job, in the order they happened.
+	Records []*job.Event
 }
 
-// Carrier is what a movement writes onto the piece of work that carries a run: the phase it is in
+// Carrier is what a movement writes onto the job that carries a run: the phase it is in
 // now, the question it is putting to a person, and what the run came to once it has ended.
 type Carrier struct {
-	Work     string
+	Job      string
 	Phase    string
 	Question string
 	Answer   string
@@ -205,31 +205,31 @@ type Spend interface {
 // ControlPlane is what the engine may do on a run's behalf. It is the same service every other
 // caller speaks to, deliberately: the engine holds no privileged road into anything.
 //
-// It no longer dispatches. A step is a piece of work now, and the work controller is what sends its
+// It no longer dispatches. A step is a job now, and the job controller is what sends its
 // task, so the one call left here is putting a session away.
 type ControlPlane interface {
 	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
 }
 
-// Works is what the engine needs from the crew to keep a run inside the work tree.
+// Works is what the engine needs from the crew to keep a run inside the job tree.
 //
 // It prepares rather than writes, because the declaration and the movement that asked for it land in
 // one transaction. Preparing is where every rule a caller's declaration is held to is applied: the
 // depth, the workspace's ceiling, the role's pinned version and the trace. The engine does not get a
 // cheaper road than a caller, it gets the same one.
 type Works interface {
-	// PrepareWork holds a declaration to every rule and answers with the row to write and the record
-	// of writing it. `under` names the piece of work this one hangs under; empty means the parent
+	// PrepareJob holds a declaration to every rule and answers with the row to write and the record
+	// of writing it. `under` names the job this one hangs under; empty means the parent
 	// comes from the credential the caller presented, which is what a run started by a person wants.
-	PrepareWork(ctx context.Context, under string, declaration work.Declaration) (*work.Work, *work.Event, error)
-	// ExportWork offers records to the event log, after the transaction that wrote them.
-	ExportWork(ctx context.Context, events ...*work.Event)
+	PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error)
+	// ExportJob offers records to the event log, after the transaction that wrote them.
+	ExportJob(ctx context.Context, events ...*job.Event)
 }
 
 // Engine drives runs: it loads the graph, calls the pure reducer, persists every transition, and
-// declares the work the reducer asked for.
+// declares the job the reducer asked for.
 //
-// It never waits on a model. A step is written down as a piece of work and the call returns, so a
+// It never waits on a model. A step is written down as a job and the call returns, so a
 // run holds no goroutine, no dispatch and no container while its step runs, and a run that then asks
 // a person holds nothing at all.
 type Engine struct {
@@ -276,7 +276,7 @@ func (e *Engine) Start(ctx context.Context, graphName, workspace, project string
 
 // Begin makes the run, answers with it, and takes its first movement behind that answer.
 //
-// The first movement declares a piece of work and returns, so this no longer outlives the caller by
+// The first movement declares a job and returns, so this no longer outlives the caller by
 // minutes. It is still detached from the caller's context: a command line that has printed the run's
 // identifier and exited must not take the run's first movement down with it.
 func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string, state map[string]string) (Run, error) {
@@ -298,12 +298,12 @@ func (e *Engine) Begin(ctx context.Context, graphName, workspace, project string
 	return run, nil
 }
 
-// create reads the graph, declares the piece of work that carries the run, and writes the run's
+// create reads the graph, declares the job that carries the run, and writes the run's
 // first row under it.
 //
-// The work comes first because the run hangs under it. Its parent is the caller's, read from the
+// The job comes first because the run hangs under it. Its parent is the caller's, read from the
 // credential the caller presented: an operator starts a root, and a session that starts a flow puts
-// the whole run one level below its own work, which is what makes a run something the depth limit
+// the whole run one level below its own job, which is what makes a run something the depth limit
 // bounds.
 func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph, error) {
 	graphName := from.graph
@@ -323,7 +323,7 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 			graphName, version, graph.Start, graph.Nodes[graph.Start].Type, NodeTrigger)
 	}
 	if e.works == nil {
-		return Run{}, "", Graph{}, fmt.Errorf("flow: this crew cannot declare work, so it cannot run a flow: a run is carried by a piece of work")
+		return Run{}, "", Graph{}, fmt.Errorf("flow: this crew cannot declare job, so it cannot run a flow: a run is carried by a job")
 	}
 
 	state := from.state
@@ -344,7 +344,7 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	if from.trigger != "" {
 		labels[labelTrigger] = from.trigger
 	}
-	carrier, declared, err := e.works.PrepareWork(ctx, from.under, work.Declaration{
+	carrier, declared, err := e.works.PrepareJob(ctx, from.under, job.Declaration{
 		Workspace: from.workspace, Project: from.project,
 		Title: fmt.Sprintf("flow %s version %d", graphName, version),
 		Brief: fmt.Sprintf("carries the run of flow %s, version %d. Its steps hang under it, and it "+
@@ -357,9 +357,9 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	// Held back rather than pending, because a controller must never send this one as a task. It is a
 	// parent whose children are outstanding, which is what waiting already means, and the controller's
 	// queries pass over it on that.
-	carrier.Phase = work.PhaseWaiting
+	carrier.Phase = job.PhaseWaiting
 
-	records := []*work.Event{declared, e.record(carrier, EventRunStarted,
+	records := []*job.Event{declared, e.record(carrier, EventRunStarted,
 		fmt.Sprintf("run %s of %s version %d", run.ID, graphName, version))}
 	if err := e.store.CreateFlowRun(ctx, &run, carrier, records, from.trigger); err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: create run of %s: %w", graphName, err)
@@ -368,12 +368,12 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	return run, carrier.ID, graph, nil
 }
 
-// advance feeds one event through the reducer, declares whatever work it asked for, and persists the
+// advance feeds one event through the reducer, declares whatever job it asked for, and persists the
 // movement. It takes one movement and returns.
 //
 // It does not wait for the step. Where the reducer asked for a dispatch, the step is written down as
-// a piece of work whose parent is the run's own, the run is recorded as working, and a controller
-// sends the task. What carries the run on is that work reaching a terminal phase, read off a row by
+// a job whose parent is the run's own, the run is recorded as working, and a controller
+// sends the task. What carries the run on is that job reaching a terminal phase, read off a row by
 // the poller, so nothing here holds a call, a goroutine or a container open.
 func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, event Event) (Run, error) {
 	// What the run has cost, read fresh before the movement, so the ceiling is checked against what
@@ -404,12 +404,12 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 		due = &when
 	}
 
-	written := WorkWrite{}
+	written := JobWrite{}
 	if dispatch != nil {
 		declared, record, err := e.declare(ctx, graph, next, at.carrier, *dispatch)
 		if err != nil {
 			// The crew refused this step: too deep, a role the workspace does not hold, a project
-			// that has gone. No work was declared, so the run must not walk a success edge on a reply
+			// that has gone. No job was declared, so the run must not walk a success edge on a reply
 			// that will never exist. It stops with the crew's own sentence, which names what to do.
 			next.Status = StatusStopped
 			next.Reason = fmt.Sprintf("stopped at %s, which the crew refused: %s", dispatch.Node, oneLine(err.Error()))
@@ -423,7 +423,7 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 
 	if err := e.store.AdvanceFlowRun(ctx, &next, Transition{
 		Event: event.Kind, Node: next.Node, Dispatch: dispatch, Due: due,
-		Answers: at.answers, Work: written,
+		Answers: at.answers, Job: written,
 	}); err != nil {
 		// Somebody stopped the run while its step was out, or another poller carried it on first.
 		// Neither is a failure: the row is the answer, so it is read back and handed over.
@@ -446,14 +446,14 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 	return next, nil
 }
 
-// declare writes down one step as a piece of work: same rules, same tree, same ceilings as anything
+// declare writes down one step as a job: same rules, same tree, same ceilings as anything
 // a session declares.
 //
 // What the node said would prove it worked travels with the declaration rather than being checked
 // here. The controller reads it after the task, which is the one place that can see the session the
-// work actually ran in, and it is the same check for a step of a flow as for anything else.
-func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier string, dispatch Command) (*work.Work, *work.Event, error) {
-	declaration := work.Declaration{
+// job actually ran in, and it is the same check for a step of a flow as for anything else.
+func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier string, dispatch Command) (*job.Job, *job.Event, error) {
+	declaration := job.Declaration{
 		Workspace: run.Workspace, Project: run.Project,
 		Title: fmt.Sprintf("%s step %s", run.GraphName, dispatch.Node),
 		Brief: dispatch.Prompt,
@@ -469,58 +469,58 @@ func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier stri
 	if expect := graph.Nodes[dispatch.Node].Expect; expect != nil {
 		declaration.ExpectFile, declaration.ExpectContains = expect.File, expect.Contains
 	}
-	return e.works.PrepareWork(ctx, carrier, declaration)
+	return e.works.PrepareJob(ctx, carrier, declaration)
 }
 
-// carrier is what this movement writes onto the piece of work that carries the run, and the record
+// carrier is what this movement writes onto the job that carries the run, and the record
 // of it where the run reached something worth a record.
 //
 // The phase follows the run: held back while it is working, waiting or moving, asking while it is
-// asking, and ended when the run has ended. So `quay work show` on a run's own work says where the
+// asking, and ended when the run has ended. So `quay job show` on a run's own job says where the
 // run is, and the answer of the whole run is a field rather than a transcript.
-func (e *Engine) carrier(ctx context.Context, id string, run Run, records []*work.Event) (*Carrier, []*work.Event) {
+func (e *Engine) carrier(ctx context.Context, id string, run Run, records []*job.Event) (*Carrier, []*job.Event) {
 	if id == "" {
 		return nil, records
 	}
-	on := &Carrier{Work: id, Phase: work.PhaseWaiting}
+	on := &Carrier{Job: id, Phase: job.PhaseWaiting}
 	kind, detail := "", ""
 	switch run.Status {
 	case StatusAsking:
-		on.Phase, on.Question = work.PhaseAsking, run.Question
+		on.Phase, on.Question = job.PhaseAsking, run.Question
 		kind, detail = EventRunAsked, fmt.Sprintf("at %s: %s", run.Node, run.Question)
 	case StatusDone:
-		on.Phase, on.Answer = work.PhaseDone, run.State["result.reply"]
+		on.Phase, on.Answer = job.PhaseDone, run.State["result.reply"]
 		kind, detail = EventRunFinished,
 			fmt.Sprintf("done at %s after %d transitions, %d tokens", run.Node, run.Transitions, run.Spent)
 	case StatusFailed:
-		on.Phase, on.Reason = work.PhaseFailed, run.Reason
+		on.Phase, on.Reason = job.PhaseFailed, run.Reason
 		kind, detail = EventRunStopped, oneLine(run.Reason)
 	case StatusStopped:
-		on.Phase, on.Reason = work.PhaseStopped, run.Reason
+		on.Phase, on.Reason = job.PhaseStopped, run.Reason
 		kind, detail = EventRunStopped, oneLine(run.Reason)
 	}
 	if kind == "" {
 		return on, records
 	}
 	// The row rather than the identifier, because a record carries the workspace, the project and the
-	// trace it belongs to, and a record that disagreed with the work it describes is a record nothing
+	// trace it belongs to, and a record that disagreed with the job it describes is a record nothing
 	// can join. A read that fails costs the record and not the movement.
-	carrying, err := e.store.GetWork(ctx, id)
+	carrying, err := e.store.GetJob(ctx, id)
 	if err != nil {
-		slog.WarnContext(ctx, "the work carrying this run could not be read, so the record of this movement is not written",
-			"run", run.ID, "work", id, "error", err)
+		slog.WarnContext(ctx, "the job carrying this run could not be read, so the record of this movement is not written",
+			"run", run.ID, "job", id, "error", err)
 		return on, records
 	}
 	return on, append(records, e.record(carrying, kind, detail))
 }
 
-// Worked carries a run on from the piece of work its step went out as.
+// Worked carries a run on from the job its step went out as.
 //
 // This is what replaced holding a dispatch open. The step's answer, its failure or its unmet claim
-// arrive as the same event the reducer always took, so advance.go does not know a piece of work
+// arrive as the same event the reducer always took, so advance.go does not know a job
 // exists. The run is put back to running first, because working is the engine's word and the pure
 // function keeps the four statuses it always had.
-func (e *Engine) Worked(ctx context.Context, run Run, step *work.Work) (Run, error) {
+func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error) {
 	definition, err := e.store.FlowGraph(ctx, run.GraphName, run.GraphVersion)
 	if err != nil {
 		return run, err
@@ -537,8 +537,8 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *work.Work) (Run, err
 	if step.Session != "" {
 		run.State[sessionKeyPrefix+run.Node] = step.Session
 	}
-	// The step's session is put away as soon as its work has ended. This is the whole point of the
-	// change: the container belongs to the piece of work, the work is over, and a run that then asks
+	// The step's session is put away as soon as its job has ended. This is the whole point of the
+	// change: the container belongs to the job, the job is over, and a run that then asks
 	// a person holds nothing while it waits.
 	e.archiveSession(ctx, step.Session)
 
@@ -547,38 +547,38 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *work.Work) (Run, err
 		Kind:   EventTaskFinished,
 		Node:   run.Node,
 		Reply:  replyOf(step),
-		Failed: step.Phase == work.PhaseFailed,
-		// Work halted over a claim it did not meet is the reducer's unmet: the crew knows the work
+		Failed: step.Phase == job.PhaseFailed,
+		// Job halted over a claim it did not meet is the reducer's unmet: the crew knows the job
 		// did not happen and does not know why, so the run stops rather than branching.
 		Unmet: unmetOf(step),
 	})
 }
 
-// replyOf is what the step said, as the run reads it. Work that failed carries the reason instead,
+// replyOf is what the step said, as the run reads it. Job that failed carries the reason instead,
 // because there is no answer and a graph branching on the reply has to have something to read.
-func replyOf(step *work.Work) string {
-	if step.Phase == work.PhaseFailed {
+func replyOf(step *job.Job) string {
+	if step.Phase == job.PhaseFailed {
 		return step.Reason
 	}
 	return step.Answer
 }
 
 // unmetOf is the claim the step did not meet, empty where it claimed nothing or the claim held.
-func unmetOf(step *work.Work) string {
-	if step.Phase == work.PhaseStopped {
+func unmetOf(step *job.Job) string {
+	if step.Phase == job.PhaseStopped {
 		return step.Reason
 	}
 	return ""
 }
 
-// The labels every piece of work a run declares carries, so a reader finds the whole run in the work
-// tree without being told an identifier: `quay work list --label flow.run=<run>`.
+// The labels every job a run declares carries, so a reader finds the whole run in the job
+// tree without being told an identifier: `quay job list --label flow.run=<run>`.
 const (
 	labelRun     = "flow.run"
 	labelGraph   = "flow.graph"
 	labelNode    = "flow.node"
 	labelAttempt = "flow.attempt"
-	// labelTrigger is on the work carrying a run that something triggered, and on nothing else, so
+	// labelTrigger is on the job carrying a run that something triggered, and on nothing else, so
 	// the tree says why a run nobody started exists.
 	labelTrigger = "flow.trigger"
 )
@@ -596,12 +596,12 @@ type starting struct {
 	// trigger is the row this run answers, marked started in the transaction that writes the run,
 	// empty for a run a person or a schedule asked for.
 	trigger string
-	// under is the piece of work the run's own work hangs under. Empty means the parent comes from
+	// under is the job the run's own job hangs under. Empty means the parent comes from
 	// the credential the caller presented, which is what a run started by a person wants.
 	under string
 }
 
-// where is a run's place in the work tree at the moment of a movement: the piece of work that
+// where is a run's place in the job tree at the moment of a movement: the job that
 // carries the run, and the step this movement answers. It is a parameter rather than two fields on
 // the run, because advance.go holds the run and the reducer has no business knowing either.
 type where struct {
@@ -612,11 +612,11 @@ type where struct {
 // exported offers records to the log after they have landed in the store, and does nothing where
 // there is nothing to export to. Called after every write rather than inside it, because a record on
 // the log that is not in the store is a record nothing can explain.
-func (e *Engine) exported(ctx context.Context, records ...*work.Event) {
+func (e *Engine) exported(ctx context.Context, records ...*job.Event) {
 	if e.works == nil || len(records) == 0 {
 		return
 	}
-	e.works.ExportWork(ctx, records...)
+	e.works.ExportJob(ctx, records...)
 }
 
 // spentBy is what the run has cost, over every session it started. It keeps the last known number
@@ -637,8 +637,8 @@ func (e *Engine) spentBy(ctx context.Context, run Run) int64 {
 	return total
 }
 
-// SessionKey is where a run made before its steps were work remembered its own session. Runs no
-// longer have one: a step's session belongs to the piece of work that ran it, and is remembered
+// SessionKey is where a run made before its steps were job remembered its own session. Runs no
+// longer have one: a step's session belongs to the job that ran it, and is remembered
 // against that step's node.
 //
 // Exported and still read, because a run outlives the reading of it and the runs already in the
@@ -693,10 +693,10 @@ func (e *Engine) archiveSession(ctx context.Context, id string) {
 	_, _ = e.plane.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: id})
 }
 
-// record describes one thing a run did, against the work that carries it.
-func (e *Engine) record(carrier *work.Work, kind, detail string) *work.Event {
-	return &work.Event{
-		ID: newEventID(), Kind: kind, Work: carrier.ID,
+// record describes one thing a run did, against the job that carries it.
+func (e *Engine) record(carrier *job.Job, kind, detail string) *job.Event {
+	return &job.Event{
+		ID: newEventID(), Kind: kind, Job: carrier.ID,
 		Workspace: carrier.Workspace, Project: carrier.Project,
 		Parent: carrier.Parent, Depth: carrier.Depth, Detail: detail,
 		TraceID: carrier.TraceID, OccurredAt: time.Now().UTC(),
@@ -722,8 +722,8 @@ func (r Run) copy() Run {
 }
 
 // SessionHandle names a run, in the shape its own session used to be named: the graph and a short
-// run identifier. Nothing is dispatched to it now, because a step's session is named after the piece
-// of work that ran it, and it is kept because a listing and a console still read a run by it.
+// run identifier. Nothing is dispatched to it now, because a step's session is named after the
+// job that ran it, and it is kept because a listing and a console still read a run by it.
 func (r Run) SessionHandle() string {
 	short := r.ID
 	if len(short) > 8 {

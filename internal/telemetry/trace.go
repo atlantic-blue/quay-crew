@@ -46,7 +46,7 @@ func SpanIDFrom(ctx context.Context) string {
 }
 
 // NewTraceID mints a trace identifier for a record that starts one, which is a root nothing was
-// tracing: work declared by a poller, or by a caller whose own tool starts no trace.
+// tracing: job declared by a poller, or by a caller whose own tool starts no trace.
 //
 // It is minted rather than left empty because the identifier is what joins the tree together
 // afterwards. A root with none leaves every descendant unjoined.
@@ -65,7 +65,7 @@ func NewTraceID() string {
 // that outlived the process that wrote it goes on being part of one trace.
 //
 // A trace identifier with no span identifier still joins: the span opened under it belongs to the
-// trace and has no parent inside it, which is the honest shape for work nobody was inside when it
+// trace and has no parent inside it, which is the honest shape for a job nobody was inside when it
 // was declared.
 func Under(ctx context.Context, traceID, spanID string) context.Context {
 	trace16, err := trace.TraceIDFromHex(traceID)
@@ -95,14 +95,14 @@ func Traceparent(ctx context.Context) string {
 
 // Record emits a span for something that already finished, between two moments the crew knows.
 //
-// A span is normally opened and closed by the code inside it. A piece of work cannot be: it outlives
+// A span is normally opened and closed by the code inside it. A job cannot be: it outlives
 // the process that declared it, it is picked up by whichever controller has the lease, and a span
 // object held in memory across that would be lost with the first controller that died. So the crew
 // records the span when it knows both ends, from the timestamps on the row.
 //
 // The cost is stated: these spans are siblings under the same parent rather than parents of one
 // another, because a span identifier cannot be minted before the span exists. A reader sees one
-// trace with the whole life of the work in it and the attempts beside it, joined by the trace
+// trace with the whole life of the job in it and the attempts beside it, joined by the trace
 // identifier rather than nested inside it.
 func Record(ctx context.Context, name string, started, ended time.Time, attributes ...attribute.KeyValue) {
 	if started.IsZero() || ended.Before(started) {

@@ -86,7 +86,7 @@ Feature: A sandbox keeps a session's state outside itself
 
   # `git` has been in the sandbox image the whole time and unusable, because a container has no
   # identity: the tool refuses to commit rather than guessing, which is right and is a wall to walk
-  # into halfway through a piece of work.
+  # into halfway through a job.
   Scenario: A session can commit as the operator
     Given a crew whose commits are by "A Name" at "a@example.com"
     And a workspace named "acme"

@@ -209,7 +209,7 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsInOnPostgres(t
 	}
 	if opened != conversationOn(box.commands()[0]) {
 		t.Fatalf("attaching opens conversation %q and the task is running in %q, so the operator "+
-			"is watching an empty conversation beside the work", opened, conversationOn(box.commands()[0]))
+			"is watching an empty conversation beside the job", opened, conversationOn(box.commands()[0]))
 	}
 	// Attaching must not have named anything: a second name here is the defect wearing a fix.
 	after, err := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sent.GetId()})
@@ -245,7 +245,7 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsInOnPostgres(t
 
 // A session carried over from a crew that named conversations after the task, caught mid task. The
 // crew cannot know that conversation's name until the task lands, so attaching says so rather than
-// naming a second one and opening an empty conversation beside the work.
+// naming a second one and opening an empty conversation beside the job.
 func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefusedOnPostgres(t *testing.T) {
 	box := newHeldSandbox()
 	s := aCrewOnPostgresRunningTheModelAdapter(t, box)

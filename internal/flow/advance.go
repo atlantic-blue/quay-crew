@@ -180,8 +180,8 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed)
 		// A step that did not do what the graph said would show it worked stops the run, rather than
 		// carrying on down the edge a reply happens to be sitting on. There is no recovery the crew
-		// could pick: it knows the work did not happen and it does not know why. A run that walks its
-		// success path through work that never happened is worse than one that halts, because the
+		// could pick: it knows the job did not happen and it does not know why. A run that walks its
+		// success path through job that never happened is worse than one that halts, because the
 		// summary it ends with is the model's plausible account of it.
 		if event.Unmet != "" {
 			run.State["result.expected"] = event.Unmet
@@ -214,7 +214,7 @@ func brake(graph Graph, run Run) (Run, bool) {
 	}
 	if graph.Limits.Tokens > 0 && run.Spent >= graph.Limits.Tokens {
 		run.Status = StatusStopped
-		run.Reason = fmt.Sprintf("stopped having spent %d tokens against the ceiling of %d that graph %s declares; raise limits.tokens if this is the cost of the work",
+		run.Reason = fmt.Sprintf("stopped having spent %d tokens against the ceiling of %d that graph %s declares; raise limits.tokens if this is the cost of the job",
 			run.Spent, graph.Limits.Tokens, graph.Name)
 		return run, true
 	}

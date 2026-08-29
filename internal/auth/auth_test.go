@@ -76,8 +76,8 @@ func TestTokenAtRefusesAnEmptyFile(t *testing.T) {
 	}
 }
 
-// A work credential is the third kind of caller. It is bound to one piece of work, carries only the
-// verbs that work's role declared, and is what lets a session declare work while holding strictly
+// A job credential is the third kind of caller. It is bound to one job, carries only the
+// verbs that job's role declared, and is what lets a session declare job while holding strictly
 // less than the driver does.
 
 // callThrough puts one real call through the interceptors, which is the only way to know what a
@@ -103,7 +103,7 @@ func callThrough(t *testing.T, options []grpc.ServerOption, token string) error 
 	return err
 }
 
-// grants is a double for what recognises a work token.
+// grants is a double for what recognises a job token.
 type grants map[string]auth.Grant
 
 func (g grants) Grant(token string) (auth.Grant, bool) {
@@ -111,40 +111,40 @@ func (g grants) Grant(token string) (auth.Grant, bool) {
 	return held, found
 }
 
-func TestAWorkTokenIsRecognisedAndItsGrantReachesThePolicy(t *testing.T) {
-	held := auth.Grant{Work: "work-1", Workspace: "workspace-1", Project: "project-1", Verbs: []string{"work.create"}}
+func TestAJobTokenIsRecognisedAndItsGrantReachesThePolicy(t *testing.T) {
+	held := auth.Grant{Job: "job-1", Workspace: "workspace-1", Project: "project-1", Verbs: []string{"job.create"}}
 	var seen auth.Grant
-	var sawWork bool
+	var sawJob bool
 	options := auth.ServerOptions(auth.Policy{
-		Token: "operator", Grants: grants{"work-token": held},
-		DeniedToWork: func(_ string, _ any, grant auth.Grant) error {
-			seen, sawWork = grant, true
+		Token: "operator", Grants: grants{"job-token": held},
+		DeniedToJob: func(_ string, _ any, grant auth.Grant) error {
+			seen, sawJob = grant, true
 			return nil
 		},
 	})
 
-	if err := callThrough(t, options, "work-token"); err != nil {
-		t.Fatalf("a work token was refused: %v", err)
+	if err := callThrough(t, options, "job-token"); err != nil {
+		t.Fatalf("a job token was refused: %v", err)
 	}
-	if !sawWork {
-		t.Fatal("the policy never saw the call, so a work token is judged by nothing")
+	if !sawJob {
+		t.Fatal("the policy never saw the call, so a job token is judged by nothing")
 	}
-	if seen.Work != "work-1" || len(seen.Verbs) != 1 || seen.Verbs[0] != "work.create" {
-		t.Fatalf("the grant reads %+v, want the work and the verbs the token was minted with", seen)
+	if seen.Job != "job-1" || len(seen.Verbs) != 1 || seen.Verbs[0] != "job.create" {
+		t.Fatalf("the grant reads %+v, want the job and the verbs the token was minted with", seen)
 	}
 }
 
 // The refusal is the policy's, so a session is told which verb it lacks rather than that something
 // went wrong.
-func TestAWorkTokenIsRefusedByThePolicyThatJudgesIt(t *testing.T) {
+func TestAJobTokenIsRefusedByThePolicyThatJudgesIt(t *testing.T) {
 	options := auth.ServerOptions(auth.Policy{
-		Token: "operator", Grants: grants{"work-token": {Work: "work-1"}},
-		DeniedToWork: func(string, any, auth.Grant) error {
-			return status.Error(codes.PermissionDenied, "this work may not do that")
+		Token: "operator", Grants: grants{"job-token": {Job: "job-1"}},
+		DeniedToJob: func(string, any, auth.Grant) error {
+			return status.Error(codes.PermissionDenied, "this job may not do that")
 		},
 	})
 
-	err := callThrough(t, options, "work-token")
+	err := callThrough(t, options, "job-token")
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("the refusal is %v, want the policy's own", err)
 	}
@@ -153,7 +153,7 @@ func TestAWorkTokenIsRefusedByThePolicyThatJudgesIt(t *testing.T) {
 // A token nobody minted is nobody's, however much it looks like one.
 func TestATokenNoGrantHoldsIsStillRefused(t *testing.T) {
 	options := auth.ServerOptions(auth.Policy{
-		Token: "operator", Grants: grants{"work-token": {Work: "work-1"}},
+		Token: "operator", Grants: grants{"job-token": {Job: "job-1"}},
 	})
 
 	if err := callThrough(t, options, "another-token"); status.Code(err) != codes.Unauthenticated {
@@ -162,11 +162,11 @@ func TestATokenNoGrantHoldsIsStillRefused(t *testing.T) {
 }
 
 // Each caller is judged by the policy written for it, and by no other.
-func TestTheOperatorIsNotJudgedByTheWorkPolicy(t *testing.T) {
+func TestTheOperatorIsNotJudgedByTheJobPolicy(t *testing.T) {
 	judged := false
 	options := auth.ServerOptions(auth.Policy{
-		Token: "operator", Grants: grants{"work-token": {Work: "work-1"}},
-		DeniedToWork: func(string, any, auth.Grant) error {
+		Token: "operator", Grants: grants{"job-token": {Job: "job-1"}},
+		DeniedToJob: func(string, any, auth.Grant) error {
 			judged = true
 			return status.Error(codes.PermissionDenied, "no")
 		},
@@ -176,29 +176,29 @@ func TestTheOperatorIsNotJudgedByTheWorkPolicy(t *testing.T) {
 		t.Fatalf("the operator was refused: %v", err)
 	}
 	if judged {
-		t.Fatal("the operator was put through the policy written for a piece of work")
+		t.Fatal("the operator was put through the policy written for a job")
 	}
 }
 
-// A grant that has run out is not a grant. It expires with the work, so one that leaks out of a
+// A grant that has run out is not a grant. It expires with the job, so one that leaks out of a
 // sandbox stops working.
 func TestAGrantThatHasExpiredIsRefused(t *testing.T) {
 	options := auth.ServerOptions(auth.Policy{
 		Token:  "operator",
-		Grants: grants{"work-token": {Work: "work-1", ExpiresAt: time.Now().Add(-time.Second)}},
+		Grants: grants{"job-token": {Job: "job-1", ExpiresAt: time.Now().Add(-time.Second)}},
 	})
 
-	if err := callThrough(t, options, "work-token"); status.Code(err) != codes.Unauthenticated {
+	if err := callThrough(t, options, "job-token"); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("an expired grant answered %v, want Unauthenticated", err)
 	}
 }
 
 // A crew that recognises nobody refuses everybody, which is the one behaviour this package exists to
 // keep: the guard must never fail open.
-func TestACrewWithNoTokensAtAllRefusesAWorkToken(t *testing.T) {
-	options := auth.ServerOptions(auth.Policy{Grants: grants{"work-token": {Work: "work-1"}}})
+func TestACrewWithNoTokensAtAllRefusesAJobToken(t *testing.T) {
+	options := auth.ServerOptions(auth.Policy{Grants: grants{"job-token": {Job: "job-1"}}})
 
-	if err := callThrough(t, options, "work-token"); status.Code(err) != codes.Unauthenticated {
+	if err := callThrough(t, options, "job-token"); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("a crew holding no token of its own answered %v, want Unauthenticated", err)
 	}
 }
@@ -206,14 +206,14 @@ func TestACrewWithNoTokensAtAllRefusesAWorkToken(t *testing.T) {
 // What a call is allowed to do is read from the grant it carried, so a handler asks the context
 // rather than being told by whoever called it.
 func TestTheGrantIsReadableFromTheContextOfTheCall(t *testing.T) {
-	ctx := auth.WithGrant(context.Background(), auth.Grant{Work: "work-1", Verbs: []string{"work.create"}})
+	ctx := auth.WithGrant(context.Background(), auth.Grant{Job: "job-1", Verbs: []string{"job.create"}})
 
 	got, carried := auth.GrantFrom(ctx)
 	if !carried {
 		t.Fatal("the context carries no grant")
 	}
-	if got.Work != "work-1" {
-		t.Fatalf("the grant is for %q", got.Work)
+	if got.Job != "job-1" {
+		t.Fatalf("the grant is for %q", got.Job)
 	}
 	if _, carried := auth.GrantFrom(context.Background()); carried {
 		t.Fatal("a context nobody put a grant on carries one")
@@ -221,14 +221,14 @@ func TestTheGrantIsReadableFromTheContextOfTheCall(t *testing.T) {
 }
 
 func TestAGrantSaysWhichVerbsItHolds(t *testing.T) {
-	held := auth.Grant{Verbs: []string{"work.create", "work.read"}}
+	held := auth.Grant{Verbs: []string{"job.create", "job.read"}}
 
-	for _, verb := range []string{"work.create", "work.read"} {
+	for _, verb := range []string{"job.create", "job.read"} {
 		if !held.May(verb) {
 			t.Errorf("the grant may not %s, and it holds it", verb)
 		}
 	}
-	for _, verb := range []string{"work.stop", "work.answer", ""} {
+	for _, verb := range []string{"job.stop", "job.answer", ""} {
 		if held.May(verb) {
 			t.Errorf("the grant may %s, and it never held it", verb)
 		}

@@ -73,3 +73,95 @@ func TestAConfiguredModeThatIsNotAModeStopsTheCrewStarting(t *testing.T) {
 		})
 	}
 }
+
+// A setting that changed its name is still read under the old one, and the operator is told which
+// line to rename.
+//
+// Silence would be the failure here. An operator who tuned the lease and then upgraded would keep a
+// configuration file that looks configured while the crew ran the measured default, and nothing on
+// the screen would say the two disagree.
+func TestASettingIsStillReadUnderTheNameItUsedToHave(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		env     map[string]string
+		want    string
+		notice  []string
+		absent  bool
+		because string
+	}{
+		{
+			name:    "only the old name",
+			env:     map[string]string{"QC_WORK_LEASE": "90s"},
+			want:    "90s",
+			notice:  []string{"QC_WORK_LEASE", "QC_JOB_LEASE", "still being read"},
+			because: "the number the operator chose has to survive the rename",
+		},
+		{
+			name:    "only the new name",
+			env:     map[string]string{"QC_JOB_LEASE": "90s"},
+			want:    "90s",
+			absent:  true,
+			because: "a warning about a line the operator does not have trains them to skip the warnings",
+		},
+		{
+			name:    "both, and they disagree",
+			env:     map[string]string{"QC_WORK_LEASE": "30s", "QC_JOB_LEASE": "90s"},
+			want:    "90s",
+			notice:  []string{"QC_JOB_LEASE is set too and wins"},
+			because: "two lines for one setting is the one state where which of them counts has to be said",
+		},
+		{
+			name:    "neither",
+			env:     map[string]string{},
+			want:    "",
+			absent:  true,
+			because: "a crew that configured nothing is not drifting from anything",
+		},
+		{
+			// Whitespace is how a commented out line comes back from compose.
+			name:    "the old name is blank",
+			env:     map[string]string{"QC_WORK_LEASE": "   "},
+			want:    "",
+			absent:  true,
+			because: "a blank line is a setting the operator already removed",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value, notice := renamedSetting("QC_JOB_LEASE", func(key string) string { return tc.env[key] })
+			if value != tc.want {
+				t.Errorf("the lease reads %q, want %q, and %s", value, tc.want, tc.because)
+			}
+			if tc.absent && notice != "" {
+				t.Errorf("it says %q, and %s", notice, tc.because)
+			}
+			for _, want := range tc.notice {
+				if !strings.Contains(notice, want) {
+					t.Errorf("the notice %q does not mention %q, and %s", notice, want, tc.because)
+				}
+			}
+		})
+	}
+}
+
+// Every renamed setting points at a name something actually reads, which is how this table goes
+// stale: an entry is added, the reader is renamed again, and the fallback quietly stops firing.
+func TestEveryRenamedSettingPointsAtANameThatIsRead(t *testing.T) {
+	if len(renamedSettings) == 0 {
+		t.Fatal("the renamed table is empty, so this test proves nothing")
+	}
+	for was, becomes := range renamedSettings {
+		if was == becomes {
+			t.Errorf("%s is renamed to itself", was)
+		}
+		value, _ := renamedSetting(becomes, func(key string) string {
+			if key == was {
+				return "90s"
+			}
+			return ""
+		})
+		if value != "90s" {
+			t.Errorf("%s is set and %s reads %q, so the old name is in the table and nothing reads it",
+				was, becomes, value)
+		}
+	}
+}

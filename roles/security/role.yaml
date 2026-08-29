@@ -3,6 +3,6 @@ version: 1
 summary: reviews a change for security defects and writes a failing test for each one, and never fixes the code itself
 model: sonnet
 receives:
-  - work
+  - job
   - context
   - skills

@@ -15,10 +15,10 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -888,7 +888,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	})
 
 	// A project cannot outlive the workspace it belongs to, or deleting a workspace would leave its
-	// work reachable and dispatchable.
+	// job reachable and dispatchable.
 	t.Run("deleting a workspace hides its projects", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -910,7 +910,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	})
 
 	// A session identifier only has to be unique inside its project, which is what lets two bodies of
-	// work in one workspace both have a session the channel calls "general".
+	// job in one workspace both have a session the channel calls "general".
 	t.Run("two projects in one workspace can share a session identifier", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -1109,7 +1109,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 
 		// Read back through both roads: a run that reads as running in one and stopped in the other
-		// would have the console and the command line disagreeing about whether work is happening.
+		// would have the console and the command line disagreeing about whether job is happening.
 		kept, err := s.GetFlowRun(ctx, "run-stopped")
 		if err != nil {
 			t.Fatalf("GetFlowRun: %v", err)
@@ -1316,11 +1316,11 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	// A flow run is carried by a piece of work, and every step it takes is a piece of work under
-	// that one. Both stores have to write the run, the work and the record of it together, because a
+	// A flow run is carried by a job, and every step it takes is a job under
+	// that one. Both stores have to write the run, the job and the record of it together, because a
 	// step written without its movement is paid for twice and a movement written without its step is a
 	// run waiting on something nobody declared.
-	t.Run("a run hangs under a piece of work, and its step is another under that", func(t *testing.T) {
+	t.Run("a run hangs under a job, and its step is another under that", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -1345,36 +1345,36 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if read != carrier.ID {
 			t.Fatalf("the run is carried by %q, want %q", read, carrier.ID)
 		}
-		if _, err := s.GetWork(ctx, carrier.ID); err != nil {
-			t.Fatalf("the work carrying the run is not there: %v", err)
+		if _, err := s.GetJob(ctx, carrier.ID); err != nil {
+			t.Fatalf("the job carrying the run is not there: %v", err)
 		}
 		// And the record of the run starting landed with it.
-		history, err := s.ListWorkEvents(ctx, carrier.ID)
+		history, err := s.ListJobEvents(ctx, carrier.ID)
 		if err != nil || len(history) != len(records) {
-			t.Fatalf("the run's own work has %d records (%v), want %d", len(history), err, len(records))
+			t.Fatalf("the run's own job has %d records (%v), want %d", len(history), err, len(records))
 		}
 
 		// One movement: the run goes to a dispatch node, the step is written down under it, and the
-		// run's own work is moved to say it is out with something.
-		step := &work.Work{
+		// run's own job is moved to say it is out with something.
+		step := &job.Job{
 			ID: "step-fix", Workspace: workspace, Project: project,
 			Title: "fix-red step fix", Brief: "fix the build",
-			Parent: carrier.ID, Depth: carrier.Depth + 1, Version: 1, Phase: work.PhasePending,
+			Parent: carrier.ID, Depth: carrier.Depth + 1, Version: 1, Phase: job.PhasePending,
 			Labels: map[string]string{"flow.run": run.ID, "flow.node": "fix"},
 		}
 		run.Node, run.Status, run.Attempts = "fix", flow.StatusWorking, map[string]int{"fix": 1}
 		if err := s.AdvanceFlowRun(ctx, run, flow.Transition{
 			Event: flow.EventStarted, Node: "fix",
 			Dispatch: &flow.Command{Kind: flow.CommandDispatch, Node: "fix", Attempt: 1, Prompt: "fix the build"},
-			Work: flow.WorkWrite{
+			Job: flow.JobWrite{
 				Declared: step,
-				Carrier:  &flow.Carrier{Work: carrier.ID, Phase: work.PhaseWaiting},
-				Records:  []*work.Event{declaredEvent(step)},
+				Carrier:  &flow.Carrier{Job: carrier.ID, Phase: job.PhaseWaiting},
+				Records:  []*job.Event{declaredEvent(step)},
 			},
 		}); err != nil {
 			t.Fatalf("AdvanceFlowRun: %v", err)
 		}
-		written, err := s.GetWork(ctx, step.ID)
+		written, err := s.GetJob(ctx, step.ID)
 		if err != nil {
 			t.Fatalf("the step was not written with the movement: %v", err)
 		}
@@ -1392,13 +1392,13 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 
 		// The step ends, through the same calls a controller makes.
-		if _, err := s.StartWork(ctx, step.ID, work.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)},
-			[]*work.Event{declaredEvent(step)}); err != nil {
-			t.Fatalf("StartWork: %v", err)
+		if _, err := s.StartJob(ctx, step.ID, job.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)},
+			[]*job.Event{declaredEvent(step)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
 		}
-		if _, err := s.LandWork(ctx, step.ID, work.Landing{Phase: work.PhaseDone, Answer: "fixed it"},
+		if _, err := s.LandJob(ctx, step.ID, job.Landing{Phase: job.PhaseDone, Answer: "fixed it"},
 			declaredEvent(step)); err != nil {
-			t.Fatalf("LandWork: %v", err)
+			t.Fatalf("LandJob: %v", err)
 		}
 
 		landed, err = s.LandedFlowSteps(ctx, 0)
@@ -1417,8 +1417,8 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		run.Node, run.Status = "done", flow.StatusDone
 		answering := flow.Transition{
 			Event: flow.EventTaskFinished, Node: "done", Answers: step.ID,
-			Work: flow.WorkWrite{Carrier: &flow.Carrier{
-				Work: carrier.ID, Phase: work.PhaseDone, Answer: "fixed it",
+			Job: flow.JobWrite{Carrier: &flow.Carrier{
+				Job: carrier.ID, Phase: job.PhaseDone, Answer: "fixed it",
 			}},
 		}
 		if err := s.AdvanceFlowRun(ctx, run, answering); err != nil {
@@ -1427,16 +1427,16 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err := s.AdvanceFlowRun(ctx, run, answering); !errors.Is(err, flow.ErrRunHalted) {
 			t.Fatalf("the same landed step moved the run twice: %v", err)
 		}
-		// And the run's own work says what the run came to, so a person reads one record.
-		ended, err := s.GetWork(ctx, carrier.ID)
+		// And the run's own job says what the run came to, so a person reads one record.
+		ended, err := s.GetJob(ctx, carrier.ID)
 		if err != nil {
-			t.Fatalf("GetWork: %v", err)
+			t.Fatalf("GetJob: %v", err)
 		}
-		if ended.Phase != work.PhaseDone || ended.Answer != "fixed it" {
-			t.Fatalf("the run's own work is %q answering %q, want done with the run's answer", ended.Phase, ended.Answer)
+		if ended.Phase != job.PhaseDone || ended.Answer != "fixed it" {
+			t.Fatalf("the run's own job is %q answering %q, want done with the run's answer", ended.Phase, ended.Answer)
 		}
 		if ended.FinishedAt == nil {
-			t.Fatal("the run's own work ended and carries no finishing time")
+			t.Fatal("the run's own job ended and carries no finishing time")
 		}
 	})
 
@@ -1935,25 +1935,25 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 	runHookConformance(t, newDataset)
 	runRoleConformance(t, newDataset)
-	runWorkConformance(t, newDataset)
-	runWorkControllerConformance(t, newDataset)
-	runWorkLeaseConformance(t, newDataset)
+	runJobConformance(t, newDataset)
+	runJobControllerConformance(t, newDataset)
+	runJobLeaseConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
 	runTriggerConformance(t, newDataset)
 }
 
-// carrierFor is the piece of work that carries a run, the way the flow engine writes one. A run
-// hangs inside the work tree rather than beside it, so a store that writes a run without one is a
+// carrierFor is the job that carries a run, the way the flow engine writes one. A run
+// hangs inside the job tree rather than beside it, so a store that writes a run without one is a
 // store the engine cannot use.
-func carrierFor(run *flow.Run) (*work.Work, []*work.Event) {
-	carrier := &work.Work{
+func carrierFor(run *flow.Run) (*job.Job, []*job.Event) {
+	carrier := &job.Job{
 		ID: "carrier-" + run.ID, Workspace: run.Workspace, Project: run.Project,
 		Title: "flow " + run.GraphName, Brief: "carries the run of " + run.GraphName,
-		Version: 1, Phase: work.PhaseWaiting, TraceID: "trace-" + run.ID,
+		Version: 1, Phase: job.PhaseWaiting, TraceID: "trace-" + run.ID,
 	}
-	return carrier, []*work.Event{{
-		ID: "declared-" + run.ID, Kind: work.EventDeclared, Work: carrier.ID,
+	return carrier, []*job.Event{{
+		ID: "declared-" + run.ID, Kind: job.EventDeclared, Job: carrier.ID,
 		Workspace: run.Workspace, Project: run.Project, OccurredAt: time.Now().UTC(),
 	}}
 }

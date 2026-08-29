@@ -4,7 +4,7 @@ import (
 	"context"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -12,7 +12,7 @@ import (
 // GetWorkspaceLimits says what a workspace lets its sessions declare.
 //
 // A workspace nobody has set limits on answers with the defaults rather than with nothing, because
-// the defaults are the answer: max_depth is zero, so no session in it may declare work at all.
+// the defaults are the answer: max_depth is zero, so no session in it may declare a job at all.
 func (s *Server) GetWorkspaceLimits(ctx context.Context, req *quaycrewv1.GetWorkspaceLimitsRequest) (
 	*quaycrewv1.GetWorkspaceLimitsResponse, error) {
 	if req.GetWorkspace() == "" {
@@ -61,7 +61,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 		}
 	}
 
-	written, err := s.store.SetWorkspaceLimits(ctx, work.Limits{
+	written, err := s.store.SetWorkspaceLimits(ctx, job.Limits{
 		Workspace: asked.GetWorkspace(), MaxDepth: int(asked.GetMaxDepth()),
 		MaxRunning: int(asked.GetMaxRunning()), BudgetTokens: asked.GetBudgetTokens(),
 		LeaseSeconds:   int(asked.GetLeaseSeconds()),
@@ -75,7 +75,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 }
 
 // asLimits puts a workspace's ceiling on the wire.
-func asLimits(from work.Limits) *quaycrewv1.WorkspaceLimits {
+func asLimits(from job.Limits) *quaycrewv1.WorkspaceLimits {
 	return &quaycrewv1.WorkspaceLimits{
 		Workspace: from.Workspace, MaxDepth: int32(from.MaxDepth),
 		MaxRunning: int32(from.MaxRunning), BudgetTokens: from.BudgetTokens,

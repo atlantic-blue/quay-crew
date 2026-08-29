@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -60,7 +60,7 @@ func (p *Postgres) FlowGraph(ctx context.Context, name string, version int) (str
 }
 
 // DueFlowRuns are the waiting runs whose time has come. Only those: a crew with a thousand finished
-// runs and one waiting does one row's work per tick, which is what the partial index is for.
+// runs and one waiting does one row's job per tick, which is what the partial index is for.
 func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
@@ -75,11 +75,11 @@ func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run,
 	return scanFlowRuns(rows)
 }
 
-// CreateFlowRun writes a fresh run and the piece of work that carries it, in one transaction.
+// CreateFlowRun writes a fresh run and the job that carries it, in one transaction.
 //
-// One transaction because a run outside the work tree is a run neither the depth limit nor the
-// budget counts, and a piece of work carrying a run that was never written is a row nothing explains.
-func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
+// One transaction because a run outside the job tree is a run neither the depth limit nor the
+// budget counts, and a job carrying a run that was never written is a row nothing explains.
+func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *job.Job, records []*job.Event, trigger string) error {
 	state, attempts, err := runJSON(run)
 	if err != nil {
 		return err
@@ -90,11 +90,11 @@ func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *wo
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := insertWork(ctx, tx, carrier); err != nil {
+	if err := insertJob(ctx, tx, carrier); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts, transitions, spent, reason, question, work)
+		insert into flow_runs (id, workspace, project, graph_name, graph_version, node, status, state, attempts, transitions, spent, reason, question, job)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		run.ID, run.Workspace, run.Project, run.GraphName, run.GraphVersion,
 		run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason, run.Question,
@@ -125,11 +125,11 @@ func (p *Postgres) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *wo
 	return nil
 }
 
-// FlowRunCarrier is the piece of work that carries a run.
+// FlowRunCarrier is the job that carries a run.
 func (p *Postgres) FlowRunCarrier(ctx context.Context, run string) (string, error) {
 	var carrier string
 	err := p.pool.QueryRow(ctx,
-		`select coalesce(work, '') from flow_runs where id = $1`, run).Scan(&carrier)
+		`select coalesce(job, '') from flow_runs where id = $1`, run).Scan(&carrier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	}
@@ -141,7 +141,7 @@ func (p *Postgres) FlowRunCarrier(ctx context.Context, run string) (string, erro
 
 // LandedFlowSteps are the runs whose step has ended: working runs whose step reached a terminal
 // phase. The poller reads these and nothing else, so a crew with a thousand finished runs does the
-// work of the few that are out with a step.
+// job of the few that are out with a step.
 //
 // The step is read back by identifier rather than joined, because a join of two tables that both
 // carry id, status, workspace and project has to qualify every column, and one wrong prefix in that
@@ -150,10 +150,10 @@ func (p *Postgres) FlowRunCarrier(ctx context.Context, run string) (string, erro
 func (p *Postgres) LandedFlowSteps(ctx context.Context, limit int) ([]flow.Landed, error) {
 	query := `
 		select id, workspace, project, graph_name, graph_version, node, status, state, attempts,
-		       transitions, spent, reason, due_at, question, step_work
+		       transitions, spent, reason, due_at, question, step_job
 		from flow_runs
-		where status = $1 and step_work is not null
-		  and exists (select 1 from work w where w.id = flow_runs.step_work and w.phase = any($2))
+		where status = $1 and step_job is not null
+		  and exists (select 1 from jobs w where w.id = flow_runs.step_job and w.phase = any($2))
 		order by updated_at`
 	if limit > 0 {
 		query += fmt.Sprintf(" limit %d", limit)
@@ -192,7 +192,7 @@ func (p *Postgres) LandedFlowSteps(ctx context.Context, limit int) ([]flow.Lande
 
 	landed := make([]flow.Landed, 0, len(runs))
 	for _, run := range runs {
-		step, err := p.GetWork(ctx, steps[run.ID])
+		step, err := p.GetJob(ctx, steps[run.ID])
 		if err != nil {
 			return nil, fmt.Errorf("landed flow step %s: %w", steps[run.ID], err)
 		}
@@ -219,9 +219,9 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	// The step this movement declares, or nothing where it dispatched nothing, which also clears the
 	// step the run was out with.
 	step := ""
-	if transition.Work.Declared != nil {
-		step = transition.Work.Declared.ID
-		if err := insertWork(ctx, tx, transition.Work.Declared); err != nil {
+	if transition.Job.Declared != nil {
+		step = transition.Job.Declared.ID
+		if err := insertJob(ctx, tx, transition.Job.Declared); err != nil {
 			return err
 		}
 	}
@@ -232,8 +232,8 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 	tag, err := tx.Exec(ctx, `
 		update flow_runs set node = $2, status = $3, state = $4, attempts = $5,
 		    transitions = $6, spent = $7, reason = $8, due_at = $9, question = $10,
-		    step_work = nullif($13, ''), updated_at = now()
-		where id = $1 and status = any($11) and ($12 = '' or coalesce(step_work, '') = $12)`,
+		    step_job = nullif($13, ''), updated_at = now()
+		where id = $1 and status = any($11) and ($12 = '' or coalesce(step_job, '') = $12)`,
 		run.ID, run.Node, run.Status, state, attempts, run.Transitions, run.Spent, run.Reason,
 		transition.Due, run.Question, liveRunStatuses(), transition.Answers, step)
 	if err != nil {
@@ -267,19 +267,19 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 			return fmt.Errorf("claim flow dispatch: %w", err)
 		}
 	}
-	if on := transition.Work.Carrier; on != nil {
+	if on := transition.Job.Carrier; on != nil {
 		if _, err := tx.Exec(ctx, `
-			update work set phase = $2, question = $3,
+			update jobs set phase = $2, question = $3,
 			    answer = case when $4 = '' then answer else $4 end,
 			    reason = case when $5 = '' then reason else $5 end,
 			    finished_at = case when $6 then coalesce(finished_at, now()) else finished_at end,
 			    updated_at = now()
 			where id = $1`,
-			on.Work, on.Phase, on.Question, on.Answer, on.Reason, work.Terminal(on.Phase)); err != nil {
-			return fmt.Errorf("advance the work carrying a flow run: %w", err)
+			on.Job, on.Phase, on.Question, on.Answer, on.Reason, job.Terminal(on.Phase)); err != nil {
+			return fmt.Errorf("advance the job carrying a flow run: %w", err)
 		}
 	}
-	if err := appendRunRecords(ctx, tx, transition.Work.Records); err != nil {
+	if err := appendRunRecords(ctx, tx, transition.Job.Records); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -295,12 +295,12 @@ func liveRunStatuses() []string {
 }
 
 // appendRunRecords writes the records of one movement of a run, in the transaction that moved it.
-func appendRunRecords(ctx context.Context, tx pgx.Tx, records []*work.Event) error {
+func appendRunRecords(ctx context.Context, tx pgx.Tx, records []*job.Event) error {
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
-		if err := appendWorkEvent(ctx, tx, record); err != nil {
+		if err := appendJobEvent(ctx, tx, record); err != nil {
 			return err
 		}
 	}

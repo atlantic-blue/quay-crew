@@ -317,7 +317,7 @@ func conversationFlag(started bool) string {
 // to be any use. It is a check now: the crew hands the name down before the task starts, so a stream
 // carrying a different one means the runtime ignored the flag, and everything the crew reports about
 // that session afterwards, its history and what it cost, is being read from a transcript nobody wrote.
-// Both names are in the sentence, because the work is under the second one.
+// Both names are in the sentence, because the job is under the second one.
 func ConversationCheck(asked, reported string) string {
 	if asked == "" || reported == "" || asked == reported {
 		return ""

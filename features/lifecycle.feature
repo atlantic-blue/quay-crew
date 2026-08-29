@@ -3,7 +3,7 @@ Feature: A session gives its container back and keeps its history
   The crew never put a session away on its own. Nothing removed a container without somebody asking,
   so a session that answered one question in March still held its container in August.
 
-  This is the loop that does. It is the same controller that runs work, reading a fourth query: the
+  This is the loop that does. It is the same controller that runs jobs, reading a fourth query: the
   sessions nothing is holding open. One of those, idle for longer than its workspace allows, gives its
   container back and reads "reclaimed". Everything else it has stays, so the next task builds a fresh
   container over the same conversation and carries on.
@@ -60,9 +60,9 @@ Feature: A session gives its container back and keeps its history
     Then the session is reported as idle
     And the crew still holds its container
 
-  Scenario: A session a piece of work is still running in is never taken
+  Scenario: A session a job is still running in is never taken
     Given the workspace reclaims a session after 1 second
-    And a piece of work titled "read the electricity bill"
+    And a job titled "read the electricity bill"
     And the model takes longer over a task than anybody will wait
     When the controller ticks
     And the reclaim time passes
@@ -116,13 +116,13 @@ Feature: A session gives its container back and keeps its history
     Then the crew says there was nothing to stop
     And the session still holds 1 task
 
-  # What happens to the work that was running in it. A stop is not a crash, so the work is stopped
+  # What happens to the job that was running in it. A stop is not a crash, so the job is stopped
   # with the operator's reason rather than failed with whatever the runtime said about being killed.
-  Scenario: Work running in a session an operator stopped is stopped, not failed
-    Given a piece of work titled "read the electricity bill"
+  Scenario: A job running in a session an operator stopped is stopped, not failed
+    Given a job titled "read the electricity bill"
     And the model takes longer over a task than anybody will wait
     When the controller ticks
-    And the operator stops the session the work is running in saying "the bill is not due yet"
+    And the operator stops the session the job is running in saying "the bill is not due yet"
     And the controller ticks again
-    Then the work reads stopped, saying "the bill is not due yet"
-    And the work carries no answer
+    Then the job reads stopped, saying "the bill is not due yet"
+    And the job carries no answer

@@ -80,42 +80,42 @@ message SessionEvent {
   google.protobuf.Timestamp occurred_at = 8;
 }
 
-// WorkEvent is one thing that happened to a piece of work, written every time it happens.
+// JobEvent is one thing that happened to a job, written every time it happens.
 //
-// It goes to the `work_events` table in the same transaction as the row it describes, and to
-// `<workspace>.work` after, keyed by the work identifier so one piece of work's records stay in
+// It goes to the `job_events` table in the same transaction as the row it describes, and to
+// `<workspace>.job` after, keyed by the job identifier so one job's records stay in
 // order on one partition. The store is the truth: a crew with no broker keeps the whole history and
 // loses only the export.
 //
-// The kinds split in two, and the split is the useful part. A dashboard counting work must not break
+// The kinds split in two, and the split is the useful part. A dashboard counting jobs must not break
 // because the crew changed how it leases.
-message WorkEvent {
+message JobEvent {
   // id identifies this record. Delivery from the log is at least once, so a consumer sees the same
   // record more than once and needs something to recognise it by. It is the same value as the row in
-  // the `work_events` table.
+  // the `job_events` table.
   string id = 1;
   // kind is what happened, and it is the field a consumer switches on.
   //
   // The contract, which another service may depend on:
   //
-  //   work.declared   somebody wrote the work down
-  //   work.started    a controller sent its brief as a task
-  //   work.answered   the answer landed and the claim held
-  //   work.failed     the model did not finish, or the sandbox could not be made
-  //   work.asked      it put a question to a person
-  //   work.stopped    a person stopped it, or a limit did, or its claim did not hold
+  //   job.declared   somebody wrote the job down
+  //   job.started    a controller sent its brief as a task
+  //   job.answered   the answer landed and the claim held
+  //   job.failed     the model did not finish, or the sandbox could not be made
+  //   job.asked      it put a question to a person
+  //   job.stopped    a person stopped it, or a limit did, or its claim did not hold
   //
   // Internal, which nothing outside should depend on:
   //
-  //   work.claimed    a controller took the row
-  //   work.released   a controller's hold ran out and another took it
+  //   job.claimed    a controller took the row
+  //   job.released   a controller's hold ran out and another took it
   //
   // A kind names something that happened, in the past tense, at one moment. A phase, "pending" or
   // "running", is what the row says now, which is the fold of these, so it is never a kind.
   string kind = 2;
-  // work is the piece of work this happened to, and the key the record is published under.
-  string work = 3;
-  // workspace, project, parent and depth are where the work sits in the tree, denormalised
+  // job is the job this happened to, and the key the record is published under.
+  string job = 3;
+  // workspace, project, parent and depth are where the job sits in the tree, denormalised
   // deliberately: a consumer must not have to query the store to know what it is reading. parent is
   // empty for a root.
   string workspace = 4;
@@ -127,7 +127,7 @@ message WorkEvent {
   // redactor before it is written or exported.
   string detail = 8;
   // trace_id is the trace the whole tree belongs to, minted at the root and inherited by every
-  // descendant, so one identifier joins a piece of work, its children, its tasks and its spans.
+  // descendant, so one identifier joins a job, its children, its tasks and its spans.
   string trace_id = 9;
   // occurred_at is when it happened.
   google.protobuf.Timestamp occurred_at = 10;

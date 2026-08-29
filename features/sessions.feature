@@ -41,7 +41,7 @@ Feature: Sessions run in isolated sandboxes
 
   # A task cannot yet be dispatched after a restart: the control plane forgets which container each
   # session was running in, and starting a new one collides with the container still on the host.
-  # Reattaching a session to its sandbox is separate work.
+  # Reattaching a session to its sandbox is separate job.
   Scenario: A session survives the control plane restarting
     Given a session started by dispatching "remember this"
     When the control plane restarts

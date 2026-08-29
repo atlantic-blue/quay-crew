@@ -206,7 +206,7 @@ other name findable rather than quietly adopting it.
 - **A session running a task that named its own conversation cannot be opened.** That is a session
   carried over from before this, caught mid task: the crew does not know that conversation's name and
   cannot until the task lands. Attaching is refused, in those words, rather than naming a second
-  conversation and opening an empty one beside the work. The name lands on the session when the task
+  conversation and opening an empty one beside the job. The name lands on the session when the task
   finishes, and attaching works from then on.
 - **A transcript written under a name a session does not hold is not deleted, and not shown either.**
   Attaching used to name a conversation of its own while a first task was running, so a sandbox built
@@ -509,7 +509,7 @@ session that ever worked in a repository.
 `QC_DATA_HOST` moves the directory somewhere else, for example a disk with more room:
 
 ```
-QC_DATA_HOST=/Volumes/work/quaycrew make up
+QC_DATA_HOST=/Volumes/job/quaycrew make up
 ```
 
 Compose gives the control plane its own view of that directory and tells it the host path as well,

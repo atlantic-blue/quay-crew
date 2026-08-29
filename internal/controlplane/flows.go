@@ -91,15 +91,15 @@ func (s *Server) ListFlowRuns(ctx context.Context, req *quaycrewv1.ListFlowRunsR
 	return &quaycrewv1.ListFlowRunsResponse{Runs: out}, nil
 }
 
-// flowRun puts a run on the wire, with the piece of work that carries it.
+// flowRun puts a run on the wire, with the job that carries it.
 //
-// The work is read here rather than kept on the run, because the reducer holds the run and has no
-// business knowing where in the tree it sits. A run whose work cannot be read is answered without it
+// The job is read here rather than kept on the run, because the reducer holds the run and has no
+// business knowing where in the tree it sits. A run whose job cannot be read is answered without it
 // rather than refused: where it sits is not why somebody asked.
 func (s *Server) flowRun(ctx context.Context, run *flow.Run) *quaycrewv1.FlowRun {
 	on := asFlowRun(run)
 	if carrier, err := s.store.FlowRunCarrier(ctx, run.ID); err == nil {
-		on.Work = carrier
+		on.Job = carrier
 	}
 	return on
 }
@@ -228,7 +228,7 @@ func (s *Server) RunFlowPoller(ctx context.Context) {
 }
 
 // TickFlows moves every run the crew holds on by one step: a wait that came due, a schedule that
-// fired, a step whose work ended. Exported so a test and a scenario drive one tick rather than
+// fired, a step whose job ended. Exported so a test and a scenario drive one tick rather than
 // waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (s *Server) TickFlows(ctx context.Context) {
 	s.flowPoller.Tick(ctx)
@@ -236,7 +236,7 @@ func (s *Server) TickFlows(ctx context.Context) {
 
 // SessionTokens is what one session's conversation has cost, which is what a run's ceiling is checked
 // against. Zero for a session that is gone, has no conversation yet, or whose transcript cannot be
-// read: a cost that cannot be read is not a reason to stop work that is already under way.
+// read: a cost that cannot be read is not a reason to stop job that is already under way.
 func (s *Server) SessionTokens(ctx context.Context, id string) int64 {
 	session, err := s.store.GetSession(ctx, id)
 	if err != nil {

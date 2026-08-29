@@ -39,9 +39,9 @@ func TestADispatchNodeDeclaresWhatProvesItWorked(t *testing.T) {
 // run took the success edge and finished at done with the model's account of work that never
 // happened. It stops instead, and says what it was looking for.
 //
-// What a claim is checked against lives on the piece of work the step goes out as, and the work
-// controller reads it after the task: TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheWork and
-// TestAFileTheWorkClaimedIsCheckedAndItsAbsenceStopsTheWork in internal/work. This is the half the
+// What a claim is checked against lives on the job the step goes out as, and the job
+// controller reads it after the task: TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheJob and
+// TestAFileTheJobClaimedIsCheckedAndItsAbsenceStopsTheJob in internal/job. This is the half the
 // reducer owns, which is what a run does about it.
 func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 	graph, err := Parse([]byte(provingGraph))
@@ -54,7 +54,7 @@ func TestAnUnmetExpectationStopsTheRun(t *testing.T) {
 		Kind:  EventTaskFinished,
 		Node:  "read",
 		Reply: "the working directory is empty, so I summarised the project from memory",
-		Unmet: "package.json is not in the session that did the work",
+		Unmet: "package.json is not in the session that did the job",
 	})
 	if err != nil {
 		t.Fatalf("advance: %v", err)
@@ -97,7 +97,7 @@ func TestAMetExpectationCarriesTheRunOn(t *testing.T) {
 	}
 }
 
-func TestANodeThatDoesNoWorkCannotSayWhatProvesItWorked(t *testing.T) {
+func TestANodeThatDoesNoJobCannotSayWhatProvesItWorked(t *testing.T) {
 	_, err := Parse([]byte(`
 name: confused
 version: 1

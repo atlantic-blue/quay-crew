@@ -58,7 +58,7 @@ func TestASessionWhoseRuntimeIsRunningDoesNotReadIdle(t *testing.T) {
 		t.Fatalf("the listing says %q, want %q", word, display.StatusAwake)
 	}
 	// The row itself is untouched. Status says whether a dispatched task is open and that is still
-	// true, so an event log and a work controller reading it are unaffected.
+	// true, so an event log and a job controller reading it are unaffected.
 	if listed.GetStatus() != controlplane.StatusIdle {
 		t.Fatalf("the session's own status reads %q, and no task is open, so it should read idle",
 			listed.GetStatus())

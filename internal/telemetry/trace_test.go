@@ -45,7 +45,7 @@ func TestATraceIdentifierIsMintedInTheShapeEverythingElseUses(t *testing.T) {
 	}
 }
 
-// The row is the trace context. A controller that picks up work reads both off it and goes on being
+// The row is the trace context. A controller that picks up job reads both off it and goes on being
 // part of the same trace, which is what makes a trace survive the process that started it.
 func TestAContextUnderARecordedTraceCarriesItOn(t *testing.T) {
 	const (
@@ -67,7 +67,7 @@ func TestAContextUnderARecordedTraceCarriesItOn(t *testing.T) {
 	}
 }
 
-// A trace with no span still joins. Work declared by something nothing was inside belongs to the
+// A trace with no span still joins. Job declared by something nothing was inside belongs to the
 // trace and has no parent within it, which is the honest shape rather than a made up parent.
 func TestATraceWithNoSpanStillJoins(t *testing.T) {
 	ctx := telemetry.Under(context.Background(), "4bf92f3577b34da6a3ce929d0e0e4736", "")
@@ -101,12 +101,12 @@ func TestARecordedTraceTheCrewCannotReadIsIgnored(t *testing.T) {
 	}
 }
 
-// Recording a span that already happened must never panic on the times a row can actually hold: work
+// Recording a span that already happened must never panic on the times a row can actually hold: job
 // that never started has no start, and a clock that moved backwards is not a duration.
 func TestRecordingASpanWithNoHonestDurationDoesNothing(t *testing.T) {
 	ctx := telemetry.Under(context.Background(), "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7")
 	now := time.Now()
-	telemetry.Record(ctx, "work", time.Time{}, now)
-	telemetry.Record(ctx, "work", now, now.Add(-time.Hour))
-	telemetry.Record(ctx, "work", now.Add(-time.Hour), now)
+	telemetry.Record(ctx, "job", time.Time{}, now)
+	telemetry.Record(ctx, "job", now, now.Add(-time.Hour))
+	telemetry.Record(ctx, "job", now.Add(-time.Hour), now)
 }

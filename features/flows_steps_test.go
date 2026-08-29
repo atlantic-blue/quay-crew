@@ -13,19 +13,19 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/cucumber/godog"
 )
 
 // The flow scenarios drive the crew the way the crew drives itself. A run declares its step as a
-// piece of work and returns, so nothing here finishes a run on its own: the work controller sends
-// the task, and the flow poller carries the run on when that work ends. Both are ticked rather than
+// job and returns, so nothing here finishes a run on its own: the job controller sends
+// the task, and the flow poller carries the run on when that job ends. Both are ticked rather than
 // waited for, because a scenario that slept would be slow when it passed and flaky when it did not.
 
 // planeClient adapts the gRPC client to the one call the engine is allowed. The engine dispatches
-// nothing now: a step is a piece of work, and the work controller is what sends its task.
+// nothing now: a step is a job, and the job controller is what sends its task.
 type planeClient struct {
 	client quaycrewv1.ControlPlaneServiceClient
 }
@@ -118,7 +118,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		if step.Phase != work.PhaseRunning {
+		if step.Phase != job.PhaseRunning {
 			return fmt.Errorf("the step is %q, want it running with the model", step.Phase)
 		}
 		if step.Answer != "" {
@@ -139,7 +139,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's step is a piece of work under the run, one level deeper$`, func(ctx context.Context) error {
+	sc.Step(`^the run's step is a job under the run, one level deeper$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
 		if err != nil {
@@ -154,7 +154,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if step.Parent != carrier.ID {
-			return fmt.Errorf("the step hangs under %q, want the work carrying the run %q", step.Parent, carrier.ID)
+			return fmt.Errorf("the step hangs under %q, want the job carrying the run %q", step.Parent, carrier.ID)
 		}
 		if step.Depth != carrier.Depth+1 {
 			return fmt.Errorf("the step is at depth %d and the run at %d, want one deeper", step.Depth, carrier.Depth)
@@ -183,15 +183,15 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^no piece of work of the run is still open$`, func(ctx context.Context) error {
+	sc.Step(`^no job of the run is still open$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		steps, err := runSteps(ctx, w)
 		if err != nil {
 			return err
 		}
 		for _, step := range steps {
-			if !work.Terminal(step.Phase) {
-				return fmt.Errorf("the step %q is %q, so the run is still out with work while it asks",
+			if !job.Terminal(step.Phase) {
+				return fmt.Errorf("the step %q is %q, so the run is still out with a job while it asks",
 					step.Title, step.Phase)
 			}
 		}
@@ -223,29 +223,29 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's own work carries what the run came to$`, func(ctx context.Context) error {
+	sc.Step(`^the run's own job carries what the run came to$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		carrier, err := runCarrier(ctx, w)
 		if err != nil {
 			return err
 		}
-		if carrier.Phase != work.PhaseDone {
-			return fmt.Errorf("the run finished and the work carrying it is %q", carrier.Phase)
+		if carrier.Phase != job.PhaseDone {
+			return fmt.Errorf("the run finished and the job carrying it is %q", carrier.Phase)
 		}
 		if carrier.Answer == "" {
-			return fmt.Errorf("the work carrying the run carries no answer")
+			return fmt.Errorf("the job carrying the run carries no answer")
 		}
 		return nil
 	})
 
-	sc.Step(`^the run's own work records "([^"]*)" and then "([^"]*)"$`,
+	sc.Step(`^the run's own job records "([^"]*)" and then "([^"]*)"$`,
 		func(ctx context.Context, first, second string) error {
 			w := worldFrom(ctx)
 			carrier, err := runCarrier(ctx, w)
 			if err != nil {
 				return err
 			}
-			records, err := w.store.ListWorkEvents(ctx, carrier.ID)
+			records, err := w.store.ListJobEvents(ctx, carrier.ID)
 			if err != nil {
 				return err
 			}
@@ -255,7 +255,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 			}
 			at, then := indexOfKind(kinds, first), indexOfKind(kinds, second)
 			if at < 0 || then < 0 || at > then {
-				return fmt.Errorf("the work carrying the run records %v, want %q before %q", kinds, first, second)
+				return fmt.Errorf("the job carrying the run records %v, want %q before %q", kinds, first, second)
 			}
 			return nil
 		})
@@ -314,7 +314,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		if w.lastErr != nil {
 			return w.lastErr
 		}
-		// The answer moves the run to its next step, and that step is a piece of work a controller
+		// The answer moves the run to its next step, and that step is a job a controller
 		// runs rather than a call the answer waits on.
 		return driveTheCrew(ctx)
 	})
@@ -534,9 +534,9 @@ func tickFlowPoller(ctx context.Context, forward time.Duration) error {
 // driveTheCrew ticks the crew's two loops until nothing is moving.
 //
 // This is what the crew does on its own every few seconds, done in one pass rather than over an
-// interval: the work controller claims each step and sends its task, the task lands, the controller
-// writes the answer onto the work, and the poller carries the run on to its next step. It ends when
-// no piece of work is open and no run has a step that has ended, which is a run that finished,
+// interval: the job controller claims each step and sends its task, the task lands, the controller
+// writes the answer onto the job, and the poller carries the run on to its next step. It ends when
+// no job is open and no run has a step that has ended, which is a run that finished,
 // waited, asked or stopped.
 //
 // The cap is a graph's own transition cap plus room, so a run that will not settle fails here rather
@@ -545,11 +545,11 @@ func driveTheCrew(ctx context.Context) error {
 	w := worldFrom(ctx)
 	for range flow.DefaultTransitions + 10 {
 		// Send what has not started, let every task land, then write what came back.
-		w.server.TickWork(ctx)
+		w.server.TickJob(ctx)
 		if err := w.settled(ctx); err != nil {
 			return err
 		}
-		w.server.TickWork(ctx)
+		w.server.TickJob(ctx)
 		w.server.TickFlows(ctx)
 		if !w.somethingIsMoving(ctx) {
 			return nil
@@ -558,15 +558,15 @@ func driveTheCrew(ctx context.Context) error {
 	return fmt.Errorf("the crew was still moving after %d passes", flow.DefaultTransitions+10)
 }
 
-// somethingIsMoving says whether any piece of work has yet to end, or any run is sitting on a step
+// somethingIsMoving says whether any job has yet to end, or any run is sitting on a step
 // that already has.
 func (w *world) somethingIsMoving(ctx context.Context) bool {
 	landed, err := w.store.LandedFlowSteps(ctx, 0)
 	if err != nil || len(landed) > 0 {
 		return true
 	}
-	for _, phase := range []string{work.PhasePending, work.PhaseRunning} {
-		open, err := w.store.ListWork(ctx, work.Filter{Phase: phase})
+	for _, phase := range []string{job.PhasePending, job.PhaseRunning} {
+		open, err := w.store.ListJobs(ctx, job.Filter{Phase: phase})
 		if err != nil || len(open) > 0 {
 			return true
 		}
@@ -591,7 +591,7 @@ func flowRunsOf(ctx context.Context, graph string) ([]*quaycrewv1.FlowRun, error
 
 // runSessions are the sessions a run's steps ran in, in the order the run took them.
 //
-// A run has no session of its own any more. Each step is a piece of work, the work owns the session
+// A run has no session of its own any more. Each step is a job, the job owns the session
 // that did it, and the run remembers which one against the node, so this reads the run's own state
 // rather than looking for a handle named after the run.
 func runSessions(ctx context.Context, w *world) ([]*quaycrewv1.Session, error) {
@@ -617,7 +617,7 @@ func sessionsOfRun(ctx context.Context, w *world, id string) ([]*quaycrewv1.Sess
 	for _, wanted := range flow.SessionsIn(run.State) {
 		session, found := held[wanted]
 		if !found {
-			return nil, fmt.Errorf("the run says step session %q did some of its work, and the crew does not hold it", wanted)
+			return nil, fmt.Errorf("the run says step session %q did some of its job, and the crew does not hold it", wanted)
 		}
 		out = append(out, session)
 	}
@@ -641,31 +641,31 @@ func flowRunTasks(ctx context.Context, w *world) ([]*quaycrewv1.Task, error) {
 	return out, nil
 }
 
-// runCarrier is the piece of work that carries the run the scenario started.
-func runCarrier(ctx context.Context, w *world) (*work.Work, error) {
+// runCarrier is the job that carries the run the scenario started.
+func runCarrier(ctx context.Context, w *world) (*job.Job, error) {
 	id, err := w.store.FlowRunCarrier(ctx, w.flowRun.ID)
 	if err != nil {
 		return nil, err
 	}
 	if id == "" {
-		return nil, fmt.Errorf("the run hangs under no piece of work, so it is outside the tree")
+		return nil, fmt.Errorf("the run hangs under no job, so it is outside the tree")
 	}
-	return w.store.GetWork(ctx, id)
+	return w.store.GetJob(ctx, id)
 }
 
-// runSteps is every piece of work the run declared for a step, oldest first. Found by the labels each
-// one carries, which is the road a person takes too: quay work list --label flow.run=<run>.
-func runSteps(ctx context.Context, w *world) ([]*work.Work, error) {
-	listed, err := w.store.ListWork(ctx, work.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
+// runSteps is every job the run declared for a step, oldest first. Found by the labels each
+// one carries, which is the road a person takes too: quay job list --label flow.run=<run>.
+func runSteps(ctx context.Context, w *world) ([]*job.Job, error) {
+	listed, err := w.store.ListJobs(ctx, job.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*work.Work, 0, len(listed))
+	out := make([]*job.Job, 0, len(listed))
 	for at := len(listed) - 1; at >= 0; at-- {
 		if listed[at].Labels["flow.node"] == "" {
 			continue
 		}
-		whole, err := w.store.GetWork(ctx, listed[at].ID)
+		whole, err := w.store.GetJob(ctx, listed[at].ID)
 		if err != nil {
 			return nil, err
 		}
@@ -674,8 +674,8 @@ func runSteps(ctx context.Context, w *world) ([]*work.Work, error) {
 	return out, nil
 }
 
-// runStepOn is the piece of work the run declared for one node.
-func runStepOn(ctx context.Context, w *world, node string) (*work.Work, error) {
+// runStepOn is the job the run declared for one node.
+func runStepOn(ctx context.Context, w *world, node string) (*job.Job, error) {
 	steps, err := runSteps(ctx, w)
 	if err != nil {
 		return nil, err
@@ -685,7 +685,7 @@ func runStepOn(ctx context.Context, w *world, node string) (*work.Work, error) {
 			return step, nil
 		}
 	}
-	return nil, fmt.Errorf("the run is on %s and declared no work for it", node)
+	return nil, fmt.Errorf("the run is on %s and declared no job for it", node)
 }
 
 func indexOfKind(kinds []string, want string) int {

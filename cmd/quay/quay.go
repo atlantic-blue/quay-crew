@@ -90,17 +90,17 @@ var removedFlags = map[string]string{
 	"--wait": "quay task waits for the answer already: quay task [<address>] \"...\"",
 	"--no-wait": "letting go is quay task --dispatch [<address>] \"...\"" +
 		"\n\nand quay task on its own waits for the answer instead",
-	// The word reads correctly in both directions now: this work requires context, and the architect
+	// The word reads correctly in both directions now: this job requires context, and the architect
 	// role receives context.
-	"--hands": "what a piece of work cannot be done without is what it requires: " +
-		"quay work create --requires <material>",
+	"--hands": "what a job cannot be done without is what it requires: " +
+		"quay job create --requires <material>",
 }
 
 // removedCommands are the words this tool used to take, each against what to type now.
 //
 // A removed command refuses by being absent from the table in run and present here, rather than by a
 // case of its own, so the next word removed cannot forget to say anything. The three that one word
-// replaced are why: ask, dispatch and tasks were three top level commands for one entity, while work
+// replaced are why: ask, dispatch and tasks were three top level commands for one entity, while job
 // and flow were each one noun with verbs under it.
 //
 // None of these is a quiet alias. A word that still works keeps two spellings alive for one thing, a
@@ -127,6 +127,9 @@ var removedCommands = map[string]string{
 		"once with quay skill import skills/git, attach it with quay skill attach <workspace> git, " +
 		"and ask the session to clone what it works on",
 	"panel": "`quay` on its own opens the crew, and p shows or hides the conversation beside it",
+	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
+		"thing: run to completion, watched by a controller, with a disposable container underneath" +
+		"\n\n  quay job <create|list|show|stop>",
 }
 
 // helpSpellings are every way somebody asks what this tool does. Asking for help is the one thing
@@ -144,7 +147,7 @@ var helpSpellings = map[string]bool{
 var takenFlags = map[string]map[string]bool{
 	"answer": {allAnswers: true},
 	"task":   {flagDispatch: true},
-	"work":   workFlagsTaken(),
+	"job":    jobFlagsTaken(),
 	"limits": limitsFlagsTaken(),
 }
 
@@ -242,8 +245,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHook(ctx, client, args[1:], out)
 	case "role":
 		return runRole(ctx, client, args[1:], out)
-	case "work":
-		return runWork(ctx, client, args[1:], out)
+	case "job":
+		return runJob(ctx, client, args[1:], out)
 	case "limits":
 		return runLimits(ctx, client, args[1:], out)
 	case "flow":
@@ -783,7 +786,7 @@ func firstLine(body string) string {
 
 // runContextSet writes a level's context from standard input, which is how a file becomes context:
 //
-//	quay context set crew < ~/notes/how-we-work.md
+//	quay context set crew < ~/notes/how-we-job.md
 //
 // Reading a file rather than taking it as an argument is deliberate: context is prose, often long and
 // full of everything a shell would like to interpret.
@@ -898,7 +901,7 @@ func contextTarget(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 }
 
 // runContextEdit opens the project's memory file in the operator's editor. The project's rather than
-// the workspace's, because that is the one somebody means when they say "the context for this work";
+// the workspace's, because that is the one somebody means when they say "the context for this job";
 // the workspace's is reached by naming it.
 func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {

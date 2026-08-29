@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
 // ImportFlowGraph stores a graph at a version. A version that exists is refused rather than
@@ -74,9 +74,9 @@ func (m *Memory) DueFlowRuns(_ context.Context, now time.Time) ([]*flow.Run, err
 	return out, nil
 }
 
-// CreateFlowRun writes a fresh run and the piece of work that carries it, together under one lock,
+// CreateFlowRun writes a fresh run and the job that carries it, together under one lock,
 // which is what one transaction means here.
-func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
+func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *job.Job, records []*job.Event, trigger string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.flowRuns == nil {
@@ -91,31 +91,31 @@ func (m *Memory) CreateFlowRun(_ context.Context, run *flow.Run, carrier *work.W
 	if trigger != "" && !m.startTrigger(trigger, run.ID) {
 		return fmt.Errorf("store: trigger %s is no longer waiting to start a run, so this run was not written", trigger)
 	}
-	if err := m.writeWork(carrier); err != nil {
+	if err := m.writeJob(carrier); err != nil {
 		return err
 	}
 	for _, record := range records {
-		if err := m.appendWorkEvent(record); err != nil {
+		if err := m.appendJobEvent(record); err != nil {
 			return err
 		}
 	}
 	kept := cloneRun(*run)
 	m.flowRuns[run.ID] = &kept
-	if m.flowRunWork == nil {
-		m.flowRunWork = map[string]string{}
+	if m.flowRunJob == nil {
+		m.flowRunJob = map[string]string{}
 	}
-	m.flowRunWork[run.ID] = carrier.ID
+	m.flowRunJob[run.ID] = carrier.ID
 	return nil
 }
 
-// FlowRunCarrier is the piece of work that carries a run.
+// FlowRunCarrier is the job that carries a run.
 func (m *Memory) FlowRunCarrier(_ context.Context, run string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if _, held := m.flowRuns[run]; !held {
 		return "", ErrNotFound
 	}
-	return m.flowRunWork[run], nil
+	return m.flowRunJob[run], nil
 }
 
 // LandedFlowSteps are the runs whose step has ended: working runs whose step reached a terminal
@@ -128,11 +128,11 @@ func (m *Memory) LandedFlowSteps(_ context.Context, limit int) ([]flow.Landed, e
 		if run.Status != flow.StatusWorking {
 			continue
 		}
-		step, held := m.work[m.flowRunStep[id]]
-		if !held || !work.Terminal(step.Phase) {
+		step, held := m.jobs[m.flowRunStep[id]]
+		if !held || !job.Terminal(step.Phase) {
 			continue
 		}
-		ended := cloneWork(*step)
+		ended := cloneJob(*step)
 		out = append(out, flow.Landed{Run: cloneRun(*run), Step: &ended})
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Run.ID < out[b].Run.ID })
@@ -150,7 +150,7 @@ func (m *Memory) StopFlowRun(_ context.Context, id, reason string) (*flow.Run, e
 	if !held {
 		return nil, ErrNotFound
 	}
-	// Every live status can be stopped, working included: a run out with a piece of work is as
+	// Every live status can be stopped, working included: a run out with a job is as
 	// stoppable as one sitting on a wait. A run that ended is not stopped again, because how it
 	// ended is the useful part.
 	if !liveRun(run.Status) {
@@ -192,7 +192,7 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 		}
 		m.flowDispatches[key] = true
 	}
-	if err := m.writeMovementWork(transition.Work); err != nil {
+	if err := m.writeMovementJob(transition.Job); err != nil {
 		return err
 	}
 	kept := cloneRun(*run)
@@ -205,8 +205,8 @@ func (m *Memory) AdvanceFlowRun(_ context.Context, run *flow.Run, transition flo
 	}
 	// The step the run is out with, or nothing where this movement dispatched nothing.
 	m.flowRunStep[run.ID] = ""
-	if transition.Work.Declared != nil {
-		m.flowRunStep[run.ID] = transition.Work.Declared.ID
+	if transition.Job.Declared != nil {
+		m.flowRunStep[run.ID] = transition.Job.Declared.ID
 	}
 	if m.flowTransitions == nil {
 		m.flowTransitions = map[string][]flow.RecordedTransition{}
@@ -266,18 +266,18 @@ func liveRun(status string) bool {
 	}
 }
 
-// writeMovementWork applies the work tree's side of one movement, under the lock the movement holds.
+// writeMovementJob applies the job tree's side of one movement, under the lock the movement holds.
 // The caller holds the lock, which is what makes this the same transaction as the movement.
-func (m *Memory) writeMovementWork(written flow.WorkWrite) error {
+func (m *Memory) writeMovementJob(written flow.JobWrite) error {
 	if written.Declared != nil {
-		if err := m.writeWork(written.Declared); err != nil {
+		if err := m.writeJob(written.Declared); err != nil {
 			return err
 		}
 	}
 	if on := written.Carrier; on != nil {
-		carried, held := m.work[on.Work]
+		carried, held := m.jobs[on.Job]
 		if !held {
-			return fmt.Errorf("store: work %s carries a run and is not here", on.Work)
+			return fmt.Errorf("store: job %s carries a run and is not here", on.Job)
 		}
 		now := time.Now().UTC()
 		carried.Phase, carried.Question, carried.UpdatedAt = on.Phase, on.Question, now
@@ -287,12 +287,12 @@ func (m *Memory) writeMovementWork(written flow.WorkWrite) error {
 		if on.Reason != "" {
 			carried.Reason = on.Reason
 		}
-		if work.Terminal(on.Phase) && carried.FinishedAt == nil {
+		if job.Terminal(on.Phase) && carried.FinishedAt == nil {
 			carried.FinishedAt = &now
 		}
 	}
 	for _, record := range written.Records {
-		if err := m.appendWorkEvent(record); err != nil {
+		if err := m.appendJobEvent(record); err != nil {
 			return err
 		}
 	}

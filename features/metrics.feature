@@ -1,7 +1,7 @@
 Feature: What a task spent is measured
 
-  Tokens are the bill. The useful question is never what the crew cost in total, it is what one piece
-  of work cost, so every measurement says which workspace and which project it belongs to and which
+  Tokens are the bill. The useful question is never what the crew cost in total, it is what one job
+  cost, so every measurement says which workspace and which project it belongs to and which
   model spent it. A task that failed spent what it spent and is counted the same way, because the
   task somebody is investigating is usually the one that went wrong.
 

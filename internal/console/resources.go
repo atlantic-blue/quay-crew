@@ -435,7 +435,7 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Name:    "archived",
 		Aliases: []string{"arch", "archive"},
 		// The same shape as the live view, because both are drawn from the same row. An archived
-		// session's cost is still worth seeing: it is what that piece of work came to.
+		// session's cost is still worth seeing: it is what that job came to.
 		// The same colours as the live listing, because it is the same listing: a session that was put
 		// away should not have to be read differently from one that was not.
 		Columns: []Column{

@@ -106,11 +106,11 @@ func TestNoFlagIsBothTakenAndRemoved(t *testing.T) {
 // removed flag that is ignored is worse than one that never existed: its value becomes the next
 // argument and the command reads as one that worked.
 //
-// Every flag is driven through `work create`, because a flag no command takes is refused the same
-// way whichever word carries it, and `work create` is the one word with a value after the flag for
+// Every flag is driven through `job create`, because a flag no command takes is refused the same
+// way whichever word carries it, and `job create` is the one word with a value after the flag for
 // the refusal to swallow.
 func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
-	client := aCrewToWorkIn(t)
+	client := aCrewToJobIn(t)
 	if len(removedFlags) == 0 {
 		t.Fatal("the removed flag table is empty, so this test proves nothing")
 	}
@@ -119,7 +119,7 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 	// rather than proving the sentence mentions a material.
 	const value = "swallowed-by-the-refusal"
 	for flag := range removedFlags {
-		err := refused(t, client, "work", "create",
+		err := refused(t, client, "job", "create",
 			flag, value, "--title", "read the electricity bill", "--brief", "open it")
 		if !strings.Contains(err.Error(), flag) {
 			t.Errorf("%s is refused with %q, which does not name the flag", flag, err)
@@ -137,9 +137,9 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 // proves the entry says the word to type instead. A caller with --hands in their fingers, their
 // scripts and their notes gets sent to --requires and nowhere else.
 func TestTheHandsFlagRefusesAndNamesRequires(t *testing.T) {
-	client := aCrewToWorkIn(t)
+	client := aCrewToJobIn(t)
 
-	err := refused(t, client, "work", "create",
+	err := refused(t, client, "job", "create",
 		"--title", "read the electricity bill", "--brief", "open it", "--hands", "context")
 
 	for _, want := range []string{"--hands is gone", "--requires"} {
@@ -148,7 +148,7 @@ func TestTheHandsFlagRefusesAndNamesRequires(t *testing.T) {
 		}
 	}
 	// And no row was written, so a caller who reads the listing after a refusal finds nothing.
-	listed := mustRun(t, client, "work", "list")
+	listed := mustRun(t, client, "job", "list")
 	if strings.Contains(listed, "read the electricity bill") {
 		t.Errorf("the refused declaration was written anyway: %q", listed)
 	}
@@ -165,5 +165,79 @@ func TestARemovedWordIsRefusedBeforeItsFlagsAre(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "remember the number") {
 		t.Errorf("the refusal took the message with it: %q", err)
+	}
+}
+
+// No removed word is also a live command.
+//
+// The removed check runs before the command switch, so a word in both tables refuses and the command
+// underneath it becomes unreachable with nothing saying so. That is exactly the shape a rename makes:
+// the word is added to the removed table and the old case is left in the switch, or the new word is
+// added to the switch and the old one is never removed from it. Either way the tool builds, every
+// other test passes, and one command quietly stops existing.
+func TestNoRemovedWordIsAlsoACommandTheToolStillRuns(t *testing.T) {
+	client := testClient(t)
+	if len(removedCommands) == 0 {
+		t.Fatal("the removed table is empty, so this test proves nothing")
+	}
+
+	// A live command is one the usage lists, which is what a caller reads.
+	for word := range removedCommands {
+		if strings.Contains(usage, "\n  "+word+" ") || strings.Contains(usage, "\n  "+word+"\n") {
+			t.Errorf("quay %s is refused as removed and listed in the usage, so a caller is told to "+
+				"type a word the tool then refuses", word)
+		}
+		// And it is refused rather than run, which is the same defect read from the other end.
+		err := run(context.Background(), client, []string{word}, io.Discard, "")
+		if err == nil || !strings.Contains(err.Error(), "there is no "+word+" command") {
+			t.Errorf("quay %s answered with %v, want the refusal that says the word is gone", word, err)
+		}
+	}
+}
+
+// The word this rename removed, by name, because the class guard proves every entry refuses and this
+// proves the entry says the word to type instead.
+//
+// It is driven with the flags a person actually had in their fingers, because a refusal that blames
+// one of them sends the operator to correct part of a command that is gone whole. And it is driven
+// against a real crew, so the row count afterwards means something.
+func TestTheWorkCommandRefusesAndNamesJob(t *testing.T) {
+	client := aCrewToJobIn(t)
+
+	err := refused(t, client, "work", "create",
+		"--title", "read the electricity bill", "--brief", "open it")
+
+	for _, want := range []string{"there is no work command", "quay job"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("quay work create is refused with %q, want it to say %q", err, want)
+		}
+	}
+	// The refusal is about the word, not about a flag on it.
+	if strings.Contains(err.Error(), "--title") {
+		t.Errorf("the refusal blames a flag rather than the word: %q", err)
+	}
+	// And it took nothing with it, so the declaration cannot read as one that landed.
+	if strings.Contains(err.Error(), "read the electricity bill") {
+		t.Errorf("the refusal took the title with it: %q", err)
+	}
+	listed := mustRun(t, client, "job", "list")
+	if strings.Contains(listed, "read the electricity bill") {
+		t.Errorf("the refused declaration was written anyway: %q", listed)
+	}
+}
+
+// Every verb the old word carried refuses too, rather than only the noun on its own. Somebody's
+// scripts hold `quay work list`, not `quay work`.
+func TestEveryVerbOfTheWordThatWentIsRefused(t *testing.T) {
+	client := testClient(t)
+
+	for _, verb := range []string{"create", "list", "show", "stop"} {
+		err := refused(t, client, "work", verb)
+		if !strings.Contains(err.Error(), "there is no work command") {
+			t.Errorf("quay work %s is refused with %q, which does not say the word is gone", verb, err)
+		}
+		if !strings.Contains(err.Error(), "quay job") {
+			t.Errorf("quay work %s is refused with %q, which names nothing to type instead", verb, err)
+		}
 	}
 }

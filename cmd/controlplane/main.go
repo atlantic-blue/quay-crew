@@ -147,12 +147,17 @@ func main() {
 	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
 	defer events.Close()
 
+	leaseSetting, leaseNotice := renamedSetting("QC_JOB_LEASE", os.Getenv)
+	if leaseNotice != "" {
+		logger.Warn(leaseNotice)
+	}
+
 	server := controlplane.NewServer(controlplane.Config{
 		// How often a session describes itself, from the crew's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
-		// How long the controller holds a piece of work before another may take it, and the name it
+		// How long the controller holds a job before another may take it, and the name it
 		// writes on the hold so an investigator knows which machine stopped.
-		WorkLease:      controlplane.WorkLease(os.Getenv("QC_WORK_LEASE"), logger),
+		JobLease:       controlplane.JobLease(leaseSetting, logger),
 		ControllerName: controlplane.ControllerName(os.Hostname),
 		// What reads the machine. Only where a daemon is what makes the sandboxes: a crew running
 		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
@@ -199,10 +204,10 @@ func main() {
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
 
-	// And the work the crew holds is made to happen the same way: a controller reads the rows, sends
-	// a task for what has not started, and writes what came back. Declared intent is a row, so work
+	// And the jobs the crew holds are made to happen the same way: a controller reads the rows, sends
+	// a task for what has not started, and writes what came back. Declared intent is a row, so a job
 	// declared while the crew was down starts on the way up.
-	go server.RunWorkController(ctx)
+	go server.RunJobController(ctx)
 
 	// And the machine itself, on its own timer. The header reads the last sample rather than the
 	// daemon, because reading the daemon takes as long as the daemon takes and the header redraws
@@ -230,9 +235,9 @@ func main() {
 		telemetry.ServerOptions(),
 		auth.ServerOptions(auth.Policy{
 			Token: token, DriverToken: driverToken, Denied: controlplane.DeniedToDriver,
-			// A session running a piece of work presents a credential of its own, minted for that
-			// work and holding only the verbs its role declared.
-			Grants: server.Grants(), DeniedToWork: controlplane.DeniedToWork,
+			// A session running a job presents a credential of its own, minted for that
+			// job and holding only the verbs its role declared.
+			Grants: server.Grants(), DeniedToJob: controlplane.DeniedToJob,
 		})...,
 	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
@@ -394,6 +399,41 @@ func sandboxSecretsRetired(value string) (string, bool) {
 	}
 	return "QC_SANDBOX_SECRETS is set and is no longer read: a workspace's secrets reach that " +
 		"workspace's sandboxes, so the list can be removed from the crew's configuration", true
+}
+
+// renamedSettings are the crew's settings that changed their name, against what they are called now.
+//
+// A table rather than a case each, so the next rename is covered the moment its entry is added. The
+// value is still read from the old name where the new one says nothing, because a crew that silently
+// went back to the default lease after an upgrade is the exact failure a rename must not cause.
+var renamedSettings = map[string]string{
+	"QC_WORK_LEASE": "QC_JOB_LEASE",
+}
+
+// renamedSetting reads one setting through its old name as well as its new one, and says what to
+// tell an operator whose file still carries the old spelling.
+//
+// Silence would be worse than the warning. An operator who tuned the lease and then upgraded would
+// keep a file that looks configured while the crew ran the measured default, and nothing on the
+// screen would say the two disagree.
+func renamedSetting(now string, read func(string) string) (value, notice string) {
+	value = strings.TrimSpace(read(now))
+	for was, becomes := range renamedSettings {
+		if becomes != now {
+			continue
+		}
+		old := strings.TrimSpace(read(was))
+		if old == "" {
+			continue
+		}
+		if value == "" {
+			return old, was + " is set and is called " + now + " now: it is still being read, and " +
+				"renaming it in the crew's configuration is what makes that stop being luck"
+		}
+		return value, was + " is set and is called " + now + " now: " + now +
+			" is set too and wins, so the old line can be removed from the crew's configuration"
+	}
+	return value, ""
 }
 
 func splitAndTrim(csv string) []string {

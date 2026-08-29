@@ -168,11 +168,11 @@ func runFlowShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	for _, key := range keys {
 		fmt.Fprintf(out, "  %-16s %s\n", key, truncateLine(run.GetState()[key]))
 	}
-	// Where the run sits in the work tree. A run is carried by a piece of work and every step is
+	// Where the run sits in the job tree. A run is carried by a job and every step is
 	// another under it, so this is the road to the answer of each step as a value rather than as a
 	// transcript.
-	if run.GetWork() != "" {
-		fmt.Fprintf(out, "read its steps with quay work list --label flow.run=%s\n", run.GetId())
+	if run.GetJob() != "" {
+		fmt.Fprintf(out, "read its steps with quay job list --label flow.run=%s\n", run.GetId())
 	}
 	// What the run actually did is in its sessions, and the summary above is the model's own account
 	// of it. The two can disagree, so the way to read the tasks is printed rather than left to be

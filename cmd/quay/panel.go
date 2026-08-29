@@ -112,7 +112,7 @@ func panelSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 
 	// The driver, made the first time the crew is opened. Not whichever conversation happens to be
-	// newest: that is somebody else's work, and opening the crew should not drop you into it.
+	// newest: that is somebody else's job, and opening the crew should not drop you into it.
 	opened, err := client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: project})
 	if err != nil {
 		return "", err
@@ -277,7 +277,7 @@ func whyNoConversation(current workspace.Path, projects int) string {
 // endConversationBeside ends the conversation the driver is in, so the next open starts one.
 //
 // The conversation runs in a tmux session inside the sandbox, attached to rather than started when it
-// is already there, which is what makes coming back to it work. Ending that session is what makes the
+// is already there, which is what makes coming back to it job. Ending that session is what makes the
 // next open a fresh start.
 func endConversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) error {
 	return func(string) error {

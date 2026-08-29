@@ -16,7 +16,7 @@ import (
 // all on a session's first task, read the name the runtime chose out of the output stream, and record
 // it once the task had landed. So for the whole life of that first task the crew held no name, and
 // opening the session meanwhile found an empty field, named a second conversation and opened that
-// one. The operator watched an empty conversation while the work happened in another.
+// one. The operator watched an empty conversation while the job happened in another.
 //
 // Called again on a session that has one, this does nothing: a conversation is named once and the
 // name is the only pointer to the transcript.
@@ -27,7 +27,7 @@ func (s *Server) nameConversation(ctx context.Context, session *quaycrewv1.Sessi
 	named := store.NewConversationID()
 	if err := s.store.RecordTask(ctx, session.GetId(), named, session.GetStatus()); err != nil {
 		// The task still runs, under a name nothing else can see. Worth a line, and not worth refusing
-		// the work over: a session that cannot be opened is better than a session that cannot work.
+		// the job over: a session that cannot be opened is better than a session that cannot work.
 		slog.WarnContext(ctx, "the conversation could not be named", "session", session.GetId(), "error", err)
 	}
 	// Carried on the session whether the write landed or not, so everything downstream of this call

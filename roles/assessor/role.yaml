@@ -3,9 +3,9 @@ version: 1
 summary: reads an existing codebase and reports its test coverage, its contracts, its risks and its gaps against the standards
 model: sonnet
 receives:
-  - work
+  - job
   - context
   - skills
 may:
-  - work.create
-  - work.read
+  - job.create
+  - job.read

@@ -100,7 +100,7 @@ func WithoutSection(body, scope string) (string, bool) {
 //
 // Anything before the first mark, or under a mark this build does not know, belongs to the last scope
 // given: text appended to the end of the file is what an agent writing a note actually does, and the
-// innermost level is where a note about this piece of work belongs. Nothing is thrown away.
+// innermost level is where a note about this job belongs. Nothing is thrown away.
 func Decompose(body string, scopes []string) map[string]string {
 	found := make(map[string]string, len(scopes))
 	if len(scopes) == 0 {

@@ -20,9 +20,9 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/google/uuid"
 )
 
@@ -54,19 +54,19 @@ var ErrNotFound = errors.New("store: not found")
 const StatusReclaimed = "reclaimed"
 
 // settledStatuses are the states a session can be in and still be nothing's to hold open: waiting for
-// work, holding a failed last task, or already reclaimed and waiting to be filed.
+// job, holding a failed last task, or already reclaimed and waiting to be filed.
 //
 // "running" is absent because a task is in flight. "stopped" is absent because an operator put the
 // session down, and a crew that archived what somebody halted would be overwriting a decision with
 // bookkeeping.
 func settledStatuses() []string { return []string{"idle", "failed", StatusReclaimed} }
 
-// terminalPhases are the phases of work that no longer hold a session open. Read from the work
+// terminalPhases are the phases of a job that no longer hold a session open. Read from the job
 // package rather than listed here, so a phase added there cannot be forgotten in these two queries.
 func terminalPhases() []string {
 	var terminal []string
-	for _, phase := range work.Phases() {
-		if work.Terminal(phase) {
+	for _, phase := range job.Phases() {
+		if job.Terminal(phase) {
 			terminal = append(terminal, phase)
 		}
 	}
@@ -185,11 +185,11 @@ type Store interface {
 	// control plane's question, not the store's.
 	ReclaimSession(ctx context.Context, id string) error
 	// SettledSessions is the sessions nothing is holding open, oldest touched first: live, not
-	// running, and named by no piece of work in a non terminal phase. It is the fourth query a
+	// running, and named by no job in a non terminal phase. It is the fourth query a
 	// controller runs each tick, and the one the session lifecycle is derived from.
 	//
 	// A session is not a second resource with a declaration of its own. What is wanted of it is read
-	// from the work that names it, so work still in flight keeps its session alive and nothing here
+	// from the job that names it, so job still in flight keeps its session alive and nothing here
 	// has to be told.
 	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 	// ArchiveSession only hides a session from the default listing. The row, the conversation handle
@@ -283,7 +283,7 @@ type Store interface {
 
 	// The same questions again for roles, and a separate set of calls for the same reason hooks are
 	// separate: a role is its own entity, and a workspace that holds a skill has said nothing about
-	// which roles its work may be split into.
+	// which roles its job may be split into.
 	//
 	// ImportRole takes a role into the crew at the version its manifest declares. The same name and
 	// version again is fine when it is the same role and refused when it is not.
@@ -340,14 +340,14 @@ type Store interface {
 	UnscheduleFlow(ctx context.Context, graph, project string) error
 	DueFlowSchedules(ctx context.Context, now time.Time) ([]flow.Schedule, error)
 	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
-	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error
+	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *job.Job, records []*job.Event, trigger string) error
 	// The pending trigger queue: something that happened, written down so a run starts from it. A
 	// row is raised in the transaction of whatever caused it, read off an indexed query, and claimed
 	// with a conditional write, so two pollers reading one trigger start one run. The contract is
 	// flow.Store.
 	RaiseTrigger(ctx context.Context, trigger *flow.Trigger) error
 	PendingTriggers(ctx context.Context, limit int) ([]*flow.Trigger, error)
-	ClaimTrigger(ctx context.Context, id string, lease work.Lease) (*flow.Trigger, error)
+	ClaimTrigger(ctx context.Context, id string, lease job.Lease) (*flow.Trigger, error)
 	FailTrigger(ctx context.Context, id, reason string) error
 	GetTrigger(ctx context.Context, id string) (*flow.Trigger, error)
 	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
@@ -357,43 +357,43 @@ type Store interface {
 	// refused rather than overwritten: the record of how it ended is the useful part.
 	StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error)
 	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
-	// Work is declared intent, kept as a row so it outlives the caller that asked for it. A caller
-	// writes a piece of work and a controller makes reality match it.
+	// Job is declared intent, kept as a row so it outlives the caller that asked for it. A caller
+	// writes a job and a controller makes reality match it.
 	//
-	// CreateWork writes the work and the record of its declaration in one transaction. A row with no
+	// CreateJob writes the job and the record of its declaration in one transaction. A row with no
 	// record of how it came to exist, and a record of a declaration that is not there, are both
 	// states nothing can explain afterwards.
-	CreateWork(ctx context.Context, declared *work.Work, event *work.Event) error
-	// GetWork reads one piece of work back, whole, its answer included.
-	GetWork(ctx context.Context, id string) (*work.Work, error)
-	// ListWork returns what matches, newest first and without answers, because a listing of a hundred
-	// answers is a listing nobody can read. A caller that wants an answer asks for one piece of work.
-	ListWork(ctx context.Context, filter work.Filter) ([]*work.Work, error)
-	// StopWork halts work that has not ended, keeping the reason, and writes the record of the stop
-	// beside it. Work that already ended is refused rather than overwritten: how it ended is the
+	CreateJob(ctx context.Context, declared *job.Job, event *job.Event) error
+	// GetJob reads one job back, whole, its answer included.
+	GetJob(ctx context.Context, id string) (*job.Job, error)
+	// ListJob returns what matches, newest first and without answers, because a listing of a hundred
+	// answers is a listing nobody can read. A caller that wants an answer asks for one job.
+	ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error)
+	// StopJob halts job that has not ended, keeping the reason, and writes the record of the stop
+	// beside it. Job that already ended is refused rather than overwritten: how it ended is the
 	// useful part.
-	StopWork(ctx context.Context, id, reason string, event *work.Event) (*work.Work, error)
-	// What a controller needs of the store. RunnableWork is the work it may start, HeldWork is what
-	// it holds and has to come back to, and ExpiredWork is what a controller that went away left
+	StopJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
+	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
+	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps
-	// two controllers from both starting one piece of work, both taking over one abandoned row, or
-	// both writing what came of it. The contract is work.Store.
-	RunnableWork(ctx context.Context, limit int) ([]*work.Work, error)
-	HeldWork(ctx context.Context, owner string, limit int) ([]*work.Work, error)
-	ExpiredWork(ctx context.Context, limit int) ([]*work.Work, error)
-	StartWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error)
-	TakeOverWork(ctx context.Context, id string, lease work.Lease, events []*work.Event) (*work.Work, error)
-	ReleaseWork(ctx context.Context, id string, events []*work.Event) (*work.Work, error)
-	RenewLease(ctx context.Context, id string, lease work.Lease) error
-	RecordWorkSession(ctx context.Context, id, session string) error
-	LandWork(ctx context.Context, id string, landed work.Landing, event *work.Event) (*work.Work, error)
-	// ListWorkEvents returns one piece of work's own history, oldest first.
-	ListWorkEvents(ctx context.Context, id string) ([]*work.Event, error)
+	// two controllers from both starting one job, both taking over one abandoned row, or
+	// both writing what came of it. The contract is job.Store.
+	RunnableJob(ctx context.Context, limit int) ([]*job.Job, error)
+	HeldJob(ctx context.Context, owner string, limit int) ([]*job.Job, error)
+	ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error)
+	StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
+	TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
+	ReleaseJob(ctx context.Context, id string, events []*job.Event) (*job.Job, error)
+	RenewLease(ctx context.Context, id string, lease job.Lease) error
+	RecordJobSession(ctx context.Context, id, session string) error
+	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
+	// ListJobEvents returns one job's own history, oldest first.
+	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
 	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a crew
 	// nobody configured refuses rather than allows.
-	WorkspaceLimits(ctx context.Context, workspace string) (work.Limits, error)
-	SetWorkspaceLimits(ctx context.Context, limits work.Limits) (work.Limits, error)
+	WorkspaceLimits(ctx context.Context, workspace string) (job.Limits, error)
+	SetWorkspaceLimits(ctx context.Context, limits job.Limits) (job.Limits, error)
 
 	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.

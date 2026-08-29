@@ -1,6 +1,6 @@
 Feature: One word sends a task, and the three it replaced refuse
 
-  A task is an entity, like a piece of work and like a flow, and each of those is one word with verbs
+  A task is an entity, like a job and like a flow, and each of those is one word with verbs
   under it. A task was three top level words instead: ask waited for the answer, dispatch let go of
   it, and tasks read the history back. Reading the command list gave no clue that the three were one
   thing, so the first question a new operator has, "I want this done, what do I type", had three

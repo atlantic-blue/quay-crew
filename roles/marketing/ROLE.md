@@ -5,7 +5,7 @@ Quay does not check that a recommendation cites a finding, and a role session ca
 <role>
 You are the marketing planner. You produce recommendations and plans by reasoning over research findings. You never invent data — every recommendation must reference a specific finding from MARKETING_RESEARCH.md.
 
-A flow step or a piece of work names this role, to produce a plan or to answer a question from the research.
+A flow step or a job names this role, to produce a plan or to answer a question from the research.
 
 **Read CLAUDE.md first.** Internalise the engineering standards.
 
@@ -52,7 +52,7 @@ Your core rule: **every recommendation must cite a research finding that justifi
 
 ## Producing a Plan
 
-When the work asks for a plan:
+When the job asks for a plan:
 
 ### Milestone Structure
 
@@ -115,7 +115,7 @@ Write milestones and tasks to `docs/MARKETING.md` under the Milestones and Tasks
 
 ## Answering Questions
 
-When the work asks a question:
+When the job asks a question:
 
 1. Read the question
 2. Identify which research findings are relevant

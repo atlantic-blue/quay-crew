@@ -298,43 +298,43 @@ func (x *SessionEvent) GetOccurredAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// WorkEvent is one thing that happened to a piece of work, written every time it happens.
+// JobEvent is one thing that happened to a job, written every time it happens.
 //
-// It goes to the `work_events` table in the same transaction as the row it describes, and to
-// `<workspace>.work` after, keyed by the work identifier so one piece of work's records stay in
+// It goes to the `job_events` table in the same transaction as the row it describes, and to
+// `<workspace>.job` after, keyed by the job identifier so one job's records stay in
 // order on one partition. The store is the truth: a crew with no broker keeps the whole history and
 // loses only the export.
 //
-// The kinds split in two, and the split is the useful part. A dashboard counting work must not break
+// The kinds split in two, and the split is the useful part. A dashboard counting jobs must not break
 // because the crew changed how it leases.
-type WorkEvent struct {
+type JobEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
 	// record more than once and needs something to recognise it by. It is the same value as the row in
-	// the `work_events` table.
+	// the `job_events` table.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// kind is what happened, and it is the field a consumer switches on.
 	//
 	// The contract, which another service may depend on:
 	//
-	//	work.declared   somebody wrote the work down
-	//	work.started    a controller sent its brief as a task
-	//	work.answered   the answer landed and the claim held
-	//	work.failed     the model did not finish, or the sandbox could not be made
-	//	work.asked      it put a question to a person
-	//	work.stopped    a person stopped it, or a limit did, or its claim did not hold
+	//	job.declared   somebody wrote the job down
+	//	job.started    a controller sent its brief as a task
+	//	job.answered   the answer landed and the claim held
+	//	job.failed     the model did not finish, or the sandbox could not be made
+	//	job.asked      it put a question to a person
+	//	job.stopped    a person stopped it, or a limit did, or its claim did not hold
 	//
 	// Internal, which nothing outside should depend on:
 	//
-	//	work.claimed    a controller took the row
-	//	work.released   a controller's hold ran out and another took it
+	//	job.claimed    a controller took the row
+	//	job.released   a controller's hold ran out and another took it
 	//
 	// A kind names something that happened, in the past tense, at one moment. A phase, "pending" or
 	// "running", is what the row says now, which is the fold of these, so it is never a kind.
 	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	// work is the piece of work this happened to, and the key the record is published under.
-	Work string `protobuf:"bytes,3,opt,name=work,proto3" json:"work,omitempty"`
-	// workspace, project, parent and depth are where the work sits in the tree, denormalised
+	// job is the job this happened to, and the key the record is published under.
+	Job string `protobuf:"bytes,3,opt,name=job,proto3" json:"job,omitempty"`
+	// workspace, project, parent and depth are where the job sits in the tree, denormalised
 	// deliberately: a consumer must not have to query the store to know what it is reading. parent is
 	// empty for a root.
 	Workspace string `protobuf:"bytes,4,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -346,7 +346,7 @@ type WorkEvent struct {
 	// redactor before it is written or exported.
 	Detail string `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
 	// trace_id is the trace the whole tree belongs to, minted at the root and inherited by every
-	// descendant, so one identifier joins a piece of work, its children, its tasks and its spans.
+	// descendant, so one identifier joins a job, its children, its tasks and its spans.
 	TraceId string `protobuf:"bytes,9,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	// occurred_at is when it happened.
 	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
@@ -354,20 +354,20 @@ type WorkEvent struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorkEvent) Reset() {
-	*x = WorkEvent{}
+func (x *JobEvent) Reset() {
+	*x = JobEvent{}
 	mi := &file_quaycrew_v1_events_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorkEvent) String() string {
+func (x *JobEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorkEvent) ProtoMessage() {}
+func (*JobEvent) ProtoMessage() {}
 
-func (x *WorkEvent) ProtoReflect() protoreflect.Message {
+func (x *JobEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_events_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -379,75 +379,75 @@ func (x *WorkEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorkEvent.ProtoReflect.Descriptor instead.
-func (*WorkEvent) Descriptor() ([]byte, []int) {
+// Deprecated: Use JobEvent.ProtoReflect.Descriptor instead.
+func (*JobEvent) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_events_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *WorkEvent) GetId() string {
+func (x *JobEvent) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetKind() string {
+func (x *JobEvent) GetKind() string {
 	if x != nil {
 		return x.Kind
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetWork() string {
+func (x *JobEvent) GetJob() string {
 	if x != nil {
-		return x.Work
+		return x.Job
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetWorkspace() string {
+func (x *JobEvent) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetProject() string {
+func (x *JobEvent) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetParent() string {
+func (x *JobEvent) GetParent() string {
 	if x != nil {
 		return x.Parent
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetDepth() int32 {
+func (x *JobEvent) GetDepth() int32 {
 	if x != nil {
 		return x.Depth
 	}
 	return 0
 }
 
-func (x *WorkEvent) GetDetail() string {
+func (x *JobEvent) GetDetail() string {
 	if x != nil {
 		return x.Detail
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetTraceId() string {
+func (x *JobEvent) GetTraceId() string {
 	if x != nil {
 		return x.TraceId
 	}
 	return ""
 }
 
-func (x *WorkEvent) GetOccurredAt() *timestamppb.Timestamp {
+func (x *JobEvent) GetOccurredAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.OccurredAt
 	}
@@ -482,11 +482,11 @@ const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\x06handle\x18\x06 \x01(\tR\x06handle\x12\x16\n" +
 	"\x06detail\x18\a \x01(\tR\x06detail\x12;\n" +
 	"\voccurred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAt\"\x99\x02\n" +
-	"\tWorkEvent\x12\x0e\n" +
+	"occurredAt\"\x96\x02\n" +
+	"\bJobEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
-	"\x04work\x18\x03 \x01(\tR\x04work\x12\x1c\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x10\n" +
+	"\x03job\x18\x03 \x01(\tR\x03job\x12\x1c\n" +
 	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x05 \x01(\tR\aproject\x12\x16\n" +
 	"\x06parent\x18\x06 \x01(\tR\x06parent\x12\x14\n" +
@@ -514,13 +514,13 @@ var file_quaycrew_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_quaycrew_v1_events_proto_goTypes = []any{
 	(*TaskEvent)(nil),             // 0: quaycrew.v1.TaskEvent
 	(*SessionEvent)(nil),          // 1: quaycrew.v1.SessionEvent
-	(*WorkEvent)(nil),             // 2: quaycrew.v1.WorkEvent
+	(*JobEvent)(nil),              // 2: quaycrew.v1.JobEvent
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_events_proto_depIdxs = []int32{
 	3, // 0: quaycrew.v1.TaskEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	3, // 1: quaycrew.v1.SessionEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	3, // 2: quaycrew.v1.WorkEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	3, // 2: quaycrew.v1.JobEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name

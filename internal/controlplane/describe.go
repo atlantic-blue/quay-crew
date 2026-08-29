@@ -14,7 +14,7 @@ import (
 // A session says what it is about, written by the crew rather than by the operator.
 //
 // A listing is a column of hexadecimal, and a label fixes that only for the sessions somebody stopped
-// to name. Naming things is work and nobody does it consistently, so the half that actually gets used
+// to name. Naming things is job and nobody does it consistently, so the half that actually gets used
 // is the one the crew writes itself.
 //
 // It never touches the label. A name somebody picked is the one thing in a listing that is certainly
@@ -161,7 +161,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	}
 	// Its own conversation, not the session's. Describing inside the session would put a request the
 	// operator never made into their history, and would add its tokens to what the listing says the
-	// conversation cost, so the cost column would stop describing the work.
+	// conversation cost, so the cost column would stop describing the job.
 	prompt := describePrompt(history)
 	said, err := s.runner.Run(ctx, box, model.Request{
 		Text:           prompt,

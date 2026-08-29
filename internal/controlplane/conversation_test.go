@@ -202,7 +202,7 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.
 	opened := conversationOpenedBy(spec.GetArgv())
 	if opened != conversationOn(box.commands()[0]) {
 		t.Fatalf("attaching opens conversation %q and the task is running in %q, so the operator is "+
-			"watching an empty conversation beside the work", opened, conversationOn(box.commands()[0]))
+			"watching an empty conversation beside the job", opened, conversationOn(box.commands()[0]))
 	}
 	// Attaching named nothing of its own. A second name here is the defect wearing a fix.
 	if got := conversationHeldBy(t, s, sent.GetId()); got != named {
@@ -322,7 +322,7 @@ func TestAStoppedSessionOpensTheConversationItAlreadyHolds(t *testing.T) {
 
 // A session carried over from a crew that named conversations after the task, caught mid task. Its
 // conversation has a name and the crew cannot know it until the task lands, so attaching says so
-// rather than naming a second one and opening an empty conversation beside the work.
+// rather than naming a second one and opening an empty conversation beside the job.
 func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testing.T) {
 	kept := store.NewMemory()
 	box := newHeldSandbox()
