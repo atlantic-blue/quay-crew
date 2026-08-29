@@ -104,6 +104,17 @@ Feature: A controller makes declared jobs happen
     Then the crew was asked to run 0 tasks
     And the job is stopped, and the reason names the "backlog-clearer" role
 
+  # The listing an operator reads while the work is happening. A job is one long task, so a name
+  # written behind a task that has answered arrives when the job is over: four jobs running, four
+  # blank name cells, and no way to tell which conversation was burning which tokens. The title is
+  # typed at declaration, so the crew already has it.
+  Scenario: A job's session carries the title it was declared with, while the job is still running
+    Given a job titled "read the electricity bill"
+    And the model takes longer over a task than anybody will wait
+    When the controller ticks
+    Then the session doing that job is listed as "read the electricity bill"
+    And nothing has described that conversation
+
   Scenario: Every movement is on the record
     Given a job titled "read the electricity bill"
     When the controller ticks

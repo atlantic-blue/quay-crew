@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A job's session is named at dispatch, with the title the job was declared with.** Four jobs were
+  running and every one of their sessions had a blank name cell, so the operator could see four
+  conversations burning tokens and not which was which. Every one of those jobs had been declared with
+  a title. The controller built the dispatch and sent the project, the handle, the brief, the mode, the
+  detach flag, the role and the job id, and no title, and `DispatchRequest` had no field for one, so it
+  could not have travelled anyway. The crew was handed a name at declaration and dropped it.
+
+  The only other thing that names a session is the description, which is written behind a task that has
+  already been answered. A job is one long task, so the name arrived when the job was over, which is
+  when nobody needs it, and it spent a model call inventing a name the operator had already typed.
+
+  `DispatchRequest` now carries a title, and the session keeps it in a column of its own. It is written
+  when the session is made and never afterwards, so a dispatch made again after a controller died lands
+  in the same conversation without renaming it.
+
+  **The name column now reads three names, in the order of how much a reader should trust them:** the
+  label the operator set, then the title, then the description. The label stays first because it is the
+  last word of the person who has seen the session, and the only one of the three they can change. The
+  title is next because a person typed it too, at declaration. A job title never overwrites a label the
+  operator set later, and it never touches the label column at all.
+
+  Description keeps its job of renaming a conversation that wandered. It stops being the only source of
+  a name.
+
 - **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
   and the last column showed how long ago the session was last touched, or put away. So the two
   disagreed: a session made a week ago and used an hour ago sat below one made yesterday and untouched

@@ -104,6 +104,9 @@ sandbox. The console calls them sessions too, and `sessions` still opens that vi
   because how long a session has been reclaimed is what the archive time is measured against, and
   `updated_at` moves on every write. A task, a stop or a restart clears it. See section 11 of
   `docs/ORCHESTRATION.md`, which also says why the two times that drive it ship unset
+- `label`, `title` and `description` are the three names a listing can show, read in that order.
+  `label` is what the operator typed, `title` is what the session was dispatched with and is written
+  only when the session is made, and `description` is the line the crew wrote about the conversation
 
 ### The order a session listing comes back in
 

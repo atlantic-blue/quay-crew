@@ -98,6 +98,15 @@ message Session {
   // Set only when the request asked for it, because the answer costs a question to the sandbox. Unset
   // means nobody asked, which is not the same as nothing being there.
   SessionPresence presence = 20;
+  // title is the name the session was dispatched with, written when the session is made and never
+  // afterwards. A job carries its declared title here, so a listing says which conversation is which
+  // from the first second, rather than once a description is written behind a task that has landed.
+  //
+  // It is a third name rather than a second use of label, because the two are typed at different
+  // moments about different things: the title names the job the session was made for, and the label
+  // is what the operator calls this conversation once they have seen it. A dispatch that has to be
+  // made again would put the job title back over a label the operator set in the meantime.
+  string title = 21;
 }
 
 // SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
@@ -380,6 +389,14 @@ message DispatchRequest {
   // it: a credential written at birth would label every later task with the first task's grant, and a
   // grant made after birth would never reach the container at all.
   string job = 7;
+  // title is what to call the session this dispatch makes, and it is read only when the session is
+  // made: a name a caller sends with every task must not overwrite what the operator has called the
+  // conversation since.
+  //
+  // It is what a caller that already knows the name sends. A job is declared with a title, and
+  // without this the crew is handed that name and drops it, which leaves a listing of running jobs
+  // waiting for a description written after the work is over.
+  string title = 8;
 }
 message DispatchResponse {
   string id = 1;
