@@ -26,13 +26,26 @@ read, or run with `make features`.
   any, and everything held when there are not, because a short list of real names is more use than a
   correct silence.
 
-  **What this found.** The `roles` table carried no `may` column, so the verbs a manifest declares
-  were dropped on the way into the database and every role read back allowed to call nothing. The
-  shipped `assessor` role declares `job.create` and `job.read`, and on a crew running Postgres it
-  could call neither. The in memory store keeps the whole struct and the shared conformance suite
-  never asked, which is how the two stayed agreeing. Reading a role back is what surfaced it, and it
-  is fixed in [#459](https://github.com/atlantic-blue/quay-crew/pull/459) rather than here, because
-  making the column exist changes what a session is permitted to do.
+  Reading a role back is what surfaced the dropped `may` column that the entry below fixes. The
+  integration tier here holds every shipped role's brief, model, boundary and verb list against the
+  file it was imported from, so the next column to go missing fails a test rather than a run.
+
+- **What a role may call survives the store.** The `roles` table carried `receives` and not `may`, so
+  a role imported declaring `may: job.create` came back out of Postgres granting nothing. The
+  credential a job runs under is minted from the role as the store gives it back, so on a real crew
+  every role granted the empty list, and a session whose whole job is to declare children was refused
+  at its first call. The refusal reads as an authentication failure rather than as a missing column,
+  which is what makes this one expensive to find.
+
+  Nothing caught it. The fingerprint is computed from the role as it was sent, so an import was
+  accepted and looked stored. The in memory store keeps the whole role in a map, so every unit run and
+  every scenario agreed the grant was there. The one integration test that read a credential back
+  asserted a role with no `may` list grants nothing, which is the answer a dropped column gives too.
+
+  The column is added by migration 0038, and the conformance suite now reads a verb list back through
+  `GetRole`, `ListRoles`, `WorkspaceRoles` and `CrewRoles`, so both stores answer the same way. Roles
+  imported before today keep the answer they were already giving, and importing them again writes
+  what they declared.
 
 - **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
   and the last column showed how long ago the session was last touched, or put away. So the two

@@ -50,6 +50,71 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// What a role may call, read back out. It is a separate case from the one above because aRole
+	// grants nothing, so a store that never wrote the column would agree with it in every run.
+	//
+	// This is the whole of a role's grant. The credential a job runs under is minted from the role
+	// as the store gives it back, so a verb dropped here is a session refused at its first call, and
+	// the refusal reads as an authentication failure rather than as a missing column.
+	t.Run("what a role may call survives the round trip", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportRole(ctx, aRoleThatMay("orchestrator", 1,
+			role.VerbJobCreate, role.VerbJobRead, role.VerbJobStop)); err != nil {
+			t.Fatalf("ImportRole: %v", err)
+		}
+		got, err := s.GetRole(ctx, "orchestrator", 1)
+		if err != nil {
+			t.Fatalf("GetRole: %v", err)
+		}
+		for _, verb := range []string{role.VerbJobCreate, role.VerbJobRead, role.VerbJobStop} {
+			if !got.May(verb) {
+				t.Errorf("it came back unable to %s, and it was imported declaring it: %+v", verb, got.May_)
+			}
+		}
+		// The other direction, so a store answering "every verb" passes nothing.
+		if got.May(role.VerbJobAnswer) {
+			t.Errorf("it came back able to %s, which it never declared: %+v", role.VerbJobAnswer, got.May_)
+		}
+
+		// Every read a credential could be minted from, because a job's role is looked up through
+		// the workspace rather than through GetRole.
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		if _, err := s.AttachRole(ctx, workspace.GetId(), "orchestrator"); err != nil {
+			t.Fatalf("AttachRole: %v", err)
+		}
+		if _, err := s.AttachCrewRole(ctx, "orchestrator"); err != nil {
+			t.Fatalf("AttachCrewRole: %v", err)
+		}
+		listed, err := s.ListRoles(ctx)
+		if err != nil {
+			t.Fatalf("ListRoles: %v", err)
+		}
+		held, err := s.WorkspaceRoles(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceRoles: %v", err)
+		}
+		crew, err := s.CrewRoles(ctx)
+		if err != nil {
+			t.Fatalf("CrewRoles: %v", err)
+		}
+		for what, from := range map[string][]store.ImportedRole{
+			"the listing": listed, "the workspace": held, "the crew": crew,
+		} {
+			if len(from) != 1 {
+				t.Fatalf("%s holds %d roles, want the one that was imported", what, len(from))
+			}
+			if !from[0].May(role.VerbJobCreate) {
+				t.Errorf("%s gives back a role that may %v, and it declared %s",
+					what, from[0].May_, role.VerbJobCreate)
+			}
+		}
+	})
+
 	t.Run("importing the same version twice is harmless, and importing a different role as it is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -291,4 +356,12 @@ func aRole(name string, version int) store.ImportedRole {
 		Receives: []string{role.MaterialContext, role.MaterialJob},
 		Brief:    "Write the tests. Do not write the code.",
 	}}
+}
+
+// aRoleThatMay is a role with a verb list, so the round trip is asserted on a role that grants
+// something. aRole grants nothing, and a store that dropped the column would agree with it forever.
+func aRoleThatMay(name string, version int, verbs ...string) store.ImportedRole {
+	one := aRole(name, version)
+	one.May_ = verbs
+	return one
 }

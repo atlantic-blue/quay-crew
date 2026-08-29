@@ -23,11 +23,12 @@ import (
 // first few thousand bytes shows here and nowhere else, and each of them would make this command
 // agree with a role the crew does not hold.
 //
-// What a role may call is not compared against the file here, and the gap is deliberate rather than
-// forgotten. The roles table carried no may column, so the verbs a manifest declares were dropped on
-// the way into the database and every role read back allowed to call nothing. Reading a role back is
-// what surfaced it, and it is fixed in quay-crew#459: adding the column changes what a session is
-// permitted to do, which is its own change and its own review.
+// What a role may call is compared against the file too, and it is the reason this file exists in
+// the shape it does. The roles table carried no may column until quay-crew#459, so the verbs a
+// manifest declared were dropped on the way into the database and every role read back allowed to
+// call nothing, while the in memory store kept the whole struct and agreed with itself. Reading a
+// role back is what surfaced it, so the assertion stays here: the next column to go missing fails a
+// test rather than a run.
 
 // TestEveryShippedBriefComesBackByteForByteThroughGetRole imports the roles this build ships and
 // reads each one back, comparing against the file on disk rather than against the import's own
@@ -70,6 +71,10 @@ func TestEveryShippedBriefComesBackByteForByteThroughGetRole(t *testing.T) {
 		if strings.Join(got.GetRole().GetReceives(), ",") != strings.Join(one.Receives, ",") {
 			t.Errorf("%s came back receiving %v and its file says %v",
 				one.Name, got.GetRole().GetReceives(), one.Receives)
+		}
+		if strings.Join(got.GetMay(), ",") != strings.Join(one.May_, ",") {
+			t.Errorf("%s came back allowed to call %v and its file says %v",
+				one.Name, got.GetMay(), one.May_)
 		}
 		read++
 	}
