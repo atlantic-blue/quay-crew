@@ -1,0 +1,14 @@
+-- What a role may call is a column, because a boundary that does not survive the store is not one.
+--
+-- The roles table carried receives and not may, so a role imported with `may: job.create` came back
+-- out of Postgres granting nothing. The credential a job runs under reads the role from the store,
+-- so on a real crew every role granted the empty list, and a session whose whole job is to declare
+-- children was refused at its first call.
+--
+-- Nothing showed it. The fingerprint is computed from the role as it was sent, so an import was
+-- accepted and looked stored. The in memory store keeps the whole role in a map, so every unit and
+-- scenario run agreed the grant was there. Only Postgres dropped it, and no test read a may list
+-- back out of Postgres.
+--
+-- Default empty, so every role imported before today keeps the answer it was already giving.
+alter table roles add column if not exists "may" text[] not null default '{}';
