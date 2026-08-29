@@ -3,11 +3,11 @@ package web
 import (
 	"context"
 	"net/http"
-	"sort"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/session"
 )
 
 // shell is what every page carries: what the tab says, and where the operator is.
@@ -63,12 +63,13 @@ func (v *view) sessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The order the crew answered in, untouched. It is last moved first, so the age column reads in
+	// order, and it is the same order the console and the command line show: a page that sorted the
+	// listing again would be a second order to keep in step with this one.
 	rows := make([]sessionRow, 0, len(listed.GetSessions()))
 	for _, session := range listed.GetSessions() {
 		rows = append(rows, row(session, names))
 	}
-	// By address, so the listing groups by workspace and project and holds still between loads.
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Address < rows[j].Address })
 
 	v.render(w, "sessions.html", sessionsPage{
 		shell:    shell{Title: "sessions", Where: "every live conversation"},
@@ -118,14 +119,14 @@ func task(turn *quaycrewv1.Task) taskRow {
 	}
 }
 
-func row(session *quaycrewv1.Session, names map[string]string) sessionRow {
+func row(one *quaycrewv1.Session, names map[string]string) sessionRow {
 	return sessionRow{
-		ID:      session.GetId(),
-		Short:   display.ShortID(session.GetId()),
-		Address: address(session, names),
-		Name:    display.SessionName(session),
-		Status:  display.StatusLabel(session),
-		Age:     display.Age(display.LastMoved(session)),
+		ID:      one.GetId(),
+		Short:   display.ShortID(one.GetId()),
+		Address: address(one, names),
+		Name:    display.SessionName(one),
+		Status:  display.StatusLabel(one),
+		Age:     display.Age(session.LastMoved(one)),
 	}
 }
 

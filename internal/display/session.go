@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/session"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -24,21 +25,21 @@ func SessionColumns() []string {
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
-func SessionCells(session *quaycrewv1.Session, workspaceName, projectName string) []string {
+func SessionCells(one *quaycrewv1.Session, workspaceName, projectName string) []string {
 	return []string{
-		ShortID(session.GetId()),
-		Name(workspaceName, session.GetWorkspace()),
-		Name(projectName, session.GetProject()),
-		SessionLabel(session),
-		StatusLabel(session),
-		PermissionLabel(session.GetPermissionMode()),
-		ContextLabel(session),
-		Tokens(session.GetUsage().GetInput()),
-		Tokens(session.GetUsage().GetOutput()),
-		Tokens(session.GetUsage().GetCacheRead()),
-		// How long ago it was put away where it was, and how long ago it was touched otherwise. A
-		// live session has no archived stamp, so one rule covers both.
-		Age(LastMoved(session)),
+		ShortID(one.GetId()),
+		Name(workspaceName, one.GetWorkspace()),
+		Name(projectName, one.GetProject()),
+		SessionLabel(one),
+		StatusLabel(one),
+		PermissionLabel(one.GetPermissionMode()),
+		ContextLabel(one),
+		Tokens(one.GetUsage().GetInput()),
+		Tokens(one.GetUsage().GetOutput()),
+		Tokens(one.GetUsage().GetCacheRead()),
+		// How long ago the session moved, which is the same stamp the listing is ordered by. Both the
+		// column and the order read it from the session package, so the two cannot come apart.
+		Age(session.LastMoved(one)),
 	}
 }
 
@@ -174,15 +175,6 @@ func Tokens(count int64) string {
 func trimZero(value float64) string {
 	rendered := strconv.FormatFloat(value, 'f', 1, 64)
 	return strings.TrimSuffix(rendered, ".0")
-}
-
-// LastMoved is when the session last went anywhere: when it was put away if it was, and when it was
-// last touched otherwise.
-func LastMoved(session *quaycrewv1.Session) *timestamppb.Timestamp {
-	if session.GetArchivedAt() != nil {
-		return session.GetArchivedAt()
-	}
-	return session.GetUpdatedAt()
 }
 
 // Age renders how long ago a timestamp was, compactly. An unset timestamp shows a dash rather than

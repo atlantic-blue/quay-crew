@@ -8,6 +8,38 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
+  and the last column showed how long ago the session was last touched, or put away. So the two
+  disagreed: a session made a week ago and used an hour ago sat below one made yesterday and untouched
+  since. A real listing of forty five sessions ran 1d, 1d, 1d, 7d, 7d, 7d, 1d, 7d down the age column,
+  which is a column nobody can read.
+
+  The listing now comes back last moved first, so the ages run in order and the session you were last
+  working in is at the top. Last moved is when a session was put away where it was, and when it was
+  last touched otherwise, which is one rule over a live session and an archived one. `id` breaks a tie,
+  so two sessions that share a moment keep one order between two reads.
+
+  **Last moved is now a fact about a session, in `internal/session`.** It used to live in the display
+  package, where the age cell reads it, and the store cannot import that: a store reaching into a
+  display package is a direction the next reader copies. Writing the rule out twice was the other way
+  to do it, and two copies drifting is the defect above. So it moved to a package of its own, beside
+  `internal/job`, which holds a job's phases for the same reason. It depends on the generated types
+  and nothing else, so both the store and the surfaces read the one definition.
+
+  Both stores answer the same way. Postgres orders by `coalesce(archived_at, updated_at) desc, id`, the
+  in memory store sorts by the same rule in Go, and the conformance suite holds the two to it. The in
+  memory store had no order at all before this, so it was handing back whatever the map iterated.
+
+  **One order, decided in one place.** The console sorted the sessions view and the archived view by
+  the identifier column, and the web page sorted its listing by address. Three surfaces reading one
+  listing and each deciding its own order is three things to keep in step, and they were already out of
+  step. All three now render the order they are given. The two console views no longer mark a column
+  with the sort arrow, because they no longer sort one.
+
+  What this does not do. It does not touch any other listing, and it does not change what the age
+  column means. Workspaces and projects still come back by `created_at desc`, which is the stamp their
+  own age column shows, though neither is sorted at all by the in memory store.
+
 - **Declared intent is a job, and `quay work` is `quay job`.** The vocabulary was confusing to the
   person who has to use it, and that has now cost real time twice. Kubernetes already solved this,
   and the crew had borrowed half of its words already: a `Lease`, a `Phase`, a `Role`, verbs on a

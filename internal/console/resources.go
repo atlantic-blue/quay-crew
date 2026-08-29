@@ -354,10 +354,13 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// name, so it takes that column's three bands rather than being dimmed with the counts.
 			{Title: "age", Width: 6, Colour: colourOfAge},
 		},
-		// Ordered by the session column, so a session keeps its place in the list as its age, its
-		// status and its name change under it. The name column cannot hold this order: it is empty
-		// until somebody names the session, and it moves the row when they do.
-		SortBy:  0,
+		// No order of its own: the control plane answers last moved first, so the session an operator
+		// was working in is at the top and the age column reads down the page. Sorting here again would
+		// be a second order to keep in step with the command line and the web page.
+		//
+		// The age column cannot hold this order either way. These cells are rendered text, so sorting
+		// them compares "10d" against "1d" and "59m" against "7d" as words.
+		SortBy:  -1,
 		List:    sessionLister(client, live),
 		Actions: sessionActions(client),
 	}
@@ -458,9 +461,9 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},
 			{Title: "archived", Width: 8, Colour: dim},
 		},
-		// By the session column, as the live view is, so a row keeps its place whatever changes
-		// under it.
-		SortBy: 0,
+		// No order of its own, as the live view has none: an archived session is measured from when it
+		// was put away, and the control plane already answers with the most recently put away first.
+		SortBy: -1,
 		List:   sessionLister(client, putAway),
 		Actions: []Action{
 			{

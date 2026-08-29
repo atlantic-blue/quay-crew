@@ -105,7 +105,49 @@ sandbox. The console calls them sessions too, and `sessions` still opens that vi
   `updated_at` moves on every write. A task, a stop or a restart clears it. See section 11 of
   `docs/ORCHESTRATION.md`, which also says why the two times that drive it ship unset
 
-**`contexts`** is the memory the model reads: `scope`, `owner`, `body`, timestamps, keyed on the first
+### The order a session listing comes back in
+
+A listing of sessions comes back last moved first, and `id` breaks a tie so two sessions that share a
+moment keep one order between two reads. Last moved is `archived_at` where it is set and `updated_at`
+otherwise, which is the same stamp the age column at the end of the listing shows.
+
+```mermaid
+flowchart LR
+    R["a session row"] --> Q{"archived_at set?"}
+    Q -->|"yes"| A["put away at archived_at"]
+    Q -->|"no"| U["last touched at updated_at"]
+    A --> K["last moved"]
+    U --> K
+    K --> O["order by last moved desc, id"]
+    K --> C["the age column"]
+```
+
+The order and the column read the same field on purpose. They used to disagree: the query ordered by
+`created_at desc` while the column showed this stamp, so a session made a week ago and used an hour
+ago sat below one made yesterday and untouched since. A real listing of forty five sessions ran
+1d, 1d, 1d, 7d, 7d, 7d, 1d, 7d down the age column, which is a column nobody can read.
+
+Last moved is defined once, in `internal/session`, because it is a fact about a session rather than
+a fact about how one is drawn or where one is kept. The store reads it to order the listing and the
+surfaces read it to fill the age cell, so the order and the column cannot come apart. It sits beside
+`internal/job`, which holds a job's phases the same way and for the same reason.
+
+Both stores then write the order. Postgres orders by `coalesce(archived_at, updated_at) desc, id` and
+the in memory store sorts by `sortByLastMoved` in `internal/store/store.go`. The conformance suite in
+`internal/store/storetest` holds the two to the same answer.
+
+The order is decided here and nowhere else. The console, `quay sessions` and the web page all render
+this listing in the order they are given it, and none of them sorts it again: a second order would be
+a second thing to keep in step with this one.
+
+What this does not do. It does not order any other listing. Workspaces and projects still come back
+by `created_at desc`, which is the stamp their own age column shows, and neither store sorts them at
+all in memory. It does not change what the age column means, and it does not give an operator a way
+to ask for a different order: the console's sort key is a constant per view, and on these two views it
+is now unset.
+
+**`contexts`** is the memory the model reads:
+ `scope`, `owner`, `body`, timestamps, keyed on the first
 two columns together. `scope` is `crew`, `workspace` or `project`, and `owner` is the workspace or
 project it belongs to, empty for the crew. It has no foreign key for that reason. The `CLAUDE.md`
 inside a sandbox is a rendering of this row, written when the sandbox is made and read back when
@@ -205,7 +247,9 @@ erDiagram
 
 ## Queries worth knowing
 
-Every session, live ones first, named by where it sits rather than by its identifier:
+Every session in the order the crew lists them, named by where it sits rather than by its
+identifier. The order is the one described above, so this reads the way the console and
+`quay sessions` read:
 
 ```sql
 select w.name || '/' || p.name as address,
@@ -216,7 +260,7 @@ select w.name || '/' || p.name as address,
 from sessions s
 join projects p on p.id = s.project
 join workspaces w on w.id = s.workspace
-order by s.updated_at desc;
+order by coalesce(s.archived_at, s.updated_at) desc, s.id;
 ```
 
 Sessions with no conversation behind them, which is what "there is nothing to attach to" looks like
