@@ -230,9 +230,10 @@ write what every session in the workspace is told.
 
 ## The roles this build ships
 
-Twelve roles live in [`roles/`](../roles) at the root of this repository, one directory each. Between
-them they are a design phase: a way of working from a design to a shipped slice where each step runs
-as a session of its own, given only what its role declares.
+Fifteen roles live in [`roles/`](../roles) at the root of this repository, one directory each. Twelve
+of them are a design phase: a way of working from a design to a shipped slice where each step runs as
+a session of its own, given only what its role declares. The other three deliver one, and they are
+below under "The three that deliver a slice".
 
 ```mermaid
 flowchart LR
@@ -245,7 +246,12 @@ flowchart LR
     subgraph MARKET["the market it ships into"]
         RESEARCHER["marketing-researcher"] --> MARKETING["marketing"]
     end
+    subgraph DELIVER["delivering a slice"]
+        ORCHESTRATOR["orchestrator"] --> INFRA["infrastructure-writer"]
+        ORCHESTRATOR --> RELEASER["releaser"]
+    end
     ASSESSOR --> DESIGNER
+    ORCHESTRATOR --> TESTWRITER
 ```
 
 The design phase, in order, and the model each one runs on:
@@ -269,10 +275,48 @@ list, `job.create` and `job.read`, because its brief declares a security review 
 back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
 grant mean something.
 
-`skills` goes to all twelve because each brief works inside a repository, and a repository reaches a
+`skills` goes to all fifteen because each brief works inside a repository, and a repository reaches a
 session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
 away the brief and the mounted directory and leave the workspace's secrets in the environment
 regardless, so it would break a role rather than fence one.
+
+### The three that deliver a slice
+
+`orchestrator`, `infrastructure-writer` and `releaser` were written for the acceptance run in
+[`docs/ACCEPTANCE-PROJECT.md`](ACCEPTANCE-PROJECT.md) and they ship here now, so they can be read and
+changed like anything else.
+
+- `orchestrator` on opus turns one brief into the smallest tree of jobs that delivers it, then waits.
+  It may `job.create`, `job.read` and `job.stop`.
+- `infrastructure-writer` on opus writes the infrastructure and the pipeline that applies it, and
+  declares a child per deliverable that has its own review. It may `job.create` and `job.read`.
+- `releaser` on sonnet takes a working tree somebody else wrote and gets it onto a branch, in a
+  commit, in a pull request. It may `job.read` only, because a session that can push and can also fan
+  work out could spend a whole budget on pushes nobody reviewed. It is the one role that does not
+  receive `context`.
+
+**Every role can push, and no role merges.** A push is not a deploy. What runs a pipeline is a merge,
+and the pipeline is what applies infrastructure and ships a release, so the merge is the gate and it
+is the operator's. Taking the push away from a role removes the operator's sight of work in flight
+and stops nothing, which is what the acceptance run proved: `infrastructure-writer` received no
+skills, so it held no git tool, and the only thing that changed was that nobody could see what it
+had built until the job ended. So each of the three briefs ends a slice the same way. Commit it, push
+the branch, open a pull request describing what changed and why in two to five sentences, say the
+address in the answer, and move to the next phase.
+
+**A test and the code it tests come from different sessions.** The orchestrator's brief says that a
+deliverable carrying logic is at least three children: `test-writer` from the contract, `implementer`
+from the test names, `verifier` against the contract. One session that writes the contract, the tests
+and the code writes tests that agree with the code it just wrote, and a suite like that is green on
+the day it ships and silent afterwards. The three roles already existed; what was missing was
+anything telling an orchestrator to use them.
+
+**A refusal it cannot act on stops the run.** There is exactly one refusal an orchestrator may work
+around, the workspace depth limit, and only by doing that one child's work. Anything else, an
+unknown verb or a credential the crew will not accept, means writing the refusal into the answer and
+ending. In the acceptance run the brief said to do the work itself when a declaration was refused,
+which was written for the depth limit and applied to a credential failure, so one session wrote the
+whole product and no child ever ran.
 
 ### What a brief asks that quay does not enforce
 
@@ -298,15 +342,17 @@ there, and each brief says which document it writes.
 
 ### The two longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. Ten of the twelve fit under thirteen thousand, and `architect` at
-16,360 and `assessor` at 16,257 are both within two hundred bytes of the ceiling, so a sentence
-added to either has to come out somewhere else. Both say so at the top. Raising the ceiling is the
-change that would give those two room, and it is the operator's to make.
+A brief may be 16,384 bytes. Twelve of the fifteen fit under thirteen thousand. `architect` at 16,348
+and `assessor` at 16,237 are both within two hundred bytes of the ceiling, so a sentence added to
+either has to come out somewhere else, and both say so at the top. That is also why the phase ending
+about pushing and opening a pull request is written into the three delivery briefs rather than into
+all fifteen: those two have no room for it. Raising the ceiling is the change that would give them
+room, and it is the operator's to make.
 
 ### What this does not do
 
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
-  and it is the reason every one of the twelve carries a line saying so.
+  and it is the reason every one of the fifteen carries a line saying so.
 - A fresh crew is seeded with none of them. Skills and hooks are seeded and roles are not, so an
   operator runs `quay role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
@@ -318,9 +364,12 @@ change that would give those two room, and it is the operator's to make.
   next role reads it from there, so a role whose predecessor never ran says so and stops.
 
 The scenarios that hold this up are in [`features/roles.feature`](../features/roles.feature), which
-imports every role in `roles/` and refuses a directory holding none, and in
-[`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as
-one of them.
+imports every role in `roles/`, refuses a directory holding none, and asks each of the three
+delivery roles for a verb it holds and a verb it does not; in
+[`features/rolesessions.feature`](../features/rolesessions.feature), which proves a role receiving
+`skills` is handed the git skill and one that does not is handed none; and in
+[`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as one of
+them.
 
 ## What is not built
 

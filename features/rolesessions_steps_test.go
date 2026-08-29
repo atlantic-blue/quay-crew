@@ -321,3 +321,45 @@ func initializeStoppedReasonSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 }
+
+// The positive direction of the skills boundary, registered beside the negative one it mirrors.
+func initializeRoleSkillSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the role's session holds the "([^"]*)" skill$`, func(ctx context.Context, name string) error {
+		w := worldFrom(ctx)
+		session, err := roleSession(ctx)
+		if err != nil {
+			return err
+		}
+		listed, err := w.client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Session: session.GetId()})
+		if err != nil {
+			return err
+		}
+		for _, held := range listed.GetSkills() {
+			if held.GetName() == name {
+				return nil
+			}
+		}
+		return fmt.Errorf("the role's session holds %d skills and none of them is %s",
+			len(listed.GetSkills()), name)
+	})
+
+	// A listing that says git over a container with no mount is a session that cannot push, so the
+	// mount is asserted as well as the listing.
+	sc.Step(`^the role's sandbox mounts the ([^ ]+) skill$`, func(ctx context.Context, name string) error {
+		box, err := roleSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		at := skill.DirIn(sandbox.SkillsPath, name)
+		for _, mount := range box.Mounts {
+			if mount.Target != at {
+				continue
+			}
+			if !mount.ReadOnly {
+				return fmt.Errorf("%s is mounted writable, and a session may not edit its own capability", at)
+			}
+			return nil
+		}
+		return fmt.Errorf("the role's sandbox does not mount %s, so the session holds no tool for it", at)
+	})
+}
