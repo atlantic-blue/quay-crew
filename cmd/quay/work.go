@@ -74,17 +74,13 @@ func runWorkCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if len(rest) == 1 {
 		typed = rest[0]
 	}
-	located, err := locate(ctx, client, typed)
+	project, at, err := whereTheWorkRuns(ctx, client, typed)
 	if err != nil {
 		return err
 	}
-	if located.ProjectID == "" {
-		return fmt.Errorf("work runs in a project: quay work create <workspace>/<project> %s \"...\" %s \"...\"",
-			flagTitle, flagBrief)
-	}
 
 	request := &quaycrewv1.CreateWorkRequest{
-		Project:        located.ProjectID,
+		Project:        project,
 		Title:          values.first(flagTitle),
 		Brief:          values.first(flagBrief),
 		Role:           values.first(flagRole),
@@ -119,10 +115,51 @@ func runWorkCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		return err
 	}
 	declared := resp.GetWork()
-	fmt.Fprintf(out, "declared %s in %s\n", display.ShortID(declared.GetId()), located.Path)
+	fmt.Fprintf(out, "declared %s%s\n", display.ShortID(declared.GetId()), inAddress(at))
 	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with quay work show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
 	return nil
+}
+
+// whereTheWorkRuns is the project to declare in, and empty when the crew is to read it from the
+// credential the caller presented.
+//
+// A session running a piece of work is standing nowhere and types no address. It cannot resolve one
+// either: resolving an address means listing workspaces and projects, and a role grants the four work
+// verbs and nothing else. What it does hold is a credential minted for the work it is running, and
+// that credential already says which project that work is in, so the crew reads it there. The same
+// place the parent comes from.
+//
+// An operator standing somewhere is unchanged, and an operator standing in a workspace with no
+// project is still told what is missing rather than having the work land somewhere unexpected.
+func whereTheWorkRuns(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (string, string, error) {
+	if typed == "" {
+		standing, err := currentPath()
+		if err != nil {
+			return "", "", err
+		}
+		if standing.IsZero() {
+			return "", "", nil
+		}
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return "", "", err
+	}
+	if located.ProjectID == "" {
+		return "", "", fmt.Errorf("work runs in a project: quay work create <workspace>/<project> %s \"...\" %s \"...\"",
+			flagTitle, flagBrief)
+	}
+	return located.ProjectID, located.Path.String(), nil
+}
+
+// inAddress is the address to say a piece of work was declared in, and nothing when nobody named one:
+// a session declares in the project its credential names, and it has no address to print.
+func inAddress(at string) string {
+	if strings.TrimSpace(at) == "" {
+		return ""
+	}
+	return " in " + at
 }
 
 // runWorkList says what a project holds, newest first.

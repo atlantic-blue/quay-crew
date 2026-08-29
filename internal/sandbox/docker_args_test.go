@@ -5,37 +5,100 @@ import (
 	"testing"
 )
 
-// TestTheDriverJoinsTheNetworkAndAnOrdinarySessionDoesNot. Reaching the control plane is what lets a
-// session drive the crew, and a session that can drive the crew can also stop other sessions, so it is
-// the one session marked for it rather than every session in the crew.
-func TestTheDriverJoinsTheNetworkAndAnOrdinarySessionDoesNot(t *testing.T) {
-	provider := DockerProvider{Image: "img", Network: "quaycrew_default", DriverMounts: []string{"/hub:/hub:ro"}}
+// TestEverySandboxJoinsTheNetworkThatReachesTheCrew.
+//
+// A session running a piece of work is handed the crew's address and a credential minted for that
+// work. Both are worthless in a container with no route to the address, which is what an ordinary
+// session had: every call died resolving the name, so the verb boundary refused nothing and a
+// permission system that has never refused anything cannot be told from one that is not wired up.
+//
+// The network is not the permission. It decides what a session can address, and the credential
+// decides what it may do there.
+func TestEverySandboxJoinsTheNetworkThatReachesTheCrew(t *testing.T) {
+	provider := DockerProvider{Image: "img", SessionNetwork: "quaycrew_sessions"}
 
-	driver := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1", Driver: true}, nil), " ")
-	if !strings.Contains(driver, "--network quaycrew_default") {
-		t.Fatalf("the driver does not join the network:\n%s", driver)
-	}
-	if !strings.Contains(driver, "-v /hub:/hub:ro") {
-		t.Fatalf("the driver does not get the host paths it was given:\n%s", driver)
-	}
-
-	ordinary := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
-	if strings.Contains(ordinary, "--network") {
-		t.Fatalf("an ordinary session joins the crew's network:\n%s", ordinary)
-	}
-	if strings.Contains(ordinary, "/hub") {
-		t.Fatalf("an ordinary session gets the driver's host paths:\n%s", ordinary)
+	got := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
+	if !strings.Contains(got, "--network quaycrew_sessions") {
+		t.Fatalf("a session joins no network that reaches the crew:\n%s", got)
 	}
 }
 
-// TestASandboxJoinsNothingWithNoNetworkConfigured: a session that can reach the crew can also stop
-// other sessions, so it is turned on rather than assumed.
+// TestASessionIsKeptOffTheCrewsOwnNetwork. That network carries Postgres, Redpanda and the
+// observability stack, and a session runs model output, so the session network is a second network
+// with the control plane on it rather than a wider grant of this one.
+func TestASessionIsKeptOffTheCrewsOwnNetwork(t *testing.T) {
+	provider := DockerProvider{
+		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",
+		DriverMounts: []string{"/hub:/hub:ro"},
+	}
+
+	got := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
+	if strings.Contains(got, "quaycrew_default") {
+		t.Fatalf("a session joins the crew's own network, where the store and the broker are:\n%s", got)
+	}
+	if strings.Contains(got, "/hub") {
+		t.Fatalf("a session gets the driver's host paths:\n%s", got)
+	}
+}
+
+// TestTheDriverJoinsTheCrewsOwnNetworkWhenTheOperatorNamedOne. The driver is the deliberate widening,
+// and it is the operator who asks for it by naming the network.
+func TestTheDriverJoinsTheCrewsOwnNetworkWhenTheOperatorNamedOne(t *testing.T) {
+	provider := DockerProvider{
+		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",
+		DriverMounts: []string{"/hub:/hub:ro"},
+	}
+
+	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1", Driver: true}, nil), " ")
+	if !strings.Contains(got, "--network quaycrew_default") {
+		t.Fatalf("the driver does not join the network the operator named:\n%s", got)
+	}
+	if !strings.Contains(got, "-v /hub:/hub:ro") {
+		t.Fatalf("the driver does not get the host paths it was given:\n%s", got)
+	}
+}
+
+// TestTheDriverFallsBackToTheSessionNetwork, so a crew that named no wider network still has a driver
+// that can drive it. Reaching the control plane is the whole of what driving needs.
+func TestTheDriverFallsBackToTheSessionNetwork(t *testing.T) {
+	provider := DockerProvider{Image: "img", SessionNetwork: "quaycrew_sessions"}
+
+	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1", Driver: true}, nil), " ")
+	if !strings.Contains(got, "--network quaycrew_sessions") {
+		t.Fatalf("the driver joins nothing, so it cannot reach the crew it exists to drive:\n%s", got)
+	}
+}
+
+// TestASandboxJoinsExactlyOneNetwork. A sandbox keeps what it was created with and there is no
+// promotion, so this decision is made once, here, and two --network flags would be one of them
+// silently ignored.
+func TestASandboxJoinsExactlyOneNetwork(t *testing.T) {
+	provider := DockerProvider{Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions"}
+
+	for _, cfg := range []Config{{ID: "s1", Driver: true}, {ID: "s2"}} {
+		got := provider.runArgs("quaycrew-"+cfg.ID, cfg, nil)
+		joined := 0
+		for _, arg := range got {
+			if arg == "--network" {
+				joined++
+			}
+		}
+		if joined != 1 {
+			t.Fatalf("the sandbox for %+v joins %d networks, want exactly 1:\n%s", cfg, joined, strings.Join(got, " "))
+		}
+	}
+}
+
+// TestASandboxJoinsNothingWithNoNetworkConfigured: a crew run outside the compose stack may have no
+// network to put a session on, and it says so by joining none rather than by inventing a name.
 func TestASandboxJoinsNothingWithNoNetworkConfigured(t *testing.T) {
 	provider := DockerProvider{Image: "img"}
-	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")
 
-	if strings.Contains(got, "--network") {
-		t.Fatalf("the sandbox joins a network with none configured:\n%s", got)
+	for _, cfg := range []Config{{ID: "s1", Driver: true}, {ID: "s2"}} {
+		got := strings.Join(provider.runArgs("quaycrew-"+cfg.ID, cfg, nil), " ")
+		if strings.Contains(got, "--network") {
+			t.Fatalf("the sandbox for %+v joins a network with none configured:\n%s", cfg, got)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 	"github.com/atlantic-blue/quay-crew/internal/role"
+	"github.com/atlantic-blue/quay-crew/internal/work"
 	"github.com/cucumber/godog"
 )
 
@@ -108,6 +109,32 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return worldFrom(ctx).lastErr
 	})
 
+	sc.Step(`^that session declares a piece of work naming no project$`, func(ctx context.Context) error {
+		w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+		declared, err := w.dialAs(scenario.token).CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+			Title: "pull request 341", Brief: "review it", Role: "backlog-clearer",
+		})
+		w.lastErr = err
+		if err != nil {
+			return nil
+		}
+		scenario.declared = append(scenario.declared, declared.GetWork())
+		return nil
+	})
+
+	sc.Step(`^the new work is in the same project as the work that declared it$`, func(ctx context.Context) error {
+		w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("the declaration was refused: %w", w.lastErr)
+		}
+		newest := scenario.declared[len(scenario.declared)-1]
+		if newest.GetProject() != w.projectID {
+			return fmt.Errorf("the work landed in project %q, want %q, which is the project its credential names",
+				newest.GetProject(), w.projectID)
+		}
+		return nil
+	})
+
 	// The work the session declared is itself a piece of work, so the crew mints a credential for it
 	// the same way, and that credential is what declares one level deeper.
 	sc.Step(`^the work at depth (\d+) declares another$`, func(ctx context.Context, depth int) error {
@@ -196,6 +223,87 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		_, w.lastErr = asTheSession(ctx).SetSecret(ctx, &quaycrewv1.SetSecretRequest{
 			Workspace: w.workspaceID, Key: "CLAUDE_CODE_OAUTH_TOKEN", Value: "tok-xyz",
 		})
+		return nil
+	})
+
+	// What a task is actually handed, read off the task the crew ran rather than off the sandbox: a
+	// credential is minted for one piece of work and travels in the environment of one task, because a
+	// sandbox keeps what it was born with and would otherwise label every later task with the first
+	// task's grant.
+	sc.Step(`^the crew runs that work$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: w.projectID, Text: "clear it", Work: capabilityFrom(ctx).running,
+		})
+		w.lastErr = err
+		return err
+	})
+
+	sc.Step(`^the task carries the address of the crew$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if got := w.runner.lastRequest().Env["QC_GRPC_ADDR"]; got != w.reachable {
+			return fmt.Errorf("the task was told the crew is at %q, want %q", got, w.reachable)
+		}
+		return nil
+	})
+
+	sc.Step(`^the task carries the credential minted for that work, not the operator's token$`,
+		func(ctx context.Context) error {
+			w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+			presented := w.runner.lastRequest().Env["QC_TOKEN"]
+			if presented == "" {
+				return fmt.Errorf("the task carries no credential, so it can do nothing at the address it was given")
+			}
+			if presented == w.token || presented == w.driverToken {
+				return fmt.Errorf("the task carries a token that is not its own, so it holds what the crew holds")
+			}
+			grant, recognised := w.server.Grants().Grant(presented)
+			if !recognised {
+				return fmt.Errorf("the crew does not recognise the credential it put in the task")
+			}
+			if grant.Work != scenario.running {
+				return fmt.Errorf("the credential is bound to %q, want the work the task runs for", grant.Work)
+			}
+			return nil
+		})
+
+	sc.Step(`^the task carries no address and no token$`, func(ctx context.Context) error {
+		env := worldFrom(ctx).runner.lastRequest().Env
+		for _, name := range []string{"QC_GRPC_ADDR", "QC_TOKEN"} {
+			if got, told := env[name]; told {
+				return fmt.Errorf("the task carries %s=%q, and a task running no work is told neither", name, got)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^that session tries to stop the work it is running$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = asTheSession(ctx).StopWork(ctx, &quaycrewv1.StopWorkRequest{
+			Id: capabilityFrom(ctx).running, Reason: "I have had enough",
+		})
+		return nil
+	})
+
+	sc.Step(`^the crew refuses it and names the verb it lacks and how an operator grants it$`,
+		func(ctx context.Context) error {
+			for _, want := range []string{role.VerbWorkStop, "may list", "attaching it"} {
+				if err := theRefusalSays(want)(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the work is still running$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		held, err := w.client.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: capabilityFrom(ctx).running})
+		if err != nil {
+			return err
+		}
+		if held.GetWork().GetPhase() == work.PhaseStopped {
+			return fmt.Errorf("the work is stopped, and the session that asked was refused")
+		}
 		return nil
 	})
 

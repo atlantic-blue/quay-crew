@@ -73,8 +73,10 @@ func inAContainer() bool {
 // A session that was never told where the crew is falls back to localhost, and localhost inside a
 // container is the container: there is nothing there and there never will be. The dial error names an
 // address the operator did not choose and cannot fix, which reads as the crew being down. What is
-// actually true is that this session was not given the two pieces of configuration that let it reach
-// the crew at all, and neither of them can be set from in here.
+// actually true is that nothing told this session where to go, and that cannot be set from in here.
+//
+// A task is told where the crew is when it runs a piece of work, so the ordinary reason to see this
+// is a task that is running none. The other reason is a crew whose own address is unset.
 func unreachable(err error, told string, sandboxed bool) error {
 	if err == nil || !sandboxed || told != "" {
 		return err
@@ -83,10 +85,10 @@ func unreachable(err error, told string, sandboxed bool) error {
 		return err
 	}
 	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
-		"address it fell back to. It reaches the control plane only when the crew is set up for it: "+
-		"QC_SANDBOX_NETWORK and QC_SANDBOX_CONTROL_PLANE on the control plane, which is the crew's "+
-		"configuration file, ~/.quay/env on a compose stack. Then start this session again, because a sandbox "+
-		"keeps the configuration it was made with. (%w)", err)
+		"address it fell back to. A task is told where the crew is when it runs a piece of work, and "+
+		"what it may do there comes from that work's role. So either this task is running none, or "+
+		"the crew has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
+		"the crew's configuration file, ~/.quay/env on a compose stack. (%w)", err)
 }
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.

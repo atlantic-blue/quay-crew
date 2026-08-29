@@ -34,6 +34,16 @@ Feature: A session may declare work, within limits
     When that session declares a piece of work
     Then the new work hangs under the work that declared it, one level deeper
 
+  # A session cannot resolve an address: resolving one means listing workspaces and projects, and a
+  # role grants the four work verbs and nothing else. So it names no project, and the crew reads that
+  # from the credential, the same place the parent comes from.
+  Scenario: A session names no project and its work lands in the one its credential names
+    Given the workspace allows work down to depth 2
+    And a piece of work titled "clear the backlog" running as a role that may create work
+    When that session declares a piece of work naming no project
+    Then the new work is in the same project as the work that declared it
+    And the new work hangs under the work that declared it, one level deeper
+
   Scenario: Work deeper than the workspace allows is refused, naming the limit
     Given the workspace allows work down to depth 1
     And a piece of work titled "clear the backlog" running as a role that may create work
@@ -63,6 +73,31 @@ Feature: A session may declare work, within limits
     Then the crew refuses the session that call
     When that session tries to set a secret
     Then the crew refuses the session that call
+
+  # A session was handed the address and the credential and had no route to the address, so every
+  # call died resolving the name and nothing was ever refused. These two say what a session is given
+  # and what it is not, which is the half of the fault the crew decides.
+  Scenario: A session running a piece of work is told where the crew is, and what it may spend there
+    Given a crew that sessions can reach at "controlplane:50051"
+    And the workspace allows work down to depth 2
+    And a piece of work titled "clear the backlog" running as a role that may create work
+    When the crew runs that work
+    Then the task carries the address of the crew
+    And the task carries the credential minted for that work, not the operator's token
+
+  Scenario: A task running no piece of work is told nothing
+    Given a crew that sessions can reach at "controlplane:50051"
+    When the operator dispatches "hello" to the project
+    Then the task carries no address and no token
+
+  # The load bearing test is the refusal, not the call. A role's may list is the whole boundary, so a
+  # verb it does not carry has to come back as a refusal a session can act on.
+  Scenario: A session whose role may not stop work is refused, and told where the verb comes from
+    Given the workspace allows work down to depth 2
+    And a piece of work titled "clear the backlog" running as a role that may create work
+    When that session tries to stop the work it is running
+    Then the crew refuses it and names the verb it lacks and how an operator grants it
+    And the work is still running
 
   # The credential is the boundary, so what it carries is the whole of what a session holds.
   Scenario: The credential a session runs under is bound to its work and expires
