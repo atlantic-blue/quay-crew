@@ -413,7 +413,16 @@ type Session struct {
 	//
 	// Set only when the request asked for it, because the answer costs a question to the sandbox. Unset
 	// means nobody asked, which is not the same as nothing being there.
-	Presence      SessionPresence `protobuf:"varint,20,opt,name=presence,proto3,enum=quaycrew.v1.SessionPresence" json:"presence,omitempty"`
+	Presence SessionPresence `protobuf:"varint,20,opt,name=presence,proto3,enum=quaycrew.v1.SessionPresence" json:"presence,omitempty"`
+	// title is the name the session was dispatched with, written when the session is made and never
+	// afterwards. A job carries its declared title here, so a listing says which conversation is which
+	// from the first second, rather than once a description is written behind a task that has landed.
+	//
+	// It is a third name rather than a second use of label, because the two are typed at different
+	// moments about different things: the title names the job the session was made for, and the label
+	// is what the operator calls this conversation once they have seen it. A dispatch that has to be
+	// made again would put the job title back over a label the operator set in the meantime.
+	Title         string `protobuf:"bytes,21,opt,name=title,proto3" json:"title,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -586,6 +595,13 @@ func (x *Session) GetPresence() SessionPresence {
 		return x.Presence
 	}
 	return SessionPresence_SESSION_PRESENCE_UNSPECIFIED
+}
+
+func (x *Session) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
 }
 
 // ContextWindow is how full a conversation's context window is.
@@ -2607,7 +2623,15 @@ type DispatchRequest struct {
 	// Per task rather than at sandbox birth, because a sandbox is born with its configuration and keeps
 	// it: a credential written at birth would label every later task with the first task's grant, and a
 	// grant made after birth would never reach the container at all.
-	Job           string `protobuf:"bytes,7,opt,name=job,proto3" json:"job,omitempty"`
+	Job string `protobuf:"bytes,7,opt,name=job,proto3" json:"job,omitempty"`
+	// title is what to call the session this dispatch makes, and it is read only when the session is
+	// made: a name a caller sends with every task must not overwrite what the operator has called the
+	// conversation since.
+	//
+	// It is what a caller that already knows the name sends. A job is declared with a title, and
+	// without this the crew is handed that name and drops it, which leaves a listing of running jobs
+	// waiting for a description written after the work is over.
+	Title         string `protobuf:"bytes,8,opt,name=title,proto3" json:"title,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2687,6 +2711,13 @@ func (x *DispatchRequest) GetRole() string {
 func (x *DispatchRequest) GetJob() string {
 	if x != nil {
 		return x.Job
+	}
+	return ""
+}
+
+func (x *DispatchRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
 	}
 	return ""
 }
@@ -8381,7 +8412,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x93\x06\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xa9\x06\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -8406,7 +8437,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0econtext_window\x18\x11 \x01(\v2\x1a.quaycrew.v1.ContextWindowR\rcontextWindow\x12\x12\n" +
 	"\x04role\x18\x12 \x01(\tR\x04role\x12=\n" +
 	"\freclaimed_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\vreclaimedAt\x128\n" +
-	"\bpresence\x18\x14 \x01(\x0e2\x1c.quaycrew.v1.SessionPresenceR\bpresence\"7\n" +
+	"\bpresence\x18\x14 \x01(\x0e2\x1c.quaycrew.v1.SessionPresenceR\bpresence\x12\x14\n" +
+	"\x05title\x18\x15 \x01(\tR\x05title\"7\n" +
 	"\rContextWindow\x12\x12\n" +
 	"\x04used\x18\x01 \x01(\x03R\x04used\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\"y\n" +
@@ -8530,7 +8562,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"projection\x18\x04 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
 	"projection\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\"\x13\n" +
-	"\x11SetSecretResponse\"\xbe\x01\n" +
+	"\x11SetSecretResponse\"\xd4\x01\n" +
 	"\x0fDispatchRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
@@ -8538,7 +8570,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fpermission_mode\x18\x04 \x01(\tR\x0epermissionMode\x12\x16\n" +
 	"\x06detach\x18\x05 \x01(\bR\x06detach\x12\x12\n" +
 	"\x04role\x18\x06 \x01(\tR\x04role\x12\x10\n" +
-	"\x03job\x18\a \x01(\tR\x03job\"P\n" +
+	"\x03job\x18\a \x01(\tR\x03job\x12\x14\n" +
+	"\x05title\x18\b \x01(\tR\x05title\"P\n" +
 	"\x10DispatchResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x14\n" +
