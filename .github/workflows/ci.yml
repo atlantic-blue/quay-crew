@@ -120,6 +120,10 @@ jobs:
     # the whole stack. Without this the workspace defaults to the checkout directory ("quaycrew").
     env:
       COMPOSE_PROJECT_NAME: qcci
+      # The network a sandbox joins to reach the control plane, named after this stack the way the
+      # makefile names it. One variable creates the network and tells the control plane which one to
+      # join a sandbox to, so the two cannot drift.
+      QC_SESSION_NETWORK: qcci_sessions
     steps:
       - uses: actions/checkout@v4
 
@@ -250,6 +254,48 @@ jobs:
           test -n "$handle"
           go run ./cmd/quay task "smoke/bills/$handle" "second task" >/dev/null
           test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+
+      # The point of this step: prove a session can reach the crew and reach nothing else of it. The
+      # session container above is on the network the compose file made, so the name the crew hands
+      # out resolves inside it, and the store's does not.
+      #
+      # This is the half the tagged tests cannot prove. There the control plane listens on the host
+      # and a session dials it by address; here it is a container on the same network, which is what
+      # makes "controlplane:50051" mean anything at all. A sandbox handed that address and unable to
+      # resolve it reported "produced zero addresses" and read as the crew being down.
+      - name: A session resolves the crew and cannot resolve the store
+        run: |
+          set -euo pipefail
+          sandbox=$(docker ps --filter 'name=quaycrew-' --format '{{.Names}}' | head -1)
+          test -n "$sandbox"
+          echo "sandbox: $sandbox"
+
+          # What the crew told it to dial, resolved from inside the container the crew made.
+          docker exec "$sandbox" nslookup controlplane
+          # And the store, which is on the crew's own network and not on this one. Captured rather
+          # than piped, because a refusal is the answer this step wants and pipefail would take it
+          # for a failure of the step.
+          if docker exec "$sandbox" nslookup postgres > /tmp/store.txt 2>&1; then
+            echo "a session resolved the crew's store:"
+            cat /tmp/store.txt
+            exit 1
+          fi
+          cat /tmp/store.txt
+
+          # The same thing read from the daemon rather than from inside: one network, and it is the
+          # sessions one. A second network here would be the widening this design exists to avoid.
+          joined=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$sandbox")
+          echo "networks: $joined"
+          test "$(echo "$joined" | wc -w)" -eq 1
+          test "$(echo "$joined" | tr -d ' ')" = "$QC_SESSION_NETWORK"
+
+          # And the control plane is on both: the crew's own network for the store, the broker and the
+          # collector, and the sessions network for the sandboxes.
+          crew=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' \
+            "$(docker compose -f deploy/docker-compose.yml ps -q controlplane)")
+          echo "the crew is on: $crew"
+          case "$crew" in *"$QC_SESSION_NETWORK"*) ;; *) echo "the crew is not where its sessions are"; exit 1 ;; esac
+          case "$crew" in *qcci_default*) ;; *) echo "the crew left its own network, so it has no store"; exit 1 ;; esac
 
       # Tasks have now run, so the signals have to have moved. This is the check docs/OBSERVABILITY.md
       # tells an operator to run, and it is the one that was never automated: the stack could ship

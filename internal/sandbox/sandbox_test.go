@@ -109,19 +109,23 @@ func TestFakeProviderAdoptsASessionsSandbox(t *testing.T) {
 	}
 }
 
-// TestASandboxJoinsNoNetworkByDefault. A session that can reach the control plane can drive the crew,
-// and can stop other sessions with it, so reaching it is configuration rather than the default.
+// TestASandboxJoinsNoNetworkByDefault. Neither network is assumed: a crew run outside the compose
+// stack may have no network to put a session on, and the crew's own network, which carries the store
+// and the broker, is a widening the operator asks for.
 func TestASandboxJoinsNoNetworkByDefault(t *testing.T) {
 	plain := sandbox.DockerProvider{Image: "quaycrew-sandbox-claude:local"}
-	if plain.Network != "" {
-		t.Fatalf("a sandbox joins %q with nothing configured", plain.Network)
+	if plain.Network != "" || plain.SessionNetwork != "" {
+		t.Fatalf("a sandbox joins %q and %q with nothing configured", plain.Network, plain.SessionNetwork)
 	}
 }
 
-// TestOptionsCarryTheNetworkThroughToTheBackend: the provider is built by converting the options
-// across, so a field added to one and not the other silently does nothing.
-func TestOptionsCarryTheNetworkThroughToTheBackend(t *testing.T) {
-	provider, err := sandbox.NewProvider(sandbox.KindDocker, sandbox.Options{Image: "img", Network: "quaycrew_default"})
+// TestOptionsCarryBothNetworksThroughToTheBackend: the provider is built by converting the options
+// across, so a field added to one and not the other silently does nothing. Both, because a session
+// that never reaches the crew is exactly what this pair of fields exists to stop.
+func TestOptionsCarryBothNetworksThroughToTheBackend(t *testing.T) {
+	provider, err := sandbox.NewProvider(sandbox.KindDocker, sandbox.Options{
+		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",
+	})
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}
@@ -130,6 +134,9 @@ func TestOptionsCarryTheNetworkThroughToTheBackend(t *testing.T) {
 		t.Fatalf("NewProvider gave %T, want the Docker backend", provider)
 	}
 	if docker.Network != "quaycrew_default" {
-		t.Fatalf("the backend joins %q, want the network it was configured with", docker.Network)
+		t.Fatalf("the driver joins %q, want the network it was configured with", docker.Network)
+	}
+	if docker.SessionNetwork != "quaycrew_sessions" {
+		t.Fatalf("a session joins %q, want the network it was configured with", docker.SessionNetwork)
 	}
 }

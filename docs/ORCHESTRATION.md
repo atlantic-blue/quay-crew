@@ -47,6 +47,12 @@ plane's network. `internal/controlplane/deny.go` refuses eleven calls to that to
 and `StartFlow` are not among them. So the driver holds exactly the capability this document wants
 to generalise.
 
+**Both of those sentences were overtaken on 29 August 2026, by `quay-crew#435`.** Every sandbox now
+joins a network the control plane is also on, and a session running a piece of work is told the
+address and handed a credential minted for that work. The rest of this section is left as it was
+written, because it is what was true when the design was made. Section 5's "what this does not do"
+carries the correction.
+
 Captured from inside an ordinary session on 27 August 2026, in the sandbox this document was written
 in. `which quay` answers `/usr/local/bin/quay`, so the tool is in the image. `quay sessions` then
 answers:
@@ -60,6 +66,11 @@ sandbox keeps the configuration it was made with.
 
 That last sentence is the trap. A sandbox is born with its environment. A capability granted after
 birth does not reach the container that is already running.
+
+That capture is what the tool said that day and it says something else now: a task is told where the
+crew is when it runs a piece of work, and `quay sessions` is not a work verb, so a session running
+one is refused it by name. The trap in the last sentence is unchanged and is the reason the network
+is joined at birth.
 
 **Blocker two, a session's answer cannot be read as data. True, and smaller than it looks.**
 
@@ -115,7 +126,8 @@ row exists before the answer does. Section 4 depends on it.
 - **No declared unit of work.** Everything is a verb. `Dispatch` runs a task, `StartFlow` starts a
   run. Nothing writes down what somebody wants and lets a loop make it so.
 - **No capability a session can hold except the driver's.** The boundary is locality: the network
-  and the token follow the `driver` flag on the row.
+  and the token follow the `driver` flag on the row. (Both halves of this shipped since: the
+  credential in `quay-crew#414`, the network in `quay-crew#435`.)
 - **No quota anywhere.** A workspace has no limit on running sessions, on depth, or on spend. The
   flow engine's caps are per run, and nothing bounds a workspace.
 - **No command prints one answer whole.** Named above.
@@ -681,12 +693,19 @@ and set, and nothing enforces them yet: nothing runs a child, so there is no fan
 slice that runs work in a role is where they start to bite. The lease length is read by the
 controller when it claims that workspace's work.
 
-**What this does not do.** It does not put a session's container on a network that can reach the
-control plane, which is a property of sandbox birth and belongs to the session lifecycle slice. So
-the credential is honoured everywhere the crew is reachable, and a session that cannot reach the
-crew holds a credential it cannot spend. It does not scope `work.read` to the caller's own tree yet:
-the verb is checked, the tree is not. And `work.answer` is granted and refused but nothing asks a
-question yet.
+**What this does not do.** It does not scope `work.read` to the caller's own tree yet: the verb is
+checked, the tree is not. And `work.answer` is granted and refused but nothing asks a question yet.
+
+**What it did not do until 29 August 2026, and now does.** It did not put a session's container on a
+network that could reach the control plane, so every call a session made died resolving the name and
+the boundary above had never refused a real call. `quay-crew#435` closed it: every sandbox joins a
+second network that the control plane is also on, and nothing else of the crew's is. A session can
+address the crew and cannot address the store, the broker or the dashboards.
+
+The two halves are still two decisions and that is deliberate. The network says what a session can
+address, and the credential says what it may do there. A session on the network holding no credential
+is refused every call, which is what an ordinary task is. See the "What a session's sandbox can
+reach" section of `docs/SANDBOX.md`.
 
 ### The verbs
 
@@ -2018,18 +2037,28 @@ flowchart TD
 
 ### Why a driver session cannot be an ordinary session
 
-Three properties follow the `driver` flag on the session row, and all three are decided when the
-container is created.
+Two properties follow the `driver` flag on the session row, and both are decided when the container
+is created. A third used to, and no longer does.
 
-- **The address and the token.** `internal/controlplane/server.go:1621` reads
-  `if session.GetDriver() && s.reachable != ""`, and only then writes `QC_GRPC_ADDR` into the
-  environment. The token follows inside the same block, at line 1626. The comment states the rule:
-  the token travels with the address and only with it.
-- **The network.** `internal/sandbox/docker.go:186` reads `if cfg.Driver && d.Network != ""`, and
-  only then passes `--network`. An ordinary session's container is not on a network that reaches the
-  control plane. It could not use the address even if it held one.
-- **The extra host paths.** `internal/sandbox/docker.go:189` adds the driver mounts, and an ordinary
-  session gets none of them.
+- **The driver's own token, and the address beside it.** `taskEnv` in
+  `internal/controlplane/server.go` writes `QC_GRPC_ADDR` and the driver's token when
+  `session.GetDriver()` is true. That token is the crew's own interface, refused the named list in
+  `deny.go` and holding everything else. It is not the same thing as the credential a session gets:
+  that one is minted for one piece of work, carries the verbs its role declared, and expires with the
+  work.
+- **The extra host paths.** `runArgs` in `internal/sandbox/docker.go` adds the driver mounts, and an
+  ordinary session gets none of them. That is what makes the driver the glue between the machine and
+  the crew.
+- **The network is no longer one of them.** It was, and the two halves of this document disagreed
+  about it for two days: this section said an ordinary session's container is not on a network that
+  reaches the control plane, while section 5 handed that session a credential for an address it could
+  not resolve. `quay-crew#435` settled it the way section 5 needs. Every sandbox joins a network the
+  control plane is on, and only the control plane is on it. `QC_SANDBOX_NETWORK` still names the
+  crew's own network, which carries the store, the broker and the dashboards, and only the driver
+  joins that, when an operator asks for it.
+
+So the boundary is no longer locality. What a session may do is the credential, and the flag decides
+what a session holds rather than what it can address.
 
 The flag reaches the container at `internal/controlplane/server.go:345`, where `cfg.Driver` is set,
 one line after `cfg.Env` is filled from `taskEnv`.
