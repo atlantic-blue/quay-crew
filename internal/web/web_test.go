@@ -13,6 +13,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -298,4 +299,40 @@ func waitUntilLanded(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, 
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("the task never landed")
+}
+
+// The page shows how long ago each session moved and reads it from the same stamp the crew orders by,
+// so the column runs down the page. It does not order the listing itself: one order decided in the
+// crew is what keeps this page, the console and the command line saying the same thing.
+//
+// The waits are real because the crew stamps its own rows and takes no stamp from a caller. Without
+// them the two sessions would share a moment, the identifier would decide, and this would pass on
+// whichever identifier happened to be minted first.
+func TestTheListingPutsTheSessionLastWorkedInAtTheTop(t *testing.T) {
+	client := aCrew(t)
+	project := projectOf(t, client)
+
+	// The handles are chosen so that any order taken from the address runs against the answer: the
+	// session that belongs at the top is the one whose address sorts last. Left to generated handles
+	// this case passes or fails on which identifier the crew happened to mint first.
+	early := dispatch(t, client, project, "zzz-older-subject", "the older subject")
+	time.Sleep(10 * time.Millisecond)
+	late := dispatch(t, client, project, "aaa-newer-subject", "a newer subject")
+	time.Sleep(10 * time.Millisecond)
+	// Back to the one started first, which makes it the session somebody was last working in.
+	dispatch(t, client, project, early.GetHandle(), "carry on")
+
+	body, status := get(t, client, "/")
+	if status != http.StatusOK {
+		t.Fatalf("the listing answered %d", status)
+	}
+
+	first := strings.Index(body, display.ShortID(early.GetHandle()))
+	second := strings.Index(body, display.ShortID(late.GetHandle()))
+	if first < 0 || second < 0 {
+		t.Fatalf("both sessions should be on the page:\n%s", body)
+	}
+	if first > second {
+		t.Errorf("the session worked in last is below the one nobody has touched since:\n%s", body)
+	}
 }

@@ -566,6 +566,97 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The listing's last column says how long ago a session moved, so the listing is ordered on that
+	// same stamp. It used to be ordered on the created stamp instead, and a real listing of forty five
+	// sessions then ran 1d, 1d, 1d, 7d, 7d, 7d, 1d, 7d down the age column.
+	//
+	// The gaps here are real waits rather than stamps written by hand, because the store writes its own
+	// and there is no way to hand it one. Without them two sessions made in the same microsecond would
+	// tie, and a tie is decided by the identifier, so the case would pass on whichever identifier the
+	// store happened to mint first and prove nothing at all.
+	t.Run("the listing is ordered by when a session last moved, not by when it was made", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+
+		// made first, and then worked in last: the session the operator wants at the top.
+		early, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-early", store.Birth{})
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		time.Sleep(orderingGap)
+		late, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-late", store.Birth{})
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		time.Sleep(orderingGap)
+		if err := s.RecordTask(ctx, early.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordTask: %v", err)
+		}
+
+		listed, err := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
+		if len(listed) != 2 {
+			t.Fatalf("the listing is %v, want both sessions", ids(listed))
+		}
+		// The two stamps disagree, which is the whole point of the case. Asserted rather than assumed,
+		// because a sleep that did not separate them would leave this passing on the tiebreaker.
+		if !listed[0].GetCreatedAt().AsTime().Before(listed[1].GetCreatedAt().AsTime()) {
+			t.Fatalf("the sessions were made in the same moment, so this case cannot tell the two clocks apart")
+		}
+		if !listed[1].GetUpdatedAt().AsTime().Before(listed[0].GetUpdatedAt().AsTime()) {
+			t.Fatalf("the sessions were touched in the same moment, so this case cannot tell the two clocks apart")
+		}
+		if got := ids(listed); got[0] != early.GetId() {
+			t.Fatalf("the listing is %v, want the session touched last first: %s", got, early.GetId())
+		}
+		if got := ids(listed); got[1] != late.GetId() {
+			t.Fatalf("the listing is %v, want the session made last second: %s", got, late.GetId())
+		}
+	})
+
+	// An archived session is measured from when it was put away, which is a different stamp from the
+	// one a live session is measured by. Writing to an archived row afterwards moves the touched stamp
+	// and must not move the row: ordered on the touched stamp alone, this listing comes back reversed.
+	t.Run("archived sessions are ordered by when they were put away", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+
+		first, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-first", store.Birth{})
+		second, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-second", store.Birth{})
+
+		if err := s.ArchiveSession(ctx, first.GetId()); err != nil {
+			t.Fatalf("ArchiveSession: %v", err)
+		}
+		time.Sleep(orderingGap)
+		if err := s.ArchiveSession(ctx, second.GetId()); err != nil {
+			t.Fatalf("ArchiveSession: %v", err)
+		}
+		time.Sleep(orderingGap)
+		// Naming the one put away first is what pulls its touched stamp past the other's, so the two
+		// clocks now say opposite things about this listing.
+		if err := s.SetLabel(ctx, first.GetId(), "the bills"); err != nil {
+			t.Fatalf("SetLabel: %v", err)
+		}
+
+		listed, err := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId(), Archived: true})
+		if err != nil {
+			t.Fatalf("ListSessions archived: %v", err)
+		}
+		if len(listed) != 2 {
+			t.Fatalf("the archived listing is %v, want both sessions", ids(listed))
+		}
+		if !listed[1].GetUpdatedAt().AsTime().After(listed[0].GetUpdatedAt().AsTime()) {
+			t.Fatalf("naming the session did not move its touched stamp past the other's, so this case proves nothing")
+		}
+		if got := ids(listed); got[0] != second.GetId() {
+			t.Fatalf("the archived listing is %v, want the one put away last first: %s", got, second.GetId())
+		}
+	})
+
 	// The mode belongs to the session, so it has to survive everything the session survives. A session
 	// started to plan something that quietly went back to editing files on the next task would be
 	// worse than never having the setting.
@@ -2001,3 +2092,9 @@ func ids(sessions []*quaycrewv1.Session) []string {
 	}
 	return out
 }
+
+// orderingGap is how long the ordering cases wait between two writes so the stamps they compare are
+// genuinely apart. The store writes its own stamps and takes none, so a wait is the only way to put a
+// gap between them. Ten milliseconds is far above what either store's clock resolves and is paid four
+// times in the whole suite.
+const orderingGap = 10 * time.Millisecond

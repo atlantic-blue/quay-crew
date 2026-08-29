@@ -15,6 +15,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
@@ -22,6 +23,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/role"
+	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/google/uuid"
 )
@@ -173,6 +175,9 @@ type Store interface {
 	// erase it.
 	RecordTask(ctx context.Context, id, modelSessionID, status string) error
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
+	// ListSessions returns sessions last moved first: put away if they were, last touched otherwise,
+	// which is the clock a listing's age column shows. The order is decided here rather than by each
+	// surface, so the console, the command line and the web page cannot drift apart.
 	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
 	// ReclaimSession records that the crew took a session's container back: the status becomes
@@ -457,4 +462,27 @@ func NewID() string {
 // history for, and could not count the tokens of.
 func NewConversationID() string {
 	return uuid.NewString()
+}
+
+// sortByLastMoved orders a session listing newest movement first, which is the clock its last column
+// shows: when a session was put away if it was, and when it was last touched otherwise.
+//
+// It sorts on the same stamp the listing renders because the two used to disagree. The order was the
+// created stamp and the column was this one, so a session made a week ago and used an hour ago sat
+// below one made yesterday and untouched since, and a real listing of forty five sessions read
+// 1d, 1d, 1d, 7d, 7d, 7d, 1d, 7d. A column in no order is a column nobody can read.
+//
+// The identifier breaks a tie, so two sessions that share a moment keep one order between reads.
+//
+// Postgres writes the same rule as `coalesce(archived_at, updated_at) desc, id`, and storetest holds
+// the two to it. The stamp comes from internal/session, which is also where the age column reads it,
+// so the order and the cell can never be computed from different fields.
+func sortByLastMoved(sessions []*quaycrewv1.Session) {
+	sort.Slice(sessions, func(i, j int) bool {
+		left, right := session.LastMoved(sessions[i]).AsTime(), session.LastMoved(sessions[j]).AsTime()
+		if left.Equal(right) {
+			return sessions[i].GetId() < sessions[j].GetId()
+		}
+		return left.After(right)
+	})
 }

@@ -88,7 +88,9 @@ commands:
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is
-                                          the crew asking the sandbox and not being told
+                                          the crew asking the sandbox and not being told. Last
+                                          moved first, so the session you were last working in is at
+                                          the top and the age column reads down the list
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first

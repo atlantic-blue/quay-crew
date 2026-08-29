@@ -37,6 +37,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
@@ -481,6 +482,28 @@ func (w *world) lastTask() (task, error) {
 	return w.tasks[len(w.tasks)-1], nil
 }
 
+// orderedSessions is the workspace's listing as the crew hands it over, with the two things an
+// ordering case needs guarded: at least two sessions to put in an order, and stamps that are actually
+// apart. Two sessions sharing a moment are ordered by their identifiers, which would leave an
+// ordering case passing on whichever identifier the crew minted first.
+func (w *world) orderedSessions(ctx context.Context, archived bool) ([]*quaycrewv1.Session, error) {
+	resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+		Workspace: w.workspaceID, Archived: archived,
+	})
+	if err != nil {
+		return nil, err
+	}
+	listed := resp.GetSessions()
+	if len(listed) < 2 {
+		return nil, fmt.Errorf("the listing holds %d sessions, and an order needs two", len(listed))
+	}
+	first, second := session.LastMoved(listed[0]).AsTime(), session.LastMoved(listed[1]).AsTime()
+	if first.Equal(second) {
+		return nil, fmt.Errorf("the first two sessions share a moment, so the identifier decided this order")
+	}
+	return listed, nil
+}
+
 // conversationOfFirstTask is the conversation the session's first task ran in. The crew names a
 // conversation before the task starts and the name is a fresh identifier each time, so a scenario
 // reads it back from the task rather than expecting a name it could write down.
@@ -802,6 +825,67 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			return err
 		}
 		_, w.lastErr = w.client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: current.sessionID})
+		return nil
+	})
+	sc.Step(`^the operator dispatches "([^"]*)" to the session started first$`, func(ctx context.Context, text string) error {
+		w := worldFrom(ctx)
+		if len(w.tasks) == 0 {
+			return fmt.Errorf("no session has been started yet")
+		}
+		return w.dispatch(ctx, w.projectID, w.tasks[0].handle, text)
+	})
+	// The listing's last column says how long ago each session moved, and the listing is ordered on
+	// that same stamp, so the column reads down the page and the session somebody was last in is at
+	// the top. It used to be ordered on the created stamp instead, which put a session made a week ago
+	// and used an hour ago below one made yesterday and untouched since.
+	sc.Step(`^the listing puts the session last worked in at the top$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		listed, err := w.orderedSessions(ctx, false)
+		if err != nil {
+			return err
+		}
+		if listed[0].GetId() != current.sessionID {
+			return fmt.Errorf("the listing starts with %s, want the session last worked in: %s",
+				listed[0].GetId(), current.sessionID)
+		}
+		// The created stamps have to disagree with the order, or this passed on a listing that is in
+		// created order too and says nothing about which clock decided it.
+		if !listed[0].GetCreatedAt().AsTime().Before(listed[1].GetCreatedAt().AsTime()) {
+			return fmt.Errorf("the session at the top is also the one made last, so this proves nothing")
+		}
+		return nil
+	})
+	// Naming a session writes to its row, which moves its touched stamp without bringing it back out
+	// of the archive. It is what makes the two stamps disagree, so the archived listing below can only
+	// be in the right order if it was ordered by when each session was put away.
+	sc.Step(`^the operator names the session archived first "([^"]*)"$`, func(ctx context.Context, label string) error {
+		w := worldFrom(ctx)
+		if len(w.tasks) == 0 {
+			return fmt.Errorf("no session has been started yet")
+		}
+		_, err := w.client.SetSessionLabel(ctx, &quaycrewv1.SetSessionLabelRequest{
+			Id: w.tasks[0].sessionID, Label: label,
+		})
+		return err
+	})
+	sc.Step(`^the archived listing puts the session put away last at the top$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastTask()
+		if err != nil {
+			return err
+		}
+		listed, err := w.orderedSessions(ctx, true)
+		if err != nil {
+			return err
+		}
+		if listed[0].GetId() != current.sessionID {
+			return fmt.Errorf("the archived listing starts with %s, want the session put away last: %s",
+				listed[0].GetId(), current.sessionID)
+		}
 		return nil
 	})
 	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {

@@ -39,6 +39,30 @@ Feature: Sessions run in isolated sandboxes
     And the operator dispatches "a different subject" to a new session
     Then the workspace has 2 sessions
 
+  # The last column of a listing says how long ago each session moved, and the listing is ordered on
+  # that same stamp, so the column reads down the page. Ordered on the created stamp instead, a
+  # session made a week ago and used an hour ago sat below one made yesterday and untouched since,
+  # and a listing of forty five sessions ran 1d, 1d, 1d, 7d, 7d, 7d, 1d, 7d.
+  Scenario: The listing puts the session last worked in at the top
+    When the operator dispatches "the older subject" to the project
+    And the operator dispatches "a newer subject" to a new session
+    And the operator dispatches "carry on" to the session started first
+    Then the listing puts the session last worked in at the top
+
+  # An archived session is measured from when it was put away rather than from when it was last
+  # touched, so the archived listing is ordered by the same rule and reads the same way down.
+  #
+  # The session put away first is named at the end, which writes to its row and moves its touched
+  # stamp past the other's. The two stamps then say opposite things about this listing, so it can only
+  # come back in this order if it was ordered by when each session was put away.
+  Scenario: The archived listing puts the session put away last at the top
+    When the operator dispatches "the older subject" to the project
+    And the operator archives the session
+    And the operator dispatches "a newer subject" to a new session
+    And the operator archives the session
+    And the operator names the session archived first "the older subject"
+    Then the archived listing puts the session put away last at the top
+
   # A task cannot yet be dispatched after a restart: the control plane forgets which container each
   # session was running in, and starting a new one collides with the container still on the host.
   # Reattaching a session to its sandbox is separate job.

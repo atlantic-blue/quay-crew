@@ -283,7 +283,8 @@ func (m *Memory) GetSession(_ context.Context, id string) (*quaycrewv1.Session, 
 	return clone(session), nil
 }
 
-// ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
+// ListSessions returns sessions, filtered to one project when set, else to one workspace when set,
+// last moved first: see sortByLastMoved for the order and why it is that one.
 func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -304,6 +305,9 @@ func (m *Memory) ListSessions(_ context.Context, filter SessionFilter) ([]*quayc
 		}
 		out = append(out, clone(session))
 	}
+	// The order is the store's to decide, not each surface's, so the console, the command line and
+	// the web page cannot drift apart. See sortByLastMoved.
+	sortByLastMoved(out)
 	return out, nil
 }
 

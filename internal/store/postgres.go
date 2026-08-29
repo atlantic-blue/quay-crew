@@ -299,7 +299,8 @@ const sessionColumns = `id, workspace, project, handle, status, model_session_id
 	`updated_at, archived_at, reclaimed_at, permission_mode, driver, label, description, ` +
 	`described_at_task, role`
 
-// ListSessions returns sessions, filtered to one project when set, else to one workspace when set.
+// ListSessions returns sessions, filtered to one project when set, else to one workspace when set,
+// last moved first: see sortByLastMoved for the order and why it is that one.
 func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `
 		select `+sessionColumns+`
@@ -307,7 +308,10 @@ func (p *Postgres) ListSessions(ctx context.Context, filter SessionFilter) ([]*q
 		where ($2 = '' or project = $2)
 		  and ($2 <> '' or $1 = '' or workspace = $1)
 		  and ((archived_at is not null) = $3)
-		order by created_at desc, id`, filter.Workspace, filter.Project, filter.Archived)
+		-- The same stamp the age column shows, so the column reads in order. An archived session is
+		-- measured from when it was put away, a live one from when it was last touched, and the
+		-- identifier breaks a tie. sortByLastMoved is this rule in Go, and storetest holds the two to it.
+		order by coalesce(archived_at, updated_at) desc, id`, filter.Workspace, filter.Project, filter.Archived)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
