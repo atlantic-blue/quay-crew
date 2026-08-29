@@ -1,0 +1,9 @@
+name: releaser
+version: 1
+summary: commits, pushes and opens the pull request for work another session wrote, and cannot declare a job of its own
+model: sonnet
+receives:
+  - job
+  - skills
+may:
+  - job.read
