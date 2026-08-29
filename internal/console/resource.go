@@ -80,7 +80,12 @@ type Action struct {
 	// Also are further keys that do the same thing. The header shows Key alone, so the hints stay one
 	// line per action; the question mark lists all of them, which is where somebody goes looking for
 	// the spelling they used to type.
-	Also  []string
+	Also []string
+	// Moved are keys this action used to answer to and does not any more. Pressing one says what to
+	// press instead rather than doing nothing, because a key that quietly stopped working is how an
+	// operator learns to distrust every other key on the screen. They are not listed in the help: the
+	// way off a key is a refusal, not an entry beside the keys that still work.
+	Moved []string
 	Label string
 	// Confirm makes the console ask before it acts, naming the row it is about to act on. Every
 	// destructive key sets it: the list is full of conversations, and there is no way back from
@@ -139,6 +144,17 @@ func (a Action) Bound(key string) bool {
 // Keys is every key this action answers to, primary first, for the help list.
 func (a Action) Keys() []string {
 	return append([]string{a.Key}, a.Also...)
+}
+
+// WasBound says whether key is one this action used to answer to, which is what a refusal naming the
+// new spelling is built from.
+func (a Action) WasBound(key string) bool {
+	for _, moved := range a.Moved {
+		if moved == key {
+			return true
+		}
+	}
+	return false
 }
 
 // Resource is one thing the console can list. Adding a view is adding one of these.

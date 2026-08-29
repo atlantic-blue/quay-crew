@@ -33,7 +33,7 @@ func initializeFirstRunSteps(sc *godog.ScenarioContext) {
 		// The client is what the guided setup asks whether any workspaces exist, and what the
 		// wizard's own makes go through.
 		c.model = opened.WithClient(w.client)
-		return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+		return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 	})
 
 	sc.Step(`^the guided setup is asking for a workspace name$`, func(ctx context.Context) error {

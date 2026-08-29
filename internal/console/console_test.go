@@ -417,7 +417,7 @@ func TestCtrlCQuitsFromEveryMode(t *testing.T) {
 		{"browsing", runes("")},
 		{"the command bar", runes(":")},
 		{"the filter", runes("/")},
-		{"the wizard", runes("n")},
+		{"the wizard", runes("o")},
 		{"help", runes("?")},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
@@ -445,7 +445,7 @@ func TestEscapeStillCancelsEachModeWithoutQuitting(t *testing.T) {
 	}{
 		{"the command bar", runes(":")},
 		{"the filter", runes("/")},
-		{"the wizard", runes("n")},
+		{"the wizard", runes("o")},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			model := newTestModel(t, staticResource("sessions"))
@@ -840,20 +840,17 @@ func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	}
 }
 
-// TestRefreshIsBoundToRAndG: refreshing is the key reached for constantly, so it holds the short
-// obvious letter.
-func TestRefreshIsBoundToRAndG(t *testing.T) {
-	for _, key := range []string{"r", "g"} {
-		t.Run(key, func(t *testing.T) {
-			client := &fakeClient{}
-			_, cmd := update(t, sessionsAt(t, client), runes(key))
-			if cmd == nil {
-				t.Fatalf("%s produced no command, want a listing", key)
-			}
-			if _, isRows := cmd().(rowsMsg); !isRows {
-				t.Fatalf("%s returned %#v, want a listing", key, cmd())
-			}
-		})
+// TestRefreshIsBoundToR: refreshing is the key reached for constantly, so it holds the short obvious
+// letter, and it holds it alone. It used to answer to `g` as well, which is what kept gg and G off
+// the console.
+func TestRefreshIsBoundToR(t *testing.T) {
+	client := &fakeClient{}
+	_, cmd := update(t, sessionsAt(t, client), runes("r"))
+	if cmd == nil {
+		t.Fatal("r produced no command, want a listing")
+	}
+	if _, isRows := cmd().(rowsMsg); !isRows {
+		t.Fatalf("r returned %#v, want a listing", cmd())
 	}
 }
 
@@ -2006,7 +2003,7 @@ func wizardAt(t *testing.T, client *wizardClient) Model {
 	client.fakeClient.workspaces = []*quaycrewv1.Workspace{{Id: "w-acme", Name: "acme"}}
 	client.fakeClient.projects = []*quaycrewv1.Project{{Id: "p-bills", Workspace: "w-acme", Name: "house-bills"}}
 	model := newTestModel(t, Sessions(client)).WithClient(client)
-	model, _ = update(t, model, runes("n"))
+	model, _ = update(t, model, runes("o"))
 	return model
 }
 
@@ -2726,21 +2723,22 @@ func TestTheWordmarkIsDrawnInAHeaderOfOneRow(t *testing.T) {
 	}
 }
 
-// TestNStartsAFreshConversationAndPEndsNothing. Opening the crew comes back to the conversation you
-// were in, because it runs in a tmux session inside the sandbox that is attached to rather than
+// TestBigPStartsAFreshConversationAndPEndsNothing. Opening the crew comes back to the conversation
+// you were in, because it runs in a tmux session inside the sandbox that is attached to rather than
 // started when it is already there. That is what ctrl-q is for, and it is why the driver could never
 // give you a clean start.
 //
-// So N ends the one that is there and opens a new one, and p is left alone: it shows and hides.
-func TestNStartsAFreshConversationAndPEndsNothing(t *testing.T) {
+// So P ends the one that is there and opens a new one, beside p, which shows and hides that same
+// conversation. It was on N, which vim spends on the previous match.
+func TestBigPStartsAFreshConversationAndPEndsNothing(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	ended := 0
 	model := newTestModel(t, Sessions(&fakeClient{})).
 		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil }).
 		Freshen(func(string) error { ended++; return nil })
 
-	if _, cmd := update(t, model, runes("N")); cmd == nil {
-		t.Fatal("N produced no command")
+	if _, cmd := update(t, model, runes("P")); cmd == nil {
+		t.Fatal("P produced no command")
 	}
 	// p only shows and hides, so it must never end anything.
 	if _, cmd := update(t, model, runes("p")); cmd == nil {
@@ -2751,18 +2749,18 @@ func TestNStartsAFreshConversationAndPEndsNothing(t *testing.T) {
 	}
 }
 
-// TestNWithNoWayToEndOneSaysSo rather than opening a second conversation beside the first.
-func TestNWithNoWayToEndOneSaysSo(t *testing.T) {
+// TestAFreshConversationWithNoWayToEndOneSaysSo rather than opening a second one beside the first.
+func TestAFreshConversationWithNoWayToEndOneSaysSo(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	model := newTestModel(t, Sessions(&fakeClient{})).
 		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil })
 
-	model, cmd := update(t, model, runes("N"))
+	model, cmd := update(t, model, runes("P"))
 	if cmd != nil {
-		t.Fatal("N opened something with no way to end what was there")
+		t.Fatal("P opened something with no way to end what was there")
 	}
 	if model.err == nil {
-		t.Fatal("N did nothing and said nothing")
+		t.Fatal("P did nothing and said nothing")
 	}
 }
 

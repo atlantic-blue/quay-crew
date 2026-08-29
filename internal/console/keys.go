@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -82,8 +83,23 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 // updateBrowseKey handles the default mode: move, drill, go back, act.
+//
+// The keys read as vim reads them, because the console is shaped like k9s and k9s is shaped like vim:
+// the motion keys move and nothing else, an action never sits on one, and a key that moved says what
+// to press now rather than doing nothing.
 func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
+	key := msg.String()
+	if m.pendingHalf != "" {
+		return m.afterPending(msg)
+	}
+	if typing, isDigit := m.takeDigit(key); isDigit {
+		return typing, nil
+	}
+	// Every key that is not a digit ends the count, and each one below reads how many it was.
+	count := m.count()
+	m.counted = ""
+
+	switch key {
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
@@ -96,25 +112,36 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "?":
 		m.mode = modeHelp
 		return m, nil
-	case "n":
-		// Making something is not a thing any one view owns, so it is not an action on a row.
+	case "g":
+		// Half of gg, held until the other half arrives. It used to refresh, and holding it here is
+		// what lets the first and last row have the keys they have everywhere else.
+		m.pendingHalf, m.counted = "g", countText(count)
+		return m, nil
+	case "n", "N":
+		// Next and previous match, the keys pressed straight after a search in vim. This console
+		// filters rather than searching, so what they jump through is what the filter last matched,
+		// which is worth having the moment the filter itself is cleared.
+		return m.jumpToMatch(key, count)
+	case "o":
+		// Making something is not a thing any one view owns, so it is not an action on a row. Vim
+		// opens a new line with o, which is the closest thing it has to making one.
 		if m.client == nil {
 			m.err = fmt.Errorf("this console cannot make anything: it was opened without a crew")
 			return m, nil
 		}
 		m.mode, m.making, m.err = modeWizard, wizard{}, nil
 		return m, nil
-	case "N":
+	case "P":
 		// A fresh conversation in place of the one beside the console. Opening the crew comes back to
-		// the one you were in, which is what you want almost always and not quite always.
+		// the one you were in, which is what you want almost always and not quite always. Beside `p`,
+		// which shows and hides that same conversation, so the pair reads as one subject.
 		return m.startFreshConversation()
 	case "p":
 		// Show the conversation beside the console, or hide the one already there. The panel builds
 		// this in one go; this is the same thing without having to decide before opening the console.
 		return m.toggleConversation()
-	case "r", "g":
-		// Refreshing is the key reached for constantly, so it holds the short obvious letter. `g` is
-		// what the help has said since the console shipped, so it keeps working.
+	case "r":
+		// Refreshing is the key reached for constantly, so it holds the short obvious letter.
 		return m, listCmd(m.active, m.parent)
 	case "enter":
 		// Enter descends where there is somewhere to descend to, and otherwise does whatever this
@@ -127,36 +154,182 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc":
 		return m.back()
 	}
-	if moved, handled := m.move(msg.String()); handled {
+	if moved, handled := m.move(key, count); handled {
 		return moved, nil
 	}
-	return m.act(msg.String())
+	return m.act(key)
 }
 
-// move handles navigation, returning whether the key was one.
-func (m Model) move(key string) (Model, bool) {
-	body := m.bodyHeight()
+// takeDigit collects a count typed in front of a move, so 5j moves five rows. A zero with nothing in
+// front of it is not a count: it is the only digit that could begin one and mean nothing.
+func (m Model) takeDigit(key string) (Model, bool) {
+	if len(key) != 1 || key < "0" || key > "9" {
+		return m, false
+	}
+	if key == "0" && m.counted == "" {
+		return m, false
+	}
+	// A count long enough to overflow is a key held down rather than an intention.
+	if len(m.counted) < 4 {
+		m.counted += key
+	}
+	return m, true
+}
+
+// count is how many times the next key should happen, and zero when no count was typed. Zero rather
+// than one, because a move that lands on a row by number has to tell "5G" from "G".
+func (m Model) count() int {
+	times := 0
+	for _, digit := range m.counted {
+		times = times*10 + int(digit-'0')
+	}
+	return times
+}
+
+// countText writes a count back out, for the half of a two key sequence that has to carry it.
+func countText(count int) string {
+	if count == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", count)
+}
+
+// afterPending answers the second half of a two key sequence. The only sequence is gg, and anything
+// else after a g is the operator reaching for the refresh that g used to be, so it says where refresh
+// went and then does whatever the key they pressed does.
+func (m Model) afterPending(msg tea.KeyMsg) (Model, tea.Cmd) {
+	count := m.count()
+	m.pendingHalf, m.counted = "", ""
+
+	if msg.String() == "g" {
+		m.selected = rowNumbered(count, 0)
+		return m.clampSelection(), nil
+	}
+	m.err, m.held = fmt.Errorf("g does not refresh any more: r refreshes, and gg goes to the first row"), true
+	return m.updateBrowseKey(msg)
+}
+
+// move handles navigation, returning whether the key was one. count is how many times, and zero is
+// once: a move typed with no count in front of it.
+func (m Model) move(key string, count int) (Model, bool) {
+	body, times := m.bodyHeight(), count
+	if times == 0 {
+		times = 1
+	}
 	switch key {
 	case "up", "k":
-		m.selected--
+		m.selected -= times
 	case "down", "j":
-		m.selected++
+		m.selected += times
 	case "pgup", "ctrl+b":
-		m.selected -= body
+		m.selected -= times * body
 	case "pgdown", "ctrl+f":
-		m.selected += body
+		m.selected += times * body
+	case "ctrl+u":
+		m.selected -= times * halfOf(body)
+	case "ctrl+d":
+		m.selected += times * halfOf(body)
 	case "home":
 		m.selected = 0
-	case "end":
-		m.selected = len(m.visibleRows()) - 1
+	case "end", "G":
+		m.selected = rowNumbered(count, len(m.visibleRows())-1)
 	default:
 		return m, false
 	}
 	return m.clampSelection(), true
 }
 
+// rowNumbered is the row a counted jump lands on, counting from one the way an editor numbers lines,
+// and fallback when no count was typed.
+func rowNumbered(count, fallback int) int {
+	if count == 0 {
+		return fallback
+	}
+	return count - 1
+}
+
+// halfOf is half a page, and never nothing: a half page key on a window with two rows in it still
+// has to move.
+func halfOf(body int) int {
+	if body < 2 {
+		return 1
+	}
+	return body / 2
+}
+
+// jumpToMatch moves to the next row matching what the filter was last typed with, wrapping at the
+// ends the way n does in vim.
+//
+// With nothing filtered for yet it says so, and names the key that used to be here: pressing one of
+// these out of the blue is the operator reaching for what it used to do.
+func (m Model) jumpToMatch(key string, count int) (Model, tea.Cmd) {
+	forward := key == "n"
+	if m.search == "" {
+		m.err, m.held = movedToMatching(key), true
+		return m, nil
+	}
+	visible := m.visibleRows()
+	if len(visible) == 0 {
+		return m, nil
+	}
+	step := 1
+	if !forward {
+		step = -1
+	}
+	times := count
+	if times == 0 {
+		times = 1
+	}
+	at := m.selected
+	for range times {
+		next, found := nextMatch(visible, at, step, strings.ToLower(m.search))
+		if !found {
+			m.err, m.held = fmt.Errorf("no other row matches %q", m.search), true
+			return m, nil
+		}
+		at = next
+	}
+	m.selected = at
+	return m.clampSelection(), nil
+}
+
+// movedToMatching says what these two keys do now, and where what they used to do has gone. n made a
+// thing and N started a fresh conversation, and both are in somebody's fingers.
+func movedToMatching(key string) error {
+	if key == "n" {
+		return fmt.Errorf(
+			"nothing has been filtered for yet: n jumps to the next match of what / filtered for, and o makes something")
+	}
+	return fmt.Errorf(
+		"nothing has been filtered for yet: N jumps to the previous match of what / filtered for, " +
+			"and P starts a fresh conversation")
+}
+
+// nextMatch is the row the search lands on next, walking in one direction and wrapping. The row it
+// started on is not an answer: a jump that lands where it already was reads as a key doing nothing.
+func nextMatch(rows []Row, from, step int, needle string) (int, bool) {
+	for away := 1; away < len(rows); away++ {
+		at := ((from+away*step)%len(rows) + len(rows)) % len(rows)
+		if rowMatches(rows[at], needle) {
+			return at, true
+		}
+	}
+	return 0, false
+}
+
 // act runs the action bound to key on the selected row, if there is one.
 func (m Model) act(key string) (Model, tea.Cmd) {
+	// A key this view used to answer to says what to press now, before anything else and whether or
+	// not there is a row under the cursor. A key that quietly stopped working is the regression this
+	// console has already had once.
+	for _, action := range m.active.Actions {
+		if !action.WasBound(key) {
+			continue
+		}
+		m.err, m.held = fmt.Errorf("%s is not bound any more: %s is on %s",
+			key, strings.ToLower(action.Label), action.Key), true
+		return m, nil
+	}
 	row, hasRow := m.selectedRowValue()
 	if !hasRow {
 		return m, nil
@@ -357,6 +530,10 @@ func (m Model) openTyped() (Model, tea.Cmd) {
 }
 
 // updateFilterKey handles the filter bar. Filtering is live: every keystroke narrows the rows.
+//
+// What was typed is remembered as the search, and escape does not take it with it. Escape puts every
+// row back on screen, which is the moment the keys for the next and previous match are worth
+// anything: until now the word was thrown away and there was nothing to jump through.
 func (m Model) updateFilterKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -367,11 +544,11 @@ func (m Model) updateFilterKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "backspace":
 		m.input = trimLastRune(m.input)
-		m.filter = m.input
+		m.filter, m.search = m.input, m.input
 		return m.clampSelection(), nil
 	}
 	m.input += typedText(msg)
-	m.filter = m.input
+	m.filter, m.search = m.input, m.input
 	return m.clampSelection(), nil
 }
 
