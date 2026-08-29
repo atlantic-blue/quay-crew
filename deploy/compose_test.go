@@ -101,10 +101,8 @@ func TestOnlyTheControlPlaneIsOnTheNetworkSessionsJoin(t *testing.T) {
 
 	var on []string
 	for name, service := range compose.Services {
-		for _, joined := range service.Networks {
-			if joined == sessionNetwork {
-				on = append(on, name)
-			}
+		if _, joined := service.Networks[sessionNetwork]; joined {
+			on = append(on, name)
 		}
 	}
 	if len(on) != 1 || on[0] != "controlplane" {
@@ -118,13 +116,7 @@ func TestOnlyTheControlPlaneIsOnTheNetworkSessionsJoin(t *testing.T) {
 func TestTheControlPlaneStaysOnTheCrewsOwnNetworkToo(t *testing.T) {
 	joined := composeFile(t).Services["controlplane"].Networks
 
-	var onDefault bool
-	for _, network := range joined {
-		if network == "default" {
-			onDefault = true
-		}
-	}
-	if !onDefault {
+	if _, onDefault := joined["default"]; !onDefault {
 		t.Fatalf("the control plane is on %v, and naming a network takes it off the default one, so it "+
 			"reaches neither Postgres nor the collector", joined)
 	}
@@ -170,6 +162,30 @@ func TestACrewToldWhereItIsPutsItsSessionsWhereTheyCanReachIt(t *testing.T) {
 	}
 }
 
+// TestTheCrewAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn.
+//
+// A network alias belongs to one network rather than to a container, so the name a service answers to
+// is a per network fact. A session has nothing to dial but the name in QC_SANDBOX_CONTROL_PLANE, and
+// the whole call fails resolving it if the two ever differ, which reads to the session as the crew
+// being down rather than as a name.
+func TestTheCrewAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn(t *testing.T) {
+	crew := composeFile(t).Services["controlplane"]
+
+	handedOut, _, found := strings.Cut(unsetGives(crew.Environment["QC_SANDBOX_CONTROL_PLANE"]), ":")
+	if !found || handedOut == "" {
+		t.Fatalf("the crew hands out %q, which names no host to resolve",
+			crew.Environment["QC_SANDBOX_CONTROL_PLANE"])
+	}
+	answersTo := crew.Networks[sessionNetwork].Aliases
+	for _, alias := range answersTo {
+		if alias == handedOut {
+			return
+		}
+	}
+	t.Fatalf("the crew hands a session the name %q and answers to %v on the network that session is on",
+		handedOut, answersTo)
+}
+
 // unsetGives is what a compose value comes out as when the operator set nothing: the default inside
 // ${NAME:-default}, or the value itself where it names no variable.
 func unsetGives(value string) string {
@@ -190,13 +206,21 @@ const sessionNetwork = "sessions"
 
 // composeStack is as much of the compose file as these tests read.
 type composeStack struct {
-	Services map[string]struct {
-		Networks    []string          `yaml:"networks"`
-		Environment map[string]string `yaml:"environment"`
-	} `yaml:"services"`
+	Services map[string]composeService `yaml:"services"`
 	Networks map[string]struct {
 		Name string `yaml:"name"`
 	} `yaml:"networks"`
+}
+
+type composeService struct {
+	Networks    map[string]composeEndpoint `yaml:"networks"`
+	Environment map[string]string          `yaml:"environment"`
+}
+
+// composeEndpoint is what a service says about one of its networks. A null value is the ordinary
+// case, which is a service saying only that it is on the network.
+type composeEndpoint struct {
+	Aliases []string `yaml:"aliases"`
 }
 
 // composeFile reads the stack, with compose's own rule that a service naming no network is on the
@@ -213,7 +237,7 @@ func composeFile(t *testing.T) composeStack {
 	}
 	for name, service := range compose.Services {
 		if len(service.Networks) == 0 {
-			service.Networks = []string{"default"}
+			service.Networks = map[string]composeEndpoint{"default": {}}
 			compose.Services[name] = service
 		}
 	}

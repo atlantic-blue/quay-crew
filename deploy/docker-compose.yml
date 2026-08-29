@@ -143,9 +143,16 @@ services:
     # Both networks. The default one is where the store, the broker and the collector are, and the
     # sessions one is where the sandboxes are. This service is the only thing on both, which is what
     # makes it the only thing a session can reach.
+    #
+    # The alias is written down rather than left to the default, because it is the name in
+    # QC_SANDBOX_CONTROL_PLANE above and a session has nothing else to dial. An alias belongs to one
+    # network rather than to a container, so the name a service answers to is a per network fact, and
+    # this is the network where being wrong means every call a session makes fails to resolve.
     networks:
-      - default
-      - sessions
+      default: {}
+      sessions:
+        aliases:
+          - controlplane
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
