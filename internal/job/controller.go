@@ -69,6 +69,9 @@ type Landing struct {
 	Answer      string
 	Reason      string
 	SpentTokens int64
+	// PullRequest is the address the answer named, where the job named a repository. It is read off
+	// the answer rather than reported by the model, the way an expectation is.
+	PullRequest string
 }
 
 // Store is the rows a controller reads and writes. Every write takes the event that describes it, so
@@ -397,7 +400,7 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 	// The handle is derived from the job, so a dispatch that has to be made again lands in the same
 	// conversation rather than starting a second one.
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: claimed.Project, Handle: handle, Text: claimed.Brief,
+		Project: claimed.Project, Handle: handle, Text: Asked(claimed),
 		PermissionMode: claimed.Mode, Detach: true,
 		// The role comes off the row and never from a caller. A caller that could name its own role
 		// could name one granting more than the job was declared with, and the credential the crew
@@ -620,7 +623,57 @@ func (c *Controller) adopt(ctx context.Context, one *Job) {
 			landing.Phase, landing.Reason, kind = PhaseStopped, unmet, EventStopped
 		}
 	}
+
+	// Where the job names a repository, the answer has to say where the work went. Read off the answer
+	// rather than reported by the model, the way an expectation is, and read on every path so a job
+	// that stopped for some other reason still records the pull request it did open.
+	landing.PullRequest = PullRequestIn(one.Repository, landing.Answer)
+	if kind == EventAnswered && one.Repository != "" && landing.PullRequest == "" {
+		// Nothing is landed here. The job stays running while the session is asked, so a controller
+		// that dies between the ask and the answer finds a running job with two tasks and reads them
+		// the way this one would have.
+		if c.askForThePullRequest(ctx, one, len(tasks)) {
+			return
+		}
+		landing.Phase, landing.Reason, kind = PhaseStopped, NoPullRequest(one.Repository), EventStopped
+	}
 	c.land(ctx, one, landing, kind)
+}
+
+// askForThePullRequest sends the session back for the address its answer did not carry, and says
+// whether it went. `asked` is how many tasks the session has already run.
+//
+// Asked once and no more. The bound is the count of tasks rather than a counter of the crew's own,
+// because the session is named after the job and holds this job's tasks alone: one is the work, two
+// is the work and this ask. A controller that took the row over after another died reads the same
+// number and does not ask a third time, which is the property every other decision in this loop has.
+//
+// No record of its own is written. The second task is the record, in the session `quay job show`
+// already names, and a record needs a store write that this does not otherwise need.
+//
+// This is the one expectation the crew asks again about rather than stopping on, and the difference
+// is what is missing. An answer that does not carry what it claimed is work that was not done, so
+// asking again is asking a model to do it twice. A pull request is work that was done and not
+// published: the branch is in the session, the session is open, and opening it is one command. That
+// is worth one task, and a job that ends "done, and nowhere anybody can read it" is the silence this
+// was built to end.
+func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked int) bool {
+	if asked > 1 {
+		return false
+	}
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: SessionFor(one.ID), Text: AskedForThePullRequest(one.Repository),
+		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+	}); err != nil {
+		// A crew that cannot ask again lands the job below with the reason, rather than holding a row
+		// open waiting for a task nobody sent.
+		c.logger.WarnContext(ctx, "could not ask a session again for the pull request",
+			"job", one.ID, "session", one.Session, "error", err)
+		return false
+	}
+	// The hold moves on, because the job is still this controller's and a task is in flight again.
+	c.renew(ctx, one)
+	return true
 }
 
 // renew moves this controller's hold on, which is what says it is still alive. A hold that stops
@@ -637,6 +690,10 @@ func (c *Controller) land(ctx context.Context, one *Job, landed Landing, kind st
 	detail := landed.Reason
 	if detail == "" {
 		detail = fmt.Sprintf("%d tokens in session %s", landed.SpentTokens, one.Session)
+	}
+	// The address first, because it is the one line in this record somebody opens.
+	if landed.PullRequest != "" {
+		detail = landed.PullRequest + ", " + detail
 	}
 	record := c.event(ctx, one, kind, detail)
 	ended, err := c.store.LandJob(ctx, one.ID, landed, record)

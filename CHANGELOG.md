@@ -8,6 +8,45 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A job that names a repository ends in a pull request against it.** The acceptance run took three
+  hours and produced one readable thing at the end. For three hours the record said a session was
+  busy and nothing else. Nothing in the tool suggested a phase ends in a pull request: a job is
+  declared, it runs, it answers, and a long job is a long silence. A brief could ask for the push,
+  and briefs forget.
+
+  So the expectation moved onto the job. `quay job create --repository atlantic-blue/quay-crew` says
+  where the work goes, and the crew adds a line to what the session is asked: push the branch, open
+  the pull request, put its address in the answer, do not merge it. The job is not done until an
+  answer names a pull request against that repository, and the address is read off the answer rather
+  than believed from the model, the way `--expect-contains` already is. `quay job show` prints it
+  above the answer, so reading a job says where the work is without anybody opening a sandbox.
+
+  **A session that answers without one is asked again, once, and then the job stops.** This is the
+  only expectation the crew asks again about rather than stopping on, and the difference is what is
+  missing. An answer that does not carry what it claimed is work that was not done, so asking again
+  is asking a model to do it twice. A pull request is work that was done and not published: the
+  branch is in the session, the session is still open, and opening it is one command. That is worth
+  one task. A second answer naming none stops the job with a reason that says it was asked twice, and
+  keeps what the session said, which is usually the reason it could not push.
+
+  The bound is the count of tasks in the session rather than a counter of the crew's own. The session
+  is named after the job and holds this job's tasks alone, so one task is the work and two is the work
+  and the ask, and a controller that took the row over from one that died reads the same number.
+
+  **No role gains the ability to merge.** A push applies nothing and a merge runs the pipeline, so
+  the merge is the gate and this change is only about the push and the pull request that follows it.
+  The line the crew adds says not to merge.
+
+  Both spellings of a repository are taken: `atlantic-blue/quay-crew` and the whole address out of a
+  browser, stored as the first. Anything that is not an owner and a name is refused at the write,
+  while the person who typed it is looking, because a repository the crew cannot then look for is an
+  expectation that was never going to hold.
+
+  What this does not do. It does not clone anything, and it does not check that the pull request
+  exists: the crew reads the address the session gave, and a session that invents one is a session
+  that lied about its own work, which is the failure `expect_file` exists for and not this one. A job
+  that names no repository is unchanged, and is asked exactly its brief.
+
 - **A session listing is ordered by the clock it shows.** The query ended `order by created_at desc`
   and the last column showed how long ago the session was last touched, or put away. So the two
   disagreed: a session made a week ago and used an hour ago sat below one made yesterday and untouched

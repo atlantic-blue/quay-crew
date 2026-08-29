@@ -57,6 +57,60 @@ Feature: A controller makes declared jobs happen
     Then the job is stopped, and the reason names what was claimed
     And the answer is still on the record
 
+  # The reason this exists. An acceptance run took three hours and produced one readable thing at the
+  # end, because nothing said a phase ends in a pull request. A job that names a repository carries
+  # that expectation itself, so no brief has to remember it.
+  Scenario: A session doing a job in a repository is told the job ends in a pull request
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    When the controller ticks
+    Then the session was asked to open a pull request against "atlantic-blue/quay-crew", and not to merge
+
+  Scenario: A job whose answer names its pull request is done, and says where the work is
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    And the model will answer "opened https://github.com/atlantic-blue/quay-crew/pull/454"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is done, and it names the pull request "https://github.com/atlantic-blue/quay-crew/pull/454"
+    And the crew was asked to run 1 task
+
+  # The refusal. The branch is in the session, the session is open, and opening the pull request is
+  # one command, so the session is asked rather than the job being landed with the work invisible.
+  Scenario: A job whose answer names no pull request sends the session back for one
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    And the model will answer "I made the change and the tests pass"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is running
+    And the crew was asked to run 2 tasks
+    And the session was asked again for the pull request against "atlantic-blue/quay-crew"
+
+  Scenario: The session opens the pull request when asked, and the job is done
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    And the model will answer "I made the change and the tests pass"
+    And then the model will answer "opened https://github.com/atlantic-blue/quay-crew/pull/454"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is done, and it names the pull request "https://github.com/atlantic-blue/quay-crew/pull/454"
+
+  # Asked once and no more. A session that cannot push would otherwise be asked forever, and every
+  # ask is a task somebody pays for.
+  Scenario: A session that still names no pull request stops the job rather than being asked again
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    And the model will answer "there is no token here, so I could not push"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is stopped, and the reason names the repository "atlantic-blue/quay-crew"
+    And the crew was asked to run 2 tasks
+    And the answer is still on the record
+
   Scenario: A job a person stopped is never started
     Given a job titled "read the electricity bill"
     When the caller stops the first job saying "the bill is not due yet"

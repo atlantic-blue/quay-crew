@@ -7147,6 +7147,10 @@ type Job struct {
 	// drawn from job, context and skills. A job that requires material its role does not receive is
 	// refused at dispatch, before a container starts, rather than run blind.
 	Requires []string `protobuf:"bytes,32,rep,name=requires,proto3" json:"requires,omitempty"`
+	// repository is the repository this job works in, written owner/name. Naming one says how the job
+	// ends: the session pushes its branch and opens a pull request, and the job is not done until its
+	// answer names that pull request. Empty claims nothing and is checked as nothing.
+	Repository string `protobuf:"bytes,33,opt,name=repository,proto3" json:"repository,omitempty"`
 	// What the crew assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -7166,8 +7170,11 @@ type Job struct {
 	// is a listing nobody can read.
 	Answer string `protobuf:"bytes,21,opt,name=answer,proto3" json:"answer,omitempty"`
 	// reason says why a stopped or failed job ended. question is what an asking job waits to be told.
-	Reason      string `protobuf:"bytes,22,opt,name=reason,proto3" json:"reason,omitempty"`
-	Question    string `protobuf:"bytes,23,opt,name=question,proto3" json:"question,omitempty"`
+	Reason   string `protobuf:"bytes,22,opt,name=reason,proto3" json:"reason,omitempty"`
+	Question string `protobuf:"bytes,23,opt,name=question,proto3" json:"question,omitempty"`
+	// pull_request is the address the answer named, read off the answer rather than reported by the
+	// model. It is what a reader opens to see the work, without opening a sandbox.
+	PullRequest string `protobuf:"bytes,34,opt,name=pull_request,json=pullRequest,proto3" json:"pull_request,omitempty"`
 	SpentTokens int64  `protobuf:"varint,24,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
 	// observed_version is the version of the declaration the status describes. A controller that has
 	// not caught up leaves this behind the version above.
@@ -7324,6 +7331,13 @@ func (x *Job) GetRequires() []string {
 	return nil
 }
 
+func (x *Job) GetRepository() string {
+	if x != nil {
+		return x.Repository
+	}
+	return ""
+}
+
 func (x *Job) GetParent() string {
 	if x != nil {
 		return x.Parent
@@ -7383,6 +7397,13 @@ func (x *Job) GetReason() string {
 func (x *Job) GetQuestion() string {
 	if x != nil {
 		return x.Question
+	}
+	return ""
+}
+
+func (x *Job) GetPullRequest() string {
+	if x != nil {
+		return x.PullRequest
 	}
 	return ""
 }
@@ -7462,6 +7483,9 @@ type CreateJobRequest struct {
 	// requires is the material this job cannot be done without, drawn from job, context and
 	// skills. A word the crew does not hand out is refused by name.
 	Requires []string `protobuf:"bytes,14,rep,name=requires,proto3" json:"requires,omitempty"`
+	// repository is where this job's work goes, written owner/name. A job that names one ends in a
+	// pull request against it.
+	Repository string `protobuf:"bytes,15,opt,name=repository,proto3" json:"repository,omitempty"`
 	// id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -7583,6 +7607,13 @@ func (x *CreateJobRequest) GetRequires() []string {
 		return x.Requires
 	}
 	return nil
+}
+
+func (x *CreateJobRequest) GetRepository() string {
+	if x != nil {
+		return x.Repository
+	}
+	return ""
 }
 
 func (x *CreateJobRequest) GetId() string {
@@ -8805,7 +8836,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xeb\b\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xae\t\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -8823,7 +8854,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bdeadline\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12#\n" +
 	"\rbudget_tokens\x18\r \x01(\x03R\fbudgetTokens\x124\n" +
 	"\x06labels\x18\x0e \x03(\v2\x1c.quaycrew.v1.Job.LabelsEntryR\x06labels\x12\x1a\n" +
-	"\brequires\x18  \x03(\tR\brequires\x12\x16\n" +
+	"\brequires\x18  \x03(\tR\brequires\x12\x1e\n" +
+	"\n" +
+	"repository\x18! \x01(\tR\n" +
+	"repository\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -8833,6 +8867,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x06answer\x18\x15 \x01(\tR\x06answer\x12\x16\n" +
 	"\x06reason\x18\x16 \x01(\tR\x06reason\x12\x1a\n" +
 	"\bquestion\x18\x17 \x01(\tR\bquestion\x12!\n" +
+	"\fpull_request\x18\" \x01(\tR\vpullRequest\x12!\n" +
 	"\fspent_tokens\x18\x18 \x01(\x03R\vspentTokens\x12)\n" +
 	"\x10observed_version\x18\x19 \x01(\x05R\x0fobservedVersion\x12\x19\n" +
 	"\btrace_id\x18\x1e \x01(\tR\atraceId\x12$\n" +
@@ -8847,7 +8882,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"finishedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xff\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9f\x04\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -8862,7 +8897,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\rbudget_tokens\x18\n" +
 	" \x01(\x03R\fbudgetTokens\x12A\n" +
 	"\x06labels\x18\v \x03(\v2).quaycrew.v1.CreateJobRequest.LabelsEntryR\x06labels\x12\x1a\n" +
-	"\brequires\x18\x0e \x03(\tR\brequires\x12\x0e\n" +
+	"\brequires\x18\x0e \x03(\tR\brequires\x12\x1e\n" +
+	"\n" +
+	"repository\x18\x0f \x01(\tR\n" +
+	"repository\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +

@@ -81,6 +81,11 @@ type Job struct {
 	// needs, and where the two disagree the job is refused rather than run without it.
 	Requires []string
 
+	// Repository is the repository this job works in, written owner/name. Naming one says how the job
+	// ends: the session pushes and opens a pull request, and the job is not done until its answer names
+	// that pull request. Empty claims nothing and is checked as nothing.
+	Repository string
+
 	// What the crew assigned, and the caller may not.
 	Parent string
 	Depth  int
@@ -96,6 +101,11 @@ type Job struct {
 	Answer   string
 	Reason   string
 	Question string
+	// PullRequest is the address the answer named, read off the answer rather than reported by the
+	// model. It is what a reader opens to see the work without opening a sandbox, which is the whole
+	// point of the field: a listing that says a job is done and nothing about where the work went is
+	// the silence this was built to end.
+	PullRequest string
 	// SpentTokens is what this job's own session has cost.
 	SpentTokens int64
 	// ObservedVersion is the Version of the declaration the status describes. A controller that has
@@ -210,6 +220,7 @@ type Declaration struct {
 	BudgetTokens   int64
 	Labels         map[string]string
 	Requires       []string
+	Repository     string
 	ID             string
 	Parent         string
 }
@@ -222,6 +233,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
 	d.Requires = TidyRequires(d.Requires)
+	d.Repository = TidyRepository(d.Repository)
 	return d
 }
 
@@ -257,6 +269,9 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := usableExpectFile(tidy.ExpectFile); err != nil {
+		return err
+	}
+	if err := usableRepository(tidy.Repository); err != nil {
 		return err
 	}
 	if err := tidy.validateRequires(); err != nil {

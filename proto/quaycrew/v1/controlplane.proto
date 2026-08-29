@@ -1042,6 +1042,10 @@ message Job {
   // drawn from job, context and skills. A job that requires material its role does not receive is
   // refused at dispatch, before a container starts, rather than run blind.
   repeated string requires = 32;
+  // repository is the repository this job works in, written owner/name. Naming one says how the job
+  // ends: the session pushes its branch and opens a pull request, and the job is not done until its
+  // answer names that pull request. Empty claims nothing and is checked as nothing.
+  string repository = 33;
 
   // What the crew assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1065,6 +1069,9 @@ message Job {
   // reason says why a stopped or failed job ended. question is what an asking job waits to be told.
   string reason = 22;
   string question = 23;
+  // pull_request is the address the answer named, read off the answer rather than reported by the
+  // model. It is what a reader opens to see the work, without opening a sandbox.
+  string pull_request = 34;
   int64 spent_tokens = 24;
   // observed_version is the version of the declaration the status describes. A controller that has
   // not caught up leaves this behind the version above.
@@ -1104,6 +1111,9 @@ message CreateJobRequest {
   // requires is the material this job cannot be done without, drawn from job, context and
   // skills. A word the crew does not hand out is refused by name.
   repeated string requires = 14;
+  // repository is where this job's work goes, written owner/name. A job that names one ends in a
+  // pull request against it.
+  string repository = 15;
   // id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.
