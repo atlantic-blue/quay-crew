@@ -499,8 +499,8 @@ func eventKinds(events []*work.Event) []string {
 	return kinds
 }
 
-// The steps for what a piece of work hands the session that runs it, and the boundary that holds it
-// against what its role receives.
+// The steps for what a piece of work requires of the session that runs it, and the boundary that
+// holds it against what its role receives.
 func initializeWorkMaterialSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the workspace holds the role "([^"]*)" at version (\d+) receiving "([^"]*)"$`,
 		func(ctx context.Context, name string, version int, material string) error {
@@ -520,17 +520,17 @@ func initializeWorkMaterialSteps(sc *godog.ScenarioContext) {
 			return err
 		})
 
-	sc.Step(`^the caller declares work in the role "([^"]*)" handed "([^"]*)"$`,
+	sc.Step(`^the caller declares work in the role "([^"]*)" requiring "([^"]*)"$`,
 		func(ctx context.Context, named, material string) error {
 			return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
 				Title: "write the tests", Brief: "from the work alone",
-				Role: named, Hands: []string{material},
+				Role: named, Requires: []string{material},
 			})
 		})
 
-	sc.Step(`^the caller declares work handed "([^"]*)"$`, func(ctx context.Context, material string) error {
+	sc.Step(`^the caller declares work requiring "([^"]*)"$`, func(ctx context.Context, material string) error {
 		return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
-			Title: "read the electricity bill", Brief: "open it", Hands: []string{material},
+			Title: "read the electricity bill", Brief: "open it", Requires: []string{material},
 		})
 	})
 
@@ -567,7 +567,36 @@ func initializeWorkMaterialSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the work is handed "([^"]*)"$`, func(ctx context.Context, material string) error {
+	// The tool in its own process, because the two things this proves, the exit status and which
+	// stream carried the sentence, do not exist inside the test process. It is also the only place
+	// the flag itself is specified: everything above declares over the interface, where a flag that
+	// was removed cannot be typed at all.
+	sc.Step(`^the caller declares work with "([^"]*)" through the tool$`,
+		func(ctx context.Context, flags string) error {
+			args := []string{"work", "create", whereTheProjectIs(ctx),
+				"--title", "write the tests", "--brief", "from the work alone"}
+			return runTool(ctx, append(args, strings.Fields(flags)...)...)
+		})
+
+	// Carried through to what the caller sees next: the tool is run again to read the row back, the
+	// way a person reads it, rather than the declaration being trusted because it exited zero.
+	sc.Step(`^reading that work back says it requires "([^"]*)"$`,
+		func(ctx context.Context, material string) error {
+			w := worldFrom(ctx)
+			listed, err := w.client.ListWork(ctx, &quaycrewv1.ListWorkRequest{Project: w.projectID})
+			if err != nil {
+				return err
+			}
+			if len(listed.GetWork()) != 1 {
+				return fmt.Errorf("the crew holds %d pieces of work, want 1", len(listed.GetWork()))
+			}
+			if err := runTool(ctx, "work", "show", listed.GetWork()[0].GetId()); err != nil {
+				return err
+			}
+			return says("standard output", toolFrom(ctx).stdout, "requires "+material)
+		})
+
+	sc.Step(`^the work requires "([^"]*)"$`, func(ctx context.Context, material string) error {
 		if w := worldFrom(ctx); w.lastErr != nil {
 			return fmt.Errorf("the declaration was refused: %v", w.lastErr)
 		}
@@ -575,11 +604,11 @@ func initializeWorkMaterialSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		for _, handed := range one.GetHands() {
-			if handed == material {
+		for _, required := range one.GetRequires() {
+			if required == material {
 				return nil
 			}
 		}
-		return fmt.Errorf("the work hands %v, want %q among them", one.GetHands(), material)
+		return fmt.Errorf("the work requires %v, want %q among them", one.GetRequires(), material)
 	})
 }

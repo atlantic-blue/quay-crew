@@ -7,6 +7,11 @@ Feature: Work is a record the crew keeps
   Every rule is checked at the moment of the write, while the person who wrote it is looking. A
   refusal that arrives hours later, inside a run, points at nothing.
 
+  What a piece of work cannot be done without is what it requires. The flag was called --hands, and
+  the word needed explaining every time somebody read it. --requires also reads correctly in both
+  directions: this work requires context, and the architect role receives context. The old flag is in
+  fingers, in scripts and in notes, so it refuses and names what to type instead.
+
   Background:
     Given a running control plane
     And a workspace named "acme"
@@ -54,25 +59,25 @@ Feature: Work is a record the crew keeps
 
   # A role declares what it receives and a piece of work declares what it cannot be done without.
   # Where the two disagree the work is refused, while the person who wrote it is looking.
-  Scenario: Work handed material its role does not receive is refused
+  Scenario: Work that requires material its role does not receive is refused
     Given the workspace holds the role "test-writer" at version 1 receiving "work"
-    When the caller declares work in the role "test-writer" handed "context"
+    When the caller declares work in the role "test-writer" requiring "context"
     Then the crew refuses it, naming the role, the material and what to change
     And no work was written
 
-  Scenario: Work handed what its role does receive is kept
+  Scenario: Work that requires what its role does receive is kept
     Given the workspace holds the role "backlog-clearer" at version 1 receiving "work, context"
-    When the caller declares work in the role "backlog-clearer" handed "context"
-    Then the work is handed "context"
+    When the caller declares work in the role "backlog-clearer" requiring "context"
+    Then the work requires "context"
 
-  Scenario: Work handed something the crew does not hand out is refused
-    When the caller declares work handed "the codebase"
+  Scenario: Work that requires something the crew does not hand out is refused
+    When the caller declares work requiring "the codebase"
     Then the crew refuses it and lists the material it hands out
 
-  # Work that names no role hands its material to nobody, so nothing here applies to it.
+  # Work that names no role requires its material of nobody, so nothing here applies to it.
   Scenario: Work with no role is held to no boundary
-    When the caller declares work handed "context"
-    Then the work is handed "context"
+    When the caller declares work requiring "context"
+    Then the work requires "context"
 
   Scenario: Work naming a mode that is not a mode is refused
     When the caller declares work in the mode "yolo"
@@ -110,6 +115,25 @@ Feature: Work is a record the crew keeps
   Scenario: Work in a workspace that does not exist is refused
     When the caller declares work in a project that does not exist
     Then the control plane refuses it as not found
+
+  # The tool, in its own process, because what is specified here is the exit status and which stream
+  # the sentence went to, and neither exists inside the test process.
+  Scenario: The tool declares what a piece of work requires
+    Given the crew listens on an address the tool can dial
+    When the caller declares work with "--requires context" through the tool
+    Then the command succeeds
+    And reading that work back says it requires "context"
+
+  # The way off the old flag. A removed flag that is quietly ignored reads as a command that worked,
+  # and the operator finds out from the record later that the boundary was never declared.
+  Scenario: The flag that went refuses, names what to type, and fails
+    Given the crew listens on an address the tool can dial
+    When the caller declares work with "--hands context" through the tool
+    Then standard error says "--hands is gone"
+    And standard error says "--requires"
+    And standard output is empty
+    And the command fails
+    And no work was written
 
   Scenario: A listing says what a project holds, newest first
     Given a piece of work titled "read the electricity bill"

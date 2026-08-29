@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 28 August 2026
 
+- **What a piece of work cannot be done without is now `--requires`, not `--hands`.** The old flag
+  needed explaining every time somebody read it, which is the whole case against it. `--requires`
+  comes from the Amazon Elastic Container Service and Batch line, `requiresAttributes` and
+  `resourceRequirements`, where a job declares what it cannot run without and the scheduler refuses
+  to place it where that is missing.
+
+  It also reads correctly in both directions, which `--hands` never did. This work requires context.
+  The architect role receives context.
+
+  Nothing about the boundary changed. The three materials are still `work`, `context` and `skills`, a
+  role still `receives`, the check still happens twice, and work that requires material its role does
+  not receive is still stopped before any container is built. The refusal now opens "this work
+  requires context and the test-writer role does not receive it" and still names both ways out.
+
+  **The way off the old flag.** `quay work create --hands context` refuses, exits non zero, and says
+  to type `--requires`. It is not a quiet alias and it is never absorbed into the next argument,
+  which is the failure that makes a removed flag worse than one that never existed: the command reads
+  as one that worked and the operator finds out from the record later. The flag joins the table the
+  tool already keeps for removed flags, so it is covered by the guard over the whole class rather
+  than by a case of its own, and a new test refuses any flag that is in both the taken table and the
+  removed one, since that is how the next rename would quietly reintroduce this.
+
+  **Work already in the store.** Migration 0036 renames the column, so a row written before today
+  requires exactly the material it was declared with. Nothing reads the old name, because there is no
+  old name left to read.
+
 - **The roles are quay's own words now.** The twelve in `roles/` arrived as a port and read like one:
   every brief opened by naming another product, and between them they named its files, its slash
   commands and its agents by their `gl-` prefix. This repository is going open source, so a reader

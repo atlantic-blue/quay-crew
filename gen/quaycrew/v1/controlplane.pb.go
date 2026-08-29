@@ -7042,10 +7042,10 @@ type Work struct {
 	BudgetTokens int64 `protobuf:"varint,13,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
 	// labels are free text pairs, so a caller finds its own work later.
 	Labels map[string]string `protobuf:"bytes,14,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// hands is the material this work cannot be done without: the same words a role receives, drawn
-	// from work, context and skills. Work handed material its role does not receive is refused at
-	// dispatch, before a container starts, rather than run blind.
-	Hands []string `protobuf:"bytes,32,rep,name=hands,proto3" json:"hands,omitempty"`
+	// requires is the material this work cannot be done without: the same words a role receives,
+	// drawn from work, context and skills. Work that requires material its role does not receive is
+	// refused at dispatch, before a container starts, rather than run blind.
+	Requires []string `protobuf:"bytes,32,rep,name=requires,proto3" json:"requires,omitempty"`
 	// What the crew assigned, and the caller may not.
 	// parent is which piece of work asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -7216,9 +7216,9 @@ func (x *Work) GetLabels() map[string]string {
 	return nil
 }
 
-func (x *Work) GetHands() []string {
+func (x *Work) GetRequires() []string {
 	if x != nil {
-		return x.Hands
+		return x.Requires
 	}
 	return nil
 }
@@ -7358,9 +7358,9 @@ type CreateWorkRequest struct {
 	Deadline       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=deadline,proto3" json:"deadline,omitempty"`
 	BudgetTokens   int64                  `protobuf:"varint,10,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
 	Labels         map[string]string      `protobuf:"bytes,11,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// hands is the material this work cannot be done without, drawn from work, context and skills. A
-	// word the crew does not hand out is refused by name.
-	Hands []string `protobuf:"bytes,14,rep,name=hands,proto3" json:"hands,omitempty"`
+	// requires is the material this work cannot be done without, drawn from work, context and
+	// skills. A word the crew does not hand out is refused by name.
+	Requires []string `protobuf:"bytes,14,rep,name=requires,proto3" json:"requires,omitempty"`
 	// id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -7477,9 +7477,9 @@ func (x *CreateWorkRequest) GetLabels() map[string]string {
 	return nil
 }
 
-func (x *CreateWorkRequest) GetHands() []string {
+func (x *CreateWorkRequest) GetRequires() []string {
 	if x != nil {
-		return x.Hands
+		return x.Requires
 	}
 	return nil
 }
@@ -8702,7 +8702,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xe7\b\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xed\b\n" +
 	"\x04Work\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -8719,8 +8719,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05after\x18\v \x03(\tR\x05after\x126\n" +
 	"\bdeadline\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12#\n" +
 	"\rbudget_tokens\x18\r \x01(\x03R\fbudgetTokens\x125\n" +
-	"\x06labels\x18\x0e \x03(\v2\x1d.quaycrew.v1.Work.LabelsEntryR\x06labels\x12\x14\n" +
-	"\x05hands\x18  \x03(\tR\x05hands\x12\x16\n" +
+	"\x06labels\x18\x0e \x03(\v2\x1d.quaycrew.v1.Work.LabelsEntryR\x06labels\x12\x1a\n" +
+	"\brequires\x18  \x03(\tR\brequires\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -8744,7 +8744,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"finishedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfb\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x04\n" +
 	"\x11CreateWorkRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -8758,8 +8758,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bdeadline\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12#\n" +
 	"\rbudget_tokens\x18\n" +
 	" \x01(\x03R\fbudgetTokens\x12B\n" +
-	"\x06labels\x18\v \x03(\v2*.quaycrew.v1.CreateWorkRequest.LabelsEntryR\x06labels\x12\x14\n" +
-	"\x05hands\x18\x0e \x03(\tR\x05hands\x12\x0e\n" +
+	"\x06labels\x18\v \x03(\v2*.quaycrew.v1.CreateWorkRequest.LabelsEntryR\x06labels\x12\x1a\n" +
+	"\brequires\x18\x0e \x03(\tR\brequires\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +

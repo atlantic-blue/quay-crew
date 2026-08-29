@@ -144,11 +144,11 @@ controller disposable is in it.
 
 ```mermaid
 flowchart TD
-    DECLARE["you declare a piece of work:<br/>a title, a brief, a role, what it hands"]
+    DECLARE["you declare a piece of work:<br/>a title, a brief, a role, what it requires"]
     DECLARE --> ROW["the crew writes the row, phase pending.<br/>Every rule is checked here, so a refusal<br/>reaches you while you are still looking"]
     ROW --> CLAIM{"a controller claims it<br/>and takes a lease"}
     CLAIM -->|"another controller won the race"| ROW
-    CLAIM -->|"claimed"| RECEIVES{"does the role receive<br/>everything this work hands?"}
+    CLAIM -->|"claimed"| RECEIVES{"does the role receive<br/>everything this work requires?"}
     RECEIVES -->|"no"| STOPPED(["stopped, naming the role and the<br/>material. No container is ever built"])
     RECEIVES -->|"yes, or it names no role"| SESSION["a session in its own container, running as<br/>the role: told its brief, given what the role<br/>receives, holding a credential for its verbs"]
     SESSION --> RENEW["the controller renews the lease<br/>on every tick while the task is open"]
@@ -197,14 +197,22 @@ states, moved earlier: refusing at the write is refusing while somebody is looki
 Zero when no role. A piece of work is pinned the way a run pins its graph, so editing a role cannot
 change work that is already declared.
 
-**`hands`, text array, optional, default empty.** The material this piece of work cannot be done
+**`requires`, text array, optional, default empty.** The material this piece of work cannot be done
 without, drawn from the same three words a role receives: `work`, `context` and `skills`. A word the
 crew does not hand out is refused by name at the write, with the three offered back.
 
-Empty is every piece of work written before this existed: it hands nothing beyond its own brief, and
-nothing about it changes.
+The column was called `hands` until August 2026. The word needed explaining every time somebody read
+it, and it read correctly in neither direction; `requires` comes from the Amazon Elastic Container
+Service and Batch line, `requiresAttributes` and `resourceRequirements`, where a job declares what it
+cannot run without and the scheduler refuses to place it where that is missing. This work requires
+context. The architect role receives context. Migration 0036 renames the column, so a row written
+before the rename requires exactly the material it was declared with, and `--hands` refuses on the
+tool and names `--requires`.
 
-Where the work names a role, what it hands is held against what that role receives, and where the
+Empty is every piece of work written before this existed: it requires nothing beyond its own brief,
+and nothing about it changes.
+
+Where the work names a role, what it requires is held against what that role receives, and where the
 two disagree the work is refused. The refusal names the role, the material it does not receive, and
 the two ways out: widen the role and import it again, or declare the work without the material.
 
@@ -213,6 +221,22 @@ that arrives hours later has nothing pointing back at the declaration. And again
 because a role can be detached, imported at a new version and attached again while work sits pending,
 so what the crew would put in front of a session is only settled at the moment it hands it over. Work
 refused there is `stopped` with the reason on the row, and no container is ever built for it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: "quay work create --requires context"
+    pending --> stopped: "the role does not receive context,<br/>at the write or at the dispatch"
+    pending --> running: "the role receives it, or the work names no role"
+    running --> done
+    running --> failed
+    stopped --> [*]
+    done --> [*]
+    failed --> [*]
+```
+
+What this does not do: it holds the three words the crew hands out and nothing else. There is no way
+to require a named file, a named repository or a named secret, and a role that receives `context`
+receives all of it rather than a part.
 
 The reason to refuse rather than to withhold: a session asked to do work with the context missing
 answers plausibly instead of stopping. That is the same failure `expect_file` exists to catch, and
@@ -396,7 +420,7 @@ flowchart LR
     TICK --> RUNNABLE["read the work that is pending,<br/>with no parent and no after"]
     RUNNABLE --> CLAIM{"claim it:<br/>pending to running,<br/>in one statement"}
     CLAIM -->|"another controller won"| NOTHING["nothing"]
-    CLAIM -->|"claimed"| BOUNDARY{"does its role receive<br/>everything the work hands?"}
+    CLAIM -->|"claimed"| BOUNDARY{"does its role receive<br/>everything the work requires?"}
     BOUNDARY -->|"no, or the role cannot be read"| REFUSED["phase stopped,<br/>reason names the role<br/>and the material.<br/>No container is built"]
     BOUNDARY -->|"yes, or it names no role"| SEND["dispatch the brief into a session<br/>running as the role, and let go"]
     SEND --> RECORD["record the session on the row"]

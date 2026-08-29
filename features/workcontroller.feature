@@ -8,8 +8,8 @@ Feature: A controller makes declared work happen
   on a later tick, so a task that takes an hour costs the loop nothing.
 
   It runs pending work with nothing outstanding. Work that names a role is run as that role, and work
-  handed material its role does not receive never reaches a container. Work under a parent runs too,
-  because a flow declares every step under its own run. Work that waits for something else is left
+  that requires material its role does not receive never reaches a container. Work under a parent
+  runs too, because a flow declares every step under its own run. Work that waits for something else is left
   alone, because nothing honours ordering yet.
 
   Background:
@@ -84,9 +84,9 @@ Feature: A controller makes declared work happen
 
   # The boundary, at the moment the material would be handed over. The role was attached receiving
   # the crew's context when the work was declared, and narrowed while the work sat pending.
-  Scenario: Work handed material its role stopped receiving never reaches a container
+  Scenario: Work that requires material its role stopped receiving never reaches a container
     Given the workspace holds the role "test-writer" at version 1 receiving "work, context"
-    And a piece of work titled "write the tests" in the role "test-writer" handed "context"
+    And a piece of work titled "write the tests" in the role "test-writer" requiring "context"
     And the workspace holds the role "test-writer" at version 2 receiving "work"
     When the controller ticks
     Then the crew was asked to run 0 tasks

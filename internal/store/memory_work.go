@@ -170,8 +170,8 @@ func cloneWork(from work.Work) work.Work {
 	if from.After != nil {
 		from.After = append([]string(nil), from.After...)
 	}
-	if from.Hands != nil {
-		from.Hands = append([]string(nil), from.Hands...)
+	if from.Requires != nil {
+		from.Requires = append([]string(nil), from.Requires...)
 	}
 	if from.Labels != nil {
 		labels := make(map[string]string, len(from.Labels))

@@ -1,0 +1,15 @@
+-- The column that says what a piece of work cannot be done without is called requires.
+--
+-- It was called hands, and hands needed explaining every time somebody read it. The word that means
+-- this comes from the Amazon Elastic Container Service and Batch line, requiresAttributes and
+-- resourceRequirements: a job declares what it cannot run without, and the scheduler refuses to
+-- place it where that is missing. It also reads correctly in both directions, which hands never
+-- did. This work requires context. The architect role receives context.
+--
+-- A rename rather than a second column, because the two would then disagree and every read would
+-- have to say which one wins. Every row written before today keeps its material: the values travel
+-- with the column, so work declared yesterday requires exactly what it was handed.
+--
+-- Nothing about the boundary changes. The words are still work, context and skills, a role still
+-- receives, and the check still happens where the material would be handed over.
+alter table work rename column hands to requires;

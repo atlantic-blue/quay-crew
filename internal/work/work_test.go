@@ -340,16 +340,16 @@ func TestTheSpaceAroundATitleAndABriefComesOff(t *testing.T) {
 	}
 }
 
-// What a piece of work hands is held to the words the crew hands out, and the refusal offers those
-// words back. A word nobody assembles is a boundary that quietly means nothing.
-func TestWorkHandedSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
+// What a piece of work requires is held to the words the crew hands out, and the refusal offers
+// those words back. A word nobody assembles is a boundary that quietly means nothing.
+func TestWorkRequiringSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
 	d := declared()
-	d.Hands = []string{"the codebase"}
+	d.Requires = []string{"the codebase"}
 
 	err := d.Validate()
 
 	if err == nil {
-		t.Fatal("work handed material the crew does not hand out was accepted")
+		t.Fatal("work requiring material the crew does not hand out was accepted")
 	}
 	for _, want := range []string{"the codebase", "work", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {
@@ -358,31 +358,31 @@ func TestWorkHandedSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
 	}
 }
 
-func TestWorkHandedMaterialTheCrewHandsOutIsAccepted(t *testing.T) {
+func TestWorkRequiringMaterialTheCrewHandsOutIsAccepted(t *testing.T) {
 	d := declared()
-	d.Hands = []string{"context", "skills", "work"}
+	d.Requires = []string{"context", "skills", "work"}
 
 	if err := d.Validate(); err != nil {
-		t.Fatalf("work handed material the crew does hand out was refused: %v", err)
+		t.Fatalf("work requiring material the crew does hand out was refused: %v", err)
 	}
 }
 
-// One order and no repeats, so what a piece of work hands does not depend on the order somebody
+// One order and no repeats, so what a piece of work requires does not depend on the order somebody
 // typed it in, and two declarations that say the same thing are the same row.
-func TestWhatIsHandedIsSortedAndDeduplicated(t *testing.T) {
+func TestWhatIsRequiredIsSortedAndDeduplicated(t *testing.T) {
 	d := declared()
-	d.Hands = []string{" skills ", "context", "skills", ""}
+	d.Requires = []string{" skills ", "context", "skills", ""}
 
 	tidy := d.Tidied()
 
-	if len(tidy.Hands) != 2 || tidy.Hands[0] != "context" || tidy.Hands[1] != "skills" {
-		t.Fatalf("the work hands %v, want context and skills once each", tidy.Hands)
+	if len(tidy.Requires) != 2 || tidy.Requires[0] != "context" || tidy.Requires[1] != "skills" {
+		t.Fatalf("the work requires %v, want context and skills once each", tidy.Requires)
 	}
 }
 
-func TestWorkThatHandsNothingHandsNothing(t *testing.T) {
-	if tidy := declared().Tidied(); tidy.Hands != nil {
-		t.Fatalf("work that handed nothing hands %v", tidy.Hands)
+func TestWorkThatRequiresNothingRequiresNothing(t *testing.T) {
+	if tidy := declared().Tidied(); tidy.Requires != nil {
+		t.Fatalf("work that required nothing requires %v", tidy.Requires)
 	}
 }
 
@@ -400,20 +400,20 @@ func (r receives) Gets(material string) bool {
 
 func TestTheFirstMaterialARoleDoesNotReceiveIsNamed(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		handed []string
-		role   work.Receiver
-		want   string
+		name     string
+		required []string
+		role     work.Receiver
+		want     string
 	}{
-		{"the role receives everything handed", []string{"work", "context"}, receives{"work", "context"}, ""},
+		{"the role receives everything required", []string{"work", "context"}, receives{"work", "context"}, ""},
 		{"the role receives none of it", []string{"context"}, receives{"work"}, "context"},
 		{"the role receives some of it", []string{"context", "skills"}, receives{"work", "context"}, "skills"},
-		{"nothing was handed", nil, receives{"work"}, ""},
+		{"nothing was required", nil, receives{"work"}, ""},
 		{"a role that receives nothing at all", []string{"work"}, receives{}, "work"},
 		{"no role to hold it against", []string{"context"}, nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := work.Unreceived(tc.handed, tc.role); got != tc.want {
+			if got := work.Unreceived(tc.required, tc.role); got != tc.want {
 				t.Fatalf("the material the role does not receive is %q, want %q", got, tc.want)
 			}
 		})
@@ -425,7 +425,12 @@ func TestTheFirstMaterialARoleDoesNotReceiveIsNamed(t *testing.T) {
 func TestTheRefusalNamesTheRoleTheMaterialAndWhatToChange(t *testing.T) {
 	said := work.RefusedMaterial("test-writer", "context")
 
-	for _, want := range []string{"test-writer", "context", "import it again", "declare the work without"} {
+	// The opening clause, in the words the flag is named after. It reads in both directions: the work
+	// requires the material, and the role receives it or does not.
+	for _, want := range []string{
+		"this work requires context and the test-writer role does not receive it",
+		"test-writer", "context", "import it again", "declare the work without",
+	} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("the refusal says %q, want it to name %q", said, want)
 		}

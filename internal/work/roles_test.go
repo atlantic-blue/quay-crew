@@ -10,7 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
-// A piece of work names a role, the session runs as that role, and what the work hands is held
+// A piece of work names a role, the session runs as that role, and what the work requires is held
 // against what the role receives. This is the boundary the whole substrate was built for, so these
 // tests are about the two directions it can fail in: a session that runs as nobody, and a session
 // handed work its role was never meant to see.
@@ -50,10 +50,10 @@ func (r receivesOnly) Gets(material string) bool {
 	return false
 }
 
-// workInRole is a piece of work that names a role and hands it some material.
-func workInRole(named string, handed ...string) *work.Work {
+// workInRole is a piece of work that names a role and requires some material of it.
+func workInRole(named string, required ...string) *work.Work {
 	one := declaredWork("clear the open pull request backlog")
-	one.Role, one.RoleVersion, one.Hands = named, 1, handed
+	one.Role, one.RoleVersion, one.Requires = named, 1, required
 	return one
 }
 
@@ -115,7 +115,7 @@ func TestWorkWithNoRoleIsDispatchedAsNobody(t *testing.T) {
 
 // The boundary, in the direction that matters. The work needs the crew's context and the role never
 // receives it, so no container is ever built for it.
-func TestWorkHandedMaterialItsRoleDoesNotReceiveIsStoppedBeforeAnyDispatch(t *testing.T) {
+func TestWorkRequiringMaterialItsRoleDoesNotReceiveIsStoppedBeforeAnyDispatch(t *testing.T) {
 	kept, plane := newRows(), newCrew()
 	controller := work.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("test-writer", "work"))
@@ -156,8 +156,9 @@ func TestRefusedWorkIsClaimedAndStoppedAndNeverStarted(t *testing.T) {
 	}
 }
 
-// The boundary holding is not the same as no boundary. Work handed what its role does receive runs.
-func TestWorkHandedWhatItsRoleReceivesRuns(t *testing.T) {
+// The boundary holding is not the same as no boundary. Work requiring what its role does receive
+// runs.
+func TestWorkRequiringWhatItsRoleReceivesRuns(t *testing.T) {
 	kept, plane := newRows(), newCrew()
 	controller := work.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("backlog-clearer", "work", "context"))

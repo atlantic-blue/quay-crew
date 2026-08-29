@@ -57,7 +57,7 @@ commands:
   work create [<address>]                 declare a piece of work: what it is, and what has to
     --title "..." --brief "..."           happen. The crew keeps it, so the intent outlives the
     [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it as
-    [--hands <material>]                  the role it names. --hands says what the work cannot be
+    [--requires <material>]               the role it names. --requires says what the work cannot be
     [--after <work>] [--label k=v]        done without, one of work, context or skills, and a role
     [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the work
     [--expect-file <path>]

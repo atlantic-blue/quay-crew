@@ -30,8 +30,8 @@ func (s *Server) CreateWork(ctx context.Context, req *quaycrewv1.CreateWorkReque
 		Title:   req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
 		ExpectFile: req.GetExpectFile(), ExpectContains: req.GetExpectContains(),
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
-		Hands: req.GetHands(),
-		ID:    req.GetId(), Parent: req.GetParent(),
+		Requires: req.GetRequires(),
+		ID:       req.GetId(), Parent: req.GetParent(),
 	}
 	if req.GetDeadline() != nil {
 		at := req.GetDeadline().AsTime()
@@ -85,7 +85,7 @@ func (s *Server) PrepareWork(ctx context.Context, under string, declaration work
 		Title: tidy.Title, Brief: tidy.Brief, Mode: tidy.NamedMode(),
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
-		Labels: tidy.Labels, Hands: tidy.Hands,
+		Labels: tidy.Labels, Requires: tidy.Requires,
 		Version: 1, Phase: work.PhasePending,
 	}
 	if err := s.underTheCaller(ctx, under, declared); err != nil {
@@ -110,11 +110,11 @@ func (s *Server) PrepareWork(ctx context.Context, under string, declaration work
 // The version is pinned the way a run pins its graph: editing a role tomorrow cannot change work
 // that is already declared. A role the workspace does not hold is refused by name here, while
 // somebody is looking, rather than when a session that cannot be built is asked for. What the work
-// hands is held against what the role receives for the same reason, and it is checked again at the
-// dispatch, because a role can be detached, imported again and attached again while work sits
+// requires is held against what the role receives for the same reason, and it is checked again at
+// the dispatch, because a role can be detached, imported again and attached again while work sits
 // pending.
 //
-// Work that names no role hands its material to nobody, so nothing here applies to it.
+// Work that names no role requires its material of nobody, so nothing here applies to it.
 func (s *Server) pinRole(ctx context.Context, declared *work.Work, named string) error {
 	if named == "" {
 		return nil
@@ -123,7 +123,7 @@ func (s *Server) pinRole(ctx context.Context, declared *work.Work, named string)
 	if err != nil {
 		return err
 	}
-	if material := work.Unreceived(declared.Hands, held); material != "" {
+	if material := work.Unreceived(declared.Requires, held); material != "" {
 		return status.Error(codes.FailedPrecondition, work.RefusedMaterial(held.Name, material))
 	}
 	declared.Role, declared.RoleVersion = held.Name, held.Version
@@ -254,8 +254,8 @@ func asWork(from *work.Work) *quaycrewv1.Work {
 		Title: from.Title, Brief: from.Brief, Role: from.Role, RoleVersion: int32(from.RoleVersion),
 		Mode: from.Mode, ExpectFile: from.ExpectFile, ExpectContains: from.ExpectContains,
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
-		Hands:  from.Hands,
-		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
+		Requires: from.Requires,
+		Parent:   from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question,
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
