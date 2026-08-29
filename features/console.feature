@@ -345,3 +345,68 @@ Feature: The operator sees the crew from the console
     And the operator looks at the console
     Then a session's row carries more than one colour
     And the row says how the session is doing in its status cell
+
+  # The console was built when a session was the unit of work. A job is what an operator declares now,
+  # and five of them were running on this repository the day the console could show none: the full
+  # screen interface an operator leaves open was drawing the layer underneath the work rather than the
+  # work. See issue 455.
+  #
+  # These drive the console against the real control plane, so the rows are the crew's actual jobs.
+
+  Scenario: The console lists the jobs the crew holds
+    Given a job titled "read the electricity bill"
+    And a job titled "read the water bill" after the first
+    When the operator opens the console on jobs
+    Then the console lists 2 jobs
+
+  Scenario: A short word for the jobs view opens it
+    When the operator opens the console by typing "j"
+    Then the console is showing jobs
+
+  # A pending job has no session, which is the normal state rather than a fault, so the cell says
+  # which it is. An empty cell reads as something missing.
+  Scenario: A job that has not reached a session says so rather than leaving the cell empty
+    Given a job titled "read the electricity bill"
+    When the operator opens the console on jobs
+    Then the job's row says it has no session yet
+
+  Scenario: A job a controller started names the session doing it
+    Given a job titled "read the electricity bill"
+    When the controller ticks
+    And the task the controller sent lands
+    And the operator opens the console on jobs
+    Then the job's row names the session doing it
+
+  # Enter goes to what the job did rather than to the row it runs in: a job's session is one row, and
+  # a listing of one row says nothing the line above it did not. The tasks are the whole account of
+  # what was asked and what came back.
+  Scenario: Enter on a job opens what it did
+    Given a job titled "read the electricity bill"
+    When the controller ticks
+    And the task the controller sent lands
+    And the operator opens the console on jobs
+    And the operator presses enter on the selected job
+    Then the console shows what the job's session was asked
+
+  # A job with nothing behind it yet is the case enter has to refuse, and the refusal names the phase,
+  # so it says why rather than only that it will not.
+  Scenario: Enter on a job with no session yet says why
+    Given a job titled "read the electricity bill"
+    When the operator opens the console on jobs
+    And the operator presses enter on the selected job
+    Then the console says "pending"
+    And the console is still showing the job
+
+  # Stopping is destructive and there is no way back from the wrong row, so it asks first, the way
+  # every destructive key in this console already does.
+  Scenario: Backspace asks before it stops a job, and stops nothing until yes
+    Given a job titled "read the electricity bill"
+    When the operator opens the console on jobs and presses backspace on the job
+    Then the console asks whether to stop that job
+    And the job is pending
+
+  Scenario: Answering yes stops the job
+    Given a job titled "read the electricity bill"
+    When the operator opens the console on jobs and presses backspace on the job
+    And the operator answers "y"
+    Then the job is stopped, and the reason says a person did it
