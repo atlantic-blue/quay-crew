@@ -13,7 +13,7 @@ import (
 // workColumns is the row every read of a piece of work selects, in one place so a reader and a
 // listing cannot drift into scanning different things.
 const workColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
-	expect_contains, after_work, deadline, budget_tokens, labels, hands, coalesce(parent, ''), depth, version,
+	expect_contains, after_work, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, created_at, updated_at, started_at, finished_at`
 
@@ -54,7 +54,7 @@ func insertWork(ctx context.Context, tx pgx.Tx, declared *work.Work) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into work (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_work, deadline, budget_tokens, labels, hands, parent, depth, version, phase,
+			expect_contains, after_work, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
 			lease_owner, lease_until, trace_id, parent_span_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
@@ -62,7 +62,7 @@ func insertWork(ctx context.Context, tx pgx.Tx, declared *work.Work) error {
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		afterOrEmpty(declared.Hands), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
@@ -239,7 +239,7 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	var labels []byte
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
-		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Hands, &found.Parent, &found.Depth,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
@@ -257,8 +257,8 @@ func scanWork(row rowScanner) (*work.Work, error) {
 	if len(found.After) == 0 {
 		found.After = nil
 	}
-	if len(found.Hands) == 0 {
-		found.Hands = nil
+	if len(found.Requires) == 0 {
+		found.Requires = nil
 	}
 	return &found, nil
 }

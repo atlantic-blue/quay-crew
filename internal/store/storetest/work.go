@@ -504,33 +504,33 @@ func runWorkControllerConformance(t *testing.T, newDataset func(t *testing.T) Op
 		}
 	})
 
-	// What a piece of work hands its session survives the store, which is the whole of the boundary
-	// the controller checks: a field that came back empty would refuse nothing and look exactly like
-	// a boundary that held.
-	t.Run("what a piece of work hands is kept", func(t *testing.T) {
+	// What a piece of work requires survives the store, which is the whole of the boundary the
+	// controller checks: a field that came back empty would refuse nothing and look exactly like a
+	// boundary that held.
+	t.Run("what a piece of work requires is kept", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 
-		handed := workShaped(t, s, workspace, project, "needs the crew's context", func(w *work.Work) {
+		demanding := workShaped(t, s, workspace, project, "needs the crew's context", func(w *work.Work) {
 			w.Role, w.RoleVersion = "backlog-clearer", 1
-			w.Hands = []string{"context", "skills"}
+			w.Requires = []string{"context", "skills"}
 		})
-		bare := declaredWork(t, s, workspace, project, "hands nothing")
+		bare := declaredWork(t, s, workspace, project, "requires nothing")
 
-		kept, err := s.GetWork(ctx, handed)
+		kept, err := s.GetWork(ctx, demanding)
 		if err != nil {
 			t.Fatalf("GetWork: %v", err)
 		}
-		if len(kept.Hands) != 2 || kept.Hands[0] != "context" || kept.Hands[1] != "skills" {
-			t.Fatalf("the work hands %v, want context and skills", kept.Hands)
+		if len(kept.Requires) != 2 || kept.Requires[0] != "context" || kept.Requires[1] != "skills" {
+			t.Fatalf("the work requires %v, want context and skills", kept.Requires)
 		}
 		plain, err := s.GetWork(ctx, bare)
 		if err != nil {
 			t.Fatalf("GetWork: %v", err)
 		}
-		if len(plain.Hands) != 0 {
-			t.Fatalf("work that handed nothing hands %v, want nothing", plain.Hands)
+		if len(plain.Requires) != 0 {
+			t.Fatalf("work that requires nothing requires %v, want nothing", plain.Requires)
 		}
 	})
 

@@ -271,32 +271,32 @@ func TestDeclaringWorkFromAWorkspaceSaysItNeedsAProject(t *testing.T) {
 	}
 }
 
-// What a piece of work hands its session reaches the crew and comes back on the listing, because a
-// flag that is quietly dropped looks exactly like one that took effect.
-func TestWhatWorkHandsReachesTheCrewAndIsShownBack(t *testing.T) {
+// What a piece of work requires reaches the crew and comes back on the listing, because a flag that
+// is quietly dropped looks exactly like one that took effect.
+func TestWhatWorkRequiresReachesTheCrewAndIsShownBack(t *testing.T) {
 	client := aCrewToWorkIn(t)
 
 	said := mustRun(t, client, "work", "create",
 		"--title", "read the electricity bill",
 		"--brief", "open it",
-		"--hands", "context",
-		"--hands", "skills")
+		"--requires", "context",
+		"--requires", "skills")
 
 	shown := mustRun(t, client, "work", "show", strings.Fields(said)[1])
-	if !strings.Contains(shown, "handed context, skills") {
-		t.Errorf("quay work show says %q, want it to say what the work hands", shown)
+	if !strings.Contains(shown, "requires context, skills") {
+		t.Errorf("quay work show says %q, want it to say what the work requires", shown)
 	}
 }
 
 // A word the crew does not hand out is refused by name, with the three that would work.
-func TestWorkHandedSomethingTheCrewDoesNotHandOutIsRefusedByTheTool(t *testing.T) {
+func TestWorkRequiringSomethingTheCrewDoesNotHandOutIsRefusedByTheTool(t *testing.T) {
 	client := aCrewToWorkIn(t)
 
 	_, err := runQuay(t, client, "work", "create",
-		"--title", "read the electricity bill", "--brief", "open it", "--hands", "the codebase")
+		"--title", "read the electricity bill", "--brief", "open it", "--requires", "the codebase")
 
 	if err == nil {
-		t.Fatal("work handed material the crew does not hand out was accepted")
+		t.Fatal("work requiring material the crew does not hand out was accepted")
 	}
 	for _, want := range []string{"the codebase", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {

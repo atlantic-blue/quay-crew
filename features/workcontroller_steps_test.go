@@ -392,10 +392,10 @@ func waitForTheLeaseToRunOut(ctx context.Context, id string) error {
 // The steps for work that names a role: the session it runs in, and the refusal that keeps a
 // container from ever being built for it.
 func initializeWorkRoleSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^a piece of work titled "([^"]*)" in the role "([^"]*)" handed "([^"]*)"$`,
+	sc.Step(`^a piece of work titled "([^"]*)" in the role "([^"]*)" requiring "([^"]*)"$`,
 		func(ctx context.Context, title, named, material string) error {
 			return declareWork(ctx, &quaycrewv1.CreateWorkRequest{
-				Title: title, Brief: "from the work alone", Role: named, Hands: []string{material},
+				Title: title, Brief: "from the work alone", Role: named, Requires: []string{material},
 			})
 		})
 

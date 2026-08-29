@@ -439,7 +439,7 @@ func (c *Controller) refusedMaterial(ctx context.Context, one *Work) string {
 	if err != nil {
 		return oneLine(err.Error())
 	}
-	if material := Unreceived(one.Hands, held); material != "" {
+	if material := Unreceived(one.Requires, held); material != "" {
 		return RefusedMaterial(one.Role, material)
 	}
 	return ""

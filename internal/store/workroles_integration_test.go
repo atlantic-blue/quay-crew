@@ -21,7 +21,7 @@ import (
 // Work that names a role, over the real database and the real control plane.
 //
 // The unit tier proves the controller's decisions against doubles. What only this tier reaches is
-// the crossing: the role and what the work hands are columns, they are read back by a different
+// the crossing: the role and what the work requires are columns, they are read back by a different
 // process than wrote them, and the session the crew builds either carries the role or does not.
 
 // aCrewWithRoles stands the control plane up on a real database, with a provider that records every
@@ -73,7 +73,7 @@ func TestWorkInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
 
 	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "clear the backlog", Brief: "read the open pull requests",
-		Role: "backlog-clearer", Hands: []string{"context"},
+		Role: "backlog-clearer", Requires: []string{"context"},
 	})
 	if err != nil {
 		t.Fatalf("CreateWork: %v", err)
@@ -141,7 +141,7 @@ func TestTheCredentialForWorkInARoleCarriesThatRolesVerbsInPostgres(t *testing.T
 // The refusal, at the moment the material would be handed over, and the reason it lives there: the
 // role was attached receiving context when the work was declared, and a version that receives less
 // was attached while the work sat pending.
-func TestWorkHandedWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPostgres(t *testing.T) {
+func TestWorkRequiringWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPostgres(t *testing.T) {
 	s, boxes := aCrewWithRoles(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
@@ -149,7 +149,7 @@ func TestWorkHandedWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPostg
 
 	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "write the tests", Brief: "from the work alone",
-		Role: "test-writer", Hands: []string{"context"},
+		Role: "test-writer", Requires: []string{"context"},
 	})
 	if err != nil {
 		t.Fatalf("CreateWork: %v", err)
@@ -216,7 +216,7 @@ func TestRefusedWorkIsClaimedAndStoppedAndNeverStartedInPostgres(t *testing.T) {
 
 	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "write the tests", Brief: "from the work alone",
-		Role: "test-writer", Hands: []string{"skills"},
+		Role: "test-writer", Requires: []string{"skills"},
 	})
 	if err != nil {
 		t.Fatalf("CreateWork: %v", err)

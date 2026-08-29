@@ -679,7 +679,7 @@ func importRoleReceiving(t *testing.T, s *controlplane.Server, name string, vers
 
 // The boundary is checked while the caller is looking, as well as at the dispatch: a refusal that
 // arrives hours later has nothing pointing back at the declaration.
-func TestWorkHandedMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing.T) {
+func TestWorkRequiringMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, project := newProject(t, s)
 	importRoleReceiving(t, s, "test-writer", 1, "work")
@@ -687,7 +687,7 @@ func TestWorkHandedMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing.T
 
 	err := refusalOf(t, s, &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "write the tests", Brief: "from the work alone",
-		Role: "test-writer", Hands: []string{"context"},
+		Role: "test-writer", Requires: []string{"context"},
 	})
 
 	for _, want := range []string{"test-writer", "context", "declare the work without"} {
@@ -704,7 +704,7 @@ func TestWorkHandedMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing.T
 	}
 }
 
-func TestWorkHandedWhatItsRoleReceivesIsKeptWholeAndReadBack(t *testing.T) {
+func TestWorkRequiringWhatItsRoleReceivesIsKeptWholeAndReadBack(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, project := newProject(t, s)
 	importRoleReceiving(t, s, "backlog-clearer", 1, "work", "context")
@@ -712,25 +712,25 @@ func TestWorkHandedWhatItsRoleReceivesIsKeptWholeAndReadBack(t *testing.T) {
 
 	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "clear the backlog", Brief: "read the pull requests",
-		Role: "backlog-clearer", Hands: []string{"context", "work"},
+		Role: "backlog-clearer", Requires: []string{"context", "work"},
 	})
 	if err != nil {
 		t.Fatalf("CreateWork: %v", err)
 	}
-	handed := declared.GetWork().GetHands()
-	if len(handed) != 2 || handed[0] != "context" || handed[1] != "work" {
-		t.Fatalf("the work hands %v, want context and work", handed)
+	required := declared.GetWork().GetRequires()
+	if len(required) != 2 || required[0] != "context" || required[1] != "work" {
+		t.Fatalf("the work requires %v, want context and work", required)
 	}
 }
 
-// Work that names no role hands its material to nobody, so nothing about it changes.
+// Work that names no role requires its material of nobody, so nothing about it changes.
 func TestWorkWithNoRoleIsNeverHeldToAnyBoundary(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 
 	declared, err := s.CreateWork(context.Background(), &quaycrewv1.CreateWorkRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
-		Hands: []string{"context", "skills"},
+		Requires: []string{"context", "skills"},
 	})
 	if err != nil {
 		t.Fatalf("work with no role was refused: %v", err)

@@ -42,19 +42,24 @@ that work in a session running as that role:
 quay work create me/quay-crew --role backlog-clearer \
   --title "clear the open pull request backlog" \
   --brief "Read the open pull requests. For each one, declare a piece of work." \
-  --hands context
+  --requires context
 ```
 
 The role is on the record, never on the call that runs the task. A caller that could name its own
 role could name one granting more than the work was declared with, and the credential the crew mints
 for that task carries what the role's `may` list declares.
 
-`--hands` is the other side of `receives`: it says what this piece of work cannot be done without.
+`--requires` is the other side of `receives`: it says what this piece of work cannot be done without.
 Where the role does not receive it, the work is refused, and no container is ever built for it.
+
+The two words read correctly in both directions, which is why they are these two words. This work
+requires context. The architect role receives context. The flag was called `--hands` until August
+2026, and it needed explaining every time somebody read it; `--hands` now refuses and names
+`--requires`.
 
 ```mermaid
 flowchart LR
-    WORK["a piece of work<br/>role backlog-clearer<br/>hands context"] --> CHECK{"does the role receive<br/>everything the work hands?"}
+    WORK["a piece of work<br/>role backlog-clearer<br/>requires context"] --> CHECK{"does the role receive<br/>everything the work requires?"}
     CHECK -->|"no"| STOPPED["phase stopped.<br/>The refusal names the role,<br/>the material, and both ways out"]
     CHECK -->|"yes"| SESSION["a session running as the role,<br/>in its own container"]
     SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its may list"]

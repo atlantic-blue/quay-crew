@@ -492,6 +492,85 @@ func TestTheRepositoryMachineryIsGoneFromTheSchema(t *testing.T) {
 	}
 }
 
+// A row written before the rename keeps the material it was declared with, and comes back out of the
+// store under the new name.
+//
+// This is the one thing a rename of a stored column can get wrong quietly. The code compiles either
+// way, every test that writes and then reads passes on a fresh database, and the rows that already
+// exist are the only place the mistake shows. So the row here is written through the old schema, in
+// the old column, before the migration that renames it exists.
+func TestWorkDeclaredBeforeTheRenameStillRequiresWhatItWasGiven(t *testing.T) {
+	ctx := context.Background()
+	dropEverything(t)
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+
+	// The schema as it stood the day before: the column is called hands and nothing has renamed it.
+	applyThrough(t, ctx, pool, "0035_pending_triggers")
+
+	var columnThere bool
+	if err := pool.QueryRow(ctx, `
+		select exists (select 1 from information_schema.columns
+		               where table_name = 'work' and column_name = 'hands')`).Scan(&columnThere); err != nil {
+		t.Fatalf("check the old column: %v", err)
+	}
+	if !columnThere {
+		t.Fatal("the old schema has no hands column, so this test stands on nothing and proves nothing")
+	}
+
+	if _, err := pool.Exec(ctx, `
+		insert into workspaces (id, name) values ('w1', 'acme');
+		insert into projects (id, workspace, name) values ('p1', 'w1', 'house-bills');
+		insert into work (id, workspace, project, title, brief, role, role_version, hands, phase)
+		values ('k1', 'w1', 'p1', 'write the tests', 'from the work alone', 'test-writer', 1,
+		        '{context,skills}', 'pending'),
+		       ('k2', 'w1', 'p1', 'read the electricity bill', 'open it', '', 0, '{}', 'pending')`); err != nil {
+		t.Fatalf("seed the old shape: %v", err)
+	}
+
+	if err := store.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate over the old shape: %v", err)
+	}
+
+	// Read back through the store, not through a query of my own, because what has to hold is that
+	// the code path a caller uses finds the material.
+	kept, err := store.NewPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	t.Cleanup(kept.Close)
+
+	carried, err := kept.GetWork(ctx, "k1")
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if len(carried.Requires) != 2 || carried.Requires[0] != "context" || carried.Requires[1] != "skills" {
+		t.Fatalf("work declared before the rename requires %v, want context and skills", carried.Requires)
+	}
+	bare, err := kept.GetWork(ctx, "k2")
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if len(bare.Requires) != 0 {
+		t.Fatalf("work that required nothing requires %v, want nothing", bare.Requires)
+	}
+
+	// And the old name is gone from the schema, because a column nothing writes is a question every
+	// later migration has to answer.
+	if err := pool.QueryRow(ctx, `
+		select exists (select 1 from information_schema.columns
+		               where table_name = 'work' and column_name = 'hands')`).Scan(&columnThere); err != nil {
+		t.Fatalf("check the old column: %v", err)
+	}
+	if columnThere {
+		t.Error("work still has a hands column beside requires, so two columns hold one thing")
+	}
+}
+
 // applyThrough runs the migrations in order up to and including one of them, and records them as
 // applied, so a test can stand on the schema as it was at a particular commit.
 func applyThrough(t *testing.T, ctx context.Context, pool *pgxpool.Pool, last string) {

@@ -88,6 +88,72 @@ func TestEveryRemovedFlagNamesSomethingTheToolStillHas(t *testing.T) {
 	}
 }
 
+// A flag in both tables is accepted and does nothing, which is the exact defect the removed table
+// exists to prevent: the command succeeds and the caller believes the flag took effect. It reads as
+// a thing nobody would do until a rename removes a flag from one place and forgets the other.
+func TestNoFlagIsBothTakenAndRemoved(t *testing.T) {
+	for command, taken := range takenFlags {
+		for flag := range taken {
+			if _, gone := removedFlags[flag]; gone {
+				t.Errorf("quay %s still takes %s and the removed table says it is gone, so it is accepted "+
+					"and quietly ignored", command, flag)
+			}
+		}
+	}
+}
+
+// The guard over the whole class of removed flags, so the next flag that goes cannot repeat this. A
+// removed flag that is ignored is worse than one that never existed: its value becomes the next
+// argument and the command reads as one that worked.
+//
+// Every flag is driven through `work create`, because a flag no command takes is refused the same
+// way whichever word carries it, and `work create` is the one word with a value after the flag for
+// the refusal to swallow.
+func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
+	client := aCrewToWorkIn(t)
+	if len(removedFlags) == 0 {
+		t.Fatal("the removed flag table is empty, so this test proves nothing")
+	}
+
+	// A value nothing else in a refusal could contain, so finding it proves the refusal ate it
+	// rather than proving the sentence mentions a material.
+	const value = "swallowed-by-the-refusal"
+	for flag := range removedFlags {
+		err := refused(t, client, "work", "create",
+			flag, value, "--title", "read the electricity bill", "--brief", "open it")
+		if !strings.Contains(err.Error(), flag) {
+			t.Errorf("%s is refused with %q, which does not name the flag", flag, err)
+		}
+		if !strings.Contains(err.Error(), "is gone") {
+			t.Errorf("%s is refused with %q, which does not say the flag is gone", flag, err)
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Errorf("%s took its value with it: %q", flag, err)
+		}
+	}
+}
+
+// The flag this rename removed, by name, because the class guard proves every entry refuses and this
+// proves the entry says the word to type instead. A caller with --hands in their fingers, their
+// scripts and their notes gets sent to --requires and nowhere else.
+func TestTheHandsFlagRefusesAndNamesRequires(t *testing.T) {
+	client := aCrewToWorkIn(t)
+
+	err := refused(t, client, "work", "create",
+		"--title", "read the electricity bill", "--brief", "open it", "--hands", "context")
+
+	for _, want := range []string{"--hands is gone", "--requires"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("--hands is refused with %q, want it to say %q", err, want)
+		}
+	}
+	// And no row was written, so a caller who reads the listing after a refusal finds nothing.
+	listed := mustRun(t, client, "work", "list")
+	if strings.Contains(listed, "read the electricity bill") {
+		t.Errorf("the refused declaration was written anyway: %q", listed)
+	}
+}
+
 // A removed word is refused before its flags are, so somebody who typed a whole command that is gone
 // is told about the word rather than sent to correct one part of it.
 func TestARemovedWordIsRefusedBeforeItsFlagsAre(t *testing.T) {

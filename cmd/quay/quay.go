@@ -90,6 +90,10 @@ var removedFlags = map[string]string{
 	"--wait": "quay task waits for the answer already: quay task [<address>] \"...\"",
 	"--no-wait": "letting go is quay task --dispatch [<address>] \"...\"" +
 		"\n\nand quay task on its own waits for the answer instead",
+	// The word reads correctly in both directions now: this work requires context, and the architect
+	// role receives context.
+	"--hands": "what a piece of work cannot be done without is what it requires: " +
+		"quay work create --requires <material>",
 }
 
 // removedCommands are the words this tool used to take, each against what to type now.
