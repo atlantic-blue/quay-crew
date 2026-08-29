@@ -49,7 +49,8 @@ commands:
   flow start [<address>] <graph>          begin a run of it in a project
   flow schedule [<address>] <graph>       let it run on its own, as often as it says
   flow unschedule [<address>] <graph>     stop it running on its own
-  flow list [<address>]                   what has run, newest first
+  flow list [<address>|crew]              what has run, newest first. It reads where you are
+                                          standing and says so; crew reads every project
   flow show <run>                         where one run got to, what it cost, why it stopped,
                                           and how to read the job its steps went out as
   flow stop <run> [<reason>]              halt a run in flight, keeping the reason
@@ -62,9 +63,10 @@ commands:
     [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job
     [--expect-file <path>]
     [--expect-contains "..."]
-  job list [<address>]                    the jobs there are, newest first. Narrow it with
-    [--phase <phase>] [--label k=v]       --phase, --label, --parent or --roots
-    [--parent <job>] [--roots]
+  job list [<address>|crew]               the jobs there are, newest first. With no address it
+    [--phase <phase>] [--label k=v]       reads where you are standing and says so, and crew reads
+    [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
+                                          --parent or --roots
   job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
@@ -84,7 +86,9 @@ commands:
   task --dispatch [<address>] <text>      the same, and let go of the task. It runs in the crew, so
                                           closing the terminal does not take the work with it
   task list <session>                     what a session was asked to do, and what came back
-  sessions [<address>]                    list sessions, which session and sessions also do. The
+  sessions [<address>|crew]               list sessions, which session and sessions also do. It
+                                          reads where you are standing and says so; crew reads
+                                          every workspace. The
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is

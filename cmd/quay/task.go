@@ -179,8 +179,11 @@ func runTaskList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
+	// The session is the scope here, and it is named for the same reason every other listing names
+	// where it looked: a history read off the wrong session is unreadable as a mistake.
+	where := narrowedTo("tasks", "session "+display.ShortID(sessionID), "quay sessions crew lists every session")
 	if len(resp.GetTasks()) == 0 {
-		fmt.Fprintf(out, "no tasks recorded for %s\n", display.ShortID(sessionID))
+		where.nothing(out)
 		return nil
 	}
 
@@ -199,6 +202,7 @@ func runTaskList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 			fmt.Fprintf(out, "          %s\n", oneLine(task.GetReply()))
 		}
 	}
+	where.counted(out, len(resp.GetTasks()))
 	return nil
 }
 

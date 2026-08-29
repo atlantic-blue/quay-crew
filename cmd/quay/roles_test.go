@@ -78,7 +78,7 @@ func TestARoleIsAttachedToAWorkspaceAndTakenAwayAgain(t *testing.T) {
 	if printed := mustRun(t, client, "role", "detach", "test-writer"); !strings.Contains(printed, "no longer holds") {
 		t.Errorf("detaching said: %q", printed)
 	}
-	if printed := mustRun(t, client, "role", "list", "me"); !strings.Contains(printed, "holds no roles") {
+	if printed := mustRun(t, client, "role", "list", "me"); !strings.Contains(printed, "no roles in me") {
 		t.Errorf("the workspace still holds it: %q", printed)
 	}
 }

@@ -266,11 +266,17 @@ func TestASessionOnItsOwnIsRefusedRatherThanSentAsAMessage(t *testing.T) {
 		}
 	}
 
-	// And nothing was sent: the session still holds the one task it was given above.
+	// And nothing was sent: the session still holds the one task it was given above. The prompts
+	// only, because the listing also names the session it read, which is the identifier itself.
 	history := mustRun(t, client, "task", "list", session.GetHandle()[:8])
-	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8]} {
-		if strings.Contains(history, typed) {
-			t.Errorf("the identifier was sent as a message after all:\n%s", history)
+	for _, line := range strings.Split(history, "\n") {
+		if !strings.Contains(line, "  you  ") {
+			continue
+		}
+		for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8]} {
+			if strings.Contains(line, typed) {
+				t.Errorf("the identifier was sent as a message after all:\n%s", history)
+			}
 		}
 	}
 }
