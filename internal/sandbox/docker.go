@@ -22,13 +22,23 @@ type DockerProvider struct {
 	Mounts []string
 	// Storage keeps the workspace's conversation store and the project's files on the host.
 	Storage Storage
-	// Network is the container network the driver joins. Empty leaves it on the daemon's default,
-	// where the control plane is not reachable by name.
-	//
-	// Only the driver joins it. Joining is what lets a session drive the crew, and a session that can
-	// drive the crew can also stop other sessions, so it is the one session marked for it rather than
-	// every session in the crew.
+	// Network is the crew's own network, and the driver is the only sandbox on it. It carries the
+	// store, the broker and the observability stack as well as the control plane, so it is a real
+	// widening, and it is configuration rather than a default. Empty puts the driver on the session
+	// network below, which is all it needs to drive the crew.
 	Network string
+	// SessionNetwork is the network every sandbox joins to reach the control plane. The control plane
+	// is on it and nothing else of the crew's is, so a session can reach the crew and no store, no
+	// broker and no dashboard.
+	//
+	// Reaching the crew is not permission to do anything there. A session is refused every call until
+	// it presents a credential the crew minted for the job it is running, and that credential
+	// carries the verbs its role declared and expires with the job. So this decides what
+	// a session can address, and the credential decides what it may do.
+	//
+	// Empty leaves a sandbox on the daemon's default network, where the control plane cannot be
+	// reached by name, which is what every session had before this existed.
+	SessionNetwork string
 	// DriverMounts are host paths the driver gets and an ordinary session does not, each
 	// "host:container[:ro]". They are what makes the driver the glue between the machine and the
 	// crew: without them it can reach the control plane and see nothing to bring to it.
@@ -291,8 +301,8 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 		// said, and reach it by thrashing. Equal figures make the limit mean what it says.
 		args = append(args, "--memory", d.Memory, "--memory-swap", d.Memory)
 	}
-	if cfg.Driver && d.Network != "" {
-		args = append(args, "--network", d.Network)
+	if network := d.networkFor(cfg); network != "" {
+		args = append(args, "--network", network)
 	}
 	if cfg.Driver {
 		for _, mount := range d.DriverMounts {
@@ -313,6 +323,20 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 		args = append(args, "-v", mount)
 	}
 	return append(args, d.Image, "sleep", "infinity")
+}
+
+// networkFor is the one network this sandbox joins, decided here because a sandbox keeps what it was
+// created with. There is no promotion: a container that is already running joins nothing later, so a
+// session that has to reach the crew has to be born able to.
+//
+// A session joins the session network, where the control plane is and nothing else of the crew's is.
+// The driver joins the crew's own network when the operator named one, because that is the wider
+// access it was given deliberately, and falls back to the session network, which is all it needs.
+func (d DockerProvider) networkFor(cfg Config) string {
+	if cfg.Driver && d.Network != "" {
+		return d.Network
+	}
+	return d.SessionNetwork
 }
 
 // secretsMount is the memory backed directory a file projected secret lands in, on every sandbox

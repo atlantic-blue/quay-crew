@@ -271,6 +271,30 @@ func TestDeclaringJobFromAWorkspaceSaysItNeedsAProject(t *testing.T) {
 	}
 }
 
+// TestASessionDeclaresWithNoAddressAndTheCrewReadsTheProjectFromItsCredential.
+//
+// A session running a job is standing nowhere and cannot resolve an address: resolving one means
+// listing workspaces and projects, and a role grants the four job verbs and nothing else. So the
+// tool sends no project and the crew reads it from the credential, the same place the parent comes
+// from. The tool refusing here would make the first verb a role grants unusable from the only place
+// it is ever held.
+//
+// A crew that has no credential to read is the case underneath, and it is the one this can assert
+// with no interceptor in front of it: the declaration has to reach the crew and be refused there,
+// rather than be stopped in the tool for being nowhere.
+func TestASessionDeclaresWithNoAddressAndTheCrewReadsTheProjectFromItsCredential(t *testing.T) {
+	client := testClient(t)
+
+	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it")
+
+	if err == nil {
+		t.Fatal("a job was declared with no project and no credential to read one from")
+	}
+	if !strings.Contains(err.Error(), "job needs a project to run in") {
+		t.Fatalf("the refusal says %q, want the crew's own answer: the tool stopped it before the crew saw it", err)
+	}
+}
+
 // What a job requires reaches the crew and comes back on the listing, because a flag that
 // is quietly dropped looks exactly like one that took effect.
 func TestWhatJobRequiresReachesTheCrewAndIsShownBack(t *testing.T) {

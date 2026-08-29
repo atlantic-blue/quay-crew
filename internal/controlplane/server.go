@@ -1777,9 +1777,15 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	if id := session.GetId(); id != "" {
 		env[sandbox.SessionIDEnv] = id
 	}
-	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
-	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
-	// not on a network that could reach it anyway.
+	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. The
+	// driver holds the crew's own interface, which is why it is told here and why it is told the
+	// driver's token: an ordinary session has no business driving the crew. A session running a job
+	// is told the same address below, with a credential that buys it four verbs rather than
+	// the crew.
+	//
+	// Every sandbox is on a network that reaches the control plane, so being told is what decides
+	// this and not what the container can address. The network carries no permission: a session
+	// presenting no credential is refused every call.
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 		// The token travels with the address and only with it: an ordinary session is told

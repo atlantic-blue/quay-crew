@@ -160,7 +160,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 // it so the rule they hold up reads on its own.
 
 // initializeFrontDoorDifferenceSteps holds the front door to sending a reader somewhere that answers
-// the question they ask first: not what a piece of work is, but how it differs from the task they
+// the question they ask first: not what a job is, but how it differs from the task they
 // already know how to send. The answer itself lives in the document, not in the front door.
 func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the document it names for the words tells a task and a job apart$`, func(ctx context.Context) error {

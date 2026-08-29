@@ -352,6 +352,75 @@ thrashing. Unset, a session has no limit, which is where every session started.
 The figure is the operator's. It shares one machine between the stack, every session already running,
 and this one, so add up what you are willing to give them and check it against what the daemon has.
 
+## What a session's sandbox can reach
+
+A session runs model output, so what its container can address is a boundary rather than a detail.
+There are two networks, and the split is the whole of the answer.
+
+```mermaid
+flowchart LR
+    subgraph CREW["the crew's own network"]
+        POSTGRES["postgres"]
+        REDPANDA["redpanda"]
+        OBS["grafana, loki, tempo, prometheus, otel collector"]
+    end
+    subgraph SESSIONS["the sessions network"]
+        SANDBOX1["a session's sandbox"]
+        SANDBOX2["another session's sandbox"]
+    end
+    CONTROLPLANE["the control plane"]
+    CONTROLPLANE --- POSTGRES
+    CONTROLPLANE --- REDPANDA
+    CONTROLPLANE --- OBS
+    CONTROLPLANE --- SANDBOX1
+    CONTROLPLANE --- SANDBOX2
+```
+
+The control plane is the only thing on both. A session can address it and cannot address the store,
+the broker or the dashboards, so widening what a session may do never widens what a session may
+reach.
+
+**Every sandbox joins the sessions network, and it joins it at birth.** A sandbox keeps the
+configuration it was made with and there is no promotion: a network added when a task starts would
+miss every container already running. So a session that has to reach the crew has to be born able to,
+which is also why a change here needs the session started again rather than a task run again.
+
+**The network is not the permission.** Reaching the control plane buys nothing on its own. Every call
+is refused until the caller presents a credential, and the only credential a session ever holds is
+the one the crew mints for the job that task is running: bound to that job, carrying the
+verbs the job's role declared, expiring with the job. A session on the network holding no
+credential can do nothing at all, which is what an ordinary task is. See `docs/ORCHESTRATION.md`
+section 5 for what a role grants and `internal/controlplane/deny.go` for the refusals.
+
+**Nothing is configured for this.** The compose file creates the network and puts the control plane
+on it, and the makefile names it after the stack, so two stacks on one machine do not share one.
+`QC_SANDBOX_CONTROL_PLANE` is the address a session dials, `controlplane:50051` in the composed
+stack. Unset it and the crew tells a session nothing, and a session running a job then
+holds a credential it cannot spend. The control plane says so on startup when the two disagree.
+
+**The driver is the one deliberate widening, and it is off.** `QC_SANDBOX_NETWORK` names the crew's
+own network, and only the driver joins it. Left empty, which is what a fresh configuration ships
+with, the driver joins the sessions network like everything else, which is all it needs to drive the
+crew. Set it to `quaycrew_default` only when a driver on this machine has to reach the rest of the
+stack, and read `docs/DRIVERS.md` first.
+
+### What this does not do
+
+- **It does not isolate sessions from each other.** Every sandbox is on one network, so a session can
+  address another session's container. Nothing in a sandbox listens on a port, and the conversation a
+  session runs is a tmux socket inside the container rather than anything on the network, so there is
+  nothing there to answer today. A network for each session is the shape that would close it, and
+  nothing has needed it yet.
+- **It does not bound what a session reaches outside the crew.** A sandbox has the internet, because
+  a session clones repositories and installs packages. What is bounded here is the crew's own
+  services.
+- **It does not hide a port the host publishes.** A container reaches the host at its network's
+  gateway, so anything the compose file publishes on every address of the machine is reachable from a
+  sandbox as it is from anywhere else on the machine. The control plane's own port is published to
+  loopback only, and the store publishes none.
+- **It does not reach a crew running its sessions on the host.** `QC_SANDBOX=local` has no container
+  and no network, and none of this applies to it.
+
 ## What the image pins
 
 Every tool the image installs names its version, as a build argument at the top of the step that

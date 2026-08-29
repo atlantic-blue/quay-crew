@@ -28,6 +28,56 @@ func TestNothingIsSaidWhenTheAllowlistWasNeverSet(t *testing.T) {
 	}
 }
 
+// TestACrewThatHandsOutAnAddressNoSessionCanResolveSaysSo.
+//
+// This is the fault the notice exists for, and it is silent from both ends. The crew tells a session
+// running a job where it is and mints it a credential; the sandbox joins no network that
+// reaches that address; and the session reports "produced zero addresses", which reads as the crew
+// being down. Only this process can see both halves at once.
+func TestACrewThatHandsOutAnAddressNoSessionCanResolveSaysSo(t *testing.T) {
+	notice, mismatched := unreachableCrew("docker", "controlplane:50051", "")
+
+	if !mismatched {
+		t.Fatal("a crew handing out an address its sessions cannot resolve said nothing about it")
+	}
+	for _, want := range []string{"QC_SANDBOX_CONTROL_PLANE", "QC_SESSION_NETWORK", "resolve"} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("the notice does not mention %q: %s", want, notice)
+		}
+	}
+}
+
+func TestNothingIsSaidWhenTheTwoHalvesAgree(t *testing.T) {
+	for _, tc := range []struct {
+		name                            string
+		kind, reachable, sessionNetwork string
+		because                         string
+	}{
+		{
+			name: "both set", kind: "docker", reachable: "controlplane:50051", sessionNetwork: "quaycrew_sessions",
+			because: "the address is handed out and the sandbox can reach it",
+		},
+		{
+			name: "neither set", kind: "docker",
+			because: "a session is told nothing and holds no credential, so the two halves agree",
+		},
+		{
+			name: "a network and no address", kind: "docker", sessionNetwork: "quaycrew_sessions",
+			because: "nothing is handed out, so nothing is unresolvable",
+		},
+		{
+			name: "sessions on the host", kind: "local", reachable: "controlplane:50051",
+			because: "there is no container and no network to put one on",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, mismatched := unreachableCrew(tc.kind, tc.reachable, tc.sessionNetwork); mismatched {
+				t.Errorf("the crew was warned, and %s", tc.because)
+			}
+		})
+	}
+}
+
 // What a session may do when it is born comes from the crew's configuration. These hold the reading of
 // it, and in particular hold it to refusing rather than falling back, because a crew configured for
 // "planning" that quietly ran everything in acceptEdits would look exactly like a crew configured for

@@ -329,7 +329,7 @@ func usableExpectFile(path string) error {
 	return nil
 }
 
-// Terminal says whether nothing moves work out of this phase.
+// Terminal says whether nothing moves a job out of this phase.
 func Terminal(phase string) bool {
 	switch phase {
 	case PhaseDone, PhaseFailed, PhaseStopped:

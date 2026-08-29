@@ -70,6 +70,16 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	if err := declaration.Validate(); err != nil {
 		return nil, nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	// Where the job runs, and a session names none: it holds a credential minted for the job
+	// it is running, and that credential says which project that job is in. It is the same
+	// reading as the parent below, and for the same reason. A session cannot resolve an address
+	// anyway, because resolving one means listing workspaces and projects, and the verbs a role
+	// grants are the four job verbs and nothing else.
+	if declaration.Project == "" {
+		if grant, carried := auth.GrantFrom(ctx); carried {
+			declaration.Project = grant.Project
+		}
+	}
 	if declaration.Project == "" {
 		return nil, nil, status.Error(codes.InvalidArgument,
 			"job needs a project to run in: say where with an address, for example quay job create me/house-bills")

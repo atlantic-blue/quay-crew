@@ -12,6 +12,14 @@ GOBIN := $(shell go env GOPATH)/bin
 QUAY_HOME ?= $(HOME)/.quay
 ENV_FILE ?= $(QUAY_HOME)/env
 
+# QC_SESSION_NETWORK is the network a session's sandbox joins to reach the control plane, and the
+# control plane is the only thing on it. It is computed rather than configured, and named after this
+# stack, so two stacks on one machine do not put their sessions on one network. Compose reads it
+# twice, once to create the network and once to tell the control plane which name to join a sandbox
+# to, so a single value is what keeps those two the same.
+QC_SESSION_NETWORK ?= $(COMPOSE_PROJECT)_sessions
+export QC_SESSION_NETWORK
+
 COMPOSE := docker compose -p $(COMPOSE_PROJECT) --env-file $(ENV_FILE) -f deploy/docker-compose.yml
 
 # BINDIR is where `make install` puts the quay binary. Left unset, it installs over whatever quay

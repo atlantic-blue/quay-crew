@@ -300,7 +300,7 @@ func TestJobReachedTwiceByDifferentPathsIsNotACycle(t *testing.T) {
 func TestTheTerminalPhasesAreTheThreeThatEnd(t *testing.T) {
 	for _, phase := range []string{job.PhaseDone, job.PhaseFailed, job.PhaseStopped} {
 		if !job.Terminal(phase) {
-			t.Errorf("%q is not terminal, and nothing moves work out of it", phase)
+			t.Errorf("%q is not terminal, and nothing moves a job out of it", phase)
 		}
 	}
 	for _, phase := range []string{job.PhasePending, job.PhaseWaiting, job.PhaseRunning, job.PhaseAsking} {

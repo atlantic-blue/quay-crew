@@ -95,10 +95,16 @@ func main() {
 		Image:   os.Getenv("QC_SANDBOX_IMAGE"),
 		Mounts:  splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
 		Storage: storage,
-		// The network the driver joins, and the host paths only it gets. Unset leaves the driver
-		// where it can reach nothing and see nothing of the machine.
-		Network:      os.Getenv("QC_SANDBOX_NETWORK"),
-		DriverMounts: splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
+		// The crew's own network, which only the driver joins, and the host paths only it gets.
+		// Unset leaves the driver on the session network below, which reaches the crew and nothing
+		// else, and leaves it seeing nothing of the machine.
+		Network: os.Getenv("QC_SANDBOX_NETWORK"),
+		// The network every sandbox joins so a session can reach this control plane. The compose
+		// file creates it and puts this service on it, and the store, the broker and the dashboards
+		// are not on it. Unset leaves a session unable to reach the crew, so its credential buys it
+		// nothing.
+		SessionNetwork: os.Getenv("QC_SESSION_NETWORK"),
+		DriverMounts:   splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
 		// How much memory one session may take. Unset gives it no limit, so it advertises the whole
 		// machine to node, Go, jest and webpack, and the kernel kills it against what is actually
 		// free. A session reads whichever of the two it got with quay room.
@@ -126,6 +132,10 @@ func main() {
 			"skills", len(skills))
 	}
 	if notice, retired := sandboxSecretsRetired(os.Getenv("QC_SANDBOX_SECRETS")); retired {
+		logger.Warn(notice)
+	}
+	if notice, mismatched := unreachableCrew(sandboxKind,
+		os.Getenv("QC_SANDBOX_CONTROL_PLANE"), os.Getenv("QC_SESSION_NETWORK")); mismatched {
 		logger.Warn(notice)
 	}
 	// Which build the sandbox image was made from, read once at startup: it is configuration, and an
@@ -434,6 +444,25 @@ func renamedSetting(now string, read func(string) string) (value, notice string)
 			" is set too and wins, so the old line can be removed from the crew's configuration"
 	}
 	return value, ""
+}
+
+// unreachableCrew says what to tell an operator whose crew hands out an address no session can
+// resolve, and whether there is anything to say.
+//
+// This is the fault the check exists for, and it is silent from both ends. The crew tells a session
+// running a job where it is and mints it a credential; the sandbox joins no network that reaches
+// that address; and the session reports "produced zero addresses", which reads as the crew being
+// down rather than as configuration. Only this process can see both halves.
+//
+// A crew that tells a session nothing is not warned about. That crew hands out no credential either,
+// so the two halves agree.
+func unreachableCrew(kind, reachable, sessionNetwork string) (string, bool) {
+	if kind != sandbox.KindDocker || reachable == "" || sessionNetwork != "" {
+		return "", false
+	}
+	return "QC_SANDBOX_CONTROL_PLANE is set and QC_SESSION_NETWORK is not: a session running a job " +
+		"is told where the crew is, and its sandbox joins no network that reaches that address, so " +
+		"every call it makes fails to resolve the name", true
 }
 
 func splitAndTrim(csv string) []string {

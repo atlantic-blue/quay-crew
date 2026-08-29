@@ -80,11 +80,19 @@ services:
       # Each session gets its own container on the host daemon, a sibling of this one.
       QC_SANDBOX: docker
       QC_SANDBOX_IMAGE: ${QC_SANDBOX_IMAGE:-alpine:3.22}
-      # The network a session's sandbox joins, and the address it dials to reach this control plane.
-      # Together they are what lets a session drive the crew: `quay` inside a sandbox then reaches the
-      # same interface the operator's does. Unset either and it cannot, which is the default.
+      # The crew's own network, which only the driver joins. It carries Postgres, Redpanda and the
+      # observability stack as well as this service, so it is a real widening and it stays off unless
+      # the operator asks for it. Unset puts the driver on the session network below.
       QC_SANDBOX_NETWORK: ${QC_SANDBOX_NETWORK:-}
-      QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-}
+      # The network every sandbox joins, and the address it dials to reach this control plane. The
+      # name is the same variable the network below is created under, so what compose makes and what
+      # this service asks the daemon for cannot drift.
+      #
+      # A session can address this service and nothing else of the crew's. It may still do nothing
+      # here: every call is refused until the session presents the credential the crew minted for the
+      # job it is running, and that credential carries the verbs its role declared.
+      QC_SESSION_NETWORK: ${QC_SESSION_NETWORK:-quaycrew_sessions}
+      QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-controlplane:50051}
       # How much memory one session may take, as the daemon spells it, for example 4g. Unset gives
       # a session no limit, so it advertises the whole machine to node, Go, jest and webpack, and
       # the kernel kills them against whatever the rest of the machine has left.
@@ -137,6 +145,19 @@ services:
       # this also puts every task on <workspace>.tasks for a second consumer. Set it to empty in your
       # own configuration to turn the export off, which loses nothing.
       QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS-redpanda:9092}
+    # Both networks. The default one is where the store, the broker and the collector are, and the
+    # sessions one is where the sandboxes are. This service is the only thing on both, which is what
+    # makes it the only thing a session can reach.
+    #
+    # The alias is written down rather than left to the default, because it is the name in
+    # QC_SANDBOX_CONTROL_PLANE above and a session has nothing else to dial. An alias belongs to one
+    # network rather than to a container, so the name a service answers to is a per network fact, and
+    # this is the network where being wrong means every call a session makes fails to resolve.
+    networks:
+      default: {}
+      sessions:
+        aliases:
+          - controlplane
     volumes:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
@@ -206,3 +227,15 @@ volumes:
   postgres-data:
   tempo-data:
   loki-data:
+
+networks:
+  # The crew's own network. Every service here is on it, and no session is.
+  default:
+  # Where a session reaches the control plane. The control plane is the only service on it, so a
+  # session can address the crew and cannot address the store, the broker or the dashboards.
+  #
+  # Named rather than left to compose, because the control plane has to tell the daemon which network
+  # to put each sandbox on and it reads that name from the same variable. Two spellings of one name is
+  # how a session ends up on a network the crew is not on.
+  sessions:
+    name: ${QC_SESSION_NETWORK:-quaycrew_sessions}

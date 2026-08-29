@@ -59,6 +59,60 @@ read, or run with `make features`.
   from 80 to 120 for it, once, and a scenario holds the list exact so a twelfth resource is defined
   in the change that adds it.
 
+  **What a session declares says where it goes.** The slice merged just before this one taught a
+  session to declare without naming a project, because a session cannot resolve an address and its
+  credential already says which project it is in. That reads `whereTheJobRuns` now, and the scenario
+  and the refusal say job.
+
+- **A job's session can reach the control plane, and only the control plane.** The crew handed a
+  session running a piece of work the address of the crew and a credential minted for that work, and
+  its container had no route to that address. Every call died with `name resolver error: produced
+  zero addresses`. Measured in `quay-crew#435`: job `dbffa81d` ran as the assessor role, the one role
+  of the twelve that carries `work.create`, and none of its four steps ran. So the verb boundary in
+  `internal/controlplane/deny.go` had never refused a real call, and a permission system that has
+  never refused anything cannot be told apart from one that is not wired up.
+
+  It is not a regression. Every sandbox joined the network for three hours on 7 August, between
+  `quay-crew#154` and `quay-crew#157`, which narrowed it to the driver. The credential arrived twenty
+  days later in `quay-crew#414`, under a comment still saying an ordinary session's sandbox is not on
+  a network that could reach the crew. The two halves were never true together.
+
+  **A second network, and the control plane is the only thing on both.** The crew's own network
+  carries Postgres, Redpanda and the observability stack, and no session is on it: a session runs
+  model output, and widening that network is the thing the driver flag exists to prevent. The compose
+  file makes a `sessions` network, puts the control plane on it as well, and every sandbox joins it at
+  birth. A session can address the crew and cannot address the store, the broker or the dashboards. A
+  tagged test proves the last part against a real daemon, from inside a real container, by name and by
+  address, with the same command against the crew as a control.
+
+  **The network is not the permission.** Reaching the crew buys nothing. Every call is refused until
+  the caller presents the credential the crew minted for the piece of work that task is running, and
+  that credential carries the verbs the work's role declared and expires with the work. A session
+  holding none can do nothing at all, which is what an ordinary task is.
+
+  **Joined at birth, because there is no promotion.** A sandbox keeps what it was created with, and a
+  container that already carries a session's name is adopted untouched, so a network added when a task
+  starts would miss every container already running.
+
+  **What a session declares now says where it goes.** A session cannot resolve an address: resolving
+  one means listing workspaces and projects, and a role grants the four work verbs and nothing else.
+  So `quay work create` inside a session sends no project and the crew reads it from the credential,
+  the same place the parent comes from. Without that, the first verb a role grants was unusable from
+  the only place it is ever held.
+
+  **The proof is a refusal, through a real container.** A job running as a role whose `may` list does
+  not carry `work.stop` calls `quay work stop`, and the crew's own refusal comes back into the
+  container naming the verb and how an operator grants it. Then the other half: a job running as a
+  role that carries `work.create` declares a sub job naming another role, and one tick of the
+  controller runs it in a session and a container of its own, at depth 1, under the parent the
+  credential named.
+
+  **What an operator has to do about it.** Nothing on a compose stack, and a session started before
+  this is on the old network until it is started again. `QC_SANDBOX_NETWORK` changed meaning: it now
+  names the crew's own network and only the driver joins it, and a fresh configuration ships it empty,
+  which puts the driver on the sessions network with everything else. The control plane says so on
+  startup when it holds an address and no network to reach it from.
+
 - **What a piece of work cannot be done without is now `--requires`, not `--hands`.** The old flag
   needed explaining every time somebody read it, which is the whole case against it. `--requires`
   comes from the Amazon Elastic Container Service and Batch line, `requiresAttributes` and

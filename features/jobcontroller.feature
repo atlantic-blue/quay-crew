@@ -131,7 +131,7 @@ Feature: A controller makes declared jobs happen
     And one task is recorded against that job
 
   # The point of the port is twelve roles a person can use rather than twelve directories, so one of
-  # them runs a real work here, end to end, and the answer comes back on the row.
+  # them runs a real job here, end to end, and the answer comes back on the row.
   Scenario: A job runs as a role this build ships
     Given the operator imports every role this build ships
     And the operator attaches the "test-writer" role to the workspace
