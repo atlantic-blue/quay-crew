@@ -13,7 +13,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// A console draws a screen. A task takes as long as the work takes. The console used to wait for one
+// A console draws a screen. A task takes as long as the job takes. The console used to wait for one
 // anyway, hold every key while it waited, give up at thirty seconds and leave behind a session with a
 // container, a row, and no conversation in it. These are the cases that stop that coming back.
 

@@ -698,7 +698,7 @@ func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 				return actionDoneMsg{kind: plan.kind, err: fmt.Errorf("the context for %s: %w", plan.where(), err)}
 			}
 		case kindSession:
-			// Detached, because a task takes as long as the work takes and the console has a screen to
+			// Detached, because a task takes as long as the job takes and the console has a screen to
 			// draw. Waiting for one meant the wizard held every key until the thirty second deadline
 			// below killed the task, and the session it left had a container, a row, and no
 			// conversation. The row says running until it lands.

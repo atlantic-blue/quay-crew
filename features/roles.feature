@@ -23,7 +23,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator imports the "test-writer" role
     Then the crew holds the "test-writer" role
     And the listing says the "test-writer" role runs on "opus"
-    And the listing says the "test-writer" role receives "context, work"
+    And the listing says the "test-writer" role receives "context, job"
 
   # A boundary that means nothing looks exactly like one that holds, and import is the only moment
   # anybody is looking.
@@ -129,7 +129,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator imports every role this build ships
     Then the crew holds every role this build ships
     And the listing says the "test-writer" role runs on "sonnet"
-    And the listing says the "test-writer" role receives "context, skills, work"
+    And the listing says the "test-writer" role receives "context, job, skills"
 
   Scenario: A role this build ships reaches a workspace
     Given the operator imports every role this build ships

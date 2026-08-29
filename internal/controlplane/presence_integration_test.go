@@ -25,7 +25,7 @@ import (
 // and it has to be a measured number rather than an estimate.
 
 // listingSessions is how many rows the measurement is taken over. About the size of a real crew: the
-// measurement that opened this work read eighteen containers on one machine.
+// measurement that opened this job read eighteen containers on one machine.
 const listingSessions = 20
 
 // aCrewOverRealContainers gives back a control plane whose sandboxes are containers the daemon is

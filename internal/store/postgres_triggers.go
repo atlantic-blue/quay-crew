@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/jackc/pgx/v5"
 )
 
 // The pending trigger queue. A trigger row is written in the transaction of whatever caused it, read
 // off an indexed query, and claimed with a conditional write in one statement, which is the same
-// mechanism the crew already uses for waits, for dispatch idempotency and for work events.
+// mechanism the crew already uses for waits, for dispatch idempotency and for job events.
 //
 // The claim is the part that has to be exact. Two pollers reading the same pending row must leave one
 // holder, so the condition and the write are one statement and never a read followed by an update.
@@ -75,7 +75,7 @@ func (p *Postgres) PendingTriggers(ctx context.Context, limit int) ([]*flow.Trig
 // ClaimTrigger takes a lease on one trigger, and applies only where it is still pending and nobody
 // else's claim is live. The condition is in the same statement as the write, so two pollers finding
 // one pending trigger leave one holder and one ErrTriggerTaken.
-func (p *Postgres) ClaimTrigger(ctx context.Context, id string, lease work.Lease) (*flow.Trigger, error) {
+func (p *Postgres) ClaimTrigger(ctx context.Context, id string, lease job.Lease) (*flow.Trigger, error) {
 	row := p.pool.QueryRow(ctx, `
 		update pending_triggers set lease_owner = $2, lease_until = $3, attempts = attempts + 1,
 		    updated_at = now()

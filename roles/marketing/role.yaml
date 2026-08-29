@@ -3,6 +3,6 @@ version: 1
 summary: writes the marketing plan and its tasks from the research findings, and cites a finding for every recommendation
 model: opus
 receives:
-  - work
+  - job
   - context
   - skills

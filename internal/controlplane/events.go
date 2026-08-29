@@ -22,7 +22,7 @@ const tasksStream = "tasks"
 //
 // It is written at the start because that is when the operator needs it. A task takes minutes, and a
 // history that only holds finished tasks says nothing at all about the one burning the tokens: the
-// session reads as though it were asked nothing, while the work it was actually asked for is
+// session reads as though it were asked nothing, while the job it was actually asked for is
 // invisible until it lands.
 //
 // It is not exported here. The log carries one record per task, at the end, and a consumer handed a
@@ -144,7 +144,7 @@ func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Session) 
 }
 
 // sealedForWorkspace is the same set for a workspace rather than for a session, which is what
-// anything redacting outside a conversation has: a piece of work has no session yet.
+// anything redacting outside a conversation has: a job has no session yet.
 func (s *Server) sealedForWorkspace(ctx context.Context, workspace string) map[string]string {
 	values := map[string]string{}
 	refs, err := s.secrets.List(ctx, workspace)

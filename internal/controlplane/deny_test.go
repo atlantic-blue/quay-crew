@@ -13,7 +13,7 @@ import (
 )
 
 // The two policies point in opposite directions, and that is the design. The driver is refused a
-// named list and holds everything else. A piece of work holds a named list and is refused everything
+// named list and holds everything else. A job holds a named list and is refused everything
 // else, which is what makes its credential the narrowest thing the crew hands out.
 
 // A hook is a command that runs on a session's own tool use, so a session that could attach one
@@ -47,32 +47,32 @@ func TestTheDriverStillDoesWhatItExistsToDo(t *testing.T) {
 	}
 }
 
-// A piece of work may call the verbs its role declared, and the call it needs for each is the one
+// A job may call the verbs its role declared, and the call it needs for each is the one
 // the crew maps it to.
-func TestAPieceOfWorkMayCallWhatItsRoleDeclared(t *testing.T) {
-	grant := auth.Grant{Work: "work-1", Verbs: []string{role.VerbWorkCreate, role.VerbWorkRead}}
+func TestAJobMayCallWhatItsRoleDeclared(t *testing.T) {
+	grant := auth.Grant{Job: "job-1", Verbs: []string{role.VerbJobCreate, role.VerbJobRead}}
 
 	for _, method := range []string{
-		quaycrewv1.ControlPlaneService_CreateWork_FullMethodName,
-		quaycrewv1.ControlPlaneService_GetWork_FullMethodName,
-		quaycrewv1.ControlPlaneService_ListWork_FullMethodName,
+		quaycrewv1.ControlPlaneService_CreateJob_FullMethodName,
+		quaycrewv1.ControlPlaneService_GetJob_FullMethodName,
+		quaycrewv1.ControlPlaneService_ListJobs_FullMethodName,
 	} {
-		if err := controlplane.DeniedToWork(method, nil, grant); err != nil {
-			t.Errorf("%s was refused to work whose role declared it: %v", method, err)
+		if err := controlplane.DeniedToJob(method, nil, grant); err != nil {
+			t.Errorf("%s was refused to a job whose role declared it: %v", method, err)
 		}
 	}
 }
 
 // The refusal names the verb, because a session that was refused has to know what to ask for.
-func TestAPieceOfWorkIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
-	grant := auth.Grant{Work: "work-1", Verbs: []string{role.VerbWorkRead}}
+func TestAJobIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
+	grant := auth.Grant{Job: "job-1", Verbs: []string{role.VerbJobRead}}
 
-	err := controlplane.DeniedToWork(quaycrewv1.ControlPlaneService_CreateWork_FullMethodName, nil, grant)
+	err := controlplane.DeniedToJob(quaycrewv1.ControlPlaneService_CreateJob_FullMethodName, nil, grant)
 
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("the refusal is %v, want PermissionDenied", status.Code(err))
 	}
-	if !strings.Contains(err.Error(), role.VerbWorkCreate) {
+	if !strings.Contains(err.Error(), role.VerbJobCreate) {
 		t.Fatalf("the refusal says %q, want it to name the verb", err)
 	}
 	if !strings.Contains(err.Error(), "may list") {
@@ -82,10 +82,10 @@ func TestAPieceOfWorkIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
 
 // Everything outside the four verbs is refused, which is the whole difference from the driver: this
 // credential holds a list rather than everything but a list.
-func TestAPieceOfWorkIsRefusedEveryCallThatIsNotAWorkVerb(t *testing.T) {
+func TestAJobIsRefusedEveryCallThatIsNotAJobVerb(t *testing.T) {
 	// A grant holding every verb there is, so what is refused here is refused by kind rather than by
 	// the grant being narrow.
-	grant := auth.Grant{Work: "work-1", Verbs: role.Verbs}
+	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
 
 	for _, method := range []string{
 		quaycrewv1.ControlPlaneService_Dispatch_FullMethodName,
@@ -103,35 +103,35 @@ func TestAPieceOfWorkIsRefusedEveryCallThatIsNotAWorkVerb(t *testing.T) {
 		quaycrewv1.ControlPlaneService_StartFlow_FullMethodName,
 		quaycrewv1.ControlPlaneService_ListSessions_FullMethodName,
 	} {
-		err := controlplane.DeniedToWork(method, nil, grant)
+		err := controlplane.DeniedToJob(method, nil, grant)
 		if status.Code(err) != codes.PermissionDenied {
-			t.Errorf("%s answered %v to a piece of work, want PermissionDenied", method, status.Code(err))
+			t.Errorf("%s answered %v to a job, want PermissionDenied", method, status.Code(err))
 		}
 	}
 }
 
 // A session that could raise its own ceiling has none, so the limits are the operator's alone.
-func TestAPieceOfWorkMayNotRaiseItsOwnCeiling(t *testing.T) {
-	grant := auth.Grant{Work: "work-1", Verbs: role.Verbs}
+func TestAJobMayNotRaiseItsOwnCeiling(t *testing.T) {
+	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
 
-	err := controlplane.DeniedToWork(
+	err := controlplane.DeniedToJob(
 		quaycrewv1.ControlPlaneService_SetWorkspaceLimits_FullMethodName, nil, grant)
 
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("a piece of work may set the limits: %v", err)
+		t.Fatalf("a job may set the limits: %v", err)
 	}
 }
 
-// The work a task runs for decides which credential the crew mints, so a session naming one would be
-// minting itself that work's grant.
-func TestAPieceOfWorkMayNotNameTheWorkATaskRunsFor(t *testing.T) {
-	grant := auth.Grant{Work: "work-1", Verbs: role.Verbs}
+// The job a task runs for decides which credential the crew mints, so a session naming one would be
+// minting itself that job's grant.
+func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
+	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
 
-	err := controlplane.DeniedToWork(quaycrewv1.ControlPlaneService_CreateWork_FullMethodName,
-		&quaycrewv1.DispatchRequest{Work: "work-2"}, grant)
+	err := controlplane.DeniedToJob(quaycrewv1.ControlPlaneService_CreateJob_FullMethodName,
+		&quaycrewv1.DispatchRequest{Job: "job-2"}, grant)
 
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("a session named the work a task runs for: %v", err)
+		t.Fatalf("a session named the job a task runs for: %v", err)
 	}
 	if !strings.Contains(err.Error(), "credential") {
 		t.Fatalf("the refusal says %q, want it to say where the crew reads it from", err)
@@ -140,15 +140,15 @@ func TestAPieceOfWorkMayNotNameTheWorkATaskRunsFor(t *testing.T) {
 
 // A grant holding nothing calls nothing, which is what a role that declared no may list becomes.
 func TestAGrantThatHoldsNothingCallsNothing(t *testing.T) {
-	grant := auth.Grant{Work: "work-1"}
+	grant := auth.Grant{Job: "job-1"}
 
 	for _, method := range []string{
-		quaycrewv1.ControlPlaneService_CreateWork_FullMethodName,
-		quaycrewv1.ControlPlaneService_GetWork_FullMethodName,
-		quaycrewv1.ControlPlaneService_ListWork_FullMethodName,
-		quaycrewv1.ControlPlaneService_StopWork_FullMethodName,
+		quaycrewv1.ControlPlaneService_CreateJob_FullMethodName,
+		quaycrewv1.ControlPlaneService_GetJob_FullMethodName,
+		quaycrewv1.ControlPlaneService_ListJobs_FullMethodName,
+		quaycrewv1.ControlPlaneService_StopJob_FullMethodName,
 	} {
-		if err := controlplane.DeniedToWork(method, nil, grant); status.Code(err) != codes.PermissionDenied {
+		if err := controlplane.DeniedToJob(method, nil, grant); status.Code(err) != codes.PermissionDenied {
 			t.Errorf("%s answered %v to a grant holding nothing", method, status.Code(err))
 		}
 	}

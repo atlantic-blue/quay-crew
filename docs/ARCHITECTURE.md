@@ -81,7 +81,7 @@ Each is its own Go service in its own container.
 - **Workspaceor.** Consumes the event log and materialises the read model. The read model is derived, so
   it is disposable and can be rebuilt from the log.
 - **Admin dashboard.** Reads the read model and drives the control plane over gRPC: list workspaces, see
-  every session, tail a conversation, start or stop work.
+  every session, tail a conversation, start or stop job.
 - **Flow engine.** Advances automation runs against a graph, over its own Postgres tables,
   dispatching tasks into each run's own session. It is where control flow across sessions is written
   down. Built as of 9 August 2026: `internal/flow`, with `quay flow import|start|list|show` in
@@ -206,7 +206,7 @@ with a model substitute that still execs inside the sandbox.
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
-**Decided 16 August 2026: the crew has one word for a conversation and one for a piece of work.
+**Decided 16 August 2026: the crew has one word for a conversation and one for a job.
 They are session and task.** This reverses the 9 August decision below. The wire says `Session`: the
 session RPCs (`ListSessions`, `GetSession`, `AttachSession` and the rest), a `Task` and a `TaskEvent`
 that say which session they belong to, and a dispatch that returns the session's `id` beside its
@@ -226,7 +226,7 @@ refusal offers only that one.
 
 **Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
 two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
-learn both. `turn` came from conversation analysis and never said how long the work takes.
+learn both. `turn` came from conversation analysis and never said how long the job takes.
 
 ```
 workspace  "me"                      who you are; secrets and channels attach here
@@ -387,7 +387,7 @@ edges:
 **`result.failed` says the model did not error. It says nothing about whether anything was
 achieved.** A task that could not do the work is not a failed task: asked to read a file that is not
 there, a capable model answers plausibly instead of stopping, and a graph branching on
-`result.failed` then walks its success path through work that never happened. The first flow run
+`result.failed` then walks its success path through a job that never happened. The first flow run
 against a real crew did exactly that. It finished at `done`, reported four transitions, and its
 summary was the model's account of a repository it never found.
 
@@ -395,11 +395,11 @@ summary was the model's account of a repository it never found.
 package.json }` is a path that must be in the run's session after the task, read from the working
 directory the crew keeps rather than asked of the model. `expect: { contains: "all green" }` is a
 string the reply must carry, which is weaker because it is still the model's own prose, and is there
-for work that leaves no file behind. Whichever is declared is checked.
+for a job that leaves no file behind. Whichever is declared is checked.
 
 **An expectation that does not hold stops the run**, with the reason naming the node and what was
 not there, and `result.expected` in the run's state. It stops rather than branching because the crew
-knows the work did not happen and does not know why, and because a run that halts is read correctly
+knows the job did not happen and does not know why, and because a run that halts is read correctly
 while a run that finishes is believed. Its session is left alone rather than archived, since that is
 where the evidence is. A graph that declares nothing behaves exactly as it did.
 

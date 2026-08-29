@@ -20,7 +20,7 @@ const presenceSweep = 5 * time.Second
 
 // presenceAtOnce is how many sandboxes are asked at the same time.
 //
-// The questions are network round trips to the daemon rather than work this process does, so they
+// The questions are network round trips to the daemon rather than job this process does, so they
 // overlap: twenty sessions asked one after another cost twenty round trips end to end, and asked
 // eight at a time they cost three. The figure is a ceiling on how much of the daemon one listing may
 // take, because the same daemon is running every session on the machine.

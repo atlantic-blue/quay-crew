@@ -174,7 +174,7 @@ Two figures, and they are three orders of magnitude apart. That spread is why th
 a listing that does not carry it cannot answer which session to stop.
 
 - **A working sandbox: 1,206 mebibytes.** Read at 17:35:39 on 27 August 2026, from
-  `/sys/fs/cgroup/memory.current` inside a sandbox that was running this work. Its peak since it
+  `/sys/fs/cgroup/memory.current` inside a sandbox that was running this job. Its peak since it
   started was 2,798 mebibytes. The machine underneath it read 7,837 mebibytes of memory with 3,628
   available, and its swap was fully used, 1,024 mebibytes of 1,024.
 - **An idle sandbox: about 1.6 megabytes.** Measured during the incident on 27 August 2026 and
@@ -186,7 +186,7 @@ Both are one machine on one day. They set no threshold and this document sets no
 
 ### Reading it
 
-The header carries it while you work. The room view is one line per sandbox, largest first, with what
+The header carries it while you job. The room view is one line per sandbox, largest first, with what
 each one holds, its share of one processor, how long since its last task, and what its session is
 doing. The last column matters: the largest sandbox may be the one doing the work.
 
@@ -205,30 +205,30 @@ shown here.
 - **It refuses nothing.** The crew reports a full machine and still tries to start a session on it.
   Refusing a dispatch with a reason is the next step, and it is what issue 400 asks for.
 - **It sets no limit.** Nothing here bounds how many sandboxes run. `max_running` belongs to the
-  work controller in `docs/ORCHESTRATION.md`, and this reading is the measurement that would set it.
+  job controller in `docs/ORCHESTRATION.md`, and this reading is the measurement that would set it.
 - **It cannot see a Mac.** Nothing inside a Linux container reads what macOS is doing, so on a Mac
   the machine reported is the Docker virtual machine and the crew says so by name.
 - **It stops nothing on its own.** The view answers which session to stop and the operator stops it.
 - **It keeps no history.** There is one sample, the last one. A figure that has to be read over time
   belongs on the telemetry pipeline this document already describes.
 
-## One trace joins a piece of work, its task and its records
+## One trace joins a job, its task and its records
 
 The crew's correlation identifier is the trace identifier rather than a second value beside it. So
 one identifier is enough to get from any part of the record to any other, and it is a column rather
-than something a process holds. That last part is the whole reason it works: a piece of work outlives
+than something a process holds. That last part is the whole reason it works: a job outlives
 the controller that started it, so a trace held in memory would be lost with the first controller
 that died.
 
 ```mermaid
 flowchart TD
-    CALL["a caller declares work"] --> ROW["the work row: trace_id, parent_span_id"]
-    ROW --> REC["work_events rows, each carrying the trace"]
-    REC --> LOG[["workspace.work, exported after the commit"]]
+    CALL["a caller declares job"] --> ROW["the job row: trace_id, parent_span_id"]
+    ROW --> REC["job_events rows, each carrying the trace"]
+    REC --> LOG[["workspace.job, exported after the commit"]]
     ROW --> CTL["a controller reads the row and works under that trace"]
     CTL --> TASK["the tasks row, carrying the same trace"]
     CTL --> ENV["the task environment: QC_TRACEPARENT"]
-    CTL --> SPAN["spans: work, and work.attempt"]
+    CTL --> SPAN["spans: job, and job.attempt"]
 ```
 
 **Where each value comes from.** A root takes the trace of the call that declared it, and mints one
@@ -242,17 +242,17 @@ the tenth task with the first task's span for as long as the container lives. `Q
 on the command instead, once per task.
 
 **The spans.** Two, and both are recorded when the crew knows both ends of them rather than held open
-in memory: `work.attempt` covers one attempt, and `work` covers the whole life of the work and is
-written once it reaches a terminal phase. Their attributes name the work, the workspace, the project,
+in memory: `job.attempt` covers one attempt, and `job` covers the whole life of the job and is
+written once it reaches a terminal phase. Their attributes name the job, the workspace, the project,
 the phase, the attempt and the session.
 
 ### What this does not do
 
 - **Nothing inside the container adopts the trace context.** The model's own tool does not read
-  `QC_TRACEPARENT`, so what the crew gets is one span per attempt around work whose inside is opaque.
+  `QC_TRACEPARENT`, so what the crew gets is one span per attempt around a job whose inside is opaque.
   Anything finer needs a hook, and no hook emits a span today.
 - **The two spans are siblings, not parent and child.** A span identifier cannot be minted before the
-  span exists, and the work span is written at the end, so `work.attempt` hangs beside `work` under
+  span exists, and the job span is written at the end, so `job.attempt` hangs beside `job` under
   the same parent rather than inside it. They are joined by the trace identifier.
 - **Nothing reads the log back.** There is no consumer and no projection. An empty consumer group
   list is the expected state.
@@ -260,7 +260,7 @@ the phase, the attempt and the session.
   model call are still missing, and they are
   [issue 345](https://github.com/atlantic-blue/quay-crew/issues/345).
 - **A flow run has no spans of its own yet.** `flow.run` and `flow.transition` belong to the slice
-  that makes the engine declare work.
+  that makes the engine declare job.
 
 ## What you can actually look at today
 
@@ -326,7 +326,7 @@ Two things to know before you spend time in there:
 - **Tempo holds traces.** Dispatch a task, open Grafana, pick the Tempo data source and search. The
   span is named for the gRPC method the crew served.
 - **Prometheus holds what tasks cost.** `sum by (workspace) (quaycrew_cost_usd_total)` is what each
-  piece of work has cost, and `sum by (kind) (quaycrew_tokens_total)` is where the tokens went. The
+  a job has cost, and `sum by (kind) (quaycrew_tokens_total)` is where the tokens went. The
   cache read figure is normally the largest by far.
 - **Loki holds the crew's log lines**, and a line carrying a correlation id has a link on it that
   opens the trace. The link works the other way too: from a span, Grafana offers the log lines that
@@ -405,7 +405,7 @@ That the four telemetry containers agree with each other about names and ports i
 `deploy/telemetry_test.go`, which reads the collector, Prometheus, Grafana and compose files and
 refuses a host that is not a service or a scrape port that is not the one the collector publishes on.
 
-Neither of those is the same as having watched it work. Every command in this document that starts
+Neither of those is the same as having watched it job. Every command in this document that starts
 `docker` is a reproduction step and not a captured result: this change was made and gated in an
 environment with no container runtime. Run `make up`, dispatch a task, and the Tempo
 search above is the check.

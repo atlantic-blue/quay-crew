@@ -10,6 +10,45 @@ The name is the picture of the system: a crew you command at the quay where ever
 It is early. [`CHANGELOG.md`](CHANGELOG.md) is the list of what has landed, and
 [`features/`](features/) says what the crew does today, as scenarios you can run.
 
+## The words
+
+Eleven resources, and everything the crew holds is one of them.
+
+**Workspaces.** The outer grouping. It holds projects, and the secrets, roles and skills they share.
+
+**Projects.** Inside a workspace. A repository, its context, and the sessions working in it.
+
+**Jobs.** What you want. A row the crew keeps, so the intent outlives the terminal that asked for
+it. A controller runs it. Close the laptop and it carries on.
+
+**Sessions.** The workers. A container holding one conversation and its history.
+
+**Tasks.** One thing you said to a session, and the reply. Ephemeral: a task is written when it
+starts and nothing survives the process going down.
+
+**Flows.** An automation graph the crew runs: dispatch, choice, ask, wait and trigger nodes, joined
+by edges.
+
+**Roles.** A named way of working: a brief, the model it runs on, and the material it may receive.
+
+**Skills.** What the crew can do. Imported, then attached to a workspace so its sessions hold them.
+
+**Hooks.** Constraints a session runs under, checked when it acts. A hook reaches a sandbox when the
+sandbox is built, so a session already running is not under a new one.
+
+**Secrets.** Credentials a workspace holds. Values never printed, and a mounted secret reaches a
+session as a file rather than through its environment.
+
+**Context.** What the crew, the workspace and the project know, as memory files. It is a resource
+with levels, not a setting.
+
+Beside them are the **limits**, which are settings rather than resources: per workspace, how deep the
+job tree may go, how many run at once, what a tree may spend, and how long an unused session is kept.
+
+A job is a Kubernetes Job: declared intent, run to completion, watched by a controller, with a
+disposable container underneath. A session is deliberately not a Pod. A Pod is disposable and
+interchangeable with its replacement, and a session's whole value is the history it holds.
+
 ## Quick start
 
 You need Docker and a Claude subscription.
@@ -36,7 +75,7 @@ Then run `quay` with no arguments to open the console. `make help` lists every o
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the whole picture, the stack, the principles and
   the plan.
-- [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md): work as a record the crew keeps, the controller,
+- [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md): a job as a record the crew keeps, the controller,
   the lease and the capability model.
 - [`docs/TASKS.md`](docs/TASKS.md): one task from dispatch to the records it leaves, and the words
   that get used for each other.

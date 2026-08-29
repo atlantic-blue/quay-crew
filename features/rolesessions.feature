@@ -1,6 +1,6 @@
 Feature: A step of a flow runs as a role, in its own session
 
-  Every step of a flow is a piece of work now, and a piece of work owns the session that does it, so
+  Every step of a flow is a job now, and a job owns the session that does it, so
   each step has a conversation of its own. A step that names a role goes further: its session is made
   as that role, with the role's brief and only what the role receives.
 
@@ -53,7 +53,7 @@ Feature: A step of a flow runs as a role, in its own session
     When the operator starts the flow "write-tests" in the project
     Then the role's memory file carries "Write the tests. Do not write the code."
 
-  # The boundary, in the direction that matters. This role receives work and context, and no skills.
+  # The boundary, in the direction that matters. This role receives job and context, and no skills.
   Scenario: A role that does not receive skills is given none
     Given the crew has a skill "git" that says "Branch first."
     When the operator starts the flow "write-tests" in the project
@@ -66,7 +66,7 @@ Feature: A step of a flow runs as a role, in its own session
     Then the role's memory file carries "we ship on Fridays"
 
   Scenario: A role that does not receive context is told none of it
-    Given the operator imported the "reviewer" role, which receives only work
+    Given the operator imported the "reviewer" role, which receives only the job material
     And the operator attached the "reviewer" role to the workspace
     And the operator sets context at scope "crew" to "we ship on Fridays"
     And the crew holds this flow graph:

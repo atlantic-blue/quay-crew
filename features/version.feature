@@ -1,7 +1,7 @@
 Feature: The crew says which build it is, and drift is reported
 
   A crew is three parts and each is built on its own: the tool the operator types, the control plane
-  that runs the work, and the image every session runs in. An upgrade stops containers, so an
+  that runs the job, and the image every session runs in. An upgrade stops containers, so an
   operator delays it, and the three drift apart. Nothing said so.
 
   On 27 August 2026 three defects were investigated as if they were live. All three were fixed

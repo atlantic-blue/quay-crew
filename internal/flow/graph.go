@@ -92,7 +92,7 @@ type Graph struct {
 	Start string
 }
 
-// Expect is what a dispatch node declares will show its task did the work.
+// Expect is what a dispatch node declares will show its task did the job.
 //
 // The crew checks it. That is the whole point of it: a task that could not do the work is not a
 // failed task, so `result.failed` says only that the model did not error, and a model asked to read
@@ -103,7 +103,7 @@ type Expect struct {
 	// directory. It is the strong one: nothing the model says can satisfy it.
 	File string
 	// Contains is a string the reply must carry. It is weaker, because it is still the model's own
-	// prose, and it is here because some work has no file to point at.
+	// prose, and it is here because some job has no file to point at.
 	Contains string
 }
 
@@ -114,7 +114,7 @@ type Node struct {
 	// run's state.
 	Prompt string
 	// Role is the name of the role a dispatch runs as, empty for a step that runs in the run's own
-	// session. A step that names a role runs in a session of its own, so the work is done by
+	// session. A step that names a role runs in a session of its own, so the job is done by
 	// somebody who has read only what the role declares.
 	Role string
 	// Expect is what shows this dispatch worked, or nil where the graph claims nothing.
@@ -254,13 +254,13 @@ func Parse(source []byte) (Graph, error) {
 			return Graph{}, fmt.Errorf("flow: node %s has type %q; this graph engine knows %s, %s, %s, %s, %s and the implicit %s", name, node.Type, NodeDispatch, NodeChoice, NodeWait, NodeAsk, NodeTrigger, DoneNode)
 		}
 
-		// A role belongs to a dispatch, because a role is who does work and nothing else in a graph
+		// A role belongs to a dispatch, because a role is who does the work and nothing else in a graph
 		// does any. Refused here rather than ignored: a role silently dropped from a choice reads as
 		// a boundary that is in force and is not.
 		roleName := strings.TrimSpace(node.Role)
 		if roleName != "" {
 			if node.Type != NodeDispatch {
-				return Graph{}, fmt.Errorf("flow: %s node %s names the role %s, and only a %s does work, so the role would do nothing",
+				return Graph{}, fmt.Errorf("flow: %s node %s names the role %s, and only a %s does the work, so the role would do nothing",
 					node.Type, name, roleName, NodeDispatch)
 			}
 			if !role.UsableName(roleName) {
@@ -271,7 +271,7 @@ func Parse(source []byte) (Graph, error) {
 		var expect *Expect
 		if node.Expect != nil {
 			if node.Type != NodeDispatch {
-				return Graph{}, fmt.Errorf("flow: %s node %s says what proves it worked, and only a %s does work", node.Type, name, NodeDispatch)
+				return Graph{}, fmt.Errorf("flow: %s node %s says what proves it worked, and only a %s does the work", node.Type, name, NodeDispatch)
 			}
 			path, carries := strings.TrimSpace(node.Expect.File), node.Expect.Contains
 			if path == "" && carries == "" {

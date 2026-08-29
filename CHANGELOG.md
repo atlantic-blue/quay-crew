@@ -8,6 +8,111 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **Declared intent is a job, and `quay work` is `quay job`.** The vocabulary was confusing to the
+  person who has to use it, and that has now cost real time twice. Kubernetes already solved this,
+  and the crew had borrowed half of its words already: a `Lease`, a `Phase`, a `Role`, verbs on a
+  resource. The one it had not borrowed was the name of the resource itself.
+
+  A Kubernetes Job is declared intent, run to completion, watched by a controller, with a disposable
+  container underneath. That is what this is, down to the phase field and the lease. So it is a job.
+
+  `quay work create|list|show|stop` is `quay job create|list|show|stop`, and `--after <work>` is
+  `--after <job>`. The Go package, the types, the fields, the errors and the log lines follow, and so
+  do the protobuf messages: `Work` is `Job`, `CreateWork` is `CreateJob`, and `ListWork` is
+  `ListJobs`, which is what every other listing on this service was already called.
+
+  **A session is deliberately not a Pod.** A Pod is disposable and interchangeable with its
+  replacement: kill one, another takes its place, and nothing is lost. A session's whole value is the
+  history it holds, so killing one loses the conversation that made it worth having. Borrowing a word
+  whose contract the crew does not honour is worse than breaking the pattern on purpose.
+  `docs/TASKS.md` says this where the words are defined, because it is the obvious next question.
+
+  **The verbs a role may call.** `work.create`, `work.read`, `work.answer` and `work.stop` are
+  `job.create`, `job.read`, `job.answer` and `job.stop`. The material a role receives moves with them,
+  so `receives: work` is `receives: job`: the material names the resource, the same way the verbs do,
+  and leaving it would have kept the old word in every manifest. All five old spellings are refused at
+  import by name, against one table, so a stale manifest fails at the door and reads what it should
+  say instead. Nothing about the boundary changed.
+
+  **The way off the old word.** `quay work create` refuses, exits non zero, and names `quay job
+  create`. It is not a quiet alias and it is never absorbed into the next argument, which is the
+  failure that makes a removed word worse than one that never existed: the command reads as one that
+  worked and the operator finds out from the record later. The word joins the table the tool already
+  keeps for removed commands, so it is covered by the guard over the whole class rather than by a case
+  of its own, and a new test refuses any word that is in both the removed table and the live commands.
+
+  **Jobs already in the store.** Migration 0037 renames `work` to `jobs` and `work_events` to
+  `job_events`, with the columns, the indexes and the sequence. A job declared before today keeps its
+  identifier, its phase, its answer and its history, and reads back whole under the new name. The
+  kinds move with the rows, so `work.declared` becomes `job.declared`: a history that answers in two
+  vocabularies would make every consumer switch on both spellings forever, and a kind is the crew's
+  own word for what happened rather than anything a person typed.
+
+  **The crew's configuration.** `QC_WORK_LEASE` is `QC_JOB_LEASE`. The old name is still read where
+  the new one says nothing, so an operator who tuned the lease keeps the number they chose, and the
+  control plane says on startup which line to rename.
+
+  **The front door now defines all eleven resources.** Workspaces, projects, jobs, sessions, tasks,
+  flows, roles, skills, hooks, secrets and context, one short paragraph each, above the quick start,
+  with the limits named as settings rather than resources. A reader who meets a word for the first
+  time inside a command guesses at it. The README grew a fourth section and its line ceiling moved
+  from 80 to 120 for it, once, and a scenario holds the list exact so a twelfth resource is defined
+  in the change that adds it.
+
+  **What a session declares says where it goes.** The slice merged just before this one taught a
+  session to declare without naming a project, because a session cannot resolve an address and its
+  credential already says which project it is in. That reads `whereTheJobRuns` now, and the scenario
+  and the refusal say job.
+
+- **A job's session can reach the control plane, and only the control plane.** The crew handed a
+  session running a piece of work the address of the crew and a credential minted for that work, and
+  its container had no route to that address. Every call died with `name resolver error: produced
+  zero addresses`. Measured in `quay-crew#435`: job `dbffa81d` ran as the assessor role, the one role
+  of the twelve that carries `work.create`, and none of its four steps ran. So the verb boundary in
+  `internal/controlplane/deny.go` had never refused a real call, and a permission system that has
+  never refused anything cannot be told apart from one that is not wired up.
+
+  It is not a regression. Every sandbox joined the network for three hours on 7 August, between
+  `quay-crew#154` and `quay-crew#157`, which narrowed it to the driver. The credential arrived twenty
+  days later in `quay-crew#414`, under a comment still saying an ordinary session's sandbox is not on
+  a network that could reach the crew. The two halves were never true together.
+
+  **A second network, and the control plane is the only thing on both.** The crew's own network
+  carries Postgres, Redpanda and the observability stack, and no session is on it: a session runs
+  model output, and widening that network is the thing the driver flag exists to prevent. The compose
+  file makes a `sessions` network, puts the control plane on it as well, and every sandbox joins it at
+  birth. A session can address the crew and cannot address the store, the broker or the dashboards. A
+  tagged test proves the last part against a real daemon, from inside a real container, by name and by
+  address, with the same command against the crew as a control.
+
+  **The network is not the permission.** Reaching the crew buys nothing. Every call is refused until
+  the caller presents the credential the crew minted for the piece of work that task is running, and
+  that credential carries the verbs the work's role declared and expires with the work. A session
+  holding none can do nothing at all, which is what an ordinary task is.
+
+  **Joined at birth, because there is no promotion.** A sandbox keeps what it was created with, and a
+  container that already carries a session's name is adopted untouched, so a network added when a task
+  starts would miss every container already running.
+
+  **What a session declares now says where it goes.** A session cannot resolve an address: resolving
+  one means listing workspaces and projects, and a role grants the four work verbs and nothing else.
+  So `quay work create` inside a session sends no project and the crew reads it from the credential,
+  the same place the parent comes from. Without that, the first verb a role grants was unusable from
+  the only place it is ever held.
+
+  **The proof is a refusal, through a real container.** A job running as a role whose `may` list does
+  not carry `work.stop` calls `quay work stop`, and the crew's own refusal comes back into the
+  container naming the verb and how an operator grants it. Then the other half: a job running as a
+  role that carries `work.create` declares a sub job naming another role, and one tick of the
+  controller runs it in a session and a container of its own, at depth 1, under the parent the
+  credential named.
+
+  **What an operator has to do about it.** Nothing on a compose stack, and a session started before
+  this is on the old network until it is started again. `QC_SANDBOX_NETWORK` changed meaning: it now
+  names the crew's own network and only the driver joins it, and a fresh configuration ships it empty,
+  which puts the driver on the sessions network with everything else. The control plane says so on
+  startup when it holds an address and no network to reach it from.
+
 - **What a piece of work cannot be done without is now `--requires`, not `--hands`.** The old flag
   needed explaining every time somebody read it, which is the whole case against it. `--requires`
   comes from the Amazon Elastic Container Service and Batch line, `requiresAttributes` and

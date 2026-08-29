@@ -105,7 +105,7 @@ Feature: A hook is a constraint the crew holds
     And the task loaded the hooks settings
 
   # The crew ships the analyser because it only adds context and can never wrongly refuse. Anything
-  # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the work.
+  # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the job.
   Scenario: A fresh crew is already under the hooks this build ships
     Given a crew seeded with the hooks this build ships
     Then the crew holds the "prompt-analyser" hook

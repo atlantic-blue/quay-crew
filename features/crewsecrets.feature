@@ -55,7 +55,7 @@ Feature: A secret every workspace needs is held once by the crew
     And the sandbox carries nothing called "gitconfig"
 
   # Signing and the crew's level are two features that only pay off together: a key mounted once
-  # signs the work of every workspace, including the ones made tomorrow. Neither test suite covers
+  # signs the job of every workspace, including the ones made tomorrow. Neither test suite covers
   # the join, so each could keep passing while the pair stopped working.
   Scenario: A gpg key the crew holds makes every workspace sign
     Given the crew mounts the secret "GPG_SIGNING_KEY" holding "an exported secret key"

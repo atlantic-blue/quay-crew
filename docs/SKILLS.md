@@ -1,6 +1,6 @@
 # Skills
 
-A session opens knowing nothing about how you work. It has a model, a sandbox, and whatever context
+A session opens knowing nothing about how you job. It has a model, a sandbox, and whatever context
 the crew has written into it. Ask it to open a pull request and it will find `git` in the image, no
 identity, no credential, and no `gh`, and it will tell you the control plane is refusing connections.
 
@@ -184,7 +184,7 @@ So a brief is short by construction, and the mount is what makes that possible:
 - **`summary` in the manifest says when to reach for the skill, in a sentence.** This is the part loaded
   every time, and it is capped at 200 bytes so it cannot quietly become a brief.
 - **`SKILL.md` says how that kind of work is done here.** A page, not a manual, capped at 4,096 bytes.
-  It sits at the path the index gives and is opened when the work comes up.
+  It sits at the path the index gives and is opened when the job comes up.
 - **The detail lives in files in the skill's own directory**, which is mounted and which the model
   reads only when it needs them. A convention document, a checklist, an example, a reference. None of
   it costs anything until something opens it.

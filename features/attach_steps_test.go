@@ -111,7 +111,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	})
 
 	// While the task runs, not after it. Read off the task itself rather than off the session, so this
-	// says the operator lands where the work is happening rather than only that two of the crew's own
+	// says the operator lands where the job is happening rather than only that two of the crew's own
 	// fields agree with each other.
 	sc.Step(`^the command opens the conversation the task is running in$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
@@ -124,7 +124,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		if got := conversationIn(a.spec); got != running {
 			return fmt.Errorf("the command opens conversation %q and the task is running in %q, "+
-				"so the operator is watching an empty conversation beside the work", got, running)
+				"so the operator is watching an empty conversation beside the job", got, running)
 		}
 		return nil
 	})
@@ -200,7 +200,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
 		// The conversation the task itself ran in, read off the task rather than off the session, so
-		// this says the operator lands where the work happened rather than only that two of the crew's
+		// this says the operator lands where the job happened rather than only that two of the crew's
 		// own fields agree.
 		ran, err := w.conversationOfFirstTask()
 		if err != nil {

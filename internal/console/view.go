@@ -110,7 +110,7 @@ func (m Model) headerLines() []string {
 }
 
 // logo is the wordmark, drawn on the right of the header the way k9s draws its own.
-// everywhereKeys are the keys that work in every view. One list, read by the overlay behind the
+// everywhereKeys are the keys that job in every view. One list, read by the overlay behind the
 // question mark and by the keys view, because two lists of the same keys drift and the one nobody is
 // looking at drifts first.
 var everywhereKeys = [][2]string{
@@ -645,7 +645,7 @@ func (m Model) rowLine(row Row, isSelected bool) string {
 	// Every other state goes in the status cell instead. Drawing a whole row in its state was costing
 	// the row every other colour it had, because a line rendered in one colour cannot carry any of the
 	// others: nine of the ten views set a state on every row, so nine listings came out flat and the
-	// tenth came out in two colours. The states that were doing that work are green, yellow and dim on
+	// tenth came out in two colours. The states that were doing that job are green, yellow and dim on
 	// one cell now, which is where the sessions tool puts them.
 	if row.State == StateFailed {
 		return styleFor(row.State).Render(m.fit(m.renderCells(row.Cells)))
@@ -859,7 +859,7 @@ func (m Model) hintParts() []string {
 	return []string{hint("?", "Help")}
 }
 
-// helpLines is every key, this view's own first and then the ones that work everywhere. This is what
+// helpLines is every key, this view's own first and then the ones that job everywhere. This is what
 // the question mark opens, and it is the only place the full list lives.
 func (m Model) helpLines() []string {
 	lines := make([]string, 0, len(m.active.Actions)+12)

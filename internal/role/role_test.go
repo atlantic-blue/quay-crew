@@ -17,10 +17,10 @@ func good() []File {
 		{Path: ManifestFile, Body: []byte(manifestOf(
 			"name: test-writer",
 			"version: 1",
-			"summary: writes the tests for a piece of work, from the work alone",
+			"summary: writes the tests for a job, from the job alone",
 			"model: opus",
 			"receives:",
-			"  - work",
+			"  - job",
 			"  - context",
 		))},
 		{Path: BriefFile, Body: []byte("Write the tests. Do not write the code.")},
@@ -63,8 +63,8 @@ func TestARoleIsReadFromItsManifestAndItsBrief(t *testing.T) {
 		t.Errorf("the brief read as %q", loaded.Brief)
 	}
 	// Sorted, so what a role receives does not depend on the order somebody typed it in.
-	if got := strings.Join(loaded.Receives, ","); got != "context,work" {
-		t.Errorf("it receives %q, want context,work", got)
+	if got := strings.Join(loaded.Receives, ","); got != "context,job" {
+		t.Errorf("it receives %q, want context,job", got)
 	}
 }
 
@@ -77,22 +77,22 @@ func TestAMaterialTheCrewDoesNotHandOutIsRefusedByName(t *testing.T) {
 		"summary: writes the tests",
 		"model: opus",
 		"receives:",
-		"  - work",
+		"  - job",
 		"  - the whole repository",
 	)))
 	if err == nil {
 		t.Fatal("a role receiving material the crew does not hand out was accepted")
 	}
-	for _, want := range []string{"the whole repository", "work", "context", "skills"} {
+	for _, want := range []string{"the whole repository", "job", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
 	}
 }
 
-// A session with no work to do is not a task, so the one nonsense list is refused with a sentence
+// A session with no job to do is not a task, so the one nonsense list is refused with a sentence
 // saying what to add.
-func TestARoleThatDoesNotReceiveTheWorkIsRefused(t *testing.T) {
+func TestARoleThatDoesNotReceiveTheJobIsRefused(t *testing.T) {
 	_, err := FromFiles(replace(good(), ManifestFile, manifestOf(
 		"name: test-writer",
 		"version: 1",
@@ -102,10 +102,10 @@ func TestARoleThatDoesNotReceiveTheWorkIsRefused(t *testing.T) {
 		"  - context",
 	)))
 	if err == nil {
-		t.Fatal("a role that receives no work was accepted")
+		t.Fatal("a role that receives no job was accepted")
 	}
-	if !strings.Contains(err.Error(), "work") {
-		t.Errorf("the refusal does not say to add work: %v", err)
+	if !strings.Contains(err.Error(), "job") {
+		t.Errorf("the refusal does not say to add job: %v", err)
 	}
 }
 
@@ -131,7 +131,7 @@ func TestARoleWithNoModelIsRefusedAndSaysWhatToWrite(t *testing.T) {
 		"version: 1",
 		"summary: writes the tests",
 		"receives:",
-		"  - work",
+		"  - job",
 	)))
 	if err == nil {
 		t.Fatal("a role naming no model was accepted")
@@ -150,7 +150,7 @@ func TestAModelThatIsAShellFragmentIsRefused(t *testing.T) {
 		"summary: writes the tests",
 		"model: opus; rm -rf /",
 		"receives:",
-		"  - work",
+		"  - job",
 	)))
 	if err == nil {
 		t.Fatal("a model name carrying a shell fragment was accepted")
@@ -176,7 +176,7 @@ func TestAFieldTheCrewDoesNotKnowIsRefused(t *testing.T) {
 		"model: opus",
 		"tools: [bash]",
 		"receives:",
-		"  - work",
+		"  - job",
 	)))
 	if err == nil {
 		t.Fatal("a manifest carrying a field the crew does not know was accepted")
@@ -192,7 +192,7 @@ func TestAVersionIsRequiredSoASessionCanBePinned(t *testing.T) {
 		"summary: writes the tests",
 		"model: opus",
 		"receives:",
-		"  - work",
+		"  - job",
 	)))
 	if err == nil {
 		t.Fatal("a role with no version was accepted")
@@ -231,7 +231,7 @@ func TestTheFingerprintCoversEveryDeclaredField(t *testing.T) {
 
 	// Each case changes exactly one field and leaves every other one as good() wrote it. A case that
 	// moved two would pass against a fingerprint that had stopped covering either.
-	summary := "summary: writes the tests for a piece of work, from the work alone"
+	summary := "summary: writes the tests for a job, from the job alone"
 	changed := []struct {
 		what  string
 		files []File
@@ -239,16 +239,16 @@ func TestTheFingerprintCoversEveryDeclaredField(t *testing.T) {
 		{"the brief", replace(good(), BriefFile, "Write the code instead.")},
 		{"the model", replace(good(), ManifestFile, manifestOf(
 			"name: test-writer", "version: 1", summary,
-			"model: haiku", "receives:", "  - work", "  - context"))},
+			"model: haiku", "receives:", "  - job", "  - context"))},
 		{"what it receives", replace(good(), ManifestFile, manifestOf(
 			"name: test-writer", "version: 1", summary,
-			"model: opus", "receives:", "  - work", "  - skills"))},
+			"model: opus", "receives:", "  - job", "  - skills"))},
 		{"the summary", replace(good(), ManifestFile, manifestOf(
 			"name: test-writer", "version: 1", "summary: something else entirely",
-			"model: opus", "receives:", "  - work", "  - context"))},
+			"model: opus", "receives:", "  - job", "  - context"))},
 		{"the version", replace(good(), ManifestFile, manifestOf(
 			"name: test-writer", "version: 2", summary,
-			"model: opus", "receives:", "  - work", "  - context"))},
+			"model: opus", "receives:", "  - job", "  - context"))},
 	}
 	for _, one := range changed {
 		altered, err := FromFiles(one.files)
@@ -301,7 +301,7 @@ func TestARoleReadsBackWholeFromItsDirectory(t *testing.T) {
 	if loaded.Name != "test-writer" || loaded.Dir != dir {
 		t.Errorf("it read as %q in %q", loaded.Name, loaded.Dir)
 	}
-	if !loaded.Gets(MaterialWork) || loaded.Gets(MaterialSkills) {
+	if !loaded.Gets(MaterialJob) || loaded.Gets(MaterialSkills) {
 		t.Errorf("what it receives read as %v", loaded.Receives)
 	}
 }
@@ -314,10 +314,10 @@ func mayDo(verbs ...string) []File {
 	lines := []string{
 		"name: test-writer",
 		"version: 1",
-		"summary: writes the tests for a piece of work, from the work alone",
+		"summary: writes the tests for a job, from the job alone",
 		"model: opus",
 		"receives:",
-		"  - work",
+		"  - job",
 	}
 	if len(verbs) > 0 {
 		lines = append(lines, "may:")
@@ -329,17 +329,17 @@ func mayDo(verbs ...string) []File {
 }
 
 func TestARoleDeclaresTheVerbsItMayCall(t *testing.T) {
-	loaded, err := FromFiles(mayDo(VerbWorkCreate, VerbWorkRead))
+	loaded, err := FromFiles(mayDo(VerbJobCreate, VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
 
-	for _, verb := range []string{VerbWorkCreate, VerbWorkRead} {
+	for _, verb := range []string{VerbJobCreate, VerbJobRead} {
 		if !loaded.May(verb) {
 			t.Errorf("the role may not %s, and it declared it", verb)
 		}
 	}
-	for _, verb := range []string{VerbWorkStop, VerbWorkAnswer} {
+	for _, verb := range []string{VerbJobStop, VerbJobAnswer} {
 		if loaded.May(verb) {
 			t.Errorf("the role may %s, and it never declared it", verb)
 		}
@@ -364,7 +364,7 @@ func TestARoleThatDeclaresNoVerbsMayCallNothing(t *testing.T) {
 // A word the crew does not know is a boundary that quietly means nothing, so it is refused while
 // somebody is looking at the file.
 func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
-	_, err := FromFiles(mayDo(VerbWorkCreate, "workspace.create"))
+	_, err := FromFiles(mayDo(VerbJobCreate, "workspace.create"))
 
 	if err == nil {
 		t.Fatal("a verb the crew does not know was accepted")
@@ -380,20 +380,20 @@ func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
 }
 
 // Four verbs and no more: a verb nobody uses is a boundary that means nothing.
-func TestTheVerbsAreTheFourWorkVerbs(t *testing.T) {
-	if got := strings.Join(Verbs, ","); got != "work.create,work.read,work.answer,work.stop" {
-		t.Fatalf("the verbs are %q, want the four work verbs and no more", got)
+func TestTheVerbsAreTheFourJobVerbs(t *testing.T) {
+	if got := strings.Join(Verbs, ","); got != "job.create,job.read,job.answer,job.stop" {
+		t.Fatalf("the verbs are %q, want the four job verbs and no more", got)
 	}
 }
 
 // The same version carrying different verbs is a different role, or a workspace pinned to a version
 // would find its boundary changed underneath it.
 func TestTheVerbsArePartOfWhatAVersionIs(t *testing.T) {
-	narrow, err := FromFiles(mayDo(VerbWorkRead))
+	narrow, err := FromFiles(mayDo(VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
-	wide, err := FromFiles(mayDo(VerbWorkRead, VerbWorkCreate))
+	wide, err := FromFiles(mayDo(VerbJobRead, VerbJobCreate))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
@@ -406,12 +406,12 @@ func TestTheVerbsArePartOfWhatAVersionIs(t *testing.T) {
 // The verbs come back sorted and without repeats, so a listing and a fingerprint do not depend on
 // the order somebody happened to type them in.
 func TestTheVerbsAreTidiedTheWayTheMaterialIs(t *testing.T) {
-	loaded, err := FromFiles(mayDo(VerbWorkRead, VerbWorkCreate, VerbWorkRead))
+	loaded, err := FromFiles(mayDo(VerbJobRead, VerbJobCreate, VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
 
-	if got := strings.Join(loaded.May_, ","); got != VerbWorkCreate+","+VerbWorkRead {
+	if got := strings.Join(loaded.May_, ","); got != VerbJobCreate+","+VerbJobRead {
 		t.Fatalf("the verbs read back as %q, want them sorted and once each", got)
 	}
 }
@@ -435,7 +435,7 @@ func TestASetOfRolesReadsBackSortedByName(t *testing.T) {
 	write(t, root, "test-writer", good())
 	write(t, root, "architect", replace(good(), ManifestFile, manifestOf(
 		"name: architect", "version: 1", "summary: writes the contracts",
-		"model: opus", "receives:", "  - work",
+		"model: opus", "receives:", "  - job",
 	)))
 
 	roles, err := All(root)
@@ -500,5 +500,69 @@ func TestOneRoleThatWillNotLoadFailsTheWholeSet(t *testing.T) {
 func TestADirectoryThatIsNotThereIsRefused(t *testing.T) {
 	if _, err := All(filepath.Join(t.TempDir(), "nowhere")); err == nil {
 		t.Fatal("a directory that does not exist was read as a set of roles")
+	}
+}
+
+// Every word the crew retired is refused at import, by name, with what to write instead.
+//
+// The guard is over the table rather than a case per word, so the next rename is covered the moment
+// its entry is added. A word that is merely unknown says only that the crew does not have it, which
+// sends the author looking; a word quietly accepted is worse than both, because the boundary then
+// means nothing and reads exactly like one that holds.
+func TestEveryRetiredWordIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
+	if len(Retired) == 0 {
+		t.Fatal("the retired table is empty, so this test proves nothing")
+	}
+
+	for was, becomes := range Retired {
+		// A material is a plain word and a verb is dotted, which is what lets one table serve both.
+		manifest := "name: backlog-clearer\nversion: 1\nsummary: clears the backlog\nmodel: opus\n"
+		if strings.Contains(was, ".") {
+			manifest += "receives:\n  - job\nmay:\n  - " + was + "\n"
+		} else {
+			manifest += "receives:\n  - " + was + "\n"
+		}
+
+		dir := filepath.Join(t.TempDir(), "backlog-clearer")
+		write(t, filepath.Dir(dir), "backlog-clearer", []File{
+			{Path: ManifestFile, Body: []byte(manifest)},
+			{Path: BriefFile, Body: []byte("Read the open pull requests.")},
+		})
+
+		_, err := One(dir)
+		if err == nil {
+			t.Errorf("a role carrying %q was imported, so the word means nothing and looks exactly "+
+				"like one that holds", was)
+			continue
+		}
+		// It names the word, what to write instead, and that the word was renamed. The last part is
+		// what makes this a refusal rather than the allow list saying no: "work is not material the
+		// crew hands out, it is one of job, context, skills" contains both words already, and it sends
+		// the author to guess which of the three their manifest meant.
+		for _, want := range []string{was, becomes, "is called"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("a role carrying %q is refused with %q, want it to say %q", was, err, want)
+			}
+		}
+	}
+}
+
+// Nothing the crew retired is a word it still takes, which is how a rename reintroduces the old
+// spelling: the entry is added to the retired table and the allow list is never cleaned out, so the
+// word is refused and accepted by two rules that disagree.
+func TestNoRetiredWordIsStillAWordTheCrewTakes(t *testing.T) {
+	for was := range Retired {
+		if known(was) {
+			t.Errorf("%q is retired and still material the crew hands out", was)
+		}
+		if knownVerb(was) {
+			t.Errorf("%q is retired and still a verb the crew grants", was)
+		}
+	}
+	// And every replacement is a word the crew does take, so the advice can be acted on.
+	for was, becomes := range Retired {
+		if !known(becomes) && !knownVerb(becomes) {
+			t.Errorf("%q is retired in favour of %q, which the crew does not take either", was, becomes)
+		}
 	}
 }

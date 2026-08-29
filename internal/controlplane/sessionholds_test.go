@@ -15,7 +15,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// What a graph's claim about its own work is checked against: the session's working directory as the
+// What a graph's claim about its own job is checked against: the session's working directory as the
 // crew keeps it, read without starting a container.
 func aCrewWithASession(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
 	t.Helper()

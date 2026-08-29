@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/work"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
 // The pending trigger queue, held to the same contract the Postgres one is.
@@ -62,7 +62,7 @@ func (m *Memory) PendingTriggers(_ context.Context, limit int) ([]*flow.Trigger,
 
 // ClaimTrigger takes a lease on one trigger, and applies only where it is still pending and nobody
 // else's claim is live.
-func (m *Memory) ClaimTrigger(_ context.Context, id string, lease work.Lease) (*flow.Trigger, error) {
+func (m *Memory) ClaimTrigger(_ context.Context, id string, lease job.Lease) (*flow.Trigger, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	trigger, held := m.triggers[id]
@@ -88,7 +88,7 @@ func (m *Memory) FailTrigger(_ context.Context, id, reason string) error {
 		return ErrNotFound
 	}
 	trigger.Status, trigger.Reason = flow.TriggerFailed, reason
-	trigger.Lease = work.Lease{}
+	trigger.Lease = job.Lease{}
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (m *Memory) startTrigger(id, run string) bool {
 }
 
 // heldNow says whether a claim is still somebody's.
-func heldNow(lease work.Lease, now time.Time) bool {
+func heldNow(lease job.Lease, now time.Time) bool {
 	return lease.Owner != "" && lease.Until.After(now)
 }
 

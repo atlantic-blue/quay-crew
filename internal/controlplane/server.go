@@ -5,7 +5,7 @@
 // The server holds no domain state of its own. Workspaces and sessions live in the store, so a restart
 // resumes conversations instead of orphaning them. The one thing it still keeps in the process is
 // the map of live sandboxes, which is a handle to a running container rather than a fact worth
-// keeping; reattaching those after a restart is its own piece of work.
+// keeping; reattaching those after a restart is its own job.
 package controlplane
 
 import (
@@ -25,6 +25,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/headroom"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/manual"
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -35,7 +36,6 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -146,15 +146,15 @@ type Config struct {
 	// Zero takes exportWait.
 	ExportWait time.Duration
 	// FlowPollEvery is how often the flow poller looks for runs to carry on: a wait that came due, a
-	// schedule that fired, a step whose work ended. Zero takes flow.DefaultPollEvery.
+	// schedule that fired, a step whose job ended. Zero takes flow.DefaultPollEvery.
 	FlowPollEvery time.Duration
-	// WorkTickEvery is how often the work controller looks at the work the crew holds. Zero takes
-	// work.DefaultTickEvery.
-	WorkTickEvery time.Duration
-	// WorkLease is how long a controller holds a piece of work before another may take it. Zero takes
-	// work.DefaultLease, which is derived from what a tick costs rather than chosen.
-	WorkLease time.Duration
-	// ControllerName is what this crew writes on the leases it takes, on a piece of work and on a
+	// JobTickEvery is how often the job controller looks at the job the crew holds. Zero takes
+	// job.DefaultTickEvery.
+	JobTickEvery time.Duration
+	// JobLease is how long a controller holds a job before another may take it. Zero takes
+	// job.DefaultLease, which is derived from what a tick costs rather than chosen.
+	JobLease time.Duration
+	// ControllerName is what this crew writes on the leases it takes, on a job and on a
 	// trigger alike. Empty mints one, which is right for a test and wrong for a crew an investigator
 	// has to read a record from.
 	ControllerName string
@@ -190,11 +190,11 @@ type Server struct {
 	// flowPoller resumes waiting runs whose time has come. Started by whoever owns the process,
 	// because a goroutine hidden inside a constructor is a lifetime nobody can see.
 	flowPoller *flow.Poller
-	// workController makes reality match the work the crew holds. Started the same way and for the
+	// jobController makes reality match the job the crew holds. Started the same way and for the
 	// same reason.
-	workController *work.Controller
-	// grants are the credentials this crew has minted for pieces of work, so a call carrying one is
-	// recognised as that work rather than as the operator.
+	jobController *job.Controller
+	// grants are the credentials this crew has minted for jobs, so a call carrying one is
+	// recognised as that job rather than as the operator.
 	grants *grants
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
@@ -291,13 +291,13 @@ func NewServer(cfg Config) *Server {
 	// reaches nothing the caller could not, because these are the same two methods.
 	engine := flow.NewEngine(cfg.Store, server, server, server)
 	server.flows = engine
-	// The same name the work controller writes on its leases, because both claims are this crew's and
+	// The same name the job controller writes on its leases, because both claims are this crew's and
 	// an investigator reading either wants to know which crew took it.
 	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil).Owned(cfg.ControllerName)
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
-	server.workController = work.NewController(cfg.Store, server, server, server, nil).
-		Every(cfg.WorkTickEvery).Leasing(cfg.WorkLease).Owned(cfg.ControllerName).
+	server.jobController = job.NewController(cfg.Store, server, server, server, nil).
+		Every(cfg.JobTickEvery).Leasing(cfg.JobLease).Owned(cfg.ControllerName).
 		Redacting(server).Exporting(server).Reading(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
@@ -850,7 +850,7 @@ func (s *Server) ReapStrays(ctx context.Context) {
 //
 // A detached task is a goroutine and not a call, so draining requests does not drain it: a graceful
 // stop that skips this exits mid task, and the session comes back up settled as failed for no better
-// reason than that nobody waited. Bounded by the caller, because a task takes as long as the work
+// reason than that nobody waited. Bounded by the caller, because a task takes as long as the job
 // takes and a shutdown cannot.
 func (s *Server) WaitForTasks(ctx context.Context) {
 	landed := make(chan struct{})
@@ -1210,11 +1210,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		go func(session *quaycrewv1.Session, text, credential string) {
 			defer s.tasking.Done()
 			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential)
-		}(session, req.GetText(), s.credentialFor(ctx, req.GetWork()))
+		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()))
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetWork()))
+	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()))
 	if err != nil {
 		return nil, err
 	}
@@ -1230,7 +1230,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	// `quay stop` end the model rather than only mark a row.
 	ctx, held := s.beginRunning(ctx, session.GetId())
 	defer s.endRunning(session.GetId(), held)
-	// Both of these happen before any work does, and that is the point of them. An operator has to be
+	// Both of these happen before any job does, and that is the point of them. An operator has to be
 	// able to see what a session was asked to do while it is doing it, whether or not the caller
 	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
 	// working for half an hour read idle, with the task burning its tokens invisible.
@@ -1306,7 +1306,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 //
 // The honest limit, stated because a reader will look for it: nothing inside the container adopts
 // this yet. The model's own tool does not read it, so what the crew gets is one span per attempt
-// written by the crew, around work whose inside is opaque.
+// written by the crew, around a job whose inside is opaque.
 func withTraceparent(ctx context.Context, env map[string]string) map[string]string {
 	parent := telemetry.Traceparent(ctx)
 	if parent == "" {
@@ -1322,7 +1322,7 @@ func withTraceparent(ctx context.Context, env map[string]string) map[string]stri
 // measureTask publishes what a task spent and where it was spent.
 //
 // The workspace and the project are on it because the useful question is never "what did the crew
-// cost" but "what did this piece of work cost". The model is on it because a crew that moved from
+// cost" but "what did this job cost". The model is on it because a crew that moved from
 // one model to another wants to see the step.
 func (s *Server) measureTask(ctx context.Context, session *quaycrewv1.Session, resp model.Response, status string) {
 	s.taskMetrics.Record(ctx, telemetry.TaskMeasurement{
@@ -1767,7 +1767,7 @@ func environ(values map[string]string) []string {
 
 // taskEnv gathers the environment a task runs with from the workspace's secrets. A workspace that has
 // set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
-// task, because a secret that cannot be read is a worse reason to refuse work than to attempt it.
+// task, because a secret that cannot be read is a worse reason to refuse job than to attempt it.
 func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, credential string) map[string]string {
 	env := map[string]string{}
 	// Who this session is. The volume is shared by every session in the workspace, so anything a
@@ -1777,9 +1777,15 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	if id := session.GetId(); id != "" {
 		env[sandbox.SessionIDEnv] = id
 	}
-	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. Only
-	// the driver is told: an ordinary session has no business driving the crew, and its sandbox is
-	// not on a network that could reach it anyway.
+	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. The
+	// driver holds the crew's own interface, which is why it is told here and why it is told the
+	// driver's token: an ordinary session has no business driving the crew. A session running a job
+	// is told the same address below, with a credential that buys it four verbs rather than
+	// the crew.
+	//
+	// Every sandbox is on a network that reaches the control plane, so being told is what decides
+	// this and not what the container can address. The network carries no permission: a session
+	// presenting no credential is refused every call.
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 		// The token travels with the address and only with it: an ordinary session is told
@@ -1788,9 +1794,9 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 			env[auth.TokenEnv] = s.driverToken
 		}
 	}
-	// The credential this one task runs under, where the task runs a piece of work. It is minted for
-	// that work, carries the verbs its role declared, and expires with it, so a value read out of the
-	// container grants what that piece of work could do and only until it ends.
+	// The credential this one task runs under, where the task runs a job. It is minted for
+	// that job, carries the verbs its role declared, and expires with it, so a value read out of the
+	// container grants what that job could do and only until it ends.
 	//
 	// Never written at sandbox birth, and that is the constraint the obvious design fails on: a
 	// sandbox keeps what it was created with, so a credential put there would label every later task
@@ -2005,7 +2011,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 		if session.GetStatus() == StatusRunning {
 			// The one case where naming a conversation here is the defect rather than the fix. The task
 			// is working in a conversation this crew never named and cannot know the name of until the
-			// task lands, and a name minted now would open an empty conversation beside the work.
+			// task lands, and a name minted now would open an empty conversation beside the job.
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"session %s is running a task that named its own conversation: it lands on the session "+
 					"when the task finishes, and opening the session now would start a second conversation "+
@@ -2041,7 +2047,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 // A session that is already live is stopped first rather than refused. Restarting is what the operator
 // reaches for when the container is wrong: a wedged task, a shell that will not answer, a credential
 // the sandbox was born without. Refusing until it was stopped made that two keys, and the second was
-// the one that did the work, so the first key read as broken.
+// the one that did the job, so the first key read as broken.
 //
 // An archived session is refused. It is put away, and bringing one back is what restore is for.
 func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSessionRequest) (*quaycrewv1.RestartSessionResponse, error) {

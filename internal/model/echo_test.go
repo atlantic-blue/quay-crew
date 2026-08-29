@@ -12,7 +12,7 @@ import (
 func TestEchoRunnerExecsInsideTheSandbox(t *testing.T) {
 	box := &sandbox.FakeSandbox{Output: "hello there\n"}
 
-	resp, err := model.EchoRunner{}.Run(context.Background(), box, model.Request{Text: "hello there", Workdir: "/work"})
+	resp, err := model.EchoRunner{}.Run(context.Background(), box, model.Request{Text: "hello there", Workdir: "/job"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -34,8 +34,8 @@ func TestEchoRunnerExecsInsideTheSandbox(t *testing.T) {
 			t.Fatalf("Argv = %v, want %v", box.LastSpec.Argv, want)
 		}
 	}
-	if box.LastSpec.Workdir != "/work" {
-		t.Fatalf("Workdir = %q, want %q", box.LastSpec.Workdir, "/work")
+	if box.LastSpec.Workdir != "/job" {
+		t.Fatalf("Workdir = %q, want %q", box.LastSpec.Workdir, "/job")
 	}
 }
 

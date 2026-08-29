@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/atlantic-blue/quay-crew/internal/flow"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // The graph these drive: two steps with a choice between them, which is the shape every flow has.
@@ -47,7 +47,7 @@ func TestARunOutWithAStepHoldsNoDispatchOpen(t *testing.T) {
 	step := stepOf(t, it, *kept)
 	// Nothing has run it. A start that waited for the model would answer with the step already done,
 	// and this is the assertion that tells the two apart.
-	if step.Phase != work.PhasePending {
+	if step.Phase != job.PhasePending {
 		t.Fatalf("the step is %q by the time the start returned, so the call waited for it", step.Phase)
 	}
 	if step.Session != "" {
@@ -58,7 +58,7 @@ func TestARunOutWithAStepHoldsNoDispatchOpen(t *testing.T) {
 	}
 }
 
-// One tree, and it is the work tree. A step hangs under the run's own work, one level deeper, which
+// One tree, and it is the job tree. A step hangs under the run's own job, one level deeper, which
 // is what makes the depth limit and the tree budget bound a run at all.
 func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, twoStepGraph)
@@ -70,32 +70,32 @@ func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FlowRunCarrier: %v", err)
 	}
-	carrying, err := it.store.GetWork(ctx, carrier)
+	carrying, err := it.store.GetJob(ctx, carrier)
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
 	if carrying.Parent != "" || carrying.Depth != 0 {
 		t.Fatalf("a run an operator started hangs under %q at depth %d, want a root", carrying.Parent, carrying.Depth)
 	}
 	if !strings.Contains(carrying.Brief, "fix-red") || !strings.Contains(carrying.Brief, "version 1") {
-		t.Errorf("the run's own work says %q, want it to name the flow and its version", carrying.Brief)
+		t.Errorf("the run's own job says %q, want it to name the flow and its version", carrying.Brief)
 	}
-	// Held back rather than pending, or the work controller would send the run's own work as a task
+	// Held back rather than pending, or the job controller would send the run's own job as a task
 	// and a person would read a second session doing nothing.
-	if carrying.Phase != work.PhaseWaiting {
-		t.Errorf("the run's own work is %q, want it held back so no controller runs it", carrying.Phase)
+	if carrying.Phase != job.PhaseWaiting {
+		t.Errorf("the run's own job is %q, want it held back so no controller runs it", carrying.Phase)
 	}
 
 	step := stepOf(t, it, run)
 	if step.Parent != carrier {
-		t.Errorf("the step hangs under %q, want the run's own work %q", step.Parent, carrier)
+		t.Errorf("the step hangs under %q, want the run's own job %q", step.Parent, carrier)
 	}
 	if step.Depth != carrying.Depth+1 {
 		t.Errorf("the step is at depth %d and the run at %d, want one deeper", step.Depth, carrying.Depth)
 	}
 }
 
-// The run carries on from the work rather than from a reply held in memory, so a crew restarted
+// The run carries on from the job rather than from a reply held in memory, so a crew restarted
 // while twenty steps were running picks all twenty up off their rows.
 func TestAStepThatEndedCarriesTheRunOn(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, twoStepGraph)
@@ -109,9 +109,9 @@ func TestAStepThatEndedCarriesTheRunOn(t *testing.T) {
 		t.Fatalf("the run is %q at %q, want it working on push", run.Status, run.Node)
 	}
 	if run.State["result.reply"] != "fixed it" {
-		t.Errorf("the run read the step's answer as %q, want what the work carried", run.State["result.reply"])
+		t.Errorf("the run read the step's answer as %q, want what the job carried", run.State["result.reply"])
 	}
-	// The step's session is put away the moment its work ends. That is what stops a run holding a
+	// The step's session is put away the moment its job ends. That is what stops a run holding a
 	// container while it does something else, and it is the whole point of the change.
 	if len(it.archived) != 1 || it.archived[0] != "session-of-fix" {
 		t.Errorf("the sessions put away are %v, want the step's own", it.archived)
@@ -125,7 +125,7 @@ func TestAStepThatEndedCarriesTheRunOn(t *testing.T) {
 }
 
 // The trap quay-crew#354 names: a run that asks holds its container for the whole wait, because a
-// run used to close its session only at the end. The work ended when it answered, so there is
+// run used to close its session only at the end. The job ended when it answered, so there is
 // nothing left running while a person decides.
 func TestAnAskingRunHoldsNoContainer(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
@@ -158,18 +158,18 @@ edges:
 	if len(landed) != 0 {
 		t.Errorf("the asking run still has %d steps out", len(landed))
 	}
-	open, err := it.store.ListWork(ctx, work.Filter{Phase: work.PhaseRunning})
+	open, err := it.store.ListJobs(ctx, job.Filter{Phase: job.PhaseRunning})
 	if err != nil {
-		t.Fatalf("ListWork: %v", err)
+		t.Fatalf("ListJob: %v", err)
 	}
 	if len(open) != 0 {
-		t.Errorf("%d pieces of work are still running while the run asks", len(open))
+		t.Errorf("%d jobs are still running while the run asks", len(open))
 	}
 }
 
-// A run's own work says where the run is and what it came to, so `quay work show` on it answers the
+// A run's own job says where the run is and what it came to, so `quay job show` on it answers the
 // two questions a person has without their reading a transcript.
-func TestTheRunsOwnWorkFollowsTheRun(t *testing.T) {
+func TestTheRunsOwnJobFollowsTheRun(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: careful
 version: 1
@@ -190,34 +190,34 @@ edges:
 	lands(t, it, stepOf(t, it, run), "session-of-fix", answered("fixed it"))
 	run = ticked(t, engine, it, run)
 
-	asking, err := it.store.GetWork(ctx, carrier)
+	asking, err := it.store.GetJob(ctx, carrier)
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if asking.Phase != work.PhaseAsking || asking.Question != "fixed it. push?" {
-		t.Fatalf("the run's own work is %q asking %q, want it asking the run's question", asking.Phase, asking.Question)
+	if asking.Phase != job.PhaseAsking || asking.Question != "fixed it. push?" {
+		t.Fatalf("the run's own job is %q asking %q, want it asking the run's question", asking.Phase, asking.Question)
 	}
 
 	if _, err := engine.Answer(ctx, run, "yes"); err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
-	ended, err := it.store.GetWork(ctx, carrier)
+	ended, err := it.store.GetJob(ctx, carrier)
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if ended.Phase != work.PhaseDone {
-		t.Fatalf("the run finished and its own work is %q", ended.Phase)
+	if ended.Phase != job.PhaseDone {
+		t.Fatalf("the run finished and its own job is %q", ended.Phase)
 	}
 	if ended.Answer != "fixed it" {
-		t.Errorf("the run's own work answers %q, want what the run came to", ended.Answer)
+		t.Errorf("the run's own job answers %q, want what the run came to", ended.Answer)
 	}
 	if ended.FinishedAt == nil {
-		t.Error("the run's own work has ended and carries no finishing time")
+		t.Error("the run's own job has ended and carries no finishing time")
 	}
 }
 
-// The records quay-crew#349 named and nothing ever wrote. They are work events against the run's own
-// work, so a reader has one history rather than two.
+// The records quay-crew#349 named and nothing ever wrote. They are job events against the run's own
+// job, so a reader has one history rather than two.
 func TestARunWritesTheRecordsOfItsOwnLife(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, twoStepGraph)
 	ctx := context.Background()
@@ -233,26 +233,26 @@ func TestARunWritesTheRecordsOfItsOwnLife(t *testing.T) {
 	ticked(t, engine, it, run)
 
 	kinds := []string{}
-	records, err := it.store.ListWorkEvents(ctx, carrier)
+	records, err := it.store.ListJobEvents(ctx, carrier)
 	if err != nil {
-		t.Fatalf("ListWorkEvents: %v", err)
+		t.Fatalf("ListJobEvents: %v", err)
 	}
 	for _, record := range records {
 		kinds = append(kinds, record.Kind)
 	}
-	want := []string{work.EventDeclared, flow.EventRunStarted, flow.EventRunFinished}
+	want := []string{job.EventDeclared, flow.EventRunStarted, flow.EventRunFinished}
 	if len(kinds) != len(want) {
-		t.Fatalf("the run's own work records %v, want %v", kinds, want)
+		t.Fatalf("the run's own job records %v, want %v", kinds, want)
 	}
 	for at := range want {
 		if kinds[at] != want[at] {
-			t.Fatalf("the run's own work records %v, want %v", kinds, want)
+			t.Fatalf("the run's own job records %v, want %v", kinds, want)
 		}
 	}
 	// And every one of them is offered to the log, after the transaction that wrote it.
 	offered := 0
 	for _, record := range it.exported {
-		if record.Work == carrier {
+		if record.Job == carrier {
 			offered++
 		}
 	}
@@ -268,7 +268,7 @@ func TestAStepThatFailedIsAResultTheGraphReads(t *testing.T) {
 
 	run := started(t, engine, it, "fix-red", workspace, project)
 	lands(t, it, stepOf(t, it, run), "session-of-fix",
-		work.Landing{Phase: work.PhaseFailed, Reason: "the model ran out of room"})
+		job.Landing{Phase: job.PhaseFailed, Reason: "the model ran out of room"})
 
 	run = ticked(t, engine, it, run)
 
@@ -280,12 +280,12 @@ func TestAStepThatFailedIsAResultTheGraphReads(t *testing.T) {
 		t.Fatalf("the run is %q at %q, want done down the failed edge", run.Status, run.Node)
 	}
 	if !strings.Contains(run.State["result.reply"], "ran out of room") {
-		t.Errorf("the run read the failure as %q, want the reason on the work", run.State["result.reply"])
+		t.Errorf("the run read the failure as %q, want the reason on the job", run.State["result.reply"])
 	}
 }
 
-// Work halted over a claim it did not meet stops the run rather than branching. The crew knows the
-// work did not happen and does not know why, and a run that walks its success path through work that
+// Job halted over a claim it did not meet stops the run rather than branching. The crew knows the
+// job did not happen and does not know why, and a run that walks its success path through job that
 // never happened ends with the model's plausible account of it.
 func TestAStepStoppedOverItsClaimStopsTheRun(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
@@ -301,13 +301,13 @@ edges:
 
 	run := started(t, engine, it, "site-check", workspace, project)
 	step := stepOf(t, it, run)
-	// What the node said would prove it worked travels on the work, so the controller is what checks
+	// What the node said would prove it worked travels on the job, so the controller is what checks
 	// it: the one place that can see the session the task actually ran in.
 	if step.ExpectFile != "package.json" {
 		t.Fatalf("the step went out expecting %q, want the node's claim", step.ExpectFile)
 	}
-	lands(t, it, step, "session-of-read", work.Landing{
-		Phase: work.PhaseStopped, Reason: "package.json is not in the session that did the work",
+	lands(t, it, step, "session-of-read", job.Landing{
+		Phase: job.PhaseStopped, Reason: "package.json is not in the session that did the job",
 	})
 
 	run = ticked(t, engine, it, run)
@@ -320,11 +320,11 @@ edges:
 	}
 }
 
-// A step the crew will not take is not a step that failed. No work was declared, so there is no
+// A step the crew will not take is not a step that failed. No job was declared, so there is no
 // reply and the run must not walk a success edge on one that will never exist.
 func TestAStepTheCrewRefusesStopsTheRunWithTheReason(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, twoStepGraph)
-	it.refuse = errors.New("this workspace allows work no deeper than 1, and this would be at depth 2")
+	it.refuse = errors.New("this workspace allows job no deeper than 1, and this would be at depth 2")
 
 	run, err := engine.Start(context.Background(), "fix-red", workspace, project, nil)
 	if err != nil {
@@ -395,9 +395,9 @@ func TestAStoppedRunIsNotCarriedOnByItsStep(t *testing.T) {
 	}
 }
 
-// A step names its role on the piece of work it goes out as, so the boundary is on the record rather
+// A step names its role on the job it goes out as, so the boundary is on the record rather
 // than inside the call that made it.
-func TestAStepNamingARoleDeclaresWorkInThatRole(t *testing.T) {
+func TestAStepNamingARoleDeclaresJobInThatRole(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: write-tests
 version: 1
@@ -412,7 +412,7 @@ edges:
 	run := started(t, engine, it, "write-tests", workspace, project)
 	plan := stepOf(t, it, run)
 	if plan.Role != "" {
-		t.Errorf("the step naming no role went out as work in role %q", plan.Role)
+		t.Errorf("the step naming no role went out as job in role %q", plan.Role)
 	}
 	lands(t, it, plan, "session-of-plan", answered("these need testing"))
 
@@ -420,7 +420,7 @@ edges:
 
 	tests := stepOf(t, it, run)
 	if tests.Role != "test-writer" {
-		t.Errorf("the step went out as work in role %q, want test-writer", tests.Role)
+		t.Errorf("the step went out as job in role %q, want test-writer", tests.Role)
 	}
 	if tests.Parent != plan.Parent {
 		t.Errorf("the two steps hang under %q and %q, want both under the run", tests.Parent, plan.Parent)
@@ -458,10 +458,10 @@ edges:
 	}
 }
 
-// watchingStore records the phase a run's own work is written in, which is the one thing that cannot
+// watchingStore records the phase a run's own job is written in, which is the one thing that cannot
 // be read afterwards: the first movement of the run writes over it a moment later.
 //
-// It matters because the work controller reads pending work and sends a task for it. A run's own work
+// It matters because the job controller reads pending job and sends a task for it. A run's own job
 // written pending would be dispatched as a task, in the window between the run being created and its
 // first movement, and a person would read a session doing nothing.
 type watchingStore struct {
@@ -469,12 +469,12 @@ type watchingStore struct {
 	writtenAs string
 }
 
-func (w *watchingStore) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *work.Work, records []*work.Event, trigger string) error {
+func (w *watchingStore) CreateFlowRun(ctx context.Context, run *flow.Run, carrier *job.Job, records []*job.Event, trigger string) error {
 	w.writtenAs = carrier.Phase
 	return w.Store.CreateFlowRun(ctx, run, carrier, records, trigger)
 }
 
-func TestARunsOwnWorkIsNeverOfferedToAController(t *testing.T) {
+func TestARunsOwnJobIsNeverOfferedToAController(t *testing.T) {
 	ctx := context.Background()
 	kept := store.NewMemory()
 	workspace, err := kept.CreateWorkspace(ctx, "acme")
@@ -496,14 +496,14 @@ func TestARunsOwnWorkIsNeverOfferedToAController(t *testing.T) {
 		t.Fatalf("starting the run: %v", err)
 	}
 
-	if watching.writtenAs != work.PhaseWaiting {
-		t.Fatalf("the run's own work was written %q, want it held back: pending work is what a controller sends",
+	if watching.writtenAs != job.PhaseWaiting {
+		t.Fatalf("the run's own job was written %q, want it held back: pending job is what a controller sends",
 			watching.writtenAs)
 	}
 	// And nothing pending is left behind for a controller to find, other than the step itself.
-	runnable, err := kept.RunnableWork(ctx, 0)
+	runnable, err := kept.RunnableJob(ctx, 0)
 	if err != nil {
-		t.Fatalf("RunnableWork: %v", err)
+		t.Fatalf("RunnableJob: %v", err)
 	}
 	for _, one := range runnable {
 		if one.Labels["flow.node"] == "" {

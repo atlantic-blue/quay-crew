@@ -37,7 +37,7 @@ edges:
 `
 
 // The whole of the slice against the database that holds it: something happens, nobody starts
-// anything, and the crew's own tick runs the work.
+// anything, and the crew's own tick runs the job.
 func TestATriggerStartsAFlowRunInPostgres(t *testing.T) {
 	s, kept := aCrewWithAController(t, &echoingRunner{})
 	ctx := context.Background()
@@ -65,25 +65,25 @@ func TestATriggerStartsAFlowRunInPostgres(t *testing.T) {
 	if run.GetState()["url"] != "https://ci.test/9" {
 		t.Fatalf("the run opened knowing %v, want what the trigger carried", run.GetState())
 	}
-	if run.GetWork() == "" {
-		t.Fatal("the triggered run was written outside the work tree, so neither depth nor budget counts it")
+	if run.GetJob() == "" {
+		t.Fatal("the triggered run was written outside the job tree, so neither depth nor budget counts it")
 	}
-	carrier, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: run.GetWork()})
+	carrier, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: run.GetJob()})
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
 	// The label is how a person finds why a run nobody started exists.
-	if carrier.GetWork().GetLabels()["flow.trigger"] != raised.ID {
-		t.Errorf("the run's own work is labelled %v, want it to name the trigger", carrier.GetWork().GetLabels())
+	if carrier.GetJob().GetLabels()["flow.trigger"] != raised.ID {
+		t.Errorf("the run's own job is labelled %v, want it to name the trigger", carrier.GetJob().GetLabels())
 	}
 	// And the step was asked about the thing that happened, which is what the payload becoming the
 	// opening state is for.
-	listed, err := s.ListWork(ctx, &quaycrewv1.ListWorkRequest{LabelKey: "flow.run", LabelValue: run.GetId()})
+	listed, err := s.ListJobs(ctx, &quaycrewv1.ListJobsRequest{LabelKey: "flow.run", LabelValue: run.GetId()})
 	if err != nil {
-		t.Fatalf("ListWork: %v", err)
+		t.Fatalf("ListJob: %v", err)
 	}
 	asked := ""
-	for _, one := range listed.GetWork() {
+	for _, one := range listed.GetJobs() {
 		if one.GetLabels()["flow.node"] == "fix" {
 			asked = one.GetBrief()
 		}
@@ -145,15 +145,15 @@ func TestConcurrentPollersStartOneRunFromOneTriggerInPostgres(t *testing.T) {
 	if acted.Status != flow.TriggerStarted || acted.Run != runs[0].ID {
 		t.Fatalf("the trigger reads %q naming run %q, want it started naming the one run", acted.Status, acted.Run)
 	}
-	// And one piece of work carries it, rather than eight declared and seven orphaned.
-	carriers, err := s.ListWork(ctx, &quaycrewv1.ListWorkRequest{
+	// And one job carries it, rather than eight declared and seven orphaned.
+	carriers, err := s.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
 		LabelKey: "flow.trigger", LabelValue: raised.ID,
 	})
 	if err != nil {
-		t.Fatalf("ListWork: %v", err)
+		t.Fatalf("ListJob: %v", err)
 	}
-	if len(carriers.GetWork()) != 1 {
-		t.Fatalf("%d pieces of work carry the run of one trigger", len(carriers.GetWork()))
+	if len(carriers.GetJobs()) != 1 {
+		t.Fatalf("%d jobs carry the run of one trigger", len(carriers.GetJobs()))
 	}
 }
 
@@ -191,7 +191,7 @@ func TestATriggerThatStartsNothingSaysWhyOnItsRowInPostgres(t *testing.T) {
 }
 
 // anEngineOn is the engine the crew builds for itself: the store it keeps, and the control plane it
-// asks to prepare work and put sessions away.
+// asks to prepare job and put sessions away.
 func anEngineOn(kept store.Store, s *controlplane.Server) *flow.Engine {
 	return flow.NewEngine(kept, s, s, s)
 }

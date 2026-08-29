@@ -77,7 +77,7 @@ func TestBuildArgsResumeAndMode(t *testing.T) {
 //
 // The first of the two is the defect this pair exists for. A first task carried no name at all, so the
 // runtime named its own conversation and told nobody until the task was over, and anybody opening the
-// session while it worked opened an empty conversation beside the work.
+// session while it worked opened an empty conversation beside the job.
 func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

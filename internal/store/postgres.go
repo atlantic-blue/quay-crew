@@ -363,9 +363,9 @@ func (p *Postgres) ReclaimSession(ctx context.Context, id string) error {
 
 // SettledSessions is the sessions nothing is holding open, oldest touched first.
 //
-// Live, not running, and named by no piece of work in a non terminal phase. A session with a task
-// under way is not settled, and neither is one whose work is still open even though its own task has
-// landed: the work is what says the session is wanted, and the controller is about to send it another
+// Live, not running, and named by no job in a non terminal phase. A session with a task
+// under way is not settled, and neither is one whose job is still open even though its own task has
+// landed: the job is what says the session is wanted, and the controller is about to send it another
 // task.
 //
 // Sessions an operator stopped are left out. A stop is somebody's decision, and filing away what
@@ -377,7 +377,7 @@ func (p *Postgres) SettledSessions(ctx context.Context, limit int) ([]*quaycrewv
 		where s.archived_at is null
 		  and s.status = any($1)
 		  and not exists (
-		      select 1 from work w where w.session = s.id and not (w.phase = any($2))
+		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
 		  )
 		order by s.updated_at, s.id`
 	args := []any{settledStatuses(), terminalPhases()}
@@ -753,7 +753,7 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 	if err != nil {
 		return nil, err
 	}
-	// Created dangerous. The driver acts for the operator rather than doing work of its own, and a
+	// Created dangerous. The driver acts for the operator rather than doing job of its own, and a
 	// driver that stops to ask before every step describes the task instead of doing it. What bounds
 	// it is the sandbox, which is the same boundary it would have either way.
 	if _, err := p.pool.Exec(ctx, `

@@ -47,7 +47,7 @@ func (s stallingStore) Probe(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Steps for the scenarios about a crew that cannot start work: what it says instead of waiting, and
+// Steps for the scenarios about a crew that cannot start job: what it says instead of waiting, and
 // what it answers when something asks whether it is well.
 func initializeWaitsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a sandbox that never starts$`, func(ctx context.Context) error {

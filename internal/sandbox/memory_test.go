@@ -42,8 +42,8 @@ func TestComposeAndDecomposeAreTheSameThingBothWays(t *testing.T) {
 	}
 }
 
-// TestSomethingAppendedBelongsToTheInnermostLevel: an agent writing a note about the work it is doing
-// writes at the end of the file, and that note is about this piece of work rather than about the crew.
+// TestSomethingAppendedBelongsToTheInnermostLevel: an agent writing a note about the job it is doing
+// writes at the end of the file, and that note is about this job rather than about the crew.
 func TestSomethingAppendedBelongsToTheInnermostLevel(t *testing.T) {
 	scopes := []string{"project", "session"}
 	file := sandbox.Compose([]sandbox.Section{

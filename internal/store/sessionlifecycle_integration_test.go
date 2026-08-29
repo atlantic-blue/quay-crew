@@ -9,18 +9,18 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
 	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/work"
 )
 
 // The session lifecycle over a real database and a real control plane.
 //
 // The unit tier proves the loop's decisions against doubles and the conformance suite proves each
 // store keeps its side. Neither reaches what this file is for: the fourth query is a `not exists`
-// against the work table with a phase array in it, and whether that query means the same thing in
+// against the job table with a phase array in it, and whether that query means the same thing in
 // Postgres as it does in the map is a question only Postgres answers.
 
 // aCrewWithAProviderOnPostgres stands the control plane up on a real database over a provider a test
@@ -63,7 +63,7 @@ func TestWithBothTimesUnsetNothingIsReclaimedInPostgres(t *testing.T) {
 	}
 
 	for range 20 {
-		s.TickWork(ctx)
+		s.TickJob(ctx)
 	}
 
 	session, err := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sent.GetId()})
@@ -95,7 +95,7 @@ func TestASettledSessionIsReclaimedAndCarriesOnInPostgres(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 	time.Sleep(1200 * time.Millisecond)
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 
 	reclaimed, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sent.GetId()})
 	if reclaimed.GetSession().GetStatus() != controlplane.StatusReclaimed {
@@ -142,7 +142,7 @@ func TestASessionSomebodyIsInIsNotReclaimedInPostgres(t *testing.T) {
 	provider.Watch(sent.GetId())
 	time.Sleep(1200 * time.Millisecond)
 	for range 5 {
-		s.TickWork(ctx)
+		s.TickJob(ctx)
 	}
 
 	session, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sent.GetId()})
@@ -152,9 +152,9 @@ func TestASessionSomebodyIsInIsNotReclaimedInPostgres(t *testing.T) {
 	}
 }
 
-// The fourth query against the real engine: work still open holds its session out of the settled
-// ones, and work that ended stops holding it.
-func TestWorkStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
+// The fourth query against the real engine: job still open holds its session out of the settled
+// ones, and a job that ended stops holding it.
+func TestJobStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
 	gate := make(chan struct{})
 	provider := &sandbox.FakeProvider{}
 	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, provider)
@@ -162,37 +162,37 @@ func TestWorkStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
 	workspace, project := aProjectOnPostgres(t, s)
 	reclaimingAfter(t, s, workspace, 1, 0)
 
-	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 	time.Sleep(1200 * time.Millisecond)
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 
-	running, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: declared.GetWork().GetId()})
+	running, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetJob().GetId()})
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if running.GetWork().GetSession() == "" {
-		t.Fatal("the work says no session, so this case is not testing what it says it is")
+	if running.GetJob().GetSession() == "" {
+		t.Fatal("the job says no session, so this case is not testing what it says it is")
 	}
-	held, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetWork().GetSession()})
+	held, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetJob().GetSession()})
 	if held.GetSession().GetStatus() == controlplane.StatusReclaimed {
-		t.Fatal("the crew took the container of a session a piece of work is still running in")
+		t.Fatal("the crew took the container of a session a job is still running in")
 	}
 
-	// The work ends, and the same session becomes the crew's to take back.
+	// The job ends, and the same session becomes the crew's to take back.
 	close(gate)
-	waitForWork(t, s, declared.GetWork().GetId(), work.PhaseDone)
+	waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 	time.Sleep(1200 * time.Millisecond)
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 
-	after, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetWork().GetSession()})
+	after, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetJob().GetSession()})
 	if after.GetSession().GetStatus() != controlplane.StatusReclaimed {
-		t.Fatalf("the session reads %q once its work had ended, want reclaimed",
+		t.Fatalf("the session reads %q once its job had ended, want reclaimed",
 			after.GetSession().GetStatus())
 	}
 }
@@ -209,9 +209,9 @@ func TestAReclaimedSessionIsArchivedInPostgres(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 	time.Sleep(1200 * time.Millisecond)
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 	time.Sleep(1200 * time.Millisecond)
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 
 	session, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sent.GetId()})
 	if session.GetSession().GetArchivedAt() == nil {
@@ -224,30 +224,30 @@ func TestAReclaimedSessionIsArchivedInPostgres(t *testing.T) {
 }
 
 // Stopping the task one session is running, over the real store: the record closes as a stop with the
-// operator's own reason, and the work that was running in it is stopped rather than failed.
-func TestStoppingASessionStopsItsWorkInPostgres(t *testing.T) {
+// operator's own reason, and the job that was running in it is stopped rather than failed.
+func TestStoppingASessionStopsItsJobInPostgres(t *testing.T) {
 	gate := make(chan struct{})
 	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, &sandbox.FakeProvider{})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
-	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
-	s.TickWork(ctx)
-	running, err := s.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: declared.GetWork().GetId()})
+	s.TickJob(ctx)
+	running, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetJob().GetId()})
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if running.GetWork().GetSession() == "" {
-		t.Fatal("the work says no session, so there is nothing to stop")
+	if running.GetJob().GetSession() == "" {
+		t.Fatal("the job says no session, so there is nothing to stop")
 	}
 
 	stopped, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{
-		Id: running.GetWork().GetSession(), Reason: "the bill is not due yet",
+		Id: running.GetJob().GetSession(), Reason: "the bill is not due yet",
 	})
 	if err != nil {
 		t.Fatalf("StopTask: %v", err)
@@ -257,12 +257,12 @@ func TestStoppingASessionStopsItsWorkInPostgres(t *testing.T) {
 	}
 	close(gate)
 
-	halted := waitForWork(t, s, declared.GetWork().GetId(), work.PhaseStopped)
+	halted := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseStopped)
 	if halted.GetReason() == "" || halted.GetAnswer() != "" {
-		t.Fatalf("the stopped work says %q and answers %q, want the operator's reason and no answer",
+		t.Fatalf("the stopped job says %q and answers %q, want the operator's reason and no answer",
 			halted.GetReason(), halted.GetAnswer())
 	}
-	tasks, err := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: running.GetWork().GetSession()})
+	tasks, err := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: running.GetJob().GetSession()})
 	if err != nil {
 		t.Fatalf("ListTasks: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestStoppingASessionStopsItsWorkInPostgres(t *testing.T) {
 			"the crashes", got)
 	}
 	// The session survives, which is the whole difference between this and stopping a session.
-	session, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetWork().GetSession()})
+	session, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetJob().GetSession()})
 	if session.GetSession().GetStatus() != controlplane.StatusIdle {
 		t.Fatalf("the session reads %q after its task was stopped, want idle",
 			session.GetSession().GetStatus())

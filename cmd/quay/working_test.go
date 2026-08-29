@@ -15,7 +15,7 @@ import (
 )
 
 // What the operator actually does while a session works: type quay sessions, then quay tasks. Both
-// screens used to say a session had been asked nothing, for as long as the work took.
+// screens used to say a session had been asked nothing, for as long as the job took.
 //
 // The task is held open rather than timed. What is being tested is what is true while one runs, and a
 // test that waits a duration for that passes on a slow machine by accident.

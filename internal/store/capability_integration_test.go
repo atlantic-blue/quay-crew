@@ -26,7 +26,7 @@ import (
 // aRoleThatMay imports and attaches a role declaring the verbs named.
 func aRoleThatMay(t *testing.T, s *controlplane.Server, workspace, name string, verbs ...string) {
 	t.Helper()
-	manifest := "name: " + name + "\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - work\n"
+	manifest := "name: " + name + "\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n"
 	if len(verbs) > 0 {
 		manifest += "may:\n"
 		for _, verb := range verbs {
@@ -62,69 +62,69 @@ func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
 	}
 
 	// And a session in it declares nothing, which is what that default is for.
-	root, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	root, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "clear the backlog", Brief: "read the pull requests",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
-	_, err = s.CreateWork(auth.WithGrant(ctx, auth.Grant{
-		Work: root.GetWork().GetId(), Verbs: []string{role.VerbWorkCreate},
-	}), &quaycrewv1.CreateWorkRequest{Project: project, Title: "pull request 341", Brief: "review it"})
+	_, err = s.CreateJob(auth.WithGrant(ctx, auth.Grant{
+		Job: root.GetJob().GetId(), Verbs: []string{role.VerbJobCreate},
+	}), &quaycrewv1.CreateJobRequest{Project: project, Title: "pull request 341", Brief: "review it"})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("a session in an unconfigured workspace answered %v, want PermissionDenied", status.Code(err))
 	}
 }
 
 // The whole path, against the database that holds it: an operator raises the ceiling, a session
-// declares work under its own, and the row carries the parent and the depth the crew assigned.
-func TestASessionDeclaresWorkWithinTheCeilingInPostgres(t *testing.T) {
+// declares job under its own, and the row carries the parent and the depth the crew assigned.
+func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	s := aCrewNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
-	aRoleThatMay(t, s, workspace, "backlog-clearer", role.VerbWorkCreate)
+	aRoleThatMay(t, s, workspace, "backlog-clearer", role.VerbJobCreate)
 
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
 		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 1, MaxRunning: 4, LeaseSeconds: 90},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
-	root, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	root, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "clear the backlog", Brief: "read the pull requests", Role: "backlog-clearer",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
 
-	child, err := s.CreateWork(auth.WithGrant(ctx, auth.Grant{
-		Work: root.GetWork().GetId(), Verbs: []string{role.VerbWorkCreate},
-	}), &quaycrewv1.CreateWorkRequest{
+	child, err := s.CreateJob(auth.WithGrant(ctx, auth.Grant{
+		Job: root.GetJob().GetId(), Verbs: []string{role.VerbJobCreate},
+	}), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "pull request 341", Brief: "review it", Role: "backlog-clearer",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork as the session: %v", err)
+		t.Fatalf("CreateJob as the session: %v", err)
 	}
-	if child.GetWork().GetParent() != root.GetWork().GetId() || child.GetWork().GetDepth() != 1 {
-		t.Fatalf("the child is at depth %d under %q", child.GetWork().GetDepth(), child.GetWork().GetParent())
+	if child.GetJob().GetParent() != root.GetJob().GetId() || child.GetJob().GetDepth() != 1 {
+		t.Fatalf("the child is at depth %d under %q", child.GetJob().GetDepth(), child.GetJob().GetParent())
 	}
 
 	// Read back off the database rather than from the answer, because the parent is a foreign key and
 	// the depth is a column.
-	found, err := kept.GetWork(ctx, child.GetWork().GetId())
+	found, err := kept.GetJob(ctx, child.GetJob().GetId())
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
-	if found.Parent != root.GetWork().GetId() || found.Depth != 1 {
+	if found.Parent != root.GetJob().GetId() || found.Depth != 1 {
 		t.Fatalf("the row says depth %d under %q", found.Depth, found.Parent)
 	}
 
 	// One deeper is refused, and the refusal names the limit rather than the role.
-	_, err = s.CreateWork(auth.WithGrant(ctx, auth.Grant{
-		Work: child.GetWork().GetId(), Verbs: []string{role.VerbWorkCreate},
-	}), &quaycrewv1.CreateWorkRequest{Project: project, Title: "write a test", Brief: "write it"})
+	_, err = s.CreateJob(auth.WithGrant(ctx, auth.Grant{
+		Job: child.GetJob().GetId(), Verbs: []string{role.VerbJobCreate},
+	}), &quaycrewv1.CreateJobRequest{Project: project, Title: "write a test", Brief: "write it"})
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("work below the ceiling answered %v, want PermissionDenied", status.Code(err))
+		t.Fatalf("job below the ceiling answered %v, want PermissionDenied", status.Code(err))
 	}
 }
 
@@ -156,7 +156,7 @@ func TestACeilingOutlivesTheProcessThatSetItInPostgres(t *testing.T) {
 	}
 }
 
-// The lease a workspace names is what a controller holds that workspace's work for, read from the
+// The lease a workspace names is what a controller holds that workspace's job for, read from the
 // database on every claim rather than remembered.
 func TestTheLeaseAWorkspaceNamesIsWhatAControllerUsesInPostgres(t *testing.T) {
 	kept := openPostgres(t)
@@ -168,21 +168,21 @@ func TestTheLeaseAWorkspaceNamesIsWhatAControllerUsesInPostgres(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
-	declared, err := s.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
-		t.Fatalf("CreateWork: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
 
-	s.TickWork(ctx)
+	s.TickJob(ctx)
 
-	found, err := kept.GetWork(ctx, declared.GetWork().GetId())
+	found, err := kept.GetJob(ctx, declared.GetJob().GetId())
 	if err != nil {
-		t.Fatalf("GetWork: %v", err)
+		t.Fatalf("GetJob: %v", err)
 	}
 	if found.LeaseUntil == nil {
-		t.Fatal("the work is held with no end to the hold")
+		t.Fatal("the job is held with no end to the hold")
 	}
 	// An hour, not the crew's own minute, which is what says the workspace's number was read.
 	if held := found.LeaseUntil.Sub(found.UpdatedAt); held < 50*time.Minute {

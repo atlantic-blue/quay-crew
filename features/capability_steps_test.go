@@ -9,22 +9,23 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/cucumber/godog"
 )
 
 // What a session may do, driven the way a session does it: through a call carrying the credential
-// the crew minted for the piece of work that session is running.
+// the crew minted for the job that session is running.
 
 type capabilityKey struct{}
 
 // capabilityWorld is the session under test and what it declared.
 type capabilityWorld struct {
-	// running is the piece of work the session is running, and token is the credential minted for it.
+	// running is the job the session is running, and token is the credential minted for it.
 	running string
 	token   string
 	// declared is what that session declared, oldest first.
-	declared []*quaycrewv1.Work
+	declared []*quaycrewv1.Job
 	limits   *quaycrewv1.WorkspaceLimits
 }
 
@@ -38,11 +39,11 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, capabilityKey{}, &capabilityWorld{}), nil
 	})
 
-	sc.Step(`^the workspace allows work down to depth (\d+)$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the workspace allows jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
 		return setLimits(ctx, int32(depth))
 	})
 
-	sc.Step(`^the operator allows work down to depth (\d+)$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the operator allows jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
 		return setLimits(ctx, int32(depth))
 	})
 
@@ -74,7 +75,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the limits allow work down to depth (\d+)$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the limits allow jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
 		w := worldFrom(ctx)
 		held, err := w.client.GetWorkspaceLimits(ctx, &quaycrewv1.GetWorkspaceLimitsRequest{
 			Workspace: w.workspaceID,
@@ -88,45 +89,71 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^a piece of work titled "([^"]*)" running as a role that may (only read|create) work$`,
+	sc.Step(`^a job titled "([^"]*)" running as a role that may (only read|create) jobs$`,
 		func(ctx context.Context, title, grant string) error {
-			verbs := []string{role.VerbWorkRead}
+			verbs := []string{role.VerbJobRead}
 			if grant == "create" {
-				verbs = []string{role.VerbWorkCreate, role.VerbWorkRead}
+				verbs = []string{role.VerbJobCreate, role.VerbJobRead}
 			}
 			return aSessionRunning(ctx, title, verbs)
 		})
 
-	sc.Step(`^that session declares a piece of work$`, func(ctx context.Context) error {
+	sc.Step(`^that session declares a job$`, func(ctx context.Context) error {
 		return declareAsTheSession(ctx, "pull request 341")
 	})
 
-	sc.Step(`^that session declared a piece of work$`, func(ctx context.Context) error {
+	sc.Step(`^that session declared a job$`, func(ctx context.Context) error {
 		if err := declareAsTheSession(ctx, "pull request 341"); err != nil {
 			return err
 		}
 		return worldFrom(ctx).lastErr
 	})
 
-	// The work the session declared is itself a piece of work, so the crew mints a credential for it
+	sc.Step(`^that session declares a job naming no project$`, func(ctx context.Context) error {
+		w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+		declared, err := w.dialAs(scenario.token).CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+			Title: "pull request 341", Brief: "review it", Role: "backlog-clearer",
+		})
+		w.lastErr = err
+		if err != nil {
+			return nil
+		}
+		scenario.declared = append(scenario.declared, declared.GetJob())
+		return nil
+	})
+
+	sc.Step(`^the new job is in the same project as the job that declared it$`, func(ctx context.Context) error {
+		w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+		if w.lastErr != nil {
+			return fmt.Errorf("the declaration was refused: %w", w.lastErr)
+		}
+		newest := scenario.declared[len(scenario.declared)-1]
+		if newest.GetProject() != w.projectID {
+			return fmt.Errorf("the job landed in project %q, want %q, which is the project its credential names",
+				newest.GetProject(), w.projectID)
+		}
+		return nil
+	})
+
+	// The job the session declared is itself a job, so the crew mints a credential for it
 	// the same way, and that credential is what declares one level deeper.
-	sc.Step(`^the work at depth (\d+) declares another$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the job at depth (\d+) declares another$`, func(ctx context.Context, depth int) error {
 		scenario := capabilityFrom(ctx)
 		if len(scenario.declared) == 0 {
 			return fmt.Errorf("this scenario declared nothing at depth %d", depth)
 		}
 		deeper := scenario.declared[len(scenario.declared)-1]
 		if deeper.GetDepth() != int32(depth) {
-			return fmt.Errorf("the work is at depth %d, want %d", deeper.GetDepth(), depth)
+			return fmt.Errorf("the job is at depth %d, want %d", deeper.GetDepth(), depth)
 		}
-		token, minted := worldFrom(ctx).server.WorkCredentialForTest(ctx, deeper.GetId())
+		token, minted := worldFrom(ctx).server.JobCredentialForTest(ctx, deeper.GetId())
 		if !minted {
-			return fmt.Errorf("the crew minted no credential for the work at depth %d", depth)
+			return fmt.Errorf("the crew minted no credential for the job at depth %d", depth)
 		}
 		return declareCarrying(ctx, token, "write a test")
 	})
 
-	sc.Step(`^the new work hangs under the work that declared it, one level deeper$`, func(ctx context.Context) error {
+	sc.Step(`^the new job hangs under the job that declared it, one level deeper$`, func(ctx context.Context) error {
 		scenario := capabilityFrom(ctx)
 		if worldFrom(ctx).lastErr != nil {
 			return fmt.Errorf("the declaration was refused: %w", worldFrom(ctx).lastErr)
@@ -136,21 +163,21 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		}
 		newest := scenario.declared[len(scenario.declared)-1]
 		if newest.GetParent() == "" {
-			return fmt.Errorf("the work has no parent, so nothing bounds how deep it goes")
+			return fmt.Errorf("the job has no parent, so nothing bounds how deep it goes")
 		}
-		parent, err := worldFrom(ctx).client.GetWork(ctx, &quaycrewv1.GetWorkRequest{Id: newest.GetParent()})
+		parent, err := worldFrom(ctx).client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: newest.GetParent()})
 		if err != nil {
 			return err
 		}
-		if newest.GetDepth() != parent.GetWork().GetDepth()+1 {
-			return fmt.Errorf("the work is at depth %d under work at depth %d",
-				newest.GetDepth(), parent.GetWork().GetDepth())
+		if newest.GetDepth() != parent.GetJob().GetDepth()+1 {
+			return fmt.Errorf("the job is at depth %d under job at depth %d",
+				newest.GetDepth(), parent.GetJob().GetDepth())
 		}
 		return nil
 	})
 
 	sc.Step(`^the crew refuses it and names the verb it lacks$`, func(ctx context.Context) error {
-		return theRefusalSays(role.VerbWorkCreate)(ctx)
+		return theRefusalSays(role.VerbJobCreate)(ctx)
 	})
 
 	sc.Step(`^the crew refuses it and names the limit and the command that raises it$`, func(ctx context.Context) error {
@@ -162,15 +189,15 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the project holds only the work the operator declared$`, func(ctx context.Context) error {
+	sc.Step(`^the project holds only the job the operator declared$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		listed, err := w.client.ListWork(ctx, &quaycrewv1.ListWorkRequest{Project: w.projectID})
+		listed, err := w.client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: w.projectID})
 		if err != nil {
 			return err
 		}
-		if len(listed.GetWork()) != 1 {
-			return fmt.Errorf("the project holds %d pieces of work, want the one the operator declared",
-				len(listed.GetWork()))
+		if len(listed.GetJobs()) != 1 {
+			return fmt.Errorf("the project holds %d jobs, want the one the operator declared",
+				len(listed.GetJobs()))
 		}
 		return nil
 	})
@@ -199,34 +226,115 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// What a task is actually handed, read off the task the crew ran rather than off the sandbox: a
+	// credential is minted for one job and travels in the environment of one task, because a
+	// sandbox keeps what it was born with and would otherwise label every later task with the first
+	// task's grant.
+	sc.Step(`^the crew runs that job$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: w.projectID, Text: "clear it", Job: capabilityFrom(ctx).running,
+		})
+		w.lastErr = err
+		return err
+	})
+
+	sc.Step(`^the task carries the address of the crew$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if got := w.runner.lastRequest().Env["QC_GRPC_ADDR"]; got != w.reachable {
+			return fmt.Errorf("the task was told the crew is at %q, want %q", got, w.reachable)
+		}
+		return nil
+	})
+
+	sc.Step(`^the task carries the credential minted for that job, not the operator's token$`,
+		func(ctx context.Context) error {
+			w, scenario := worldFrom(ctx), capabilityFrom(ctx)
+			presented := w.runner.lastRequest().Env["QC_TOKEN"]
+			if presented == "" {
+				return fmt.Errorf("the task carries no credential, so it can do nothing at the address it was given")
+			}
+			if presented == w.token || presented == w.driverToken {
+				return fmt.Errorf("the task carries a token that is not its own, so it holds what the crew holds")
+			}
+			grant, recognised := w.server.Grants().Grant(presented)
+			if !recognised {
+				return fmt.Errorf("the crew does not recognise the credential it put in the task")
+			}
+			if grant.Job != scenario.running {
+				return fmt.Errorf("the credential is bound to %q, want the job the task runs for", grant.Job)
+			}
+			return nil
+		})
+
+	sc.Step(`^the task carries no address and no token$`, func(ctx context.Context) error {
+		env := worldFrom(ctx).runner.lastRequest().Env
+		for _, name := range []string{"QC_GRPC_ADDR", "QC_TOKEN"} {
+			if got, told := env[name]; told {
+				return fmt.Errorf("the task carries %s=%q, and a task running no job is told neither", name, got)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^that session tries to stop the job it is running$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = asTheSession(ctx).StopJob(ctx, &quaycrewv1.StopJobRequest{
+			Id: capabilityFrom(ctx).running, Reason: "I have had enough",
+		})
+		return nil
+	})
+
+	sc.Step(`^the crew refuses it and names the verb it lacks and how an operator grants it$`,
+		func(ctx context.Context) error {
+			for _, want := range []string{role.VerbJobStop, "may list", "attaching it"} {
+				if err := theRefusalSays(want)(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the job is still running$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		held, err := w.client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: capabilityFrom(ctx).running})
+		if err != nil {
+			return err
+		}
+		if held.GetJob().GetPhase() == job.PhaseStopped {
+			return fmt.Errorf("the job is stopped, and the session that asked was refused")
+		}
+		return nil
+	})
+
 	sc.Step(`^the crew refuses the session that call$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
 			return fmt.Errorf("the session was allowed the call")
 		}
-		if !strings.Contains(w.lastErr.Error(), "may call the work verbs and nothing else") &&
+		if !strings.Contains(w.lastErr.Error(), "may call the job verbs and nothing else") &&
 			!strings.Contains(w.lastErr.Error(), "may not") {
 			return fmt.Errorf("the refusal says %q, want it to say what a session may do", w.lastErr)
 		}
 		return nil
 	})
 
-	sc.Step(`^the credential names that work, carries only the verbs the role declared, and runs out$`,
+	sc.Step(`^the credential names that job, carries only the verbs the role declared, and runs out$`,
 		func(ctx context.Context) error {
 			scenario := capabilityFrom(ctx)
 			grant, recognised := worldFrom(ctx).server.Grants().Grant(scenario.token)
 			if !recognised {
 				return fmt.Errorf("the crew does not recognise the credential it minted")
 			}
-			if grant.Work != scenario.running {
-				return fmt.Errorf("the credential is bound to %q, want the work the session is running", grant.Work)
+			if grant.Job != scenario.running {
+				return fmt.Errorf("the credential is bound to %q, want the job the session is running", grant.Job)
 			}
-			for _, verb := range []string{role.VerbWorkCreate, role.VerbWorkRead} {
+			for _, verb := range []string{role.VerbJobCreate, role.VerbJobRead} {
 				if !grant.May(verb) {
 					return fmt.Errorf("the credential may not %s, and the role declared it", verb)
 				}
 			}
-			for _, verb := range []string{role.VerbWorkStop, role.VerbWorkAnswer} {
+			for _, verb := range []string{role.VerbJobStop, role.VerbJobAnswer} {
 				if grant.May(verb) {
 					return fmt.Errorf("the credential may %s, and the role never declared it", verb)
 				}
@@ -267,7 +375,7 @@ func setLimits(ctx context.Context, depth int32) error {
 	return err
 }
 
-// aSessionRunning declares one piece of work as the operator, gives it a role with the verbs named,
+// aSessionRunning declares one job as the operator, gives it a role with the verbs named,
 // and mints the credential a session running it would hold.
 func aSessionRunning(ctx context.Context, title string, verbs []string) error {
 	w, scenario := worldFrom(ctx), capabilityFrom(ctx)
@@ -282,16 +390,16 @@ func aSessionRunning(ctx context.Context, title string, verbs []string) error {
 	}); err != nil {
 		return err
 	}
-	declared, err := w.client.CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := w.client.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: w.projectID, Title: title, Brief: "read the open pull requests", Role: name,
 	})
 	if err != nil {
 		return err
 	}
-	scenario.running = declared.GetWork().GetId()
-	token, minted := w.server.WorkCredentialForTest(ctx, scenario.running)
+	scenario.running = declared.GetJob().GetId()
+	token, minted := w.server.JobCredentialForTest(ctx, scenario.running)
 	if !minted {
-		return fmt.Errorf("the crew minted no credential for the work the session runs")
+		return fmt.Errorf("the crew minted no credential for the job the session runs")
 	}
 	scenario.token = token
 	return nil
@@ -302,19 +410,19 @@ func declareAsTheSession(ctx context.Context, title string) error {
 	return declareCarrying(ctx, capabilityFrom(ctx).token, title)
 }
 
-// declareCarrying declares a piece of work as whoever holds this credential.
+// declareCarrying declares a job as whoever holds this credential.
 func declareCarrying(ctx context.Context, token, title string) error {
 	w, scenario := worldFrom(ctx), capabilityFrom(ctx)
-	// The child runs as the same role, because a role is what grants: work declared without one
+	// The child runs as the same role, because a role is what grants: a job declared without one
 	// holds a credential that may call nothing, and could declare nothing itself.
-	declared, err := w.dialAs(token).CreateWork(ctx, &quaycrewv1.CreateWorkRequest{
+	declared, err := w.dialAs(token).CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: w.projectID, Title: title, Brief: "review it", Role: "backlog-clearer",
 	})
 	w.lastErr = err
 	if err != nil {
 		return nil
 	}
-	scenario.declared = append(scenario.declared, declared.GetWork())
+	scenario.declared = append(scenario.declared, declared.GetJob())
 	return nil
 }
 
@@ -326,7 +434,7 @@ func asTheSession(ctx context.Context) quaycrewv1.ControlPlaneServiceClient {
 
 // roleFilesThatMay is a role declaring the verbs it may call.
 func roleFilesThatMay(name string, verbs []string) []*quaycrewv1.RoleFile {
-	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - work\n", name)
+	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n", name)
 	if len(verbs) > 0 {
 		manifest += "may:\n"
 		for _, verb := range verbs {

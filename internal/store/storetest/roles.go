@@ -42,7 +42,7 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		// What it receives is the boundary. A role whose receives list is dropped somewhere in the
 		// round trip is a role the crew would give everything to.
-		if len(got.Receives) != 2 || !got.Gets(role.MaterialWork) || !got.Gets(role.MaterialContext) {
+		if len(got.Receives) != 2 || !got.Gets(role.MaterialJob) || !got.Gets(role.MaterialContext) {
 			t.Errorf("what it receives did not survive: %+v", got.Receives)
 		}
 		if got.Gets(role.MaterialSkills) {
@@ -286,9 +286,9 @@ func aRole(name string, version int) store.ImportedRole {
 	return store.ImportedRole{Role: role.Role{
 		Name:     name,
 		Version:  version,
-		Summary:  "Writes the tests for a piece of work, from the work alone.",
+		Summary:  "Writes the tests for a job, from the job alone.",
 		Model:    "opus",
-		Receives: []string{role.MaterialContext, role.MaterialWork},
+		Receives: []string{role.MaterialContext, role.MaterialJob},
 		Brief:    "Write the tests. Do not write the code.",
 	}}
 }

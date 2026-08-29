@@ -67,45 +67,45 @@ func refusedToDriver(fullMethod string) error {
 		"the driver drives the crew, it does not widen it: %s grants capability and is the operator's to make", name))
 }
 
-// DeniedToWork is the policy over what a piece of work may call.
+// DeniedToJob is the policy over what a job may call.
 //
 // Default deny, and the difference from the driver's policy is the direction: the driver is refused
-// a named list and holds everything else, while a piece of work holds a named list and is refused
-// everything else. A credential minted for one piece of work is the narrowest thing the crew hands
+// a named list and holds everything else, while a job holds a named list and is refused
+// everything else. A credential minted for one job is the narrowest thing the crew hands
 // out, so it grants what its role declared and nothing beside it.
 //
 // The refusal names the verb, because a session that was refused has to know what to ask its
 // operator for.
-func DeniedToWork(fullMethod string, request any, grant auth.Grant) error {
-	verb, known := workVerbs[fullMethod]
+func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
+	verb, known := jobVerbs[fullMethod]
 	if !known {
 		return status.Errorf(codes.PermissionDenied,
-			"a session running a piece of work may call the work verbs and nothing else: %s is not one of them",
+			"a session running a job may call the job verbs and nothing else: %s is not one of them",
 			shortMethod(fullMethod))
 	}
 	if !grant.May(verb) {
 		return status.Errorf(codes.PermissionDenied,
-			"this work runs as a role that may not %s; a role declares what it may do in its may list, "+
+			"this job runs as a role that may not %s; a role declares what it may do in its may list, "+
 				"and an operator widens it by importing the role again and attaching it",
 			verb)
 	}
-	// The work a caller names on a dispatch decides which credential the crew mints for that task, so
-	// only the operator may name one. A session that could name any piece of work could mint itself
-	// that work's grant.
-	if named, ok := request.(*quaycrewv1.DispatchRequest); ok && named.GetWork() != "" {
+	// The job a caller names on a dispatch decides which credential the crew mints for that task, so
+	// only the operator may name one. A session that could name any job could mint itself
+	// that job's grant.
+	if named, ok := request.(*quaycrewv1.DispatchRequest); ok && named.GetJob() != "" {
 		return status.Error(codes.PermissionDenied,
-			"a session may not name the work a task runs for: the crew reads that from the credential")
+			"a session may not name the job a task runs for: the crew reads that from the credential")
 	}
 	return nil
 }
 
-// workVerbs is which verb each call needs. A call that is not here is not a work call, and a piece of
-// work may not make it.
-var workVerbs = map[string]string{
-	quaycrewv1.ControlPlaneService_CreateWork_FullMethodName: role.VerbWorkCreate,
-	quaycrewv1.ControlPlaneService_GetWork_FullMethodName:    role.VerbWorkRead,
-	quaycrewv1.ControlPlaneService_ListWork_FullMethodName:   role.VerbWorkRead,
-	quaycrewv1.ControlPlaneService_StopWork_FullMethodName:   role.VerbWorkStop,
+// jobVerbs is which verb each call needs. A call that is not here is not a job call, and a
+// job may not make it.
+var jobVerbs = map[string]string{
+	quaycrewv1.ControlPlaneService_CreateJob_FullMethodName: role.VerbJobCreate,
+	quaycrewv1.ControlPlaneService_GetJob_FullMethodName:    role.VerbJobRead,
+	quaycrewv1.ControlPlaneService_ListJobs_FullMethodName:  role.VerbJobRead,
+	quaycrewv1.ControlPlaneService_StopJob_FullMethodName:   role.VerbJobStop,
 }
 
 // shortMethod is the call's own name, without the service in front of it.

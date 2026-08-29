@@ -1,0 +1,486 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/jackc/pgx/v5"
+)
+
+// jobColumns is the row every read of a job selects, in one place so a reader and a
+// listing cannot drift into scanning different things.
+const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
+	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
+	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
+	lease_owner, lease_until, trace_id, parent_span_id, created_at, updated_at, started_at, finished_at`
+
+// CreateJob writes a job and the record of its declaration in one transaction.
+//
+// One transaction because the store is the source of truth here. A row with no record of how it came
+// to exist, or a record of a declaration that is not there, are both states nothing can explain
+// afterwards.
+func (p *Postgres) CreateJob(ctx context.Context, declared *job.Job, event *job.Event) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := insertJob(ctx, tx, declared); err != nil {
+		return err
+	}
+	if err := appendJobEvent(ctx, tx, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	return nil
+}
+
+// insertJob writes one job inside a transaction somebody else owns, which is what lets a
+// declaration land with whatever asked for it: a caller's call, or the movement of a flow run.
+//
+// The whole record, status fields included, because the store keeps what it is handed. Writing only
+// the declared half would leave the two stores disagreeing about the same call, which is how a double
+// that accepts more than the real thing manufactures a green suite.
+func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
+	labels, err := json.Marshal(labelsOrEmpty(declared.Labels))
+	if err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
+			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
+			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
+			lease_owner, lease_until, trace_id, parent_span_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)`,
+		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
+		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
+		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
+		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
+		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
+		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID); err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	return nil
+}
+
+// GetJob reads one job back, whole, answer included.
+func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
+	row := p.pool.QueryRow(ctx, `select `+jobColumns+` from jobs where id = $1`, id)
+	found, err := scanJob(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get job: %w", err)
+	}
+	return found, nil
+}
+
+// ListJob returns what matches, newest first, without answers.
+//
+// Without answers because a listing of a hundred answers is a listing nobody can read. A caller that
+// wants an answer asks for one job.
+func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error) {
+	query := `select ` + jobColumns + ` from jobs where 1 = 1`
+	args := []any{}
+	add := func(clause string, value any) {
+		args = append(args, value)
+		query += fmt.Sprintf(clause, len(args))
+	}
+	switch {
+	case filter.Project != "":
+		add(` and project = $%d`, filter.Project)
+	case filter.Workspace != "":
+		add(` and workspace = $%d`, filter.Workspace)
+	}
+	switch {
+	case filter.Parent != "":
+		add(` and parent = $%d`, filter.Parent)
+	case filter.Root:
+		query += ` and parent is null`
+	}
+	if filter.Phase != "" {
+		add(` and phase = $%d`, filter.Phase)
+	}
+	if filter.LabelKey != "" {
+		// The function rather than the ? operator, because a question mark in a statement sent with
+		// numbered parameters is read as a placeholder by more than one thing on the way.
+		if filter.LabelValue == "" {
+			add(` and jsonb_exists(labels, $%d)`, filter.LabelKey)
+		} else {
+			add(` and labels @> $%d`, labelJSON(filter.LabelKey, filter.LabelValue))
+		}
+	}
+	query += ` order by created_at desc, id desc`
+
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list job: %w", err)
+	}
+	defer rows.Close()
+
+	listed := make([]*job.Job, 0)
+	for rows.Next() {
+		found, err := scanJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list job: %w", err)
+		}
+		found.Answer = ""
+		listed = append(listed, found)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list job: %w", err)
+	}
+	return listed, nil
+}
+
+// StopJob halts job that has not ended, keeping the reason, and writes the record of the stop in
+// the same transaction.
+//
+// Job that already ended is refused rather than overwritten: how it ended is the useful part, and a
+// second stop would erase it.
+func (p *Postgres) StopJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("stop job: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		update jobs set phase = $2, reason = $3, lease_owner = '', lease_until = null,
+			finished_at = now(), updated_at = now()
+		where id = $1 and phase in ($4, $5, $6, $7)`,
+		id, job.PhaseStopped, reason,
+		job.PhasePending, job.PhaseWaiting, job.PhaseRunning, job.PhaseAsking)
+	if err != nil {
+		return nil, fmt.Errorf("stop job: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		found, err := p.GetJob(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("store: job %s is %s, and a job that already ended is not stopped again", id, found.Phase)
+	}
+	if err := appendJobEvent(ctx, tx, event); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("stop job: %w", err)
+	}
+	return p.GetJob(ctx, id)
+}
+
+// ListJobEvents returns one job's own history, in the order it was written.
+//
+// By the sequence rather than by the moment. Two records written in one transaction are stamped in
+// the same microsecond, and an order broken by a random identifier is an order that reads back wrong
+// about once in a few runs: "claimed" after "started", which is a controller that appears to have
+// worked backwards.
+func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at
+		from job_events where job = $1 order by seq`, id)
+	if err != nil {
+		return nil, fmt.Errorf("list job events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]*job.Event, 0)
+	for rows.Next() {
+		var event job.Event
+		if err := rows.Scan(&event.ID, &event.Kind, &event.Job, &event.Workspace, &event.Project,
+			&event.Parent, &event.Depth, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
+			return nil, fmt.Errorf("scan job event: %w", err)
+		}
+		events = append(events, &event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list job events: %w", err)
+	}
+	return events, nil
+}
+
+// appendJobEvent writes one record inside the transaction that carries the change it describes. The
+// same event written twice leaves one row, which is what the primary key is for.
+func appendJobEvent(ctx context.Context, tx pgx.Tx, event *job.Event) error {
+	if event == nil {
+		return nil
+	}
+	if event.ID == "" || event.Kind == "" {
+		return errors.New("store: a job event needs an id and a kind")
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into job_events (id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		on conflict (id) do nothing`,
+		event.ID, event.Kind, event.Job, event.Workspace, event.Project,
+		event.Parent, event.Depth, event.Detail, event.TraceID, event.OccurredAt); err != nil {
+		return fmt.Errorf("append job event: %w", err)
+	}
+	return nil
+}
+
+// rowScanner is what QueryRow and Rows both offer, so one function reads a job from either.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanJob(row rowScanner) (*job.Job, error) {
+	var found job.Job
+	var labels []byte
+	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
+		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
+		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
+		&found.Question, &found.SpentTokens, &found.ObservedVersion,
+		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
+		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
+		return nil, err
+	}
+	if len(labels) > 0 {
+		if err := json.Unmarshal(labels, &found.Labels); err != nil {
+			return nil, fmt.Errorf("read labels: %w", err)
+		}
+	}
+	if len(found.Labels) == 0 {
+		found.Labels = nil
+	}
+	if len(found.After) == 0 {
+		found.After = nil
+	}
+	if len(found.Requires) == 0 {
+		found.Requires = nil
+	}
+	return &found, nil
+}
+
+// labelJSON builds the one pair a listing matches on, as text so the parameter is read as jsonb
+// rather than as bytes. The value is a label, held to 63 characters at the write, so it cannot fail
+// to encode.
+func labelJSON(key, value string) string {
+	encoded, _ := json.Marshal(map[string]string{key: value})
+	return string(encoded)
+}
+
+func labelsOrEmpty(labels map[string]string) map[string]string {
+	if labels == nil {
+		return map[string]string{}
+	}
+	return labels
+}
+
+func afterOrEmpty(after []string) []string {
+	if after == nil {
+		return []string{}
+	}
+	return after
+}
+
+// nullIfEmpty keeps a root's parent null rather than an empty string, so the foreign key holds and
+// "job with no parent" is a query rather than a convention.
+func nullIfEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+// RunnableJob is the job a controller may start: pending with nothing it waits for, oldest
+// declared first.
+//
+// A job under a parent and a job in a role are both started. A role because the controller runs it as
+// that role, and a parent because a flow run declares every step under its own job, so a controller
+// that started roots only would leave every step of every automation pending forever. What is still
+// left out is job that waits for something, because nothing honours ordering yet. The tree budget is
+// enforced for none of these and for a root either, so nothing is honoured less here than anywhere
+// else.
+func (p *Postgres) RunnableJob(ctx context.Context, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and cardinality(after_jobs) = 0
+		order by created_at, id`, limit, job.PhasePending)
+}
+
+// HeldJob is the job this controller is holding, and only this one: another controller's job is
+// not this one's to move. Job with no session yet is left out, because there is no task to read back.
+func (p *Postgres) HeldJob(ctx context.Context, owner string, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and session <> '' and lease_owner = $2 and lease_until > now()
+		order by created_at, id`, limit, job.PhaseRunning, owner)
+}
+
+// ExpiredJob is the job whose holder went away: running, under a lease that has run out or was
+// never written.
+func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and (lease_until is null or lease_until <= now())
+		order by created_at, id`, limit, job.PhaseRunning)
+}
+
+// jobMatching runs one of the controller's queries, capped.
+func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, args ...any) ([]*job.Job, error) {
+	query := `select ` + jobColumns + ` from jobs ` + where
+	if limit > 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" limit $%d", len(args))
+	}
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read job: %w", err)
+	}
+	defer rows.Close()
+
+	found := make([]*job.Job, 0)
+	for rows.Next() {
+		one, err := scanJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read job: %w", err)
+		}
+		found = append(found, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read job: %w", err)
+	}
+	return found, nil
+}
+
+// StartJob claims one job and records the record of the claim in the same transaction.
+//
+// The update is conditional on the phase in the same statement, which is the compare and set that
+// keeps two controllers from both starting the same job. A row that moved on first is refused, and
+// the refusal is not a failure: it means somebody else has it.
+func (p *Postgres) StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "start job", job.ErrNotPending, events, `
+		update jobs set phase = $2, attempts = attempts + 1, lease_owner = $3, lease_until = $4,
+			started_at = now(), updated_at = now()
+		where id = $1 and phase = $5`,
+		job.PhaseRunning, lease.Owner, lease.Until, job.PhasePending)
+}
+
+// TakeOverJob takes the lease on a job whose holder went away.
+//
+// The condition on the lease is in the same statement as the write, so two controllers finding the
+// same abandoned row leave one holder. That is the compare and set a log cannot give.
+func (p *Postgres) TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "take over job", job.ErrHeld, events, `
+		update jobs set lease_owner = $2, lease_until = $3, updated_at = now()
+		where id = $1 and phase = $4 and (lease_until is null or lease_until <= now())`,
+		lease.Owner, lease.Until, job.PhaseRunning)
+}
+
+// ReleaseJob puts job back to pending. Only running job with no session under a lease that has
+// run out, which is the one state that says for certain no task was ever sent.
+func (p *Postgres) ReleaseJob(ctx context.Context, id string, events []*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "release job", job.ErrHeld, events, `
+		update jobs set phase = $2, lease_owner = '', lease_until = null,
+			started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and session = '' and (lease_until is null or lease_until <= now())`,
+		job.PhasePending, job.PhaseRunning)
+}
+
+// RenewLease moves the holder's hold on. Only the holder renews, so a controller that lost a row
+// cannot take it back by renewing.
+func (p *Postgres) RenewLease(ctx context.Context, id string, lease job.Lease) error {
+	tag, err := p.pool.Exec(ctx, `
+		update jobs set lease_until = $3, updated_at = now()
+		where id = $1 and lease_owner = $2`, id, lease.Owner, lease.Until)
+	if err != nil {
+		return fmt.Errorf("renew lease: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetJob(ctx, id); err != nil {
+			return err
+		}
+		return job.ErrHeld
+	}
+	return nil
+}
+
+// moveJob runs one conditional movement and the records that describe it, in one transaction.
+//
+// The condition lives in the statement rather than in a read before it, which is what makes two
+// controllers racing over one row leave one winner. A statement that changed nothing means the row
+// was not in the state this movement is for, and that is refused rather than reported as a failure.
+func (p *Postgres) moveJob(ctx context.Context, id, what string, refusal error,
+	events []*job.Event, statement string, args ...any) (*job.Job, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, statement, append([]any{id}, args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetJob(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, refusal
+	}
+	for _, event := range events {
+		if err := appendJobEvent(ctx, tx, event); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	return p.GetJob(ctx, id)
+}
+
+// RecordJobSession writes which conversation a job runs in. Not a movement, so it writes
+// no record of its own.
+func (p *Postgres) RecordJobSession(ctx context.Context, id, session string) error {
+	tag, err := p.pool.Exec(ctx,
+		`update jobs set session = $2, updated_at = now() where id = $1`, id, session)
+	if err != nil {
+		return fmt.Errorf("record job session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// LandJob writes what came of the job, with its record, in one transaction. Conditional on the
+// job still running, so what it ended as is written once.
+func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("land job: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
+		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
+			observed_version = version, lease_owner = '', lease_until = null,
+			finished_at = now(), updated_at = now()
+		where id = $1 and phase = $6`,
+		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, job.PhaseRunning)
+	if err != nil {
+		return nil, fmt.Errorf("land job: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := p.GetJob(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, job.ErrNotRunning
+	}
+	if err := appendJobEvent(ctx, tx, event); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("land job: %w", err)
+	}
+	return p.GetJob(ctx, id)
+}
