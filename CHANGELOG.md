@@ -8,7 +8,32 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
-- **The three roles the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
+- **A graph must say what mode its runs work in, and one that says nothing is refused at import.**
+  `mode:` used to be optional, and a graph that left it out ran in the mode a session is born in,
+  which is `acceptEdits`: file edits inside the working directory are approved, and nothing else is.
+  So a step that runs a command, or reads a file outside that directory, stopped and waited for an
+  approval. A flow is the one thing with nobody there to give one. Run `68ffb98298125c2cb9017e4f` of
+  the `pr-sweep` graph sat on its first node through 532,978 tokens: every `gh` call came back needing
+  approval, and so did reading its own skill file. The session behaved correctly and refused to write
+  "none open", because an empty result and a refused command look identical in a file.
+
+  The repair is a refusal rather than a wider default. A default broad enough to work unwatched is
+  `bypassPermissions`, and that would hand every graph already written more than its author asked for,
+  silently. The refusal names the line to add and the three modes there are. It is checked where every
+  other graph rule is checked, so a graph stored before this stops rather than running in a mode its
+  author never chose, and the message says to import the next version.
+
+  **A run that stopped now says what the graph wanted apart from what the crew found.** The field
+  called `result.expected` held the finding, so `quay flow show` printed the same sentence twice and
+  never said what was claimed, and `result.failed` read `false` on a run that had stopped. The claim
+  the node declared is `result.expected`, what the crew found is `result.unmet`, and `result.failed`
+  is true when the step did not do its job, whether the model errored or the claim went unmet. No
+  graph branches differently for it: an unmet claim stops the run before any edge is followed.
+
+  [#461](https://github.com/atlantic-blue/quay-crew/issues/461).
+
+- **The three roles
+ the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
   They were written outside this repository, so nobody could read them, review them or change them.
   `orchestrator`, `infrastructure-writer` and `releaser` are now fifteen roles rather than twelve, held
   to the same rules as the rest: they import, they open by saying what quay does not enforce, they name

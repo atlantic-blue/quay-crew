@@ -177,14 +177,25 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 			return run, nil, fmt.Errorf("flow: run %s sits on %s, which is not a dispatch, so no task result belongs to it", run.ID, run.Node)
 		}
 		run.State["result.reply"] = event.Reply
-		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed)
+		// True when the model errored and true when the step did not do what the node said would show
+		// it worked, because both are the step failing to do its job and the field is called failed. It
+		// used to carry only the first, so a run halted over an unmet claim read `result.failed false`
+		// next to the sentence saying it stopped, and the two contradicted each other on the same
+		// screen. Nothing branches differently for it: an unmet claim stops the run before any edge is
+		// followed, so no choice node can ever see this case.
+		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed || event.Unmet != "")
 		// A step that did not do what the graph said would show it worked stops the run, rather than
 		// carrying on down the edge a reply happens to be sitting on. There is no recovery the crew
 		// could pick: it knows the job did not happen and it does not know why. A run that walks its
 		// success path through job that never happened is worse than one that halts, because the
 		// summary it ends with is the model's plausible account of it.
 		if event.Unmet != "" {
-			run.State["result.expected"] = event.Unmet
+			// The claim and the finding are two keys, not one. `result.expected` held the finding, so
+			// reading a stopped run gave the same sentence twice and never said what the graph wanted.
+			if expect := node.Expect; expect != nil {
+				run.State["result.expected"] = expect.Declared()
+			}
+			run.State["result.unmet"] = event.Unmet
 			run.Status = StatusStopped
 			run.Reason = fmt.Sprintf("stopped at %s, which did not do what the graph says proves it worked: %s",
 				run.Node, event.Unmet)

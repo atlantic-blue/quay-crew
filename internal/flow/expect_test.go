@@ -10,6 +10,7 @@ import (
 const provingGraph = `
 name: site-check
 version: 1
+mode: edits
 nodes:
   read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
   ok:   { type: choice, on: { result.failed: "false" } }
@@ -101,6 +102,7 @@ func TestANodeThatDoesNoJobCannotSayWhatProvesItWorked(t *testing.T) {
 	_, err := Parse([]byte(`
 name: confused
 version: 1
+mode: edits
 nodes:
   go:   { type: dispatch, prompt: "go" }
   next: { type: choice, on: { result.failed: "false" }, expect: { file: package.json } }
@@ -121,6 +123,7 @@ func TestAnExpectationOfNothingIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: empty
 version: 1
+mode: edits
 nodes:
   go: { type: dispatch, prompt: "go", expect: {} }
 edges:
@@ -141,6 +144,7 @@ func TestAnExpectedFileOutsideTheSessionIsRefused(t *testing.T) {
 		_, err := Parse([]byte(`
 name: nosy
 version: 1
+mode: edits
 nodes:
   go: { type: dispatch, prompt: "go", expect: { file: "` + path + `" } }
 edges:
@@ -149,5 +153,77 @@ edges:
 		if err == nil {
 			t.Errorf("a node expecting %q parsed", path)
 		}
+	}
+}
+
+// The second half of quay-crew#461. A run that stopped over an unmet claim recorded the finding under
+// `result.expected` and nothing under any other key, so `quay flow show` printed the same sentence
+// twice and never said what the graph had asked for. A reader could not tell whether the graph wanted
+// pr-state.md or wanted something else and got pr-state.md wrong.
+func TestAStoppedRunSaysWhatItWantedApartFromWhatItFound(t *testing.T) {
+	graph, err := Parse([]byte(provingGraph))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	run := Run{ID: "r1", Node: "read", Status: StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
+
+	found := "package.json is not in the session that did the job"
+	next, _, err := Advance(graph, run, Event{
+		Kind: EventTaskFinished, Node: "read",
+		Reply: "the working directory is empty, so I summarised the project from memory",
+		Unmet: found,
+	})
+	if err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	if want := "the file package.json"; next.State["result.expected"] != want {
+		t.Errorf("the run expected %q, want %q: the claim the graph declared, not the finding",
+			next.State["result.expected"], want)
+	}
+	if next.State["result.unmet"] != found {
+		t.Errorf("the run found %q, want %q", next.State["result.unmet"], found)
+	}
+	// The two must not be the same sentence, which is the whole defect: one field held both jobs and
+	// so did neither.
+	if next.State["result.expected"] == next.State["result.unmet"] {
+		t.Error("the claim and the finding read identically, so the reader learns nothing from having both")
+	}
+	// A run that stopped because its step did not do its job reads failed, because that is what the
+	// word means. It read false.
+	if next.State["result.failed"] != "true" {
+		t.Errorf("the run reads result.failed %q on a step that did not do its job, want true",
+			next.State["result.failed"])
+	}
+}
+
+// A claim of both kinds says both, or a graph whose file arrived and whose sentence did not would be
+// reported as wanting only the file.
+func TestAClaimOfBothKindsIsDeclaredInFull(t *testing.T) {
+	declared := Expect{File: "pr-state.md", Contains: "all green"}.Declared()
+	if !strings.Contains(declared, "pr-state.md") || !strings.Contains(declared, "all green") {
+		t.Errorf("a node claiming a file and a phrase declares %q, want both", declared)
+	}
+}
+
+// A step that errored still reads failed, or the field would have swapped one narrow meaning for
+// another rather than covering the step failing to do its job.
+func TestAStepTheModelErroredOnStillReadsFailed(t *testing.T) {
+	graph, err := Parse([]byte(provingGraph))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	run := Run{ID: "r1", Node: "read", Status: StatusRunning, State: map[string]string{}, Attempts: map[string]int{}}
+	next, _, err := Advance(graph, run, Event{
+		Kind: EventTaskFinished, Node: "read", Reply: "the sandbox died", Failed: true,
+	})
+	if err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	if next.State["result.failed"] != "true" {
+		t.Errorf("a step the model errored on reads result.failed %q, want true", next.State["result.failed"])
+	}
+	if next.State["result.unmet"] != "" {
+		t.Errorf("a step that errored records the unmet claim %q, and it met no claim either way",
+			next.State["result.unmet"])
 	}
 }

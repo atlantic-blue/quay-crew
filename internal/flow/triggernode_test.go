@@ -10,6 +10,7 @@ import (
 const reactingGraph = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   arrived: { type: trigger }
   fix:     { type: dispatch, prompt: "the build at {{url}} is red. Fix it." }
@@ -49,6 +50,7 @@ func TestATriggerNodeThatIsNotWhereARunBeginsIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: late
 version: 1
+mode: edits
 nodes:
   fix:     { type: dispatch, prompt: "fix the build" }
   arrived: { type: trigger }
@@ -71,6 +73,7 @@ func TestAGraphWithTwoTriggerNodesIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: two-ways-in
 version: 1
+mode: edits
 nodes:
   pushed: { type: trigger }
   opened: { type: trigger }
@@ -95,6 +98,7 @@ func TestATriggerNodeNeedsOneEdgeOut(t *testing.T) {
 	_, err := Parse([]byte(`
 name: forked
 version: 1
+mode: edits
 nodes:
   arrived: { type: trigger }
   fix:     { type: dispatch, prompt: "fix the build" }
@@ -118,6 +122,7 @@ func TestATriggerNodeNamingARoleIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: roled
 version: 1
+mode: edits
 nodes:
   arrived: { type: trigger, role: reviewer }
   fix:     { type: dispatch, prompt: "fix the build" }
@@ -139,6 +144,7 @@ func TestTheRefusalOfAnUnknownNodeTypeOffersTheTriggerNode(t *testing.T) {
 	_, err := Parse([]byte(`
 name: mistyped
 version: 1
+mode: edits
 nodes:
   arrived: { type: triger }
   fix:     { type: dispatch, prompt: "fix the build" }

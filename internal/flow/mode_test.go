@@ -79,21 +79,37 @@ edges:
 	}
 }
 
-// A graph that says nothing keeps saying nothing, so the session's own birth mode decides and this
-// change moves no automation that already exists.
-func TestAGraphThatDeclaresNoModeCarriesNone(t *testing.T) {
-	graph, err := Parse([]byte(`
-name: plain
+// The fault quay-crew#461 was opened for. A graph that said nothing used to parse, and its runs took
+// the mode a session is born in, which is acceptEdits: file edits inside the working directory are
+// approved and nothing else is. So every command a step ran, and every file it read outside that
+// directory, stopped to ask a person who was not there. Run 68ffb98298125c2cb9017e4f sat on its first
+// node through 532,978 tokens finding that out.
+//
+// Refusing is the safer of the two repairs. The other is a default wide enough to work unwatched,
+// and that grants every graph already written more than its author asked for, silently. This says no
+// and names the line.
+func TestAGraphThatSaysNothingAboutItsModeIsRefused(t *testing.T) {
+	_, err := Parse([]byte(`
+name: pr-sweep
 version: 1
 nodes:
-  go: { type: dispatch, prompt: "go" }
+  read: { type: dispatch, prompt: "read the open pull requests" }
 edges:
-  - [go, done]
+  - [read, done]
 `))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
+	if err == nil {
+		t.Fatal("a graph saying nothing about its mode parsed, so a run of it would stop to ask a person who is not there")
 	}
-	if graph.Mode != "" {
-		t.Fatalf("a graph declaring no mode carries %q", graph.Mode)
+	if !strings.Contains(err.Error(), "pr-sweep") {
+		t.Errorf("the refusal says %q, want it to name the graph", err)
+	}
+	// The line that is missing, so the refusal can be acted on without reading the manual.
+	if !strings.Contains(err.Error(), "mode:") {
+		t.Errorf("the refusal says %q, want it to name the line to add", err)
+	}
+	for _, offered := range model.PermissionModesOffered() {
+		if !strings.Contains(err.Error(), offered) {
+			t.Errorf("the refusal says %q, want it to offer %q", err, offered)
+		}
 	}
 }

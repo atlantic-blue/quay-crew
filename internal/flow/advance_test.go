@@ -11,6 +11,7 @@ import (
 const fixGraph = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   fix:   { type: dispatch, prompt: "fix the build" }
   ok:    { type: choice, on: { result.failed: "false" } }
@@ -45,6 +46,7 @@ func TestAGraphWhereEveryNodeHasAnIncomingEdgeIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: cycle
 version: 1
+mode: edits
 nodes:
   a: { type: dispatch, prompt: "a" }
   b: { type: dispatch, prompt: "b" }
@@ -64,6 +66,7 @@ func TestAnEdgeToANodeNobodyDeclaredIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: dangling
 version: 1
+mode: edits
 nodes:
   a: { type: dispatch, prompt: "a" }
 edges:
@@ -171,6 +174,7 @@ func TestPromptsRenderFromState(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: templated
 version: 1
+mode: edits
 nodes:
   greet: { type: dispatch, prompt: "hello {{who}}" }
 edges:

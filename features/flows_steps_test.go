@@ -80,6 +80,44 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The author has to be able to act on the refusal without going and reading the manual, so it
+	// carries the line to add rather than only the fact that something is missing.
+	sc.Step(`^the refusal names the line the graph is missing$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("nothing was refused")
+		}
+		if !strings.Contains(w.lastErr.Error(), "mode:") {
+			return fmt.Errorf("the refusal says %q, want it to name the line to add", w.lastErr)
+		}
+		return nil
+	})
+
+	// What the graph asked for and what the crew found, as two lines rather than one sentence
+	// printed twice. Both are checked here because either alone reads as complete and is not.
+	sc.Step(`^reading the run back says it wanted "([^"]*)" and found "([^"]*)"$`,
+		func(ctx context.Context, wanted, found string) error {
+			w := worldFrom(ctx)
+			kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+			if err != nil {
+				return err
+			}
+			if !strings.Contains(kept.State["result.expected"], wanted) {
+				return fmt.Errorf("the run says it expected %q, want the claim the graph declared about %q",
+					kept.State["result.expected"], wanted)
+			}
+			if !strings.Contains(kept.State["result.unmet"], found) {
+				return fmt.Errorf("the run says it found %q, want %q", kept.State["result.unmet"], found)
+			}
+			// The word means what it says, or a reader sees `failed false` beside the sentence saying
+			// the run stopped and has to decide which of the two to believe.
+			if kept.State["result.failed"] != "true" {
+				return fmt.Errorf("the run reads result.failed %q on a step that did not do its job, want true",
+					kept.State["result.failed"])
+			}
+			return nil
+		})
+
 	sc.Step(`^the operator starts the flow "([^"]*)" in the project$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
 		engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server)

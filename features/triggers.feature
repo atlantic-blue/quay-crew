@@ -22,6 +22,7 @@ Feature: A flow run starts because something happened
       """
       name: fix-red
       version: 1
+      mode: edits
       nodes:
         arrived: { type: trigger }
         fix:     { type: dispatch, prompt: "the build at {{url}} is red. Fix it." }
@@ -59,6 +60,7 @@ Feature: A flow run starts because something happened
       """
       name: started-by-hand
       version: 1
+      mode: edits
       nodes:
         fix: { type: dispatch, prompt: "fix the build" }
       edges:

@@ -10,6 +10,7 @@ import (
 const askingGraph = `
 name: careful
 version: 1
+mode: edits
 nodes:
   fix:    { type: dispatch, prompt: "fix the build" }
   permit: { type: ask, text: "fixed it locally. push?" }
@@ -37,6 +38,7 @@ func TestAnAskWithNoQuestionIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: mute
 version: 1
+mode: edits
 nodes:
   go:     { type: dispatch, prompt: "go" }
   permit: { type: ask }
@@ -58,6 +60,7 @@ func TestReachingAnAskPutsTheQuestionToTheOperator(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: careful
 version: 1
+mode: edits
 nodes:
   fix:    { type: dispatch, prompt: "fix it" }
   permit: { type: ask, text: "fixed {{what}}. push?" }
