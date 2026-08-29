@@ -32,7 +32,8 @@ var swept = []struct {
 	// and finding nothing is exactly what a clean tree looks like.
 	least int
 }{
-	{dir: "../../roles", least: 24},
+	{dir: "../../roles", least: 30},
+	{dir: "../../flows", only: ".yaml", least: 2},
 	{dir: "../../docs", least: 10},
 	{dir: "../../features", only: ".feature", least: 30},
 }

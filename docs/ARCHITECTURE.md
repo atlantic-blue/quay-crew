@@ -364,9 +364,15 @@ the blocking is done by an executor beside the reducer: it takes the commands th
 makes the call, and feeds the result back in as an event. One goroutine per outstanding dispatch,
 never one per run, and the reducer itself still touches no Docker, no Postgres and no model.
 
-Graphs are authored as files, loaded into the store, and versioned. A run is addressed at a project,
-because that is what a dispatch needs, so the trigger carries `workspace/project` and no node names a
-session:
+Graphs are authored as files, loaded into the store, and versioned. Two worked examples live in
+[`flows/`](../flows) at the root of this repository, beside `roles/` and `skills/` for the same reason:
+they are authored artefacts an operator imports rather than code the build links in. `quay flow import
+flows/transcript-release.yaml` imports one. Between them they use every node type above except
+`trigger`, and a unit test parses each one, because an example that dies at its first movement teaches
+the wrong shape to everybody who copies it.
+
+A run is addressed at a project, because that is what a dispatch needs, so the trigger carries
+`workspace/project` and no node names a session:
 
 ```yaml
 name: fix-red-pull-request

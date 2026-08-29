@@ -8,6 +8,45 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **The three roles the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
+  They were written outside this repository, so nobody could read them, review them or change them.
+  `orchestrator`, `infrastructure-writer` and `releaser` are now fifteen roles rather than twelve, held
+  to the same rules as the rest: they import, they open by saying what quay does not enforce, they name
+  the model they run on, and the naming sweep reads them. The two graphs, `transcript-release` and
+  `transcript-watch`, sit beside `roles/` and `skills/` because they are the same kind of thing, an
+  authored artefact an operator imports. Between them they use every node type except `trigger`, and a
+  unit test parses each one: an example that dies at its first movement teaches the wrong shape to
+  everybody who copies it.
+
+  **A push is not a deploy, and the roles confused the two.** `infrastructure-writer` received no
+  skills, which was justified as stopping it from shipping unreviewed infrastructure. It did not stop
+  that. What runs a pipeline is a merge and the pipeline is what applies, so the merge is the gate, and
+  taking the push away only removed the operator's sight of work in flight. Every role now receives
+  `skills`, so every role holds the git tool, and each of the three briefs ends a slice the same way:
+  commit it, push the branch, open a pull request describing what changed and why in two to five
+  sentences, say the address in the answer, move on. No role merges, and no role applies infrastructure
+  from a sandbox.
+
+  **An orchestrator whose fallback is to absorb the work is not an orchestrator.** Its brief said that a
+  refused declaration meant doing that work itself. That was written for the depth limit and it was
+  applied to a credential failure, so one session wrote the entire product and no child ever ran. It now
+  works around exactly one refusal, the depth limit, and only by doing that one child's work. Anything
+  else means writing the refusal into the answer, word for word, and ending.
+
+  **A test and the code it tests now come from different sessions.** One session wrote the contract, the
+  tests and the implementation, so the tests agreed with the code as it was written. The orchestrator's
+  brief says that a deliverable carrying logic is declared as three children, `test-writer` then
+  `implementer` then `verifier`. All three already shipped; nothing had ever told an orchestrator to use
+  them.
+
+  Three tiers hold this up. The unit tier reads `roles/` off disk and names what each role may call, and
+  refuses a role that does not receive the skills it would push with. `features/roles.feature` asks each
+  of the three, through the credential a job running as it carries, for a verb it holds and a verb it
+  does not. `features/rolesessions.feature` gains the direction it was missing: a role receiving
+  `skills` is handed the git skill and its container mounts it, where only the negative case was written
+  down before. The integration tier proves the same crossing over Postgres, because the role is a row
+  and the mount is built from what came back out of it.
+
 - **A role reads back out of the crew.** `quay role show [<workspace>] <name>` prints the summary,
   the version, the model, what the role receives, what it may call, who holds it, and the brief in
   full. A bare name reads what the current address can see; a workspace level address reads the

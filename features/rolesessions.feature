@@ -124,3 +124,24 @@ Feature: A step of a flow runs as a role, in its own session
     When the operator starts the flow "write-contracts" in the project
     Then the role's memory file carries "You are the architect."
     And the role's memory file names no product but quay
+
+  # The other direction of the same boundary, and the one that decides whether a role can push.
+  # Nothing is cloned for a session, so a repository reaches one through the git skill, and a role
+  # that receives skills is handed it and mounts it. Only the negative case was written down before,
+  # and a boundary tested in one direction is half a boundary.
+  Scenario: A role that receives skills is given the git skill, and its container mounts it
+    Given the crew has a skill "git" that says "Branch first."
+    And the operator imports the "releaser" role this build ships
+    And the operator attached the "releaser" role to the workspace
+    And the crew holds this flow graph:
+      """
+      name: release
+      version: 1
+      nodes:
+        push: { type: dispatch, role: releaser, prompt: "open the pull request" }
+      edges:
+        - [push, done]
+      """
+    When the operator starts the flow "release" in the project
+    Then the role's session holds the "git" skill
+    And the role's sandbox mounts the git skill

@@ -3,6 +3,7 @@ package role
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -67,14 +68,15 @@ func TestEveryShippedRoleSaysWhatQuayDoesNotEnforce(t *testing.T) {
 	}
 }
 
-// A role that names no model is refused at import, so every one of the twelve names one. This holds
-// each of them to the model it was written for rather than to a default that could quietly move.
+// A role that names no model is refused at import, so every one of them names one. This holds each
+// to the model it was written for rather than to a default that could quietly move.
 func TestTheShippedRolesRunOnTheModelsTheyWereWrittenFor(t *testing.T) {
 	want := map[string]string{
 		"architect": "opus", "assessor": "sonnet", "codebase-mapper": "sonnet",
 		"debugger": "sonnet", "designer": "opus", "implementer": "sonnet",
 		"marketing": "opus", "marketing-researcher": "opus", "security": "sonnet",
 		"test-writer": "sonnet", "verifier": "sonnet", "wrapper": "sonnet",
+		"orchestrator": "opus", "infrastructure-writer": "opus", "releaser": "sonnet",
 	}
 	roles, err := All(shipped)
 	if err != nil {
@@ -96,29 +98,71 @@ func TestTheShippedRolesRunOnTheModelsTheyWereWrittenFor(t *testing.T) {
 }
 
 // Default deny is the rule, so a verb in a shipped role is something its brief actually asks for.
-// The assessor's brief spawns a security review and reads what came back; nothing else spawns
-// anything, and a role that quietly gained a verb would go unnoticed without this.
-func TestOnlyTheAssessorMayDeclareJob(t *testing.T) {
+// The table is written out rather than derived, because a grant that appeared without anybody
+// deciding it is exactly what this catches, and a test that derived the answer from the files would
+// agree with whatever the files said.
+func TestEachShippedRoleMayOnlyWhatItsBriefAsksFor(t *testing.T) {
+	want := map[string][]string{
+		// Its brief declares a security review and reads what came back.
+		"assessor": {VerbJobCreate, VerbJobRead},
+		// It declares the tree, reads the answers, and stops a child that has gone wrong.
+		"orchestrator": {VerbJobCreate, VerbJobRead, VerbJobStop},
+		// It declares one child per deliverable that has its own review.
+		"infrastructure-writer": {VerbJobCreate, VerbJobRead},
+		// It reads the job it was given and releases it. A session that can push and can also fan
+		// out could spend a whole budget on pushes nobody reviewed.
+		"releaser": {VerbJobRead},
+	}
+	roles, err := All(shipped)
+	if err != nil {
+		t.Fatalf("loading the roles this build ships: %v", err)
+	}
+	granted := 0
+	for _, one := range roles {
+		expected, known := want[one.Name]
+		if !known {
+			if len(one.May_) != 0 {
+				t.Errorf("%s may %s, and its brief declares nothing; default deny is what makes a grant mean something",
+					one.Name, strings.Join(one.May_, ", "))
+			}
+			continue
+		}
+		granted++
+		if strings.Join(one.May_, ", ") != strings.Join(sorted(expected), ", ") {
+			t.Errorf("%s may %s, and this build grants it %s",
+				one.Name, strings.Join(one.May_, ", "), strings.Join(sorted(expected), ", "))
+		}
+	}
+	if granted != len(want) {
+		t.Errorf("%d of the %d roles this test grants verbs to are in roles/", granted, len(want))
+	}
+}
+
+// sorted is what a manifest's list becomes when it is read, so the comparison above is against the
+// same shape rather than against the order somebody typed.
+func sorted(verbs []string) []string {
+	out := append([]string(nil), verbs...)
+	sort.Strings(out)
+	return out
+}
+
+// Every role can push. A push is not a deploy: what runs a pipeline is a merge, and no role merges,
+// so taking the push away removes the operator's sight of work in flight and stops nothing.
+//
+// A repository reaches a session here through the git skill and nothing is cloned for one, so a role
+// that does not receive `skills` holds no git tool and cannot open a pull request whatever its brief
+// says. That makes `receives: skills` the whole of "this role can push", and it is why this is a
+// check on the manifest rather than on the prose.
+func TestEveryShippedRoleReceivesTheSkillsItWouldPushWith(t *testing.T) {
 	roles, err := All(shipped)
 	if err != nil {
 		t.Fatalf("loading the roles this build ships: %v", err)
 	}
 	for _, one := range roles {
-		switch one.Name {
-		case "assessor":
-			for _, verb := range []string{VerbJobCreate, VerbJobRead} {
-				if !one.May(verb) {
-					t.Errorf("the assessor may not %s, and its brief spawns a security review and reads the result", verb)
-				}
-			}
-			if one.May(VerbJobStop) || one.May(VerbJobAnswer) {
-				t.Error("the assessor may stop or answer job, and its brief asks for neither")
-			}
-		default:
-			if len(one.May_) != 0 {
-				t.Errorf("%s may %s, and its brief spawns nothing; default deny is what makes a grant mean something",
-					one.Name, strings.Join(one.May_, ", "))
-			}
+		if !one.Gets(MaterialSkills) {
+			t.Errorf("%s receives %s, so its sandbox holds no git tool and it cannot push what it wrote",
+				one.Name, strings.Join(one.Receives, ", "))
 		}
 	}
+	t.Logf("%d roles receive skills", len(roles))
 }
