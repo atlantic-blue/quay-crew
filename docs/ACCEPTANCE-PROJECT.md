@@ -166,8 +166,9 @@ distribution, the store and the alarm are three deliverables with three reviews.
 
 The fetching job tries to declare a child at depth three. The crew refuses it, and the refusal names the
 limit, the current depth and the command that raises it. **That refusal is a step of the test and not an
-accident.** The session then does the work itself, which is what the design says a model does when it
-reads the refusal.
+accident.** The session then does that one child's work itself, which is the one refusal an
+orchestrator may work around. Every other refusal ends the job with the refusal written into the answer,
+for the reason section 7 gives.
 
 The depth limit for the run is two. That number comes from the tree and not from taste: the tree is three
 levels deep, so a limit of two makes the fourth level refuse. The operator sets it with `quay limits`
@@ -175,34 +176,55 @@ before the run starts.
 
 ## 7. The roles
 
-Three roles, imported with `quay role import` and attached by the operator. The build ships twelve roles in
-`roles/`, and none of them is defined by what it may push, which is the boundary this project turns on.
+Three roles, imported with `quay role import` and attached by the operator. They live in
+[`roles/`](../roles) now, beside the twelve the design phase uses, so they can be read, reviewed and
+changed like anything else. They were written outside this repository for the first run, which is the
+reason the first run's version of this section was wrong in the three ways below.
 
 **`orchestrator`.** `receives: job, context, skills`. `may: job.create, job.read, job.stop`. It declares
-the three children, reads their answers, and writes the summary at the end. It does not push.
+the three children, reads their answers, and writes the summary at the end.
 
-**`infrastructure-writer`.** `receives: job, context`. `may: job.create, job.read`. It writes the
-infrastructure into the working tree and declares its own three children. It receives no skills, so it
-holds no git skill and no token. It cannot push and it cannot open a pull request.
+**`infrastructure-writer`.** `receives: job, context, skills`. `may: job.create, job.read`. It writes the
+infrastructure into the working tree, declares its own three children, and opens the pull request for
+what it wrote. It never applies anything.
 
-**`releaser`.** `receives: job, skills`. `may: job.read`. It holds the git skill and the token. It commits,
-pushes and opens the pull request. It cannot declare a job.
+**`releaser`.** `receives: job, skills`. `may: job.read`. It takes a working tree somebody else wrote and
+gets it onto a branch, in a commit, in a pull request. It cannot declare a job.
 
-**Why the lists must differ.** A merge runs the pipeline, and the pipeline deploys. A session that writes
-infrastructure and can also push can put an unreviewed distribution into production from one wrong answer,
-and the bill arrives before anybody reads the diff. The second difference runs the other way: `releaser`
-cannot declare a job, because a session that can push and can also fan out could spend the whole budget on
-pushes nobody reviewed. The third is `receives`, which bounds what reaches the container at all rather than
-what a session may ask the crew for. A role that receives no skills holds no credential in its sandbox,
-even if its brief asks it to push.
+**A push is not a deploy, and the first version of this section confused the two.** What runs the pipeline
+is a merge, and the pipeline is what applies, so the merge is the gate and it is the operator's. Pushing a
+branch changes nothing in any account. `infrastructure-writer` received no skills on the first run, which
+was justified as stopping it from shipping unreviewed infrastructure; it did not stop that, and the only
+thing it changed was that the operator could not see what had been built until the job ended. So every
+role receives `skills`, every role pushes and opens a pull request when its slice is done, and no role
+merges.
 
-**What the run must observe.** A session running as `infrastructure-writer` tries to push. The attempt
-fails inside the sandbox, because the tool is not there, and that failure appears in the job's answer. If
-it succeeds, the capability model failed, and that is a finding of the worst kind.
+**Why the `may` lists still differ.** `releaser` cannot declare a job, because a session that can push and
+can also fan out could spend the whole budget on pushes nobody reviewed. `infrastructure-writer` cannot
+stop one, because stopping a job is the orchestrator's. `receives` still bounds what reaches the container
+at all, which is a different question from what a session may ask the crew for.
+
+**An orchestrator does not absorb the tree.** The first version of its brief said that a refused
+declaration meant doing that work itself. That was written for the depth limit in section 6 and it was
+applied to a credential failure, so one session wrote the whole product and no child ever ran. It now
+works around exactly one refusal, the depth limit, and only by doing that one child's work. Every other
+refusal is written into the answer, with the exact words of the refusal, and the job ends.
+
+**A test and the code it tests come from different sessions.** On the first run one session wrote the
+contract, the tests and the implementation, so the tests agreed with the code as it was written. The
+orchestrator's brief now says that any deliverable carrying logic is declared as three children,
+`test-writer` then `implementer` then `verifier`. Those three already shipped; nothing had ever told an
+orchestrator to use them.
+
+**What the run must observe.** Every child ends with a pull request address in its answer, and nothing is
+merged by the crew. A session running as `infrastructure-writer` that runs an apply, rather than writing
+the pipeline that applies on merge, is a finding of the worst kind.
 
 ## 8. The flows
 
-Two flows. The operator imports both before the run and starts neither by hand.
+Two flows, in [`flows/`](../flows) at the root of this repository: `transcript-release.yaml` and
+`transcript-watch.yaml`. The operator imports both with `quay flow import` before the run and starts
+neither by hand.
 
 ```mermaid
 flowchart LR
@@ -325,8 +347,8 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 16. **The budget.** Every child draws from the root. A failure is a tree that spends past it.
 17. **The lease.** Section 13 kills the controller while a child runs. A failure dispatches a job twice,
     or leaves one that never moves again.
-18. **The `may` and `receives` lists.** A failure declares a job the role does not grant, or pushes from a
-    session with no git skill.
+18. **The `may` and `receives` lists.** A failure declares a job the role does not grant, merges a pull
+    request the operator never read, or ends a slice with nothing pushed.
 19. **Dispatch, task list, answer.** A failure blocks without an end, or returns an answer only a person
     can read.
 20. **Mode.** Each job declares its mode. A failure stops to ask permission with nobody there.
