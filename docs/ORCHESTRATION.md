@@ -1722,6 +1722,86 @@ Who owns each move:
 - The controller in section 4 owns `reclaimed` and `archived`, and nothing else.
 - The control plane owns `running`, `idle` and `failed`, which it already writes today.
 
+### What a listing says, which is not what the row says
+
+The row's `status` only ever knew about dispatched tasks. `StatusRunning` is written when a task
+starts and `StatusIdle` when it lands, and an interactive conversation is not a dispatched task, so a
+container answering somebody's question read exactly like an empty one. Eighteen sandboxes were read
+on 28 August 2026 and six of them held a running model runtime. All six listed as `idle`.
+
+That word is what an operator acts on. A restart, a drain and a reclaim all start from a listing, and
+any of the three takes a running conversation away mid answer.
+
+So a listing derives its word from three inputs rather than one field, and it says which one it is:
+
+- **`running`**, a dispatched task is open. The row knows this and it is unchanged.
+- **`attached`**, somebody has the conversation open. The container's own tmux says so.
+- **`awake`**, a model runtime is up inside the sandbox with nobody watching it. The container's own
+  process table says so.
+- **`idle`**, none of those. The only real idle.
+- **`unknown`**, the crew asked the sandbox and was not told. Never `idle`.
+
+**Why those words.** `awake` rather than `thinking` or `busy`: what the crew reads is a runtime
+process, and that process is up both while it answers and while it waits at a prompt, so `thinking`
+claims more than was measured, and `busy` is what `running` already means to an operator. `attached`
+is the word the operator typed to get there. `unknown` says the crew could not tell, which is a
+different thing from nothing being there, and a listing that guessed `idle` there would hand an
+operator the one word that invites them to take the container.
+
+```mermaid
+flowchart TD
+    ROW(["a session in a listing"]) --> TASK{"does the row say idle?"}
+    TASK -->|"no"| KEEP["print the row's own word:<br/>running, failed, stopped, reclaimed"]
+    TASK -->|"yes"| ASK["ask the sandbox, by name"]
+    ASK --> TOLD{"did it answer?"}
+    TOLD -->|"no"| UNKNOWN["unknown"]
+    TOLD -->|"yes"| WHO{"is a client on the<br/>conversation's tmux?"}
+    WHO -->|"yes"| ATTACHED["attached"]
+    WHO -->|"no"| PROC{"is a model runtime in<br/>the process table?"}
+    PROC -->|"yes"| AWAKE["awake"]
+    PROC -->|"no"| IDLE["idle"]
+```
+
+**Asked by name, and never by building a sandbox.** `SessionAttached` already documents why at
+`internal/controlplane/lifecycle.go:66`: the sandbox handles are a map in one process and the
+containers are not, so after a restart the map is empty while every container runs on, and a question
+that made a sandbox to answer would start the very container it is asked about taking away.
+
+**What it costs.** Two questions to the sandbox for every row that would otherwise read `idle`, and
+nothing at all for any other row. They are docker execs, so a listing overlaps them, eight at a time,
+and gives the whole sweep five seconds, after which every row still waiting reads `unknown` rather
+than holding the view open. The budget belongs to the listing rather than to each session, so a crew
+of forty rows costs no more of an operator's patience than a crew of twenty when the daemon is
+wedged.
+The figures, measured against a real daemon by
+`TestWhatOneListingOfTwentySessionsCosts` in the continuous integration `integration` job:
+
+- **PLACEHOLDER_LISTING** for a listing of twenty sessions, each with a container.
+- **PLACEHOLDER_QUESTION** for one question to one container.
+
+Because of the price, a caller asks for it: `ListSessionsRequest.presence`. The console, `quay
+sessions` and the web page set it, and the machinery that resolves an address, finds a session by
+name or lists sessions to delete a project does not. A caller that does not ask reads the row's own
+word, exactly as it did before.
+
+**What this does not do.**
+
+- **The drain is unchanged.** `DrainSessions` reads the row's own status out of the store, so it
+  still refuses over a dispatched task and still puts down a session holding a conversation nobody
+  dispatched. Making it refuse over `awake` and `attached` means reading presence in the drain and
+  deciding what `unknown` should do there, which is its own change.
+- **The reclaim is unchanged**, and it was already safe: `internal/work/lifecycle.go` asks
+  `SessionAttached` before every reclaim and treats an error as attached. It does not read the
+  runtime question, so a conversation answering with nobody watching it can still be reclaimed once a
+  workspace sets a reclaim time.
+- **`GetSession` does not ask.** One session fetched on its own reads the row's word.
+- **`awake` is a process, not a thought.** A runtime waiting at a prompt with nobody attached reads
+  the same as one mid answer, because from outside the container they are the same thing.
+- **The match is deliberately wide.** Anything in the sandbox whose program name is the runtime's
+  counts, so a session running `grep claude` reads `awake` while the grep lasts. Reading a live
+  conversation as empty invites a drain over the top of it; reading an empty container as busy holds
+  it a little longer.
+
 ### How the controller in section 4 owns this
 
 The controller reconciles work. A session is not a second resource with its own declaration. **The
@@ -1754,16 +1834,18 @@ flowchart TD
     FILE --> LEAVE
 ```
 
-**One gap this design does not close, and it is the dangerous one.** The crew cannot tell whether an
-operator is attached. `AttachSession` returns a `tmux` command that the operator runs against the
-container, and the crew records nothing about it afterwards. So a controller that reclaimed on idle
-time alone would close a container an operator is typing into. Until a signal exists, the reclaim
-time is unset and the controller reclaims nothing, which is exactly the behaviour today.
+**One gap this design did not close, and it was the dangerous one.** The crew could not tell whether
+an operator was attached. `AttachSession` returns a `tmux` command that the operator runs against the
+container, and the crew recorded nothing about it afterwards, so a controller that reclaimed on idle
+time alone would close a container an operator is typing into.
 
-Two signals would work, and neither is built. The crew can ask the container whether the `quay` tmux
-session inside it has a client, through one exec. Or `AttachSession` can stamp the row, and the
-console can refresh the stamp while the pane is open. The first needs no new state and costs one exec
-per candidate session per tick. That cost is unmeasured.
+Two signals would work, and the first is built. The crew asks the container whether the `quay` tmux
+session inside it has a client, through one exec: `DockerProvider.Attached`, and the controller reads
+it before every reclaim. The other, stamping the row on attach and refreshing the stamp while the
+pane is open, was rejected: a stamp needs somebody to keep it fresh, how often is a number, and no
+measurement has set one.
+
+The container answers a second question now as well, which is the subject of the section below.
 
 ### Can a session resume after its container goes, and what does it cost
 

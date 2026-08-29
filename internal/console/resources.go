@@ -503,6 +503,10 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) List
 		resp, err := client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
 			Project:  parent,
 			Archived: bool(from),
+			// The console is what an operator reads before they act on a session, so it pays for the
+			// question the sandbox answers: a conversation running with nobody watching it reads awake
+			// here rather than idle. A put away session has no container, so nothing is asked for one.
+			Presence: from == live,
 		})
 		if err != nil {
 			return nil, err
@@ -548,7 +552,10 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 		// before typing.
 		Detail: session.GetLabel(),
 		Cells:  display.SessionCells(session, workspaceName, projectName),
-		State:  stateFromStatus(session.GetStatus()),
+		// The word the row prints rather than the one the store holds, so the colour and the cell
+		// agree. A session whose sandbox is answering with nobody watching it says awake, and a green
+		// row under that word would say the opposite of the word.
+		State: stateFromStatus(display.SessionStatus(session)),
 	}
 }
 
@@ -749,12 +756,17 @@ func attachCommand(client quaycrewv1.ControlPlaneServiceClient, sessionID string
 	return exec.Command("docker", args...), nil
 }
 
-// stateFromStatus maps the control plane's session status onto a colour. An unrecognised status is
-// left uncoloured rather than guessed at, so a new status shows up as plain text instead of a lie.
+// stateFromStatus maps the word a listing shows onto a colour. An unrecognised status is left
+// uncoloured rather than guessed at, so a new status shows up as plain text instead of a lie.
 func stateFromStatus(status string) State {
 	switch status {
-	case "idle":
+	case display.StatusIdle:
 		return StateReady
+	// A conversation is running in there. Awake is a runtime answering with nobody watching it and
+	// attached is somebody typing, and both mean the same thing to an operator looking for something
+	// to act on: that container is somebody's.
+	case display.StatusAwake, display.StatusAttached:
+		return StateBusy
 	case "running", "dispatching":
 		return StateBusy
 	// Reclaimed reads the same as stopped, because from the console's side both are a session with
@@ -763,6 +775,8 @@ func stateFromStatus(status string) State {
 		return StateStopped
 	case "failed":
 		return StateFailed
+	// Unknown falls through on purpose: the crew asked the sandbox and was not told, so the row is
+	// left uncoloured rather than dressed as ready or as busy.
 	default:
 		return StateUnknown
 	}

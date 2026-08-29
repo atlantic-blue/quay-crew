@@ -6,7 +6,7 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
-## 28 August 2026
+## 29 August 2026
 
 - **What a piece of work cannot be done without is now `--requires`, not `--hands`.** The old flag
   needed explaining every time somebody read it, which is the whole case against it. `--requires`
@@ -33,6 +33,43 @@ read, or run with `make features`.
   **Work already in the store.** Migration 0036 renames the column, so a row written before today
   requires exactly the material it was declared with. Nothing reads the old name, because there is no
   old name left to read.
+
+## 28 August 2026
+
+- **A session that is running a conversation no longer reads idle.** The row's status only ever knew
+  about dispatched tasks, so a conversation somebody opened by hand and left answering looked exactly
+  like an empty container. Eighteen sandboxes were read on 28 August 2026 and six of them held a
+  running model runtime; all six listed as `idle`, which is the word that invites a restart, a drain
+  or a reclaim.
+
+  A listing now derives its word from three inputs and says which one it is: `running` for a
+  dispatched task, `attached` for somebody with the conversation open, `awake` for a model runtime up
+  with nobody watching it, and `idle`, which finally means an empty container. A fifth, `unknown`,
+  says the crew asked the sandbox and was not told, which is never `idle`. `awake` rather than
+  `thinking`, because what the crew reads is a process, and that process is up while it answers and
+  while it waits at a prompt.
+
+  **The sandbox is asked, and nothing is written down.** The provider has a second question beside
+  `Attached`: is a model runtime in this container's own process table. The reader carries no part of
+  the runtime's name, because the shell that reads the table is itself a process in that container
+  and would otherwise find its own command line and report every sandbox in the crew as busy. Both
+  questions are asked by name and neither creates a sandbox to answer, so a listing cannot start the
+  container it is asked about taking away. A provider that cannot tell returns the error rather than
+  answering no.
+
+  **What it costs is asked for rather than always paid.** Two questions per row that would otherwise
+  read `idle` and none for any other row, overlapped eight at a time, with five seconds for the whole
+  sweep rather than for each row, after which anything still waiting reads `unknown`. So a wedged
+  daemon costs one listing the same whether the crew has twenty sessions or forty.
+  `ListSessions` takes a `presence` flag: the console, `quay sessions` and
+  the web page set it, and the machinery that resolves an address or finds a session by name does
+  not. The measurement is in `docs/ORCHESTRATION.md` section 11 and comes from a test that lists
+  twenty real containers on the continuous integration runner.
+
+  **What it does not do.** The drain still reads the row, so it still puts down a session holding a
+  conversation nobody dispatched. The reclaim is unchanged and was already safe, because it asks
+  whether somebody is attached before every reclaim. Nine scenarios in `features/presence.feature`,
+  and 564 in the suite where there were 555.
 
 - **The roles are quay's own words now.** The twelve in `roles/` arrived as a port and read like one:
   every brief opened by naming another product, and between them they named its files, its slash
