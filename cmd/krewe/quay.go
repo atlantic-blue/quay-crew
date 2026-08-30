@@ -250,6 +250,10 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runHook(ctx, client, args[1:], out)
 	case "role":
 		return runRole(ctx, client, args[1:], out)
+	case "steer":
+		return runSteer(ctx, client, args[1:], out)
+	case "steers":
+		return runSteers(ctx, client, args[1:], out)
 	case "job":
 		return runJob(ctx, client, args[1:], out)
 	case "target":

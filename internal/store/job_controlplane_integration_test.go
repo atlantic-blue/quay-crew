@@ -9,9 +9,11 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
 	"github.com/atlantic-blue/krewe/internal/controlplane"
 	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
 	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/atlantic-blue/krewe/internal/secrets"
 	"github.com/atlantic-blue/krewe/internal/store"
@@ -378,4 +380,100 @@ func declaredUnder(t *testing.T, s *controlplane.Server, kept store.Store, proje
 		t.Fatalf("CreateJob: %v", err)
 	}
 	return declared.ID
+}
+
+// A steer recorded against a job in flight is read back on that job, and the count reaches the job
+// at the top of the tree.
+//
+// Only the real engine says this. The steer is a row of its own and the count is a column on another
+// table, written in one transaction, so what is proved here is the half the in memory store cannot
+// have an opinion about: the foreign key holds, the count survives the read that rebuilds a job out
+// of its columns, and the marks come back in the order they were made.
+func TestASteerIsReadBackOnTheJobThroughPostgres(t *testing.T) {
+	s, _ := aSystemOnPostgres(t)
+	ctx := context.Background()
+	workspace, project := aProjectOnPostgres(t, s)
+	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+	}); err != nil {
+		t.Fatalf("SetWorkspaceLimits: %v", err)
+	}
+	root, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "build the transcripts page", Brief: "build what the design describes",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	// The child is declared the way a session declares one: the parent comes off the credential the
+	// caller presented, never off the request.
+	under := auth.WithGrant(ctx, auth.Grant{Job: root.GetJob().GetId(), Verbs: []string{role.VerbJobCreate}})
+	declared, err := s.CreateJob(under, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "fetch the captions", Brief: "fetch them once and keep them",
+	})
+	if err != nil {
+		t.Fatalf("declare the child: %v", err)
+	}
+	child := declared.GetJob().GetId()
+
+	for _, said := range []struct{ on, text string }{
+		{on: root.GetJob().GetId(), text: "the workspace has no secrets"},
+		{on: child, text: "it chose a store that bills while idle"},
+	} {
+		if _, err := s.RecordSteer(ctx, &quaycrewv1.RecordSteerRequest{Job: said.on, Text: said.text}); err != nil {
+			t.Fatalf("RecordSteer on %s: %v", said.on, err)
+		}
+	}
+
+	read, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: root.GetJob().GetId()})
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if read.GetJob().GetSteers() != 2 {
+		t.Fatalf("the job at the top counts %d steers, want the tree's 2", read.GetJob().GetSteers())
+	}
+	onTheChild, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: child})
+	if err != nil {
+		t.Fatalf("GetJob on the child: %v", err)
+	}
+	if onTheChild.GetJob().GetSteers() != 1 {
+		t.Fatalf("the child counts %d steers, want 1", onTheChild.GetJob().GetSteers())
+	}
+
+	listed, err := s.ListSteers(ctx, &quaycrewv1.ListSteersRequest{Job: child})
+	if err != nil {
+		t.Fatalf("ListSteers: %v", err)
+	}
+	if len(listed.GetSteers()) != 2 {
+		t.Fatalf("the report carries %d steers, want the tree's 2", len(listed.GetSteers()))
+	}
+	if listed.GetSteers()[0].GetText() != "the workspace has no secrets" {
+		t.Fatalf("the report opens with %q", listed.GetSteers()[0].GetText())
+	}
+	if listed.GetSteers()[1].GetJob() != child {
+		t.Fatalf("the second steer says it landed on %q, want the child", listed.GetSteers()[1].GetJob())
+	}
+	if listed.GetRoot().GetId() != root.GetJob().GetId() {
+		t.Fatalf("the report names %q as the job at the top", listed.GetRoot().GetId())
+	}
+}
+
+// A steer against a job the database does not hold is refused by the foreign key as much as by the
+// call, and the row is not written.
+func TestASteerAgainstAJobThatIsNotThereIsRefusedThroughPostgres(t *testing.T) {
+	s, kept := aSystemOnPostgres(t)
+	ctx := context.Background()
+	aProjectOnPostgres(t, s)
+
+	if _, err := s.RecordSteer(ctx, &quaycrewv1.RecordSteerRequest{
+		Job: "0123456789abcdef01234567", Text: "the workspace has no secrets",
+	}); status.Code(err) != codes.NotFound {
+		t.Fatalf("a steer against a job nobody has answered %v, want NotFound", err)
+	}
+	listed, err := kept.ListSteers(ctx, "0123456789abcdef01234567")
+	if err != nil {
+		t.Fatalf("ListSteers: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("the store holds %d steers against a job it does not have", len(listed))
+	}
 }

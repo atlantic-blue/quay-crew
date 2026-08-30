@@ -76,6 +76,8 @@ const (
 	ControlPlaneService_StopJob_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/StopJob"
 	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
 	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
+	ControlPlaneService_RecordSteer_FullMethodName              = "/quaycrew.v1.ControlPlaneService/RecordSteer"
+	ControlPlaneService_ListSteers_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSteers"
 	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
 	ControlPlaneService_SetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetWorkspaceLimits"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
@@ -158,6 +160,9 @@ type ControlPlaneServiceClient interface {
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error)
 	AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error)
+	// The score of a job: one command marks a moment, and the report reads the marks back.
+	RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error)
+	ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
 	GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error)
@@ -754,6 +759,26 @@ func (c *controlPlaneServiceClient) AnswerJob(ctx context.Context, in *AnswerJob
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordSteerResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordSteer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSteersResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListSteers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetWorkspaceLimitsResponse)
@@ -897,6 +922,9 @@ type ControlPlaneServiceServer interface {
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error)
 	AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error)
+	// The score of a job: one command marks a moment, and the report reads the marks back.
+	RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error)
+	ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
 	GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error)
@@ -1093,6 +1121,12 @@ func (UnimplementedControlPlaneServiceServer) AskJob(context.Context, *AskJobReq
 }
 func (UnimplementedControlPlaneServiceServer) AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AnswerJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordSteer not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSteers not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceLimits not implemented")
@@ -2162,6 +2196,42 @@ func _ControlPlaneService_AnswerJob_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RecordSteer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordSteerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordSteer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordSteer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordSteer(ctx, req.(*RecordSteerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListSteers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSteersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListSteers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListSteers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListSteers(ctx, req.(*ListSteersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetWorkspaceLimitsRequest)
 	if err := dec(in); err != nil {
@@ -2522,6 +2592,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AnswerJob",
 			Handler:    _ControlPlaneService_AnswerJob_Handler,
+		},
+		{
+			MethodName: "RecordSteer",
+			Handler:    _ControlPlaneService_RecordSteer_Handler,
+		},
+		{
+			MethodName: "ListSteers",
+			Handler:    _ControlPlaneService_ListSteers_Handler,
 		},
 		{
 			MethodName: "GetWorkspaceLimits",

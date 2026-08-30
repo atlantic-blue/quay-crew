@@ -1203,6 +1203,10 @@ message Job {
   // what they get back. It is stated on the root and every child carries it, so a design document is
   // evidence for that sentence rather than a replacement for it.
   string product = 36;
+  // steers is how many times the operator had to say something this job should have known, counted
+  // on the job the steer landed on and on every job above it. On the job at the top it is the score
+  // of the whole tree.
+  int32 steers = 37;
 
   // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1367,6 +1371,50 @@ message AnswerJobResponse {
   Job job = 1;
 }
 
+// Steer is one moment the operator had to say something the system should have known.
+//
+// It is the unit the acceptance job is scored in. The mark is the operator's to make, because a
+// steer looks exactly like an ordinary message and only the person typing it knows it is one.
+message Steer {
+  string id = 1;
+  // job is the job the steer landed on, and root is the job at the top of that tree, which is what
+  // the count is against.
+  string job = 2;
+  string root = 3;
+  string workspace = 4;
+  string project = 5;
+  // text is what the operator had to say, in their own words.
+  string text = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+}
+
+// RecordSteerRequest marks one moment while it is happening.
+//
+// The operator's call. A session may not record a steer against the job it is running: a score the
+// scored thing can write is not a score.
+message RecordSteerRequest {
+  // job is the job the steer lands on. Empty is the job running where the operator is standing,
+  // which is what makes this one command in the moment.
+  string job = 1;
+  string text = 2;
+}
+message RecordSteerResponse {
+  Steer steer = 1;
+  // root is the job at the top of the tree, carrying the count this steer just moved.
+  Job root = 2;
+}
+
+// ListSteersRequest reads one job's marks back, in the order they were made.
+message ListSteersRequest {
+  // job is any job in the tree. The system reads the marks of the whole tree, because the score
+  // belongs to the job at the top rather than to whichever child was running at the time.
+  string job = 1;
+}
+message ListSteersResponse {
+  repeated Steer steers = 1;
+  Job root = 2;
+}
+
 // WorkspaceLimits is the ceiling a workspace puts on the jobs its sessions declare.
 //
 // The workspace carries the ceiling and a role carries the grant, and the two mean different things:
@@ -1510,6 +1558,10 @@ service ControlPlaneService {
   // AnswerJob is the person answering. Nothing else moves the job in between.
   rpc AskJob(AskJobRequest) returns (AskJobResponse);
   rpc AnswerJob(AnswerJobRequest) returns (AnswerJobResponse);
+
+  // The score of a job: one command marks a moment, and the report reads the marks back.
+  rpc RecordSteer(RecordSteerRequest) returns (RecordSteerResponse);
+  rpc ListSteers(ListSteersRequest) returns (ListSteersResponse);
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.
   rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);
