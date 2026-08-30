@@ -231,7 +231,7 @@ func (h Hook) check(directory string, byPath map[string]File) error {
 				directory, name)
 		}
 		if systemOwnName(name) {
-			return fmt.Errorf("hook: %s names the secret %s, and names starting QC_ or CLAUDE_ are the system's own: a hook cannot ask for the system's configuration or the model's token",
+			return fmt.Errorf("hook: %s names the secret %s, which is the system's own: a hook cannot ask for the system's configuration or the model's token, under either of the names the token is carried as",
 				directory, name)
 		}
 		if strings.TrimSpace(h.Secrets[name]) == "" {
@@ -304,8 +304,14 @@ func plain(binary string) bool { return commandShape.MatchString(binary) }
 func environmentName(name string) bool { return environmentShape.MatchString(name) }
 
 // systemOwnName says the name belongs to the system rather than to whoever wrote the hook.
+//
+// QUAY_MODEL_TOKEN is the model's token under the second name the system writes it as, because Claude
+// Code strips the first name from every process a session starts. It is the same credential, so it
+// is refused the same way: a hook is content somebody else imported, and content does not ask for
+// the system's configuration or the model's token by either of its names.
 func systemOwnName(name string) bool {
-	return strings.HasPrefix(name, "QC_") || strings.HasPrefix(name, "CLAUDE_")
+	return strings.HasPrefix(name, "QC_") || strings.HasPrefix(name, "CLAUDE_") ||
+		name == "QUAY_MODEL_TOKEN"
 }
 
 // insideOwnDirectory says the path stays under the hook's directory: relative, no parent steps, no

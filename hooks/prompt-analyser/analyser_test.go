@@ -490,7 +490,7 @@ func TestTheAnalysisIsCappedAtTheCeiling(t *testing.T) {
 func TestTheLastRunLineSaysWhenWhatAndHowLong(t *testing.T) {
 	when := time.Date(2026, 8, 15, 9, 30, 0, 0, time.UTC)
 
-	line := LastRunLine(when, Analysed, 1234*time.Millisecond, "  fix the\n  flaky test  ")
+	line := LastRunLine(when, Analysed, 1234*time.Millisecond, "  fix the\n  flaky test  ", "")
 
 	for _, want := range []string{"2026-08-15T09:30:00.000Z", "analysed", "1234ms", "fix the flaky test"} {
 		if !strings.Contains(line, want) {
@@ -503,7 +503,7 @@ func TestTheLastRunLineSaysWhenWhatAndHowLong(t *testing.T) {
 }
 
 func TestTheLastRunLineKeepsOnlyTheOpeningOfALongMessage(t *testing.T) {
-	line := LastRunLine(time.Unix(0, 0).UTC(), Passed, 0, strings.Repeat("a", 500))
+	line := LastRunLine(time.Unix(0, 0).UTC(), Passed, 0, strings.Repeat("a", 500), "")
 
 	if len(line) > 120 {
 		t.Errorf("the line is %d bytes, which is a message rather than a log line", len(line))
@@ -788,7 +788,7 @@ func TestNotBeingLoggedInSaysSoAndSaysWhatToDo(t *testing.T) {
 		t.Errorf("it does not say what to do next: %q", trouble)
 	}
 	// The reason it is confusing is worth saying: the token is there, it just does not come down.
-	if !strings.Contains(trouble, "not what the session starts") {
+	if !strings.Contains(trouble, "strips CLAUDE_CODE_OAUTH_TOKEN") {
 		t.Errorf("it does not explain why a token that exists does not reach the hook: %q", trouble)
 	}
 }
@@ -856,5 +856,93 @@ func TestTheTerminalIsToldTheCauseRatherThanThatSomethingWentWrong(t *testing.T)
 	// It still fails open. The message must get through whatever the hook could not do.
 	if strings.Contains(out.String(), "hookSpecificOutput") {
 		t.Errorf("a failed analysis reached the session: %s", out.String())
+	}
+}
+
+// The record used to be one word. "no answer" reads the same whether the model was slow, said
+// nothing, or was never logged in, and in a sandbox it was the only sign anywhere that the hook had
+// never once worked. A person reading the file has to be able to act on it.
+func TestTheLastRunLineSaysWhyThereWasNoAnswer(t *testing.T) {
+	when := time.Date(2026, 8, 30, 6, 38, 34, 0, time.UTC)
+
+	line := LastRunLine(when, NoAnswer, 770*time.Millisecond, "Answer in one word: ready",
+		"the model call is not logged in.\nSet the token")
+
+	if !strings.Contains(line, "the model call is not logged in") {
+		t.Errorf("the record says the run failed and never why: %q", line)
+	}
+	// One run is one line, so a reason with a newline in it must not read as a second run.
+	if strings.Count(line, "\n") != 1 {
+		t.Errorf("the record is more than one line: %q", line)
+	}
+}
+
+// The terminal line is gone as soon as the session scrolls. The file is where somebody looks a day
+// later asking why nothing is ever analysed, so the reason has to be in both.
+func TestAFailedRunRecordsWhyInTheFileAsWellAsOnTheTerminal(t *testing.T) {
+	run := driveTrouble(t, testConfig(), `{"prompt":"fix it","cwd":"/home/agent"}`, NotLoggedIn)
+
+	if !strings.Contains(run.out, "not logged in") {
+		t.Errorf("the terminal was not told why: %q", run.out)
+	}
+	if !strings.Contains(run.lastRun, string(NoAnswer)) {
+		t.Errorf("last run: got %q, want it to say no answer", run.lastRun)
+	}
+	if !strings.Contains(run.lastRun, "not logged in") {
+		t.Errorf("the record says the run failed and never why: %q", run.lastRun)
+	}
+	if strings.Contains(run.out, "hookSpecificOutput") {
+		t.Errorf("a failed analysis reached the session: %q", run.out)
+	}
+}
+
+// driveTrouble runs the hook against a model call that failed, which is the path the whole of this
+// issue lives on.
+func driveTrouble(t *testing.T, config Config, payload, trouble string) driven {
+	t.Helper()
+	fs := newFakeFS(map[string]string{})
+	out := &strings.Builder{}
+	run := driven{fs: fs}
+	tick := time.Date(2026, 8, 30, 6, 38, 34, 0, time.UTC)
+
+	Run(Options{
+		Config: config,
+		Stdin:  strings.NewReader(payload),
+		Stdout: out,
+		FS:     fs,
+		Now: func() time.Time {
+			tick = tick.Add(500 * time.Millisecond)
+			return tick
+		},
+		Facts: func(cwd string) Facts { return Facts{Cwd: cwd} },
+		Ask: func(system, user string) (string, string) {
+			run.calls++
+			run.system, run.asked = system, user
+			return "", trouble
+		},
+	})
+
+	run.out = out.String()
+	run.lastRun = fs.written[config.LastRunFile]
+	return run
+}
+
+// The reason a run failed is the child's own words, and since the record started saying why, those
+// words go on disk as well as to the terminal. Nothing is known to print a credential. This is what
+// makes that a fact rather than a hope.
+func TestACredentialInWhatTheChildSaidIsNeverRepeated(t *testing.T) {
+	const token = "sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA"
+
+	trouble := Trouble(nil, errors.New("exit status 1"),
+		"could not use "+token+" against the endpoint", Default("/home/agent"))
+
+	if strings.Contains(trouble, token) {
+		t.Fatalf("the reason repeats a credential, and it is written to a file: %q", trouble)
+	}
+	if !strings.Contains(trouble, "[redacted]") {
+		t.Errorf("the reason says nothing about what was taken out: %q", trouble)
+	}
+	if !strings.Contains(trouble, "against the endpoint") {
+		t.Errorf("the reason lost the words that say what went wrong: %q", trouble)
 	}
 }

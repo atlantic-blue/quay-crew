@@ -47,3 +47,18 @@ fired and stayed quiet from a hook that never fired at all.
 `MAX_THINKING_TOKENS=0` is what makes it fast enough to run on every message. With extended thinking
 left on, one analysis cost 3,855 thinking tokens and 42 seconds. With it off the same call takes
 about 1.5 seconds.
+
+## The credential
+
+The hook asks a model, so it needs a credential of its own. It does not inherit one. Claude Code
+removes `CLAUDE_CODE_OAUTH_TOKEN` from the environment of every process it starts, by that name and
+no other, and a hook is one of those processes, so inside a sandbox the hook holds nine other
+`CLAUDE_` variables and no token.
+
+The system therefore writes the same value a second time, as `QUAY_MODEL_TOKEN`, which survives the way
+`QC_TOKEN` and `GH_TOKEN` already do. The hook hands the child the name the command line reads, from
+whichever of the two carried a value, and a value a person set for themselves wins.
+
+With neither name set the hook still exits 0 and the message still gets through. It says why on the
+terminal and writes the same sentence at the end of the last run line, because a failure recorded as
+one word is a failure nobody finds.

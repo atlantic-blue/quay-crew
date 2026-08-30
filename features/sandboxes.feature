@@ -84,6 +84,26 @@ Feature: A sandbox keeps a session's state outside itself
     When the operator dispatches "hello" to the project
     Then the sandbox carries "CLAUDE_CODE_OAUTH_TOKEN" set to "tok-xyz"
 
+  # A hook fired on a message is a process the session starts, and Claude Code removes the model's
+  # token from every one of those, by that name and no other. So the same value travels under a
+  # second name as well, which survives, and the prompt analyser reads it. Without it every message
+  # in every sandbox went unanalysed, and the only record was one word in a file in /tmp.
+  Scenario: The model's token travels under a second name, so a hook can authenticate too
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    And the workspace has the subscription token "tok-xyz"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries "CLAUDE_CODE_OAUTH_TOKEN" set to "tok-xyz"
+    And the sandbox carries "QUAY_MODEL_TOKEN" set to "tok-xyz"
+
+  # An empty credential reads as a configured one. A workspace nobody set a token on carries neither
+  # name, so the hook reports being logged out rather than failing with a variable set.
+  Scenario: A workspace with no subscription token carries neither name
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    When the operator dispatches "hello" to the project
+    Then the sandbox carries nothing called "QUAY_MODEL_TOKEN"
+
   # `git` has been in the sandbox image the whole time and unusable, because a container has no
   # identity: the tool refuses to commit rather than guessing, which is right and is a wall to walk
   # into halfway through a job.

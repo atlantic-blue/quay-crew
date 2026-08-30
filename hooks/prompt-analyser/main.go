@@ -16,15 +16,24 @@ import (
 // is a hook that calls itself.
 const Guard = "CLAUDE_PROMPT_ANALYSER"
 
+// OAuthToken is the name the Claude Code command line reads a subscription token from.
+const OAuthToken = "CLAUDE_CODE_OAUTH_TOKEN"
+
+// ModelToken is the same token under a second name, which is the only way the hook gets one inside a
+// sandbox. Claude Code removes OAuthToken from the environment of every process it starts, by that
+// name and no other, and the hook is one of those processes. It kept the name it was never given.
+//
+// So the system writes the value under this name as well, beside QC_TOKEN and GH_TOKEN, which already
+// survive. The hook reads it and hands the child the name the command line expects.
+const ModelToken = "QUAY_MODEL_TOKEN"
+
 // kept are the CLAUDE_ variables the child keeps, against a rule that drops the rest so it does not
 // inherit what the running session set for itself.
 //
 // A credential is not that. On a logged in install it is a file, so dropping every CLAUDE_ variable
-// costs nothing. A quay sandbox has no credentials file: the subscription arrives as
-// CLAUDE_CODE_OAUTH_TOKEN, and dropping it left the child unable to authenticate. Nothing looked
-// wrong, because the hook fails open: it exited 0 in under a second and the only sign anywhere was
-// the word "no answer" in a file in /tmp.
-var kept = map[string]bool{"CLAUDE_CONFIG_DIR": true, "CLAUDE_CODE_OAUTH_TOKEN": true}
+// costs nothing, and a person running this on a laptop is that case: OAuthToken is theirs to set and
+// it is kept. Inside a sandbox it is never here to keep, so ModelToken is what the child runs on.
+var kept = map[string]bool{"CLAUDE_CONFIG_DIR": true}
 
 // It always exits 0. An exit code the runtime reads as a refusal would block the message.
 func main() {
@@ -134,17 +143,33 @@ func AskModel(config Config, home string) func(string, string) (string, string) 
 }
 
 func childEnv(parent []string) []string {
-	child := make([]string, 0, len(parent)+2)
+	child := make([]string, 0, len(parent)+3)
+	credential, fallback := "", ""
 	for _, entry := range parent {
-		name, _, found := strings.Cut(entry, "=")
+		name, value, found := strings.Cut(entry, "=")
 		switch {
 		case !found:
+		case name == OAuthToken:
+			// Held back rather than copied, so the child is never handed this name twice: which of two
+			// entries a process reads is the C library's business rather than ours. It goes on below.
+			credential = value
 		case kept[name]:
 			child = append(child, entry)
 		case strings.HasPrefix(name, "CLAUDE_") || name == "CLAUDECODE":
 		default:
+			if name == ModelToken {
+				fallback = value
+			}
 			child = append(child, entry)
 		}
+	}
+	// The name the command line reads, from whichever name carried a value. A person on a laptop has
+	// the first and keeps it; a session in a sandbox only ever has the second.
+	if credential == "" {
+		credential = fallback
+	}
+	if credential != "" {
+		child = append(child, OAuthToken+"="+credential)
 	}
 	return append(child, Guard+"=1", "MAX_THINKING_TOKENS=0")
 }
