@@ -30,9 +30,9 @@ type toolKey struct{}
 // toolWorld is what came back out of the last run of the tool.
 type toolWorld struct {
 	address string
-	// stdin is what the next run is handed on its standard input. Context is read from there rather
-	// than from an argument, so a scenario about writing one has to be able to pipe.
-	stdin    string
+	// saying is the body a later step pipes in. Context is read from standard input rather than from
+	// an argument, so the step that holds the text and the step that writes it are not the same step.
+	saying   string
 	stdout   string
 	stderr   string
 	exitCode int
@@ -68,6 +68,16 @@ func initializeToolSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^standard output is empty$`, func(ctx context.Context) error {
 		if got := toolFrom(ctx).stdout; got != "" {
 			return fmt.Errorf("standard output carries %q, and a caller reading it would take that for the answer", got)
+		}
+		return nil
+	})
+
+	// Exactly, rather than carries, because what a redirection captures is the whole of standard
+	// output. A heading or a trailing newline added for the look of it becomes part of the level the
+	// moment somebody pipes this back into the command that writes one.
+	sc.Step(`^standard output is exactly "([^"]*)"$`, func(ctx context.Context, want string) error {
+		if got := toolFrom(ctx).stdout; got != want {
+			return fmt.Errorf("standard output is %q, want exactly %q", got, want)
 		}
 		return nil
 	})
@@ -115,11 +125,18 @@ func listenForTool(ctx context.Context) error {
 	return nil
 }
 
-// runTool runs the tool the way a caller runs it, with its streams kept apart.
+// runTool runs the tool the way a caller runs it, with its streams kept apart and nothing on
+// standard input.
+func runTool(ctx context.Context, args ...string) error {
+	return runToolSaying(ctx, "", args...)
+}
+
+// runToolSaying runs the tool with something piped into it, which is how a file becomes a context,
+// a secret or anything else this tool reads rather than takes as an argument.
 //
 // The home directory is a temporary one: the tool keeps where the operator is standing on the
 // machine it runs on, and a scenario must not read or write the operator's own.
-func runTool(ctx context.Context, args ...string) error {
+func runToolSaying(ctx context.Context, in string, args ...string) error {
 	t := toolFrom(ctx)
 	if t.address == "" {
 		return fmt.Errorf("the crew has no address the tool can dial")
@@ -135,9 +152,6 @@ func runTool(ctx context.Context, args ...string) error {
 	defer func() { _ = os.RemoveAll(home) }()
 
 	command := exec.CommandContext(ctx, binary, args...)
-	if t.stdin != "" {
-		command.Stdin = strings.NewReader(t.stdin)
-	}
 	command.Env = append(os.Environ(),
 		"QC_GRPC_ADDR="+t.address,
 		"QC_TOKEN="+worldFrom(ctx).token,
@@ -145,6 +159,7 @@ func runTool(ctx context.Context, args ...string) error {
 		"HOME="+home,
 	)
 	var out, said bytes.Buffer
+	command.Stdin = strings.NewReader(in)
 	command.Stdout, command.Stderr = &out, &said
 	runErr := command.Run()
 	t.ran, t.stdout, t.stderr = true, out.String(), said.String()

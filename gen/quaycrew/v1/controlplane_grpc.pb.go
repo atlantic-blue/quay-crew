@@ -74,6 +74,8 @@ const (
 	ControlPlaneService_GetJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/GetJob"
 	ControlPlaneService_ListJobs_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/ListJobs"
 	ControlPlaneService_StopJob_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/StopJob"
+	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
+	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
 	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
 	ControlPlaneService_SetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetWorkspaceLimits"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
@@ -152,6 +154,10 @@ type ControlPlaneServiceClient interface {
 	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
 	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
 	StopJob(ctx context.Context, in *StopJobRequest, opts ...grpc.CallOption) (*StopJobResponse, error)
+	// AskJob is a session putting a question to a person about the job it is running, and
+	// AnswerJob is the person answering. Nothing else moves the job in between.
+	AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error)
+	AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
 	GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error)
@@ -728,6 +734,26 @@ func (c *controlPlaneServiceClient) StopJob(ctx context.Context, in *StopJobRequ
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AskJobResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AskJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AnswerJobResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AnswerJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetWorkspaceLimitsResponse)
@@ -867,6 +893,10 @@ type ControlPlaneServiceServer interface {
 	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
 	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
 	StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error)
+	// AskJob is a session putting a question to a person about the job it is running, and
+	// AnswerJob is the person answering. Nothing else moves the job in between.
+	AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error)
+	AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
 	GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error)
@@ -1057,6 +1087,12 @@ func (UnimplementedControlPlaneServiceServer) ListJobs(context.Context, *ListJob
 }
 func (UnimplementedControlPlaneServiceServer) StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AskJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AnswerJob not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceLimits not implemented")
@@ -2090,6 +2126,42 @@ func _ControlPlaneService_StopJob_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_AskJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AskJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AskJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AskJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AskJob(ctx, req.(*AskJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AnswerJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AnswerJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AnswerJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AnswerJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AnswerJob(ctx, req.(*AnswerJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetWorkspaceLimitsRequest)
 	if err := dec(in); err != nil {
@@ -2442,6 +2514,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopJob",
 			Handler:    _ControlPlaneService_StopJob_Handler,
+		},
+		{
+			MethodName: "AskJob",
+			Handler:    _ControlPlaneService_AskJob_Handler,
+		},
+		{
+			MethodName: "AnswerJob",
+			Handler:    _ControlPlaneService_AnswerJob_Handler,
 		},
 		{
 			MethodName: "GetWorkspaceLimits",

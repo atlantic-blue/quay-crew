@@ -93,6 +93,58 @@ Feature: The operator can find the files the model reads
     Then the project's context names the words a crew is made of
     And the project's context says how to set a context
 
+  # A level could be written and never read back, so it could only be overwritten. Adding a paragraph
+  # meant already holding the whole text, and during an acceptance run the only way to recover a
+  # workspace's context before adding to it was to read the contexts table in the database directly.
+  #
+  # These scenarios run the command line tool as a caller runs it: its own process, its own standard
+  # output, its own exit status. What is specified is what a redirection captures, and none of that
+  # exists inside a test process.
+
+  Scenario: A level says what it says, and standard output carries that and nothing else
+    Given the crew listens on an address the tool can dial
+    And the operator sets the project's context to "pay the water bill first"
+    When the caller reads the project's context back
+    Then standard output is exactly "pay the water bill first"
+    And the command succeeds
+
+  Scenario: Reading a level out and writing it back leaves it unchanged
+    Given the crew listens on an address the tool can dial
+    And the operator sets the project's context to "pay the water bill first"
+    When the caller reads the project's context back
+    And the caller writes back what it read
+    And the caller reads the project's context back
+    Then standard output is exactly "pay the water bill first"
+
+  # The whole point of the read: a level can be added to now, where before a caller had to already
+  # hold the whole text to change one paragraph of it.
+  Scenario: A level is added to rather than overwritten
+    Given the crew listens on an address the tool can dial
+    And the operator sets the project's context to "pay the water bill first"
+    When the caller reads the project's context back
+    And the caller writes back what it read with "then the electricity bill" added
+    And the caller reads the project's context back
+    Then standard output carries "pay the water bill first"
+    And standard output carries "then the electricity bill"
+
+  # The crew's level is the one every session in the crew is told, and the one the editor refuses by
+  # name. It is read by the same word that writes it.
+  Scenario: The crew's own level is read by name
+    Given the crew listens on an address the tool can dial
+    And the operator sets context at scope "crew" to "no acronyms"
+    When the caller reads the crew's context back
+    Then standard output is exactly "no acronyms"
+    And the command succeeds
+
+  # Silence is what a broken read looks like too. A redirection writes an empty file either way, so
+  # the exit status is the only thing that tells a caller which of the two it got.
+  Scenario: A level that says nothing is refused rather than printed as silence
+    Given the crew listens on an address the tool can dial
+    When the caller reads the project's context back
+    Then standard output is empty
+    And standard error says "says nothing yet"
+    And the command fails
+
   # A hundred thousand characters at the crew level, read out of the contexts table in Postgres
   # because nothing in the crew would say it. Every session in every workspace carries that level
   # before it reads a line of the repository it works on, so a rule added there is a rule nobody
