@@ -12,16 +12,22 @@ import (
 //
 // The first two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
-// Everything else is imported so `krewe skill list` can show it, and attaching one is a decision.
+// The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
 //
-// The third is here for a different reason: it is a rule rather than a capability. A job wrote six
-// resources, opened a pull request, and every check went green, because validating a configuration
-// never talks to the account. The identity that would apply it held read only access and could not
-// have created any of them. A rule that only arrives when somebody attaches it is a rule that is
-// missing in every system nobody set up, which is exactly where this failure happens. It names no
-// secret, so no workspace loses it for want of a credential, and the one binary it needs is already
-// in the image for the cloud skills.
-var SeedToSystem = []string{"git", "github", "deploy-identity"}
+// outbound is here on a different argument. It is not a tool a job reaches for, it is a rule about
+// code the job has already decided to write, and the job that needs it is the one that does not know
+// it does: a deployed page reported "No video with that id" for a video that was there, because the
+// code threw the one failure it knew the name of and logged nothing at the boundary it had just
+// crossed. A rule somebody has to attach first only reaches the jobs that were never going to break
+// it. It names no secret and no binary, so nothing can leave it out of a session.
+//
+// deploy-identity is here on the same argument, from the other end of the same delivery. It is a rule
+// about infrastructure a job has already decided to write, and the job that needs it is the one whose
+// checks are green: six resources shipped, `terraform validate` passed in eleven seconds because it
+// never talks to the account, and the deploy died on `s3:CreateBucket` because the identity that runs
+// it holds read only access. It names no secret and no binary either, so nothing can leave it out of
+// a session and no image can refuse one over it.
+var SeedToSystem = []string{"git", "github", "outbound", "deploy-identity"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //

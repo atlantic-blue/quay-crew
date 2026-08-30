@@ -1,0 +1,3 @@
+name: outbound
+version: 1
+summary: "Calling something outside this process: log the status and the shape of what came back, and never report a failure you did not read."

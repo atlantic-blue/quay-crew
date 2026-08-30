@@ -50,6 +50,7 @@ report names the whole gap.
 
 ## When the check cannot run
 
-No credentials in the session, or a cloud with no simulator: say the check did not run, and why, in
-the same place you would have put the result. Not run is not the same as passed. That sentence is
-what tells whoever merges to look first.
+No credentials in the session, a credential that may not call the simulator, which is its own
+`iam:SimulatePrincipalPolicy` permission, or a cloud with no simulator at all: say the check did not
+run, and why, in the same place you would have put the result. Not run is not the same as passed.
+That sentence is what tells whoever merges to look first.

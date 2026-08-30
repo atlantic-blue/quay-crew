@@ -73,17 +73,19 @@ func TestTheShippedDeployIdentitySkillStopsAJobReportingReady(t *testing.T) {
 	}
 }
 
-// What it asks of a sandbox, and what it deliberately does not ask.
+// What it asks of a sandbox, which is nothing.
 //
-// The binary is the check itself, so a session without it cannot follow the brief and is better
-// refused with a sentence. The secrets are the opposite: naming them would leave the skill out of
-// exactly the workspaces that deploy by federated identity, where the rule still holds and the
-// answer is to say the check did not run.
-func TestTheShippedDeployIdentitySkillNeedsTheCommandLineAndNoSecret(t *testing.T) {
+// It is a rule rather than a tool, and the two ways a skill can fail to reach a session are a binary
+// the image does not carry and a secret the workspace has not set. Either one would take the rule out
+// of the sessions it exists for: a workspace whose pipeline authenticates by federated identity holds
+// no cloud credential, and a system level skill naming a binary refuses every task in every workspace
+// on an image that lags. The brief says what to do when the command line or the credential is not
+// there, which is to say the check did not run.
+func TestTheShippedDeployIdentitySkillAsksForNothing(t *testing.T) {
 	held := shippedSkill(t, "deploy-identity")
 
-	if len(held.Binaries) != 1 || held.Binaries[0] != "aws" {
-		t.Errorf("it declares %v, and the check is one aws command", held.Binaries)
+	if len(held.Binaries) != 0 {
+		t.Errorf("it declares the binaries %v, so an image without one refuses every task in the system over a rule", held.Binaries)
 	}
 	if len(held.Secrets) != 0 {
 		t.Errorf("it names the secrets %v, so a workspace that has not set them loses the rule as well as the check", held.SecretNames())

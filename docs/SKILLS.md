@@ -104,9 +104,11 @@ narrow belongs, because a capability for one kind of work should not be in front
 system has.
 
 A system whose catalogue is empty is given the skills this build ships with when the control plane
-starts: every one imported, git, github and deploy-identity taken at the system level, the rest waiting
-to be attached. The third of those is a rule rather than a capability, and it is at the system level
-because a rule that waits to be attached is missing in every system nobody set up.
+starts: all ten imported, with git, github, outbound and deploy-identity taken at the system level and
+the rest waiting to be attached. The first two are how work is done in any repository. The other two are
+rules rather than tools, about code and infrastructure a session has already decided to write, and they
+are taken at the system level for the opposite reason: the job that needs one is the one that does not
+know it does.
 It happens only on an empty catalogue, so it is where a system begins rather than a policy that undoes a
 decision later.
 
