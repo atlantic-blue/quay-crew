@@ -60,9 +60,10 @@ commands:
     [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it as
     [--requires <material>]               the role it names. --requires says what the job cannot be
     [--after <job>] [--label k=v]         done without, one of job, context or skills, and a role
-    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job
-    [--expect-file <path>]
-    [--expect-contains "..."]
+    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job.
+    [--expect-file <path>]                --repository says where the work goes, and a job that
+    [--expect-contains "..."]             names one is not done until its answer names a pull
+    [--repository <owner>/<name>]         request against it
   job list [<address>|crew]               the jobs there are, newest first. With no address it
     [--phase <phase>] [--label k=v]       reads where you are standing and says so, and crew reads
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,

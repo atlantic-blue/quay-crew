@@ -51,6 +51,7 @@ const (
 	flagBudgetTokens   = "--budget-tokens"
 	flagLabel          = "--label"
 	flagRequires       = "--requires"
+	flagRepository     = "--repository"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -90,6 +91,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		ExpectContains: values.first(flagExpectContains),
 		After:          values[flagAfter],
 		Requires:       values[flagRequires],
+		Repository:     values.first(flagRepository),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -283,6 +285,9 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if required := one.GetRequires(); len(required) > 0 {
 		fmt.Fprintf(out, "requires %s\n", strings.Join(required, ", "))
 	}
+	if one.GetRepository() != "" {
+		fmt.Fprintf(out, "in %s\n", one.GetRepository())
+	}
 	if one.GetBudgetTokens() > 0 {
 		fmt.Fprintf(out, "budget %d tokens\n", one.GetBudgetTokens())
 	}
@@ -293,7 +298,12 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "label %s=%s\n", key, one.GetLabels()[key])
 	}
 	fmt.Fprintf(out, "\n%s\n", one.GetBrief())
-	// The answer last and whole, because it is what a caller came for.
+	// The answer last and whole, because it is what a caller came for. The pull request sits above it
+	// rather than inside it: reading a job says where the work is without anybody reading an answer to
+	// the end, or opening a sandbox to find out.
+	if one.GetPullRequest() != "" {
+		fmt.Fprintf(out, "\npull request: %s\n", one.GetPullRequest())
+	}
 	if one.GetAnswer() != "" {
 		fmt.Fprintf(out, "\nanswer:\n%s\n", one.GetAnswer())
 	}
@@ -431,7 +441,7 @@ func sortedKeys(labels map[string]string) []string {
 func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
-		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains,
+		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.

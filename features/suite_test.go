@@ -107,6 +107,31 @@ type recordingRunner struct {
 	// onTask runs before the double answers, so a scenario can be a model that did the job rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
 	onTask func()
+	// says is what the double answers, one entry per task, with the last repeating once the queue
+	// runs out. Empty echoes the task, which is what almost every scenario wants.
+	//
+	// A queue rather than one string, because a scenario about a session being asked a second thing
+	// has to be able to say what it answers the second time. The last one repeats rather than the
+	// queue running dry, so a scenario that means "and it keeps saying that" says it once.
+	says []string
+}
+
+// willSay adds one answer to the queue, so a scenario builds up what a model says over several tasks.
+func (r *recordingRunner) willSay(answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.says = append(r.says, answer)
+}
+
+// answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
+func (r *recordingRunner) answerFor(asked int, text string) string {
+	if len(r.says) == 0 {
+		return "you said: " + text
+	}
+	if asked > len(r.says) {
+		asked = len(r.says)
+	}
+	return r.says[asked-1]
 }
 
 // hold makes every task wait, and returns the func that lets them go.
@@ -180,7 +205,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 		return model.Response{}, fmt.Errorf("the model refused this task")
 	}
 	return model.Response{
-		Reply: "you said: " + req.Text,
+		Reply: r.answerFor(asked, req.Text),
 		// The conversation it was given comes back, which is what a runtime that honours the name does.
 		// A double that answered with a name of its own would be looser than the thing it stands in for:
 		// the crew would read every task as the runtime ignoring the name it was handed.
@@ -649,6 +674,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobSteps(sc)
 	initializeJobMaterialSteps(sc)
 	initializeJobControllerSteps(sc)
+	initializeJobRepositorySteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
