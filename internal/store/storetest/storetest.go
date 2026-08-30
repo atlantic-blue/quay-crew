@@ -2228,6 +2228,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runHookConformance(t, newDataset)
 	runRoleConformance(t, newDataset)
 	runJobConformance(t, newDataset)
+	runSteerConformance(t, newDataset)
 	runJobControllerConformance(t, newDataset)
 	runJobLeaseConformance(t, newDataset)
 	runJobAskingConformance(t, newDataset)

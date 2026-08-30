@@ -435,6 +435,14 @@ type Store interface {
 	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
+	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
+	// transaction. Counted is the job it landed on and every job above it, so the count on the job at
+	// the top is the score of the whole tree. The row and the counts are written together because a
+	// score that disagrees with the marks under it is a score nobody can defend.
+	RecordSteer(ctx context.Context, steer *job.Steer, counted []string) error
+	// ListSteers returns every steer under one job at the top of a tree, oldest first, which is the
+	// order they were made in and the order the report reads.
+	ListSteers(ctx context.Context, root string) ([]*job.Steer, error)
 	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
 	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a system
 	// nobody configured refuses rather than allows.

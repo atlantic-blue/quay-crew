@@ -353,6 +353,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetProduct() != "" {
 		fmt.Fprintf(out, "for a person: %s\n", one.GetProduct())
 	}
+	// The score, printed even at zero. Every other field here is hidden when it is empty, and this one
+	// is not: no steers is the best a job can do, and a number that only appears once somebody had to
+	// steer reads as an error rather than as a measurement.
+	fmt.Fprintf(out, "%s, read them with krewe steers %s\n",
+		job.Steers(int(one.GetSteers())), display.ShortID(one.GetId()))
 	// Why it stopped, before anything else, because a job that halted and a job that went quiet read
 	// the same without it.
 	if one.GetReason() != "" {

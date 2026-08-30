@@ -148,15 +148,22 @@ func runToolSaying(ctx context.Context, in string, args ...string) error {
 // used to have is a second binary beside it, and what it does is only observable from outside the
 // process: which stream it wrote on, and what it exited with.
 func runBinarySaying(ctx context.Context, binary, in string, args ...string) error {
-	t := toolFrom(ctx)
-	if t.address == "" {
-		return fmt.Errorf("the system has no address the tool can dial")
-	}
 	home, err := os.MkdirTemp("", "quaycrew-tool-")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(home) }()
+	return runBinaryInHome(ctx, binary, home, in, args...)
+}
+
+// runBinaryInHome is that run in a home directory the caller keeps, which is what lets two runs share
+// where the operator is standing: the tool writes that to a file on the machine it runs on, so a
+// scenario about a command that reads it has to move first and then type the command.
+func runBinaryInHome(ctx context.Context, binary, home, in string, args ...string) error {
+	t := toolFrom(ctx)
+	if t.address == "" {
+		return fmt.Errorf("the system has no address the tool can dial")
+	}
 
 	command := exec.CommandContext(ctx, binary, args...)
 	command.Env = append(os.Environ(),
@@ -189,4 +196,15 @@ func says(stream, got, want string) error {
 		return fmt.Errorf("%s says %q, want it to say %q", stream, got, want)
 	}
 	return nil
+}
+
+// runToolIn runs the tool in a home directory the caller keeps, for a scenario whose command reads
+// where the operator is standing: the move and the command have to be two runs of the same tool in
+// one home.
+func runToolIn(ctx context.Context, home string, args ...string) error {
+	binary, err := kreweBinary()
+	if err != nil {
+		return err
+	}
+	return runBinaryInHome(ctx, binary, home, "", args...)
 }

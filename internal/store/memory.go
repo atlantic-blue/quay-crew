@@ -87,6 +87,9 @@ type Memory struct {
 	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
 	// carries what a listing there carries.
 	jobSteps map[string][]job.Step
+	// jobSteers is every moment the operator had to say something a job should have known, keyed by
+	// the steer identifier.
+	jobSteers map[string]*job.Steer
 	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
 	// defaults, which grant nothing.
 	limits map[string]job.Limits

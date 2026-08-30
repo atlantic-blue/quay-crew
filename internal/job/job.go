@@ -100,6 +100,11 @@ type Job struct {
 	// because only one of them existed.
 	Product string
 
+	// Steers is how many times the operator had to say something this job should have known, counted
+	// on the job the steer landed on and on every job above it. On the job at the top it is the score
+	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.
+	Steers int
+
 	// What the system assigned, and the caller may not.
 	Parent string
 	Depth  int
