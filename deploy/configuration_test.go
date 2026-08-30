@@ -55,8 +55,8 @@ func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 //
 // Exemptions are per path rather than per file, because the places that name a retired directory on
 // purpose are the ones that refuse it, and they name only that one. Exempting a whole file instead
-// would stop it being scanned for the others: the makefile has to keep naming ~/.quaycrew in its
-// refusal, and still must never send anybody back to a checkout env file.
+// would stop it being scanned for the others: the tool has to keep naming ~/.quaycrew in the refusal
+// that moves a crew off the old layout, and still must never send anybody back to a checkout env file.
 //
 // The changelog is exempt from all of them. It records what shipped on the day it shipped, and
 // rewriting it would make it a worse record.
@@ -66,7 +66,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	itself := filepath.Join("deploy", "configuration_test.go")
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
-	oneCrewDirectory := []string{home, homeTest, itself, "Makefile"}
+	oneCrewDirectory := []string{home, homeTest, itself}
 	retired := []struct {
 		path    string
 		because string
@@ -105,56 +105,144 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 }
 
 // makeVariable asks make what a variable expands to, so these read the real recipe rather than a
-// remembered copy of it.
-func makeVariable(t *testing.T, name string) string {
+// remembered copy of it. It takes the variables a case needs set, so a case can ask what a path
+// expands to under a crew directory of its own rather than under the operator's.
+func makeVariable(t *testing.T, name string, with ...string) string {
 	t.Helper()
-	out, err := exec.Command("make", "-C", "..", "--no-print-directory", "print-"+name).CombinedOutput()
+	out, err := exec.Command("make", append([]string{"-C", "..", "--no-print-directory", "print-" + name}, with...)...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("make print-%s: %v\n%s", name, err, out)
 	}
 	return strings.TrimSpace(string(out))
 }
 
-// TestTheStackRefusesToStartOnAnEmptyDataDirectory.
+// The stack mounts $(QUAY_HOME)/data, which holds the crew's token, the key that seals every secret
+// and the skills a session is given. Starting with that directory missing or empty is not an error
+// the operator ever sees as one: the control plane mints a fresh token and the crew comes up looking
+// exactly like one that lost every conversation. `home-check` is the refusal that stops it.
 //
-// The tool refuses when a crew's files are still in the layout from before ~/.quay held everything.
-// The stack is a second way in, and it does not go through the tool: `make up` mounts the data
-// directory straight into the control plane. Without the same refusal it would mount an empty one,
-// mint a new token, and come up looking exactly like a crew that had lost every conversation.
-func TestTheStackRefusesToStartOnAnEmptyDataDirectory(t *testing.T) {
-	old := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(filepath.Join(old, ".quaycrew", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
+// There are three states and the middle one is the only one that matters. The outer two are how a
+// guard like this gets written wrong. A guard that refuses whenever the data directory is absent
+// breaks the first run on a clean machine, where absent is correct. A guard whose condition can
+// never be true passes every case that only asks whether the happy path still works, which is how
+// the previous one sat here dead after the directory it watched was removed from every machine.
 
-	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
-		"home-check", "HOME="+old, "QUAY_HOME="+filepath.Join(old, ".quay")).CombinedOutput()
+// TestACleanMachineStarts. Nothing has ever run here, so there is no crew to have lost, and `up`
+// creates the data directory a moment later in `config`.
+func TestACleanMachineStarts(t *testing.T) {
+	quay := filepath.Join(t.TempDir(), ".quay")
 
-	if err == nil {
-		t.Fatalf("the stack started on a crew whose data is still in the old place:\n%s", out)
-	}
-	want := "mv " + filepath.Join(old, ".quaycrew", "data") + " " + filepath.Join(old, ".quay", "data")
-	if !strings.Contains(string(out), want) {
-		t.Errorf("it never says to run\n  %s\nit says:\n%s", want, out)
+	out, err := homeCheck(t, quay)
+
+	if err != nil {
+		t.Fatalf("a machine that never held a crew was refused its first run: %v\n%s", err, out)
 	}
 }
 
-// And it starts once the move is done, because a refusal nobody can clear is worse than no refusal.
-func TestTheStackStartsOnceTheDataHasMoved(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(filepath.Join(home, ".quay", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(home, ".quaycrew", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+// TestACrewWhoseDataWentMissingIsRefused, in both shapes the loss takes.
+//
+// Empty is the shape it is in by the time anybody types `make up` again: `config` runs `mkdir -p` on
+// the data directory as a prerequisite of `down`, `logs`, `ps` and `up-check`, so a directory that
+// was deleted is back, and empty, after any one of those. A guard that only watched for a missing
+// directory would be dead again within one command.
+func TestACrewWhoseDataWentMissingIsRefused(t *testing.T) {
+	losses := []struct {
+		name string
+		take func(t *testing.T, data string)
+	}{
+		{
+			name: "the directory was deleted",
+			take: func(t *testing.T, data string) {
+				if err := os.RemoveAll(data); err != nil {
+					t.Fatalf("remove: %v", err)
+				}
+			},
+		},
+		{
+			name: "the directory is back and empty",
+			take: func(t *testing.T, data string) {
+				entries, err := os.ReadDir(data)
+				if err != nil {
+					t.Fatalf("read: %v", err)
+				}
+				for _, entry := range entries {
+					if err := os.RemoveAll(filepath.Join(data, entry.Name())); err != nil {
+						t.Fatalf("remove: %v", err)
+					}
+				}
+			},
+		},
 	}
 
-	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
-		"home-check", "HOME="+home, "QUAY_HOME="+filepath.Join(home, ".quay")).CombinedOutput()
+	for _, loss := range losses {
+		t.Run(loss.name, func(t *testing.T) {
+			quay := aCrewThatHasRun(t)
+			loss.take(t, filepath.Join(quay, "data"))
+
+			out, err := homeCheck(t, quay)
+
+			if err == nil {
+				t.Fatalf("the stack started on a crew whose data is gone:\n%s", out)
+			}
+			// What is missing, and what to check before starting again. A refusal that only says no
+			// is a refusal somebody clears by deleting whatever it named.
+			for _, want := range []string{filepath.Join(quay, "data"), "QUAY_HOME is " + quay} {
+				if !strings.Contains(out, want) {
+					t.Errorf("the refusal never says %q:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, ".quaycrew") {
+				t.Errorf("the refusal sends the operator to a directory that no longer exists:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestAHealthyCrewStarts, and is recorded as a crew, because the recording is what the refusal above
+// reads. A machine that holds a crew and never writes that down cannot tell a lost one from a first
+// run, and the guard is dead in the other direction.
+func TestAHealthyCrewStarts(t *testing.T) {
+	quay := aCrewThatHasRun(t)
+
+	out, err := homeCheck(t, quay)
 
 	if err != nil {
-		t.Fatalf("a crew that has already moved was refused: %v\n%s", err, out)
+		t.Fatalf("a crew whose data is where it belongs was refused: %v\n%s", err, out)
 	}
+	marker := makeVariable(t, "STARTED_FILE", "QUAY_HOME="+quay)
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("nothing records that this machine holds a crew, so a later run cannot tell one that "+
+			"lost its data from one that never had any: %v", err)
+	}
+}
+
+// aCrewThatHasRun is the crew directory a machine has after the stack has started: the data
+// directory holds the token the control plane mints on its first run, and the guard has seen it.
+func aCrewThatHasRun(t *testing.T) string {
+	t.Helper()
+
+	quay := filepath.Join(t.TempDir(), ".quay")
+	if err := os.MkdirAll(filepath.Join(quay, "data"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(quay, "data", "crew.token"), []byte("a-token\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	out, err := homeCheck(t, quay)
+	if err != nil {
+		t.Fatalf("a crew whose data is where it belongs was refused: %v\n%s", err, out)
+	}
+	return quay
+}
+
+// homeCheck runs the guard against a crew directory of the test's own, so no case reads or writes
+// the operator's.
+func homeCheck(t *testing.T, quay string) (string, error) {
+	t.Helper()
+
+	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
+		"home-check", "QUAY_HOME="+quay).CombinedOutput()
+	return string(out), err
 }
 
 // TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt.

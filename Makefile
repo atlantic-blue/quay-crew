@@ -12,6 +12,11 @@ GOBIN := $(shell go env GOPATH)/bin
 QUAY_HOME ?= $(HOME)/.quay
 ENV_FILE ?= $(QUAY_HOME)/env
 
+# STARTED_FILE records that this machine has held a crew, which is the one thing a first run and a
+# crew that lost its data do not have in common: both have no data directory to read. It sits beside
+# the data rather than inside it, so it is still there to be read after the loss it reports.
+STARTED_FILE ?= $(QUAY_HOME)/started
+
 # QC_SESSION_NETWORK is the network a session's sandbox joins to reach the control plane, and the
 # control plane is the only thing on it. It is computed rather than configured, and named after this
 # stack, so two stacks on one machine do not put their sessions on one network. Compose reads it
@@ -69,21 +74,53 @@ config:
 		echo "wrote $(ENV_FILE) from deploy/env.example. Edit it to say which model and image to run."; \
 	fi
 
-## home-check: refuse to start a crew whose data is still in the layout from before ~/.quay
+## home-check: refuse to start a crew whose data directory has gone missing
 #
-# The stack mounts $(QUAY_HOME)/data. A crew made before the move has its tokens, its sealing key and
-# every conversation under ~/.quaycrew/data, so starting would mount an empty directory, mint a new
-# token, and look exactly like a crew that had lost everything. The tool refuses for the same reason;
-# this is the same refusal on the path that does not go through the tool.
+# The stack mounts $(QUAY_HOME)/data, and that directory holds the crew's token, the key that unseals
+# every secret, and the skills a session is given. Starting on an empty one is not an error anybody
+# sees as one: the control plane mints a fresh token, unseals nothing, and the crew comes up looking
+# exactly like a crew that lost every conversation. So this refuses first, before compose is asked
+# for anything.
+#
+# Telling a first run apart from a lost crew is the whole difficulty, because on a clean machine the
+# data directory is absent too and absent is correct there. $(STARTED_FILE) is what tells them apart.
+# It is written below the first time this machine is seen holding a crew's data, it sits beside the
+# data rather than inside it, so it outlives the loss it reports, and nothing the crew runs removes
+# it.
+#
+# It is not $(ENV_FILE). Config writes that in the same recipe that makes the empty data directory,
+# so a first `make up` that got as far as compose and failed there, on a daemon that was not running
+# or a build that broke, would leave a machine that has env and no data and has never held a crew.
+# This would then refuse it, and name a loss that never happened.
+#
+# Missing and empty are one condition rather than two, because empty is the shape the loss is in by
+# the time anybody reads this. Config runs `mkdir -p` on the data directory as a prerequisite of
+# down, logs, ps and up-check, so a directory that was deleted is back, and empty, after any one of
+# them. A guard that only watched for a missing directory would be dead again within one command.
 home-check:
-	@if [ -d "$(HOME)/.quaycrew/data" ] && [ ! -d "$(QUAY_HOME)/data" ]; then \
-		echo "refusing: this crew's data is still at $(HOME)/.quaycrew/data, and the stack now mounts"; \
-		echo "          $(QUAY_HOME)/data. Starting would come up empty on a new token. Move it, once:"; \
-		echo ""; \
-		echo "  mkdir -p $(QUAY_HOME)"; \
-		echo "  mv $(HOME)/.quaycrew/data $(QUAY_HOME)/data"; \
-		exit 1; \
-	fi
+	@if [ -n "$$(ls -A "$(QUAY_HOME)/data" 2>/dev/null)" ]; then \
+		if [ ! -f "$(STARTED_FILE)" ]; then \
+			{ echo "This machine holds a crew, in $(QUAY_HOME)/data: its token, the key that unseals every"; \
+			  echo "secret, and its skills. make up refuses to start while that directory is missing or empty,"; \
+			  echo "rather than coming up on a new token and looking like a crew that lost everything."; \
+			  echo "Delete this file to start a new crew here."; } > "$(STARTED_FILE)" 2>/dev/null || true; \
+		fi; \
+		exit 0; \
+	fi; \
+	if [ ! -f "$(STARTED_FILE)" ]; then exit 0; fi; \
+	if [ -d "$(QUAY_HOME)/data" ]; then state="is empty"; else state="is not there"; fi; \
+	echo "refusing: this machine has held a crew, and $(QUAY_HOME)/data $$state."; \
+	echo "          That directory holds the crew's token, the key that unseals every secret, and its"; \
+	echo "          skills. Starting would mount an empty one, mint a new token, and come up looking"; \
+	echo "          exactly like a crew that lost every conversation."; \
+	echo ""; \
+	echo "          Check, before starting again:"; \
+	echo "            QUAY_HOME is $(QUAY_HOME). Is that where your crew is?"; \
+	echo "            Is the disk holding it mounted, and the directory readable by you?"; \
+	echo "            Is there a copy of it to restore into $(QUAY_HOME)/data?"; \
+	echo ""; \
+	echo "          If this machine has no crew any more, remove $(STARTED_FILE) and make up starts a new one."; \
+	exit 1
 
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
 up: home-check config
