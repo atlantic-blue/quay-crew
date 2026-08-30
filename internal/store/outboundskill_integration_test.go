@@ -12,6 +12,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/atlantic-blue/krewe/internal/secrets"
@@ -24,7 +25,7 @@ import (
 //
 // The unit tier reads skills/outbound off disk and holds the words to the rule. What only this tier
 // reaches is the crossing, and the crossing is the whole delivery: seeding writes the brief into rows,
-// attaching it to the system decides which sessions get it, a dispatch reads it back out, writes it
+// attaching it to the system decides which sessions get it, a job reads it back out, writes it
 // into the workspace's directory and mounts it. A brief that is truncated in a column, a skill the
 // seed imports and never attaches, or a mount pointing at a file nobody wrote all look identical to
 // the unit tier and all leave the session with no rule.
@@ -56,18 +57,31 @@ func aFreshSystemSeededFromDisk(t *testing.T) (*controlplane.Server, *sandbox.Fa
 	return s, boxes, dir
 }
 
-// TestASessionOnAFreshSystemIsGivenTheOutboundRule is the acceptance criterion as a test: a job that
-// is about to write a call to another service holds the rule, and nobody attached anything.
-func TestASessionOnAFreshSystemIsGivenTheOutboundRule(t *testing.T) {
+// TestAJobOnAFreshSystemIsGivenTheOutboundRule is the acceptance criterion as a test: the job that is
+// about to write a call to another service is offered the rule in its sandbox, and nobody attached
+// anything.
+//
+// It goes through a declared job rather than a dispatch because that is the shape the criterion is
+// written in, and because a job runs as a role: what a role receives is a second gate the dispatch
+// path never crosses.
+func TestAJobOnAFreshSystemIsGivenTheOutboundRule(t *testing.T) {
 	s, boxes, _ := aFreshSystemSeededFromDisk(t)
 	ctx := context.Background()
-	_, project := aProjectOnPostgres(t, s)
+	workspace, project := aProjectOnPostgres(t, s)
+	importRoleOnPostgres(t, s, workspace, "implementer", 1, "job", "context", "skills")
 
-	sent, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Text: "read the watch page"})
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "read the captions", Brief: "fetch the watch page and read the title out of it",
+		Role: "implementer",
+	})
 	if err != nil {
-		t.Fatalf("Dispatch: %v", err)
+		t.Fatalf("CreateJob: %v", err)
 	}
-	session := sent.GetId()
+	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
+	session := done.GetSession()
+	if session == "" {
+		t.Fatal("the job ran in no session, so there is no container to read")
+	}
 
 	listed, err := s.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Session: session})
 	if err != nil {

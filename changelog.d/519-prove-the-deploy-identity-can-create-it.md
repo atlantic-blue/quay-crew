@@ -20,9 +20,9 @@ green plan is not evidence. And the first denial hides the rest, which is what t
 deploy per missing action.
 
 A fresh system gives it to every session rather than offering it, beside git, github and the outbound
-rule. A rule that waits to be attached is missing in every system nobody set up, and that is where
-this failure happens. It names no secret and no binary, so no workspace loses it for want of a
-credential and no image can refuse a task over it.
+and proving rules. A rule that waits to be attached is missing in every system nobody set up, and
+that is where this failure happens. It names no secret and no binary, so no workspace loses it for
+want of a credential and no image can refuse a task over it.
 
 It says nothing about what the pipeline does after the merge. A release is done when the deployed
 address answers, and reading what came back is [#450](https://github.com/atlantic-blue/quay-crew/issues/450).

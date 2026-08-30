@@ -104,11 +104,13 @@ narrow belongs, because a capability for one kind of work should not be in front
 system has.
 
 A system whose catalogue is empty is given the skills this build ships with when the control plane
-starts: all ten imported, with git, github, outbound and deploy-identity taken at the system level and
-the rest waiting to be attached. The first two are how work is done in any repository. The other two are
-rules rather than tools, about code and infrastructure a session has already decided to write, and they
-are taken at the system level for the opposite reason: the job that needs one is the one that does not
-know it does.
+starts: every one of them imported, with git, github, outbound, proving and deploy-identity taken at
+the system level and the rest waiting to be attached. The first two are how work is done in any
+repository. outbound is a rule rather than a tool, about code a session has already decided to write,
+so it is taken at the system level for the opposite reason: the job that needs it is the one that does
+not know it does. proving is that same reason one step earlier, about the assumption a design rests on
+rather than the code, and deploy-identity is the same reason at the other end, about infrastructure
+whose checks are green and whose deploy identity was never asked whether it may create anything.
 It happens only on an empty catalogue, so it is where a system begins rather than a policy that undoes a
 decision later.
 
