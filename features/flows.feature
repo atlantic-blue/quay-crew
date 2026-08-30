@@ -492,3 +492,36 @@ Feature: A flow runs a graph across sessions
   Scenario: A flow nobody imported cannot start
     When the operator starts the flow "never-imported" in the project
     Then starting it is refused as not found
+
+  # A job cannot wait, so a brief that asks one to wait for the checks, or to merge on the result, is
+  # refused where a caller declares it. A step of a flow is a different thing: the graph around it
+  # holds the wait, so the node after the wait merges the pull request and means it. Refusing that
+  # would refuse the very graph the refusal tells a caller to write.
+  Scenario: A step of a flow merges the pull request its wait was for
+    Given the crew holds this flow graph:
+      """
+      name: ship
+      version: 1
+      mode: edits
+      nodes:
+        push:  { type: dispatch, prompt: "push the branch and open the pull request" }
+        hold:  { type: wait, for: 10m }
+        read:  { type: dispatch, prompt: "read the checks and answer green or red" }
+        green: { type: choice, on: { result.reply: "green" } }
+        land:  { type: dispatch, prompt: "merge the pull request, the checks are green" }
+      edges:
+        - [push, hold]
+        - [hold, read]
+        - [read, green]
+        - [green, land, "true"]
+        - [green, done, "false"]
+        - [land, done]
+      """
+    And the model will answer "opened it"
+    And then the model will answer "green"
+    When the operator starts the flow "ship" in the project
+    Then the flow run is waiting
+    When ten minutes pass and the crew looks for waits that are due
+    Then the flow run is done
+    And the run's steps were asked 3 tasks
+    And one of the run's steps was asked "merge the pull request, the checks are green"
