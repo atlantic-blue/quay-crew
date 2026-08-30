@@ -12,6 +12,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
@@ -406,4 +407,74 @@ func waitForJob(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, id, p
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("the job never reached %s", phase)
+}
+
+// A workspace with no credential took a whole tree of job and said nothing, and every session in it
+// would have died on its first clone. The crew already knew: quay skill list printed the reason,
+// unprompted, in a listing nobody is required to read. So the declaration says it too, where somebody
+// is looking.
+func aCrewWhoseGitSkillNeedsAToken(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
+	t.Helper()
+	srv := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+		Skills: []skill.Skill{{
+			Name: "git", Version: 1, Summary: "Branch first.", Brief: "Branch first.",
+			Secrets: map[string]string{"GH_TOKEN": "a token with repository scope"},
+		}},
+	})
+	client := testClientFor(t, srv)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	return client, srv
+}
+
+func TestDeclaringJobInAWorkspaceWithNoCredentialSaysWhatTheSessionStartsWithout(t *testing.T) {
+	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+
+	said := mustRun(t, client, "job", "create", "--title", "fix the defect", "--brief", "clone it and push a branch")
+
+	for _, want := range []string{
+		"starts without",
+		"git",
+		"GH_TOKEN",
+		"quay secret set",
+	} {
+		if !strings.Contains(said, want) {
+			t.Errorf("quay job create says %q, want it to say %q", said, want)
+		}
+	}
+	// Said rather than refused: the crew cannot know which skill a brief reaches for, and a job that
+	// reads an electricity bill runs perfectly well with no forge token.
+	if !strings.Contains(said, "declared ") {
+		t.Errorf("quay job create says %q, want the job declared anyway", said)
+	}
+}
+
+// The note is about a real gap, so a workspace that has its credentials must not carry it: a warning
+// printed every time is a warning nobody reads.
+func TestDeclaringJobInAWorkspaceThatHasItsCredentialsSaysNothingExtra(t *testing.T) {
+	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+	mustRun(t, client, "secret", "set", "me", "GH_TOKEN", "a token")
+
+	said := mustRun(t, client, "job", "create", "--title", "fix the defect", "--brief", "clone it and push a branch")
+
+	if strings.Contains(said, "starts without") {
+		t.Fatalf("quay job create says %q, want nothing about a skill the workspace can supply", said)
+	}
+}
+
+// A role that does not receive skills is given none of them by design, so there is no gap to report
+// and nothing to say. Reporting it anyway would teach the operator to skip the line.
+func TestJobInARoleThatDoesNotReceiveSkillsSaysNothingAboutThem(t *testing.T) {
+	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
+	mustRun(t, client, "role", "attach", "test-writer")
+
+	said := mustRun(t, client, "job", "create",
+		"--title", "read the bill", "--brief", "open it", "--role", "test-writer")
+
+	if strings.Contains(said, "starts without") {
+		t.Fatalf("quay job create says %q, want nothing about skills a role never receives", said)
+	}
 }
