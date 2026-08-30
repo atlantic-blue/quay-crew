@@ -18,6 +18,17 @@ import (
 // as a secret and injects it into the sandbox at task time.
 const ClaudeCodeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 
+// ModelTokenEnv carries the same subscription token under a second name, and it exists because of
+// how the CLI treats the first one. Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the environment
+// of every process it starts, by that name and no other, so anything the task starts inherits no
+// credential: a hook fired on a message got nine other CLAUDE_ variables and not that one. On a
+// laptop that costs nothing, because a logged in install keeps its credential in a file. A sandbox
+// has no such file, so the hook could never authenticate, and it told nobody.
+//
+// So the crew writes the value twice. This name survives into what the task starts, the same way
+// QC_TOKEN and GH_TOKEN already do, and the hook reads it when the first name is missing.
+const ModelTokenEnv = "QUAY_MODEL_TOKEN"
+
 // ClaudeCodeRunner runs tasks by driving the Claude Code CLI, under your subscription (no API cost).
 // It runs the CLI inside the session's sandbox it is handed, so the run is isolated and the CLI's
 // state persists across the session's tasks. It streams JSON events, captures the session id so the

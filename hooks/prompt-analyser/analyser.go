@@ -381,17 +381,29 @@ func FormatAnalysis(raw string, max int) string {
 	return Clip(strings.Join(kept, "\n"), max)
 }
 
-func LastRunLine(when time.Time, outcome Outcome, elapsed time.Duration, prompt string) string {
+// LastRunLine is the one line the hook leaves behind, and for a long time it said "no answer" and
+// stopped there. That is a fact nobody can act on: it reads the same whether the model was slow,
+// said nothing, or was never logged in, and it was the only record anywhere of a hook that had never
+// once worked in a sandbox. The reason now goes on the end, so the file says what to fix.
+//
+// The reason is a sentence, never a value: no credential is ever written here.
+func LastRunLine(when time.Time, outcome Outcome, elapsed time.Duration, prompt, reason string) string {
 	opening := runsOfSpace.ReplaceAllString(strings.TrimSpace(prompt), " ")
 	if len(opening) > 60 {
 		opening = opening[:60]
 	}
-	return strings.Join([]string{
+	fields := []string{
 		when.UTC().Format("2006-01-02T15:04:05.000Z"),
 		string(outcome),
 		strconv.FormatInt(elapsed.Milliseconds(), 10) + "ms",
 		opening,
-	}, "  ") + "\n"
+	}
+	// One run is one line, so a reason that arrived with a newline in it is flattened rather than
+	// allowed to look like a second run.
+	if reason = runsOfSpace.ReplaceAllString(strings.TrimSpace(reason), " "); reason != "" {
+		fields = append(fields, reason)
+	}
+	return strings.Join(fields, "  ") + "\n"
 }
 
 // Context labels both halves so the analysis is never mistaken for an instruction.
@@ -476,7 +488,7 @@ func Run(o Options) {
 		return
 	}
 	if o.Config.Skipped(read.Prompt) {
-		o.finish(started, Skipped, read.Prompt, "")
+		o.finish(started, Skipped, read.Prompt, "", "")
 		return
 	}
 
@@ -485,15 +497,15 @@ func Run(o Options) {
 		trouble = "the model answered with nothing"
 	}
 	if trouble != "" {
-		o.finish(started, NoAnswer, read.Prompt, Notice(trouble))
+		o.finish(started, NoAnswer, read.Prompt, trouble, Notice(trouble))
 		return
 	}
 	analysis := FormatAnalysis(answer, o.Config.MaxAnalysisChars)
 	if analysis == "" {
-		o.finish(started, Passed, read.Prompt, Notice("nothing to add"))
+		o.finish(started, Passed, read.Prompt, "nothing to add", Notice("nothing to add"))
 		return
 	}
-	o.finish(started, Analysed, read.Prompt, Printed(read.Prompt, analysis))
+	o.finish(started, Analysed, read.Prompt, "", Printed(read.Prompt, analysis))
 }
 
 func (o Options) message(read payload) string {
@@ -521,11 +533,16 @@ func (o Options) message(read payload) string {
 	return ask.UserMessage()
 }
 
-func (o Options) finish(started time.Time, outcome Outcome, prompt, out string) {
+// finish records how the run went and prints whatever the runtime should read.
+//
+// The reason travels into the record as well as onto the terminal, because the two are read by
+// different people at different times: the terminal line is gone the moment the session scrolls, and
+// the file is where somebody looks a day later asking why nothing is ever analysed.
+func (o Options) finish(started time.Time, outcome Outcome, prompt, reason, out string) {
 	if o.Config.LastRunFile != "" {
 		// A hook that cannot write its own log still has a job to do.
 		_ = o.FS.Write(o.Config.LastRunFile,
-			[]byte(LastRunLine(o.Now(), outcome, o.Now().Sub(started), prompt)))
+			[]byte(LastRunLine(o.Now(), outcome, o.Now().Sub(started), prompt, reason)))
 	}
 	if out != "" {
 		_, _ = io.WriteString(o.Stdout, out)
@@ -554,22 +571,25 @@ func Trouble(timedOut, err error, said string, config Config) string {
 
 	case said != "":
 		// Whatever it said, rather than a guess. One line, because this goes to a terminal.
-		return "the model call failed: " + firstLine(said)
+		return "the model call failed: " + Redacted(firstLine(said))
 
 	default:
 		return "the model call failed with " + err.Error() + " and said nothing"
 	}
 }
 
-// NotLoggedIn is the failure every sandbox hits, so it is written once and says the whole of it.
+// NotLoggedIn is the failure a sandbox with no credential hits, written once so it says the whole of
+// it and names the next move.
 //
-// The token reaches the session. It does not reach what the session starts: Claude Code removes
-// CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it spawns, while passing nine other
-// CLAUDE_ variables through. A hook is one of those processes, so keeping the variable is a no-op:
-// it was never there to keep.
+// Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it starts, while
+// passing nine other CLAUDE_ variables through, so the token reaches the session and not what the
+// session starts. A hook is one of those processes. The crew now writes the same value under
+// QUAY_MODEL_TOKEN too, which survives, and reaching this sentence means neither name arrived.
 const NotLoggedIn = "the model call is not logged in, so this hook cannot analyse anything. " +
-	"The subscription token reaches your session but not what the session starts, and a hook is " +
-	"started by the session. Until the crew hands the hook a credential of its own, turn it off with: " +
+	"The crew carries the workspace's subscription token into a sandbox under two names, because " +
+	"Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from every process a session starts and a hook is " +
+	"one of those. Neither name arrived here. Set the token with: quay secret set <workspace> " +
+	"CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>, or turn the hook off with: " +
 	"quay hook detach crew prompt-analyser"
 
 func firstLine(text string) string {
@@ -578,4 +598,18 @@ func firstLine(text string) string {
 		line = line[:200]
 	}
 	return strings.TrimSpace(line)
+}
+
+// tokenShape is a subscription token as the tool that mints it prints one. Long enough that it
+// cannot match an ordinary word.
+var tokenShape = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{8,}`)
+
+// Redacted takes any credential out of something the child said before it is repeated.
+//
+// The reason a run failed goes to the terminal and, since the record started saying why, into the
+// last run file as well. That is the child's own words, and the child is a model call: repeating them
+// is right, and putting a credential on disk while doing it is not. Nothing is known to print one.
+// This is what makes that a fact rather than a hope.
+func Redacted(text string) string {
+	return tokenShape.ReplaceAllString(text, "[redacted]")
 }
