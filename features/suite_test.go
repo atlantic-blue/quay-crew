@@ -738,6 +738,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializePanelSteps(sc)
 	initializeScreenSteps(sc)
 	initializeRenderSteps(sc)
+	initializeProvingSteps(sc)
 	initializeRoomSteps(sc)
 	initializeStatusLineSteps(sc)
 	initializeIdentifierSteps(sc)
