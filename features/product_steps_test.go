@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/role"
 	"github.com/cucumber/godog"
 )
@@ -211,5 +210,3 @@ func declareUnderTheSession(ctx context.Context, which int, sentence string) err
 	scenario.declared = append(scenario.declared, declared.GetJob())
 	return nil
 }
-
-var _ = job.ProductLimit
