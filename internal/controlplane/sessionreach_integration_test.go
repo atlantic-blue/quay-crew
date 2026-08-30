@@ -55,7 +55,7 @@ func TestASessionIsRefusedAVerbItsRoleDoesNotCarry(t *testing.T) {
 
 	// The role carries job.create and job.read and not job.stop, so the crew names the verb and
 	// says where a verb comes from. A session that was refused has to know what to ask for.
-	for _, want := range []string{role.VerbJobStop, "may not", "may list", "attaching it"} {
+	for _, want := range []string{role.VerbJobStop, "may not", "verbs list", "attaching it"} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("the session was told %q, want the crew's refusal naming %q", said, want)
 		}

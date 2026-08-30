@@ -75,7 +75,7 @@ func TestAJobIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
 	if !strings.Contains(err.Error(), role.VerbJobCreate) {
 		t.Fatalf("the refusal says %q, want it to name the verb", err)
 	}
-	if !strings.Contains(err.Error(), "may list") {
+	if !strings.Contains(err.Error(), "verbs list") {
 		t.Fatalf("the refusal says %q, want it to say where the grant is written", err)
 	}
 }
@@ -138,7 +138,7 @@ func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
 	}
 }
 
-// A grant holding nothing calls nothing, which is what a role that declared no may list becomes.
+// A grant holding nothing calls nothing, which is what a role that declared no verbs list becomes.
 func TestAGrantThatHoldsNothingCallsNothing(t *testing.T) {
 	grant := auth.Grant{Job: "job-1"}
 

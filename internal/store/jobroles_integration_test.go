@@ -128,10 +128,10 @@ func TestTheCredentialForJobInARoleCarriesThatRolesVerbsInPostgres(t *testing.T)
 	if !held {
 		t.Fatal("the crew does not recognise the credential it minted")
 	}
-	// This role declared no may list, so it may call nothing. Default deny, the same direction the
+	// This role declared no verbs list, so it may call nothing. Default deny, the same direction the
 	// capability model already took.
 	if len(grant.Verbs) != 0 {
-		t.Fatalf("the credential may %v, and a role that declared no may list may call nothing", grant.Verbs)
+		t.Fatalf("the credential may %v, and a role that declared no verbs list may call nothing", grant.Verbs)
 	}
 	if grant.Job != declared.GetJob().GetId() {
 		t.Fatalf("the credential is bound to %q, want the job it was minted for", grant.Job)

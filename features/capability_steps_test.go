@@ -287,7 +287,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the crew refuses it and names the verb it lacks and how an operator grants it$`,
 		func(ctx context.Context) error {
-			for _, want := range []string{role.VerbJobStop, "may list", "attaching it"} {
+			for _, want := range []string{role.VerbJobStop, "verbs list", "attaching it"} {
 				if err := theRefusalSays(want)(ctx); err != nil {
 					return err
 				}
