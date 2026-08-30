@@ -234,15 +234,5 @@ func colourOfWritten(cell string) string {
 // sessions tool puts a repository, and this is the same cell in a different listing.
 func place(string) string { return ansiCyanCode }
 
-// heading is the cell a row is about, when the row's own name is what carries it: the feature a
-// scenario proves, the key a binding is on. Bold rather than coloured, because it sits next to cells
-// that are already carrying colour of their own.
-func heading(cell string) string {
-	if strings.TrimSpace(cell) == "" {
-		return ""
-	}
-	return boldCode
-}
-
 // dim is anything secondary: an identifier, an age, a count that is only there for completeness.
 func dim(string) string { return dimCode }

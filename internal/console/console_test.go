@@ -1408,30 +1408,25 @@ func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 	}
 }
 
-// TestTheFeaturesViewAsksTheControlPlaneNothing is the point of that view: it is what an operator
-// opens before they have a stack, and a capability belongs to the build rather than to a running one.
-func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
-	rows, err := Features().List(context.Background(), "")
+// The features view listed every scenario in this build under a column headed "proved by", which
+// named a scenario without saying whether it passed here, so the column claimed evidence nobody had
+// checked. The list is `quay features` and nothing else, so none of the words that opened the view
+// opens anything.
+func TestNothingOpensTheFeaturesView(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
 	if err != nil {
-		t.Fatalf("listing features: %v", err)
+		t.Fatalf("NewDefaultRegistry: %v", err)
 	}
-	if len(rows) < 10 {
-		t.Fatalf("the features view lists %d rows, want every scenario in the build", len(rows))
-	}
-
-	var titled int
-	for _, row := range rows {
-		if row.Cells[0] != "" {
-			titled++
-		}
-		if row.Cells[1] == "" {
-			t.Fatalf("a row names no scenario: %+v", row)
+	for _, token := range []string{"features", "f", "feature", "capabilities"} {
+		if resource, found := registry.Resolve(token); found {
+			t.Fatalf("Resolve(%q) opens %q, and that view is gone", token, resource.Name)
 		}
 	}
-	// One title per feature, then its scenarios beneath it, rather than the title repeated down the
-	// column.
-	if titled < 5 || titled >= len(rows) {
-		t.Fatalf("%d of %d rows carry a feature title, want one per feature", titled, len(rows))
+	for _, name := range registry.Names() {
+		if name == "features" {
+			t.Fatal("the switcher still lists a features view")
+		}
 	}
 }
 
