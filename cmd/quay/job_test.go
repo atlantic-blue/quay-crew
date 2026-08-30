@@ -1,10 +1,18 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
 // aCrewToJobIn is a crew with one workspace and one project, with the operator standing in it.
@@ -175,9 +183,11 @@ func TestTheListingIsNewestFirstAndNarrowsByPhase(t *testing.T) {
 	declaredHere(t, client, "pay the electricity bill")
 
 	listed := mustRun(t, client, "job", "list")
-	lines := strings.Split(strings.TrimSpace(listed), "\n")
+	// The rows, which are everything above the line that says where the listing looked.
+	rows, _, _ := strings.Cut(strings.TrimSpace(listed), "\n\n")
+	lines := strings.Split(rows, "\n")
 	if len(lines) != 2 {
-		t.Fatalf("the listing has %d lines, want 2: %q", len(lines), listed)
+		t.Fatalf("the listing has %d rows, want 2: %q", len(lines), listed)
 	}
 	if !strings.Contains(lines[0], "pay the electricity bill") {
 		t.Fatalf("the listing opens with %q, want the newest first", lines[0])
@@ -327,4 +337,73 @@ func TestJobRequiringSomethingTheCrewDoesNotHandOutIsRefusedByTheTool(t *testing
 			t.Fatalf("the refusal says %q, want it to name %q", err, want)
 		}
 	}
+}
+
+// What the operator sees, driven all the way through: a job that names a repository, a session that
+// answers with the address, and the address on the screen beside the answer.
+//
+// The whole point of the change is that reading a job says where the work is. A test that stopped at
+// the row would prove the field is written and nothing about whether anybody can find it.
+func TestJobShowSaysWhereTheWorkWent(t *testing.T) {
+	const address = "https://github.com/atlantic-blue/quay-crew/pull/454"
+	srv := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "Pushed the branch and opened " + address},
+		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+	client := testClientFor(t, srv)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	mustRun(t, client, "job", "create",
+		"--title", "sort the listing",
+		"--brief", "make the listing sort by the clock it shows",
+		"--repository", "atlantic-blue/quay-crew")
+	// The whole identifier, because a listing prints the short one and only the tool expands it.
+	listed, err := client.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{})
+	if err != nil || len(listed.GetJobs()) != 1 {
+		t.Fatalf("the crew holds %v jobs (%v), want the one just declared", len(listed.GetJobs()), err)
+	}
+	id := listed.GetJobs()[0].GetId()
+
+	// The declaration says where the work goes, before anything has run.
+	if shown := mustRun(t, client, "job", "show", id); !strings.Contains(shown, "in atlantic-blue/quay-crew") {
+		t.Fatalf("quay job show says %q, want it to say which repository the job works in", shown)
+	}
+
+	ctx := context.Background()
+	srv.TickJob(ctx)
+	waitForJob(t, client, id, job.PhaseDone)
+	srv.TickJob(ctx)
+
+	shown := mustRun(t, client, "job", "show", id)
+	if !strings.Contains(shown, "pull request: "+address) {
+		t.Fatalf("quay job show says %q, want it to name the pull request", shown)
+	}
+	// Above the answer, so somebody reading a job finds it without reading an answer to the end.
+	if strings.Index(shown, "pull request: ") > strings.Index(shown, "\nanswer:") {
+		t.Fatalf("quay job show puts the pull request below the answer: %q", shown)
+	}
+}
+
+// waitForJob waits for the controller's detached task to land, which is a goroutine rather than the
+// tick that started it. Waited for rather than slept through: how long a goroutine takes to be
+// scheduled is a question about the machine.
+func waitForJob(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, id, phase string) {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		found, err := client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
+		if err == nil && found.GetJob().GetPhase() == phase {
+			return
+		}
+		if err == nil && found.GetJob().GetSession() != "" {
+			tasks, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: found.GetJob().GetSession()})
+			if err == nil && len(tasks.GetTasks()) > 0 && tasks.GetTasks()[0].GetStatus() != "running" {
+				return
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("the job never reached %s", phase)
 }

@@ -115,22 +115,39 @@ func runFlowList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if len(args) > 1 {
 		return fmt.Errorf("usage: quay flow list [<workspace>/<project>]")
 	}
-	located, err := locate(ctx, client, typed)
-	if err != nil {
-		return err
+	where := crewWide("runs")
+	request := &quaycrewv1.ListFlowRunsRequest{}
+	if !readsTheCrew(typed) {
+		located, err := locate(ctx, client, typed)
+		if err != nil {
+			return err
+		}
+		request.Project = located.ProjectID
+		where = narrowedTo("runs", located.Path.String(), "quay flow list crew reads every project")
 	}
-	resp, err := client.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{Project: located.ProjectID})
+	resp, err := client.ListFlowRuns(ctx, request)
 	if err != nil {
 		return err
 	}
 	if len(resp.GetRuns()) == 0 {
-		fmt.Fprintf(out, "nothing has run here yet; start one with quay flow start <graph>\n")
+		where.nothing(out)
+		fmt.Fprintf(out, "start one with quay flow start <graph>\n")
 		return nil
 	}
+	addresses := map[string]string{}
+	if where.where == "" {
+		addresses = jobAddresses(ctx, client)
+	}
 	for _, run := range resp.GetRuns() {
+		if where.where == "" {
+			fmt.Fprintf(out, "%-10s %-24s %-24s %-10s %s\n", display.ShortID(run.GetId()),
+				addresses[run.GetProject()], run.GetGraphName(), run.GetStatus(), run.GetNode())
+			continue
+		}
 		fmt.Fprintf(out, "%-10s %-24s %-10s %s\n",
 			display.ShortID(run.GetId()), run.GetGraphName(), run.GetStatus(), run.GetNode())
 	}
+	where.counted(out, len(resp.GetRuns()))
 	return nil
 }
 

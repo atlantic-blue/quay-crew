@@ -93,8 +93,9 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
+	read := heldBy("roles", where, "quay role list on its own reads what the crew holds")
 	if len(resp.GetRoles()) == 0 {
-		fmt.Fprintf(out, "%s holds no roles\n", where)
+		read.nothing(out)
 		return nil
 	}
 	for _, held := range resp.GetRoles() {
@@ -107,6 +108,7 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 			fmt.Fprintf(out, "%-16s      held by the crew, so every workspace has it\n", "")
 		}
 	}
+	read.counted(out, len(resp.GetRoles()))
 	return nil
 }
 

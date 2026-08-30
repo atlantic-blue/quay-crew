@@ -597,7 +597,7 @@ func (c *consoleWorld) openModel(w *world) error {
 // refresh reloads the active view, which is what the key for it does and what the clock does on its
 // own every few seconds.
 func (c *consoleWorld) refresh() error {
-	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 }
 
 // pressEnter runs whatever the active view has bound to enter on the single listed row, which is the
@@ -743,11 +743,11 @@ func askForHistory(ctx context.Context, c *consoleWorld) error {
 		return err
 	}
 	for _, action := range c.active.Actions {
-		if !action.Bound("l") {
+		if !action.Bound("t") {
 			continue
 		}
 		if action.Descend == "" {
-			return fmt.Errorf("the key bound to l on %s descends into nothing", c.active.Name)
+			return fmt.Errorf("the key bound to t on %s descends into nothing", c.active.Name)
 		}
 		resource, found := c.registry.Get(action.Descend)
 		if !found {
@@ -756,5 +756,5 @@ func askForHistory(ctx context.Context, c *consoleWorld) error {
 		c.active = resource
 		return c.list(ctx, row.ID)
 	}
-	return fmt.Errorf("the %s view has nothing bound to l", c.active.Name)
+	return fmt.Errorf("the %s view has nothing bound to t", c.active.Name)
 }

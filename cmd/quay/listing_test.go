@@ -47,7 +47,9 @@ func TestANarrowedListingSaysWhatItWasNarrowedTo(t *testing.T) {
 	if !strings.Contains(narrowed, "elsewhere/other") {
 		t.Errorf("the listing does not say what it was narrowed to:\n%s", narrowed)
 	}
-	if !strings.Contains(narrowed, "lists the whole crew") {
+	// The advice has to be typeable. "quay sessions on its own" was what the operator had just
+	// typed, and standing somewhere it narrows again.
+	if !strings.Contains(narrowed, "quay sessions crew") {
 		t.Errorf("the listing does not say how to see everything:\n%s", narrowed)
 	}
 	if strings.Contains(narrowed, "house-bills") {
