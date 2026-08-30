@@ -45,7 +45,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks changelog promises help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks changelog promises help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -69,24 +69,8 @@ config:
 		echo "wrote $(ENV_FILE) from deploy/env.example. Edit it to say which model and image to run."; \
 	fi
 
-## home-check: refuse to start a crew whose data is still in the layout from before ~/.quay
-#
-# The stack mounts $(QUAY_HOME)/data. A crew made before the move has its tokens, its sealing key and
-# every conversation under ~/.quaycrew/data, so starting would mount an empty directory, mint a new
-# token, and look exactly like a crew that had lost everything. The tool refuses for the same reason;
-# this is the same refusal on the path that does not go through the tool.
-home-check:
-	@if [ -d "$(HOME)/.quaycrew/data" ] && [ ! -d "$(QUAY_HOME)/data" ]; then \
-		echo "refusing: this crew's data is still at $(HOME)/.quaycrew/data, and the stack now mounts"; \
-		echo "          $(QUAY_HOME)/data. Starting would come up empty on a new token. Move it, once:"; \
-		echo ""; \
-		echo "  mkdir -p $(QUAY_HOME)"; \
-		echo "  mv $(HOME)/.quaycrew/data $(QUAY_HOME)/data"; \
-		exit 1; \
-	fi
-
 ## up: start the core stack (Redpanda, OpenTelemetry collector, services)
-up: home-check config
+up: config
 	QC_VERSION=$(VERSION) $(COMPOSE) up --build -d
 
 ## start: alias for up
@@ -201,7 +185,6 @@ upgrade:
 	@echo "so leaving it behind means upgrading the tool and the stack while every conversation keeps"
 	@echo "the build from before."
 	@$(MAKE) --no-print-directory rebuild
-	@$(MAKE) --no-print-directory home-check
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
 	@echo "clearing whatever sandboxes are left. Draining took the ones the crew knows about; these"
@@ -286,7 +269,6 @@ build:
 # What it cannot do is mint the model credential, so it ends by printing the commands that are the
 # operator's, in full, rather than sending them to a document.
 install:
-	@$(MAKE) --no-print-directory home-check
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory rebuild
 	@$(MAKE) --no-print-directory env-check
