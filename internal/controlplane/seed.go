@@ -10,10 +10,17 @@ import (
 
 // SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.
 //
-// These two are how work is done in any repository, they are what the system's own documentation
+// The first two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
 // The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
-var SeedToSystem = []string{"git", "github"}
+//
+// proving is here for a different reason. It says to prove the riskiest assumption in the runtime
+// that has to run it, and the job that needs to read it is the one that does not know it needs to:
+// the design was written, the assumption was proved on a laptop, and two days of product sat on top
+// of it before anything ran where it had to. A skill an operator has to attach to the workspace
+// doing the designing is a skill that arrives after the design. It names no secret and no binary, so
+// nothing can leave it out of a session, and it costs every session one line.
+var SeedToSystem = []string{"git", "github", "proving"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //

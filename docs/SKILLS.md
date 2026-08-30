@@ -104,9 +104,15 @@ narrow belongs, because a capability for one kind of work should not be in front
 system has.
 
 A system whose catalogue is empty is given the skills this build ships with when the control plane
-starts: all seven imported, git and github taken at the system level, the rest waiting to be attached.
-It happens only on an empty catalogue, so it is where a system begins rather than a policy that undoes a
-decision later.
+starts: every one of them imported, git, github and proving taken at the system level, the rest waiting
+to be attached. It happens only on an empty catalogue, so it is where a system begins rather than a
+policy that undoes a decision later.
+
+git and github are there because that is how work is done in any repository. proving is there for a
+different reason: it says to name the assumption that would waste the most work if it is false and prove
+it in the runtime that has to run it, and the job that needs to read that is the one that does not know
+it needs to. A skill an operator has to attach to the workspace doing the designing is a skill that
+arrives after the design.
 
 A skill the system holds is rendered into each workspace's own directory and mounted from there, exactly
 as a workspace's own skill is, so the writing out, the sweeping when it is let go, and the staleness of

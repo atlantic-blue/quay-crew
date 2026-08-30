@@ -1,0 +1,3 @@
+name: proving
+version: 1
+summary: Before you design, name the assumption that would waste the most work if it is false, and prove it in the runtime that has to run it.
