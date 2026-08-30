@@ -236,3 +236,16 @@ func place(string) string { return ansiCyanCode }
 
 // dim is anything secondary: an identifier, an age, a count that is only there for completeness.
 func dim(string) string { return dimCode }
+
+// colourOfHealth writes a health state in the colour of the state: green for a probe that landed,
+// red for one that did not, and dim for the two answers that are the absence of a reading.
+func colourOfHealth(cell string) string {
+	switch stateFromHealth(cell) {
+	case StateReady:
+		return ansiGreenCode
+	case StateFailed:
+		return ansiRedCode
+	default:
+		return dimCode
+	}
+}

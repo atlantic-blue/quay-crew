@@ -26,6 +26,9 @@ type jobWorld struct {
 	// declared holds each job the scenario made, oldest first.
 	declared []*quaycrewv1.Job
 	listed   []*quaycrewv1.Job
+	// leftOut is what the last declaration answered: the skills the session running that job will
+	// start without, because the workspace has not set the secrets they need.
+	leftOut []*quaycrewv1.Skill
 }
 
 func jobFrom(ctx context.Context) *jobWorld {
@@ -432,6 +435,50 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 			}
 			return fmt.Errorf("the records are %v, want a %s saying %q", eventKinds(events), kind, want)
 		})
+
+	sc.Step(`^the caller declares a job titled "([^"]*)"$`, func(ctx context.Context, title string) error {
+		return declareJob(ctx, &quaycrewv1.CreateJobRequest{
+			Title: title, Brief: "clone the repository and push a branch",
+		})
+	})
+
+	// The sentence is the skill listing's own, so this holds it to naming the skill, the secret and
+	// the command that sets it. A note that says a capability is missing without saying how to supply
+	// it sends the reader looking, which is the failure this whole scenario is about.
+	sc.Step(`^the declaration says the session starts without the "([^"]*)" skill, needing "([^"]*)"$`,
+		func(ctx context.Context, name, secret string) error {
+			for _, one := range jobFrom(ctx).leftOut {
+				if one.GetName() != name {
+					continue
+				}
+				if !strings.Contains(one.GetLeftOut(), secret) {
+					return fmt.Errorf("the declaration says the %s skill is left out saying %q, want it to name %q",
+						name, one.GetLeftOut(), secret)
+				}
+				if !strings.Contains(one.GetLeftOut(), "quay secret set") {
+					return fmt.Errorf("the declaration says %q, want it to say how to set the secret",
+						one.GetLeftOut())
+				}
+				return nil
+			}
+			return fmt.Errorf("the declaration names %v, want it to name the %s skill", leftOutNames(ctx), name)
+		})
+
+	sc.Step(`^the declaration names no skill the session starts without$`, func(ctx context.Context) error {
+		if named := leftOutNames(ctx); len(named) > 0 {
+			return fmt.Errorf("the declaration names %v, want it to name nothing", named)
+		}
+		return nil
+	})
+}
+
+// leftOutNames is what the last declaration said the session starts without, for a failure to print.
+func leftOutNames(ctx context.Context) []string {
+	var names []string
+	for _, one := range jobFrom(ctx).leftOut {
+		names = append(names, one.GetName())
+	}
+	return names
 }
 
 // declareJob sends one declaration into the project the scenario is standing in and keeps whatever
@@ -445,6 +492,7 @@ func declareJob(ctx context.Context, request *quaycrewv1.CreateJobRequest) error
 		return nil
 	}
 	scenario.declared = append(scenario.declared, created.GetJob())
+	scenario.leftOut = created.GetLeftOut()
 	return nil
 }
 
