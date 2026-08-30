@@ -24,6 +24,9 @@ type scope struct {
 	wider string
 }
 
+// wholeCrew reports whether the listing read every workspace rather than one address.
+func (s scope) wholeCrew() bool { return s.where == "" }
+
 // crewWide is the scope of a listing that read every workspace.
 func crewWide(what string) scope { return scope{what: what} }
 

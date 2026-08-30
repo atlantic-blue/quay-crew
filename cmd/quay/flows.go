@@ -135,11 +135,11 @@ func runFlowList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		return nil
 	}
 	addresses := map[string]string{}
-	if where.where == "" {
+	if where.wholeCrew() {
 		addresses = jobAddresses(ctx, client)
 	}
 	for _, run := range resp.GetRuns() {
-		if where.where == "" {
+		if where.wholeCrew() {
 			fmt.Fprintf(out, "%-10s %-24s %-24s %-10s %s\n", display.ShortID(run.GetId()),
 				addresses[run.GetProject()], run.GetGraphName(), run.GetStatus(), run.GetNode())
 			continue

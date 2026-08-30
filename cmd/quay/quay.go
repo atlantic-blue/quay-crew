@@ -656,17 +656,17 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 				"the session to clone what it works on")
 
 	case "list":
-		scope := ""
+		holder := ""
 		where := crewWide("projects")
 		if len(args) > 1 {
 			located, err := locate(ctx, client, args[1])
 			if err != nil {
 				return err
 			}
-			scope = located.WorkspaceID
+			holder = located.WorkspaceID
 			where = narrowedTo("projects", located.Path.Workspace, "quay project list on its own reads every workspace")
 		}
-		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: scope})
+		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: holder})
 		if err != nil {
 			return err
 		}

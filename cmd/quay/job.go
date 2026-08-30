@@ -214,11 +214,11 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// A listing that read every project says which project each row is in, or the rows are a heap
 	// of identifiers with no address on any of them.
 	addresses := map[string]string{}
-	if where.where == "" {
+	if where.wholeCrew() {
 		addresses = jobAddresses(ctx, client)
 	}
 	for _, one := range resp.GetJobs() {
-		if where.where == "" {
+		if where.wholeCrew() {
 			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s\n", display.ShortID(one.GetId()),
 				addresses[one.GetProject()], one.GetDepth(), one.GetPhase(), truncateLine(one.GetTitle()))
 			continue
