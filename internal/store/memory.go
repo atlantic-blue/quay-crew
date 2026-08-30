@@ -83,6 +83,9 @@ type Memory struct {
 	// them, keyed by the event identifier so writing one twice leaves one.
 	jobs      map[string]*job.Job
 	jobEvents map[string]*job.Event
+	// jobSteers is every moment the operator had to say something a job should have known, keyed by
+	// the steer identifier.
+	jobSteers map[string]*job.Steer
 	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
 	// defaults, which grant nothing.
 	limits map[string]job.Limits
