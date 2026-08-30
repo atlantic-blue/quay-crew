@@ -356,6 +356,8 @@ type world struct {
 	lastSkills         *quaycrewv1.ListSkillsResponse
 	lastRoles          *quaycrewv1.ListRolesResponse
 	lastRole           *quaycrewv1.GetRoleResponse
+	// mergeGate is what the shipped merge gate answered the last time a scenario fired it.
+	mergeGate gateAnswer
 }
 
 type worldKey struct{}
@@ -711,6 +713,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
+	initializeMergeGateSteps(sc)
 	initializeRoleSteps(sc)
 	initializeShippedRoleSteps(sc)
 	initializeShippedRoleVerbSteps(sc)

@@ -7,7 +7,8 @@ The evidence is one working session on 13 August 2026. The crew context held 100
 The session broke three of them. It did not break the one about committing without approval, because
 that one is not advice on the operator's machine: a hook refused the command and named how to ask.
 
-A quay sandbox has no such gate. So the rule that matters most is the rule nothing checks.
+A quay sandbox had no such gate, so the rule that mattered most was the rule nothing checked. It has
+one gate now, on the merge, and the rest of this document is the shape every other one takes.
 
 ## What a hook is, and is not
 
@@ -154,21 +155,49 @@ dispatched tasks is a hook the operator walks around by opening the conversation
 - **It cannot ask for the crew's own secrets.** `QC_` and `CLAUDE_` are refused at validation, the
   same rule a skill lives under.
 
-## The first hooks
+## The hooks this build ships
 
-Each one is a rule the crew already carries and nothing checks. The analyser comes first because it
-only adds context and can never wrongly refuse.
+Each one is a rule the crew already carries and nothing else checks.
 
 - **prompt-analyser.** Reads the message, asks a small model to restate it, and hands the session
   both. Adds context, never refuses.
-- Refuse a `git commit`, a `git push`, a pull request creation or a merge without approval, and name
-  how to approve it.
+- **merge-gate.** Reads each Bash command and refuses one that merges. `gh pr merge` in every
+  spelling, the same merge over `gh api`, `curl` or `wget`, the `mergePullRequest` mutation, and a
+  `git push` onto `main` or `master`. It is designed in
+  [`hooks/merge-gate/README.md`](../hooks/merge-gate/README.md).
+
+Both are seeded, so a fresh crew is under them without anybody attaching anything.
+
+A seeded hook used to mean a hook that cannot refuse. The merge gate refuses and is seeded anyway,
+because it holds the boundary the whole shape of this crew rests on: every role pushes and opens a
+pull request, and no role merges, since a push applies nothing and a merge runs the pipeline that
+spends money. A gate an operator has to remember to attach is off in every crew nobody set up, which
+is where the boundary matters most. So the rule is not that a seeded hook never refuses. It is that a
+seeded hook refuses something no session is ever meant to do, exactly, and says what to do instead.
+`quay hook detach crew merge-gate` is how somebody decides otherwise.
+
+### How a hook refuses
+
+Exit code 2, with the reason on standard error, which the runtime hands to the session. The runtime
+also takes a refusal as a document on standard output. The exit code is what this crew uses, because
+that contract is the older and simpler of the two, and a refusal a runtime does not understand is a
+gate that quietly opens.
+
+A hook fires on every command a session runs, so anything it cannot read exits 0 and lets the command
+through. A gate that refuses what it does not understand refuses the work, and a broken hook must not
+be able to stop a crew.
+
+### Still worth writing
+
+- Refuse a `git commit` or a `git push` without approval, and name how to approve it.
 - Refuse `git add .` and `git add -A`, and name the form that stages files by name.
 - Refuse a force push and any history rewrite.
 - Check the commit message format, and refuse an attribution line.
 
 A hook that refuses wrongly blocks the work and costs the operator an interruption, which is worse
-than no hook. A rule stays advice until its check is exact.
+than no hook. A rule stays advice until its check is exact. That is why the merge gate reads a
+command line the way a shell would rather than matching text: `git commit -m "merge the two lists"`
+has to go through.
 
 ## What is not settled
 

@@ -324,6 +324,14 @@ had built until the job ended. So each of the three briefs ends a slice the same
 the branch, open a pull request describing what changed and why in two to five sentences, say the
 address in the answer, and move to the next phase.
 
+**The merge is refused rather than asked for.** `may` grants the verbs a session calls on the crew,
+and merging is not one of them: it is a github action a session takes with a credential a skill gave
+it, so the control plane never sees it and cannot refuse it. The place it can be refused is the
+sandbox, at the moment the command runs, and that is a hook. `merge-gate` ships in `hooks/` and a
+fresh crew is put under it, so a session that runs `gh pr merge` is refused and told to open a pull
+request instead. An operator who takes the hook off has decided otherwise, deliberately, which is the
+difference between a boundary and a sentence.
+
 **A test and the code it tests come from different sessions.** The orchestrator's brief says that a
 deliverable carrying logic is at least three children: `test-writer` from the contract, `implementer`
 from the test names, `verifier` against the contract. One session that writes the contract, the tests

@@ -34,6 +34,11 @@ repository whose default branch is called `trunk` can be pushed to directly, and
 than a decision: reading the real default branch means asking the remote, and a hook that makes a
 network call is a hook on the critical path of every command a session runs.
 
+**A bare `git push` from a checkout that is already on the default branch.** The gate reads the
+command, not the repository, so it cannot see which branch you are standing on. Refusing every
+`git push` with no arguments would refuse the push every role makes on every slice, which is the
+trade this hook exists on the right side of.
+
 **A merge from anywhere that is not the Bash tool.** The gate is bound to `Bash`, because that is
 where a session runs `gh`. A tool that reaches github another way is not covered.
 

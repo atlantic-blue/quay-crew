@@ -166,3 +166,43 @@ func TestEveryShippedRoleReceivesTheSkillsItWouldPushWith(t *testing.T) {
 	}
 	t.Logf("%d roles receive skills", len(roles))
 }
+
+// The claim a brief may no longer make.
+//
+// The orchestrator's brief used to say that merging is not a verb the crew has, so nothing stops a
+// session merging except the brief itself. That was honest when it was written and it is false now:
+// the crew ships a hook that reads each command before it runs and refuses one that merges.
+//
+// A brief is prose, so nothing but this stops the sentence coming back. It is written as the claim
+// rather than as the correction, because what matters is that no role tells a session the gate is
+// not there.
+func TestNoShippedBriefTellsASessionThatNothingStopsItMerging(t *testing.T) {
+	roles, err := All(shipped)
+	if err != nil {
+		t.Fatalf("loading the roles this build ships: %v", err)
+	}
+	for _, one := range roles {
+		if strings.Contains(one.Brief, "nothing stops you from merging") {
+			t.Errorf("%s tells a session nothing stops it merging, and a hook does", one.Name)
+		}
+	}
+}
+
+// And the other direction, because the sweep above passes over a brief that says nothing at all. The
+// orchestrator is the role that ends a slice, so it is the one that has to say where the gate is.
+func TestTheOrchestratorSaysTheMergeIsRefusedByAHook(t *testing.T) {
+	roles, err := All(shipped)
+	if err != nil {
+		t.Fatalf("loading the roles this build ships: %v", err)
+	}
+	for _, one := range roles {
+		if one.Name != "orchestrator" {
+			continue
+		}
+		if !strings.Contains(one.Brief, "refuses one that merges") {
+			t.Error("the orchestrator's brief does not say a hook refuses a merge, so a session reads the gate as advice")
+		}
+		return
+	}
+	t.Fatal("this build ships no orchestrator, so this test proves nothing")
+}

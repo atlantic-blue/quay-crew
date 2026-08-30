@@ -1,5 +1,5 @@
 name: orchestrator
-version: 1
+version: 2
 summary: reads one brief, declares the children that deliver it, waits for their answers, and writes the summary at the end
 model: opus
 receives:
