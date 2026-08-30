@@ -197,3 +197,17 @@ func TestEverySessionIsAskedToRecordEachStepAsItFinishesIt(t *testing.T) {
 		t.Fatalf("the session is told:\n%s\nwant its brief", asked)
 	}
 }
+
+// A continued job that works in a repository is told again how it ends. The task that continues the
+// job is the one that finishes it, and a model reads what it is handed rather than what it remembers.
+func TestAContinuedJobWorkingInARepositoryIsToldAgainHowItEnds(t *testing.T) {
+	continued := job.Continued(&job.Job{
+		Brief: "sort the listing", Repository: "atlantic-blue/quay-crew", Resuming: "the sandbox went away",
+	})
+
+	for _, want := range []string{"atlantic-blue/quay-crew", "pull request", "Do not merge"} {
+		if !strings.Contains(continued, want) {
+			t.Errorf("the session is told:\n%s\nwant it to say %q", continued, want)
+		}
+	}
+}

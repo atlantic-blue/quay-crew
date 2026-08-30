@@ -159,6 +159,13 @@ func Continued(one *Job) string {
 			"under it while you were stopped, because it may have moved. Then carry on from the first step " +
 			"that is not on the list above, and record each step as you finish it.",
 	}
+	if one.Repository != "" {
+		// Said again, because this task is the one that ends the job and a model reads what it is handed.
+		// It also keeps the bound honest: the system asks a session once more for an address its answer
+		// did not carry, and counts the tasks the session has run to decide, so a continued attempt that
+		// was never told how the job ends would be stopped for missing something nobody asked it for.
+		said = append(said, EndsInAPullRequest(one.Repository))
+	}
 	if one.Product != "" {
 		said = append([]string{ServesAPerson(one.Product)}, said...)
 	}
