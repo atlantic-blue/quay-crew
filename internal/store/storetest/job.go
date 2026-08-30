@@ -268,6 +268,39 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The listing behind `quay job list crew`. Every other filter here narrows, and this is the one
+	// that does not: a filter naming no workspace and no project reads across both, which is what an
+	// operator standing in one project types to find the work that is somewhere else.
+	t.Run("a listing that names no place reads every workspace", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		here, project := aProject(t, s)
+		declaredJob(t, s, here, project, "the observability slice")
+
+		second, err := s.CreateWorkspace(ctx, "transcript")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		elsewhere, err := s.CreateProject(ctx, second.GetId(), "site")
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		declaredJob(t, s, second.GetId(), elsewhere.GetId(), "a page that turns a video into text")
+
+		listed, err := s.ListJobs(ctx, job.Filter{})
+		if err != nil {
+			t.Fatalf("ListJob: %v", err)
+		}
+		if got := titlesOf(listed); len(got) != 2 {
+			t.Fatalf("a listing of the whole crew holds %v, want both workspaces' jobs", got)
+		}
+		// And a filter that does name a place still narrows, so the crew wide read is the word the
+		// caller typed rather than a filter that stopped working.
+		if listed, _ = s.ListJobs(ctx, job.Filter{Workspace: second.GetId()}); len(listed) != 1 {
+			t.Fatalf("the second workspace holds %d jobs, want the one declared in it", len(listed))
+		}
+	})
+
 	t.Run("a listing carries no answers and reading one job does", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
