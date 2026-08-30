@@ -66,7 +66,7 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the next task will fail$`, func(ctx context.Context) error {
-		worldFrom(ctx).runner.failNext = true
+		worldFrom(ctx).runner.failTheNextTask()
 		return nil
 	})
 

@@ -116,6 +116,14 @@ type recordingRunner struct {
 	says []string
 }
 
+// failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
+// scenario sets it while a task is already waiting inside the double.
+func (r *recordingRunner) failTheNextTask() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failNext = true
+}
+
 // willSay adds one answer to the queue, so a scenario builds up what a model says over several tasks.
 func (r *recordingRunner) willSay(answer string) {
 	r.mu.Lock()
@@ -694,6 +702,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
+	initializeResumingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)
 	initializeTasksViewSteps(sc)
