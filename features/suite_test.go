@@ -664,6 +664,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeInstallSteps(sc)
 	initializeFrontDoorSteps(sc)
 	initializeProjectSteps(sc)
+	initializeDeployTargetSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)

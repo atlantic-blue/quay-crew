@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -170,15 +171,16 @@ func (p *Postgres) CreateProject(ctx context.Context, workspace, name string) (*
 // GetProject returns a live project whose workspace is also live.
 func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error) {
 	var (
-		workspace, name string
-		createdAt       time.Time
+		workspace, name           string
+		account, region, identity string
+		createdAt                 time.Time
 	)
 	// The join is what stops a project outliving the workspace it belongs to.
 	err := p.pool.QueryRow(ctx, `
-		select p.workspace, p.name, p.created_at
+		select p.workspace, p.name, p.created_at, p.deploy_account, p.deploy_region, p.deploy_identity
 		from projects p join workspaces w on w.id = p.workspace
 		where p.id = $1 and p.deleted_at is null and w.deleted_at is null`, id,
-	).Scan(&workspace, &name, &createdAt)
+	).Scan(&workspace, &name, &createdAt, &account, &region, &identity)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -187,13 +189,14 @@ func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Proje
 	}
 	return &quaycrewv1.Project{
 		Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt),
+		DeployTarget: deployTarget(account, region, identity),
 	}, nil
 }
 
 // ListProjects returns live projects, filtered to one workspace when set, newest first.
 func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error) {
 	rows, err := p.pool.Query(ctx, `
-		select p.id, p.workspace, p.name, p.created_at
+		select p.id, p.workspace, p.name, p.created_at, p.deploy_account, p.deploy_region, p.deploy_identity
 		from projects p join workspaces w on w.id = p.workspace
 		where p.deleted_at is null and w.deleted_at is null and ($1 = '' or p.workspace = $1)
 		order by p.created_at desc, p.id`, workspace)
@@ -205,20 +208,37 @@ func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quayc
 	out := make([]*quaycrewv1.Project, 0)
 	for rows.Next() {
 		var (
-			id, owner, name string
-			createdAt       time.Time
+			id, owner, name           string
+			account, region, identity string
+			createdAt                 time.Time
 		)
-		if err := rows.Scan(&id, &owner, &name, &createdAt); err != nil {
+		if err := rows.Scan(&id, &owner, &name, &createdAt, &account, &region, &identity); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		out = append(out, &quaycrewv1.Project{
 			Id: id, Workspace: owner, Name: name, CreatedAt: timestamppb.New(createdAt),
+			DeployTarget: deployTarget(account, region, identity),
 		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
 	return out, nil
+}
+
+// SetDeployTarget records where a project ships, and a zero target clears it.
+func (p *Postgres) SetDeployTarget(ctx context.Context, project string, target deploy.Target) error {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return err
+	}
+	if _, err := p.pool.Exec(ctx, `
+		update projects
+		set deploy_account = $2, deploy_region = $3, deploy_identity = $4, updated_at = now()
+		where id = $1 and deleted_at is null`,
+		project, target.Account, target.Region, target.Identity); err != nil {
+		return fmt.Errorf("set deploy target: %w", err)
+	}
+	return nil
 }
 
 // DeleteProject soft deletes a project, leaving its sessions intact.
@@ -779,4 +799,15 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 		return nil, ErrNotFound
 	}
 	return scanSession(rows)
+}
+
+// deployTarget is the three columns as a target, and nothing at all when a project has not said.
+//
+// A project that has not said carries no target rather than a target of three empty strings, so a
+// reader asks one question instead of three.
+func deployTarget(account, region, identity string) *quaycrewv1.DeployTarget {
+	if account == "" && region == "" && identity == "" {
+		return nil
+	}
+	return &quaycrewv1.DeployTarget{Account: account, Region: region, Identity: identity}
 }
