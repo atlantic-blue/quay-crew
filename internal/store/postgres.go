@@ -170,15 +170,16 @@ func (p *Postgres) CreateProject(ctx context.Context, workspace, name string) (*
 // GetProject returns a live project whose workspace is also live.
 func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Project, error) {
 	var (
-		workspace, name string
-		createdAt       time.Time
+		workspace, name        string
+		repository, visibility string
+		createdAt              time.Time
 	)
 	// The join is what stops a project outliving the workspace it belongs to.
 	err := p.pool.QueryRow(ctx, `
-		select p.workspace, p.name, p.created_at
+		select p.workspace, p.name, p.created_at, p.repository, p.visibility
 		from projects p join workspaces w on w.id = p.workspace
 		where p.id = $1 and p.deleted_at is null and w.deleted_at is null`, id,
-	).Scan(&workspace, &name, &createdAt)
+	).Scan(&workspace, &name, &createdAt, &repository, &visibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -187,13 +188,30 @@ func (p *Postgres) GetProject(ctx context.Context, id string) (*quaycrewv1.Proje
 	}
 	return &quaycrewv1.Project{
 		Id: id, Workspace: workspace, Name: name, CreatedAt: timestamppb.New(createdAt),
+		Repository: repository, Visibility: visibility,
 	}, nil
+}
+
+// SetProjectRepository records where a project's work lands, and what kind of repository it is.
+//
+// The row is read first, through GetProject, so a project whose workspace has been deleted is not
+// found rather than updated: a project outliving its workspace is the case that join exists for.
+func (p *Postgres) SetProjectRepository(ctx context.Context, project, repository, visibility string) (*quaycrewv1.Project, error) {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return nil, err
+	}
+	if _, err := p.pool.Exec(ctx, `
+		update projects set repository = $2, visibility = $3, updated_at = now()
+		where id = $1 and deleted_at is null`, project, repository, visibility); err != nil {
+		return nil, fmt.Errorf("set project repository: %w", err)
+	}
+	return p.GetProject(ctx, project)
 }
 
 // ListProjects returns live projects, filtered to one workspace when set, newest first.
 func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error) {
 	rows, err := p.pool.Query(ctx, `
-		select p.id, p.workspace, p.name, p.created_at
+		select p.id, p.workspace, p.name, p.created_at, p.repository, p.visibility
 		from projects p join workspaces w on w.id = p.workspace
 		where p.deleted_at is null and w.deleted_at is null and ($1 = '' or p.workspace = $1)
 		order by p.created_at desc, p.id`, workspace)
@@ -205,14 +223,16 @@ func (p *Postgres) ListProjects(ctx context.Context, workspace string) ([]*quayc
 	out := make([]*quaycrewv1.Project, 0)
 	for rows.Next() {
 		var (
-			id, owner, name string
-			createdAt       time.Time
+			id, owner, name        string
+			repository, visibility string
+			createdAt              time.Time
 		)
-		if err := rows.Scan(&id, &owner, &name, &createdAt); err != nil {
+		if err := rows.Scan(&id, &owner, &name, &createdAt, &repository, &visibility); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		out = append(out, &quaycrewv1.Project{
 			Id: id, Workspace: owner, Name: name, CreatedAt: timestamppb.New(createdAt),
+			Repository: repository, Visibility: visibility,
 		})
 	}
 	if err := rows.Err(); err != nil {

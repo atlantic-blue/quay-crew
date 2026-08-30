@@ -26,6 +26,16 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
+  // repository is where this project's work lands, written owner/name. A job declared here that
+  // names no repository of its own works in this one, so where the work goes is a row rather than an
+  // argument somebody has to remember to pass.
+  string repository = 5;
+  // visibility is what kind of repository that is: "public" or "private". It is a cost fact. A
+  // pipeline's minutes are free on a public repository and metered on a private one, and that
+  // decision was being taken in a person's head, once per project.
+  //
+  // It is what the operator declared, not what the forge says. The crew does not go and look.
+  string visibility = 6;
 }
 
 // A session is one conversation inside a project: the operator's word for what the control plane
@@ -318,6 +328,19 @@ message DeleteProjectRequest {
   string id = 1;
 }
 message DeleteProjectResponse {}
+
+// SetProjectRepositoryRequest records where a project's work lands. Sending it again replaces what
+// is held, so a project that moved repository is corrected with the same command.
+message SetProjectRepositoryRequest {
+  string project = 1;
+  string repository = 2;
+  // visibility is "public" or "private". Empty is public, because free pipeline minutes are the
+  // cheaper of the two and a project that cannot be public is the one that has to say so.
+  string visibility = 3;
+}
+message SetProjectRepositoryResponse {
+  Project project = 1;
+}
 
 message AttachChannelRequest {
   string workspace = 1;
@@ -1309,6 +1332,7 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc SetProjectRepository(SetProjectRepositoryRequest) returns (SetProjectRepositoryResponse);
 
   rpc ImportFlow(ImportFlowRequest) returns (ImportFlowResponse);
   rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
