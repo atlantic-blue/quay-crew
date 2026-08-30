@@ -10,10 +10,17 @@ import (
 
 // SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.
 //
-// These two are how work is done in any repository, they are what the system's own documentation
+// The first two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
 // The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
-var SeedToSystem = []string{"git", "github"}
+//
+// outbound is here on a different argument. It is not a tool a job reaches for, it is a rule about
+// code the job has already decided to write, and the job that needs it is the one that does not know
+// it does: a deployed page reported "No video with that id" for a video that was there, because the
+// code threw the one failure it knew the name of and logged nothing at the boundary it had just
+// crossed. A rule somebody has to attach first only reaches the jobs that were never going to break
+// it. It names no secret and no binary, so nothing can leave it out of a session.
+var SeedToSystem = []string{"git", "github", "outbound"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //
