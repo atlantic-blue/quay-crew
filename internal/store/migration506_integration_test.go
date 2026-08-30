@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -22,7 +23,7 @@ import (
 // ran, rather than on a fresh one where every table is empty and a rename cannot be seen to work.
 func TestTheLevelsRowsSurviveTheWordChanging(t *testing.T) {
 	ctx := context.Background()
-	pool := schemaOfItsOwn(t, "word506")
+	pool, ownURL := databaseOfItsOwn(t, "word506")
 
 	if err := store.Migrate(ctx, pool); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -85,7 +86,7 @@ func TestTheLevelsRowsSurviveTheWordChanging(t *testing.T) {
 
 	// And the context, which is the level every session in every workspace reads before it reads a
 	// line of anything else.
-	opened, err := store.NewPostgres(ctx, databaseURL+"&search_path=word506")
+	opened, err := store.NewPostgres(ctx, ownURL)
 	if err != nil {
 		t.Fatalf("open the store: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestTheLevelsRowsSurviveTheWordChanging(t *testing.T) {
 		var there bool
 		if err := pool.QueryRow(ctx,
 			`select exists (select 1 from information_schema.tables
-			 where table_schema = 'word506' and table_name = $1)`, table,
+			 where table_schema = 'public' and table_name = $1)`, table,
 		).Scan(&there); err != nil {
 			t.Fatalf("look for %s: %v", table, err)
 		}
@@ -113,9 +114,15 @@ func TestTheLevelsRowsSurviveTheWordChanging(t *testing.T) {
 	}
 }
 
-// schemaOfItsOwn gives a test its own set of tables inside the shared database, so it can migrate
-// from nothing without truncating what every other test in this package is using.
-func schemaOfItsOwn(t *testing.T, named string) *pgxpool.Pool {
+// databaseOfItsOwn gives a test a database of its own on the same server, so it can migrate from
+// nothing without truncating what every other test in this package is using.
+//
+// A schema of its own is not enough, and the reason is worth writing down: migration 0023 renames a
+// table under a guard that reads information_schema for table_schema = 'public', so inside any other
+// schema the guard is false, the rename never happens, and the migration four after it fails on a
+// table that was never renamed. A separate database puts everything back in public where the
+// migrations expect it.
+func databaseOfItsOwn(t *testing.T, named string) (*pgxpool.Pool, string) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -124,16 +131,23 @@ func schemaOfItsOwn(t *testing.T, named string) *pgxpool.Pool {
 		t.Fatalf("open postgres: %v", err)
 	}
 	defer admin.Close()
-	if _, err := admin.Exec(ctx, fmt.Sprintf(`drop schema if exists %s cascade`, named)); err != nil {
-		t.Fatalf("drop schema %s: %v", named, err)
+	if _, err := admin.Exec(ctx, fmt.Sprintf(`drop database if exists %s with (force)`, named)); err != nil {
+		t.Fatalf("drop database %s: %v", named, err)
 	}
-	if _, err := admin.Exec(ctx, fmt.Sprintf(`create schema %s`, named)); err != nil {
-		t.Fatalf("create schema %s: %v", named, err)
+	if _, err := admin.Exec(ctx, fmt.Sprintf(`create database %s`, named)); err != nil {
+		t.Fatalf("create database %s: %v", named, err)
 	}
 
-	pool, err := pgxpool.New(ctx, databaseURL+"&search_path="+named)
+	parsed, err := url.Parse(databaseURL)
 	if err != nil {
-		t.Fatalf("open postgres on schema %s: %v", named, err)
+		t.Fatalf("read the database address: %v", err)
+	}
+	parsed.Path = "/" + named
+	own := parsed.String()
+
+	pool, err := pgxpool.New(ctx, own)
+	if err != nil {
+		t.Fatalf("open postgres on database %s: %v", named, err)
 	}
 	t.Cleanup(func() {
 		pool.Close()
@@ -142,7 +156,8 @@ func schemaOfItsOwn(t *testing.T, named string) *pgxpool.Pool {
 			return
 		}
 		defer cleanup.Close()
-		_, _ = cleanup.Exec(context.Background(), fmt.Sprintf(`drop schema if exists %s cascade`, named))
+		_, _ = cleanup.Exec(context.Background(),
+			fmt.Sprintf(`drop database if exists %s with (force)`, named))
 	})
-	return pool
+	return pool, own
 }
