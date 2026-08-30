@@ -166,3 +166,18 @@ func TestTheRemoteCommandNamesTheRecordAndTheGitSkill(t *testing.T) {
 		}
 	}
 }
+
+// A workspace is not a project, and a repository belongs to a project. Standing in a workspace with
+// no project under it, the refusal says which of the two the operator is holding.
+func TestARepositoryOnAWorkspaceSaysItBelongsToAProject(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+
+	said, err := runQuay(t, client, "project", "repository", "atlantic-blue/transcript")
+	if err == nil {
+		t.Fatalf("a repository on a workspace was accepted, and said %q", said)
+	}
+	if !strings.Contains(err.Error(), "a repository belongs to a project") {
+		t.Errorf("the refusal says %q, want it to say a repository belongs to a project", err)
+	}
+}
