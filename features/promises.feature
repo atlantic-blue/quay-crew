@@ -93,3 +93,11 @@ Feature: A change carries a scenario and a changelog entry, or says why not
     Then the check refuses
     And it says the change carries no "changelog entry"
     And it says an entry is its own file now
+
+  Scenario: A reason shown as an example does not stand in for anything
+    Given a change that edits "internal/job/waiting.go"
+    And it writes "changelog.d/486-a-check-reads-the-diff.md"
+    And the pull request body shows the reason as a fenced example
+    When the check reads the change
+    Then the check refuses
+    And it says the change carries no "scenario"

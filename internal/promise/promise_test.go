@@ -243,3 +243,45 @@ func TestTheSharedFileIsOnlyNamedWhenItWasTouched(t *testing.T) {
 		t.Errorf("the refusal talks about a file the change never touched:\n%s", said)
 	}
 }
+
+// TestAnExampleIsNotTheLine.
+//
+// A body that explains the rule, or quotes the refusal, holds the words the check looks for. The
+// first pull request to add this check had both lines in a fenced block showing what to write, and
+// would have excused itself. So a fence is where prose stops being a statement, and the check reads
+// past it.
+func TestAnExampleIsNotTheLine(t *testing.T) {
+	files := join(edited("internal/job/waiting.go"), added("changelog.d/486-a-check.md"))
+	for _, one := range []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "the line inside a fence is an example",
+			body: "**What.** The check reads the diff. The way out looks like this:\n\n```\nNo scenario: the behaviour is unchanged, this moves it between packages\n```\n",
+			want: []string{Scenario},
+		},
+		{
+			name: "a fence marked as a language is a fence too",
+			body: "```text\nNo scenario: the behaviour is unchanged, this moves it between packages\n```\n",
+			want: []string{Scenario},
+		},
+		{
+			name: "an unclosed fence swallows the rest, which is what a reader sees too",
+			body: "```\nNo scenario: the behaviour is unchanged, this moves it between packages\n",
+			want: []string{Scenario},
+		},
+		{
+			name: "the line outside the fence still counts",
+			body: "```\nNo scenario: this one is an example\n```\n\nNo scenario: the behaviour is unchanged, this moves it between packages\n",
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			got := missing(Check(Change{Files: files, Body: one.body}))
+			if strings.Join(got, ",") != strings.Join(one.want, ",") {
+				t.Fatalf("the check asks for %v, want %v", got, one.want)
+			}
+		})
+	}
+}

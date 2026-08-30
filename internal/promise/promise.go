@@ -176,8 +176,19 @@ func excuseLine(promise string) string {
 // nothing after it is refused the same as no line at all.
 func excused(body, promise string) bool {
 	want := strings.ToLower(excuseLine(promise))
+	fenced := false
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
+		// A body that explains the rule, or quotes the refusal, holds these words as an example. A
+		// fence is where prose stops being a statement, so the check reads past it. The pull request
+		// that added this check had both lines in a fenced block and would have excused itself.
+		if strings.HasPrefix(trimmed, "```") {
+			fenced = !fenced
+			continue
+		}
+		if fenced {
+			continue
+		}
 		// A body is markdown, and the line is usually written as a bullet or in bold.
 		trimmed = strings.TrimLeft(trimmed, "-*# ")
 		trimmed = strings.ReplaceAll(trimmed, "**", "")

@@ -242,6 +242,13 @@ func initializePromisesSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the pull request body shows the reason as a fenced example$`, func(ctx context.Context) error {
+		p := promisesFrom(ctx)
+		p.body = "**What.** The check reads the diff. The way out of the scenario looks like this:\n\n" +
+			"```\nNo scenario: the behaviour is unchanged, this moves it between packages\n```\n"
+		return nil
+	})
+
 	sc.Step(`^it prints the line that would say why there is none$`, func(ctx context.Context) error {
 		p := promisesFrom(ctx)
 		if !strings.Contains(p.said, "No changelog entry:") {
