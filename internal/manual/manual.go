@@ -89,6 +89,18 @@ commands:
                                           answer arrives as your next task
   job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
                                           again with the answer, in the session that asked
+  job step "<what you finished>"          record one step of the job you are running, as you finish
+                                          it. If the job dies part way, what is on that record is
+                                          where it carries on from, and what is not on it is done a
+                                          second time
+  job resume <job>                        carry on with a job that failed, from the first step it
+                                          did not finish. It keeps its session, so its working
+                                          directory, its branch and its pull request are where it
+                                          left them, and it is asked to fetch its base and say what
+                                          moved while it was stopped
+  job refuse <job> [<reason>]             the other answer to a job that failed: the work was wrong,
+                                          so end it rather than continue it. It stops, and a stopped
+                                          job is never continued
   target [<address>]                      where a project ships: the account, the region inside it,
     [--account <id>]                      and the role a pipeline assumes to get there. With no
     [--region <name>]                     values it reads what the project declared, and with them
