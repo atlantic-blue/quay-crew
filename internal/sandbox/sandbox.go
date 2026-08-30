@@ -7,6 +7,8 @@ import (
 	"context"
 	"io"
 	"path"
+
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 )
 
 // Spec describes a command to run inside a Sandbox.
@@ -51,6 +53,14 @@ type Config struct {
 	// Driver joins the control plane's network and gets the host paths handed to the driver. An
 	// ordinary session gets neither.
 	Driver bool
+	// Request is what this sandbox asks the machine for. The crew admits a sandbox only where its
+	// runtime still has this much unallocated, and the container carries the processor half of it as
+	// a share, so the runtime shares its processors out in the proportions the crew reserved rather
+	// than equally between a compile and a session waiting on a model.
+	//
+	// It is a request and not a limit. Nothing here stops a sandbox taking more than it asked for
+	// when the machine is idle, which is what a limit does, and that is issue 477.
+	Request capacity.Request
 	// Role is the role the session runs as, empty for a session that runs as nobody in particular. It
 	// decides where the session's conversation is kept, because a role that must not see the code must
 	// not be able to read the transcript of the session that wrote it.

@@ -603,6 +603,66 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		}
 	})
 
+	// A job the machine has no room for is held rather than moved. The phase stays pending, because
+	// a machine that is full now has room in ten minutes and the job is still the next thing to run,
+	// and the reason is the difference between a crew that is full and a crew that has stalled.
+	t.Run("a pending job is held with a reason, and the reason goes when it starts", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+
+		reason := "there is not enough memory for this job's sandbox: it asks for 1536 MiB, " +
+			"512 MiB of 5605 MiB is unallocated"
+		held, err := s.HoldJob(ctx, id, reason, heldEvent(id, workspace, project, reason))
+		if err != nil {
+			t.Fatalf("HoldJob: %!v(MISSING)", err)
+		}
+		if held.Phase != job.PhasePending {
+			t.Fatalf("a held job is %q, want pending", held.Phase)
+		}
+		if held.Reason != reason {
+			t.Fatalf("a held job says %q, want the reason it was given", held.Reason)
+		}
+		if held.Attempts != 0 {
+			t.Fatalf("a held job is on attempt %d, and it never started", held.Attempts)
+		}
+
+		// It is still runnable, so the next tick with room on the machine picks it up.
+		runnable, err := s.RunnableJob(ctx, 10)
+		if err != nil {
+			t.Fatalf("RunnableJob: %v", err)
+		}
+		if len(runnable) != 1 || runnable[0].ID != id {
+			t.Fatalf("%d jobs are runnable, want the held one", len(runnable))
+		}
+
+		// And the reason goes with the wait it described, in the same statement that starts the job.
+		started, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if started.Reason != "" {
+			t.Fatalf("a running job still says %q, which described the wait it is out of", started.Reason)
+		}
+	})
+
+	// A hold can never overwrite how a job ended: what came of it is the useful part.
+	t.Run("a job that already ended is not held", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if _, err := s.HoldJob(ctx, id, "there is not enough memory", nil); !errors.Is(err, job.ErrNotPending) {
+			t.Fatalf("holding a running job answered %v, want ErrNotPending", err)
+		}
+	})
+
 	t.Run("claiming job the crew does not hold is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -1215,4 +1275,12 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 			t.Fatalf("a hold where nothing is named lasts %s, want the crew's own", got)
 		}
 	})
+}
+
+// heldEvent is the record the crew writes when it will not start a job yet.
+func heldEvent(id, workspace, project, reason string) *job.Event {
+	return &job.Event{
+		ID: store.NewID(), Kind: job.EventHeld, Job: id,
+		Workspace: workspace, Project: project, Detail: reason, OccurredAt: time.Now().UTC(),
+	}
 }

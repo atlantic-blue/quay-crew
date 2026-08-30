@@ -202,10 +202,12 @@ shown here.
 
 ### What this does not do
 
-- **It refuses nothing.** The crew reports a full machine and still tries to start a session on it.
-  Refusing a dispatch with a reason is the next step, and it is what issue 400 asks for.
-- **It sets no limit.** Nothing here bounds how many sandboxes run. `max_running` belongs to the
-  job controller in `docs/ORCHESTRATION.md`, and this reading is the measurement that would set it.
+- **It decides nothing on its own, and something else now decides on it.** This reading is what
+  admission reads: the crew adds up what its sandboxes asked for and starts a job only where the
+  runtime still has that much unallocated. See section 5.1 of `docs/ORCHESTRATION.md`.
+- **It sets no limit on a sandbox.** Nothing here stops one sandbox taking more than it asked for,
+  which is issue 477, and nothing here stops anything once a machine is in trouble anyway, which is
+  issue 478.
 - **It cannot see a Mac.** Nothing inside a Linux container reads what macOS is doing, so on a Mac
   the machine reported is the Docker virtual machine and the crew says so by name.
 - **It stops nothing on its own.** The view answers which session to stop and the operator stops it.

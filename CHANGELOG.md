@@ -6,6 +6,46 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 30 August 2026
+
+- **Work is admitted by what the machine has left, not by counting jobs.** A workspace said
+  `max running 8`, nine jobs were declared, and the ninth was admitted because eight is not nine.
+  It waited two minutes and seven seconds for a container and was failed. Then the container
+  runtime stopped answering and exited, taking the control plane, the database, the event log and
+  eight running jobs with it. Two of those jobs had pushed their work; six had not.
+
+  A count cannot protect a machine, because sandboxes are not the same size: ten of them on that
+  machine held between 4.3 and 764.5 megabytes.
+
+  So the crew now does the arithmetic a scheduler does. **A sandbox declares a request**, memory
+  and processor, per workspace, in the units the room view prints:
+  `quay limits acme --request-memory 1536 --request-processor 100`. A workspace that declares
+  nothing takes the crew's own, which is measured: 1,536 mebibytes and one processor. **The crew
+  reads what its runtime has**, from the daemon and never from the host, because the host had 36
+  gibibytes free while the runtime had 7.65 and was full. **It holds back what its own containers
+  are using**, measured on every sample rather than declared, because the control plane, the
+  database and the event log are containers inside the same runtime the work fills. That is the
+  one place this differs from kubernetes, where the kubelet sits outside the pods it manages.
+  **Then it adds up**: what is placed, plus this one, against capacity less the reserve.
+
+  A job that does not fit stays pending, for as long as it takes, and says which resource ran out.
+  It is never admitted and then failed on a timeout. `quay job list` shows it as `held` rather
+  than `pending`, because a full machine and a stalled crew must not read the same.
+
+  **The room is taken in the same movement as the decision.** A dispatch is detached, so the
+  container appears seconds after the job that asked for it, and the crew reads its runtime on a
+  ten second timer. Nine jobs asking one reading whether the machine is empty are all told yes,
+  which is exactly what happened. The ledger records what has been promised as well as what has
+  been built, and the next job counts it.
+
+  A crew that cannot read its runtime admits the work and says so in the log. There is no
+  arithmetic to do for a crew whose sessions do not run on a container runtime at all.
+
+  **What this does not do.** Nothing holds a sandbox to what it asked for: measured here, one
+  sandbox running a build reached 1,856 mebibytes and nine of fourteen processors against a
+  request of 1,536 and one. That gap is a limit, and it is issue 477. Nothing stops anything once
+  a machine is in trouble anyway, which is issue 478. `max_running` stays, and still counts.
+
 ## 29 August 2026
 
 - **The console has a view of jobs.** Eleven resources were registered and none of them was the work
