@@ -275,6 +275,11 @@ a browser and a person typing from memory declare the same thing. Anything that 
 name is refused at the write, because a repository the crew cannot then look for in an answer is an
 expectation that was never going to hold.
 
+**Empty takes the project's.** A project records the repository its work lands in, so a job declared
+there and naming none works in that one and is held to it like any other. A job that names its own
+keeps it: the project's is the default, not a ceiling. Before this the address was passed to every job
+by hand, and a job that was not given one produced work nobody could read.
+
 Naming one says how the job ends. The crew adds a line to what the session is asked, saying to push
 the branch, open the pull request, name its address in the answer, and not to merge it. The job is
 not done until an answer names a pull request against that repository, and the address the crew read
@@ -414,6 +419,7 @@ purpose. The list, so a test can be written against it:
   one.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
+- A job that names no repository, in a project that records one, works in the project's.
 - A job whose brief asks it to wait for a pipeline, or to merge on the result of one, is refused,
   and the refusal quotes the brief and names the flow.
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
