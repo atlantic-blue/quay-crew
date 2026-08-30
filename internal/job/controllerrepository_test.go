@@ -40,16 +40,20 @@ func TestASessionDoingAJobInARepositoryIsToldItEndsInAPullRequest(t *testing.T) 
 	}
 }
 
-// A job naming no repository is asked its brief and nothing else, so nothing about a job declared
-// before this changes.
-func TestASessionDoingAJobInNoRepositoryIsAskedItsBriefAlone(t *testing.T) {
+// A job naming no repository is asked for no pull request, so nothing a job declares reaches a
+// session that did not declare it.
+func TestASessionDoingAJobInNoRepositoryIsAskedForNoPullRequest(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(declaredJob("read the electricity bill"))
 
 	controller.Tick(context.Background())
 
-	if asked := plane.dispatched[0].GetText(); asked != one.Brief {
-		t.Fatalf("the session was asked %q, want the brief alone", asked)
+	asked := plane.dispatched[0].GetText()
+	if !strings.Contains(asked, one.Brief) {
+		t.Fatalf("the session was asked %q, want its brief", asked)
+	}
+	if strings.Contains(asked, "pull request") {
+		t.Fatalf("the session was asked %q, and this job names no repository", asked)
 	}
 }
 

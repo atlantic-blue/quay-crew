@@ -397,7 +397,14 @@ one vocabulary rather than two.
 - `stopped`, it was halted: a person stopped it, or it met a limit, or its claim did not hold. A
   a job that went quiet and one that was halted must never read the same.
 
-The last three are terminal. Nothing moves a job out of them.
+The last three are terminal. Nothing moves a job out of them on its own.
+
+**One person may, and only out of `failed`.** `ResumeJob` puts a job that failed back to `pending`,
+keeping its session, so a controller starts it again in the conversation it has been in all along.
+That is the whole of the exception: no controller, no timer and no poller moves a terminal job, and
+`done` and `stopped` are not movable at all. `done` has nothing left to continue, and `stopped` is
+somebody ending a job on purpose, which is what `RefuseJob` does to a failure the operator judges was
+the work being wrong rather than the run. `features/resuming.feature` is the shape of it.
 
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
 reader gets from the job to the conversation, and it is what `quay attach` takes.
@@ -823,6 +830,14 @@ Asking is not a fifth verb. A session puts a question about the job it is itself
 credential is already bound to that job identifier, so no grant is involved. `AskJob` refuses any
 identifier but the caller's own, which is why it needs none.
 
+Recording a step is not one either, for the same reason and with the same check. `RecordJobStep` is
+the session saying what it finished, on the job it is itself doing. A role that could withhold it
+would leave a job that can only ever be started again from nothing.
+
+`ResumeJob` and `RefuseJob` are mapped to no verb at all, the way `AnswerJob` is. They are the two
+answers to a failure, and which of the two a failure gets is a person's decision: a session that
+could continue its own job would be deciding that its own failure was not about the work.
+
 **What shipped on 30 August 2026.** `AskJob` and `AnswerJob`, the `asking` phase written by
 something other than a flow, the `job.asked` and `job.told` records, and a `told` column carrying
 what a person decided until the session is handed it. The job stops at the question and no controller
@@ -1075,6 +1090,12 @@ Each carries `id`, `kind`, `job`, `workspace`, `project`, `parent`, `depth`, `tr
 - `job.failed`, fields: `reason`.
 - `job.asked`, fields: `question`.
 - `job.stopped`, fields: `reason`.
+- `job.stepped`, fields: `summary`. One thing the session doing the job said it finished. Not a
+  movement: the job is running before it and running after it.
+- `job.resumed`, fields: `reason`. A person continued a job that failed, from the first step its
+  session did not finish.
+- `job.refused`, fields: `reason`. A person ended a failure on purpose instead, so nothing continues
+  it.
 
 **Internal, which nothing outside should depend on:**
 

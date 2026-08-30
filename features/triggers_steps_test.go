@@ -147,7 +147,7 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 		if len(tasks) != 1 {
 			return fmt.Errorf("the run's steps hold %d tasks, want 1", len(tasks))
 		}
-		if tasks[0].GetPrompt() != prompt {
+		if !strings.Contains(tasks[0].GetPrompt(), prompt) {
 			return fmt.Errorf("the step was asked %q, want %q", tasks[0].GetPrompt(), prompt)
 		}
 		return nil

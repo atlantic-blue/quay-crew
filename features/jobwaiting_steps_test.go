@@ -3,6 +3,7 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
@@ -51,7 +52,7 @@ func initializeFlowStepSteps(sc *godog.ScenarioContext) {
 		}
 		asked := make([]string, 0, len(tasks))
 		for _, task := range tasks {
-			if task.GetPrompt() == want {
+			if strings.Contains(task.GetPrompt(), want) {
 				return nil
 			}
 			asked = append(asked, task.GetPrompt())

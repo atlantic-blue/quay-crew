@@ -42,7 +42,7 @@ func (m *Memory) writeJob(declared *job.Job) error {
 	return nil
 }
 
-// GetJob reads one job back, whole.
+// GetJob reads one job back, whole: its answer and the steps its session finished.
 func (m *Memory) GetJob(_ context.Context, id string) (*job.Job, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -50,8 +50,7 @@ func (m *Memory) GetJob(_ context.Context, id string) (*job.Job, error) {
 	if !held {
 		return nil, ErrNotFound
 	}
-	kept := cloneJob(*found)
-	return &kept, nil
+	return m.jobWithSteps(*found), nil
 }
 
 // ListJob returns what matches, newest first, without answers: a listing of a hundred answers is a
@@ -122,6 +121,9 @@ func (m *Memory) AskJob(_ context.Context, id, question string, event *job.Event
 		return nil, job.ErrNotRunning
 	}
 	found.Phase, found.Question, found.Told = job.PhaseAsking, question, ""
+	// And the resume with it. A job that asked is carried on by the answer rather than by the steps it
+	// had finished, so only one of the two is ever the instruction in hand.
+	found.Resuming = ""
 	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.UpdatedAt = time.Now().UTC()
 	if err := m.appendJobEvent(event); err != nil {
@@ -329,8 +331,9 @@ func (m *Memory) StartJob(_ context.Context, id string, lease job.Lease, events 
 	if err := m.appendJobEvents(events); err != nil {
 		return nil, err
 	}
-	kept := cloneJob(*found)
-	return &kept, nil
+	// With its steps, because this is the row the controller builds the task from: a job being
+	// continued is sent what it already finished rather than its brief.
+	return m.jobWithSteps(*found), nil
 }
 
 // HoldJob says on a pending job why it is not being started. The phase does not move: the job is
@@ -467,7 +470,11 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Answer, found.Reason = landed.Phase, landed.Answer, landed.Reason
-	found.PullRequest = landed.PullRequest
+	// Unless the landing read none and the row already carries one: a step that named the pull request
+	// wrote it before any answer landed, and a job that failed carries no answer to read.
+	if landed.PullRequest != "" {
+		found.PullRequest = landed.PullRequest
+	}
 	found.SpentTokens, found.ObservedVersion = landed.SpentTokens, found.Version
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil

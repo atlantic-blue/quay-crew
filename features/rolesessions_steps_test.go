@@ -62,7 +62,7 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 		if len(tasks) != 1 {
 			return fmt.Errorf("the role's session holds %d tasks, want 1", len(tasks))
 		}
-		if tasks[0].GetPrompt() != prompt {
+		if !strings.Contains(tasks[0].GetPrompt(), prompt) {
 			return fmt.Errorf("the role's session was asked %q, want %q", tasks[0].GetPrompt(), prompt)
 		}
 		return nil

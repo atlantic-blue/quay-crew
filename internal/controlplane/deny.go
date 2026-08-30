@@ -81,7 +81,12 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 	// question about the job it is itself running, and the credential is already bound to that job,
 	// so there is nothing here to check that the call does not check for itself. The alternative to
 	// asking is guessing, and no role should be able to leave a session with only that.
-	if fullMethod == quaycrewv1.ControlPlaneService_AskJob_FullMethodName {
+	// Recording a step is not a verb either, and for the same shape of reason. A session says what it
+	// finished on the job it is itself running, and the credential is already bound to that job. A role
+	// that could withhold it would leave a job that can only ever be started again from nothing, which
+	// is the second attempt paying for the first.
+	if fullMethod == quaycrewv1.ControlPlaneService_AskJob_FullMethodName ||
+		fullMethod == quaycrewv1.ControlPlaneService_RecordJobStep_FullMethodName {
 		return nil
 	}
 	verb, known := jobVerbs[fullMethod]
@@ -113,6 +118,10 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 // holds it, and no call is mapped to it, so what a session may do with that verb today is nothing.
 // A question is put to a person, and a run that could answer its own question is a gate that
 // decorates rather than holds.
+//
+// ResumeJob and RefuseJob are absent for the same reason and no verb exists for either. They are the
+// two answers to a failure, and a session that could continue its own job would be deciding that its
+// own failure was not about the work.
 var jobVerbs = map[string]string{
 	quaycrewv1.ControlPlaneService_CreateJob_FullMethodName: role.VerbJobCreate,
 	quaycrewv1.ControlPlaneService_GetJob_FullMethodName:    role.VerbJobRead,

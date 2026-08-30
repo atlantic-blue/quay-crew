@@ -22,7 +22,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer>")
+		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|resume|refuse>")
 	}
 	switch args[0] {
 	case "create":
@@ -37,8 +37,15 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobAsk(ctx, client, args[1:], out)
 	case "answer":
 		return runJobAnswer(ctx, client, args[1:], out)
+	case "step":
+		return runJobStep(ctx, client, args[1:], out)
+	case "resume":
+		return runJobResume(ctx, client, args[1:], out)
+	case "refuse":
+		return runJobRefuse(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("there is no job %s command: krewe job <create|list|show|stop|ask|answer>", args[0])
+		return fmt.Errorf("there is no job %s command: "+
+			"krewe job <create|list|show|stop|ask|answer|step|resume|refuse>", args[0])
 	}
 }
 
@@ -356,6 +363,25 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetReason() != "" {
 		fmt.Fprintf(out, "%s\n", one.GetReason())
 	}
+	// And what an earlier attempt failed with, where this one is carrying on past it. A job that is
+	// running for the second time and one that is running for the first read the same without it.
+	if one.GetResuming() != "" {
+		fmt.Fprintf(out, "continuing past: %s\n", one.GetResuming())
+	}
+	// What its session finished. It is the record a second attempt carries on from, so it is here
+	// rather than only inside a task nobody can read.
+	if steps := one.GetSteps(); len(steps) > 0 {
+		fmt.Fprintln(out, "finished:")
+		for _, step := range steps {
+			fmt.Fprintf(out, "  %d. %s\n", step.GetSeq(), step.GetSummary())
+		}
+	}
+	// How to answer a failure, said where somebody is already looking at one. Both ways, because
+	// which of the two this is is the reader's to decide and nothing else can.
+	if one.GetPhase() == job.PhaseFailed {
+		fmt.Fprintf(out, "carry on from there with krewe job resume %s, or end it with "+
+			"krewe job refuse %s \"...\"\n", display.ShortID(one.GetId()), display.ShortID(one.GetId()))
+	}
 	// What it asked, and what it was told. Both stay on the row after the answer, because an answer
 	// on its own says nothing and a question on its own leaves a reader looking for the decision.
 	if question := one.GetQuestion(); question != "" {
@@ -467,6 +493,92 @@ func runJobAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	fmt.Fprintf(out, "%s\n", answered.GetTold())
 	fmt.Fprintln(out, "\nit starts again with that answer, in the session that asked.")
 	return nil
+}
+
+// runJobStep records one thing the session running this job finished.
+//
+// It names no job, the way `krewe job ask` names none: the system reads which job is recording from
+// the credential this session holds. A caller that could name any job could write on any job's
+// record.
+func runJobStep(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: krewe job step \"<what you finished>\"")
+	}
+	resp, err := client.RecordJobStep(ctx, &quaycrewv1.RecordJobStepRequest{Summary: args[0]})
+	if err != nil {
+		return err
+	}
+	recorded := resp.GetJob()
+	steps := recorded.GetSteps()
+	fmt.Fprintf(out, "step %d of %s: %s\n", len(steps), display.ShortID(recorded.GetId()), args[0])
+	fmt.Fprintln(out, "if this job stops before it is done, it carries on from here rather than from nothing.")
+	return nil
+}
+
+// runJobResume continues a job that failed, from the first step it did not finish.
+//
+// It says what the job failed with before it says anything else, and it says how to refuse it. A
+// failure that was the work being wrong must not be continued, and the person typing this is the
+// only one who can tell the two apart.
+func runJobResume(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: krewe job resume <job>")
+	}
+	one, err := findJob(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	failure := one.GetReason()
+	resp, err := client.ResumeJob(ctx, &quaycrewv1.ResumeJobRequest{Id: one.GetId()})
+	if err != nil {
+		return err
+	}
+	resumed := resp.GetJob()
+	fmt.Fprintf(out, "continuing %s\n", display.ShortID(resumed.GetId()))
+	fmt.Fprintf(out, "it failed with: %s\n", failure)
+	sayWhatIsFinished(out, resumed.GetSteps())
+	fmt.Fprintf(out, "\na controller picks it up and carries on in the session it is already in. It is asked "+
+		"to fetch the branch this work is based on and say what moved while it was stopped.\n")
+	fmt.Fprintf(out, "if the work was wrong rather than the run, end it instead with "+
+		"krewe job refuse %s \"...\"\n", display.ShortID(resumed.GetId()))
+	return nil
+}
+
+// runJobRefuse ends a job that failed, so nothing continues it.
+func runJobRefuse(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("usage: krewe job refuse <job> [<reason>]")
+	}
+	one, err := findJob(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	reason := ""
+	if len(args) == 2 {
+		reason = args[1]
+	}
+	resp, err := client.RefuseJob(ctx, &quaycrewv1.RefuseJobRequest{Id: one.GetId(), Reason: reason})
+	if err != nil {
+		return err
+	}
+	refused := resp.GetJob()
+	fmt.Fprintf(out, "refused %s\n", display.ShortID(refused.GetId()))
+	fmt.Fprintf(out, "%s\n", refused.GetReason())
+	fmt.Fprintln(out, "\nit is stopped, so nothing continues it. Declare a new job for the work that is left.")
+	return nil
+}
+
+// sayWhatIsFinished lists the steps a job recorded, which is what the session continuing it is not
+// asked to do again.
+func sayWhatIsFinished(out io.Writer, steps []*quaycrewv1.JobStep) {
+	if len(steps) == 0 {
+		fmt.Fprintln(out, "nothing was recorded as finished, so it is asked to look before it repeats itself.")
+		return
+	}
+	fmt.Fprintln(out, "finished already:")
+	for _, one := range steps {
+		fmt.Fprintf(out, "  %d. %s\n", one.GetSeq(), one.GetSummary())
+	}
 }
 
 // findJob resolves job by its full identifier or by the short one a listing prints.

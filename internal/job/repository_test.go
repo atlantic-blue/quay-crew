@@ -118,11 +118,15 @@ func TestASessionIsToldTheJobEndsInAPullRequest(t *testing.T) {
 	}
 }
 
-// A job that names no repository is asked exactly what its brief says, so nothing about a job
-// declared before today changes.
-func TestAJobNamingNoRepositoryIsAskedItsBriefAndNothingElse(t *testing.T) {
+// A job that names no repository is told nothing about one. What the system adds to a brief it adds
+// for a reason the job declared, and a job that declared no repository has no such reason.
+func TestAJobNamingNoRepositoryIsToldNothingAboutAPullRequest(t *testing.T) {
 	brief := "open the bill and say when it is due"
-	if asked := job.Asked(&job.Job{Brief: brief}); asked != brief {
-		t.Fatalf("the session is asked %q, want the brief alone", asked)
+	asked := job.Asked(&job.Job{Brief: brief})
+	if !strings.Contains(asked, brief) {
+		t.Fatalf("the session is asked %q, want its brief", asked)
+	}
+	if strings.Contains(asked, "pull request") {
+		t.Fatalf("the session is asked %q, and this job names no repository", asked)
 	}
 }

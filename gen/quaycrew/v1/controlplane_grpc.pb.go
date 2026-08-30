@@ -76,6 +76,9 @@ const (
 	ControlPlaneService_StopJob_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/StopJob"
 	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
 	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
+	ControlPlaneService_RecordJobStep_FullMethodName            = "/quaycrew.v1.ControlPlaneService/RecordJobStep"
+	ControlPlaneService_ResumeJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ResumeJob"
+	ControlPlaneService_RefuseJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/RefuseJob"
 	ControlPlaneService_RecordSteer_FullMethodName              = "/quaycrew.v1.ControlPlaneService/RecordSteer"
 	ControlPlaneService_ListSteers_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSteers"
 	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
@@ -160,6 +163,12 @@ type ControlPlaneServiceClient interface {
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error)
 	AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error)
+	// RecordJobStep is the session saying what it finished, as it finishes it. ResumeJob continues a
+	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
+	// failure: end it, so nobody continues it.
+	RecordJobStep(ctx context.Context, in *RecordJobStepRequest, opts ...grpc.CallOption) (*RecordJobStepResponse, error)
+	ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error)
+	RefuseJob(ctx context.Context, in *RefuseJobRequest, opts ...grpc.CallOption) (*RefuseJobResponse, error)
 	// The score of a job: one command marks a moment, and the report reads the marks back.
 	RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error)
 	ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error)
@@ -759,6 +768,36 @@ func (c *controlPlaneServiceClient) AnswerJob(ctx context.Context, in *AnswerJob
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RecordJobStep(ctx context.Context, in *RecordJobStepRequest, opts ...grpc.CallOption) (*RecordJobStepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordJobStepResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordJobStep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeJobResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ResumeJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RefuseJob(ctx context.Context, in *RefuseJobRequest, opts ...grpc.CallOption) (*RefuseJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefuseJobResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RefuseJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecordSteerResponse)
@@ -922,6 +961,12 @@ type ControlPlaneServiceServer interface {
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error)
 	AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error)
+	// RecordJobStep is the session saying what it finished, as it finishes it. ResumeJob continues a
+	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
+	// failure: end it, so nobody continues it.
+	RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error)
+	ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error)
+	RefuseJob(context.Context, *RefuseJobRequest) (*RefuseJobResponse, error)
 	// The score of a job: one command marks a moment, and the report reads the marks back.
 	RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error)
 	ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error)
@@ -1121,6 +1166,15 @@ func (UnimplementedControlPlaneServiceServer) AskJob(context.Context, *AskJobReq
 }
 func (UnimplementedControlPlaneServiceServer) AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AnswerJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordJobStep not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RefuseJob(context.Context, *RefuseJobRequest) (*RefuseJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefuseJob not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordSteer not implemented")
@@ -2196,6 +2250,60 @@ func _ControlPlaneService_AnswerJob_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RecordJobStep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordJobStepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordJobStep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordJobStep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordJobStep(ctx, req.(*RecordJobStepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ResumeJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ResumeJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ResumeJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ResumeJob(ctx, req.(*ResumeJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RefuseJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefuseJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RefuseJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RefuseJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RefuseJob(ctx, req.(*RefuseJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RecordSteer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordSteerRequest)
 	if err := dec(in); err != nil {
@@ -2592,6 +2700,18 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AnswerJob",
 			Handler:    _ControlPlaneService_AnswerJob_Handler,
+		},
+		{
+			MethodName: "RecordJobStep",
+			Handler:    _ControlPlaneService_RecordJobStep_Handler,
+		},
+		{
+			MethodName: "ResumeJob",
+			Handler:    _ControlPlaneService_ResumeJob_Handler,
+		},
+		{
+			MethodName: "RefuseJob",
+			Handler:    _ControlPlaneService_RefuseJob_Handler,
 		},
 		{
 			MethodName: "RecordSteer",

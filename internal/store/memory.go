@@ -83,6 +83,10 @@ type Memory struct {
 	// them, keyed by the event identifier so writing one twice leaves one.
 	jobs      map[string]*job.Job
 	jobEvents map[string]*job.Event
+	// jobSteps is what each job's session said it finished, in the order it finished it. Beside the
+	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
+	// carries what a listing there carries.
+	jobSteps map[string][]job.Step
 	// jobSteers is every moment the operator had to say something a job should have known, keyed by
 	// the steer identifier.
 	jobSteers map[string]*job.Steer

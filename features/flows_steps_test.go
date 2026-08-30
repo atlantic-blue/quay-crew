@@ -453,7 +453,8 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		if len(tasks) != 2 {
 			return fmt.Errorf("the run's steps hold %d tasks, want 2", len(tasks))
 		}
-		if tasks[0].GetPrompt() != first || tasks[1].GetPrompt() != second {
+		// What the graph put in front of each step, which the system adds its own lines beside.
+		if !strings.Contains(tasks[0].GetPrompt(), first) || !strings.Contains(tasks[1].GetPrompt(), second) {
 			return fmt.Errorf("the steps were asked %q then %q, want %q then %q",
 				tasks[0].GetPrompt(), tasks[1].GetPrompt(), first, second)
 		}
