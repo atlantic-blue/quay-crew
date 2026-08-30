@@ -17,6 +17,10 @@ finished steps, the failure and the moment it stopped rather than the brief. The
 fetch the branch its work is based on and say what moved while it was stopped, because it may have
 moved.
 
+A step that names a pull request against the job's repository puts that address on the job as well.
+A job that failed after opening one said so nowhere else: no answer landed, so the address the answer
+would have carried was never read.
+
 `krewe job refuse <job> "<reason>"` is the other answer, and it is the one that protects the
 operator. A failure that was the work being wrong must not be offered a second attempt, so refusing
 ends the job as stopped, carrying both what the operator decided and what it failed with, and a
