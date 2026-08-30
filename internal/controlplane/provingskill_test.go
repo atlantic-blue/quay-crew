@@ -94,15 +94,15 @@ func TestADesigningJobIsOfferedTheProvingSkill(t *testing.T) {
 		t.Fatalf("list what the session holds: %v", err)
 	}
 	var held *quaycrewv1.Skill
-	names := make([]string, 0, len(listed.GetSkills()))
+	heldNames := make([]string, 0, len(listed.GetSkills()))
 	for _, one := range listed.GetSkills() {
-		names = append(names, one.GetName())
+		heldNames = append(heldNames, one.GetName())
 		if one.GetName() == "proving" {
 			held = one
 		}
 	}
 	if held == nil {
-		t.Fatalf("the session designing something holds %v, and none of them says to prove the riskiest assumption in the runtime", names)
+		t.Fatalf("the session designing something holds %v, and none of them says to prove the riskiest assumption in the runtime", heldNames)
 	}
 	if held.GetLeftOut() != "" {
 		t.Errorf("the proving skill was left out of the session: %s", held.GetLeftOut())

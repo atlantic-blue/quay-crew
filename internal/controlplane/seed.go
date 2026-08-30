@@ -14,13 +14,20 @@ import (
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
 // The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
 //
-// proving is here for a different reason. It says to prove the riskiest assumption in the runtime
-// that has to run it, and the job that needs to read it is the one that does not know it needs to:
-// the design was written, the assumption was proved on a laptop, and two days of product sat on top
-// of it before anything ran where it had to. A skill an operator has to attach to the workspace
-// doing the designing is a skill that arrives after the design. It names no secret and no binary, so
-// nothing can leave it out of a session, and it costs every session one line.
-var SeedToSystem = []string{"git", "github", "proving"}
+// outbound is here on a different argument. It is not a tool a job reaches for, it is a rule about
+// code the job has already decided to write, and the job that needs it is the one that does not know
+// it does: a deployed page reported "No video with that id" for a video that was there, because the
+// code threw the one failure it knew the name of and logged nothing at the boundary it had just
+// crossed. A rule somebody has to attach first only reaches the jobs that were never going to break
+// it. It names no secret and no binary, so nothing can leave it out of a session.
+//
+// proving is here on that same argument, one step earlier: it says to name the assumption that would
+// waste the most work if it is false and prove it in the runtime that has to run it. The same product
+// proved its one load bearing assumption on a laptop, where the caption endpoint returned 406,491
+// bytes, and the deployed function got back the page saying there is no video with that id. Two days
+// of product were already sitting on it. A skill an operator has to attach to the workspace doing the
+// designing is a skill that arrives after the design. It names no secret and no binary either.
+var SeedToSystem = []string{"git", "github", "outbound", "proving"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //

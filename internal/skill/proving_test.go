@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// found is the shipped skill by that name, or nil. The skills are read from skills/ at the root of
+// shipped is the skill of that name in skills/, or nil. The skills are read from skills/ at the root of
 // this repository, which is the directory the image carries, so a manifest that stops loading fails
 // here rather than on somebody's first run.
-func found(t *testing.T, name string) *Skill {
+func shipped(t *testing.T, name string) *Skill {
 	t.Helper()
 	skills, err := Load("../../skills")
 	if err != nil {
@@ -31,7 +31,7 @@ func found(t *testing.T, name string) *Skill {
 // false, and prove it in the runtime that has to run it. What it is for is in its brief, and this
 // holds the brief to the three sentences it exists to carry.
 func TestTheShippedProvingSkillLoads(t *testing.T) {
-	proving := found(t, "proving")
+	proving := shipped(t, "proving")
 	if proving == nil {
 		t.Fatal("skills/ does not hold the proving skill")
 	}
@@ -57,7 +57,7 @@ func TestTheShippedProvingSkillLoads(t *testing.T) {
 // binary the image does not carry refuses the task. This skill is prose and nothing else, so it can
 // name neither: a skill that reaches every session must have nothing that can leave it out of one.
 func TestTheProvingSkillNeedsNothingThatCouldLeaveItOut(t *testing.T) {
-	proving := found(t, "proving")
+	proving := shipped(t, "proving")
 	if proving == nil {
 		t.Fatal("skills/ does not hold the proving skill")
 	}
@@ -76,7 +76,7 @@ func TestTheProvingSkillNeedsNothingThatCouldLeaveItOut(t *testing.T) {
 // one. A skill whose whole content is in the brief is paying the page ceiling for what a session
 // reads once in ten jobs.
 func TestTheProvingSkillKeepsItsMethodBesideTheBrief(t *testing.T) {
-	proving := found(t, "proving")
+	proving := shipped(t, "proving")
 	if proving == nil {
 		t.Fatal("skills/ does not hold the proving skill")
 	}
