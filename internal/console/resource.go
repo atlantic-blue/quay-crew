@@ -169,6 +169,11 @@ type Resource struct {
 	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
 	// does nothing here.
 	DrillTo string
+	// DrillBy is the identifier the child is scoped by, when it is not the row's own. Jobs is the
+	// case: what a job did is its session's tasks, so the child is scoped by the session the row
+	// names rather than by the job. Nil scopes by the row's own identifier, which is every other
+	// view. The error is what the operator is told when there is nothing to descend to yet.
+	DrillBy func(row Row) (string, error)
 	// SortBy is the column the console orders rows by, and marks with an arrow so the order is
 	// visible. Rows that tie keep the order the control plane returned them in.
 	SortBy int

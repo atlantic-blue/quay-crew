@@ -463,10 +463,22 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
 		return m, nil
 	}
+	// What the child is scoped by, which is the row itself everywhere except jobs: a job descends
+	// into its session's tasks, and a job with no session yet says so rather than opening an empty
+	// listing under a heading that promises one.
+	scope := row.ID
+	if m.active.DrillBy != nil {
+		narrowed, err := m.active.DrillBy(row)
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+		scope = narrowed
+	}
 	m.stack = append(m.stack, crumbEntry{
 		resource: m.active.Name, parent: m.parent, selected: m.selected, into: row.Name(),
 	})
-	m.active, m.parent = child, row.ID
+	m.active, m.parent = child, scope
 	m.rows, m.selected, m.top, m.filter, m.err = nil, 0, 0, "", nil
 	return m, listCmd(m.active, m.parent)
 }
