@@ -651,6 +651,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
+	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
 	initializeFlowSteps(sc)
@@ -702,6 +703,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDispatchingSteps(sc)
 	initializeWaitsSteps(sc)
 	initializeHeadroomSteps(sc)
+	initializeAdmissionSteps(sc)
 	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)

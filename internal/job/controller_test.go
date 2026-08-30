@@ -392,9 +392,30 @@ func (r *rows) StartJob(_ context.Context, id string, lease job.Lease, events []
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Attempts = job.PhaseRunning, one.Attempts+1
+	// The reason goes with the pending phase it described, the way both real stores do it.
+	one.Reason = ""
 	one.LeaseOwner, one.LeaseUntil = lease.Owner, &lease.Until
 	one.StartedAt, one.UpdatedAt = &now, now
 	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+// HoldJob says on a pending job why it was not started, leaving it pending.
+func (r *rows) HoldJob(_ context.Context, id, reason string, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending {
+		return nil, job.ErrNotPending
+	}
+	one.Reason, one.UpdatedAt = reason, time.Now().UTC()
+	if event != nil {
+		r.record(id, []*job.Event{event})
+	}
 	kept := *one
 	return &kept, nil
 }

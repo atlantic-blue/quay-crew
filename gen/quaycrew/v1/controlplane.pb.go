@@ -8193,8 +8193,15 @@ type WorkspaceLimits struct {
 	// archive_seconds is how long a reclaimed session waits before the crew files it away. Zero is
 	// unset, and unset means the controller archives nothing here.
 	ArchiveSeconds int32 `protobuf:"varint,7,opt,name=archive_seconds,json=archiveSeconds,proto3" json:"archive_seconds,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// request_memory_mib is the memory one sandbox in this workspace asks for, in mebibytes, which is
+	// the unit the room view prints. The crew adds these up and admits a job only where its runtime
+	// still has that much unallocated. Zero takes the crew's own measured request.
+	RequestMemoryMib int32 `protobuf:"varint,8,opt,name=request_memory_mib,json=requestMemoryMib,proto3" json:"request_memory_mib,omitempty"`
+	// request_processor_percent is the processor share one sandbox here asks for, in per cent of one
+	// processor, which is the unit the room view prints beside the memory. Zero takes the crew's own.
+	RequestProcessorPercent int32 `protobuf:"varint,9,opt,name=request_processor_percent,json=requestProcessorPercent,proto3" json:"request_processor_percent,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *WorkspaceLimits) Reset() {
@@ -8272,6 +8279,20 @@ func (x *WorkspaceLimits) GetReclaimSeconds() int32 {
 func (x *WorkspaceLimits) GetArchiveSeconds() int32 {
 	if x != nil {
 		return x.ArchiveSeconds
+	}
+	return 0
+}
+
+func (x *WorkspaceLimits) GetRequestMemoryMib() int32 {
+	if x != nil {
+		return x.RequestMemoryMib
+	}
+	return 0
+}
+
+func (x *WorkspaceLimits) GetRequestProcessorPercent() int32 {
+	if x != nil {
+		return x.RequestProcessorPercent
 	}
 	return 0
 }
@@ -9098,7 +9119,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"5\n" +
 	"\x0fStopJobResponse\x12\"\n" +
-	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\x89\x02\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xf3\x02\n" +
 	"\x0fWorkspaceLimits\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tmax_depth\x18\x02 \x01(\x05R\bmaxDepth\x12\x1f\n" +
@@ -9107,7 +9128,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\rbudget_tokens\x18\x04 \x01(\x03R\fbudgetTokens\x12#\n" +
 	"\rlease_seconds\x18\x05 \x01(\x05R\fleaseSeconds\x12'\n" +
 	"\x0freclaim_seconds\x18\x06 \x01(\x05R\x0ereclaimSeconds\x12'\n" +
-	"\x0farchive_seconds\x18\a \x01(\x05R\x0earchiveSeconds\"9\n" +
+	"\x0farchive_seconds\x18\a \x01(\x05R\x0earchiveSeconds\x12,\n" +
+	"\x12request_memory_mib\x18\b \x01(\x05R\x10requestMemoryMib\x12:\n" +
+	"\x19request_processor_percent\x18\t \x01(\x05R\x17requestProcessorPercent\"9\n" +
 	"\x19GetWorkspaceLimitsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"R\n" +
 	"\x1aGetWorkspaceLimitsResponse\x124\n" +

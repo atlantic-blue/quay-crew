@@ -93,6 +93,14 @@ services:
       # job it is running, and that credential carries the verbs its role declared.
       QC_SESSION_NETWORK: ${QC_SESSION_NETWORK:-quaycrew_sessions}
       QC_SANDBOX_CONTROL_PLANE: ${QC_SANDBOX_CONTROL_PLANE:-controlplane:50051}
+      # What the crew keeps back for its own containers before it admits any sandbox: mebibytes, and
+      # per cent of one processor. The control plane, the database and the event log run in the same
+      # runtime the work fills, so a crew that reserves nothing goes down with its own workload.
+      # Unset takes the crew's own floor. Measure what to put here with, on the machine the crew runs
+      # on and with no jobs running:
+      #   docker stats --no-stream --format '{{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}' | grep -v quaycrew-
+      QC_CREW_RESERVE_MEMORY: ${QC_CREW_RESERVE_MEMORY:-}
+      QC_CREW_RESERVE_PROCESSOR: ${QC_CREW_RESERVE_PROCESSOR:-}
       # How much memory one session may take, as the daemon spells it, for example 4g. Unset gives
       # a session no limit, so it advertises the whole machine to node, Go, jest and webpack, and
       # the kernel kills them against whatever the rest of the machine has left.

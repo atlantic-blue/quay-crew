@@ -22,6 +22,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/headroom"
@@ -137,6 +138,10 @@ type Config struct {
 	// Headroom reads the machine the crew runs on. Nil means the crew cannot read it, and every
 	// figure then says unknown, which is what a crew with no daemon to ask should say.
 	Headroom headroom.Source
+	// CrewReserve is what the crew holds back for its own containers before it admits any sandbox.
+	// The zero value takes the measured floor. What binds is the larger of this and what the crew's
+	// own containers are actually holding, read on every sample.
+	CrewReserve capacity.Request
 	// HeadroomEvery is how often the machine is read. Zero takes headroom.Every.
 	HeadroomEvery time.Duration
 	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
@@ -223,6 +228,12 @@ type Server struct {
 	// taskMetrics publishes what each task spent. Nil records nothing, which is what a crew with no
 	// telemetry provider installed does.
 	taskMetrics *telemetry.TaskMetrics
+	// placed is what the crew has put on this machine and what it has promised to put there. It is
+	// what admission adds up, and it is a ledger rather than a reading because a container appears
+	// seconds after the job that asked for it was admitted.
+	placed *capacity.Ledger
+	// reserve is the floor under what the crew keeps for its own containers.
+	reserve capacity.Request
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	headroom *headroom.Sampler
@@ -273,6 +284,8 @@ func NewServer(cfg Config) *Server {
 		sandboxImage:  cfg.SandboxImage,
 		sandboxes:     make(map[string]sandbox.Sandbox),
 		headroom:      headroom.NewSampler(cfg.Headroom, cfg.HeadroomEvery),
+		placed:        capacity.NewLedger(),
+		reserve:       reserveOr(cfg.CrewReserve),
 		startWait:     orWait(cfg.StartWait, startWait),
 		exportWait:    orWait(cfg.ExportWait, exportWait),
 		starts:        make(chan struct{}, 1),
@@ -299,6 +312,8 @@ func NewServer(cfg Config) *Server {
 	server.jobController = job.NewController(cfg.Store, server, server, server, nil).
 		Every(cfg.JobTickEvery).Leasing(cfg.JobLease).Owned(cfg.ControllerName).
 		Redacting(server).Exporting(server).Reading(server).
+		// The machine, asked before a job is started rather than after it has been killed.
+		Placing(server).
 		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
 		// a credential in a working crew; its expiry is the backstop behind it.
 		Revoking(server).
@@ -306,6 +321,12 @@ func NewServer(cfg Config) *Server {
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)
 	return server
+}
+
+// reserveOr is what the crew keeps back for itself, and the measured floor where it was given
+// nothing on that axis.
+func reserveOr(configured capacity.Request) capacity.Request {
+	return configured.Or(capacity.DefaultReserve())
 }
 
 // orWait is the budget the crew was configured with, and the measured default when it was given none.
@@ -439,7 +460,15 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	if mount, under := s.renderHooks(ctx, session); under {
 		mounts = append(mounts, mount)
 	}
+	// The machine, one last time, before anything is created. The controller has already decided
+	// this fits and is holding the room under the same key; this is the check that stands between a
+	// dispatch nobody scheduled and a runtime that stops answering.
+	if err := s.placeSandbox(ctx, session); err != nil {
+		return nil, err
+	}
 	cfg := boxOf(session)
+	// What it asked for travels with it, so the container carries the request the crew reserved.
+	cfg.Request = s.requestFor(ctx, session.GetWorkspace())
 	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
 	// credential written here would label every later task with the first task's grant, and one
 	// minted after birth would never reach the container at all. It travels on the task instead.
@@ -468,6 +497,9 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 			closing, done := context.WithTimeout(context.WithoutCancel(ctx), tidyWait)
 			_ = box.Close(closing)
 			done()
+			// And its room goes back with it, or a machine loses a sandbox's worth of capacity to
+			// every setup that failed.
+			s.unplaceSandbox(session.GetId())
 		}
 		return nil, err
 	}
@@ -798,6 +830,9 @@ func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 // map is a process map, so after a restart it is empty while every container runs on, which is how
 // stopping a session used to mark the row and leave the container.
 func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
+	// The room goes back first. Everything below can fail, and a machine that keeps counting a
+	// container it has removed admits less work every time one is stopped.
+	s.unplaceSandbox(sessionID)
 	s.sandboxesMu.Lock()
 	box, ok := s.sandboxes[sessionID]
 	delete(s.sandboxes, sessionID)
@@ -842,9 +877,11 @@ func (s *Server) ReapStrays(ctx context.Context) {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			_ = s.provider.Remove(ctx, id)
+			s.unplaceSandbox(id)
 		case err != nil:
 		case session.GetArchivedAt() != nil, session.GetStatus() == StatusStopped:
 			_ = s.provider.Remove(ctx, id)
+			s.unplaceSandbox(id)
 		}
 	}
 }
