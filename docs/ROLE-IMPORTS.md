@@ -135,14 +135,14 @@ that a slice is wired in and not only that its tests are green. The file gives t
 method. A second verifying role would split one question across two sessions.
 
 **The cost.** `verifier` is 9,037 bytes and the brief ceiling is 16,384, so it fits. The source file
-is about 9,000 bytes on its own, so the import is a rewrite to the shapes and the evidence rules, not
+is 9,505 bytes on its own, so the import is a rewrite to the shapes and the evidence rules, not
 a paste.
 
 ### 3. Sharpen `verifier` with a claims check
 
 **Read at.**
 [src/bmm-skills/ship/bmad-code-review/references/claims-check.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/src/bmm-skills/ship/bmad-code-review/references/claims-check.md).
-Read in full. It is about 1,200 bytes.
+Read in full. It is 1,362 bytes.
 
 **Licence.** MIT, same file as above.
 
