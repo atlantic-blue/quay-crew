@@ -756,19 +756,25 @@ func stateFromStatus(status string) State {
 }
 
 // Stats is what the crew is running underneath: which model backend, which sandbox and store engines,
-// where secrets and state are kept, whether anything is reading the event log.
+// where secrets and state are kept, whether anything is reading the event log. Every row says what
+// the crew last found when it probed that part, or says that nothing probes it.
 //
 // A view rather than more header. Six lines of this in the header makes it ten lines tall, and a
 // header that tall in a pane of its own scrolls, which loses its own top line. The header keeps what
 // anybody needs at a glance; the rest is a question, and a question gets a view.
+//
+// The state column is here because this screen was up for the sixteen hours a dead event log went
+// unnoticed, and it drew that row in the same colour as the five working ones. Every row was ready:
+// the view had no way to say anything else. See issue 458.
 func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "stats",
 		Aliases: []string{"stat", "engines", "status"},
-		// A key and its value, the way the status block writes one: cyan on the left, plain on the
-		// right.
+		// A key, what the crew last found about it, and its value: cyan on the left, the state in the
+		// colour of the state, plain on the right.
 		Columns: []Column{
 			{Title: "what", Width: 22, Colour: place},
+			{Title: "state", Width: 15, Colour: colourOfHealth},
 			{Title: "running", Width: 0},
 		},
 		SortBy: -1,
@@ -777,15 +783,20 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
+			probed := lastProbed(ctx, client)
 			// In the order they matter when something is wrong: what runs a task, where it runs,
 			// what survives a restart, then what is watching.
-			stats := []struct{ what, running string }{
-				{"Model", described.GetModel()},
-				{"Sandbox engine", described.GetSandbox()},
-				{"Store engine", described.GetStore()},
-				{"Secrets", secretsPhrase(described.GetSecrets())},
-				{"Events engine", eventsPhrase(described.GetEvents())},
-				{"State", statePhrase(described.GetState())},
+			//
+			// A row with no component beside it is a part the crew runs no probe against, and it
+			// says not checked. Four of the six are that today. It is deliberately not green: this
+			// view claiming health it never measured is the whole finding.
+			stats := []struct{ what, component, running string }{
+				{"Model", "", described.GetModel()},
+				{"Sandbox engine", "", described.GetSandbox()},
+				{"Store engine", display.HealthStore, described.GetStore()},
+				{"Secrets", "", secretsPhrase(described.GetSecrets())},
+				{"Events engine", display.HealthEvents, eventsPhrase(described.GetEvents())},
+				{"State", "", statePhrase(described.GetState())},
 			}
 			rows := make([]Row, 0, len(stats))
 			for _, stat := range stats {
@@ -793,11 +804,15 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				if running == "" {
 					running = "not saying"
 				}
+				state := probed[stat.component]
+				if state == "" {
+					state = display.HealthNotChecked
+				}
 				rows = append(rows, Row{
 					ID:    stat.what,
 					Label: stat.what,
-					Cells: []string{stat.what, running},
-					State: StateReady,
+					Cells: []string{stat.what, state, running},
+					State: stateFromHealth(state),
 				})
 			}
 			return rows, nil
@@ -905,6 +920,41 @@ func Keys(registry *Registry) Resource {
 			}
 			return rows, nil
 		},
+	}
+}
+
+// lastProbed is what the crew last found about each part of itself, keyed by the part's name.
+//
+// A crew that will not answer is not a failed listing. The stats view's job is to say what the crew
+// is running, and an older crew that has no such call still has that to say; every row then reads
+// not checked, which is exactly what it is. Refusing to draw the view because the health call is
+// missing would take away the six lines an operator opened it for.
+func lastProbed(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	states := map[string]string{}
+	answer, err := client.GetHealth(ctx, &quaycrewv1.GetHealthRequest{})
+	if err != nil {
+		return states
+	}
+	for _, component := range answer.GetComponents() {
+		states[component.GetName()] = component.GetState()
+	}
+	return states
+}
+
+// stateFromHealth colours a row by what the last probe of it found. Down is the one that takes the
+// whole line, because a component that is down is the reason somebody opened this view.
+//
+// Not checked and not configured are unknown on purpose: no colour, no claim. A crew that has never
+// probed and a part nothing probes are both the absence of a reading, and dressing either as ready
+// is the failure the state column was added to stop.
+func stateFromHealth(state string) State {
+	switch state {
+	case display.HealthServing:
+		return StateReady
+	case display.HealthDown:
+		return StateFailed
+	default:
+		return StateUnknown
 	}
 }
 
