@@ -1,0 +1,8 @@
+name: merge-gate
+version: 1
+summary: Refuses the command that merges, because a merge runs the pipeline and that is the operator's gate.
+events:
+  - on: PreToolUse
+    matcher: Bash
+    entry: bin/hook
+    timeoutSeconds: 5
