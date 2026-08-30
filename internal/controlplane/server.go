@@ -23,6 +23,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/capacity"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/headroom"
@@ -1166,6 +1167,35 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 		s.emit(ctx, session, KindSessionDeleted, "")
 	}
 	return &quaycrewv1.DeleteProjectResponse{}, nil
+}
+
+// SetDeployTarget records where a project ships: the account, the region inside it, and the identity
+// a pipeline assumes to get there.
+//
+// The target is read whole before anything is written, so a refused one leaves the project saying
+// what it said before. A project answering "where does this go" with something nobody agreed to is
+// worse than one answering nothing.
+//
+// It is not on the driver's deny list. The record grants no reach: the credentials that deploy come
+// from secrets, which a driver may not touch, and a session that could set this could already delete
+// the project whole.
+func (s *Server) SetDeployTarget(ctx context.Context, req *quaycrewv1.SetDeployTargetRequest) (*quaycrewv1.SetDeployTargetResponse, error) {
+	if _, err := s.store.GetProject(ctx, req.GetProject()); err != nil {
+		return nil, storeError(err, "project")
+	}
+	target, err := deploy.ParseTarget(
+		req.GetTarget().GetAccount(), req.GetTarget().GetRegion(), req.GetTarget().GetIdentity())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.store.SetDeployTarget(ctx, req.GetProject(), target); err != nil {
+		return nil, storeError(err, "project")
+	}
+	written, err := s.store.GetProject(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetDeployTargetResponse{Project: written}, nil
 }
 
 // Dispatch starts or continues a session, running one task through the model runner.
