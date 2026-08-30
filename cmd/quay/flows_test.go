@@ -21,6 +21,7 @@ import (
 const oneStepGraph = `
 name: greet
 version: 1
+mode: edits
 nodes:
   say: { type: dispatch, prompt: "hello {{who}}" }
 edges:
@@ -116,6 +117,7 @@ func TestQuayFlowShowSaysWhyARunStopped(t *testing.T) {
 	mustRun(t, client, "flow", "import", graphFile(t, `
 name: loop
 version: 1
+mode: edits
 limits:
   transitions: 3
 nodes:
@@ -171,6 +173,7 @@ func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
 	mustRun(t, client, "flow", "import", graphFile(t, `
 name: loop
 version: 1
+mode: edits
 limits:
   transitions: 50
 nodes:
@@ -213,6 +216,7 @@ func TestQuayFlowAnswerCarriesARunOn(t *testing.T) {
 	mustRun(t, client, "flow", "import", graphFile(t, `
 name: careful
 version: 1
+mode: edits
 nodes:
   fix:    { type: dispatch, prompt: "fix the build" }
   permit: { type: ask, text: "fixed it locally. push?" }
@@ -264,6 +268,7 @@ func TestQuayFlowRefusesAGraphARunCouldFallOff(t *testing.T) {
 	_, err := runQuay(t, client, "flow", "import", graphFile(t, `
 name: broken
 version: 1
+mode: edits
 nodes:
   a: { type: dispatch, prompt: "a" }
 edges:

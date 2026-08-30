@@ -19,6 +19,7 @@ Feature: A flow runs a graph across sessions
       """
       name: fix-red
       version: 1
+      mode: edits
       nodes:
         fix:   { type: dispatch, prompt: "fix the build" }
         ok:    { type: choice, on: { result.failed: "false" } }
@@ -64,6 +65,7 @@ Feature: A flow runs a graph across sessions
       """
       name: careful
       version: 1
+      mode: edits
       nodes:
         fix:    { type: dispatch, prompt: "fix the build" }
         permit: { type: ask, text: "fixed it locally. push?" }
@@ -108,6 +110,7 @@ Feature: A flow runs a graph across sessions
       """
       name: patient
       version: 1
+      mode: edits
       nodes:
         ask:   { type: dispatch, prompt: "start the build" }
         pause: { type: wait, for: 10m }
@@ -129,6 +132,7 @@ Feature: A flow runs a graph across sessions
       """
       name: patient
       version: 1
+      mode: edits
       nodes:
         ask:   { type: dispatch, prompt: "start the build" }
         pause: { type: wait, for: 10m }
@@ -151,6 +155,7 @@ Feature: A flow runs a graph across sessions
       """
       name: patient
       version: 1
+      mode: edits
       nodes:
         ask:   { type: dispatch, prompt: "start the build" }
         pause: { type: wait, for: 10m }
@@ -166,6 +171,7 @@ Feature: A flow runs a graph across sessions
       """
       name: patient
       version: 2
+      mode: edits
       nodes:
         ask:   { type: dispatch, prompt: "start the build" }
         pause: { type: wait, for: 10m }
@@ -186,6 +192,7 @@ Feature: A flow runs a graph across sessions
       """
       name: careful
       version: 1
+      mode: edits
       nodes:
         fix:    { type: dispatch, prompt: "fix the build" }
         permit: { type: ask, text: "fixed it locally. push?" }
@@ -210,6 +217,7 @@ Feature: A flow runs a graph across sessions
       """
       name: careful
       version: 1
+      mode: edits
       nodes:
         fix:    { type: dispatch, prompt: "fix the build" }
         permit: { type: ask, text: "push?" }
@@ -234,6 +242,7 @@ Feature: A flow runs a graph across sessions
       """
       name: careful
       version: 1
+      mode: edits
       nodes:
         fix:    { type: dispatch, prompt: "fix the build" }
         permit: { type: ask, text: "push?" }
@@ -255,6 +264,7 @@ Feature: A flow runs a graph across sessions
       """
       name: nightly
       version: 1
+      mode: edits
       on:
         every: 24h
       nodes:
@@ -274,6 +284,7 @@ Feature: A flow runs a graph across sessions
       """
       name: nightly
       version: 1
+      mode: edits
       on:
         every: 24h
       nodes:
@@ -290,6 +301,7 @@ Feature: A flow runs a graph across sessions
       """
       name: manual
       version: 1
+      mode: edits
       nodes:
         go: { type: dispatch, prompt: "go" }
       edges:
@@ -303,6 +315,7 @@ Feature: A flow runs a graph across sessions
       """
       name: nightly
       version: 1
+      mode: edits
       on:
         every: 24h
       nodes:
@@ -320,6 +333,7 @@ Feature: A flow runs a graph across sessions
       """
       name: fix-red
       version: 2
+      mode: edits
       nodes:
         only: { type: dispatch, prompt: "the second version" }
       edges:
@@ -340,6 +354,7 @@ Feature: A flow runs a graph across sessions
       """
       name: site-check
       version: 1
+      mode: edits
       nodes:
         read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
         tell: { type: dispatch, prompt: "summarise the project" }
@@ -360,6 +375,7 @@ Feature: A flow runs a graph across sessions
       """
       name: site-check
       version: 1
+      mode: edits
       nodes:
         read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
         tell: { type: dispatch, prompt: "summarise the project" }
@@ -378,6 +394,7 @@ Feature: A flow runs a graph across sessions
       """
       name: test-run
       version: 1
+      mode: edits
       nodes:
         run: { type: dispatch, prompt: "run the tests and say how they went", expect: { contains: "all green" } }
       edges:
@@ -386,6 +403,25 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "test-run" in the project
     Then the flow run is stopped
     And reading the run back says it stopped over "all green"
+
+  # The other half of quay-crew#461. A stopped run recorded the finding under `result.expected` and
+  # nothing anywhere else, so `quay flow show` printed one sentence twice and never said what the
+  # graph had asked for. `result.failed` read false on the same screen as the line saying the run
+  # stopped, which is two fields contradicting each other in front of the reader.
+  Scenario: A run that stopped says what the graph wanted apart from what the crew found
+    Given the crew holds this flow graph:
+      """
+      name: site-check
+      version: 1
+      mode: edits
+      nodes:
+        read: { type: dispatch, prompt: "read package.json and say what runs the tests", expect: { file: package.json } }
+      edges:
+        - [read, done]
+      """
+    When the operator starts the flow "site-check" in the project
+    Then the flow run is stopped
+    And reading the run back says it wanted "package.json" and found "is not in the session"
 
   # A step's session is made when its job starts, so there is nothing to set a mode on beforehand and
   # `quay mode` has nothing to point at. Every automation therefore ran in the mode a session is born
@@ -406,10 +442,26 @@ Feature: A flow runs a graph across sessions
     Then the flow run is done
     And the task ran in permission mode "bypassPermissions"
 
-  Scenario: A graph that says nothing about its mode leaves its runs in the one a session is born in
-    When the operator starts the flow "fix-red" in the project
-    Then the flow run is done
-    And the task ran in permission mode "acceptEdits"
+  # quay-crew#461. Saying nothing used to be allowed, and a run of such a graph took the mode a
+  # session is born in, which approves file edits inside the working directory and nothing else. So
+  # every command a step ran stopped to ask a person, and a flow is the one thing with no person
+  # watching it. One run sat on its first node through 532,978 tokens before anybody saw why.
+  #
+  # The refusal is at import, where the author is standing, rather than a default wide enough to work
+  # unwatched: that default would hand every graph already written more than its author asked for,
+  # and it would do it quietly.
+  Scenario: A graph that says nothing about its mode is refused at import
+    Given the operator imports this flow graph, which is refused:
+      """
+      name: pr-sweep
+      version: 1
+      nodes:
+        read: { type: dispatch, prompt: "read the open pull requests with gh" }
+      edges:
+        - [read, done]
+      """
+    Then the refusal names the line the graph is missing
+    And the refusal names the modes there are
 
   Scenario: A graph whose mode is not a mode is refused at import
     Given the operator imports this flow graph, which is refused:
@@ -429,6 +481,7 @@ Feature: A flow runs a graph across sessions
       """
       name: broken
       version: 1
+      mode: edits
       nodes:
         a: { type: dispatch, prompt: "a" }
       edges:

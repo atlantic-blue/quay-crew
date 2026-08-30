@@ -10,6 +10,7 @@ func TestAGraphDeclaresHowOftenItRuns(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: nightly
 version: 1
+mode: edits
 on:
   every: 24h
 nodes:
@@ -31,6 +32,7 @@ func TestAGraphWithNoScheduleRunsOnlyWhenAsked(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: manual
 version: 1
+mode: edits
 nodes:
   go: { type: dispatch, prompt: "go" }
 edges:
@@ -50,6 +52,7 @@ func TestATooFrequentScheduleIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: frantic
 version: 1
+mode: edits
 on:
   every: 1s
 nodes:
@@ -69,6 +72,7 @@ func TestAnUnreadableScheduleIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: vague
 version: 1
+mode: edits
 on:
   every: "nightly"
 nodes:

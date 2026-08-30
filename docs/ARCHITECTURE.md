@@ -476,8 +476,10 @@ Nothing removes a working tree when its session ends yet, so the volume keeps on
 session that ever worked in a repository. That half is
 [#255](https://github.com/atlantic-blue/quay-crew/issues/255).
 
-**A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version, and
-a graph that declares nothing leaves its runs in the mode a session is born in. The mode belongs to
+**A graph declares what its runs may do**, as `mode: dangerous` beside the name and the version. It
+is required, and a graph that says nothing is refused at import. A run works with nobody watching, so
+a step in a mode too narrow for its job does not fail, it stops to ask a person who will never answer,
+and the bill is whatever the model spent finding that out. The mode belongs to
 the graph for the same reason the schedule does: what an automation is allowed to do is versioned and
 reviewable beside what it does. There is nowhere else to put it either, because the run's session is
 made by the run's first dispatch, so `quay mode` has nothing to point at until it is too late. Before

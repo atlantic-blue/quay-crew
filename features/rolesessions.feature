@@ -21,6 +21,7 @@ Feature: A step of a flow runs as a role, in its own session
       """
       name: write-tests
       version: 1
+      mode: edits
       nodes:
         plan:  { type: dispatch, prompt: "say what needs testing" }
         tests: { type: dispatch, role: test-writer, prompt: "write the tests" }
@@ -73,6 +74,7 @@ Feature: A step of a flow runs as a role, in its own session
       """
       name: review
       version: 1
+      mode: edits
       nodes:
         look: { type: dispatch, role: reviewer, prompt: "review it" }
       edges:
@@ -116,6 +118,7 @@ Feature: A step of a flow runs as a role, in its own session
       """
       name: write-contracts
       version: 1
+      mode: edits
       nodes:
         contracts: { type: dispatch, role: architect, prompt: "write the contracts" }
       edges:
@@ -137,6 +140,7 @@ Feature: A step of a flow runs as a role, in its own session
       """
       name: release
       version: 1
+      mode: dangerous
       nodes:
         push: { type: dispatch, role: releaser, prompt: "open the pull request" }
       edges:
