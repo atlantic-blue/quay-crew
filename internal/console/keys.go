@@ -479,7 +479,7 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 		resource: m.active.Name, parent: m.parent, selected: m.selected, into: row.Name(),
 	})
 	m.active, m.parent = child, scope
-	m.rows, m.selected, m.top, m.filter, m.err = nil, 0, 0, "", nil
+	m.rows, m.summary, m.selected, m.top, m.filter, m.err = nil, summary{}, 0, 0, "", nil
 	return m, listCmd(m.active, m.parent)
 }
 
@@ -502,7 +502,7 @@ func (m Model) back() (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.active, m.parent, m.selected = resource, previous.parent, previous.selected
-	m.rows, m.top, m.filter, m.err = nil, 0, "", nil
+	m.rows, m.summary, m.top, m.filter, m.err = nil, summary{}, 0, "", nil
 	return m, listCmd(m.active, m.parent)
 }
 
@@ -537,7 +537,7 @@ func (m Model) openTyped() (Model, tea.Cmd) {
 	}
 	// Switching resource by name is a jump, not a descent, so the breadcrumb stack resets.
 	m.active, m.parent, m.stack = resource, "", nil
-	m.rows, m.selected, m.top, m.filter, m.err = nil, 0, 0, "", nil
+	m.rows, m.summary, m.selected, m.top, m.filter, m.err = nil, summary{}, 0, 0, "", nil
 	return m, listCmd(m.active, m.parent)
 }
 

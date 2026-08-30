@@ -1028,6 +1028,41 @@ message HeadroomSandbox {
   string status = 6;
 }
 
+// GetHealthRequest asks what the crew last found when it probed the parts of itself it has to write
+// to before a dispatch can start.
+message GetHealthRequest {}
+// GetHealthResponse is that probe's last reading, one entry per part.
+//
+// It answers from the last probe and never probes on the call, for the reason GetHeadroomResponse
+// does: a broker that is down costs the whole export budget on every write, so a view that probed
+// when it drew would stall for as long as the thing it is reporting on is broken.
+//
+// It is a different message from GetInfoResponse on purpose. That one is configuration, fetched once
+// and never a verdict; this one is a verdict and goes stale, which is why it carries the time it was
+// taken.
+message GetHealthResponse {
+  // components is what was probed, in the order a dispatch needs them. A part the crew does not
+  // probe is not in here at all, and a caller reading it must say so rather than filling the gap
+  // with a colour: the whole point of this call is that a part nothing checked must not read the
+  // same as a part that answered.
+  repeated HealthComponent components = 1;
+  // checked_at is when the probe ran. Unset means the crew has never probed, which is a crew that
+  // started a moment ago.
+  google.protobuf.Timestamp checked_at = 2;
+}
+// HealthComponent is one part of the crew and what the last probe of it found.
+message HealthComponent {
+  // name is the part, for example "store" or "events".
+  string name = 1;
+  // state is one word: "serving" when the probe landed, "down" when it did not, and "not configured"
+  // for a part this crew has none of, which is an event log nothing is connected to. Down has to be
+  // readable without reading the detail beside it.
+  string state = 2;
+  // detail is why it is down, for example "the event log did not take a record: ...". Empty when
+  // there is nothing wrong to say.
+  string detail = 3;
+}
+
 // GetUsageRequest asks what the crew has cost so far.
 message GetUsageRequest {}
 // GetUsageResponse is every conversation the crew holds, added up.
@@ -1376,4 +1411,8 @@ service ControlPlaneService {
   // GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
   // and never from the daemon, so the header may ask it every second.
   rpc GetHeadroom(GetHeadroomRequest) returns (GetHeadroomResponse);
+  // GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+  // It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
+  // the reason GetHeadroom answers from the last sample.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
 }

@@ -88,3 +88,26 @@ Feature: The crew says how much room the machine has left
     And the crew reads the machine
     When the operator asks how much room there is
     Then the crew read the machine once
+
+  # The listing said which session to stop. It never said whether one had to be stopped at all: an
+  # operator could read eighteen rows of megabytes, add them up in their head, and still not know how
+  # close the machine was. There was no total, no capacity and no headroom anywhere in the view. See
+  # issue 457.
+  Scenario: The room view says what the machine has left, above the sandboxes
+    Given the machine holds 3628 megabytes of a 7837 megabyte limit
+    And a sandbox holding 1201 megabytes for the session that is working
+    And the crew reads the machine
+    When the operator opens the room view
+    Then the view says "3628 MiB" of "7837 MiB" is held, with "4209 MiB" left
+    And the view says what is left in sandboxes
+    And that line is above the sandboxes
+
+  # The margin is stated in the unit the operator acts in. A sandbox asks for a measured 1536
+  # mebibytes, so a machine with less than that left cannot take another one, whatever fraction of
+  # the machine it is.
+  Scenario: A machine that will not take another sandbox says so where the operator is reading
+    Given the machine holds 7200 megabytes of a 7837 megabyte limit
+    And the crew reads the machine
+    When the operator opens the room view
+    Then the view says the machine is "FULL"
+    And the view says another sandbox will not fit
