@@ -147,6 +147,37 @@ Feature: A job is a record the crew keeps
     When the caller declares a job carrying a label value of 64 characters
     Then the crew refuses it and says the ceiling is 63
 
+  # A workspace with no credential took a whole tree of job and said nothing about it. Every session
+  # in it would have died on its first clone, after the budget was spent starting them. The crew
+  # already knew: the skill listing named the skill, the secret and the command that sets it,
+  # unprompted. That is one listing nobody is required to read, so the declaration says it too, while
+  # the person who typed it is looking.
+  #
+  # It says rather than refuses. The crew cannot know which skill a brief will reach for, so refusing
+  # would stop a job that reads an electricity bill over a forge token it never wanted, and one unset
+  # secret would be enough to stop every job in the workspace.
+  Scenario: Declaring a job says which skills the session starts without
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    When the caller declares a job titled "fix the defect"
+    Then the job is declared
+    And the declaration says the session starts without the "github" skill, needing "GH_TOKEN"
+
+  # A note printed every time is a note nobody reads, so a workspace that can supply what its skills
+  # need hears nothing.
+  Scenario: A workspace that has its credentials is told nothing extra
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    And the workspace has the secret "GH_TOKEN" set to "a token"
+    When the caller declares a job titled "fix the defect"
+    Then the job is declared
+    And the declaration names no skill the session starts without
+
+  # A role that does not receive skills is given none of them by design, so there is no gap to report.
+  Scenario: A job whose role receives no skills is told nothing about them
+    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    And the workspace holds the role "backlog-clearer" at version 1
+    When the caller declares a job in the role "backlog-clearer"
+    Then the declaration names no skill the session starts without
+
   Scenario: Job in a workspace that does not exist is refused
     When the caller declares a job in a project that does not exist
     Then the control plane refuses it as not found
