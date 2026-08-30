@@ -687,6 +687,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeLifecycleSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
+	initializeAskingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
