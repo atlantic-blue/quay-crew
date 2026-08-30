@@ -182,3 +182,40 @@ func shipped(t *testing.T, name string) Hook {
 	t.Fatalf("hooks/ does not hold %s", name)
 	return Hook{}
 }
+
+// The merge gate is bound where it can see the command it refuses.
+//
+// Its whole job is to read a shell command before it runs, so a binding on any other event, or on
+// any other tool, is a hook that is never called on the thing it exists to stop. That failure is
+// silent: the manifest validates, the settings render, the mount is right, and the gate approves of
+// everything because it never fires.
+func TestTheShippedMergeGateFiresWhereACommandIsAboutToRun(t *testing.T) {
+	gate := shipped(t, "merge-gate")
+
+	if len(gate.Events) != 1 {
+		t.Fatalf("the merge gate fires on %d events, and it reads one thing: a command about to run",
+			len(gate.Events))
+	}
+	binding := gate.Events[0]
+	if binding.On != "PreToolUse" {
+		t.Errorf("the merge gate fires on %q, and a refusal after the merge has run is not a gate",
+			binding.On)
+	}
+	if binding.Matcher != "Bash" {
+		t.Errorf("the merge gate matches %q, and the command it refuses is run with Bash", binding.Matcher)
+	}
+	// It reads a string and answers. There is nothing for it to wait on, so a session waiting on the
+	// runtime's own default would be waiting on a bug.
+	if binding.TimeoutSeconds == 0 {
+		t.Error("the merge gate has no timeout, and it fires on every command a session runs")
+	}
+	// It shells out to nothing, so a declared binary would be a requirement the image has to meet
+	// for no reason, and a missing one refuses every session in the workspace.
+	if len(gate.Binaries) != 0 {
+		t.Errorf("the merge gate declares %v, and it runs nothing but itself", gate.Binaries)
+	}
+	// A gate that reads a credential is a gate with something to lose.
+	if len(gate.Secrets) != 0 {
+		t.Errorf("the merge gate names %v, and it decides from the command alone", gate.Secrets)
+	}
+}
