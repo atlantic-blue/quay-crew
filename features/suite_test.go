@@ -233,6 +233,10 @@ type world struct {
 	listener *bufconn.Listener
 	// token is the crew's token, which every caller has to present to be served.
 	token string
+	// clockAhead is how far ahead of the real clock this crew reads a credential's life. It is how a
+	// scenario about what a session still holds half an hour into its job runs in a millisecond.
+	// Nothing else in the crew reads it, so the only thing it moves is the passage of time.
+	clockAhead atomic.Int64
 	// driverToken is the driver's own token: recognised, and refused the calls that grant capability.
 	driverToken string
 	conn        *grpc.ClientConn
@@ -417,6 +421,7 @@ func (w *world) serve() error {
 			// The scenarios run against a crew that guards itself the way a real one does, job
 			// credentials included.
 			Grants: w.server.Grants(), DeniedToJob: controlplane.DeniedToJob,
+			Now: func() time.Time { return time.Now().Add(time.Duration(w.clockAhead.Load())) },
 		})...,
 	)...)
 	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
