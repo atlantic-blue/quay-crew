@@ -135,6 +135,15 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
 		Version: 1, Phase: job.PhasePending,
 	}
+	// Where the work lands, when the declaration did not say. It is the project's, because a project
+	// is a body of work and the repository is where that body of work goes: the acceptance run had a
+	// repository the crew held no record of, so every job had to be told the address again and a
+	// session told to push had nowhere to push to.
+	//
+	// A job that named its own keeps it. The project's is the default, not a ceiling.
+	if declared.Repository == "" {
+		declared.Repository = project.GetRepository()
+	}
 	if err := s.underTheCaller(ctx, under, declared); err != nil {
 		return nil, nil, err
 	}

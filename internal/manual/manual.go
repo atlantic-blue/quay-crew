@@ -44,6 +44,11 @@ commands:
                                           name to confirm, or pipe the name in to script it
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
+  project repository [<address>]          say where this project's work lands, and what kind of
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
+                                          declared here works in it and ends in a pull request
+                                          against it. Public unless you say otherwise, because a
+                                          pipeline's minutes are free on a public repository
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
@@ -127,6 +132,10 @@ commands:
                                           or dangerous. A task nobody waits for has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live
+  context show [<address>]                what a level says, printed as it is stored. This and set
+                                          are a pair: quay context show crew > file, edit the file,
+                                          then quay context set crew < file, which is how a level is
+                                          added to rather than overwritten
   context set [<address>] < file          write what a level says, from standard input. Say crew
                                           where the address goes and it applies to everything the
                                           crew does, which skill attach takes too
@@ -246,6 +255,10 @@ Context is files, not prompt text. Each level owns a directory, and a session's 
 So the way to teach a project something is to write it into that project's context, with
 ` + "`quay context set <address> < file`" + `, or to drop files into the directory ` + "`quay context`" + ` names. The
 model reads CLAUDE.md and the working directory natively. There is no second mechanism.
+
+A level is read back with ` + "`quay context show <address>`" + `, which prints what it says and
+nothing else. Setting overwrites, so adding a paragraph means reading the level out first, appending
+to the file, and setting it back.
 
 ## What this is for
 

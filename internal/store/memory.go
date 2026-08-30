@@ -214,6 +214,19 @@ func (m *Memory) ListProjects(_ context.Context, workspace string) ([]*quaycrewv
 	return out, nil
 }
 
+// SetProjectRepository records where a project's work lands, and what kind of repository it is.
+func (m *Memory) SetProjectRepository(_ context.Context, project, repository, visibility string) (*quaycrewv1.Project, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, err := m.getProjectLocked(project)
+	if err != nil {
+		return nil, err
+	}
+	held.Repository, held.Visibility = repository, visibility
+	m.projects[project] = held
+	return clone(held), nil
+}
+
 // DeleteProject soft deletes a project.
 func (m *Memory) DeleteProject(_ context.Context, id string) error {
 	m.mu.Lock()
