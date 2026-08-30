@@ -758,3 +758,21 @@ func askForHistory(ctx context.Context, c *consoleWorld) error {
 	}
 	return fmt.Errorf("the %s view has nothing bound to t", c.active.Name)
 }
+
+// openModelOn stands the real console up and walks it to a view the way an operator does: colon, the
+// name, enter. Typed rather than opened there, because the command bar is how anybody reaches a view
+// that is not the one the console opens on.
+func (c *consoleWorld) openModelOn(w *world, view string) error {
+	if err := c.openModel(w); err != nil {
+		return err
+	}
+	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}); err != nil {
+		return err
+	}
+	for _, letter := range view {
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}}); err != nil {
+			return err
+		}
+	}
+	return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+}
