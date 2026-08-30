@@ -40,6 +40,22 @@ func TestLimitsSetsTheCeilingAndReadsItBack(t *testing.T) {
 	}
 }
 
+// The lease reads as the length of a job and it is not one. It is the crew's hold on a job, renewed
+// on every tick, and it does not reach the credential a session runs under. An operator who read the
+// two as one number set this to cover their work and got no change to the credential at all, so the
+// line says what it is not, next to the number.
+func TestLimitsSaysTheLeaseIsNotTheLifeOfACredential(t *testing.T) {
+	client := aCrewToJobIn(t)
+
+	said := mustRun(t, client, "limits", "me", "--lease", "15m")
+
+	for _, want := range []string{"lease          15m", "not the life of a session's credential"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("quay limits does not say %q: %q", want, said)
+		}
+	}
+}
+
 // Setting one number leaves the rest, because the tool reads the row first and sends it back whole.
 func TestSettingOneLimitLeavesTheOthers(t *testing.T) {
 	client := aCrewToJobIn(t)

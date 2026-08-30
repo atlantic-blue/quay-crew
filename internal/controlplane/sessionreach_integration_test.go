@@ -122,6 +122,39 @@ func TestASessionDeclaresASubJobAndTheCrewRunsItInASessionOfItsOwn(t *testing.T)
 	}
 }
 
+// TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob is issue 449 at the only tier that can
+// prove it: a real container, holding the credential the crew minted for its job, calling the crew
+// over the real interface with the interceptor in front of it.
+//
+// The session waits past the minute its credential used to last, and then declares a child. It waits
+// for real. A double can be told what time it is, and the fault here was that a session still doing
+// its job could no longer call the crew at all, which a double would have reported as working for as
+// long as it existed. The run that found it had been going for twenty nine minutes.
+func TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+	crew := aCrewWhoseSessionsCanReachIt(ctx, t)
+
+	declared := crew.declare(ctx, t, "clear the backlog", assessorRole)
+	said := crew.run(ctx, t, declared, "sleep 75\n"+
+		`quay job create --title "write the migration" --brief "add the column" --role `+
+		implementerRole+" 2>&1")
+
+	children := crew.children(ctx, t, declared)
+	if len(children) != 1 {
+		t.Fatalf("seventy five seconds into its job the session declared %d jobs, want 1. It said:\n%s",
+			len(children), said)
+	}
+	// From the credential and never from the caller, the same as at the first second of the job.
+	child := children[0]
+	if child.GetParent() != declared {
+		t.Fatalf("the sub job hangs under %q, want the job the session was running, %q", child.GetParent(), declared)
+	}
+	if child.GetDepth() != 1 {
+		t.Fatalf("the sub job is at depth %d, want 1", child.GetDepth())
+	}
+}
+
 // within waits for something to become true, for as long as the test's own deadline allows.
 func within(ctx context.Context, done func() bool) bool {
 	for ctx.Err() == nil {

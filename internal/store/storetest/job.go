@@ -32,7 +32,8 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			Role: "reader", RoleVersion: 2, Mode: "plan",
 			ExpectFile: "notes/bill.md", ExpectContains: "due",
 			After: []string{}, Deadline: &deadline, BudgetTokens: 5000,
-			Labels: map[string]string{"owner": "house"}, Version: 1, Phase: job.PhasePending,
+			Labels: map[string]string{"owner": "house"}, Repository: "atlantic-blue/quay-crew",
+			Version: 1, Phase: job.PhasePending,
 		}
 		if err := s.CreateJob(ctx, declared, &job.Event{
 			ID: store.NewID(), Kind: job.EventDeclared, Job: declared.ID,
@@ -65,6 +66,13 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if found.Labels["owner"] != "house" {
 			t.Fatalf("the labels read back as %v", found.Labels)
+		}
+		if found.Repository != "atlantic-blue/quay-crew" {
+			t.Fatalf("the repository reads back as %q", found.Repository)
+		}
+		// Nothing has answered yet, so nothing says where the work went.
+		if found.PullRequest != "" {
+			t.Fatalf("a job nobody has run says its pull request is %q", found.PullRequest)
 		}
 		if found.Phase != job.PhasePending {
 			t.Fatalf("the job opens in phase %q, want pending", found.Phase)
@@ -663,14 +671,23 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 			t.Fatalf("StartJob: %v", err)
 		}
 
+		const address = "https://github.com/atlantic-blue/quay-crew/pull/454"
 		landed, err := s.LandJob(ctx, id, job.Landing{
 			Phase: job.PhaseDone, Answer: "the bill is due on the 14th", SpentTokens: 1234,
+			PullRequest: address,
 		}, answeredEvent(id, workspace, project))
 		if err != nil {
 			t.Fatalf("LandJob: %v", err)
 		}
 		if landed.Phase != job.PhaseDone || landed.Answer != "the bill is due on the 14th" {
 			t.Fatalf("the job landed as %q saying %q", landed.Phase, landed.Answer)
+		}
+		// Where the work went is on the row, so a reader finds it without opening the answer.
+		if landed.PullRequest != address {
+			t.Fatalf("the job landed saying its pull request is %q, want %s", landed.PullRequest, address)
+		}
+		if reread, err := s.GetJob(ctx, id); err != nil || reread.PullRequest != address {
+			t.Fatalf("the job reads back saying its pull request is %v (%v), want %s", reread, err, address)
 		}
 		if landed.SpentTokens != 1234 {
 			t.Fatalf("the job spent %d tokens", landed.SpentTokens)

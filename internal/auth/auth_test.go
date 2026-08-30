@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -232,5 +233,113 @@ func TestAGrantSaysWhichVerbsItHolds(t *testing.T) {
 		if held.May(verb) {
 			t.Errorf("the grant may %s, and it never held it", verb)
 		}
+	}
+}
+
+// The three refusals a job credential can get have to be three different sentences.
+//
+// They were two: a credential that had run out fell through to the one a forged token gets, so a
+// session was told the token is not this crew's. It was this crew's, and it had run out. The session
+// read that as a bad credential, stopped calling, and did the whole job in one sandbox (issue 449).
+func TestEachRefusalOfAJobCredentialNamesItsOwnCause(t *testing.T) {
+	ranOutAt := time.Date(2026, 8, 29, 14, 30, 0, 0, time.UTC)
+	now := ranOutAt.Add(28 * time.Minute)
+
+	for _, one := range []struct {
+		name  string
+		token string
+		says  []string
+		never string
+	}{
+		{
+			name:  "a credential that ran out says so, and says when",
+			token: "expired",
+			says:  []string{"ran out at", ranOutAt.Format(time.RFC3339), now.Format(time.RFC3339), "job-1"},
+			never: "not this crew's",
+		},
+		{
+			name:  "a credential the crew took back names the job that ended, and its phase",
+			token: "ended",
+			says:  []string{"job-2", "done", "took this credential back"},
+			never: "not this crew's",
+		},
+		{
+			name:  "a token nobody minted is still a forgery",
+			token: "invented",
+			says:  []string{"not this crew's"},
+			never: "ran out",
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			options := auth.ServerOptions(auth.Policy{
+				Token: "operator",
+				Now:   func() time.Time { return now },
+				Grants: grants{
+					"expired": {Job: "job-1", ExpiresAt: ranOutAt},
+					"ended":   {Job: "job-2", ExpiresAt: now.Add(time.Hour), Ended: "done"},
+				},
+			})
+
+			err := callThrough(t, options, one.token)
+			if status.Code(err) != codes.Unauthenticated {
+				t.Fatalf("the crew answered %v, want Unauthenticated", err)
+			}
+			for _, want := range one.says {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("the refusal says %q, and a session has to be told %q", err, want)
+				}
+			}
+			if strings.Contains(err.Error(), one.never) {
+				t.Errorf("the refusal says %q, which reads as %q and is the wrong cause", err, one.never)
+			}
+		})
+	}
+}
+
+// The boundary of a credential's life, read against a clock the test holds. A credential works up to
+// the instant it runs out and not at it, which is the moment the whole of issue 449 turned on.
+func TestACredentialWorksUpToTheInstantItRunsOutAndNotAtIt(t *testing.T) {
+	runsOutAt := time.Date(2026, 8, 29, 14, 30, 0, 0, time.UTC)
+
+	for _, one := range []struct {
+		name    string
+		now     time.Time
+		refused bool
+	}{
+		{name: "a nanosecond before it runs out", now: runsOutAt.Add(-time.Nanosecond)},
+		{name: "half an hour before it runs out", now: runsOutAt.Add(-30 * time.Minute)},
+		{name: "the instant it runs out", now: runsOutAt, refused: true},
+		{name: "a nanosecond after it runs out", now: runsOutAt.Add(time.Nanosecond), refused: true},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			options := auth.ServerOptions(auth.Policy{
+				Token:       "operator",
+				Now:         func() time.Time { return one.now },
+				Grants:      grants{"job-token": {Job: "job-1", ExpiresAt: runsOutAt}},
+				DeniedToJob: func(string, any, auth.Grant) error { return nil },
+			})
+
+			err := callThrough(t, options, "job-token")
+			if one.refused && status.Code(err) != codes.Unauthenticated {
+				t.Fatalf("a credential that ran out at %s answered %v at %s, want Unauthenticated",
+					runsOutAt, err, one.now)
+			}
+			if !one.refused && err != nil {
+				t.Fatalf("a credential that runs out at %s was refused at %s: %v", runsOutAt, one.now, err)
+			}
+		})
+	}
+}
+
+// A crew given no clock reads the real one, which is what a crew runs on.
+func TestACredentialIsReadAgainstTheRealClockWhenTheCrewIsGivenNone(t *testing.T) {
+	options := auth.ServerOptions(auth.Policy{
+		Token:       "operator",
+		Grants:      grants{"job-token": {Job: "job-1", ExpiresAt: time.Now().Add(-time.Second)}},
+		DeniedToJob: func(string, any, auth.Grant) error { return nil },
+	})
+
+	if err := callThrough(t, options, "job-token"); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("a credential that ran out a second ago answered %v, want Unauthenticated", err)
 	}
 }

@@ -348,12 +348,17 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	// "crew" asks for what the crew holds and nothing else. It is not a workspace, so it is answered
 	// by filtering the listing rather than by resolving an address.
 	onlyCrew := len(args) == 1 && args[0] == crewScope
+	where := crewWide("secrets")
+	if onlyCrew {
+		where = narrowedTo("secrets", "the crew's own", "quay secret list on its own reads every workspace")
+	}
 	if len(args) == 1 && !onlyCrew {
 		located, err := workspace.Resolve(ctx, client, args[0])
 		if err != nil {
 			return err
 		}
 		request.Workspace = located
+		where = narrowedTo("secrets", args[0], "quay secret list on its own reads every workspace")
 	}
 	resp, err := client.ListSecrets(ctx, request)
 	if err != nil {
@@ -376,8 +381,10 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 			whereItLands(secret.GetName(), secret.GetProjection()))
 	}
 	if shown == 0 {
-		fmt.Fprintln(out, "no secrets set")
+		where.nothing(out)
+		return nil
 	}
+	where.counted(out, shown)
 	return nil
 }
 
@@ -599,13 +606,15 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		if err != nil {
 			return err
 		}
+		where := crewWide("workspaces")
 		if len(resp.GetWorkspaces()) == 0 {
-			fmt.Fprintln(out, "no workspaces")
+			where.nothing(out)
 			return nil
 		}
 		for _, p := range resp.GetWorkspaces() {
 			fmt.Fprintf(out, "%s  %s\n", p.GetId(), p.GetName())
 		}
+		where.counted(out, len(resp.GetWorkspaces()))
 		return nil
 	default:
 		return fmt.Errorf("usage: quay workspace <create|list|delete>")
@@ -648,19 +657,21 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 	case "list":
 		scope := ""
+		where := crewWide("projects")
 		if len(args) > 1 {
 			located, err := locate(ctx, client, args[1])
 			if err != nil {
 				return err
 			}
 			scope = located.WorkspaceID
+			where = narrowedTo("projects", located.Path.Workspace, "quay project list on its own reads every workspace")
 		}
 		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: scope})
 		if err != nil {
 			return err
 		}
 		if len(resp.GetProjects()) == 0 {
-			fmt.Fprintln(out, "no projects")
+			where.nothing(out)
 			return nil
 		}
 		names := workspaceNames(ctx, client)
@@ -668,6 +679,7 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			fmt.Fprintf(out, "%s  %s/%s\n",
 				display.ShortID(p.GetId()), display.Name(names[p.GetWorkspace()], p.GetWorkspace()), p.GetName())
 		}
+		where.counted(out, len(resp.GetProjects()))
 		return nil
 
 	default:
@@ -978,9 +990,12 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	// conversation running with nobody watching it from an empty container.
 	request := &quaycrewv1.ListSessionsRequest{Presence: true}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
-	// nowhere lists everything, because then the question was about the crew rather than a place.
+	// nowhere lists everything, because then the question was about the crew rather than a place,
+	// and so does the word crew, which is how somebody standing somewhere widens it again.
 	path, err := addressFrom(typed)
 	switch {
+	case readsTheCrew(typed):
+		path = workspace.Path{}
 	case err != nil && typed != "":
 		return err
 	case err == nil && !path.IsZero():
@@ -997,12 +1012,12 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	// Said out loud, because a listing narrowed to where you are standing looks exactly like a crew
 	// with fewer sessions in it, and the operator has no way to tell the two apart.
-	scope := "the whole crew"
+	where := crewWide("sessions")
 	if !path.IsZero() {
-		scope = path.String()
+		where = narrowedTo("sessions", path.String(), "quay sessions crew lists every session")
 	}
 	if len(resp.GetSessions()) == 0 {
-		fmt.Fprintf(out, "no sessions in %s\n", scope)
+		where.nothing(out)
 		return nil
 	}
 	// Names, not identifiers: a listing of hex says nothing about what any of it is.
@@ -1013,8 +1028,6 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 			workspaces[session.GetWorkspace()], projects[session.GetProject()]))
 	}
 	fmt.Fprint(out, display.Rows(display.SessionColumns(), rows))
-	if !path.IsZero() {
-		fmt.Fprintf(out, "\n%d in %s. quay sessions on its own lists the whole crew\n", len(rows), scope)
-	}
+	where.counted(out, len(rows))
 	return nil
 }

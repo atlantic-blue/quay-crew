@@ -263,9 +263,9 @@ func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 func whyNoConversation(current workspace.Path, projects int) string {
 	if projects == 0 {
 		if current.Workspace == "" {
-			return "there is no project for the crew to open in, press n and choose project"
+			return "there is no project for the crew to open in, press o and choose project"
 		}
-		return "there is no project in " + current.Workspace + ", press n and choose project"
+		return "there is no project in " + current.Workspace + ", press o and choose project"
 	}
 	if current.Workspace == "" {
 		return "there is more than one project, so say which: quay use <workspace>/<project>"

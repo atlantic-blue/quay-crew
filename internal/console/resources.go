@@ -482,8 +482,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				// history somebody actually comes looking for: a flow run archives its own session
 				// when it ends, and what the run did is in there. The history is read from the
 				// store, so it needs no container and no restore.
-				Key:     "l",
-				Also:    []string{"h"},
+				Key:     "t",
+				Moved:   []string{"l", "h"},
 				Label:   "History",
 				Descend: "tasks",
 			},
@@ -620,9 +620,11 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		{
 			// The history, beside opening the conversation. Lowercase and cheap, because looking at
 			// what a session has been doing is something an operator does constantly, and it changes
-			// nothing.
-			Key:     "l",
-			Also:    []string{"h"},
+			// nothing. `t` for the view it opens, which is the tasks view and is spelled that way in
+			// the command bar. It was on `l` and `h`, which are vim's horizontal motion keys, and an
+			// action on a motion key is what teaches an operator to distrust the rest of them.
+			Key:     "t",
+			Moved:   []string{"l", "h"},
 			Label:   "History",
 			Descend: "tasks",
 		},
@@ -680,11 +682,12 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			// three, so planning was reachable from the command line and from the wizard and not from
 			// the surface an operator lives in.
 			//
-			// D still opens it. It was the flip for as long as the console has had one, so it is in
-			// somebody's fingers, and a key that silently stopped working is worse than one that
-			// changed shape.
+			// D was the flip for as long as the console had one, and it is gone: in vim D deletes to
+			// the end of the line, and a destructive shaped key on an action that takes nothing away
+			// teaches the operator that the shapes mean nothing. It says to press m rather than
+			// doing nothing.
 			Key:     "m",
-			Also:    []string{"D"},
+			Moved:   []string{"D"},
 			Label:   "Mode",
 			Confirm: true,
 			Offers:  offeredModes(),

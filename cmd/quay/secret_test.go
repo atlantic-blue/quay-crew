@@ -135,7 +135,7 @@ func TestAnEmptyPipeIsRefusedRatherThanStored(t *testing.T) {
 	if err := refused(t, client, "secret", "set", "GH_TOKEN"); !strings.Contains(err.Error(), "was not set") {
 		t.Errorf("an empty pipe was stored: %s", err)
 	}
-	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets set") {
+	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this crew") {
 		t.Errorf("an empty value was stored anyway: %q", listed)
 	}
 }
