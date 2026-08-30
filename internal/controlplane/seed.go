@@ -27,7 +27,14 @@ import (
 // bytes, and the deployed function got back the page saying there is no video with that id. Two days
 // of product were already sitting on it. A skill an operator has to attach to the workspace doing the
 // designing is a skill that arrives after the design. It names no secret and no binary either.
-var SeedToSystem = []string{"git", "github", "outbound", "proving"}
+//
+// deploy-identity is here on the same argument, from the other end of the same delivery. It is a rule
+// about infrastructure a job has already decided to write, and the job that needs it is the one whose
+// checks are green: six resources shipped, `terraform validate` passed in eleven seconds because it
+// never talks to the account, and the deploy died on `s3:CreateBucket` because the identity that runs
+// it holds read only access. It names no secret and no binary either, so nothing can leave it out of
+// a session and no image can refuse one over it.
+var SeedToSystem = []string{"git", "github", "outbound", "proving", "deploy-identity"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //
