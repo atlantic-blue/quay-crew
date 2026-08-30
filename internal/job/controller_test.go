@@ -764,8 +764,14 @@ func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
 		t.Fatalf("the crew was asked to run %d tasks, want the first and the one after the machine had room",
 			plane.sent())
 	}
-	if got := kept.get(one.ID); got.Attempts != 2 {
-		t.Fatalf("the job has been tried %d times, want 2", got.Attempts)
+	running := kept.get(one.ID)
+	if running.Attempts != 2 {
+		t.Fatalf("the job has been tried %d times, want 2", running.Attempts)
+	}
+	// The line about waiting went with the pending phase it described. A running job that still says
+	// it is waiting for room is a row that reads as two things at once.
+	if running.Reason != "" {
+		t.Fatalf("the job is running and still says %q", running.Reason)
 	}
 
 	plane.lands("the bill is due on the 14th")
