@@ -127,6 +127,14 @@ type Job struct {
 	PullRequest string
 	// SpentTokens is what this job's own session has cost.
 	SpentTokens int64
+	// Steps are what the session doing this job said it finished, in the order it finished them. They
+	// are what a continued job carries on from, and they are read with one job rather than with a
+	// listing: a listing of a hundred lists is a listing nobody can read.
+	Steps []Step
+	// Resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
+	// It is what the job failed with, moved off the reason by the resume, so a job that is going again
+	// does not sit pending reading as one the machine is holding back.
+	Resuming string
 	// ObservedVersion is the Version of the declaration the status describes. A controller that has
 	// not caught up leaves this behind, and a reader can then tell a status that is current from one
 	// that is stale.

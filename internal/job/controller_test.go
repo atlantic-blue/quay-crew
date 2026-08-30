@@ -615,7 +615,7 @@ func TestTheTaskCarriesTheBriefIntoASessionNamedAfterTheJob(t *testing.T) {
 	controller.Tick(context.Background())
 
 	sent := plane.dispatched[0]
-	if sent.GetText() != one.Brief {
+	if !strings.Contains(sent.GetText(), one.Brief) {
 		t.Fatalf("the task says %q, want the brief", sent.GetText())
 	}
 	if sent.GetProject() != one.Project {

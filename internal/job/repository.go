@@ -96,6 +96,12 @@ func EndsInAPullRequest(repository string) string {
 // The session asked a question, waited in its container, and is being started again to be given the
 // answer: sending it the brief a second time would ask it to do the whole job over.
 func Asked(one *Job) string {
+	// A job being continued goes first. It is the newest thing an operator decided about this job, and
+	// what it was told belongs to an attempt that is over: a resume is cleared the moment the job asks
+	// a question, so only one of the two is ever the instruction in hand.
+	if one.Resuming != "" {
+		return Continued(one)
+	}
 	if one.Told != "" {
 		return CarryOn(one)
 	}
@@ -107,6 +113,10 @@ func Asked(one *Job) string {
 	if one.Repository != "" {
 		said = append(said, EndsInAPullRequest(one.Repository))
 	}
+	// Last, because it is the system's line about how the job is done rather than part of what it is.
+	// It is here rather than in a brief because a brief that forgets it produces a job that can only
+	// ever be started again from nothing.
+	said = append(said, RecordEachStep())
 	return strings.Join(said, "\n\n")
 }
 

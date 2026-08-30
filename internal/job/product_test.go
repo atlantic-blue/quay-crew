@@ -110,11 +110,15 @@ func TestTheSessionIsAskedForTheSentenceAboveTheBrief(t *testing.T) {
 	}
 }
 
-// A job that carries no sentence is asked exactly what it always was.
-func TestAJobWithNoSentenceIsAskedItsBriefAndNothingElse(t *testing.T) {
+// A job that carries no sentence has none put above its brief.
+func TestAJobWithNoSentenceIsAskedItsBriefWithNothingAboveIt(t *testing.T) {
 	brief := "open the bill and say when it is due"
-	if asked := job.Asked(&job.Job{Brief: brief}); asked != brief {
+	asked := job.Asked(&job.Job{Brief: brief})
+	if !strings.Contains(asked, brief) {
 		t.Fatalf("the session was asked %q, want %q", asked, brief)
+	}
+	if strings.Contains(asked, "This job serves one sentence") {
+		t.Fatalf("the session was asked %q, and this job carries no sentence", asked)
 	}
 }
 
