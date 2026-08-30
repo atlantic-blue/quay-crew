@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
 
@@ -53,23 +52,6 @@ func initializeStatsSteps(sc *godog.ScenarioContext) {
 			}
 			return fmt.Errorf("the console draws nothing about %q:\n%s", what, stripColour(c.model.View()))
 		})
-}
-
-// openModelOn drives the real console onto a view the way an operator does: the command bar, the
-// letters, then enter.
-func (c *consoleWorld) openModelOn(w *world, view string) error {
-	if err := c.openModel(w); err != nil {
-		return err
-	}
-	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}); err != nil {
-		return err
-	}
-	for _, letter := range view {
-		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}}); err != nil {
-			return err
-		}
-	}
-	return c.press(tea.KeyMsg{Type: tea.KeyEnter})
 }
 
 // stripColour takes the escape sequences off a drawn line, so a step reads the words rather than the
