@@ -112,3 +112,79 @@ func TestTheUsageNamesEveryContextCommand(t *testing.T) {
 		}
 	}
 }
+
+// The size the acceptance run of 29 August 2026 read out of the store, because nothing in the tool
+// would say it.
+const crewOnTheDay = 100_179
+
+func longBody(length int) string { return strings.Repeat("a", length) }
+
+// A listing that says which levels are set and nothing about how big they are is how a level reached
+// a hundred thousand characters without anybody deciding to make it that big.
+func TestTheListingSaysHowBigEachLevelIs(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "atlantic-blue")
+
+	saying(t, longBody(1_886))
+	mustRun(t, client, "context", "set", "atlantic-blue")
+
+	listed := mustRun(t, client, "context")
+	if !strings.Contains(listed, "1,886") {
+		t.Errorf("the listing never says how big the workspace's level is:\n%s", listed)
+	}
+	if !strings.Contains(listed, "characters") {
+		t.Errorf("the listing has a column of numbers and no unit on it:\n%s", listed)
+	}
+	if !strings.Contains(listed, "nothing written yet") {
+		t.Errorf("a level nobody has written to no longer says so:\n%s", listed)
+	}
+}
+
+// The finding itself: whoever writes a hundred thousand characters into the crew's level is told at
+// the moment they write it, rather than by reading the contexts table in Postgres.
+func TestSettingALevelOverTheMarkSaysWhoCarriesIt(t *testing.T) {
+	client := testClient(t)
+
+	saying(t, longBody(crewOnTheDay))
+	set := mustRun(t, client, "context", "set", "crew")
+	for _, want := range []string{
+		"100,179 characters",
+		"over the 20,000 character mark",
+		"Every session in every workspace reads it",
+		"quay context set <workspace>",
+	} {
+		if !strings.Contains(set, want) {
+			t.Errorf("setting the crew's level never says %q:\n%s", want, set)
+		}
+	}
+}
+
+// A level under the mark is information and nothing else. A tool that warned on every write is a
+// tool whose warnings nobody reads.
+func TestSettingASmallLevelDoesNotWarn(t *testing.T) {
+	client := testClient(t)
+
+	saying(t, "no acronyms")
+	set := mustRun(t, client, "context", "set", "crew")
+	if !strings.Contains(set, "11 characters") {
+		t.Errorf("setting did not report what it wrote: %q", set)
+	}
+	if strings.Contains(set, "mark") {
+		t.Errorf("a level of eleven characters was warned about: %q", set)
+	}
+}
+
+// The listing carries the same warning, so somebody who never ran the set finds out by looking.
+func TestTheListingWarnsAboutALevelOverTheMark(t *testing.T) {
+	client := testClient(t)
+	saying(t, longBody(crewOnTheDay))
+	mustRun(t, client, "context", "set", "crew")
+
+	listed := mustRun(t, client, "context")
+	if !strings.Contains(listed, "100,179 over the mark") {
+		t.Errorf("the crew's row does not say it is over the mark:\n%s", listed)
+	}
+	if !strings.Contains(listed, "Every session in every workspace reads it") {
+		t.Errorf("the listing says over the mark and never says what that costs:\n%s", listed)
+	}
+}

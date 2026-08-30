@@ -64,7 +64,7 @@ func (r Reading) Note() string {
 		return ""
 	}
 	return fmt.Sprintf("%s is over the %s character mark, at %s. %s",
-		r.label(), commas(Mark), commas(r.Characters), r.reach())
+		r.Label(), commas(Mark), commas(r.Characters), r.reach())
 }
 
 // Say is what a person is told at the moment they write a level this big: the note, and then the one
@@ -73,12 +73,13 @@ func (r Reading) Say() string {
 	if !r.Over() {
 		return ""
 	}
-	return r.Note() + "\n\n" + r.advice()
+	return fmt.Sprintf("%s\n\n%s\n\n%s", r.Note(), r.cost(), r.advice())
 }
 
-// label names the level the way a person says it. The crew is the crew: there is one, and it has no
-// name of its own.
-func (r Reading) label() string {
+// Label names the level the way a person says it: "crew", or "workspace atlantic-blue". The crew is
+// the crew, because there is one and it has no name of its own, and a line built from the scope and
+// the name side by side read "crew crew".
+func (r Reading) Label() string {
 	if r.Scope == "crew" || r.Name == "" {
 		return r.Scope
 	}
@@ -90,17 +91,21 @@ func (r Reading) label() string {
 func (r Reading) reach() string {
 	switch r.Scope {
 	case "crew":
-		return "Every session in every workspace reads it, before it reads a line of the repository " +
-			"it works on."
+		return "Every session in every workspace reads it."
 	case "workspace":
-		return "Every session in this workspace reads it, before it reads a line of the repository " +
-			"it works on."
+		return "Every session in this workspace reads it."
 	case "project":
-		return "Every session in this project reads it, before it reads a line of the repository " +
-			"it works on."
+		return "Every session in this project reads it."
 	default:
-		return "This session reads it, before it reads a line of the repository it works on."
+		return "This session reads it."
 	}
+}
+
+// cost says what the size buys nobody. A session reads its context before it reads the repository it
+// was made to work on, so the level is the first thing it carries and the last place a rule is found.
+func (r Reading) cost() string {
+	return fmt.Sprintf("A session reads this level before it reads a line of the repository it works on.\n"+
+		"So a rule you add here is a rule in %s characters.", commas(r.Characters))
 }
 
 // advice is the one move that makes a level smaller: put what is not true of everything under it one
