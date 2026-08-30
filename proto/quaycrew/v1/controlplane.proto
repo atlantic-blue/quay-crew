@@ -26,16 +26,37 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
+  // deploy_target is where this body of work ships. Unset on a project that has not said, which is
+  // every project until somebody does.
+  DeployTarget deploy_target = 5;
   // repository is where this project's work lands, written owner/name. A job declared here that
   // names no repository of its own works in this one, so where the work goes is a row rather than an
   // argument somebody has to remember to pass.
-  string repository = 5;
+  string repository = 6;
   // visibility is what kind of repository that is: "public" or "private". It is a cost fact. A
   // pipeline's minutes are free on a public repository and metered on a private one, and that
   // decision was being taken in a person's head, once per project.
   //
   // It is what the operator declared, not what the forge says. The crew does not go and look.
-  string visibility = 6;
+  string visibility = 7;
+}
+
+// DeployTarget is where a project ships: the cloud account, the region inside it, and the identity a
+// pipeline assumes to get there.
+//
+// It is one message rather than three fields on the project because a target is whole or it is
+// absent. Half of one reads as an answer to "where does this go" and is not one, and the cost of
+// believing it is a tree of jobs that writes correct infrastructure for an account it can never
+// reach.
+message DeployTarget {
+  // account is the cloud account, twelve digits.
+  string account = 1;
+  // region is where inside it, for example "eu-west-2".
+  string region = 2;
+  // identity is the role a pipeline assumes to deploy, and it belongs to the account above. The
+  // control plane refuses a target whose identity names a different one, because pasting the role
+  // from the other account is invisible until a pipeline runs.
+  string identity = 3;
 }
 
 // A session is one conversation inside a project: the operator's word for what the control plane
@@ -216,6 +237,15 @@ message ListProjectsRequest {
 }
 message ListProjectsResponse {
   repeated Project projects = 1;
+}
+// SetDeployTargetRequest declares where a project ships. An unset target clears what was declared,
+// so a wrong account is undone through the same door it was written through.
+message SetDeployTargetRequest {
+  string project = 1;
+  DeployTarget target = 2;
+}
+message SetDeployTargetResponse {
+  Project project = 1;
 }
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
 // time. It is carried by a job, and every step it takes is a job under that one,
@@ -1340,6 +1370,7 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc SetDeployTarget(SetDeployTargetRequest) returns (SetDeployTargetResponse);
   rpc SetProjectRepository(SetProjectRepositoryRequest) returns (SetProjectRepositoryResponse);
 
   rpc ImportFlow(ImportFlowRequest) returns (ImportFlowResponse);

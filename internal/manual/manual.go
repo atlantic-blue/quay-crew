@@ -78,6 +78,15 @@ commands:
   job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
+  target [<address>]                      where a project ships: the account, the region inside it,
+    [--account <id>]                      and the role a pipeline assumes to get there. With no
+    [--region <name>]                     values it reads what the project declared, and with them
+    [--identity <arn>] [--clear]          it declares it. The identity has to belong to the account,
+                                          because pasting the role from the other account is
+                                          invisible until a pipeline runs. Nothing here deploys
+                                          anything: infrastructure ships through the repository's
+                                          own pipeline, and this says which account that pipeline is
+                                          aimed at. --clear takes it back off
   limits [<workspace>]                    what a workspace lets its sessions declare, and how long
     [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
     [--max-running <n>]                   jobs may go, how many run at once, what a tree may spend,

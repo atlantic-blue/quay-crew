@@ -61,6 +61,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "name", Width: 24, Colour: colourOfName},
 			{Title: "workspace", Width: 18, Colour: colourOfName},
+			{Title: "deploys to", Width: 26, Colour: dim},
 			{Title: "age", Width: 0, Colour: dim},
 		},
 		DrillTo: "sessions",
@@ -90,6 +91,7 @@ func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
 			display.ShortID(project.GetId()),
 			project.GetName(),
 			display.Name(workspaceName, project.GetWorkspace()),
+			deploysTo(project.GetDeployTarget()),
 			display.Age(project.GetCreatedAt()),
 		},
 		State: StateReady,
@@ -954,4 +956,16 @@ func stateFromHealth(state string) State {
 	default:
 		return StateUnknown
 	}
+}
+
+// deploysTo is where a project ships, for the column of that name, and an empty cell for a project
+// that has not said.
+//
+// The account and the region only. The identity repeats the account and is wider than the whole
+// view, and a listing exists to say which projects have been told rather than to carry the address.
+func deploysTo(target *quaycrewv1.DeployTarget) string {
+	if target == nil {
+		return ""
+	}
+	return target.GetAccount() + "/" + target.GetRegion()
 }

@@ -152,6 +152,7 @@ var takenFlags = map[string]map[string]bool{
 	"task":   {flagDispatch: true},
 	"job":    jobFlagsTaken(),
 	"limits": limitsFlagsTaken(),
+	"target": targetFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -250,6 +251,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRole(ctx, client, args[1:], out)
 	case "job":
 		return runJob(ctx, client, args[1:], out)
+	case "target":
+		return runTarget(ctx, client, args[1:], out)
 	case "limits":
 		return runLimits(ctx, client, args[1:], out)
 	case "flow":
@@ -688,8 +691,9 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		}
 		names := workspaceNames(ctx, client)
 		for _, p := range resp.GetProjects() {
-			fmt.Fprintf(out, "%s  %s/%s\n",
-				display.ShortID(p.GetId()), display.Name(names[p.GetWorkspace()], p.GetWorkspace()), p.GetName())
+			fmt.Fprintf(out, "%s  %s/%s%s\n",
+				display.ShortID(p.GetId()), display.Name(names[p.GetWorkspace()], p.GetWorkspace()), p.GetName(),
+				deploysTo(p.GetDeployTarget()))
 			writeRepository(out, "          ", p)
 		}
 		where.counted(out, len(resp.GetProjects()))
