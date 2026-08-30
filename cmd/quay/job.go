@@ -122,7 +122,26 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	fmt.Fprintf(out, "declared %s%s\n", display.ShortID(declared.GetId()), inAddress(at))
 	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with quay job show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
+	sayWhatIsLeftOut(out, resp.GetLeftOut())
 	return nil
+}
+
+// sayWhatIsLeftOut names the skills the session running this job starts without, and how to fix each.
+//
+// It prints where the declaration is made, because that is the last moment anybody is looking. The
+// crew has always known this and said it only in quay skill list, which is a listing nobody is
+// required to read, so a workspace with no credential took a whole tree of job and every session in
+// it died on its first clone.
+//
+// The sentence per skill is the skill listing's own, so there is one wording to keep right.
+func sayWhatIsLeftOut(out io.Writer, leftOut []*quaycrewv1.Skill) {
+	if len(leftOut) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "this workspace has not set every secret its skills need. The session running this job starts without:")
+	for _, one := range leftOut {
+		fmt.Fprintf(out, "  %s: %s\n", one.GetName(), one.GetLeftOut())
+	}
 }
 
 // whereTheJobRuns is the project to declare in, and empty when the crew is to read it from the
