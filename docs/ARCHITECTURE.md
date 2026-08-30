@@ -262,6 +262,14 @@ A session identifier is unique within its project, not within the workspace. Two
 workspace can both have a session a channel calls "general" without colliding, which is the whole
 reason the level exists.
 
+A project also says **where it deploys**: the account, the region inside it, and the role a pipeline
+assumes to get there. It sits on the project rather than the workspace because a workspace holds
+several bodies of work and each ships somewhere of its own, and it is a record rather than a
+credential: nothing in the crew reaches that account with it. Three values, all of them or none,
+because half a target reads as an answer to "where does this go" and is not one. The identity has to
+belong to the account the project names, which catches the role pasted from another account before a
+pipeline finds it. `quay target <workspace>/<project>` reads and declares it.
+
 Deleting a workspace hides its projects, and deleting a project hides it from every read while its
 sessions keep their history. Nothing is hard deleted, because a session holds the only pointer to a
 conversation the model keeps on its own disk.

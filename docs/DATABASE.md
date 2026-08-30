@@ -81,7 +81,10 @@ hold conversation handles.
 
 **`projects`** sits between a workspace and its sessions: `id`, `workspace`, `name`, timestamps,
 `deleted_at`. Same soft deletion for the same reason. A task runs inside a project, and the
-project is where the files the model reads live.
+project is where the files the model reads live. It also carries `deploy_account`, `deploy_region`
+and `deploy_identity`, which say where this body of work ships. All three default to the empty
+string and all three empty is a project that has not said; the control plane refuses half a target,
+so a row holding two of the three cannot be written through it.
 
 **`sessions`** is the interesting one. Each row is a session: one conversation, running in its own
 sandbox. The console calls them sessions too, and `sessions` still opens that view.
