@@ -244,6 +244,7 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, session string,
 		Status:         "idle",
 		PermissionMode: model.PermissionModeBornIn(born.Mode),
 		Role:           born.Role,
+		Title:          born.Title,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

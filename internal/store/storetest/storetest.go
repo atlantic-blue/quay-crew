@@ -165,6 +165,56 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// Both implementations, because the title is written in one place in each: a struct field in the
+	// memory store and a column in postgres. A memory store that carried it while postgres dropped it
+	// would keep every unit test green and leave the real listing blank, which is the defect this was
+	// written for.
+	t.Run("a session is born with the name it was dispatched with", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+
+		born, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-billing",
+			store.Birth{Title: "read the electricity bill"})
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		if born.GetTitle() != "read the electricity bill" {
+			t.Fatalf("a session dispatched with a title is called %q", born.GetTitle())
+		}
+		read, err := s.GetSession(ctx, born.GetId())
+		if err != nil {
+			t.Fatalf("GetSession: %v", err)
+		}
+		if read.GetTitle() != "read the electricity bill" {
+			t.Fatalf("the title did not survive being written: %q", read.GetTitle())
+		}
+
+		// What a session is called is its own once it exists. A dispatch that has to be made again
+		// lands in the same conversation, and must not rename it under whoever is reading it.
+		again, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-billing",
+			store.Birth{Title: "something else entirely"})
+		if err != nil {
+			t.Fatalf("FindOrCreateSession again: %v", err)
+		}
+		if again.GetTitle() != "read the electricity bill" {
+			t.Fatalf("a session that already existed was renamed to %q by a later dispatch", again.GetTitle())
+		}
+	})
+
+	t.Run("a session nobody named has no title, rather than one nobody can explain", func(t *testing.T) {
+		s := newDataset(t)(t)
+		project := newProject(t, s, "acme", "house bills")
+
+		born, _, err := s.FindOrCreateSession(context.Background(), project.GetId(), "session-quiet", store.Birth{})
+		if err != nil {
+			t.Fatalf("FindOrCreateSession: %v", err)
+		}
+		if born.GetTitle() != "" {
+			t.Fatalf("a session nobody dispatched with a title is called %q", born.GetTitle())
+		}
+	})
+
 	t.Run("a crew that configured nothing gets the mode every session used to have", func(t *testing.T) {
 		s := newDataset(t)(t)
 		project := newProject(t, s, "acme", "house bills")

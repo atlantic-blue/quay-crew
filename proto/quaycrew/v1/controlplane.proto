@@ -98,6 +98,15 @@ message Session {
   // Set only when the request asked for it, because the answer costs a question to the sandbox. Unset
   // means nobody asked, which is not the same as nothing being there.
   SessionPresence presence = 20;
+  // title is the name the session was dispatched with, written when the session is made and never
+  // afterwards. A job carries its declared title here, so a listing says which conversation is which
+  // from the first second, rather than once a description is written behind a task that has landed.
+  //
+  // It is a third name rather than a second use of label, because the two are typed at different
+  // moments about different things: the title names the job the session was made for, and the label
+  // is what the operator calls this conversation once they have seen it. A dispatch that has to be
+  // made again would put the job title back over a label the operator set in the meantime.
+  string title = 21;
 }
 
 // SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
@@ -380,6 +389,14 @@ message DispatchRequest {
   // it: a credential written at birth would label every later task with the first task's grant, and a
   // grant made after birth would never reach the container at all.
   string job = 7;
+  // title is what to call the session this dispatch makes, and it is read only when the session is
+  // made: a name a caller sends with every task must not overwrite what the operator has called the
+  // conversation since.
+  //
+  // It is what a caller that already knows the name sends. A job is declared with a title, and
+  // without this the crew is handed that name and drops it, which leaves a listing of running jobs
+  // waiting for a description written after the work is over.
+  string title = 8;
 }
 message DispatchResponse {
   string id = 1;
@@ -823,6 +840,26 @@ message DetachRoleRequest {
   string scope = 3;
 }
 message DetachRoleResponse {}
+
+// GetRoleRequest asks for one role whole, the brief included, so what a session running as it is
+// told can be read out of the crew rather than out of the directory it was imported from.
+message GetRoleRequest {
+  // workspace reads the version that workspace pinned. Empty reads what the crew has imported.
+  string workspace = 1;
+  string name = 2;
+}
+message GetRoleResponse {
+  Role role = 1;
+  // brief is the whole instruction a session running as this role is given. It travels here and
+  // nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
+  string brief = 2;
+  // may is what a session running as this role may call, sorted. Empty is a role that may call
+  // nothing, which is the default.
+  repeated string may = 3;
+  // held_by names every workspace that attached this role for itself, sorted. A role the crew holds
+  // says so on the role and reaches every workspace without being named here.
+  repeated string held_by = 4;
+}
 
 // ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
 message ListContextsRequest {
@@ -1279,6 +1316,9 @@ service ControlPlaneService {
   rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
   rpc AttachRole(AttachRoleRequest) returns (AttachRoleResponse);
   rpc DetachRole(DetachRoleRequest) returns (DetachRoleResponse);
+  // GetRole reads one role back whole, the brief included, which is the only way to audit what a
+  // session running as it was told.
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse);
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
 

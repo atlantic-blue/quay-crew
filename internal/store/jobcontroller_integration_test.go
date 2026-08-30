@@ -10,6 +10,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -236,5 +237,92 @@ func TestEveryMovementIsOnTheRecordInPostgres(t *testing.T) {
 		if events[i].Kind != kind {
 			t.Fatalf("record %d is %q, want %q", i, events[i].Kind, kind)
 		}
+	}
+}
+
+// What the operator reads while the work is happening, over the database that holds it.
+//
+// The name a session carries used to be written behind a task that had already been answered, and a
+// job is one long task, so a screen of running jobs was a column of blank name cells: four
+// conversations burning tokens and no way to tell which was which. The title is typed at declaration,
+// so it is on the row before the model has said anything.
+//
+// Against Postgres because the title is a column here and a struct field in memory, and a column that
+// is written and never read back is exactly what the in memory store cannot notice.
+func TestAJobsSessionIsNamedBeforeItsTaskAnswersInPostgres(t *testing.T) {
+	held, started := make(chan struct{}), make(chan struct{})
+	runner := &model.FakeRunner{Reply: "the bill is due on the 14th", Gate: held, Started: started}
+	s, _ := aCrewWithAController(t, runner)
+	// Closed however this test leaves, so the task behind the gate ends rather than holding the crew
+	// open after the assertions.
+	defer close(held)
+	ctx := context.Background()
+	_, project := aProjectOnPostgres(t, s)
+
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "read the electricity bill", Brief: "open it and say when it is due",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	s.TickJob(ctx)
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no task ever started, so there is nothing to read a name off")
+	}
+	sessionID := waitForJobSession(t, s, declared.GetJob().GetId())
+
+	// Still running: the model is holding at the gate, so nothing has described this conversation and
+	// the name in the listing can only have come from the declaration.
+	running, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetJob().GetId()})
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if running.GetJob().GetAnswer() != "" {
+		t.Fatalf("the task already answered %q, so this proves nothing about a job in flight",
+			running.GetJob().GetAnswer())
+	}
+
+	listed, err := s.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	for _, session := range listed.GetSessions() {
+		if session.GetId() != sessionID {
+			continue
+		}
+		if session.GetDescription() != "" {
+			t.Fatalf("the conversation was described as %q while its task was still running", session.GetDescription())
+		}
+		// The cell a listing draws, not the column it comes from: what was broken was the name an
+		// operator reads.
+		if name := display.SessionLabel(session); name != "read the electricity bill" {
+			t.Fatalf("the name cell of the session doing the job says %q", name)
+		}
+		return
+	}
+	t.Fatalf("the crew lists no session %s for the job that is running in it", sessionID)
+}
+
+// waitForJobSession reads the row until the controller has written which session its task went to.
+// The dispatch lets go of the task, so the model starts before the row says where it is running.
+func waitForJobSession(t *testing.T, s *controlplane.Server, id string) string {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		found, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if session := found.GetJob().GetSession(); session != "" {
+			return session
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the job never said which session its task went to")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

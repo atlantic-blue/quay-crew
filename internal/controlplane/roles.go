@@ -3,7 +3,9 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/job"
@@ -140,8 +142,8 @@ func (s *Server) withCrewRoles(ctx context.Context, workspace []store.ImportedRo
 	return out
 }
 
-// asRole renders a role for a client. The brief never travels back: a client asked what the crew
-// holds, not for a copy of every instruction.
+// asRole renders a role for a client. The brief does not travel here: a listing was asked what the
+// crew holds, not for a copy of every instruction, so the brief travels in GetRole and nowhere else.
 func asRole(one store.ImportedRole) *quaycrewv1.Role {
 	out := &quaycrewv1.Role{
 		Name:     one.Name,
@@ -229,4 +231,153 @@ func (s *Server) RoleFor(ctx context.Context, workspace, named string) (job.Rece
 		return nil, errors.New(status.Convert(err).Message())
 	}
 	return held, nil
+}
+
+// GetRole reads one role back whole, the brief included.
+//
+// The brief is the role. It is the several hundred words that decide how a session behaves, and
+// until this existed an imported role could not be read back at all: an operator could not diff what
+// the crew holds against the file it came from, and could not tell whether a run went the way it did
+// because of a clause they edited an hour ago. So this is the audit, and it reads from the same
+// place a session is built from rather than from a second copy.
+func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*quaycrewv1.GetRoleResponse, error) {
+	name := req.GetName()
+	held, where, err := s.rolesVisibleTo(ctx, req.GetWorkspace())
+	if err != nil {
+		return nil, err
+	}
+	var found *store.ImportedRole
+	names := make([]string, 0, len(held))
+	for at := range held {
+		names = append(names, held[at].Name)
+		if held[at].Name == name {
+			found = &held[at]
+		}
+	}
+	if found == nil {
+		return nil, status.Error(codes.NotFound, missingRole(where, name, names))
+	}
+
+	carried := asRole(*found)
+	crew, err := s.store.CrewRoles(ctx)
+	if err != nil {
+		return nil, storeError(err, "read the crew's roles")
+	}
+	for _, one := range crew {
+		if one.Name == name {
+			carried.Crew = true
+		}
+	}
+	holders, err := s.workspacesHolding(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return &quaycrewv1.GetRoleResponse{
+		Role: carried, Brief: found.Brief, May: found.May_, HeldBy: holders,
+	}, nil
+}
+
+// rolesVisibleTo is what a name could mean at an address, and what to call that address in a
+// refusal: the roles one workspace holds, its own and the crew's, or everything the crew has
+// imported. It is the rule a listing already follows, so show and list cannot disagree about which
+// roles exist.
+func (s *Server) rolesVisibleTo(ctx context.Context, workspace string) ([]store.ImportedRole, string, error) {
+	if workspace == "" {
+		held, err := s.store.ListRoles(ctx)
+		if err != nil {
+			return nil, "", storeError(err, "list roles")
+		}
+		return held, "the crew", nil
+	}
+	held, err := s.store.WorkspaceRoles(ctx, workspace)
+	if err != nil {
+		return nil, "", storeError(err, "list roles")
+	}
+	return s.withCrewRoles(ctx, held), "this workspace", nil
+}
+
+// workspacesHolding names the workspaces that attached a role for themselves, sorted.
+//
+// The crew's own holding is not in here and is said separately, because the two are different
+// statements: one workspace decided this, or everybody has it including the workspace made tomorrow.
+//
+// A workspace whose roles cannot be read is left out rather than failing the whole answer. The
+// brief is what was asked for, and losing it because one workspace listing was slow would be the
+// audit refusing to answer over the least important line of it.
+func (s *Server) workspacesHolding(ctx context.Context, name string) ([]string, error) {
+	workspaces, err := s.store.ListWorkspaces(ctx)
+	if err != nil {
+		return nil, storeError(err, "list workspaces")
+	}
+	var out []string
+	for _, workspace := range workspaces {
+		held, err := s.store.WorkspaceRoles(ctx, workspace.GetId())
+		if err != nil {
+			continue
+		}
+		for _, one := range held {
+			if one.Name == name {
+				out = append(out, workspace.GetName())
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// missingRole is what to say when a role is asked for by a name nothing here holds.
+//
+// Saying no and stopping leaves the operator guessing between a typo, a role they never imported and
+// a workspace that never attached one. So the refusal names what is actually there: the near
+// spellings when there are any, and everything held when there are not, because a short list of real
+// names is more use than a correct silence.
+func missingRole(where, name string, held []string) string {
+	if len(held) == 0 {
+		return fmt.Sprintf("%s holds no roles at all, so there is no %s to read. Import one with: quay role import <directory>",
+			where, name)
+	}
+	near := nearRoles(name, held)
+	if len(near) > 0 {
+		return fmt.Sprintf("%s holds no role called %s. The nearest names it holds are: %s",
+			where, name, strings.Join(near, ", "))
+	}
+	return fmt.Sprintf("%s holds no role called %s. It holds: %s",
+		where, name, strings.Join(held, ", "))
+}
+
+// nearRoles is the held names a typed name was plausibly meant to be: one that contains the other,
+// or one within two edits of it, which covers a transposition, a dropped letter and a plural.
+func nearRoles(name string, held []string) []string {
+	typed := strings.ToLower(name)
+	var near []string
+	for _, one := range held {
+		lowered := strings.ToLower(one)
+		if strings.Contains(lowered, typed) || strings.Contains(typed, lowered) || edits(typed, lowered) <= 2 {
+			near = append(near, one)
+		}
+	}
+	sort.Strings(near)
+	return near
+}
+
+// edits is how many single character changes turn one word into the other.
+func edits(from, to string) int {
+	previous := make([]int, len(to)+1)
+	current := make([]int, len(to)+1)
+	for at := range previous {
+		previous[at] = at
+	}
+	for row := 1; row <= len(from); row++ {
+		current[0] = row
+		for column := 1; column <= len(to); column++ {
+			cost := 1
+			if from[row-1] == to[column-1] {
+				cost = 0
+			}
+			current[column] = min(previous[column]+1, min(current[column-1]+1, previous[column-1]+cost))
+		}
+		previous, current = current, previous
+	}
+	return previous[len(to)]
 }
