@@ -324,3 +324,53 @@ func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 		t.Fatalf("the recorded task says %q, want the reply that ran", listed.GetTasks()[0].GetReply())
 	}
 }
+
+// The token a second time, under a name the Claude Code command line leaves alone.
+//
+// The CLI removes CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it starts, by that
+// name and no other, so the prompt hook fired on a message held no credential and every message went
+// unanalysed. Nothing said so: the hook fails open, and the only record was the word "no answer" in a
+// file in /tmp. The value is the same value, and only the name is new.
+func TestDispatchCarriesTheSubscriptionTokenUnderTheNameThatSurvivesIntoAHook(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "ok"}
+	s := controlplane.NewServer(controlplane.Config{
+		Store: store.NewMemory(), Runner: runner, Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+	ctx := context.Background()
+
+	wid, pid := newProject(t, s)
+
+	if _, err := s.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
+		Workspace: wid, Key: model.ClaudeCodeOAuthTokenEnv, Value: "tok-xyz"}); err != nil {
+		t.Fatalf("SetSecret: %v", err)
+	}
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if got := runner.LastReq.Env[model.ModelTokenEnv]; got != "tok-xyz" {
+		t.Fatalf("task env[%s] = %q, want tok-xyz, and without it a hook cannot ask a model anything",
+			model.ModelTokenEnv, got)
+	}
+	if got := runner.LastReq.Env[model.ClaudeCodeOAuthTokenEnv]; got != "tok-xyz" {
+		t.Fatalf("task env[%s] = %q, want tok-xyz: the second name is as well as, never instead of",
+			model.ClaudeCodeOAuthTokenEnv, got)
+	}
+}
+
+// A workspace with no subscription token carries neither name. An empty credential reads as
+// configured, and the hook would report being logged out with a variable set.
+func TestAWorkspaceWithNoSubscriptionTokenCarriesNeitherName(t *testing.T) {
+	runner := &model.FakeRunner{Reply: "ok"}
+	s := newServer(runner)
+	ctx := context.Background()
+
+	_, pid := newProject(t, s)
+	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "hello"}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	if got, set := runner.LastReq.Env[model.ModelTokenEnv]; set {
+		t.Fatalf("task env carries %s=%q, and nobody set a token", model.ModelTokenEnv, got)
+	}
+}

@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The guard is what stops the hook analysing its own model call. Losing it means a hook that calls
 // itself, so it is asserted rather than assumed.
@@ -44,6 +47,45 @@ func TestTheChildKeepsTheCredentialItNeedsToAuthenticate(t *testing.T) {
 	}
 }
 
+
+// The failure the second name exists for. Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the
+// environment of every process it starts, by that name and no other, so inside a sandbox the hook
+// never holds it: keeping it was keeping something that was never there. A real task on 30 August
+// 2026 recorded "no answer 770ms" against every message, and the child had exited 1 in 851
+// milliseconds with nothing to authenticate with.
+func TestTheChildIsGivenTheCredentialUnderTheNameTheCommandLineReads(t *testing.T) {
+	child := childEnv([]string{"PATH=/usr/bin", ModelToken + "=from-the-crew", "GH_TOKEN=other"})
+
+	if !has(child, OAuthToken+"=from-the-crew") {
+		t.Errorf("the child was never given a credential, so it cannot authenticate: %v", child)
+	}
+	if count(child, OAuthToken) != 1 {
+		t.Errorf("the child holds %s %d times, and which one a process reads is not ours to decide: %v",
+			OAuthToken, count(child, OAuthToken), child)
+	}
+}
+
+// A person on a laptop has the first name and nothing else, and their own value is the one that runs.
+func TestTheCredentialAPersonSetsWinsOverTheOneTheCrewCarries(t *testing.T) {
+	child := childEnv([]string{OAuthToken + "=mine", ModelToken + "=the-crews"})
+
+	if !has(child, OAuthToken+"=mine") {
+		t.Errorf("the credential the person set was replaced: %v", child)
+	}
+	if count(child, OAuthToken) != 1 {
+		t.Errorf("the child holds %s twice: %v", OAuthToken, child)
+	}
+}
+
+// With no credential anywhere the child gets none, rather than an empty one that reads as configured.
+func TestNoCredentialAnywhereHandsTheChildNone(t *testing.T) {
+	child := childEnv([]string{"PATH=/usr/bin", "HOME=/home/agent"})
+
+	if count(child, OAuthToken) != 0 {
+		t.Errorf("the child was handed a credential nobody set: %v", child)
+	}
+}
+
 func has(env []string, want string) bool {
 	for _, entry := range env {
 		if entry == want {
@@ -51,4 +93,14 @@ func has(env []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func count(env []string, name string) int {
+	found := 0
+	for _, entry := range env {
+		if key, _, _ := strings.Cut(entry, "="); key == name {
+			found++
+		}
+	}
+	return found
 }

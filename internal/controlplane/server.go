@@ -1980,6 +1980,15 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 		}
 		env[name] = value
 	}
+	// The model's token a second time, under a name Claude Code leaves alone. The CLI strips
+	// CLAUDE_CODE_OAUTH_TOKEN from every process a task starts, so a hook fired on a message holds no
+	// credential and cannot ask a model anything. The value is the same value; only the name is new.
+	//
+	// The crew owns this name, so it is written last and a workspace secret answering to it does not
+	// stand in for the token a task actually runs under.
+	if token := env[model.ClaudeCodeOAuthTokenEnv]; token != "" {
+		env[model.ModelTokenEnv] = token
+	}
 	if len(env) == 0 {
 		return nil
 	}
