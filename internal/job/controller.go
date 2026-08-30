@@ -243,14 +243,16 @@ type Controller struct {
 	owner string
 	// lease is how long a hold lasts before another controller may take the job.
 	lease time.Duration
-	// gaveUp is the job this tick has just put back to pending for want of a sandbox.
-	//
-	// It is a hint held for the length of one tick, and the row is still the truth: a controller that
-	// lost this would start the job a tick early rather than get anything wrong. What it buys is the
-	// one movement per job per tick this loop is built on, so a job turned away is left pending for
-	// something to read rather than given up and started again inside one pass.
-	gaveUp map[string]bool
 }
+
+// givenUp is the job one tick has put back to pending for want of a sandbox.
+//
+// It is born and dies inside a tick, and it is passed rather than kept, so nothing about it outlives
+// the pass that made it. The row is still the truth: a controller that lost this would start the job
+// a tick early rather than get anything wrong. What it buys is the one movement per job per tick
+// this loop is built on, so a job turned away is left pending for something to read rather than
+// given up and started again inside one pass.
+type givenUp map[string]bool
 
 // NewController builds one. A nil spend reader means what job cost is not written; a nil prover
 // means job claiming a file stops rather than being believed.
@@ -261,7 +263,6 @@ func NewController(store Store, plane ControlPlane, spend Spend, prover Prover, 
 	return &Controller{
 		store: store, plane: plane, spend: spend, prover: prover, logger: logger,
 		every: DefaultTickEvery, batch: DefaultBatch, lease: DefaultLease,
-		gaveUp: map[string]bool{},
 		// A name of its own, minted rather than asked for, because two controllers sharing one could
 		// each take the other's job by renewing a lease they never held.
 		owner: "controller-" + newEventID()[:8],
@@ -388,12 +389,12 @@ func (c *Controller) Run(ctx context.Context) {
 // Tick reads the world once and closes what gaps it can. Exported so a test drives one tick rather
 // than waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (c *Controller) Tick(ctx context.Context) {
-	clear(c.gaveUp)
+	turnedAway := givenUp{}
 	// Recovery first, so job a dead controller left behind is in this controller's hands before it
 	// reads what it holds, and one tick both takes the job over and writes what came of it.
 	c.recoverAbandoned(ctx)
-	c.adoptAnswers(ctx)
-	c.startDeclared(ctx)
+	c.adoptAnswers(ctx, turnedAway)
+	c.startDeclared(ctx, turnedAway)
 	// Last, so a session this tick has just dispatched into is not a candidate on the same pass. The
 	// three above decide what is wanted alive; this one acts on what is left.
 	c.putAway(ctx)
@@ -404,7 +405,7 @@ func (c *Controller) Tick(ctx context.Context) {
 // The claim comes first and the dispatch second. A claim that did not apply is another controller
 // holding the row, and it is left alone rather than dispatched for twice: job is paid for, so a
 // second dispatch is a second bill.
-func (c *Controller) startDeclared(ctx context.Context) {
+func (c *Controller) startDeclared(ctx context.Context, turnedAway givenUp) {
 	runnable, err := c.store.RunnableJob(ctx, c.batch)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read which job is ready to run", "error", err)
@@ -413,7 +414,7 @@ func (c *Controller) startDeclared(ctx context.Context) {
 	for _, one := range runnable {
 		// Turned away a moment ago, in this same pass. Starting it again here would ask the machine
 		// that had no room whether it has room yet, without anything having had a chance to change.
-		if c.gaveUp[one.ID] {
+		if turnedAway[one.ID] {
 			continue
 		}
 		c.start(ctx, one)
@@ -631,14 +632,14 @@ func ownerOrNobody(owner string) string {
 }
 
 // adoptAnswers writes what came back onto every job whose task has landed.
-func (c *Controller) adoptAnswers(ctx context.Context) {
+func (c *Controller) adoptAnswers(ctx context.Context, turnedAway givenUp) {
 	started, err := c.store.HeldJob(ctx, c.owner, c.batch)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read which job this controller is holding", "error", err)
 		return
 	}
 	for _, one := range started {
-		c.adopt(ctx, one)
+		c.adopt(ctx, one, turnedAway)
 	}
 }
 
@@ -647,7 +648,7 @@ func (c *Controller) adoptAnswers(ctx context.Context) {
 // Reading rather than remembering is what makes this safe to run twice: the task row is the record
 // of what the crew actually did, so a controller that has just started the job and one that has
 // come back to it read the same thing.
-func (c *Controller) adopt(ctx context.Context, one *Job) {
+func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	resp, err := c.plane.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: one.Session})
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read the task of a job",
@@ -671,7 +672,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job) {
 	// machine was busy, which is a moment and not a verdict, so the job goes back to pending and a
 	// later tick tries it again. Failing it here is how declared work was lost with nothing raised.
 	if last.GetStatus() == StatusFailed && NeverStarted(last.GetFailure()) {
-		c.requeue(ctx, one, waitingForRoom(last.GetFailure()))
+		c.requeue(ctx, one, waitingForRoom(last.GetFailure()), turnedAway)
 		return
 	}
 
@@ -718,7 +719,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job) {
 // declared until it runs, until its deadline passes, or until a person stops it. Each attempt costs
 // one start, and the crew starts one sandbox at a time, so a job that keeps being turned away asks
 // again about as often as a start takes rather than on every tick.
-func (c *Controller) requeue(ctx context.Context, one *Job, reason string) {
+func (c *Controller) requeue(ctx context.Context, one *Job, reason string, turnedAway givenUp) {
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 	record := c.event(ctx, one, EventReleased, reason)
 	back := Requeue{Owner: c.owner, Reason: reason}
@@ -729,7 +730,7 @@ func (c *Controller) requeue(ctx context.Context, one *Job, reason string) {
 		}
 		return
 	}
-	c.gaveUp[one.ID] = true
+	turnedAway[one.ID] = true
 	c.exported(ctx, record)
 }
 
