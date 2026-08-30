@@ -21,7 +21,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
 	registry, err := NewRegistry(Sessions(client), Jobs(client), Tasks(client), Archived(client), Projects(client),
-		Workspaces(client), Contexts(client), Secrets(client), Features(), Stats(client), Room(client))
+		Workspaces(client), Contexts(client), Secrets(client), Stats(client), Room(client))
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +30,28 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 		return nil, err
 	}
 	return registry, nil
+}
+
+// movedViews are the words the console used to open and does not any more, against what to type
+// instead. A view that leaves the switcher belongs here in the same change that takes it out of the
+// registry: left out of both, the word falls through to the tool and comes back as
+// `unknown command "f"`, which reads as the console being broken rather than as a word that moved.
+//
+// The features view is what put a table here. The whole word is not in it, because the bar runs a
+// command and `quay features` prints the same list: only the short spellings have nowhere to land.
+var movedViews = map[string]string{
+	"f":            featuresAreACommand,
+	"feature":      featuresAreACommand,
+	"capabilities": featuresAreACommand,
+}
+
+// featuresAreACommand is what to type instead of the view that went.
+const featuresAreACommand = "what this build does is a command now: type features"
+
+// moved says whether a word the console used to open has gone, and what to type instead of it.
+func moved(typed string) (string, bool) {
+	instead, gone := movedViews[cleanToken(typed)]
+	return instead, gone
 }
 
 // RoomFrom asks the crew what the machine has left: one figure and one word.

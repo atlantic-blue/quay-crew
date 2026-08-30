@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -274,40 +273,6 @@ func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					},
 					State: StateReady,
 				})
-			}
-			return rows, nil
-		},
-	}
-}
-
-// Features lists what this build of the crew can do, from the specification embedded in it. It is the
-// one view that asks the control plane nothing: a capability belongs to the build, not to a running
-// stack, and this is the view an operator opens before they know what to open.
-func Features() Resource {
-	return Resource{
-		Name:    "features",
-		Aliases: []string{"f", "feature", "capabilities"},
-		// A feature's title sits on the first of its scenarios and the rest of the group leaves it
-		// blank, so bold on that cell is what separates one group from the next.
-		Columns: []Column{
-			{Title: "feature", Width: 44, Colour: heading},
-			{Title: "proved by", Width: 0, Colour: dim},
-		},
-		List: func(context.Context, string) ([]Row, error) {
-			rows := make([]Row, 0, 32)
-			for _, feature := range features.All() {
-				for index, scenario := range feature.Scenarios {
-					title := ""
-					if index == 0 {
-						title = feature.Title
-					}
-					rows = append(rows, Row{
-						ID:    feature.Title + ": " + scenario,
-						Label: feature.Title,
-						Cells: []string{title, scenario},
-						State: StateReady,
-					})
-				}
 			}
 			return rows, nil
 		},

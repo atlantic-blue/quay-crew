@@ -87,6 +87,14 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 		return m.openTyped()
 	}
 
+	// A word this console used to open says what to type instead. Without this it would be handed
+	// to the tool, which has no such command, and `unknown command "f"` reads as the console
+	// being broken rather than as a word that moved.
+	if instead, gone := moved(typed); gone {
+		m.err = fmt.Errorf("the console has no %s view: %s", cleanToken(typed), instead)
+		return m, nil
+	}
+
 	args := strings.Fields(typed)
 	// Typing the tool's own name is what anybody does out of habit, and passing it to itself gives
 	// `unknown command "quay"`, which reads as the bar being broken rather than as a typo. The name
