@@ -8,6 +8,32 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **The console has a view of jobs.** Eleven resources were registered and none of them was the work
+  itself. Five jobs were running on this repository the day this was written and the console could
+  show none of them: it was built when a session was the unit of work, and a session is the layer
+  underneath a job rather than the job. So `:jobs` now lists them, and `j` opens it.
+
+  One line carries what an operator needs: the job, its phase, its role, its title, the session it
+  runs in, its attempts and its age. The answer and the brief are not in the row, because a listing
+  of a hundred answers is a listing nobody can read.
+
+  **Enter opens what the job did, which is its session's tasks.** The other reading was the session
+  itself, and a session is one row: a listing of one row says nothing the line above it did not. The
+  tasks are the whole account of what was asked and what came back. A job that has not reached a
+  session yet says so in its own cell, and enter names the phase it is in rather than opening an
+  empty listing under a heading that promised one.
+
+  **Backspace stops a job and asks first**, the key and the question both being the ones the sessions
+  view already uses. The reason goes on the record, because a job that went quiet and a job somebody
+  halted must never read the same.
+
+  A resource may now say what its child is scoped by, which is `DrillBy`. Every other view scopes by
+  the row's own identifier and is unchanged.
+
+  What this does not do. There is still no `:flows`, no `:roles`, no `:skills` and no `:hooks`.
+  Issue 455 asked for five views and this is one of them, kept to one so the change can be read;
+  the rest are issue 474.
+
 - **A job that names a repository ends in a pull request against it.** The acceptance run took three
   hours and produced one readable thing at the end. For three hours the record said a session was
   busy and nothing else. Nothing in the tool suggested a phase ends in a pull request: a job is
