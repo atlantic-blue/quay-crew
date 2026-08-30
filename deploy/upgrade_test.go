@@ -16,7 +16,7 @@ const makefile = "../Makefile"
 // `make upgrade` fast forwarded the checkout, reinstalled the tool and rebuilt the stack, and never
 // touched the sandbox image. So the tool and the control plane moved forward while every session
 // carried on in a container from the build before, with a `quay` inside it that was older than the
-// crew or was not in the image at all. Nothing said so.
+// system or was not in the image at all. Nothing said so.
 //
 // The list lives in one place, rebuild, so an operator has one command to type and this has one
 // place to check. Upgrade has to reach it, and rebuild has to name everything, so the next thing the
@@ -54,7 +54,7 @@ func TestTheSandboxImageRecordsWhichBuildItCameFrom(t *testing.T) {
 	}
 	dockerfile := string(contents)
 	if !strings.Contains(dockerfile, "LABEL com.quaycrew.build=$QC_VERSION") {
-		t.Errorf("the sandbox image carries no build label, so the crew cannot read one back:\n%s", dockerfile)
+		t.Errorf("the sandbox image carries no build label, so the system cannot read one back:\n%s", dockerfile)
 	}
 	// The label alone would leave the tool inside reporting a build it is not. Both come from the
 	// same argument, so they cannot disagree.
@@ -125,7 +125,7 @@ func prerequisites(t *testing.T, name string) string {
 //
 // The upgrade removes every sandbox container by name from the daemon. A container removed that way
 // takes the task in flight with it, and the operator reads "model: run exited: exit status 137, and
-// it said nothing about why" against a conversation they were watching. Draining first asks the crew
+// it said nothing about why" against a conversation they were watching. Draining first asks the system
 // to stop each session, so the row says stopped and the sandbox is closed rather than ripped out.
 //
 // The order is the whole of it: a drain after the containers are gone is a drain of nothing.
@@ -159,7 +159,7 @@ func TestDrainingRefusesTheUpgradeAndSaysHowToGoOverIt(t *testing.T) {
 	recipe := target(t, "drain")
 
 	if !strings.Contains(recipe, "quay drain") {
-		t.Fatalf("the drain target does not ask the crew to put anything down:\n%s", recipe)
+		t.Fatalf("the drain target does not ask the system to put anything down:\n%s", recipe)
 	}
 	if !strings.Contains(recipe, "FORCE") {
 		t.Errorf("a refused drain does not say how to upgrade over a task in flight:\n%s", recipe)

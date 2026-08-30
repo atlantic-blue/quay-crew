@@ -58,7 +58,7 @@ func TestAPlacedSandboxReplacesItsOwnReservation(t *testing.T) {
 	}
 }
 
-// The crew closes a sandbox by session, and the room has to go back on that road too: a machine that
+// The system closes a sandbox by session, and the room has to go back on that road too: a machine that
 // keeps counting containers it has removed admits less work every time one is stopped.
 func TestAClosedSandboxGivesItsRoomBackBySession(t *testing.T) {
 	ledger := capacity.NewLedger()
@@ -70,16 +70,16 @@ func TestAClosedSandboxGivesItsRoomBackBySession(t *testing.T) {
 	}
 }
 
-// After a restart the containers are still there and the ledger is empty. A crew that started
+// After a restart the containers are still there and the ledger is empty. A system that started
 // counting from zero would admit a whole machine's worth of work onto a full machine, which is the
 // counting failure arriving again on every restart.
-func TestSandboxesThatOutlivedTheCrewAreCounted(t *testing.T) {
+func TestSandboxesThatOutlivedTheSystemAreCounted(t *testing.T) {
 	ledger := capacity.NewLedger()
 	ledger.Seed([]string{"session-a", "session-b"}, capacity.DefaultRequest())
 	if count := ledger.Count(); count != 2 {
 		t.Fatalf("two sandboxes that survived a restart count as %d", count)
 	}
-	// And the one the crew then adopts is the same sandbox, not a third.
+	// And the one the system then adopts is the same sandbox, not a third.
 	ledger.Place("house-bills/job-one", "session-a", capacity.DefaultRequest())
 	if count := ledger.Count(); count != 2 {
 		t.Fatalf("adopting a seeded sandbox made it %d", count)
@@ -87,7 +87,7 @@ func TestSandboxesThatOutlivedTheCrewAreCounted(t *testing.T) {
 }
 
 // A controller that died between reserving and dispatching would otherwise hold that room for the
-// life of the crew. The expiry is the backstop and never the mechanism: every road out of a start
+// life of the system. The expiry is the backstop and never the mechanism: every road out of a start
 // releases explicitly.
 func TestAPromiseNobodyKeptRunsOut(t *testing.T) {
 	now := time.Now()
@@ -115,7 +115,7 @@ func TestAPlacedSandboxNeverRunsOut(t *testing.T) {
 }
 
 // The placement asks what is on the machine apart from itself. Counting its own reservation against
-// itself would refuse every job the crew had correctly admitted a moment earlier.
+// itself would refuse every job the system had correctly admitted a moment earlier.
 func TestAPlacementDoesNotCountItsOwnReservation(t *testing.T) {
 	ledger := capacity.NewLedger()
 	want := capacity.Request{Memory: 1 << 30, Processor: 100}

@@ -39,7 +39,7 @@ func TestNothingDeclaredIsNothing(t *testing.T) {
 	}
 }
 
-// Every region this crew could reach, and the shapes that are not one. A region is checked because
+// Every region this system could reach, and the shapes that are not one. A region is checked because
 // an account with no region is a target that cannot be acted on, and a typed region that is not one
 // fails at the moment somebody deploys rather than at the moment they declare it.
 func TestTheRegionsThatAreRegions(t *testing.T) {

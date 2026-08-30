@@ -83,14 +83,14 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 
 	// A dispatch that lets go answers before the model is called, so the count is waited for rather
 	// than read once: reading immediately would pass or fail on how fast the machine is.
-	sc.Step(`^the crew was asked to run (\d+) tasks?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system was asked to run (\d+) tasks?$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
 		deadline := time.Now().Add(5 * time.Second)
 		for w.runner.count() < want && time.Now().Before(deadline) {
 			time.Sleep(10 * time.Millisecond)
 		}
 		if got := w.runner.count(); got != want {
-			return fmt.Errorf("the crew was asked to run %d tasks, want %d", got, want)
+			return fmt.Errorf("the system was asked to run %d tasks, want %d", got, want)
 		}
 		return nil
 	})
@@ -118,11 +118,11 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 		if one.GetSession() == "" {
 			return fmt.Errorf("the job does not say which session did it")
 		}
-		// And that session is one the crew holds, so a person can open the conversation.
+		// And that session is one the system holds, so a person can open the conversation.
 		if _, err := worldFrom(ctx).client.GetSession(ctx, &quaycrewv1.GetSessionRequest{
 			Id: one.GetSession(),
 		}); err != nil {
-			return fmt.Errorf("the session on the job is not one the crew holds: %w", err)
+			return fmt.Errorf("the session on the job is not one the system holds: %w", err)
 		}
 		return nil
 	})
@@ -146,12 +146,12 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if one.GetSession() == "" {
-			return fmt.Errorf("the job says no session, so nothing was asked of the crew")
+			return fmt.Errorf("the job says no session, so nothing was asked of the system")
 		}
 		// The controller lets go of its task, so the row is written by the goroutine running it rather
 		// than by the call that started it. Waited for rather than read once: reading straight after
 		// the tick asks whether the goroutine has been scheduled yet, which is a question about the
-		// machine and not about the crew.
+		// machine and not about the system.
 		var counted int
 		deadline := time.Now().Add(10 * time.Second)
 		for time.Now().Before(deadline) {
@@ -200,9 +200,9 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The crew took the request and gave up on it, which is what the operator's own machine did for
+	// The system took the request and gave up on it, which is what the operator's own machine did for
 	// two minutes while eight containers were starting.
-	sc.Step(`^the crew gives up on the sandbox$`, func(ctx context.Context) error {
+	sc.Step(`^the system gives up on the sandbox$`, func(ctx context.Context) error {
 		return worldFrom(ctx).settled(ctx)
 	})
 
@@ -321,14 +321,14 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if said := session.GetDescription(); said != "" {
-			return fmt.Errorf("the crew described the conversation as %q while its task was still running", said)
+			return fmt.Errorf("the system described the conversation as %q while its task was still running", said)
 		}
 		return nil
 	})
 }
 
-// readJob reads one of the scenario's jobs back off the crew, so an assertion is about
-// what the crew holds rather than about what a call answered.
+// readJob reads one of the scenario's jobs back off the system, so an assertion is about
+// what the system holds rather than about what a call answered.
 func readJob(ctx context.Context, which int) (*quaycrewv1.Job, error) {
 	scenario := jobFrom(ctx)
 	if len(scenario.declared) <= which {
@@ -364,13 +364,13 @@ func jobTitled(ctx context.Context, title string) (*quaycrewv1.Job, error) {
 	return nil, fmt.Errorf("this scenario declared no job titled %q", title)
 }
 
-// The controller a scenario stands up beside the crew's own, so a death is one controller going away
+// The controller a scenario stands up beside the system's own, so a death is one controller going away
 // and another finding what it left. Both job over the same store, which is two control plane
 // processes over one database.
 func anotherController(ctx context.Context, name string, lease time.Duration) *controlplane.Server {
 	w := worldFrom(ctx)
 	return controlplane.NewServer(controlplane.Config{
-		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
+		Store: w.systemStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 		ControllerName: name, JobLease: lease,
@@ -379,7 +379,7 @@ func anotherController(ctx context.Context, name string, lease time.Duration) *c
 
 func initializeJobLeaseSteps(sc *godog.ScenarioContext) {
 	// A controller with a hold that runs out at once, ticked once and then never again. That is what
-	// a controller killed after its task started leaves behind: a task running in the crew, and a
+	// a controller killed after its task started leaves behind: a task running in the system, and a
 	// row nobody is renewing.
 	sc.Step(`^the controller that started it goes away after the task starts$`, func(ctx context.Context) error {
 		dying := anotherController(ctx, "controller-a", time.Millisecond)
@@ -484,7 +484,7 @@ func initializeJobRoleSteps(sc *godog.ScenarioContext) {
 		})
 
 	// The session, not the row. What decides whether the boundary is real is the conversation the
-	// crew actually built, and a row saying the name proves nothing about it.
+	// system actually built, and a row saying the name proves nothing about it.
 	sc.Step(`^the session doing that job runs as the "([^"]*)" role$`,
 		func(ctx context.Context, named string) error {
 			session, err := sessionDoingTheJob(ctx)
@@ -541,8 +541,8 @@ func initializeJobRoleSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// sessionDoingTheJob is the session the first job's task went to, read off the crew rather than off
-// the row: a row naming a session says nothing about what the crew actually built.
+// sessionDoingTheJob is the session the first job's task went to, read off the system rather than off
+// the row: a row naming a session says nothing about what the system actually built.
 func sessionDoingTheJob(ctx context.Context) (*quaycrewv1.Session, error) {
 	one, err := readJob(ctx, 0)
 	if err != nil {
@@ -561,5 +561,5 @@ func sessionDoingTheJob(ctx context.Context) (*quaycrewv1.Session, error) {
 			return session, nil
 		}
 	}
-	return nil, fmt.Errorf("the crew holds no session %s", one.GetSession())
+	return nil, fmt.Errorf("the system holds no session %s", one.GetSession())
 }

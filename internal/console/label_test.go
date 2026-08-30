@@ -25,7 +25,7 @@ func aSessionNamed(t *testing.T, client *fakeClient, label string) Model {
 	return model
 }
 
-func TestNamingASessionSendsTheNameToTheCrew(t *testing.T) {
+func TestNamingASessionSendsTheNameToTheSystem(t *testing.T) {
 	client := &fakeClient{}
 	model, _ := update(t, aSessionNamed(t, client, ""), runes("L"))
 

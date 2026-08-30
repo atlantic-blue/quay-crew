@@ -84,7 +84,7 @@ func TestASessionCanMakeACommitThatVerifies(t *testing.T) {
 	container := sandbox.ContainerName(dispatched.GetId())
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", container).Run() })
 
-	// Everything from here runs through docker exec, because asking the crew whether the sandbox can
+	// Everything from here runs through docker exec, because asking the system whether the sandbox can
 	// sign is not evidence that it can. The signature is checked against an allowed signers file
 	// holding the public half of the key the workspace mounted, which is how a reader who was not
 	// there confirms the commit came from that key and not from any key.
@@ -127,7 +127,7 @@ func aSigningKey(t *testing.T) (private, public string) {
 	return string(privateBytes), strings.TrimSpace(string(publicBytes))
 }
 
-// inTheSandbox runs a script in the container the crew made and returns what it printed. A failure
+// inTheSandbox runs a script in the container the system made and returns what it printed. A failure
 // carries the container's own stderr, because a shell script that dies halfway says why and the exit
 // status does not.
 func inTheSandbox(ctx context.Context, t *testing.T, container, script string, env ...string) string {

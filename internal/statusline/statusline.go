@@ -37,7 +37,7 @@ type Window struct {
 
 // Line reads one payload and returns the line to print. It never fails: a status line has one line
 // to say anything in, and a command that exits with an error says nothing at all, which reads as the
-// crew being broken rather than as the runtime being older than this build.
+// system being broken rather than as the runtime being older than this build.
 func Line(payload []byte) string {
 	var said Input
 	if err := json.Unmarshal(payload, &said); err != nil {

@@ -69,9 +69,9 @@ func TestARoleIsReadFromItsManifestAndItsBrief(t *testing.T) {
 	}
 }
 
-// The boundary is the whole point of a role, so a role that receives something the crew does not
+// The boundary is the whole point of a role, so a role that receives something the system does not
 // hand out has to be refused at import. Accepted, it would read as a boundary and hold nothing.
-func TestAMaterialTheCrewDoesNotHandOutIsRefusedByName(t *testing.T) {
+func TestAMaterialTheSystemDoesNotHandOutIsRefusedByName(t *testing.T) {
 	_, err := FromFiles(replace(good(), ManifestFile, manifestOf(
 		"name: test-writer",
 		"version: 1",
@@ -82,7 +82,7 @@ func TestAMaterialTheCrewDoesNotHandOutIsRefusedByName(t *testing.T) {
 		"  - the whole repository",
 	)))
 	if err == nil {
-		t.Fatal("a role receiving material the crew does not hand out was accepted")
+		t.Fatal("a role receiving material the system does not hand out was accepted")
 	}
 	for _, want := range []string{"the whole repository", "job", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {
@@ -125,7 +125,7 @@ func TestARoleThatDeclaresNoBoundaryIsRefused(t *testing.T) {
 	}
 }
 
-// What a role costs is part of what it is, so the crew will not guess it.
+// What a role costs is part of what it is, so the system will not guess it.
 func TestARoleWithNoModelIsRefusedAndSaysWhatToWrite(t *testing.T) {
 	_, err := FromFiles(replace(good(), ManifestFile, manifestOf(
 		"name: test-writer",
@@ -167,9 +167,9 @@ func TestTheManifestAndTheBriefAreBothRequired(t *testing.T) {
 	}
 }
 
-// A field the crew does not know is refused by name rather than ignored. Ignored, it looks
+// A field the system does not know is refused by name rather than ignored. Ignored, it looks
 // configured and does nothing, which sends whoever wrote it looking somewhere else entirely.
-func TestAFieldTheCrewDoesNotKnowIsRefused(t *testing.T) {
+func TestAFieldTheSystemDoesNotKnowIsRefused(t *testing.T) {
 	_, err := FromFiles(replace(good(), ManifestFile, manifestOf(
 		"name: test-writer",
 		"version: 1",
@@ -180,7 +180,7 @@ func TestAFieldTheCrewDoesNotKnowIsRefused(t *testing.T) {
 		"  - job",
 	)))
 	if err == nil {
-		t.Fatal("a manifest carrying a field the crew does not know was accepted")
+		t.Fatal("a manifest carrying a field the system does not know was accepted")
 	}
 	if !strings.Contains(err.Error(), "tools") {
 		t.Errorf("the refusal does not name the field: %v", err)
@@ -362,13 +362,13 @@ func TestARoleThatDeclaresNoVerbsMayCallNothing(t *testing.T) {
 	}
 }
 
-// A word the crew does not know is a boundary that quietly means nothing, so it is refused while
+// A word the system does not know is a boundary that quietly means nothing, so it is refused while
 // somebody is looking at the file.
-func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
+func TestAVerbTheSystemDoesNotKnowIsRefusedByName(t *testing.T) {
 	_, err := FromFiles(withVerbs(VerbJobCreate, "workspace.create"))
 
 	if err == nil {
-		t.Fatal("a verb the crew does not know was accepted")
+		t.Fatal("a verb the system does not know was accepted")
 	}
 	if !strings.Contains(err.Error(), "workspace.create") {
 		t.Errorf("the refusal says %q, want it to name the verb", err)
@@ -492,7 +492,7 @@ func TestOneRoleThatWillNotLoadFailsTheWholeSet(t *testing.T) {
 	)))
 
 	if _, err := All(root); err == nil {
-		t.Fatal("a set holding a role the crew would refuse was accepted")
+		t.Fatal("a set holding a role the system would refuse was accepted")
 	} else if !strings.Contains(err.Error(), "the whole repository") {
 		t.Errorf("the refusal does not name what was wrong: %v", err)
 	}
@@ -504,10 +504,10 @@ func TestADirectoryThatIsNotThereIsRefused(t *testing.T) {
 	}
 }
 
-// Every word the crew retired is refused at import, by name, with what to write instead.
+// Every word the system retired is refused at import, by name, with what to write instead.
 //
 // The guard is over the table rather than a case per word, so the next rename is covered the moment
-// its entry is added. A word that is merely unknown says only that the crew does not have it, which
+// its entry is added. A word that is merely unknown says only that the system does not have it, which
 // sends the author looking; a word quietly accepted is worse than both, because the boundary then
 // means nothing and reads exactly like one that holds.
 func TestEveryRetiredWordIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
@@ -538,7 +538,7 @@ func TestEveryRetiredWordIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
 		}
 		// It names the word, what to write instead, and that the word was renamed. The last part is
 		// what makes this a refusal rather than the allow list saying no: "work is not material the
-		// crew hands out, it is one of job, context, skills" contains both words already, and it sends
+		// system hands out, it is one of job, context, skills" contains both words already, and it sends
 		// the author to guess which of the three their manifest meant.
 		for _, want := range []string{was, becomes, "is called"} {
 			if !strings.Contains(err.Error(), want) {
@@ -548,29 +548,29 @@ func TestEveryRetiredWordIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
 	}
 }
 
-// Nothing the crew retired is a word it still takes, which is how a rename reintroduces the old
+// Nothing the system retired is a word it still takes, which is how a rename reintroduces the old
 // spelling: the entry is added to the retired table and the allow list is never cleaned out, so the
 // word is refused and accepted by two rules that disagree.
-func TestNoRetiredWordIsStillAWordTheCrewTakes(t *testing.T) {
+func TestNoRetiredWordIsStillAWordTheSystemTakes(t *testing.T) {
 	for was := range Retired {
 		if known(was) {
-			t.Errorf("%q is retired and still material the crew hands out", was)
+			t.Errorf("%q is retired and still material the system hands out", was)
 		}
 		if knownVerb(was) {
-			t.Errorf("%q is retired and still a verb the crew grants", was)
+			t.Errorf("%q is retired and still a verb the system grants", was)
 		}
 	}
-	// And every replacement is a word the crew does take, so the advice can be acted on.
+	// And every replacement is a word the system does take, so the advice can be acted on.
 	for was, becomes := range Retired {
 		if !known(becomes) && !knownVerb(becomes) {
-			t.Errorf("%q is retired in favour of %q, which the crew does not take either", was, becomes)
+			t.Errorf("%q is retired in favour of %q, which the system does not take either", was, becomes)
 		}
 	}
 }
 
 // The key a manifest used to carry is refused by name, with the key to write instead.
 //
-// A rename of a key is quieter than a rename of a word. yaml's own answer to a key the crew does not
+// A rename of a key is quieter than a rename of a word. yaml's own answer to a key the system does not
 // know names the struct it was decoding into, which is not a sentence about the manifest, and a key
 // merely ignored would leave every role that carries it granting nothing while reading exactly like
 // one that holds.
@@ -605,7 +605,7 @@ func TestEveryRetiredKeyIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
 	}
 }
 
-// Nothing the crew retired is a key it still takes, and every replacement is one it does, so a
+// Nothing the system retired is a key it still takes, and every replacement is one it does, so a
 // rename cannot leave the manifest answering to both spellings or to neither.
 func TestNoRetiredKeyIsStillAKeyTheManifestTakes(t *testing.T) {
 	for was, becomes := range RetiredKey {
@@ -619,7 +619,7 @@ func TestNoRetiredKeyIsStillAKeyTheManifestTakes(t *testing.T) {
 }
 
 // manifestTakes says whether a manifest has a key by this name. It reads the struct rather than a
-// list of its own, so the two cannot disagree about what the crew accepts.
+// list of its own, so the two cannot disagree about what the system accepts.
 func manifestTakes(key string) bool {
 	for _, field := range reflect.VisibleFields(reflect.TypeOf(manifest{})) {
 		if field.Tag.Get("yaml") == key {

@@ -1,21 +1,21 @@
-Feature: The crew reviews a pull request
+Feature: The system reviews a pull request
 
   Nothing reviewed a pull request. Every review of the acceptance run was done by the operator by
-  hand, and a crew that opens pull requests all day and reads none of them leaves the reading to one
-  person. The graph the crew ships reads one open pull request and makes three passes over it, in
+  hand, and a system that opens pull requests all day and reads none of them leaves the reading to one
+  person. The graph the system ships reads one open pull request and makes three passes over it, in
   the order a decision needs them: security first, because a security finding blocks the merge
   whatever else is true, then what the change does to the product and what it breaks, then what is
   missing.
 
   Posting a review is sending a message to a person, so the run stops and shows the operator the
   whole draft. Only a yes posts anything. An answer that is not yes ends the run, and the pull
-  request never hears from the crew.
+  request never hears from the system.
 
   Background:
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew holds the flow graph it ships as "pull-request-review"
+    And the system holds the flow graph it ships as "pull-request-review"
     And the model does the work every step of that graph expects
 
   Scenario: A review makes its three passes and stops before it posts anything

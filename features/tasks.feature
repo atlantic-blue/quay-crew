@@ -2,7 +2,7 @@ Feature: A session's history can be read back
 
   A task is written to the store when it starts, so an operator can see what a session was asked
   while it is still working on it, and what it came to is written into that same record when it
-  lands. What a crew was asked and what it answered survives the container the conversation ran in,
+  lands. What a system was asked and what it answered survives the container the conversation ran in,
   whether or not any broker is running. The event log is an export, not the road history travels by.
 
   Background:
@@ -26,14 +26,14 @@ Feature: A session's history can be read back
     Given the model takes longer over a task than anybody will wait
     And a task dispatched with the caller waiting for it
     And a task is under way
-    Then the crew's one session is reported as running
-    And the crew's one session was asked "read the repository" and is still running
+    Then the system's one session is reported as running
+    And the system's one session was asked "read the repository" and is still running
 
   Scenario: A task nobody is waiting for is visible while it runs too
     Given the model takes longer over a task than anybody will wait
     And a task dispatched without waiting for it
     And a task is under way
-    Then the crew's one session was asked "read the repository" and is still running
+    Then the system's one session was asked "read the repository" and is still running
 
   # One task, not two. The landing closes the record the start opened, so the operator reads the
   # prompt once with the answer under it.
@@ -43,9 +43,9 @@ Feature: A session's history can be read back
     And a task is under way
     When the model finishes the task
     And the operator's dispatch comes back
-    Then the crew's one session has 1 task
+    Then the system's one session has 1 task
     And the session carries what the model said
-    And the crew's one session is reported as idle
+    And the system's one session is reported as idle
 
   Scenario: A task that failed is in the history, saying so
     Given the next task will fail
@@ -57,10 +57,10 @@ Feature: A session's history can be read back
     And the operator dispatches "a different subject" to a new session
     Then each session has 1 task
 
-  # The whole point of writing history synchronously: a crew with no broker at all keeps every task.
+  # The whole point of writing history synchronously: a system with no broker at all keeps every task.
   # It used to lose them, silently, whenever QC_KAFKA_SEEDS was unset or the broker was down.
-  Scenario: A crew with no event log keeps the whole history
-    Given the crew has no event log configured
+  Scenario: A system with no event log keeps the whole history
+    Given the system has no event log configured
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
     And the session has 1 task

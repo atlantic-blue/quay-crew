@@ -5,28 +5,28 @@ import (
 	"testing"
 )
 
-// TestEverySandboxJoinsTheNetworkThatReachesTheCrew.
+// TestEverySandboxJoinsTheNetworkThatReachesTheSystem.
 //
-// A session running a job is handed the crew's address and a credential minted for that job.
+// A session running a job is handed the system's address and a credential minted for that job.
 // Both are worthless in a container with no route to the address, which is what an ordinary
 // session had: every call died resolving the name, so the verb boundary refused nothing and a
 // permission system that has never refused anything cannot be told from one that is not wired up.
 //
 // The network is not the permission. It decides what a session can address, and the credential
 // decides what it may do there.
-func TestEverySandboxJoinsTheNetworkThatReachesTheCrew(t *testing.T) {
+func TestEverySandboxJoinsTheNetworkThatReachesTheSystem(t *testing.T) {
 	provider := DockerProvider{Image: "img", SessionNetwork: "quaycrew_sessions"}
 
 	got := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
 	if !strings.Contains(got, "--network quaycrew_sessions") {
-		t.Fatalf("a session joins no network that reaches the crew:\n%s", got)
+		t.Fatalf("a session joins no network that reaches the system:\n%s", got)
 	}
 }
 
-// TestASessionIsKeptOffTheCrewsOwnNetwork. That network carries Postgres, Redpanda and the
+// TestASessionIsKeptOffTheSystemsOwnNetwork. That network carries Postgres, Redpanda and the
 // observability stack, and a session runs model output, so the session network is a second network
 // with the control plane on it rather than a wider grant of this one.
-func TestASessionIsKeptOffTheCrewsOwnNetwork(t *testing.T) {
+func TestASessionIsKeptOffTheSystemsOwnNetwork(t *testing.T) {
 	provider := DockerProvider{
 		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",
 		DriverMounts: []string{"/hub:/hub:ro"},
@@ -34,16 +34,16 @@ func TestASessionIsKeptOffTheCrewsOwnNetwork(t *testing.T) {
 
 	got := strings.Join(provider.runArgs("quaycrew-s2", Config{ID: "s2"}, nil), " ")
 	if strings.Contains(got, "quaycrew_default") {
-		t.Fatalf("a session joins the crew's own network, where the store and the broker are:\n%s", got)
+		t.Fatalf("a session joins the system's own network, where the store and the broker are:\n%s", got)
 	}
 	if strings.Contains(got, "/hub") {
 		t.Fatalf("a session gets the driver's host paths:\n%s", got)
 	}
 }
 
-// TestTheDriverJoinsTheCrewsOwnNetworkWhenTheOperatorNamedOne. The driver is the deliberate widening,
+// TestTheDriverJoinsTheSystemsOwnNetworkWhenTheOperatorNamedOne. The driver is the deliberate widening,
 // and it is the operator who asks for it by naming the network.
-func TestTheDriverJoinsTheCrewsOwnNetworkWhenTheOperatorNamedOne(t *testing.T) {
+func TestTheDriverJoinsTheSystemsOwnNetworkWhenTheOperatorNamedOne(t *testing.T) {
 	provider := DockerProvider{
 		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",
 		DriverMounts: []string{"/hub:/hub:ro"},
@@ -58,14 +58,14 @@ func TestTheDriverJoinsTheCrewsOwnNetworkWhenTheOperatorNamedOne(t *testing.T) {
 	}
 }
 
-// TestTheDriverFallsBackToTheSessionNetwork, so a crew that named no wider network still has a driver
+// TestTheDriverFallsBackToTheSessionNetwork, so a system that named no wider network still has a driver
 // that can drive it. Reaching the control plane is the whole of what driving needs.
 func TestTheDriverFallsBackToTheSessionNetwork(t *testing.T) {
 	provider := DockerProvider{Image: "img", SessionNetwork: "quaycrew_sessions"}
 
 	got := strings.Join(provider.runArgs("quaycrew-s1", Config{ID: "s1", Driver: true}, nil), " ")
 	if !strings.Contains(got, "--network quaycrew_sessions") {
-		t.Fatalf("the driver joins nothing, so it cannot reach the crew it exists to drive:\n%s", got)
+		t.Fatalf("the driver joins nothing, so it cannot reach the system it exists to drive:\n%s", got)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestASandboxJoinsExactlyOneNetwork(t *testing.T) {
 	}
 }
 
-// TestASandboxJoinsNothingWithNoNetworkConfigured: a crew run outside the compose stack may have no
+// TestASandboxJoinsNothingWithNoNetworkConfigured: a system run outside the compose stack may have no
 // network to put a session on, and it says so by joining none rather than by inventing a name.
 func TestASandboxJoinsNothingWithNoNetworkConfigured(t *testing.T) {
 	provider := DockerProvider{Image: "img"}
@@ -125,7 +125,7 @@ func TestTheSandboxStillCarriesItsEnvironmentAndMounts(t *testing.T) {
 // workspace has mounted one. A mount is a create time decision, so the alternative is that the first
 // workspace to mount a secret needs a fresh container before it can have the directory at all.
 //
-// It names the sandbox user. Without that the directory belongs to root, and the crew writes into it
+// It names the sandbox user. Without that the directory belongs to root, and the system writes into it
 // as the sandbox's own user, so every write is refused.
 func TestEverySandboxGetsSomewhereToPutAMountedSecret(t *testing.T) {
 	got := strings.Join(DockerProvider{Image: "img"}.runArgs("quaycrew-s1", Config{ID: "s1"}, nil), " ")

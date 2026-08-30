@@ -30,10 +30,10 @@ func aSandbox() fstest.MapFS {
 	}}
 }
 
-// theMachineTheCrewReads is the machine on 27 August 2026, as the incident recorded it.
-type theMachineTheCrewReads struct{}
+// theMachineTheSystemReads is the machine on 27 August 2026, as the incident recorded it.
+type theMachineTheSystemReads struct{}
 
-func (theMachineTheCrewReads) Sample(context.Context) (headroom.Sample, error) {
+func (theMachineTheSystemReads) Sample(context.Context) (headroom.Sample, error) {
 	return headroom.Sample{
 		Used:  headroom.Measured(3628 * mebibyte),
 		Limit: headroom.Measured(7837 * mebibyte),
@@ -52,8 +52,8 @@ func (theMachineTheCrewReads) Sample(context.Context) (headroom.Sample, error) {
 	}, nil
 }
 
-// aCrewThatReadsTheMachine is a crew with a machine behind it, already sampled.
-func aCrewThatReadsTheMachine(t *testing.T, source headroom.Source) quaycrewv1.ControlPlaneServiceClient {
+// aSystemThatReadsTheMachine is a system with a machine behind it, already sampled.
+func aSystemThatReadsTheMachine(t *testing.T, source headroom.Source) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
@@ -64,8 +64,8 @@ func aCrewThatReadsTheMachine(t *testing.T, source headroom.Source) quaycrewv1.C
 	return testClientFor(t, server)
 }
 
-// A session inside a sandbox reads the machine it stands on, and asks the crew nothing. That is the
-// question a session about to run a gate has, and the answer talks to no crew at all.
+// A session inside a sandbox reads the machine it stands on, and asks the system nothing. That is the
+// question a session about to run a gate has, and the answer talks to no system at all.
 func TestInsideASandboxTheCommandReadsTheMachineItStandsOn(t *testing.T) {
 	out := &bytes.Buffer{}
 	if err := roomOf(context.Background(), nil, aSandbox(), out); err != nil {
@@ -78,14 +78,14 @@ func TestInsideASandboxTheCommandReadsTheMachineItStandsOn(t *testing.T) {
 		}
 	}
 	if strings.Contains(said, "Docker Desktop") {
-		t.Fatal("the session was told about the crew's machine, and it asked about its own")
+		t.Fatal("the session was told about the system's machine, and it asked about its own")
 	}
 }
 
 // Off a machine that keeps no accounting, which is every Mac, the command used to fail outright. So
 // the operator most likely to need the figure was the one who could not have it.
-func TestOffAMachineWithNoAccountingTheCrewAnswersInstead(t *testing.T) {
-	client := aCrewThatReadsTheMachine(t, theMachineTheCrewReads{})
+func TestOffAMachineWithNoAccountingTheSystemAnswersInstead(t *testing.T) {
+	client := aSystemThatReadsTheMachine(t, theMachineTheSystemReads{})
 	out := &bytes.Buffer{}
 	if err := roomOf(context.Background(), client, aMachineWithNoAccounting(), out); err != nil {
 		t.Fatalf("room: %v", err)
@@ -107,10 +107,10 @@ func TestOffAMachineWithNoAccountingTheCrewAnswersInstead(t *testing.T) {
 	}
 }
 
-// Both roads shut. The refusal names both, because an operator told only about the crew goes looking
-// for a crew fault when the answer is which machine they are standing on.
-func TestWithNoAccountingAndNoCrewTheRefusalNamesBoth(t *testing.T) {
-	client := clientOfACrewThatIsNotUp(t)
+// Both roads shut. The refusal names both, because an operator told only about the system goes looking
+// for a system fault when the answer is which machine they are standing on.
+func TestWithNoAccountingAndNoSystemTheRefusalNamesBoth(t *testing.T) {
+	client := clientOfASystemThatIsNotUp(t)
 	out := &bytes.Buffer{}
 	err := roomOf(context.Background(), client, aMachineWithNoAccounting(), out)
 	if err == nil {
@@ -120,15 +120,15 @@ func TestWithNoAccountingAndNoCrewTheRefusalNamesBoth(t *testing.T) {
 	if !strings.Contains(said, "linux sandbox") {
 		t.Fatalf("the refusal does not say which machine this is: %q", said)
 	}
-	if !strings.Contains(said, "the crew could not be asked either") {
-		t.Fatalf("the refusal does not say the crew was asked too: %q", said)
+	if !strings.Contains(said, "the system could not be asked either") {
+		t.Fatalf("the refusal does not say the system was asked too: %q", said)
 	}
 }
 
-// Rule five, at the surface an operator reads. A crew that measured nothing says the word, and never
+// Rule five, at the surface an operator reads. A system that measured nothing says the word, and never
 // a zero: an operator reads zero as a machine with room on it.
-func TestACrewThatMeasuredNothingSaysUnknownRatherThanZero(t *testing.T) {
-	client := aCrewThatReadsTheMachine(t, nil)
+func TestASystemThatMeasuredNothingSaysUnknownRatherThanZero(t *testing.T) {
+	client := aSystemThatReadsTheMachine(t, nil)
 	out := &bytes.Buffer{}
 	if err := roomOf(context.Background(), client, aMachineWithNoAccounting(), out); err != nil {
 		t.Fatalf("room: %v", err)

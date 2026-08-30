@@ -126,13 +126,13 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Making something is not a thing any one view owns, so it is not an action on a row. Vim
 		// opens a new line with o, which is the closest thing it has to making one.
 		if m.client == nil {
-			m.err = fmt.Errorf("this console cannot make anything: it was opened without a crew")
+			m.err = fmt.Errorf("this console cannot make anything: it was opened without a system")
 			return m, nil
 		}
 		m.mode, m.making, m.err = modeWizard, wizard{}, nil
 		return m, nil
 	case "P":
-		// A fresh conversation in place of the one beside the console. Opening the crew comes back to
+		// A fresh conversation in place of the one beside the console. Opening the system comes back to
 		// the one you were in, which is what you want almost always and not quite always. Beside `p`,
 		// which shows and hides that same conversation, so the pair reads as one subject.
 		return m.startFreshConversation()
@@ -614,7 +614,7 @@ func (m Model) updateChooseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// chosenCmd runs what was picked, off the keyboard, so a slow crew does not hold the console still.
+// chosenCmd runs what was picked, off the keyboard, so a slow system does not hold the console still.
 // The same shape as runCmd, because a pick is a run that happens to carry an answer.
 func chosenCmd(action Action, row Row, chosen string) tea.Cmd {
 	return func() tea.Msg {

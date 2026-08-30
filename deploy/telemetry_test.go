@@ -82,7 +82,7 @@ func composeServices(t *testing.T) map[string]bool {
 // behind one.
 //
 // Grafana, Loki, Tempo and Prometheus sat behind an "observability" profile and the broker behind an
-// "export" one, so `make up` brought up a crew you could not see and an export nobody received. Each
+// "export" one, so `make up` brought up a system you could not see and an export nobody received. Each
 // was a deliberate decision to keep a laptop light, and each cost more than it saved: the operator
 // had to know a second command existed, and a signal nobody starts is a signal nobody has.
 //
@@ -297,7 +297,7 @@ func TestPrometheusScrapesWhereTheCollectorPublishes(t *testing.T) {
 	collector := readYAML[collectorConfig](t, "otel-collector.yaml")
 	exporter, defined := collector.Exporters["prometheus"]
 	if !defined {
-		t.Fatal("the collector defines no prometheus exporter, so nothing republishes the crew's metrics for scraping")
+		t.Fatal("the collector defines no prometheus exporter, so nothing republishes the system's metrics for scraping")
 	}
 	published := portOf(exporter.Endpoint)
 	if published == "" {
@@ -314,7 +314,7 @@ func TestPrometheusScrapesWhereTheCollectorPublishes(t *testing.T) {
 			}
 		}
 	}
-	t.Errorf("nothing scrapes otel-collector on port %s, which is where the collector publishes the crew's metrics", published)
+	t.Errorf("nothing scrapes otel-collector on port %s, which is where the collector publishes the system's metrics", published)
 }
 
 // TestGrafanaIsProvisionedWithTheStacksOwnStores catches the state Grafana was in: four containers

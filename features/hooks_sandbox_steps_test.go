@@ -103,7 +103,7 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 				return fmt.Errorf("the settings file is not valid json: %w", err)
 			}
 			if document.StatusLine.Type != "command" {
-				return fmt.Errorf("the crew asks for a status line of type %q, and the runtime only runs a command",
+				return fmt.Errorf("the system asks for a status line of type %q, and the runtime only runs a command",
 					document.StatusLine.Type)
 			}
 			if words := strings.Fields(document.StatusLine.Command); len(words) < 2 || words[0] != "quay" {
@@ -113,7 +113,7 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 		})
 }
 
-// renderedSettings is the settings file the crew wrote for this session's workspace.
+// renderedSettings is the settings file the system wrote for this session's workspace.
 func renderedSettings(ctx context.Context) ([]byte, error) {
 	w := worldFrom(ctx)
 	at := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, sandbox.HooksDir, hook.SettingsFile)

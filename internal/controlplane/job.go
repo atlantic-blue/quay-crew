@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// CreateJob declares a job and answers with the record the crew kept.
+// CreateJob declares a job and answers with the record the system kept.
 //
 // Every rule is checked here, at the moment of the write, while the caller is looking. A refusal
 // that arrives hours later, inside a run, has nothing to point back at.
@@ -66,11 +66,11 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 // jobLeftOut is every skill the session running this job will be born without, because the workspace
 // has not set a secret that skill needs.
 //
-// The crew already knows this at the moment of the write, and until now it said so in one listing
+// The system already knows this at the moment of the write, and until now it said so in one listing
 // nobody is required to read. A workspace with no credential accepts a whole tree of jobs, every
 // session in it dies on its first clone, and the budget is spent before anything says why.
 //
-// It is an answer rather than a refusal, because the crew cannot know which skill a brief will reach
+// It is an answer rather than a refusal, because the system cannot know which skill a brief will reach
 // for: a job that reads an electricity bill is not wrong to run in a workspace with no forge token,
 // and refusing it would make one unset secret enough to stop every job in the workspace. That is the
 // same trade withoutUnusable already made for the session itself.
@@ -98,7 +98,7 @@ func (s *Server) jobLeftOut(ctx context.Context, declared *job.Job) []*quaycrewv
 // lets a flow run declare its step in the same transaction as the movement that asked for it.
 //
 // `under` names the job this one hangs under, and empty means the parent comes from the
-// credential the caller presented. Only the crew itself passes one, and only ever an identifier it
+// credential the caller presented. Only the system itself passes one, and only ever an identifier it
 // read off a row of its own: a caller that could name its own parent could name none and start again
 // at the top, which is why a parent in a request is refused rather than ignored.
 func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
@@ -137,7 +137,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
 	// is a body of work and the repository is where that body of work goes: the acceptance run had a
-	// repository the crew held no record of, so every job had to be told the address again and a
+	// repository the system held no record of, so every job had to be told the address again and a
 	// session told to push had nowhere to push to.
 	//
 	// A job that named its own keeps it. The project's is the default, not a ceiling.
@@ -186,20 +186,20 @@ func (s *Server) pinRole(ctx context.Context, declared *job.Job, named string) e
 	return nil
 }
 
-// checkAfter refuses an ordering that could never come due: job that waits for something the crew
+// checkAfter refuses an ordering that could never come due: job that waits for something the system
 // does not hold, or a loop of jobs waiting on one another.
 func (s *Server) checkAfter(ctx context.Context, declared *job.Job) error {
 	for _, id := range declared.After {
 		if _, err := s.store.GetJob(ctx, id); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return status.Errorf(codes.InvalidArgument,
-					"this job waits for %s, which the crew does not hold: read the identifier off quay job list, "+
+					"this job waits for %s, which the system does not hold: read the identifier off quay job list, "+
 						"or declare that job first", id)
 			}
 			return storeError(err, "job")
 		}
 	}
-	// A caller cannot reach this today, because the crew assigns every identifier and what a
+	// A caller cannot reach this today, because the system assigns every identifier and what a
 	// job waits for must already exist. It is the guard for the first thing that rewrites the
 	// ordering, and a loop would otherwise sit pending forever with nothing saying why.
 	dependsOn := func(id string) []string {
@@ -226,14 +226,14 @@ func (s *Server) GetJob(ctx context.Context, req *quaycrewv1.GetJobRequest) (*qu
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the crew holds no job %s: quay job list says what there is", req.GetId())
+				"the system holds no job %s: quay job list says what there is", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}
 	return &quaycrewv1.GetJobResponse{Job: asJob(found)}, nil
 }
 
-// ListJob says what the crew holds, newest first and without answers.
+// ListJob says what the system holds, newest first and without answers.
 func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) (*quaycrewv1.ListJobsResponse, error) {
 	if phase := req.GetPhase(); phase != "" && !job.KnownPhase(phase) {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -270,7 +270,7 @@ func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the crew holds no job %s: quay job list says what there is", req.GetId())
+				"the system holds no job %s: quay job list says what there is", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}
@@ -294,7 +294,7 @@ func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*
 // jobEvent builds one record of what happened, redacted.
 //
 // The detail can carry whatever a caller typed, and everything recorded here is persisted, so it
-// goes through the same redactor a task's reply does. What the crew can know is every value the
+// goes through the same redactor a task's reply does. What the system can know is every value the
 // workspace keeps sealed.
 func (s *Server) jobEvent(ctx context.Context, of *job.Job, kind, detail string) *job.Event {
 	return &job.Event{
@@ -333,34 +333,34 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 	return on
 }
 
-// RunJobController makes reality match the job the crew holds, until ctx is done. It blocks, so
+// RunJobController makes reality match the job the system holds, until ctx is done. It blocks, so
 // the caller runs it in a goroutine and owns its lifetime.
 //
 // Declared job is a row rather than a call somebody is holding, which is what makes it survive a
-// restart: this reads the rows on the way up, so a crew restarted onto job declared while it was
+// restart: this reads the rows on the way up, so a system restarted onto job declared while it was
 // down starts that job now rather than losing it.
 func (s *Server) RunJobController(ctx context.Context) {
 	s.jobController.Run(ctx)
 }
 
-// TickJob moves the job the crew holds on by one step. Exported so a test and a scenario drive one
+// TickJob moves the job the system holds on by one step. Exported so a test and a scenario drive one
 // tick rather than waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (s *Server) TickJob(ctx context.Context) {
 	s.jobController.Tick(ctx)
 }
 
-// RedactFor removes anything the workspace keeps sealed from a line the crew is about to write down.
+// RedactFor removes anything the workspace keeps sealed from a line the system is about to write down.
 // What a model says can carry a value somebody pasted into a conversation, and everything recorded
 // here is persisted.
 func (s *Server) RedactFor(ctx context.Context, workspace, text string) string {
 	return model.Redact(text, s.sealedForWorkspace(ctx, workspace))
 }
 
-// JobLease is how long a controller holds a job, from the crew's configuration.
+// JobLease is how long a controller holds a job, from the system's configuration.
 //
-// The default is derived from what a tick costs rather than chosen, so a crew that says nothing gets
+// The default is derived from what a tick costs rather than chosen, so a system that says nothing gets
 // a measured number. A value that is not a duration is refused by falling back to that default and
-// saying so, because a crew that will not start over a misspelled interval is worse than a crew
+// saying so, because a system that will not start over a misspelled interval is worse than a system
 // running the number it was already running.
 func JobLease(configured string, logger *slog.Logger) time.Duration {
 	value := strings.TrimSpace(configured)
@@ -378,10 +378,10 @@ func JobLease(configured string, logger *slog.Logger) time.Duration {
 	return lease
 }
 
-// ControllerName is what this crew writes on the leases its controller takes.
+// ControllerName is what this system writes on the leases its controller takes.
 //
 // The host name, because an investigator reading a released record wants to know which machine
-// stopped. A crew that cannot say answers with nothing, and the controller mints itself a name.
+// stopped. A system that cannot say answers with nothing, and the controller mints itself a name.
 func ControllerName(hostname func() (string, error)) string {
 	name, err := hostname()
 	if err != nil || strings.TrimSpace(name) == "" {
@@ -419,7 +419,7 @@ func (s *Server) parentOf(ctx context.Context, declared *job.Job) *job.Job {
 }
 
 func (s *Server) underTheCaller(ctx context.Context, under string, declared *job.Job) error {
-	// The crew declaring job for something it is already running, which today is one thing: a step
+	// The system declaring job for something it is already running, which today is one thing: a step
 	// of a flow run. The ceiling was checked when the run's own job was declared, against the
 	// credential of whoever started it, so a step is not a second chance to cross it. What bounds the
 	// steps themselves is the graph: it is a finite set of nodes with a transition cap, and a run

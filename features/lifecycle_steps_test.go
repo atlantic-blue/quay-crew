@@ -17,7 +17,7 @@ import (
 //
 // The two times are set in seconds and then genuinely waited out, rather than a clock being moved
 // under the code. A second is a real second and it costs the suite one, which buys a scenario that
-// exercises the same comparison the crew makes in production instead of one that exercises a hook
+// exercises the same comparison the system makes in production instead of one that exercises a hook
 // written for the test.
 func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the workspace reclaims a session after (\d+) seconds?$`,
@@ -62,7 +62,7 @@ func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew still holds its container$`, func(ctx context.Context) error {
+	sc.Step(`^the system still holds its container$`, func(ctx context.Context) error {
 		open, err := containerIsOpen(ctx)
 		if err != nil {
 			return err
@@ -203,9 +203,9 @@ func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew says there was nothing to stop$`, func(ctx context.Context) error {
+	sc.Step(`^the system says there was nothing to stop$`, func(ctx context.Context) error {
 		if worldFrom(ctx).lastStop.GetStopped() {
-			return fmt.Errorf("the crew says it stopped a task, and nothing was running")
+			return fmt.Errorf("the system says it stopped a task, and nothing was running")
 		}
 		return nil
 	})
@@ -220,7 +220,7 @@ func initializeLifecycleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Read off the crew rather than off what the scenario declared, because what is being specified
+	// Read off the system rather than off what the scenario declared, because what is being specified
 	// is where the controller moved the job to after the task was stopped.
 	sc.Step(`^the job reads stopped, saying "([^"]*)"$`, func(ctx context.Context, reason string) error {
 		one, err := readJob(ctx, 0)
@@ -282,7 +282,7 @@ func timeIsUnset(ctx context.Context, name string, read func(*quaycrewv1.Workspa
 	return nil
 }
 
-// waitOut waits the workspace's own number out, with a small margin so the comparison the crew makes
+// waitOut waits the workspace's own number out, with a small margin so the comparison the system makes
 // is genuinely past rather than exactly on it.
 func waitOut(ctx context.Context, read func(*quaycrewv1.WorkspaceLimits) int32) error {
 	w := worldFrom(ctx)
@@ -300,7 +300,7 @@ func waitOut(ctx context.Context, read func(*quaycrewv1.WorkspaceLimits) int32) 
 	return nil
 }
 
-// containerIsOpen says whether the crew still holds a sandbox for the session the scenario is about.
+// containerIsOpen says whether the system still holds a sandbox for the session the scenario is about.
 func containerIsOpen(ctx context.Context) (bool, error) {
 	w := worldFrom(ctx)
 	current, err := w.lastTask()

@@ -43,11 +43,11 @@ func SessionCells(one *quaycrewv1.Session, workspaceName, projectName string) []
 	}
 }
 
-// ContextLabel is how full the model's context window is: a share where the crew knows how big the
+// ContextLabel is how full the model's context window is: a share where the system knows how big the
 // window is, and the count on its own where nothing has told it yet.
 //
 // The count rather than a guessed share, because a share is what an operator acts on and a wrong one
-// is worse than none. The crew learns the size from the model runtime the first time anybody attaches
+// is worse than none. The system learns the size from the model runtime the first time anybody attaches
 // to a session in that workspace.
 //
 // Blank for a conversation nobody has spoken in, the way the token columns are: a session with no
@@ -66,7 +66,7 @@ func ContextLabel(session *quaycrewv1.Session) string {
 // Share is what part of the window is used, as a whole number out of a hundred.
 //
 // It stops at a hundred: a window reported as more than full is a conversation the runtime is about
-// to compact, and a hundred and four per cent reads as a defect in the crew. Nothing is multiplied
+// to compact, and a hundred and four per cent reads as a defect in the system. Nothing is multiplied
 // above that ceiling, so a nonsense count cannot overflow into a nonsense share.
 func Share(used, size int64) int64 {
 	switch {
@@ -79,7 +79,7 @@ func Share(used, size int64) int64 {
 	}
 }
 
-// The words a listing shows for a session whose row says idle, once the crew has read what is
+// The words a listing shows for a session whose row says idle, once the system has read what is
 // actually inside its sandbox.
 //
 // They exist because idle used to cover all four. The row's status only ever said whether a
@@ -88,11 +88,11 @@ func Share(used, size int64) int64 {
 //
 // Why these words:
 //
-//   - Awake, not thinking or busy. The crew reads a runtime process, which is up both while it
+//   - Awake, not thinking or busy. The system reads a runtime process, which is up both while it
 //     answers and while it waits at a prompt, so thinking claims more than was measured. Busy is
 //     what running already means to an operator, and this is not a task.
 //   - Attached, because it is what the operator typed to get there: `quay attach`.
-//   - Unknown, because the crew asked and was not told. It is not idle, and it must never read as
+//   - Unknown, because the system asked and was not told. It is not idle, and it must never read as
 //     idle: a listing that guesses empty here is the defect this set of words was written for.
 //   - Idle keeps its word and finally earns it: nothing is running and nobody is in there.
 const (
@@ -104,7 +104,7 @@ const (
 
 // SessionStatus is the one word a listing shows for where a session is.
 //
-// It is the row's own status, except where that status is idle and the crew has read the sandbox. A
+// It is the row's own status, except where that status is idle and the system has read the sandbox. A
 // row that says anything else is left alone: running, failed, stopped and reclaimed each carry
 // something this cannot say, and overwriting failed with awake would lose that the last task did not
 // land.
@@ -154,7 +154,7 @@ func PermissionLabel(mode string) string {
 // Tokens is a count in a column seven characters wide: 52, 6.9k, 1.7M.
 //
 // Nothing at all for a session that has spent nothing, because a conversation nobody has had has not
-// cost zero, it has no cost. A column of zeroes would read as a crew that is free.
+// cost zero, it has no cost. A column of zeroes would read as a system that is free.
 func Tokens(count int64) string {
 	switch {
 	case count <= 0:
@@ -253,7 +253,7 @@ func SessionName(session *quaycrewv1.Session) string {
 // SessionLabel is what a session is called, and nothing else. Empty until somebody names it.
 //
 // Three names, in the order of how much a reader should trust them: the label the operator typed
-// about this conversation, the title it was dispatched with, then the line the crew wrote about it.
+// about this conversation, the title it was dispatched with, then the line the system wrote about it.
 //
 // The label is first because it is the last word of the person who has seen the session, and it is
 // the only one of the three they can change. The title comes next because a person typed it too, at

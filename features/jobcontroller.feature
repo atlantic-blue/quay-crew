@@ -1,7 +1,7 @@
 Feature: A controller makes declared jobs happen
 
   Declaring a job records intent. This is the half that makes reality match it: a loop reads the jobs
-  the crew holds, sends a task for what has not started, reads the task back, and writes what came of
+  the system holds, sends a task for what has not started, reads the task back, and writes what came of
   it onto the row.
 
   The loop never waits on a model. It sends the task and lets go, and reads the answer off the record
@@ -29,7 +29,7 @@ Feature: A controller makes declared jobs happen
   Scenario: The controller sends one task for one job, however often it ticks
     Given a job titled "read the electricity bill"
     When the controller ticks 3 times
-    Then the crew was asked to run 1 task
+    Then the system was asked to run 1 task
     And the job is running
 
   Scenario: A job that is running is left alone until its task lands
@@ -51,11 +51,11 @@ Feature: A controller makes declared jobs happen
   # A machine with no room to make a container is not a job that was wrong. This used to be failed,
   # which lost the work: nothing raised it, and the operator had one word in a listing to notice it
   # by. Pending is the state that exists for exactly this. See issue 465.
-  Scenario: A job the crew could not give a sandbox waits for room rather than failing
+  Scenario: A job the system could not give a sandbox waits for room rather than failing
     Given a sandbox that never starts
     And a job titled "read the electricity bill"
     When the controller ticks
-    And the crew gives up on the sandbox
+    And the system gives up on the sandbox
     And the controller ticks again
     Then the job is pending, and the reason says it waits for room
     And the records for that job say the job was given up, and never that it failed
@@ -64,7 +64,7 @@ Feature: A controller makes declared jobs happen
     Given a sandbox that never starts
     And a job titled "read the electricity bill"
     When the controller ticks
-    And the crew gives up on the sandbox
+    And the system gives up on the sandbox
     And the controller ticks again
     And the machine has room again
     And the controller ticks
@@ -96,7 +96,7 @@ Feature: A controller makes declared jobs happen
     And the task the controller sent lands
     And the controller ticks again
     Then the job is done, and it names the pull request "https://github.com/atlantic-blue/quay-crew/pull/454"
-    And the crew was asked to run 1 task
+    And the system was asked to run 1 task
 
   # The refusal. The branch is in the session, the session is open, and opening the pull request is
   # one command, so the session is asked rather than the job being landed with the work invisible.
@@ -107,7 +107,7 @@ Feature: A controller makes declared jobs happen
     And the task the controller sent lands
     And the controller ticks again
     Then the job is running
-    And the crew was asked to run 2 tasks
+    And the system was asked to run 2 tasks
     And the session was asked again for the pull request against "atlantic-blue/quay-crew"
 
   Scenario: The session opens the pull request when asked, and the job is done
@@ -132,14 +132,14 @@ Feature: A controller makes declared jobs happen
     And the task the controller sent lands
     And the controller ticks again
     Then the job is stopped, and the reason names the repository "atlantic-blue/quay-crew"
-    And the crew was asked to run 2 tasks
+    And the system was asked to run 2 tasks
     And the answer is still on the record
 
   Scenario: A job a person stopped is never started
     Given a job titled "read the electricity bill"
     When the caller stops the first job saying "the bill is not due yet"
     And the controller ticks
-    Then the crew was asked to run 0 tasks
+    Then the system was asked to run 0 tasks
     And the job is stopped, and the reason is "the bill is not due yet"
 
   # Ordering is the one thing still not honoured, so this is the one thing left alone.
@@ -149,7 +149,7 @@ Feature: A controller makes declared jobs happen
     When the controller ticks
     And the controller ticks again
     Then the job titled "pay the electricity bill" is pending
-    And the crew was asked to run 1 task
+    And the system was asked to run 1 task
 
   # The reason the whole substrate was built. The job names a role, and the session that runs it
   # runs as that role, so the credential it holds carries what that role declared it may call.
@@ -157,18 +157,18 @@ Feature: A controller makes declared jobs happen
     Given the workspace holds the role "backlog-clearer" at version 1 receiving "job"
     And a job titled "clear the backlog" in the role "backlog-clearer"
     When the controller ticks
-    Then the crew was asked to run 1 task
+    Then the system was asked to run 1 task
     And the session doing that job runs as the "backlog-clearer" role
 
   # The boundary, at the moment the material would be handed over. The role was attached receiving
-  # the crew's context when the job was declared, and narrowed while the job sat pending.
+  # the system's context when the job was declared, and narrowed while the job sat pending.
   Scenario: A job that requires material its role stopped receiving never reaches a container
     Given the workspace holds the role "test-writer" at version 1 receiving "job, context"
     And a job titled "write the tests" in the role "test-writer" requiring "context"
     And the workspace holds the role "test-writer" at version 2 receiving "job"
     When the controller ticks
-    Then the crew was asked to run 0 tasks
-    And the crew built 0 sandboxes
+    Then the system was asked to run 0 tasks
+    And the system built 0 sandboxes
     And the job is stopped, saying the "test-writer" role does not receive "context"
     And the job ran in no session
 
@@ -179,13 +179,13 @@ Feature: A controller makes declared jobs happen
     And a job titled "clear the backlog" in the role "backlog-clearer"
     And the operator detaches the "backlog-clearer" role from the workspace
     When the controller ticks
-    Then the crew was asked to run 0 tasks
+    Then the system was asked to run 0 tasks
     And the job is stopped, and the reason names the "backlog-clearer" role
 
   # The listing an operator reads while the work is happening. A job is one long task, so a name
   # written behind a task that has answered arrives when the job is over: four jobs running, four
   # blank name cells, and no way to tell which conversation was burning which tokens. The title is
-  # typed at declaration, so the crew already has it.
+  # typed at declaration, so the system already has it.
   Scenario: A job's session carries the title it was declared with, while the job is still running
     Given a job titled "read the electricity bill"
     And the model takes longer over a task than anybody will wait
@@ -201,14 +201,14 @@ Feature: A controller makes declared jobs happen
     Then the records for that job read "job.declared", "job.claimed", "job.started", "job.answered"
 
   # The failure the whole design opens with: a controller is disposable and the job is not. The
-  # task keeps running when its controller goes, because the sandbox belongs to the crew.
+  # task keeps running when its controller goes, because the sandbox belongs to the system.
   Scenario: The controller is killed after the task starts, and the answer is still adopted once
     Given a job titled "read the electricity bill"
     And the controller that started it goes away after the task starts
     When the task the controller sent lands
     And another controller ticks
     Then the job is done, and its answer is what the model said
-    And the crew was asked to run 1 task
+    And the system was asked to run 1 task
     And the records for that job say the job was taken over once, and started once
 
   Scenario: A controller that is still alive keeps hold of its job

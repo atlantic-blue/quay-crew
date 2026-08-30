@@ -24,13 +24,13 @@ import (
 // cost figure in the pull request comes from, because one exec per row per listing is a real price
 // and it has to be a measured number rather than an estimate.
 
-// listingSessions is how many rows the measurement is taken over. About the size of a real crew: the
+// listingSessions is how many rows the measurement is taken over. About the size of a real system: the
 // measurement that opened this job read eighteen containers on one machine.
 const listingSessions = 20
 
-// aCrewOverRealContainers gives back a control plane whose sandboxes are containers the daemon is
+// aSystemOverRealContainers gives back a control plane whose sandboxes are containers the daemon is
 // really holding, and the sessions they belong to.
-func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
+func aSystemOverRealContainers(ctx context.Context, t *testing.T, count int) (
 	*controlplane.Server, sandbox.DockerProvider, []*quaycrewv1.Session) {
 	t.Helper()
 
@@ -56,7 +56,7 @@ func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
 		t.Fatalf("CreateProject: %v", err)
 	}
 
-	// The rows first, then a container for each, which is the state a crew is in after a restart: the
+	// The rows first, then a container for each, which is the state a system is in after a restart: the
 	// process holds no handles and every container is still running.
 	//
 	// The configuration carries the workspace and the project as well as the session, because a
@@ -80,9 +80,9 @@ func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
 		sessions = append(sessions, made)
 	}
 	// The fixture itself is checked, because everything below reads a container that has to be there.
-	// A helper that failed halfway would otherwise leave a test measuring an empty crew.
+	// A helper that failed halfway would otherwise leave a test measuring an empty system.
 	if len(sessions) != count {
-		t.Fatalf("the crew has %d sessions, want %d", len(sessions), count)
+		t.Fatalf("the system has %d sessions, want %d", len(sessions), count)
 	}
 	standing, err := provider.Stranded(ctx)
 	if err != nil {
@@ -105,7 +105,7 @@ func aCrewOverRealContainers(ctx context.Context, t *testing.T, count int) (
 
 // TestWhatOneListingOfTwentySessionsCosts is the number the pull request quotes. It is logged rather
 // than asserted: how long a docker exec takes belongs to the machine, and a suite that failed on a
-// slow runner would say nothing about the crew.
+// slow runner would say nothing about the system.
 //
 // The answers are asserted, which is what makes the timing worth anything: a run that measured
 // twenty questions nobody answered would be fast and meaningless.
@@ -113,7 +113,7 @@ func TestWhatOneListingOfTwentySessionsCosts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	server, provider, sessions := aCrewOverRealContainers(ctx, t, listingSessions)
+	server, provider, sessions := aSystemOverRealContainers(ctx, t, listingSessions)
 
 	// One of them is holding a conversation. Adopting the container that is already there rather than
 	// making one, which is what the provider does for a session whose sandbox this process holds no
@@ -180,12 +180,12 @@ func TestWhatOneListingOfTwentySessionsCosts(t *testing.T) {
 
 // TestARealContainerWithNoTmuxServerIsNotReportedAsAttached is the sad path a double cannot prove.
 // busybox has no tmux in it at all, so the attachment question fails inside the container, and the
-// crew has to read that as nobody being attached rather than as a daemon it could not reach.
+// system has to read that as nobody being attached rather than as a daemon it could not reach.
 func TestARealContainerWithNoTmuxServerIsNotReportedAsAttached(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	server, _, sessions := aCrewOverRealContainers(ctx, t, 1)
+	server, _, sessions := aSystemOverRealContainers(ctx, t, 1)
 
 	attached, err := server.SessionAttached(ctx, sessions[0].GetId())
 	if err != nil {
@@ -205,7 +205,7 @@ func TestARealContainerWithNoTmuxServerIsNotReportedAsAttached(t *testing.T) {
 }
 
 // TestASessionWithNoContainerAtAllReadsIdle. The daemon answers, the container is not there, and that
-// is an empty session rather than a crew that could not tell. Unknown here would send an operator
+// is an empty session rather than a system that could not tell. Unknown here would send an operator
 // looking for a broken daemon.
 func TestASessionWithNoContainerAtAllReadsIdle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

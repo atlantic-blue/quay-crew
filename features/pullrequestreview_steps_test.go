@@ -12,7 +12,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The graph the crew ships is read off disk here rather than written out in the feature file. A
+// The graph the system ships is read off disk here rather than written out in the feature file. A
 // scenario carrying its own copy would prove the copy, and the file is what an operator imports.
 
 // shippedGraph reads one of the graphs in flows/, from the features directory the suite runs in.
@@ -30,7 +30,7 @@ func shippedGraph(name string) (flow.Graph, string, error) {
 }
 
 func initializePullRequestReviewSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the crew holds the flow graph it ships as "([^"]*)"$`, func(ctx context.Context, name string) error {
+	sc.Step(`^the system holds the flow graph it ships as "([^"]*)"$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
 		graph, source, err := shippedGraph(name)
 		if err != nil {
@@ -40,7 +40,7 @@ func initializePullRequestReviewSteps(sc *godog.ScenarioContext) {
 	})
 
 	// A model that does the job rather than describing it. Every step of this graph says which file
-	// would show it worked, and the crew reads the session for that file afterwards, so a double
+	// would show it worked, and the system reads the session for that file afterwards, so a double
 	// that only talks would stop the run at its first step. The files are taken from the graph, so a
 	// step added tomorrow is covered without anybody remembering this.
 	sc.Step(`^the model does the work every step of that graph expects$`, func(ctx context.Context) error {
@@ -150,7 +150,7 @@ func reviewStepNodes(ctx context.Context) ([]string, error) {
 }
 
 // reviewPostingSteps is every step the run declared for the node that posts, whatever phase it
-// reached. The question is whether the crew ever asked for one, not whether one is out now.
+// reached. The question is whether the system ever asked for one, not whether one is out now.
 func reviewPostingSteps(ctx context.Context) ([]*job.Job, error) {
 	steps, err := runSteps(ctx, worldFrom(ctx))
 	if err != nil {

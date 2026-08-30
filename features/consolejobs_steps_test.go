@@ -12,7 +12,7 @@ import (
 )
 
 // The console's view of jobs. These steps sit beside the other console steps rather than with the job
-// steps, because what they drive is the console over the real control plane: the rows are the crew's
+// steps, because what they drive is the console over the real control plane: the rows are the system's
 // actual jobs, and where a key lands is read off the screen the operator is left looking at.
 
 // sessionCell is where a job's session sits in its row. Named so a step reads as the cell it is about
@@ -61,11 +61,11 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if one.GetSession() == "" {
-			return fmt.Errorf("the crew gave the job no session, so there is nothing for the row to name")
+			return fmt.Errorf("the system gave the job no session, so there is nothing for the row to name")
 		}
 		// The whole identifier is what descending and acting use; the short one is what is read.
 		if row.Parent != one.GetSession() {
-			return fmt.Errorf("the row carries session %q and the crew says %q", row.Parent, one.GetSession())
+			return fmt.Errorf("the row carries session %q and the system says %q", row.Parent, one.GetSession())
 		}
 		if got := row.Cells[sessionCell]; got != display.ShortID(one.GetSession()) {
 			return fmt.Errorf("the session cell says %q, want %q", got, display.ShortID(one.GetSession()))

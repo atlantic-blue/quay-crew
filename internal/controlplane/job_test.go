@@ -45,7 +45,7 @@ func refusalOf(t *testing.T, s *controlplane.Server, req *quaycrewv1.CreateJobRe
 	return err
 }
 
-// A job opens pending, at depth zero, with the crew's own identifier on it.
+// A job opens pending, at depth zero, with the system's own identifier on it.
 func TestDeclaredJobOpensPendingAtDepthZero(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
@@ -56,7 +56,7 @@ func TestDeclaredJobOpensPendingAtDepthZero(t *testing.T) {
 		t.Fatalf("the job opens %q, want pending", declared.GetPhase())
 	}
 	if len(declared.GetId()) != 24 {
-		t.Fatalf("the identifier is %q, want the 24 characters the crew mints", declared.GetId())
+		t.Fatalf("the identifier is %q, want the 24 characters the system mints", declared.GetId())
 	}
 	if declared.GetParent() != "" || declared.GetDepth() != 0 {
 		t.Fatalf("the job has parent %q at depth %d, want a root", declared.GetParent(), declared.GetDepth())
@@ -108,7 +108,7 @@ func TestAnIdentifierTheCallerChoseIsRefused(t *testing.T) {
 		t.Fatalf("the refusal is %v, want InvalidArgument", status.Code(err))
 	}
 	if !strings.Contains(err.Error(), "assigns the identifier") {
-		t.Fatalf("the refusal says %q, want it to say the crew assigns the identifier", err)
+		t.Fatalf("the refusal says %q, want it to say the system assigns the identifier", err)
 	}
 }
 
@@ -279,7 +279,7 @@ func TestJobInARoleIsPinnedToTheVersionTheWorkspaceHolds(t *testing.T) {
 	}
 }
 
-func TestJobWaitingForSomethingTheCrewDoesNotHoldIsRefused(t *testing.T) {
+func TestJobWaitingForSomethingTheSystemDoesNotHoldIsRefused(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 
@@ -509,9 +509,9 @@ func TestDeclaringAndStoppingJobWriteTheirOwnRecords(t *testing.T) {
 	}
 }
 
-// Everything the crew persists goes through the redactor, and a caller can paste a credential into
+// Everything the system persists goes through the redactor, and a caller can paste a credential into
 // anything it types.
-func TestWhatTheCrewRecordsIsRedacted(t *testing.T) {
+func TestWhatTheSystemRecordsIsRedacted(t *testing.T) {
 	s, kept := serverOnAStore(t)
 	workspace, project := newProject(t, s)
 	if _, err := s.SetSecret(context.Background(), &quaycrewv1.SetSecretRequest{
@@ -707,7 +707,7 @@ func TestJobRequiringMaterialItsRoleDoesNotReceiveIsRefusedAtTheWrite(t *testing
 		t.Fatalf("ListJob: %v", listErr)
 	}
 	if len(listed.GetJobs()) != 0 {
-		t.Fatalf("the crew holds %d jobs, and a refusal must write no row", len(listed.GetJobs()))
+		t.Fatalf("the system holds %d jobs, and a refusal must write no row", len(listed.GetJobs()))
 	}
 }
 

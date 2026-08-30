@@ -1,9 +1,9 @@
 # Hooks
 
-A crew gives every session its rules as context. Context is advice, and the model decides whether to
+A system gives every session its rules as context. Context is advice, and the model decides whether to
 take it.
 
-The evidence is one working session on 13 August 2026. The crew context held 100 kilobytes of rules.
+The evidence is one working session on 13 August 2026. The system context held 100 kilobytes of rules.
 The session broke three of them. It did not break the one about committing without approval, because
 that one is not advice on the operator's machine: a hook refused the command and named how to ask.
 
@@ -39,18 +39,18 @@ prompt, and a shorter prompt is followed more closely, so the advice that remain
 The same three layers as a skill, for the same reasons, and this is deliberate rather than
 convenient. A hook was once built as `quay hook <name>`, compiled into the command line tool. That
 made it impossible to write a hook for one workspace, impossible to change one without releasing the
-tool, and impossible to hand one to another crew.
+tool, and impossible to hand one to another system.
 
 ```mermaid
 flowchart LR
-    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"quay hook import"| B["the crew's store<br/>pinned to a version"]
-    B -->|"quay hook attach"| C["a workspace, or the whole crew"]
+    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"quay hook import"| B["the system's store<br/>pinned to a version"]
+    B -->|"quay hook attach"| C["a workspace, or the whole system"]
     C --> D["every session in it<br/>files mounted read only,<br/>a settings file rendered"]
     D --> E["the model runtime<br/>runs the hook on its event"]
 ```
 
 **Files are the authoring format**, so a hook is code somebody reviews and versions. **The store is
-the runtime**, so a crew on a pod still has its hooks and a hook cannot change under a session using
+the runtime**, so a system on a pod still has its hooks and a hook cannot change under a session using
 it. **The sandbox gets files again**, because the thing that runs a hook takes a path to an
 executable.
 
@@ -60,7 +60,7 @@ executable.
 hooks/prompt-analyser/
   hook.yaml         what it is, and what event it fires on
   bin/hook          the executable the runtime calls, built rather than committed
-  go.mod            its own module, because a hook is not part of the crew
+  go.mod            its own module, because a hook is not part of the system
   *.go              the source, beside the thing it builds
   hook.config.json  what it reads, so the paths are not compiled in
 ```
@@ -113,7 +113,7 @@ session pays for it, because a hook is not in the context.
 refused with a sentence rather than discovering it halfway through. The same rule a skill uses.
 
 `secrets` names workspace secrets by name, never by value, with a line saying what each is for. A
-name starting `QC_` or `CLAUDE_` is refused: those are the crew's own.
+name starting `QC_` or `CLAUDE_` is refused: those are the system's own.
 
 ## How a hook reaches a sandbox
 
@@ -125,12 +125,12 @@ directory on the host, exactly as a skill's files are mounted at `/home/agent/sk
 **A settings file** is rendered to `/home/agent/hooks/settings.json`, listing every held hook against
 its event. Every invocation of the model is given `--settings /home/agent/hooks/settings.json`.
 
-The settings file is a separate file the crew owns entirely, rather than `/home/agent/.claude/settings.json`,
+The settings file is a separate file the system owns entirely, rather than `/home/agent/.claude/settings.json`,
 and that is the one non obvious decision here. `/home/agent/.claude` is the workspace's conversation
 directory, bind mounted from the host, written by the runtime and editable by the operator. Rendering
-the crew's hooks into it would mean merging with whatever else is in there on every task, and losing
+the system's hooks into it would mean merging with whatever else is in there on every task, and losing
 an operator's edit the first time the merge is wrong. `--settings` loads additional settings, so the
-operator's own file still applies and the crew's file is never a place anybody else writes.
+operator's own file still applies and the system's file is never a place anybody else writes.
 
 ```mermaid
 flowchart TD
@@ -152,12 +152,12 @@ dispatched tasks is a hook the operator walks around by opening the conversation
   happen. Nothing else.
 - **It is not given to the model to read.** A hook that has to be explained in the prompt to work is
   advice with extra steps.
-- **It cannot ask for the crew's own secrets.** `QC_` and `CLAUDE_` are refused at validation, the
+- **It cannot ask for the system's own secrets.** `QC_` and `CLAUDE_` are refused at validation, the
   same rule a skill lives under.
 
 ## The hooks this build ships
 
-Each one is a rule the crew already carries and nothing else checks.
+Each one is a rule the system already carries and nothing else checks.
 
 - **prompt-analyser.** Reads the message, asks a small model to restate it, and hands the session
   both. Adds context, never refuses.
@@ -166,26 +166,26 @@ Each one is a rule the crew already carries and nothing else checks.
   `git push` onto `main` or `master`. It is designed in
   [`hooks/merge-gate/README.md`](../hooks/merge-gate/README.md).
 
-Both are seeded, so a fresh crew is under them without anybody attaching anything.
+Both are seeded, so a fresh system is under them without anybody attaching anything.
 
 A seeded hook used to mean a hook that cannot refuse. The merge gate refuses and is seeded anyway,
-because it holds the boundary the whole shape of this crew rests on: every role pushes and opens a
+because it holds the boundary the whole shape of this system rests on: every role pushes and opens a
 pull request, and no role merges, since a push applies nothing and a merge runs the pipeline that
-spends money. A gate an operator has to remember to attach is off in every crew nobody set up, which
+spends money. A gate an operator has to remember to attach is off in every system nobody set up, which
 is where the boundary matters most. So the rule is not that a seeded hook never refuses. It is that a
 seeded hook refuses something no session is ever meant to do, exactly, and says what to do instead.
-`quay hook detach crew merge-gate` is how somebody decides otherwise.
+`quay hook detach system merge-gate` is how somebody decides otherwise.
 
 ### How a hook refuses
 
 Exit code 2, with the reason on standard error, which the runtime hands to the session. The runtime
-also takes a refusal as a document on standard output. The exit code is what this crew uses, because
+also takes a refusal as a document on standard output. The exit code is what this system uses, because
 that contract is the older and simpler of the two, and a refusal a runtime does not understand is a
 gate that quietly opens.
 
 A hook fires on every command a session runs, so anything it cannot read exits 0 and lets the command
 through. A gate that refuses what it does not understand refuses the work, and a broken hook must not
-be able to stop a crew.
+be able to stop a system.
 
 ### Still worth writing
 
@@ -201,7 +201,7 @@ has to go through.
 
 ## What is not settled
 
-Hooks, skills and documents are three instances of one shape: files the crew holds, pinned to a
+Hooks, skills and documents are three instances of one shape: files the system holds, pinned to a
 version, attached at a level, rendered into a sandbox. They do not share machinery today. Whether
 they should is a real question and it is open, recorded here rather than answered by building the
 third one the same way and calling it a pattern.
@@ -211,7 +211,7 @@ not need a runtime for it. The one shipped here is Go, built to a static binary,
 `binaries` list names only the commands it shells out to. That says what a hook may be written in. It
 says nothing about where a hook lives.
 
-The layout is the crew's own and predates the Claude Code plugin format, which is
+The layout is the system's own and predates the Claude Code plugin format, which is
 `.claude-plugin/plugin.json` beside a `hooks/hooks.json` that resolves paths through
 `${CLAUDE_PLUGIN_ROOT}`. Whether to move onto it is open, and it is the same question as the one
 above about skills, hooks and documents sharing machinery.

@@ -8,7 +8,7 @@ import (
 
 // TestARunningRuntimeIsFoundHoweverItWasStarted. The npm package this image installs puts the model
 // runtime behind an interpreter, and whether a sandbox shows `claude` or `node .../claude` depends on
-// how the package was installed rather than on anything the crew decides. A reader that knew one
+// how the package was installed rather than on anything the system decides. A reader that knew one
 // shape would call a live conversation an empty container on the other, which is the whole defect.
 func TestARunningRuntimeIsFoundHoweverItWasStarted(t *testing.T) {
 	for name, dump := range map[string]string{
@@ -34,7 +34,7 @@ func TestARunningRuntimeIsFoundHoweverItWasStarted(t *testing.T) {
 }
 
 // TestASandboxWithNoRuntimeReadsEmpty. The other half, and the one that decides whether a reclaim
-// can ever take a container back: a sandbox holding nothing must say so, or the crew holds every
+// can ever take a container back: a sandbox holding nothing must say so, or the system holds every
 // container it ever made forever.
 func TestASandboxWithNoRuntimeReadsEmpty(t *testing.T) {
 	for name, dump := range map[string]string{
@@ -60,7 +60,7 @@ func TestASandboxWithNoRuntimeReadsEmpty(t *testing.T) {
 
 // TestTheProcessReaderDoesNotNameWhatItLooksFor. The trap this shape exists to avoid: the shell that
 // reads the process table is itself a process in that container, so a reader carrying the runtime's
-// name in its own command line finds itself and reports every sandbox in the crew as busy. Nothing
+// name in its own command line finds itself and reports every sandbox in the system as busy. Nothing
 // would ever be reclaimed again and every listing would say awake.
 func TestTheProcessReaderDoesNotNameWhatItLooksFor(t *testing.T) {
 	if strings.Contains(processTable, RuntimeBinary) {
@@ -82,7 +82,7 @@ func TestADaemonThatCannotBeReachedIsNotAnEmptySandbox(t *testing.T) {
 
 	running, err := DockerProvider{Image: "img"}.RuntimeRunning(context.Background(), "0d4f2a")
 	if err == nil {
-		t.Fatal("the daemon could not be reached and the crew answered anyway")
+		t.Fatal("the daemon could not be reached and the system answered anyway")
 	}
 	if running {
 		t.Fatal("a failure came back as a running runtime")
@@ -94,8 +94,8 @@ func TestADaemonThatCannotBeReachedIsNotAnEmptySandbox(t *testing.T) {
 }
 
 // TestTheLocalProviderRunsNothingOfItsOwn. A local sandbox is the host, so there is no per session
-// process table to read. It answers the way it answers Attached, and it does not fail: a crew running
-// without containers must not fill its listing with sessions the crew could not tell about.
+// process table to read. It answers the way it answers Attached, and it does not fail: a system running
+// without containers must not fill its listing with sessions the system could not tell about.
 func TestTheLocalProviderRunsNothingOfItsOwn(t *testing.T) {
 	running, err := LocalProvider{}.RuntimeRunning(context.Background(), "0d4f2a")
 	if err != nil {

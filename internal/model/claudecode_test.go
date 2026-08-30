@@ -70,7 +70,7 @@ func TestBuildArgsResumeAndMode(t *testing.T) {
 	}
 }
 
-// The pair. A conversation the runtime has never seen is started under the name the crew gave it, and
+// The pair. A conversation the runtime has never seen is started under the name the system gave it, and
 // one it has seen is resumed by that name. Both, because getting either wrong fails the task: resuming
 // a name with nothing behind it prints "No conversation found" and exits, and starting a name that is
 // already there is refused as one in use.
@@ -87,7 +87,7 @@ func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *t
 		because string
 	}{
 		{
-			name: "the crew has named it and nothing has opened it", started: false,
+			name: "the system has named it and nothing has opened it", started: false,
 			want: "--session-id sess-1", absent: "--resume",
 			because: "the task is what makes the name true, and there is no transcript to resume",
 		},
@@ -112,8 +112,8 @@ func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *t
 }
 
 // A task with no conversation at all names none, which leaves the runtime to name its own. It is what
-// a crew that could not name one falls back to, and it must stay a fallback: nothing that runs a task
-// through the control plane arrives here, because the crew names the conversation first.
+// a system that could not name one falls back to, and it must stay a fallback: nothing that runs a task
+// through the control plane arrives here, because the system names the conversation first.
 func TestBuildArgsNamesNoConversationWhenItHasNone(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "go on"}, ""), " ")
 	for _, absent := range []string{"--session-id", "--resume"} {
@@ -123,10 +123,10 @@ func TestBuildArgsNamesNoConversationWhenItHasNone(t *testing.T) {
 	}
 }
 
-// What the runtime says it used, checked against what the crew asked for. The identifier in the output
+// What the runtime says it used, checked against what the system asked for. The identifier in the output
 // stream was where the name came from, which is why it arrived too late to be any use; it is a check
 // now, and a runtime that ignored the flag is worth a sentence naming both, because the session's
-// history is under the name the crew did not choose.
+// history is under the name the system did not choose.
 func TestConversationCheckSpeaksUpOnlyWhenTheRuntimeIgnoredTheName(t *testing.T) {
 	for _, tc := range []struct {
 		name, asked, reported string
@@ -134,7 +134,7 @@ func TestConversationCheckSpeaksUpOnlyWhenTheRuntimeIgnoredTheName(t *testing.T)
 	}{
 		{name: "the runtime used the name it was given", asked: "sess-1", reported: "sess-1"},
 		{name: "the runtime said nothing at all", asked: "sess-1", reported: ""},
-		{name: "the crew named nothing, so there is nothing to check", asked: "", reported: "sess-9"},
+		{name: "the system named nothing, so there is nothing to check", asked: "", reported: "sess-9"},
 		{name: "the runtime used a name of its own", asked: "sess-1", reported: "sess-9", says: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -159,7 +159,7 @@ func TestConversationCheckSpeaksUpOnlyWhenTheRuntimeIgnoredTheName(t *testing.T)
 
 // A task says which model it wants, and a task that has not been told says nothing rather than
 // guessing. The command line tool picks Sonnet when nobody says, which is how every session came to
-// run Sonnet while the crew was configured for Claude Code and nothing anywhere was wrong.
+// run Sonnet while the system was configured for Claude Code and nothing anywhere was wrong.
 func TestBuildArgsNamesTheModel(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "do a thing"}, "claude-opus-5"), " ")
 	if !strings.Contains(got, "--model claude-opus-5") {
@@ -211,7 +211,7 @@ func TestParseStream(t *testing.T) {
 	}
 }
 
-// The stream has carried these numbers the whole time and the crew read past them, so a turn's cost
+// The stream has carried these numbers the whole time and the system read past them, so a turn's cost
 // was thrown away at the point it was known.
 func TestParseStreamKeepsWhatTheTurnSpent(t *testing.T) {
 	stream := strings.Join([]string{

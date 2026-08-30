@@ -34,7 +34,7 @@ edges:
 // Now the call returns with the step written down and nothing sent. The engine cannot wait on a
 // model at all: its view of the control plane has one method on it, and it is archiving a session.
 func TestARunOutWithAStepHoldsNoDispatchOpen(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 
 	run := started(t, engine, it, "fix-red", workspace, project)
 
@@ -62,7 +62,7 @@ func TestARunOutWithAStepHoldsNoDispatchOpen(t *testing.T) {
 // One tree, and it is the job tree. A step hangs under the run's own job, one level deeper, which
 // is what makes the depth limit and the tree budget bound a run at all.
 func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
 	run := started(t, engine, it, "fix-red", workspace, project)
@@ -96,10 +96,10 @@ func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
 	}
 }
 
-// The run carries on from the job rather than from a reply held in memory, so a crew restarted
+// The run carries on from the job rather than from a reply held in memory, so a system restarted
 // while twenty steps were running picks all twenty up off their rows.
 func TestAStepThatEndedCarriesTheRunOn(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 
 	run := started(t, engine, it, "fix-red", workspace, project)
 	lands(t, it, stepOf(t, it, run), "session-of-fix", answered("fixed it"))
@@ -129,7 +129,7 @@ func TestAStepThatEndedCarriesTheRunOn(t *testing.T) {
 // run used to close its session only at the end. The job ended when it answered, so there is
 // nothing left running while a person decides.
 func TestAnAskingRunHoldsNoContainer(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, `
+	engine, it, workspace, project := aSystem(t, `
 name: careful
 version: 1
 mode: edits
@@ -172,7 +172,7 @@ edges:
 // A run's own job says where the run is and what it came to, so `quay job show` on it answers the
 // two questions a person has without their reading a transcript.
 func TestTheRunsOwnJobFollowsTheRun(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, `
+	engine, it, workspace, project := aSystem(t, `
 name: careful
 version: 1
 mode: edits
@@ -222,7 +222,7 @@ edges:
 // The records quay-crew#349 named and nothing ever wrote. They are job events against the run's own
 // job, so a reader has one history rather than two.
 func TestARunWritesTheRecordsOfItsOwnLife(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
 	run := started(t, engine, it, "fix-red", workspace, project)
@@ -264,10 +264,10 @@ func TestARunWritesTheRecordsOfItsOwnLife(t *testing.T) {
 	}
 }
 
-// A step that failed is a reply the graph may branch on: the crew ran it, the model did not finish,
+// A step that failed is a reply the graph may branch on: the system ran it, the model did not finish,
 // and the graph author decides what that means.
 func TestAStepThatFailedIsAResultTheGraphReads(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 
 	run := started(t, engine, it, "fix-red", workspace, project)
 	lands(t, it, stepOf(t, it, run), "session-of-fix",
@@ -287,11 +287,11 @@ func TestAStepThatFailedIsAResultTheGraphReads(t *testing.T) {
 	}
 }
 
-// Job halted over a claim it did not meet stops the run rather than branching. The crew knows the
+// Job halted over a claim it did not meet stops the run rather than branching. The system knows the
 // job did not happen and does not know why, and a run that walks its success path through job that
 // never happened ends with the model's plausible account of it.
 func TestAStepStoppedOverItsClaimStopsTheRun(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, `
+	engine, it, workspace, project := aSystem(t, `
 name: site-check
 version: 1
 mode: edits
@@ -324,10 +324,10 @@ edges:
 	}
 }
 
-// A step the crew will not take is not a step that failed. No job was declared, so there is no
+// A step the system will not take is not a step that failed. No job was declared, so there is no
 // reply and the run must not walk a success edge on one that will never exist.
-func TestAStepTheCrewRefusesStopsTheRunWithTheReason(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+func TestAStepTheSystemRefusesStopsTheRunWithTheReason(t *testing.T) {
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	it.refuse = errors.New("this workspace allows job no deeper than 1, and this would be at depth 2")
 
 	run, err := engine.Start(context.Background(), "fix-red", workspace, project, nil)
@@ -338,7 +338,7 @@ func TestAStepTheCrewRefusesStopsTheRunWithTheReason(t *testing.T) {
 		t.Fatalf("the run is %q at %q, want it stopped over the refusal", run.Status, run.Node)
 	}
 	if !strings.Contains(run.Reason, "no deeper than") {
-		t.Errorf("the run stopped saying %q, want the crew's own sentence", run.Reason)
+		t.Errorf("the run stopped saying %q, want the system's own sentence", run.Reason)
 	}
 	if !strings.Contains(run.Reason, "fix") {
 		t.Errorf("the run stopped saying %q, want it to name the step", run.Reason)
@@ -348,7 +348,7 @@ func TestAStepTheCrewRefusesStopsTheRunWithTheReason(t *testing.T) {
 // Two pollers reading the same landed step move the run once. The second one holds a run that has
 // moved on, and the store refuses it rather than replaying the movement.
 func TestOneLandedStepMovesARunOnce(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
 	run := started(t, engine, it, "fix-red", workspace, project)
@@ -380,7 +380,7 @@ func TestOneLandedStepMovesARunOnce(t *testing.T) {
 // A run somebody stopped while its step was out stays stopped: the step finishes, because the model
 // is already working, and the run takes no further step.
 func TestAStoppedRunIsNotCarriedOnByItsStep(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
 	run := started(t, engine, it, "fix-red", workspace, project)
@@ -402,7 +402,7 @@ func TestAStoppedRunIsNotCarriedOnByItsStep(t *testing.T) {
 // A step names its role on the job it goes out as, so the boundary is on the record rather
 // than inside the call that made it.
 func TestAStepNamingARoleDeclaresJobInThatRole(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, `
+	engine, it, workspace, project := aSystem(t, `
 name: write-tests
 version: 1
 mode: edits
@@ -432,11 +432,11 @@ edges:
 	}
 }
 
-// The mode travels with every step, because a session is born in the crew's own mode and a step is a
+// The mode travels with every step, because a session is born in the system's own mode and a step is a
 // new session now. A graph whose first step is "clone this" needs the network, and a dispatched task
 // has nobody to ask.
 func TestAGraphsModeTravelsWithEveryStep(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, `
+	engine, it, workspace, project := aSystem(t, `
 name: clone-first
 version: 1
 mode: dangerous
@@ -494,7 +494,7 @@ func TestARunsOwnJobIsNeverOfferedToAController(t *testing.T) {
 		t.Fatalf("ImportFlowGraph: %v", err)
 	}
 	watching := &watchingStore{Store: kept}
-	it := &crew{store: kept, maxDepth: 4}
+	it := &system{store: kept, maxDepth: 4}
 	engine := flow.NewEngine(watching, it, nil, it)
 
 	if _, err := engine.Start(ctx, "fix-red", workspace.GetId(), project.GetId(), nil); err != nil {

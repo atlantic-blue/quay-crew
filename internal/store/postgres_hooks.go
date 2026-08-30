@@ -11,11 +11,11 @@ import (
 
 // The durable store's hooks. The same six questions as skills, against their own tables.
 
-// ImportHook takes a hook into the crew, in one transaction, refusing a version that already exists
+// ImportHook takes a hook into the system, in one transaction, refusing a version that already exists
 // carrying something different.
 //
 // The whole hook goes in together. A hook whose manifest landed and whose files did not is a
-// constraint the crew believes it has and cannot run, which is worse than not having it: a listing
+// constraint the system believes it has and cannot run, which is worse than not having it: a listing
 // says the gate is there.
 func (p *Postgres) ImportHook(ctx context.Context, imported ImportedHook) error {
 	var held string
@@ -112,7 +112,7 @@ func (p *Postgres) ListHooks(ctx context.Context) ([]ImportedHook, error) {
 	return out, nil
 }
 
-// AttachHook gives a workspace a hook at the newest revision the crew holds.
+// AttachHook gives a workspace a hook at the newest revision the system holds.
 func (p *Postgres) AttachHook(ctx context.Context, workspace, name string) (ImportedHook, error) {
 	if _, err := p.GetWorkspace(ctx, workspace); err != nil {
 		return ImportedHook{}, err
@@ -166,18 +166,18 @@ func (p *Postgres) WorkspaceHooks(ctx context.Context, workspace string) ([]Impo
 	return out, nil
 }
 
-// AttachCrewHook gives the whole crew a hook at the newest revision it holds.
-func (p *Postgres) AttachCrewHook(ctx context.Context, name string) (ImportedHook, error) {
+// AttachSystemHook gives the whole system a hook at the newest revision it holds.
+func (p *Postgres) AttachSystemHook(ctx context.Context, name string) (ImportedHook, error) {
 	newest, err := p.hookRow(ctx, `where name = $1 order by version desc limit 1`, name)
 	if err != nil {
 		return ImportedHook{}, err
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into crew_hooks (name, version) values ($1, $2)
+		insert into system_hooks (name, version) values ($1, $2)
 		on conflict (name) do update
 		  set version = excluded.version, attached_at = now()`,
 		newest.Name, newest.Version); err != nil {
-		return ImportedHook{}, fmt.Errorf("attach crew hook %s: %w", name, err)
+		return ImportedHook{}, fmt.Errorf("attach system hook %s: %w", name, err)
 	}
 	if err := p.fillHook(ctx, &newest); err != nil {
 		return ImportedHook{}, err
@@ -185,11 +185,11 @@ func (p *Postgres) AttachCrewHook(ctx context.Context, name string) (ImportedHoo
 	return newest, nil
 }
 
-// DetachCrewHook takes a hook away from the crew.
-func (p *Postgres) DetachCrewHook(ctx context.Context, name string) error {
-	tag, err := p.pool.Exec(ctx, `delete from crew_hooks where name = $1`, name)
+// DetachSystemHook takes a hook away from the system.
+func (p *Postgres) DetachSystemHook(ctx context.Context, name string) error {
+	tag, err := p.pool.Exec(ctx, `delete from system_hooks where name = $1`, name)
 	if err != nil {
-		return fmt.Errorf("detach crew hook %s: %w", name, err)
+		return fmt.Errorf("detach system hook %s: %w", name, err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -197,15 +197,15 @@ func (p *Postgres) DetachCrewHook(ctx context.Context, name string) error {
 	return nil
 }
 
-// CrewHooks returns what the crew holds, at the versions it pinned, files included.
-func (p *Postgres) CrewHooks(ctx context.Context) ([]ImportedHook, error) {
+// SystemHooks returns what the system holds, at the versions it pinned, files included.
+func (p *Postgres) SystemHooks(ctx context.Context) ([]ImportedHook, error) {
 	out, err := p.hookRows(ctx, `
 		select h.name, h.version, h.summary, h.binaries, h.imported_at
-		from crew_hooks c
+		from system_hooks c
 		join hooks h on h.name = c.name and h.version = c.version
 		order by h.name`)
 	if err != nil {
-		return nil, fmt.Errorf("list crew hooks: %w", err)
+		return nil, fmt.Errorf("list system hooks: %w", err)
 	}
 	for at := range out {
 		if err := p.fillHook(ctx, &out[at]); err != nil {

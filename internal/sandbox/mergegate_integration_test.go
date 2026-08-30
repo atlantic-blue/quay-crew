@@ -16,7 +16,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-// The shipped merge gate, written out and mounted the way the crew writes and mounts it, and run
+// The shipped merge gate, written out and mounted the way the system writes and mounts it, and run
 // inside the real sandbox image the way the model runtime runs it.
 //
 // The unit tests in the hook's own module say what it decides. They cannot say that the file a
@@ -29,7 +29,7 @@ import (
 func TestTheShippedMergeGateRefusesAMergeInsideTheRealSandboxImage(t *testing.T) {
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the system's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -74,8 +74,8 @@ func TestTheShippedMergeGateRefusesAMergeInsideTheRealSandboxImage(t *testing.T)
 			refused: true,
 		},
 		{
-			// The half that decides whether the gate is worth mounting. Every role in this crew
-			// pushes a branch on every slice, so a wrong refusal here stops the crew delivering.
+			// The half that decides whether the gate is worth mounting. Every role in this system
+			// pushes a branch on every slice, so a wrong refusal here stops the system delivering.
 			name:    "the push every role does on every slice",
 			payload: `{"tool_name":"Bash","tool_input":{"command":"git push -u origin work"}}`,
 			refused: false,
@@ -121,7 +121,7 @@ func TestTheShippedMergeGateRefusesAMergeInsideTheRealSandboxImage(t *testing.T)
 	}
 }
 
-// The settings the crew renders have to name the gate on the event that fires before a command runs,
+// The settings the system renders have to name the gate on the event that fires before a command runs,
 // or every scenario above passes against a hook the runtime never calls.
 func TestTheRenderedSettingsBindTheMergeGateBeforeACommandRuns(t *testing.T) {
 	root := t.TempDir()

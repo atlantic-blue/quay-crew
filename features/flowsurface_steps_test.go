@@ -344,9 +344,9 @@ func waitForFlowRun(ctx context.Context, w *world, want string) error {
 	deadline := time.Now().Add(10 * time.Second)
 	var last string
 	for time.Now().Before(deadline) {
-		// The crew is driven rather than waited for: a run declares its step and returns, so nothing
+		// The system is driven rather than waited for: a run declares its step and returns, so nothing
 		// moves it until the job controller and the poller tick.
-		if err := driveTheCrew(ctx); err != nil {
+		if err := driveTheSystem(ctx); err != nil {
 			return err
 		}
 		run, err := readFlowRun(ctx, w)

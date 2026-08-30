@@ -64,7 +64,7 @@ func TestABriefThatDoesOrdinaryWorkIsAccepted(t *testing.T) {
 	}
 }
 
-// A brief telling the job not to do the thing is not a brief telling it to. The crew's own line says
+// A brief telling the job not to do the thing is not a brief telling it to. The system's own line says
 // not to merge, so this is the phrasing an operator repeats back, and refusing it would refuse the
 // rule's own advice.
 func TestABriefThatSaysNotToIsAccepted(t *testing.T) {

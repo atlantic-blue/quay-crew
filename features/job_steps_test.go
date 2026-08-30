@@ -13,7 +13,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Job is declared intent the crew keeps. These steps drive the control plane over its real
+// Job is declared intent the system keeps. These steps drive the control plane over its real
 // interface, the way the command line does, and read the record back the same way.
 //
 // Nothing runs the job. What is specified here is the record, the refusals, and that the intent
@@ -190,7 +190,7 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 
 	// The caller's own context is cancelled, which is what a closed terminal does to the call it
 	// was holding. Whatever is read afterwards is read by somebody else entirely.
-	sc.Step(`^the caller goes away and the crew is asked again$`, func(ctx context.Context) error {
+	sc.Step(`^the caller goes away and the system is asked again$`, func(ctx context.Context) error {
 		scenario := jobFrom(ctx)
 		if len(scenario.declared) == 0 {
 			return fmt.Errorf("no job was declared, so there is nothing to come back to")
@@ -223,8 +223,8 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Read off the crew rather than off what the declaration answered, so a step that runs after
-	// something else has moved the job says what the crew holds now.
+	// Read off the system rather than off what the declaration answered, so a step that runs after
+	// something else has moved the job says what the system holds now.
 	sc.Step(`^the job is pending$`, func(ctx context.Context) error {
 		return jobIs(ctx, 0, job.PhasePending)
 	})
@@ -275,14 +275,14 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew refuses it and says it assigns the identifier$`, theRefusalSays("assigns the identifier"))
-	sc.Step(`^the crew refuses it and says the parent comes from the credential$`, theRefusalSays("credential"))
-	sc.Step(`^the crew refuses it and says a title is needed$`, theRefusalSays("title"))
-	sc.Step(`^the crew refuses it and says the ceiling is (\d+)$`, func(ctx context.Context, ceiling int) error {
+	sc.Step(`^the system refuses it and says it assigns the identifier$`, theRefusalSays("assigns the identifier"))
+	sc.Step(`^the system refuses it and says the parent comes from the credential$`, theRefusalSays("credential"))
+	sc.Step(`^the system refuses it and says a title is needed$`, theRefusalSays("title"))
+	sc.Step(`^the system refuses it and says the ceiling is (\d+)$`, func(ctx context.Context, ceiling int) error {
 		return theRefusalSays(fmt.Sprintf("%d", ceiling))(ctx)
 	})
-	sc.Step(`^the crew refuses it and names the role$`, theRefusalSays("backlog-clearer"))
-	sc.Step(`^the crew refuses it and lists the modes$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it and names the role$`, theRefusalSays("backlog-clearer"))
+	sc.Step(`^the system refuses it and lists the modes$`, func(ctx context.Context) error {
 		for _, mode := range []string{"plan", "edits", "dangerous"} {
 			if err := theRefusalSays(mode)(ctx); err != nil {
 				return err
@@ -290,13 +290,13 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the crew refuses it and says the path is read inside the working directory$`,
+	sc.Step(`^the system refuses it and says the path is read inside the working directory$`,
 		theRefusalSays("working directory"))
-	sc.Step(`^the crew refuses it and says the path climbs out$`, theRefusalSays("climbs out"))
-	sc.Step(`^the crew refuses it and names the identifier it cannot find$`,
+	sc.Step(`^the system refuses it and says the path climbs out$`, theRefusalSays("climbs out"))
+	sc.Step(`^the system refuses it and names the identifier it cannot find$`,
 		theRefusalSays("0123456789abcdef01234567"))
-	sc.Step(`^the crew refuses it and says a budget cannot be below zero$`, theRefusalSays("below zero"))
-	sc.Step(`^the crew refuses it and says the job already ended$`, theRefusalSays("already"))
+	sc.Step(`^the system refuses it and says a budget cannot be below zero$`, theRefusalSays("below zero"))
+	sc.Step(`^the system refuses it and says the job already ended$`, theRefusalSays("already"))
 
 	sc.Step(`^the caller lists the job in the project$`, func(ctx context.Context) error {
 		return listJob(ctx, &quaycrewv1.ListJobsRequest{Project: worldFrom(ctx).projectID})
@@ -414,7 +414,7 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 
 	// The record of what happened is a row beside the row it describes. Nothing is published to the
 	// log in this slice, so the store is where it is read from.
-	sc.Step(`^the crew holds a "([^"]*)" record for it, naming the (title|reason)$`,
+	sc.Step(`^the system holds a "([^"]*)" record for it, naming the (title|reason)$`,
 		func(ctx context.Context, kind, naming string) error {
 			one, err := firstJob(ctx)
 			if err != nil {
@@ -508,7 +508,7 @@ func listJob(ctx context.Context, request *quaycrewv1.ListJobsRequest) error {
 }
 
 // firstJob is the job the scenario made first, read again so an assertion is about what
-// the crew holds rather than about what a call answered.
+// the system holds rather than about what a call answered.
 func firstJob(ctx context.Context) (*quaycrewv1.Job, error) {
 	scenario := jobFrom(ctx)
 	if len(scenario.declared) == 0 {
@@ -584,7 +584,7 @@ func initializeJobMaterialSteps(sc *godog.ScenarioContext) {
 
 	// The three parts of a refusal a caller can act on: whose boundary it is, what it does not
 	// receive, and the two ways out.
-	sc.Step(`^the crew refuses it, naming the role, the material and what to change$`,
+	sc.Step(`^the system refuses it, naming the role, the material and what to change$`,
 		func(ctx context.Context) error {
 			for _, want := range []string{"test-writer", "context", "import it again", "declare the job without"} {
 				if err := theRefusalSays(want)(ctx); err != nil {
@@ -594,7 +594,7 @@ func initializeJobMaterialSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew refuses it and lists the material it hands out$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it and lists the material it hands out$`, func(ctx context.Context) error {
 		for _, want := range role.Material {
 			if err := theRefusalSays(want)(ctx); err != nil {
 				return err
@@ -610,7 +610,7 @@ func initializeJobMaterialSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetJobs()) != 0 {
-			return fmt.Errorf("the crew holds %d jobs, and a refusal writes no row", len(listed.GetJobs()))
+			return fmt.Errorf("the system holds %d jobs, and a refusal writes no row", len(listed.GetJobs()))
 		}
 		return nil
 	})
@@ -636,7 +636,7 @@ func initializeJobMaterialSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			if len(listed.GetJobs()) != 1 {
-				return fmt.Errorf("the crew holds %d jobs, want 1", len(listed.GetJobs()))
+				return fmt.Errorf("the system holds %d jobs, want 1", len(listed.GetJobs()))
 			}
 			if err := runTool(ctx, "job", "show", listed.GetJobs()[0].GetId()); err != nil {
 				return err

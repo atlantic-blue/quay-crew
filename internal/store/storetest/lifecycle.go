@@ -15,7 +15,7 @@ import (
 // fourth query a controller reads sessions with.
 //
 // Both implementations or neither. A memory store that answered this query more loosely than Postgres
-// would make a suite green over a crew that reclaims containers the real one leaves alone.
+// would make a suite green over a system that reclaims containers the real one leaves alone.
 func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 

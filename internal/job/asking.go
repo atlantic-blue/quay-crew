@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Asking is the crew stopping for a person.
+// Asking is the system stopping for a person.
 //
 // A session that has to choose between two things a measurement cannot settle has three moves, and
 // two of them are bad. It can guess, and the operator finds out when the answer lands, which is how
@@ -30,7 +30,7 @@ const (
 	TellingLimit = BriefLimit
 )
 
-// TidyQuestion is a question as the crew keeps it, and the refusal where it could not be kept.
+// TidyQuestion is a question as the system keeps it, and the refusal where it could not be kept.
 func TidyQuestion(question string) (string, error) {
 	tidy := strings.TrimSpace(question)
 	switch {
@@ -45,7 +45,7 @@ func TidyQuestion(question string) (string, error) {
 	return tidy, nil
 }
 
-// TidyTelling is an answer as the crew keeps it, and the refusal where it could not be kept.
+// TidyTelling is an answer as the system keeps it, and the refusal where it could not be kept.
 func TidyTelling(answer string) (string, error) {
 	tidy := strings.TrimSpace(answer)
 	switch {
@@ -60,7 +60,7 @@ func TidyTelling(answer string) (string, error) {
 	return tidy, nil
 }
 
-// CarryOn is what the crew sends a session whose question has been answered.
+// CarryOn is what the system sends a session whose question has been answered.
 //
 // The question goes back with the answer. The session has been sitting in a container since it
 // asked, and a model reads what it is handed rather than what it remembers, so an answer arriving on

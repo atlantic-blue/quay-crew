@@ -83,7 +83,7 @@ func mounted(volumes []string, path string) bool {
 //
 // A session's sandbox joins one network so it can reach the control plane. Everything else on that
 // network is reachable by a session too, and a session runs model output, so what is on it is the
-// whole of the boundary: put Postgres there and any session can open a connection to the crew's
+// whole of the boundary: put Postgres there and any session can open a connection to the system's
 // store.
 //
 // Compose puts a service with no networks key on the default network, so this reads the file the way
@@ -110,10 +110,10 @@ func TestOnlyTheControlPlaneIsOnTheNetworkSessionsJoin(t *testing.T) {
 	}
 }
 
-// TestTheControlPlaneStaysOnTheCrewsOwnNetworkToo. Naming any network at all takes a service off the
+// TestTheControlPlaneStaysOnTheSystemsOwnNetworkToo. Naming any network at all takes a service off the
 // default one, so the store, the broker and the collector would all go out of reach in the same edit
 // that put the control plane where sessions are.
-func TestTheControlPlaneStaysOnTheCrewsOwnNetworkToo(t *testing.T) {
+func TestTheControlPlaneStaysOnTheSystemsOwnNetworkToo(t *testing.T) {
 	joined := composeFile(t).Services["controlplane"].Networks
 
 	if _, onDefault := joined["default"]; !onDefault {
@@ -124,8 +124,8 @@ func TestTheControlPlaneStaysOnTheCrewsOwnNetworkToo(t *testing.T) {
 
 // TestTheNetworkComposeMakesIsTheOneTheControlPlaneJoinsSandboxesTo.
 //
-// Two spellings of one name is how a session ends up on a network the crew is not on, and the failure
-// is invisible until a session makes a call: the container starts, the crew looks healthy, and every
+// Two spellings of one name is how a session ends up on a network the system is not on, and the failure
+// is invisible until a session makes a call: the container starts, the system looks healthy, and every
 // call from inside dies resolving the name. So both come from one variable, and this holds them to it.
 func TestTheNetworkComposeMakesIsTheOneTheControlPlaneJoinsSandboxesTo(t *testing.T) {
 	compose := composeFile(t)
@@ -137,52 +137,52 @@ func TestTheNetworkComposeMakesIsTheOneTheControlPlaneJoinsSandboxesTo(t *testin
 		t.Fatal("the sessions network is left to compose to name, and the control plane cannot read that name")
 	}
 	if made != told {
-		t.Fatalf("compose creates %q and the control plane joins sandboxes to %q, so no session reaches the crew",
+		t.Fatalf("compose creates %q and the control plane joins sandboxes to %q, so no session reaches the system",
 			made, told)
 	}
 }
 
-// TestACrewToldWhereItIsPutsItsSessionsWhereTheyCanReachIt. The address and the network are two halves
+// TestASystemToldWhereItIsPutsItsSessionsWhereTheyCanReachIt. The address and the network are two halves
 // of one thing: an address handed to a session that cannot resolve it is the defect this pair exists
-// to close, and it reads to the session as the crew being down.
+// to close, and it reads to the session as the system being down.
 //
 // Both are read as what an operator who set neither actually gets. An empty value inside
 // ${NAME:-} is still a whole line in the file, so reading the line rather than the default would pass
 // on a stack that hands out nothing.
-func TestACrewToldWhereItIsPutsItsSessionsWhereTheyCanReachIt(t *testing.T) {
+func TestASystemToldWhereItIsPutsItsSessionsWhereTheyCanReachIt(t *testing.T) {
 	environment := composeFile(t).Services["controlplane"].Environment
 
 	address := unsetGives(environment["QC_SANDBOX_CONTROL_PLANE"])
 	network := unsetGives(environment["QC_SESSION_NETWORK"])
 	if address == "" {
-		t.Fatal("a crew nobody configured tells a session no address, so a session running a job holds a credential it cannot spend")
+		t.Fatal("a system nobody configured tells a session no address, so a session running a job holds a credential it cannot spend")
 	}
 	if network == "" {
-		t.Fatalf("a crew nobody configured hands out %q and puts no session on a network that reaches it", address)
+		t.Fatalf("a system nobody configured hands out %q and puts no session on a network that reaches it", address)
 	}
 }
 
-// TestTheCrewAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn.
+// TestTheSystemAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn.
 //
 // A network alias belongs to one network rather than to a container, so the name a service answers to
 // is a per network fact. A session has nothing to dial but the name in QC_SANDBOX_CONTROL_PLANE, and
-// the whole call fails resolving it if the two ever differ, which reads to the session as the crew
+// the whole call fails resolving it if the two ever differ, which reads to the session as the system
 // being down rather than as a name.
-func TestTheCrewAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn(t *testing.T) {
-	crew := composeFile(t).Services["controlplane"]
+func TestTheSystemAnswersToTheNameItHandsOutOnTheNetworkItHandsItOutOn(t *testing.T) {
+	system := composeFile(t).Services["controlplane"]
 
-	handedOut, _, found := strings.Cut(unsetGives(crew.Environment["QC_SANDBOX_CONTROL_PLANE"]), ":")
+	handedOut, _, found := strings.Cut(unsetGives(system.Environment["QC_SANDBOX_CONTROL_PLANE"]), ":")
 	if !found || handedOut == "" {
-		t.Fatalf("the crew hands out %q, which names no host to resolve",
-			crew.Environment["QC_SANDBOX_CONTROL_PLANE"])
+		t.Fatalf("the system hands out %q, which names no host to resolve",
+			system.Environment["QC_SANDBOX_CONTROL_PLANE"])
 	}
-	answersTo := crew.Networks[sessionNetwork].Aliases
+	answersTo := system.Networks[sessionNetwork].Aliases
 	for _, alias := range answersTo {
 		if alias == handedOut {
 			return
 		}
 	}
-	t.Fatalf("the crew hands a session the name %q and answers to %v on the network that session is on",
+	t.Fatalf("the system hands a session the name %q and answers to %v on the network that session is on",
 		handedOut, answersTo)
 }
 

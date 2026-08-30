@@ -33,7 +33,7 @@ var usage = manual.Commands
 // runFeatures prints what the product does, from the specification embedded in this binary. With a
 // name, it prints only the features that mention it.
 //
-// It talks to nothing. What the crew can do is a property of the build, not of a running stack, and
+// It talks to nothing. What the system can do is a property of the build, not of a running stack, and
 // the question is usually asked by somebody who has not started one yet.
 func runFeatures(args []string, out io.Writer) error {
 	needle := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
@@ -118,9 +118,9 @@ var removedCommands = map[string]string{
 		"\n\n  quay task --dispatch [<address>] \"...\"",
 	"tasks": "a task is one word now, and reading a session's history back is a verb under it" +
 		"\n\n  quay task list <session>",
-	"threads": "a thread is called a session now, because the crew has one word for a conversation " +
+	"threads": "a thread is called a session now, because the system has one word for a conversation " +
 		"and this was the second. Use quay sessions",
-	"thread": "a thread is called a session now, because the crew has one word for a conversation " +
+	"thread": "a thread is called a session now, because the system has one word for a conversation " +
 		"and this was the second. Use quay sessions",
 	"turns": "a turn is called a task now, because a turn is a word from conversation analysis and " +
 		"nothing about it said how long it takes. Use quay task list <session>",
@@ -130,7 +130,7 @@ var removedCommands = map[string]string{
 		"once with quay skill import skills/git, attach it with quay skill attach <workspace> git, " +
 		"and ask the session to clone what it works on. To say which repository a project's work " +
 		"lands in: quay project repository <owner>/<name>",
-	"panel": "`quay` on its own opens the crew, and p shows or hides the conversation beside it",
+	"panel": "`quay` on its own opens the system, and p shows or hides the conversation beside it",
 	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
 		"thing: run to completion, watched by a controller, with a disposable container underneath" +
 		"\n\n  quay job <create|list|show|stop>",
@@ -277,16 +277,16 @@ func locate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ty
 // standing rewrites a failure to resolve an address the operator did not type, because an address
 // nobody typed came from the place they are standing in.
 //
-// That place is kept on this machine and the crew's own state is not, so anything that empties a crew
-// leaves the tool pointing at something gone: a wipe, a fresh install against a different crew, or a
-// colleague's crew on another address. Every command that defaults to where you are then refuses with
-// a sentence about a missing workspace, which reads as the crew being broken rather than as you being
+// That place is kept on this machine and the system's own state is not, so anything that empties a system
+// leaves the tool pointing at something gone: a wipe, a fresh install against a different system, or a
+// colleague's system on another address. Every command that defaults to where you are then refuses with
+// a sentence about a missing workspace, which reads as the system being broken rather than as you being
 // nowhere.
 func standing(typed string, path workspace.Path, err error) error {
 	if err == nil || strings.TrimSpace(typed) != "" || !errors.Is(err, workspace.ErrNotFound) {
 		return err
 	}
-	return fmt.Errorf("you are standing in %s, which this crew does not have: %w"+
+	return fmt.Errorf("you are standing in %s, which this system does not have: %w"+
 		"\n\nmove with quay use <workspace>/<project>, or see what there is with quay workspace list",
 		path, err)
 }
@@ -349,17 +349,17 @@ func move(path workspace.Path, out io.Writer) error {
 // runSecretList says which secrets a workspace has, and never what any of them says.
 func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay secret list [<workspace>|crew]")
+		return fmt.Errorf("usage: quay secret list [<workspace>|system]")
 	}
 	request := &quaycrewv1.ListSecretsRequest{}
-	// "crew" asks for what the crew holds and nothing else. It is not a workspace, so it is answered
+	// "system" asks for what the system holds and nothing else. It is not a workspace, so it is answered
 	// by filtering the listing rather than by resolving an address.
-	onlyCrew := len(args) == 1 && args[0] == crewScope
-	where := crewWide("secrets")
-	if onlyCrew {
-		where = narrowedTo("secrets", "the crew's own", "quay secret list on its own reads every workspace")
+	onlySystem := len(args) == 1 && args[0] == systemScope
+	where := systemWide("secrets")
+	if onlySystem {
+		where = narrowedTo("secrets", "the system's own", "quay secret list on its own reads every workspace")
 	}
-	if len(args) == 1 && !onlyCrew {
+	if len(args) == 1 && !onlySystem {
 		located, err := workspace.Resolve(ctx, client, args[0])
 		if err != nil {
 			return err
@@ -373,16 +373,16 @@ func runSecretList(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	shown := 0
 	for _, secret := range resp.GetSecrets() {
-		if onlyCrew && !secret.GetCrew() {
+		if onlySystem && !secret.GetSystem() {
 			continue
 		}
 		shown++
-		// The crew's own belong to no workspace, so the column says the level instead of an
-		// identifier. Reading "crew" where a workspace name goes is how the listing says every
+		// The system's own belong to no workspace, so the column says the level instead of an
+		// identifier. Reading "system" where a workspace name goes is how the listing says every
 		// workspace has this one.
 		where := display.Name(secret.GetWorkspaceName(), secret.GetWorkspace())
-		if secret.GetCrew() {
-			where = crewScope
+		if secret.GetSystem() {
+			where = systemScope
 		}
 		fmt.Fprintf(out, "%-20s %-32s %s\n", where, secret.GetName(),
 			whereItLands(secret.GetName(), secret.GetProjection()))
@@ -410,8 +410,8 @@ func whereItLands(name string, projection quaycrewv1.SecretProjection) string {
 const secretUsage = "usage: <value> | quay secret set [<workspace>] <key>" +
 	"\n   or: quay secret set [<workspace>] <key> <value>" +
 	"\n   or: quay secret mount [<workspace>] <name> <path>   (a credential that is a file)" +
-	"\n\nsay crew where a workspace goes to set it once for every workspace:" +
-	"\n   gh auth token | quay secret set crew GITHUB_TOKEN"
+	"\n\nsay system where a workspace goes to set it once for every workspace:" +
+	"\n   gh auth token | quay secret set system GITHUB_TOKEN"
 
 // standardInputIsPiped says whether something is being fed in rather than a person typing. A
 // character device is a terminal; anything else is a pipe or a file redirection.
@@ -471,16 +471,16 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		}
 	}
 
-	// The crew's level, said the same way a skill, a hook and a piece of context are given to it. It
+	// The system's level, said the same way a skill, a hook and a piece of context are given to it. It
 	// is not an address, so there is nothing to resolve: no workspace is named and every workspace
 	// reads it.
-	if typed == crewScope {
+	if typed == systemScope {
 		if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-			Scope: crewScope, Key: key, Value: value,
+			Scope: systemScope, Key: key, Value: value,
 		}); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "set secret %s for the crew, so every workspace has it\n", key)
+		fmt.Fprintf(out, "set secret %s for the system, so every workspace has it\n", key)
 		fmt.Fprintln(out, "a workspace that sets the same name keeps its own")
 		return nil
 	}
@@ -503,7 +503,7 @@ func runSecret(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // for and the piped form is the way to mount one that is not on disk.
 const mountUsage = "usage: quay secret mount [<workspace>] <name> <path>" +
 	"\n   or: <contents> | quay secret mount [<workspace>] <name>" +
-	"\n\nsay crew where a workspace goes to mount it for every workspace"
+	"\n\nsay system where a workspace goes to mount it for every workspace"
 
 // runSecretMount stores a secret that reaches a session as a file rather than as an environment
 // variable.
@@ -536,16 +536,16 @@ func runSecretMount(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return fmt.Errorf("there is nothing to mount, so %s was not set", name)
 	}
 
-	if typed == crewScope {
+	if typed == systemScope {
 		if _, err := client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
-			Scope:      crewScope,
+			Scope:      systemScope,
 			Key:        name,
 			Value:      value,
 			Projection: quaycrewv1.SecretProjection_SECRET_PROJECTION_FILE,
 		}); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "mounted %s for the crew at %s, so every workspace has it\n", name, sandbox.SecretFilePath(name))
+		fmt.Fprintf(out, "mounted %s for the system at %s, so every workspace has it\n", name, sandbox.SecretFilePath(name))
 		fmt.Fprintln(out, "a session already running was made before this, so stop it to get a sandbox that has it")
 		return nil
 	}
@@ -613,7 +613,7 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		if err != nil {
 			return err
 		}
-		where := crewWide("workspaces")
+		where := systemWide("workspaces")
 		if len(resp.GetWorkspaces()) == 0 {
 			where.nothing(out)
 			return nil
@@ -673,7 +673,7 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 	case "list":
 		scope := ""
-		where := crewWide("projects")
+		where := systemWide("projects")
 		if len(args) > 1 {
 			located, err := locate(ctx, client, args[1])
 			if err != nil {
@@ -728,8 +728,8 @@ func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneSer
 	if len(said) > 2 || (len(said) == 0 && kind != "") {
 		return fmt.Errorf("usage: quay project repository [<address>] <owner>/<name> [public|private]")
 	}
-	// A last word that is neither an address nor a kind the crew knows. A forge has other kinds, and
-	// "internal" read as the repository leaves the crew resolving atlantic-blue as a workspace and
+	// A last word that is neither an address nor a kind the system knows. A forge has other kinds, and
+	// "internal" read as the repository leaves the system resolving atlantic-blue as a workspace and
 	// answering that it has no such thing, which sends the operator to fix the wrong half.
 	if len(said) == 2 && !strings.Contains(said[1], workspace.Separator) {
 		return fmt.Errorf("a repository is an owner and a name, and a kind is %s or %s, and %q is neither"+
@@ -773,7 +773,7 @@ func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneSer
 //
 // A project with none says so rather than saying nothing. The gap is the finding: the acceptance run
 // had a workspace, a project, three roles and a token that worked, and the one fact nothing held was
-// where the work goes, so it read as a crew that was ready.
+// where the work goes, so it read as a system that was ready.
 func writeRepository(out io.Writer, indent string, project *quaycrewv1.Project) {
 	if project.GetRepository() == "" {
 		fmt.Fprintf(out, "%sno repository, so a job declared here is not asked to push anywhere. "+
@@ -823,7 +823,7 @@ func projectNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 }
 
 // runContext says where the files the model reads live. It asks the control plane rather than working
-// the paths out, because this tool runs on the operator's machine and the layout belongs to the crew.
+// the paths out, because this tool runs on the operator's machine and the layout belongs to the system.
 func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "edit" {
 		return runContextEdit(ctx, client, args[1:], out)
@@ -848,12 +848,12 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 
 	request := &quaycrewv1.ListContextsRequest{}
-	// The crew's level is in every listing, so asking for it by name is asking for the listing.
-	if typed == crewScope {
+	// The system's level is in every listing, so asking for it by name is asking for the listing.
+	if typed == systemScope {
 		typed = ""
 	}
 	// An address typed in wins; otherwise the operator's own place narrows it. Standing nowhere shows
-	// the whole crew, because then the question was about the crew.
+	// the whole system, because then the question was about the system.
 	path, err := addressFrom(typed)
 	switch {
 	case err != nil && typed != "":
@@ -871,7 +871,7 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return err
 	}
 	if len(resp.GetDirs()) == 0 {
-		fmt.Fprintln(out, "no context directories: this crew keeps a session's state in its container")
+		fmt.Fprintln(out, "no context directories: this system keeps a session's state in its container")
 		return nil
 	}
 	fmt.Fprintf(out, "%-10s %-20s %-22s %s\n", "scope", "name", "characters", "what it says")
@@ -912,20 +912,20 @@ func firstLine(body string) string {
 
 // runContextShow prints what one level says, and nothing else, so that
 //
-//	quay context show crew > file
-//	quay context set crew < file
+//	quay context show system > file
+//	quay context set system < file
 //
 // are a pair. Until this existed a level could only be overwritten: adding a paragraph meant already
-// holding the whole text, and the only way to recover what the crew held was to read the contexts
+// holding the whole text, and the only way to recover what the system held was to read the contexts
 // table in the database. It also means a level can be diffed, piped, and kept in a repository and
-// compared against what the crew actually holds.
+// compared against what the system actually holds.
 //
 // The body goes out byte for byte, with nothing added, because the round trip has to be a no op.
 // A heading, a trailing newline or a count would each become part of the level the moment somebody
 // piped this into `quay context set`.
 func runContextShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context show [<address>|crew]")
+		return fmt.Errorf("usage: quay context show [<address>|system]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -952,13 +952,13 @@ func runContextShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 
 // runContextSet writes a level's context from standard input, which is how a file becomes context:
 //
-//	quay context set crew < ~/notes/how-we-job.md
+//	quay context set system < ~/notes/how-we-job.md
 //
 // Reading a file rather than taking it as an argument is deliberate: context is prose, often long and
 // full of everything a shell would like to interpret.
 func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context set [<address>|crew] < file")
+		return fmt.Errorf("usage: quay context set [<address>|system] < file")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -996,7 +996,7 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 	written := contextsize.Read(scope, name, string(body))
 	fmt.Fprintf(out, "%s now says %s\n", written.Label(), contextsize.Characters(written.Characters))
-	// The size on its own is a number nobody acts on: the crew level reached 100,179 characters while
+	// The size on its own is a number nobody acts on: the system level reached 100,179 characters while
 	// every write reported its own length. So a level over the mark also says who reads it and what to
 	// move down a level, at the moment somebody makes it that big.
 	if said := written.Say(); said != "" {
@@ -1009,7 +1009,7 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 // was empty. Saying it out loud is the whole point of it being its own command.
 func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context clear [<address>|crew]")
+		return fmt.Errorf("usage: quay context clear [<address>|system]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -1037,7 +1037,7 @@ func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceC
 	return nil
 }
 
-// contextBody is what a level says today, read back out of the crew.
+// contextBody is what a level says today, read back out of the system.
 //
 // The listing carries every level's body, so there is nothing else to ask, and one call answers all
 // three questions anything here has: what a level says, how long it is, and whether it says anything
@@ -1070,18 +1070,18 @@ func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	return contextsize.Read(scope, "", body).Characters, err
 }
 
-// contextTarget works out which level an address means. The word "crew" is the level above every
+// contextTarget works out which level an address means. The word "system" is the level above every
 // workspace, a workspace address is that workspace, and anything deeper is its project.
 func contextTarget(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (scope, owner, name string, err error) {
-	if typed == "crew" {
-		return "crew", "", "crew", nil
+	if typed == "system" {
+		return "system", "", "system", nil
 	}
 	path, err := addressFrom(typed)
 	if err != nil {
 		return "", "", "", err
 	}
 	if path.IsZero() {
-		return "", "", "", fmt.Errorf("say which context: crew, a workspace, or a workspace/project")
+		return "", "", "", fmt.Errorf("say which context: system, a workspace, or a workspace/project")
 	}
 	located, err := workspace.ResolvePath(ctx, client, path)
 	if err != nil {
@@ -1147,7 +1147,7 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return err
 	}
 
-	// The editor wrote a file; this tells the crew. Context lives in the store, and a file nobody read
+	// The editor wrote a file; this tells the system. Context lives in the store, and a file nobody read
 	// back is a note left on one machine.
 	body, _ := sandbox.ReadMemory(filepath.Dir(file))
 	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
@@ -1172,11 +1172,11 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	// conversation running with nobody watching it from an empty container.
 	request := &quaycrewv1.ListSessionsRequest{Presence: true}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
-	// nowhere lists everything, because then the question was about the crew rather than a place,
-	// and so does the word crew, which is how somebody standing somewhere widens it again.
+	// nowhere lists everything, because then the question was about the system rather than a place,
+	// and so does the word system, which is how somebody standing somewhere widens it again.
 	path, err := addressFrom(typed)
 	switch {
-	case readsTheCrew(typed):
+	case readsTheSystem(typed):
 		path = workspace.Path{}
 	case err != nil && typed != "":
 		return err
@@ -1192,11 +1192,11 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
-	// Said out loud, because a listing narrowed to where you are standing looks exactly like a crew
+	// Said out loud, because a listing narrowed to where you are standing looks exactly like a system
 	// with fewer sessions in it, and the operator has no way to tell the two apart.
-	where := crewWide("sessions")
+	where := systemWide("sessions")
 	if !path.IsZero() {
-		where = narrowedTo("sessions", path.String(), "quay sessions crew lists every session")
+		where = narrowedTo("sessions", path.String(), "quay sessions system lists every session")
 	}
 	if len(resp.GetSessions()) == 0 {
 		where.nothing(out)

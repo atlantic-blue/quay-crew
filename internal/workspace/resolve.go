@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -43,7 +44,7 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
-	where := "this crew"
+	where := "this system"
 	if e.In != "" {
 		where = e.In
 	}
@@ -85,6 +86,11 @@ func (e *AmbiguousError) Error() string {
 func Resolve(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, reference string) (string, error) {
 	if strings.TrimSpace(reference) == "" {
 		return "", fmt.Errorf("workspace: a workspace id or name is required")
+	}
+	// A listing that takes the level word takes it before this, so anything arriving here saying the
+	// old one is somebody typing what used to work.
+	if err := name.RefuseRetired(reference); err != nil {
+		return "", err
 	}
 
 	if _, err := client.GetWorkspace(ctx, &quaycrewv1.GetWorkspaceRequest{Id: reference}); err == nil {

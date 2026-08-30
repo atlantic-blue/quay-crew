@@ -60,7 +60,7 @@ func initializeJobWordSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew holds no such role$`, func(ctx context.Context) error {
+	sc.Step(`^the system holds no such role$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		listed, err := w.client.ListRoles(ctx, &quaycrewv1.ListRolesRequest{})
 		if err != nil {

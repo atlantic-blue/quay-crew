@@ -10,8 +10,8 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 )
 
-// theLog is what the crew offered to the event log, in the order it offered it. It records rather
-// than publishes, because what this proves is when the crew hands a record over: after the write
+// theLog is what the system offered to the event log, in the order it offered it. It records rather
+// than publishes, because what this proves is when the system hands a record over: after the write
 // that put it in the store, and never instead of it.
 type theLog struct {
 	mu      sync.Mutex
@@ -48,7 +48,7 @@ const aTrace = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 // Every movement reaches the log, and every one of them carries the job's own trace.
 func TestEveryMovementIsOfferedToTheLogAndCarriesTheTrace(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	log := &theLog{}
 	controller := job.NewController(kept, plane, nil, nil, nil).Exporting(log)
 
@@ -83,7 +83,7 @@ func TestEveryMovementIsOfferedToTheLogAndCarriesTheTrace(t *testing.T) {
 // The export follows the write. A write that did not apply must leave nothing on the log, or a
 // consumer learns about a movement the store never made.
 func TestAWriteThatDidNotApplyIsNotExported(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	log := &theLog{}
 	controller := job.NewController(kept, plane, nil, nil, nil).Exporting(log)
 
@@ -101,7 +101,7 @@ func TestAWriteThatDidNotApplyIsNotExported(t *testing.T) {
 	}
 }
 
-// A crew with no broker configured is the default, and it is the one every scenario runs on. The
+// A system with no broker configured is the default, and it is the one every scenario runs on. The
 // job has to run exactly the same on it.
 func TestAControllerWithNoExporterStillRunsTheJob(t *testing.T) {
 	controller, kept, plane := aController(t)
@@ -113,17 +113,17 @@ func TestAControllerWithNoExporterStillRunsTheJob(t *testing.T) {
 	controller.Tick(ctx)
 
 	if got := kept.get(one.ID); got.Phase != job.PhaseDone || got.Answer == "" {
-		t.Fatalf("the job is %q with answer %q on a crew with no broker", got.Phase, got.Answer)
+		t.Fatalf("the job is %q with answer %q on a system with no broker", got.Phase, got.Answer)
 	}
 	if len(kept.recorded(one.ID)) != 3 {
-		t.Fatalf("%d records are in the store on a crew with no broker", len(kept.recorded(one.ID)))
+		t.Fatalf("%d records are in the store on a system with no broker", len(kept.recorded(one.ID)))
 	}
 }
 
 // The task the controller sends belongs to the job's trace. That is what lets a reader join the row
 // to the conversation that ran it, and it comes off the row rather than out of this process.
 func TestTheTaskAControllerSendsRunsUnderTheWorksOwnTrace(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil)
 
 	declared := declaredJob("read the electricity bill")
@@ -140,7 +140,7 @@ func TestTheTaskAControllerSendsRunsUnderTheWorksOwnTrace(t *testing.T) {
 // Job nothing was tracing is dispatched all the same. A missing trace is a record with less in it,
 // never a job that does not run.
 func TestJobWithNoTraceStillRuns(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	log := &theLog{}
 	controller := job.NewController(kept, plane, nil, nil, nil).Exporting(log)
 	one := kept.add(declaredJob("read the electricity bill"))
@@ -148,7 +148,7 @@ func TestJobWithNoTraceStillRuns(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhaseRunning {
 		t.Fatalf("the job is %q", got.Phase)

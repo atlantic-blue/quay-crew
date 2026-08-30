@@ -26,7 +26,7 @@ func subAgentAnswer(in, cacheRead int64) string {
 
 const askedSomething = `{"type":"user","message":{"role":"user","content":"and now?"}}`
 
-// wroteTranscript puts a conversation on disk where the crew reads it, and answers with the storage
+// wroteTranscript puts a conversation on disk where the system reads it, and answers with the storage
 // and the names to read it back by.
 func wroteTranscript(t *testing.T, lines ...string) (sandbox.Storage, string, string) {
 	t.Helper()
@@ -117,15 +117,15 @@ func TestTheCostIsStillTheWholeConversation(t *testing.T) {
 	}
 }
 
-// The crew cannot work the window size out for itself. A session writes down what the model runtime
-// told it, and the crew reads that, because a list of models in the code is right today and quietly
+// The system cannot work the window size out for itself. A session writes down what the model runtime
+// told it, and the system reads that, because a list of models in the code is right today and quietly
 // wrong at the next one.
 func TestTheWindowSizeIsWhateverASessionWroteDown(t *testing.T) {
 	storage, workspace, _ := wroteTranscript(t, answer(52, 400, 100_000, 0))
 	at := filepath.Join(storage.Dir, "workspaces", workspace, "claude", sandbox.ContextWindowFile)
 
 	if _, said := storage.ContextWindowSize(workspace); said {
-		t.Error("the crew claims to know the window size before anything told it")
+		t.Error("the system claims to know the window size before anything told it")
 	}
 
 	for _, tc := range []struct {
@@ -146,7 +146,7 @@ func TestTheWindowSizeIsWhateverASessionWroteDown(t *testing.T) {
 			}
 			size, said := storage.ContextWindowSize(workspace)
 			if said != tc.said || size != tc.want {
-				t.Errorf("the crew reads %d (said=%v), want %d (said=%v)", size, said, tc.want, tc.said)
+				t.Errorf("the system reads %d (said=%v), want %d (said=%v)", size, said, tc.want, tc.said)
 			}
 		})
 	}

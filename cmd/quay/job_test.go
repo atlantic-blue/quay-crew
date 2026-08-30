@@ -16,8 +16,8 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// aCrewToJobIn is a crew with one workspace and one project, with the operator standing in it.
-func aCrewToJobIn(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+// aSystemToJobIn is a system with one workspace and one project, with the operator standing in it.
+func aSystemToJobIn(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
@@ -25,7 +25,7 @@ func aCrewToJobIn(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	return client
 }
 
-// declaredHere declares one job and hands back the identifier the crew printed.
+// declaredHere declares one job and hands back the identifier the system printed.
 func declaredHere(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, title string) string {
 	t.Helper()
 	said := mustRun(t, client, "job", "create", "--title", title, "--brief", "open the bill and say when it is due")
@@ -37,7 +37,7 @@ func declaredHere(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, tit
 }
 
 func TestJobIsDeclaredAndReadBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	id := declaredHere(t, client, "read the electricity bill")
 
@@ -52,7 +52,7 @@ func TestJobIsDeclaredAndReadBack(t *testing.T) {
 // A declaration says where to read it back, because a caller that declared job and got a bare
 // identifier has to work out the next command for itself.
 func TestDeclaringJobSaysHowToReadItBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "job", "create", "--title", "read the bill", "--brief", "open it")
 
@@ -65,7 +65,7 @@ func TestDeclaringJobSaysHowToReadItBack(t *testing.T) {
 }
 
 func TestJobCarriesEverythingTheDeclarationGaveIt(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "job", "create",
 		"--title", "pay the electricity bill",
@@ -88,7 +88,7 @@ func TestJobCarriesEverythingTheDeclarationGaveIt(t *testing.T) {
 
 // The tool refuses flags everywhere else, so the ones this command takes have to reach it.
 func TestTheFlagsJobTakesReachTheCommand(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	if _, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it"); err != nil {
 		t.Fatalf("a flag quay job create takes was refused: %v", err)
@@ -100,7 +100,7 @@ func TestTheFlagsJobTakesReachTheCommand(t *testing.T) {
 
 // The parent is refused by name, with the sentence that says where a parent comes from.
 func TestTheParentFlagIsRefusedWithTheReason(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it",
 		"--parent", "0123456789abcdef01234567")
@@ -114,7 +114,7 @@ func TestTheParentFlagIsRefusedWithTheReason(t *testing.T) {
 
 // A flag at the end of the line with nothing after it is a value the caller thinks they gave.
 func TestAFlagWithNoValueIsRefusedByName(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title")
 	if err == nil {
@@ -126,7 +126,7 @@ func TestAFlagWithNoValueIsRefusedByName(t *testing.T) {
 }
 
 func TestALabelThatIsNotAPairIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it", "--label", "owner")
 	if err == nil {
@@ -138,7 +138,7 @@ func TestALabelThatIsNotAPairIsRefused(t *testing.T) {
 }
 
 func TestABudgetThatIsNotANumberIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it",
 		"--budget-tokens", "lots")
@@ -151,7 +151,7 @@ func TestABudgetThatIsNotANumberIsRefused(t *testing.T) {
 }
 
 func TestADeadlineThatIsNotAMomentIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it",
 		"--deadline", "next tuesday")
@@ -163,10 +163,10 @@ func TestADeadlineThatIsNotAMomentIsRefused(t *testing.T) {
 	}
 }
 
-// The crew's refusal reaches the operator whole. A tool that swallowed it would leave them with a
+// The system's refusal reaches the operator whole. A tool that swallowed it would leave them with a
 // failure and no sentence.
-func TestTheCrewsRefusalReachesTheOperator(t *testing.T) {
-	client := aCrewToJobIn(t)
+func TestTheSystemsRefusalReachesTheOperator(t *testing.T) {
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it",
 		"--role", "backlog-clearer")
@@ -174,12 +174,12 @@ func TestTheCrewsRefusalReachesTheOperator(t *testing.T) {
 		t.Fatal("job naming a role the workspace does not hold was accepted")
 	}
 	if !strings.Contains(err.Error(), "backlog-clearer") {
-		t.Fatalf("the refusal says %q, want the crew's own sentence", err)
+		t.Fatalf("the refusal says %q, want the system's own sentence", err)
 	}
 }
 
 func TestTheListingIsNewestFirstAndNarrowsByPhase(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	first := declaredHere(t, client, "read the electricity bill")
 	declaredHere(t, client, "pay the electricity bill")
 
@@ -205,7 +205,7 @@ func TestTheListingIsNewestFirstAndNarrowsByPhase(t *testing.T) {
 }
 
 func TestAnEmptyListingSaysHowToDeclareJob(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	listed := mustRun(t, client, "job", "list")
 
@@ -215,7 +215,7 @@ func TestAnEmptyListingSaysHowToDeclareJob(t *testing.T) {
 }
 
 func TestJobIsStoppedByTheShortIdentifierAListingPrints(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	id := declaredHere(t, client, "read the electricity bill")
 
 	said := mustRun(t, client, "job", "stop", id, "the bill is not due yet")
@@ -230,7 +230,7 @@ func TestJobIsStoppedByTheShortIdentifierAListingPrints(t *testing.T) {
 }
 
 func TestStoppingJobTwiceIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	id := declaredHere(t, client, "read the electricity bill")
 	mustRun(t, client, "job", "stop", id, "the bill is not due yet")
 
@@ -244,7 +244,7 @@ func TestStoppingJobTwiceIsRefused(t *testing.T) {
 }
 
 func TestJobNobodyHoldsIsRefusedBySayingWhereToLook(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "show", "nosuchwork")
 	if err == nil {
@@ -256,7 +256,7 @@ func TestJobNobodyHoldsIsRefusedBySayingWhereToLook(t *testing.T) {
 }
 
 func TestAWordThatIsNotAJobCommandIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "sideways")
 	if err == nil {
@@ -282,18 +282,18 @@ func TestDeclaringJobFromAWorkspaceSaysItNeedsAProject(t *testing.T) {
 	}
 }
 
-// TestASessionDeclaresWithNoAddressAndTheCrewReadsTheProjectFromItsCredential.
+// TestASessionDeclaresWithNoAddressAndTheSystemReadsTheProjectFromItsCredential.
 //
 // A session running a job is standing nowhere and cannot resolve an address: resolving one means
 // listing workspaces and projects, and a role grants the four job verbs and nothing else. So the
-// tool sends no project and the crew reads it from the credential, the same place the parent comes
+// tool sends no project and the system reads it from the credential, the same place the parent comes
 // from. The tool refusing here would make the first verb a role grants unusable from the only place
 // it is ever held.
 //
-// A crew that has no credential to read is the case underneath, and it is the one this can assert
-// with no interceptor in front of it: the declaration has to reach the crew and be refused there,
+// A system that has no credential to read is the case underneath, and it is the one this can assert
+// with no interceptor in front of it: the declaration has to reach the system and be refused there,
 // rather than be stopped in the tool for being nowhere.
-func TestASessionDeclaresWithNoAddressAndTheCrewReadsTheProjectFromItsCredential(t *testing.T) {
+func TestASessionDeclaresWithNoAddressAndTheSystemReadsTheProjectFromItsCredential(t *testing.T) {
 	client := testClient(t)
 
 	_, err := runQuay(t, client, "job", "create", "--title", "read the bill", "--brief", "open it")
@@ -302,14 +302,14 @@ func TestASessionDeclaresWithNoAddressAndTheCrewReadsTheProjectFromItsCredential
 		t.Fatal("a job was declared with no project and no credential to read one from")
 	}
 	if !strings.Contains(err.Error(), "job needs a project to run in") {
-		t.Fatalf("the refusal says %q, want the crew's own answer: the tool stopped it before the crew saw it", err)
+		t.Fatalf("the refusal says %q, want the system's own answer: the tool stopped it before the system saw it", err)
 	}
 }
 
-// What a job requires reaches the crew and comes back on the listing, because a flag that
+// What a job requires reaches the system and comes back on the listing, because a flag that
 // is quietly dropped looks exactly like one that took effect.
-func TestWhatJobRequiresReachesTheCrewAndIsShownBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+func TestWhatJobRequiresReachesTheSystemAndIsShownBack(t *testing.T) {
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "job", "create",
 		"--title", "read the electricity bill",
@@ -323,15 +323,15 @@ func TestWhatJobRequiresReachesTheCrewAndIsShownBack(t *testing.T) {
 	}
 }
 
-// A word the crew does not hand out is refused by name, with the three that would work.
-func TestJobRequiringSomethingTheCrewDoesNotHandOutIsRefusedByTheTool(t *testing.T) {
-	client := aCrewToJobIn(t)
+// A word the system does not hand out is refused by name, with the three that would work.
+func TestJobRequiringSomethingTheSystemDoesNotHandOutIsRefusedByTheTool(t *testing.T) {
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "job", "create",
 		"--title", "read the electricity bill", "--brief", "open it", "--requires", "the codebase")
 
 	if err == nil {
-		t.Fatal("job requiring material the crew does not hand out was accepted")
+		t.Fatal("job requiring material the system does not hand out was accepted")
 	}
 	for _, want := range []string{"the codebase", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {
@@ -362,7 +362,7 @@ func TestJobShowSaysWhereTheWorkWent(t *testing.T) {
 	// The whole identifier, because a listing prints the short one and only the tool expands it.
 	listed, err := client.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{})
 	if err != nil || len(listed.GetJobs()) != 1 {
-		t.Fatalf("the crew holds %v jobs (%v), want the one just declared", len(listed.GetJobs()), err)
+		t.Fatalf("the system holds %v jobs (%v), want the one just declared", len(listed.GetJobs()), err)
 	}
 	id := listed.GetJobs()[0].GetId()
 
@@ -410,10 +410,10 @@ func waitForJob(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, id, p
 }
 
 // A workspace with no credential took a whole tree of job and said nothing, and every session in it
-// would have died on its first clone. The crew already knew: quay skill list printed the reason,
+// would have died on its first clone. The system already knew: quay skill list printed the reason,
 // unprompted, in a listing nobody is required to read. So the declaration says it too, where somebody
 // is looking.
-func aCrewWhoseGitSkillNeedsAToken(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
+func aSystemWhoseGitSkillNeedsAToken(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
 	t.Helper()
 	srv := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
@@ -430,7 +430,7 @@ func aCrewWhoseGitSkillNeedsAToken(t *testing.T) (quaycrewv1.ControlPlaneService
 }
 
 func TestDeclaringJobInAWorkspaceWithNoCredentialSaysWhatTheSessionStartsWithout(t *testing.T) {
-	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+	client, _ := aSystemWhoseGitSkillNeedsAToken(t)
 
 	said := mustRun(t, client, "job", "create", "--title", "fix the defect", "--brief", "clone it and push a branch")
 
@@ -444,7 +444,7 @@ func TestDeclaringJobInAWorkspaceWithNoCredentialSaysWhatTheSessionStartsWithout
 			t.Errorf("quay job create says %q, want it to say %q", said, want)
 		}
 	}
-	// Said rather than refused: the crew cannot know which skill a brief reaches for, and a job that
+	// Said rather than refused: the system cannot know which skill a brief reaches for, and a job that
 	// reads an electricity bill runs perfectly well with no forge token.
 	if !strings.Contains(said, "declared ") {
 		t.Errorf("quay job create says %q, want the job declared anyway", said)
@@ -454,7 +454,7 @@ func TestDeclaringJobInAWorkspaceWithNoCredentialSaysWhatTheSessionStartsWithout
 // The note is about a real gap, so a workspace that has its credentials must not carry it: a warning
 // printed every time is a warning nobody reads.
 func TestDeclaringJobInAWorkspaceThatHasItsCredentialsSaysNothingExtra(t *testing.T) {
-	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+	client, _ := aSystemWhoseGitSkillNeedsAToken(t)
 	mustRun(t, client, "secret", "set", "me", "GH_TOKEN", "a token")
 
 	said := mustRun(t, client, "job", "create", "--title", "fix the defect", "--brief", "clone it and push a branch")
@@ -467,7 +467,7 @@ func TestDeclaringJobInAWorkspaceThatHasItsCredentialsSaysNothingExtra(t *testin
 // A role that does not receive skills is given none of them by design, so there is no gap to report
 // and nothing to say. Reporting it anyway would teach the operator to skip the line.
 func TestJobInARoleThatDoesNotReceiveSkillsSaysNothingAboutThem(t *testing.T) {
-	client, _ := aCrewWhoseGitSkillNeedsAToken(t)
+	client, _ := aSystemWhoseGitSkillNeedsAToken(t)
 	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
 	mustRun(t, client, "role", "attach", "test-writer")
 

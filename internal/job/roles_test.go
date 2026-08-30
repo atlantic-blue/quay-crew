@@ -15,8 +15,8 @@ import (
 // tests are about the two directions it can fail in: a session that runs as nobody, and a session
 // handed job its role was never meant to see.
 
-// roles is a double for the roles a crew holds: a name, what it receives, and whether it can be read
-// at all. A crew that cannot read its roles is its own case, because a check that quietly passes
+// roles is a double for the roles a system holds: a name, what it receives, and whether it can be read
+// at all. A system that cannot read its roles is its own case, because a check that quietly passes
 // when it could not be run is the same false green as no check.
 type roles struct {
 	receives map[string][]string
@@ -58,9 +58,9 @@ func jobInRole(named string, required ...string) *job.Job {
 }
 
 // The reason the substrate was built: the session that runs the job runs as the role the job
-// names, so the credential the crew mints for that task carries what the role declared it may call.
+// names, so the credential the system mints for that task carries what the role declared it may call.
 func TestJobThatNamesARoleRunsAsThatRole(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("backlog-clearer", "job"))
 	one := kept.add(jobInRole("backlog-clearer"))
@@ -68,7 +68,7 @@ func TestJobThatNamesARoleRunsAsThatRole(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 	if got := plane.dispatched[0].GetRole(); got != "backlog-clearer" {
 		t.Fatalf("the task runs as %q, want the role the job names", got)
@@ -81,7 +81,7 @@ func TestJobThatNamesARoleRunsAsThatRole(t *testing.T) {
 // The role comes off the row, never from the caller of the task. A caller that could name its own
 // role could name one granting more than the job was declared with.
 func TestTheRoleOnTheTaskIsTheRoleOnTheRow(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("test-writer", "job"))
 	kept.add(jobInRole("test-writer"))
@@ -92,13 +92,13 @@ func TestTheRoleOnTheTaskIsTheRoleOnTheRow(t *testing.T) {
 		t.Fatalf("the task runs as %q, want test-writer from the row", got)
 	}
 	if got := plane.dispatched[0].GetJob(); got == "" {
-		t.Fatalf("the task names no job, so the crew would mint no credential for it")
+		t.Fatalf("the task names no job, so the system would mint no credential for it")
 	}
 }
 
 // Job with no role is exactly what it was: no role on the task, and nothing about it changed.
 func TestJobWithNoRoleIsDispatchedAsNobody(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("backlog-clearer", "job"))
 	one := kept.add(declaredJob("read the electricity bill"))
@@ -113,10 +113,10 @@ func TestJobWithNoRoleIsDispatchedAsNobody(t *testing.T) {
 	}
 }
 
-// The boundary, in the direction that matters. The job needs the crew's context and the role never
+// The boundary, in the direction that matters. The job needs the system's context and the role never
 // receives it, so no container is ever built for it.
 func TestJobRequiringMaterialItsRoleDoesNotReceiveIsStoppedBeforeAnyDispatch(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("test-writer", "job"))
 	one := kept.add(jobInRole("test-writer", "context"))
@@ -124,7 +124,7 @@ func TestJobRequiringMaterialItsRoleDoesNotReceiveIsStoppedBeforeAnyDispatch(t *
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks, want none: no container starts for refused job", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want none: no container starts for refused job", plane.sent())
 	}
 	got := kept.get(one.ID)
 	if got.Phase != job.PhaseStopped {
@@ -143,7 +143,7 @@ func TestJobRequiringMaterialItsRoleDoesNotReceiveIsStoppedBeforeAnyDispatch(t *
 // The record has to read the way it happened. Job that was claimed and refused was never started,
 // so nothing on its history may say it was.
 func TestRefusedJobIsClaimedAndStoppedAndNeverStarted(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("test-writer", "job"))
 	one := kept.add(jobInRole("test-writer", "skills"))
@@ -159,7 +159,7 @@ func TestRefusedJobIsClaimedAndStoppedAndNeverStarted(t *testing.T) {
 // The boundary holding is not the same as no boundary. Job requiring what its role does receive
 // runs.
 func TestJobRequiringWhatItsRoleReceivesRuns(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("backlog-clearer", "job", "context"))
 	one := kept.add(jobInRole("backlog-clearer", "context", "job"))
@@ -167,7 +167,7 @@ func TestJobRequiringWhatItsRoleReceivesRuns(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhaseRunning {
 		t.Fatalf("the job is %q saying %q, want running", got.Phase, got.Reason)
@@ -176,8 +176,8 @@ func TestJobRequiringWhatItsRoleReceivesRuns(t *testing.T) {
 
 // A role can be detached while a job sits pending, which is why the check is here and not only at the
 // write. The job stops, naming the role, rather than running as nobody.
-func TestJobNamingARoleTheCrewNoLongerHoldsIsStopped(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+func TestJobNamingARoleTheSystemNoLongerHoldsIsStopped(t *testing.T) {
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).
 		Reading(rolesReceiving("someone-else", "job"))
 	one := kept.add(jobInRole("backlog-clearer"))
@@ -185,7 +185,7 @@ func TestJobNamingARoleTheCrewNoLongerHoldsIsStopped(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want none", plane.sent())
 	}
 	got := kept.get(one.ID)
 	if got.Phase != job.PhaseStopped || !strings.Contains(got.Reason, "backlog-clearer") {
@@ -194,8 +194,8 @@ func TestJobNamingARoleTheCrewNoLongerHoldsIsStopped(t *testing.T) {
 }
 
 // A read that failed is not a boundary that held. The job stops rather than running unchecked.
-func TestJobInARoleTheCrewCannotReadIsStopped(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+func TestJobInARoleTheSystemCannotReadIsStopped(t *testing.T) {
+	kept, plane := newRows(), newSystem()
 	held := rolesReceiving("backlog-clearer", "job")
 	held.refuse = errors.New("the store went away")
 	controller := job.NewController(kept, plane, nil, nil, nil).Reading(held)
@@ -204,7 +204,7 @@ func TestJobInARoleTheCrewCannotReadIsStopped(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want none", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhaseStopped {
 		t.Fatalf("the job is %q, want stopped: a check that could not be run is not a check that passed", got.Phase)
@@ -214,7 +214,7 @@ func TestJobInARoleTheCrewCannotReadIsStopped(t *testing.T) {
 // A controller wired with no way to read a role refuses job in one, for the same reason. Job with
 // no role is untouched by any of it.
 func TestAControllerThatCannotReadRolesStopsJobInARoleAndRunsTheRest(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil)
 	inRole := kept.add(jobInRole("backlog-clearer"))
 	plain := declaredJob("read the electricity bill")
@@ -232,6 +232,6 @@ func TestAControllerThatCannotReadRolesStopsJobInARoleAndRunsTheRest(t *testing.
 		t.Fatalf("the job with no role is %q, want running: a role nobody named changes nothing", got.Phase)
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want the one with no role", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want the one with no role", plane.sent())
 	}
 }

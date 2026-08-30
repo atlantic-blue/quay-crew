@@ -12,8 +12,8 @@ import (
 // The hook half of the contract, held against both implementations.
 //
 // A double whose behaviour is looser than the real store manufactures a green suite over a broken
-// crew, and the stakes are particular here: a hook that does not survive the round trip is a
-// constraint the crew believes it has.
+// system, and the stakes are particular here: a hook that does not survive the round trip is a
+// constraint the system believes it has.
 func runHookConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
@@ -190,11 +190,11 @@ func runHookConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		// Detaching does not unimport: another workspace may hold it.
 		if _, err := s.GetHook(ctx, "git-approval", 1); err != nil {
-			t.Errorf("detaching removed the hook from the crew: %v", err)
+			t.Errorf("detaching removed the hook from the system: %v", err)
 		}
 	})
 
-	t.Run("the crew holds a hook for every workspace, and a workspace's own is separate", func(t *testing.T) {
+	t.Run("the system holds a hook for every workspace, and a workspace's own is separate", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
@@ -205,26 +205,26 @@ func runHookConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err := s.ImportHook(ctx, aHook("git-approval", 1)); err != nil {
 			t.Fatalf("ImportHook: %v", err)
 		}
-		if _, err := s.AttachCrewHook(ctx, "git-approval"); err != nil {
-			t.Fatalf("AttachCrewHook: %v", err)
+		if _, err := s.AttachSystemHook(ctx, "git-approval"); err != nil {
+			t.Fatalf("AttachSystemHook: %v", err)
 		}
-		crew, err := s.CrewHooks(ctx)
+		system, err := s.SystemHooks(ctx)
 		if err != nil {
-			t.Fatalf("CrewHooks: %v", err)
+			t.Fatalf("SystemHooks: %v", err)
 		}
-		if len(crew) != 1 || crew[0].Version != 1 {
-			t.Fatalf("the crew should hold git-approval at 1, got %+v", crew)
+		if len(system) != 1 || system[0].Version != 1 {
+			t.Fatalf("the system should hold git-approval at 1, got %+v", system)
 		}
-		if len(crew[0].Files) == 0 || len(crew[0].Events) == 0 {
-			t.Error("a crew hook came back without what a sandbox needs to be built from it")
+		if len(system[0].Files) == 0 || len(system[0].Events) == 0 {
+			t.Error("a system hook came back without what a sandbox needs to be built from it")
 		}
 
 		// The workspace attaching it too is a separate, narrower statement.
 		if _, err := s.AttachHook(ctx, workspace.GetId(), "git-approval"); err != nil {
 			t.Fatalf("AttachHook: %v", err)
 		}
-		if err := s.DetachCrewHook(ctx, "git-approval"); err != nil {
-			t.Fatalf("DetachCrewHook: %v", err)
+		if err := s.DetachSystemHook(ctx, "git-approval"); err != nil {
+			t.Fatalf("DetachSystemHook: %v", err)
 		}
 		held, err := s.WorkspaceHooks(ctx, workspace.GetId())
 		if err != nil {
@@ -244,16 +244,16 @@ func runHookConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateWorkspace: %v", err)
 		}
 		if _, err := s.AttachHook(ctx, workspace.GetId(), "nowhere"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a hook the crew has not imported returned %v, want ErrNotFound", err)
+			t.Errorf("attaching a hook the system has not imported returned %v, want ErrNotFound", err)
 		}
 		if err := s.DetachHook(ctx, workspace.GetId(), "nowhere"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("detaching a hook the workspace does not hold returned %v, want ErrNotFound", err)
 		}
-		if _, err := s.AttachCrewHook(ctx, "nowhere"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a crew hook that does not exist returned %v, want ErrNotFound", err)
+		if _, err := s.AttachSystemHook(ctx, "nowhere"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching a system hook that does not exist returned %v, want ErrNotFound", err)
 		}
-		if err := s.DetachCrewHook(ctx, "nowhere"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("detaching a crew hook the crew does not hold returned %v, want ErrNotFound", err)
+		if err := s.DetachSystemHook(ctx, "nowhere"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("detaching a system hook the system does not hold returned %v, want ErrNotFound", err)
 		}
 		if _, err := s.GetHook(ctx, "nowhere", 1); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("getting a hook that does not exist returned %v, want ErrNotFound", err)
@@ -277,7 +277,7 @@ func runHookConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 		// The column is not null with a default, so a nil slice arriving as an explicit NULL is
 		// refused. Every hook shipped so far declares a binary, so the one that needs nothing from
-		// the sandbox is the first thing to find it, and it should not find it on a real crew.
+		// the sandbox is the first thing to find it, and it should not find it on a real system.
 		bare := store.ImportedHook{Hook: hook.Hook{
 			Name: "bare", Version: 1, Summary: "needs nothing at all",
 			Events: []hook.Binding{{On: "Stop", Entry: "bin/hook"}},

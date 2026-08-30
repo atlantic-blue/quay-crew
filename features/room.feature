@@ -20,8 +20,8 @@ Feature: A session knows how much memory it has
   not fit. The advice lives in the tool rather than in each session's memory, so the answer is the
   same every time instead of being invented once per session.
 
-  These scenarios read a machine's accounting the crew was given, so they say what a session is told
-  and not that a kernel behaves. The figures in them were measured on a real sandbox. What the crew
+  These scenarios read a machine's accounting the system was given, so they say what a session is told
+  and not that a kernel behaves. The figures in them were measured on a real sandbox. What the system
   says when a task is killed for memory sits with the other task failures, in sessions.feature.
 
   Scenario: A sandbox with no limit is told it is sizing itself against the whole machine

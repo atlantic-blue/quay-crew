@@ -66,13 +66,13 @@ Feature: A sandbox keeps a session's state outside itself
     Then the reply is "you said: hello"
     And the sandbox carries nothing called "GITHUB_TOKEN"
 
-  # The crew puts the address a session dials and the token it dials with into the sandbox itself.
-  # A workspace secret answering to one of those names would be posing as the crew rather than being
+  # The system puts the address a session dials and the token it dials with into the sandbox itself.
+  # A workspace secret answering to one of those names would be posing as the system rather than being
   # handed out by it, so those names never travel however they were set.
-  Scenario: A workspace secret cannot pose as the crew's own configuration
+  Scenario: A workspace secret cannot pose as the system's own configuration
     Given a workspace named "acme"
     And a project named "house-bills"
-    And the workspace has the secret "QC_TOKEN" set to "not-the-crews-token"
+    And the workspace has the secret "QC_TOKEN" set to "not-the-systems-token"
     When the operator dispatches "hello" to the project
     Then the sandbox carries nothing called "QC_TOKEN"
 
@@ -108,7 +108,7 @@ Feature: A sandbox keeps a session's state outside itself
   # identity: the tool refuses to commit rather than guessing, which is right and is a wall to walk
   # into halfway through a job.
   Scenario: A session can commit as the operator
-    Given a crew whose commits are by "A Name" at "a@example.com"
+    Given a system whose commits are by "A Name" at "a@example.com"
     And a workspace named "acme"
     And a project named "house-bills"
     When the operator dispatches "hello" to the project
@@ -117,7 +117,7 @@ Feature: A sandbox keeps a session's state outside itself
   # Half of one is worse than none. Git refuses either way, and a half identity looks configured, so
   # the operator goes looking for the problem somewhere else.
   Scenario: Half an identity is carried as none of one
-    Given a crew whose commits are by "A Name" at no address
+    Given a system whose commits are by "A Name" at no address
     And a workspace named "acme"
     And a project named "house-bills"
     When the operator dispatches "hello" to the project

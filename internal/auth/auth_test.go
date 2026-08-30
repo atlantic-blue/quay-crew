@@ -20,7 +20,7 @@ import (
 )
 
 func TestTokenAtMintsOnceAndReadsItBack(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "crew.token")
+	path := filepath.Join(t.TempDir(), "system.token")
 
 	minted, err := auth.TokenAt(path)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestTokenAtMintsOnceAndReadsItBack(t *testing.T) {
 }
 
 func TestTokenAtWritesForTheOwnerOnly(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "crew.token")
+	path := filepath.Join(t.TempDir(), "system.token")
 	if _, err := auth.TokenAt(path); err != nil {
 		t.Fatalf("minting: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestTokenAtWritesForTheOwnerOnly(t *testing.T) {
 }
 
 func TestTokenAtTrimsWhatAnEditorLeaves(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "crew.token")
+	path := filepath.Join(t.TempDir(), "system.token")
 	if err := os.WriteFile(path, []byte("  a-token-somebody-set-by-hand\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestTokenAtTrimsWhatAnEditorLeaves(t *testing.T) {
 }
 
 func TestTokenAtRefusesAnEmptyFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "crew.token")
+	path := filepath.Join(t.TempDir(), "system.token")
 	if err := os.WriteFile(path, []byte("\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -194,13 +194,13 @@ func TestAGrantThatHasExpiredIsRefused(t *testing.T) {
 	}
 }
 
-// A crew that recognises nobody refuses everybody, which is the one behaviour this package exists to
+// A system that recognises nobody refuses everybody, which is the one behaviour this package exists to
 // keep: the guard must never fail open.
-func TestACrewWithNoTokensAtAllRefusesAJobToken(t *testing.T) {
+func TestASystemWithNoTokensAtAllRefusesAJobToken(t *testing.T) {
 	options := auth.ServerOptions(auth.Policy{Grants: grants{"job-token": {Job: "job-1"}}})
 
 	if err := callThrough(t, options, "job-token"); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("a crew holding no token of its own answered %v, want Unauthenticated", err)
+		t.Fatalf("a system holding no token of its own answered %v, want Unauthenticated", err)
 	}
 }
 
@@ -239,7 +239,7 @@ func TestAGrantSaysWhichVerbsItHolds(t *testing.T) {
 // The three refusals a job credential can get have to be three different sentences.
 //
 // They were two: a credential that had run out fell through to the one a forged token gets, so a
-// session was told the token is not this crew's. It was this crew's, and it had run out. The session
+// session was told the token is not this system's. It was this system's, and it had run out. The session
 // read that as a bad credential, stopped calling, and did the whole job in one sandbox (issue 449).
 func TestEachRefusalOfAJobCredentialNamesItsOwnCause(t *testing.T) {
 	ranOutAt := time.Date(2026, 8, 29, 14, 30, 0, 0, time.UTC)
@@ -255,18 +255,18 @@ func TestEachRefusalOfAJobCredentialNamesItsOwnCause(t *testing.T) {
 			name:  "a credential that ran out says so, and says when",
 			token: "expired",
 			says:  []string{"ran out at", ranOutAt.Format(time.RFC3339), now.Format(time.RFC3339), "job-1"},
-			never: "not this crew's",
+			never: "not this system's",
 		},
 		{
-			name:  "a credential the crew took back names the job that ended, and its phase",
+			name:  "a credential the system took back names the job that ended, and its phase",
 			token: "ended",
 			says:  []string{"job-2", "done", "took this credential back"},
-			never: "not this crew's",
+			never: "not this system's",
 		},
 		{
 			name:  "a token nobody minted is still a forgery",
 			token: "invented",
-			says:  []string{"not this crew's"},
+			says:  []string{"not this system's"},
 			never: "ran out",
 		},
 	} {
@@ -282,7 +282,7 @@ func TestEachRefusalOfAJobCredentialNamesItsOwnCause(t *testing.T) {
 
 			err := callThrough(t, options, one.token)
 			if status.Code(err) != codes.Unauthenticated {
-				t.Fatalf("the crew answered %v, want Unauthenticated", err)
+				t.Fatalf("the system answered %v, want Unauthenticated", err)
 			}
 			for _, want := range one.says {
 				if !strings.Contains(err.Error(), want) {
@@ -331,8 +331,8 @@ func TestACredentialWorksUpToTheInstantItRunsOutAndNotAtIt(t *testing.T) {
 	}
 }
 
-// A crew given no clock reads the real one, which is what a crew runs on.
-func TestACredentialIsReadAgainstTheRealClockWhenTheCrewIsGivenNone(t *testing.T) {
+// A system given no clock reads the real one, which is what a system runs on.
+func TestACredentialIsReadAgainstTheRealClockWhenTheSystemIsGivenNone(t *testing.T) {
 	options := auth.ServerOptions(auth.Policy{
 		Token:       "operator",
 		Grants:      grants{"job-token": {Job: "job-1", ExpiresAt: time.Now().Add(-time.Second)}},

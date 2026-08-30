@@ -14,8 +14,8 @@ import (
 // see where they are without running anything.
 const contextFile = "context"
 
-// configHome is where the tool's own files live, which is the crew's directory. It used to follow
-// XDG_CONFIG_HOME into a second place of its own, so a crew was two directories and a checkout.
+// configHome is where the tool's own files live, which is the system's directory. It used to follow
+// XDG_CONFIG_HOME into a second place of its own, so a system was two directories and a checkout.
 func configHome() (string, error) {
 	return quayHome()
 }

@@ -221,16 +221,16 @@ func TestAStarInAPathStandsForOneLevelOfSubdirectories(t *testing.T) {
 	}
 }
 
-// The first directory listed wins, so a personal skill shadows the crew's one of the same name
+// The first directory listed wins, so a personal skill shadows the system's one of the same name
 // rather than appearing twice.
 func TestTheFirstDirectoryWinsWhenTwoHoldTheSameName(t *testing.T) {
 	fs := newFakeFS(map[string]string{
-		"/mine/git/SKILL.md": skillFile("git", "mine"),
-		"/crew/git/SKILL.md": skillFile("git", "the crew's"),
-		"/crew/aws/SKILL.md": skillFile("aws", "cloud"),
+		"/mine/git/SKILL.md":   skillFile("git", "mine"),
+		"/system/git/SKILL.md": skillFile("git", "the system's"),
+		"/system/aws/SKILL.md": skillFile("aws", "cloud"),
 	})
 
-	skills := CollectSkills([]string{"/mine", "/crew"}, fs)
+	skills := CollectSkills([]string{"/mine", "/system"}, fs)
 
 	if len(skills) != 2 {
 		t.Fatalf("got %d skills, want 2: %v", len(skills), skills)
@@ -784,7 +784,7 @@ func TestNotBeingLoggedInSaysSoAndSaysWhatToDo(t *testing.T) {
 	if !strings.Contains(trouble, "not logged in") {
 		t.Errorf("it does not say what is wrong: %q", trouble)
 	}
-	if !strings.Contains(trouble, "quay hook detach crew prompt-analyser") {
+	if !strings.Contains(trouble, "quay hook detach system prompt-analyser") {
 		t.Errorf("it does not say what to do next: %q", trouble)
 	}
 	// The reason it is confusing is worth saying: the token is there, it just does not come down.

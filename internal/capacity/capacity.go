@@ -1,6 +1,6 @@
 // Package capacity is the arithmetic that decides whether another sandbox fits.
 //
-// The crew used to admit work by counting it. A workspace said `max running 8`, nine jobs were
+// The system used to admit work by counting it. A workspace said `max running 8`, nine jobs were
 // declared, and the ninth was admitted because eight is not nine. Sandboxes are not the same size:
 // on the machine that broke, ten of them held 4.3, 201.7, 306.2, 325.1, 359.4, 364.7, 400.4, 478.6,
 // 498.4 and 764.5 megabytes, two orders of magnitude between the smallest and the largest. A count
@@ -9,25 +9,25 @@
 // the database and eight running jobs with it. See issue 466.
 //
 // So this is the kubernetes model rather than a count. Every sandbox declares a Request for memory
-// and processor. The crew reads what the runtime has, holds back a Reserve for itself, and admits a
+// and processor. The system reads what the runtime has, holds back a Reserve for itself, and admits a
 // sandbox only where the requests already placed plus this one still fit in what is left. A job that
 // does not fit stays pending, for as long as it takes, and says which resource ran out. Nothing is
 // admitted and then killed.
 //
-// Two things are deliberately not here. A Request is not a limit: it is what the crew reserves, and
+// Two things are deliberately not here. A Request is not a limit: it is what the system reserves, and
 // what stops one runaway sandbox taking the machine is a limit, which is issue 477. And nothing here
 // evicts: when a machine goes under anyway, something has to stop the least valuable sandbox, which
 // is issue 478.
 //
 // The one thing that differs from kubernetes is the Reserve. A kubelet runs on the node, outside the
-// pods it manages. The crew's control plane, database and event log are containers inside the same
-// runtime the work fills, so the crew has to hold capacity back for itself or it goes down with its
+// pods it manages. The system's control plane, database and event log are containers inside the same
+// runtime the work fills, so the system has to hold capacity back for itself or it goes down with its
 // own workload. On 30 August 2026 it did exactly that.
 package capacity
 
 import "fmt"
 
-// A Request is what one sandbox asks for, and what the crew reserves on its behalf.
+// A Request is what one sandbox asks for, and what the system reserves on its behalf.
 //
 // Memory is bytes and Processor is per cent of one processor, which are the units the room view
 // already prints: "764 MiB" and "913.0%". One vocabulary, so an operator sets a number and reads it
@@ -59,7 +59,7 @@ func (r Request) Minus(other Request) Request {
 func (r Request) Empty() bool { return r.Memory <= 0 && r.Processor <= 0 }
 
 // Or is this request where it asks for something, and the other where it does not. It is how a
-// workspace's own request stands in front of the crew's default without either having to know about
+// workspace's own request stands in front of the system's default without either having to know about
 // the other.
 func (r Request) Or(other Request) Request {
 	answer := r
@@ -85,21 +85,21 @@ func Memory(bytes int64) string { return fmt.Sprintf("%d MiB", bytes/(1<<20)) }
 // one and how the room view prints it.
 func Processor(percent int) string { return fmt.Sprintf("%d%%", percent) }
 
-// A Node is what the runtime has and what the crew keeps back from it.
+// A Node is what the runtime has and what the system keeps back from it.
 //
 // Capacity is read from the container runtime and never from the host. On 30 August 2026 the host
-// had 36 gibibytes free while the runtime it holds had 7.65 and was full, so a crew that read the
+// had 36 gibibytes free while the runtime it holds had 7.65 and was full, so a system that read the
 // host would have called that machine empty while it died.
 type Node struct {
 	Capacity Request
 	Reserve  Request
-	// Known says whether anything measured the capacity. A crew whose runtime cannot be read admits
+	// Known says whether anything measured the capacity. A system whose runtime cannot be read admits
 	// work unmeasured rather than refusing everything: the local sandbox provider has no runtime to
-	// read at all, and a crew that stopped dead there would be worse than the crew that counted.
+	// read at all, and a system that stopped dead there would be worse than the system that counted.
 	Known bool
 }
 
-// Allocatable is what sandboxes may have between them: what the runtime has, less what the crew
+// Allocatable is what sandboxes may have between them: what the runtime has, less what the system
 // holds back for itself.
 func (n Node) Allocatable() Request { return n.Capacity.Minus(n.Reserve) }
 
@@ -112,8 +112,8 @@ type Verdict struct {
 	Resource string
 	// Reason is the whole sentence, naming the resource, the request and what was left.
 	Reason string
-	// Unmeasured says the crew could not read its runtime, so this admission is arithmetic nobody
-	// checked. It is true only alongside OK, and a caller that logs it is saying the crew is running
+	// Unmeasured says the system could not read its runtime, so this admission is arithmetic nobody
+	// checked. It is true only alongside OK, and a caller that logs it is saying the system is running
 	// blind rather than that it is running well.
 	Unmeasured bool
 }
@@ -165,8 +165,8 @@ func shortOf(resource, want, left, allocatable string) string {
 }
 
 // atLeastZero keeps a subtraction on the sensible side of nothing. A reserve larger than the machine
-// leaves nothing to give out, which is a crew that admits nothing, and never a negative amount to
-// give out, which is a crew that admits everything.
+// leaves nothing to give out, which is a system that admits nothing, and never a negative amount to
+// give out, which is a system that admits everything.
 func atLeastZero(figure int64) int64 {
 	if figure < 0 {
 		return 0
@@ -175,7 +175,7 @@ func atLeastZero(figure int64) int64 {
 }
 
 // KeyFor is what a sandbox is admitted under, and it is the same string on both sides of the
-// dispatch: the controller reserves room before it starts a job, and the crew places the container
+// dispatch: the controller reserves room before it starts a job, and the system places the container
 // under it seconds later. Anything else would count one sandbox twice.
 //
 // The project and the handle, because a handle is only unique inside its project: two projects each

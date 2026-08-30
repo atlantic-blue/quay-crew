@@ -81,24 +81,64 @@ func TestValidateNamesWhatWouldJob(t *testing.T) {
 	}
 }
 
-// "crew" is the word every address takes for the level above a workspace. A workspace called crew
+// "system" is the word every address takes for the level above a workspace. A workspace called system
 // would take the secrets, skills, hooks and roles meant for every workspace, and nothing else would
 // ever read them.
-func TestAWorkspaceCannotBeCalledCrew(t *testing.T) {
-	err := name.ValidateWorkspace(name.Crew)
+func TestAWorkspaceCannotBeCalledSystem(t *testing.T) {
+	err := name.ValidateWorkspace(name.System)
 	if err == nil {
-		t.Fatal("ValidateWorkspace(\"crew\") = nil, want a refusal")
+		t.Fatal("ValidateWorkspace(\"system\") = nil, want a refusal")
 	}
 	// The reason, not only the refusal. An operator told no and not why types it again.
-	if !strings.Contains(err.Error(), "whole crew") {
+	if !strings.Contains(err.Error(), "whole system") {
 		t.Fatalf("the refusal is %q, and it does not say why", err)
 	}
-	if err := name.ValidateWorkspace("crews"); err != nil {
-		t.Fatalf("ValidateWorkspace(\"crews\") = %v, want it accepted", err)
+	if err := name.ValidateWorkspace("systems"); err != nil {
+		t.Fatalf("ValidateWorkspace(\"systems\") = %v, want it accepted", err)
 	}
-	// A project may still be called crew: an address names a project under a workspace, so there is
+	// A project may still be called system: an address names a project under a workspace, so there is
 	// nothing for it to shadow.
-	if err := name.Validate("project", name.Crew); err != nil {
-		t.Fatalf("Validate(project, \"crew\") = %v, want it accepted", err)
+	if err := name.Validate("project", name.System); err != nil {
+		t.Fatalf("Validate(project, \"system\") = %v, want it accepted", err)
+	}
+}
+
+// The word the level took before it was called system is refused by name. A word that stops working
+// quietly is the regression this repository has already had once: the operator types what worked
+// yesterday, is told there is no such workspace, and goes looking for a workspace.
+func TestTheWordTheLevelUsedToTakeIsRefusedByName(t *testing.T) {
+	err := name.RefuseRetired(name.Retired)
+	if err == nil {
+		t.Fatalf("RefuseRetired(%q) = nil, want a refusal", name.Retired)
+	}
+	// The refusal has one job, which is to say what to type instead.
+	if !strings.Contains(err.Error(), name.System) {
+		t.Fatalf("the refusal is %q, and it never says to type %q", err, name.System)
+	}
+	// Spacing is what a shell leaves behind, so it is refused the same way.
+	if err := name.RefuseRetired("  " + name.Retired + " "); err == nil {
+		t.Fatal("a padded word went through, so the refusal can be walked past with a space")
+	}
+	// Everything else is somebody's workspace and is none of this function's business.
+	for _, typed := range []string{"", "acme", "crews", "crew-cut", name.System} {
+		if err := name.RefuseRetired(typed); err != nil {
+			t.Fatalf("RefuseRetired(%q) = %v, want it left alone", typed, err)
+		}
+	}
+}
+
+// And it stays reserved as a workspace name. A workspace called crew would be handed everything typed
+// out of habit, and the operator would read the acknowledgement as the level having been set.
+func TestAWorkspaceCannotBeCalledTheWordTheLevelUsedToTake(t *testing.T) {
+	err := name.ValidateWorkspace(name.Retired)
+	if err == nil {
+		t.Fatalf("ValidateWorkspace(%q) = nil, want a refusal", name.Retired)
+	}
+	if !strings.Contains(err.Error(), name.System) {
+		t.Fatalf("the refusal is %q, and it never says the word is now %q", err, name.System)
+	}
+	// The word is the whole of it, so a name that merely starts with it is still a name.
+	if err := name.ValidateWorkspace("crew-quarters"); err != nil {
+		t.Fatalf("ValidateWorkspace(\"crew-quarters\") = %v, want it accepted", err)
 	}
 }

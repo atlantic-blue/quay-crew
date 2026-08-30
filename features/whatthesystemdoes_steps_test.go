@@ -16,7 +16,7 @@ import (
 // The steps for the one list of what this build does: the command that prints it, and the console
 // that runs the command rather than holding a view of its own.
 
-func initializeWhatTheCrewDoesSteps(sc *godog.ScenarioContext) {
+func initializeWhatTheSystemDoesSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the caller asks what this build does$`, func(ctx context.Context) error {
 		return runTool(ctx, "features")
 	})

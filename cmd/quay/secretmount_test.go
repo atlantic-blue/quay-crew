@@ -15,7 +15,7 @@ const aGitConfig = "[user]\n\tname = operator\n\temail = operator@example.com\n\
 
 // writtenInto reads back what the session's sandbox was actually asked to write at a path, and
 // whether it was asked at all. It reads the commands the sandbox was given rather than anything the
-// crew records about its own intent, so a write that never reached a sandbox cannot pass.
+// system records about its own intent, so a write that never reached a sandbox cannot pass.
 //
 // The write redirects on its last line, and the value travels in the environment of that one command
 // rather than in an argument, which is where both halves are read from.
@@ -42,7 +42,7 @@ func writtenInto(boxes *sandbox.FakeProvider, at string) (string, bool) {
 
 // The point of the command: a file on disk reaches the session as a file, byte for byte.
 func TestAMountedFileReachesTheSessionByteForByte(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	path := filepath.Join(t.TempDir(), "gitconfig")
 	if err := os.WriteFile(path, []byte(aGitConfig), 0o600); err != nil {
@@ -69,7 +69,7 @@ func TestAMountedFileReachesTheSessionByteForByte(t *testing.T) {
 // `quay secret set` trims, because a token gains a newline from the tool that printed it. A file's
 // bytes are the file, and one that arrives a byte shorter is a file the operator cannot reason about.
 func TestMountingDoesNotTrimTheWayASecretDoes(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	saying(t, aGitConfig)
 	mustRun(t, client, "secret", "mount", "gitconfig")
@@ -84,7 +84,7 @@ func TestMountingDoesNotTrimTheWayASecretDoes(t *testing.T) {
 // A mounted secret is not also in the environment. That is the whole reason to prefer a file for a
 // credential: a container's environment is readable through docker inspect for the life of it.
 func TestAMountedSecretIsNotAlsoInTheEnvironment(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	saying(t, aGitConfig)
 	mustRun(t, client, "secret", "mount", "gitconfig")
@@ -98,7 +98,7 @@ func TestAMountedSecretIsNotAlsoInTheEnvironment(t *testing.T) {
 // The listing is where an operator finds out which of their secrets a session opens by path. Two
 // that arrive in different places and read the same in a listing is the same as not saying.
 func TestTheListingSaysWhereAMountedSecretLands(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	// The typed form first, because saying something on standard input makes every later command a
 	// piped one for the rest of the test.
@@ -125,7 +125,7 @@ func TestTheListingSaysWhereAMountedSecretLands(t *testing.T) {
 // A workspace can be named the same way it is for `quay secret set`, and standing somewhere else must
 // not decide where a credential lands.
 func TestMountingCanNameItsWorkspace(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "use", "me/house-bills")
 
@@ -143,14 +143,14 @@ func TestMountingCanNameItsWorkspace(t *testing.T) {
 // A path that is not there is the ordinary mistake, and the refusal has to name it rather than
 // storing an empty file the listing then reports as set.
 func TestMountingAFileThatIsNotThereIsRefused(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	missing := filepath.Join(t.TempDir(), "not-here")
 	err := refused(t, client, "secret", "mount", "gitconfig", missing)
 	if !strings.Contains(err.Error(), missing) {
 		t.Fatalf("the refusal does not name the path: %s", err)
 	}
-	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this crew") {
+	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this system") {
 		t.Fatalf("something was stored anyway: %q", listed)
 	}
 }
@@ -158,7 +158,7 @@ func TestMountingAFileThatIsNotThereIsRefused(t *testing.T) {
 // An empty file is one that turned out to have nothing in it, and mounting it leaves a session
 // opening a credential that says nothing while the listing reports it as set.
 func TestMountingAnEmptyFileIsRefused(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	path := filepath.Join(t.TempDir(), "empty")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
@@ -172,7 +172,7 @@ func TestMountingAnEmptyFileIsRefused(t *testing.T) {
 // A name that walks out of its own directory would land the file wherever it said. Refused when it is
 // set, not at the moment of writing.
 func TestAMountedNameCannotEscapeItsDirectory(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "root")
 	if err := refused(t, client, "secret", "mount", "../../etc/passwd"); !strings.Contains(err.Error(), "file name") {
@@ -184,7 +184,7 @@ func TestAMountedNameCannotEscapeItsDirectory(t *testing.T) {
 // usage to say how, and a usage that only offers the two old forms is the same as the command not
 // being there.
 func TestTheUsageOffersMounting(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	if err := refused(t, client, "secret"); !strings.Contains(err.Error(), "quay secret mount") {
 		t.Fatalf("the usage does not offer mounting: %s", err)

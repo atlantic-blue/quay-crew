@@ -29,7 +29,7 @@ tree at one path take each other's away. The branch is your own for the same rea
 refuses to check out one branch in two trees.
 
 Your tree is already there on a later task, so use it rather than adding it again. If
-`/home/agent/shared` does not exist, this crew keeps no volume: clone into your working directory
+`/home/agent/shared` does not exist, this system keeps no volume: clone into your working directory
 instead and everything below is unchanged.
 
 Authentication is already handled: the image carries a credential helper that reads GH_TOKEN from the

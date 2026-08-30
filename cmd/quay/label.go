@@ -14,7 +14,7 @@ import (
 //
 // A listing is a column of hexadecimal, and fourteen of those is an operator reading identifiers to
 // work out which conversation was the one about the electricity bill. This is the half they type; the
-// crew writes the other half itself.
+// system writes the other half itself.
 //
 // Giving no text reads the label rather than clearing it, because clearing is destructive and the
 // shorter command should not be the one that destroys something. `quay label <session> ""` clears it.
@@ -47,7 +47,7 @@ func runLabel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	return nil
 }
 
-// sayLabel reads out what a session is called, and says what the crew calls it when nobody has.
+// sayLabel reads out what a session is called, and says what the system calls it when nobody has.
 func sayLabel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, sessionID string, out io.Writer) error {
 	resp, err := client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: sessionID})
 	if err != nil {

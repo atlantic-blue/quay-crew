@@ -14,7 +14,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 )
 
-// runFlow drives the automations a crew can run on its own.
+// runFlow drives the automations a system can run on its own.
 //
 // A graph is a file: the operator writes it, imports it, and starts runs of it. The file is read
 // here and sent as text, because the control plane may be in a container where a path on the
@@ -115,15 +115,15 @@ func runFlowList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if len(args) > 1 {
 		return fmt.Errorf("usage: quay flow list [<workspace>/<project>]")
 	}
-	where := crewWide("runs")
+	where := systemWide("runs")
 	request := &quaycrewv1.ListFlowRunsRequest{}
-	if !readsTheCrew(typed) {
+	if !readsTheSystem(typed) {
 		located, err := locate(ctx, client, typed)
 		if err != nil {
 			return err
 		}
 		request.Project = located.ProjectID
-		where = narrowedTo("runs", located.Path.String(), "quay flow list crew reads every project")
+		where = narrowedTo("runs", located.Path.String(), "quay flow list system reads every project")
 	}
 	resp, err := client.ListFlowRuns(ctx, request)
 	if err != nil {

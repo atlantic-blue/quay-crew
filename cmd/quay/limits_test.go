@@ -9,7 +9,7 @@ import (
 // session cannot: a caller that could raise its own ceiling has none.
 
 func TestLimitsReadsTheDefaultsAndSaysWhatZeroMeans(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "limits")
 
@@ -24,7 +24,7 @@ func TestLimitsReadsTheDefaultsAndSaysWhatZeroMeans(t *testing.T) {
 }
 
 func TestLimitsSetsTheCeilingAndReadsItBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "limits", "me", "--max-depth", "2", "--max-running", "4",
 		"--budget-tokens", "5000", "--lease", "90s")
@@ -40,12 +40,12 @@ func TestLimitsSetsTheCeilingAndReadsItBack(t *testing.T) {
 	}
 }
 
-// The lease reads as the length of a job and it is not one. It is the crew's hold on a job, renewed
+// The lease reads as the length of a job and it is not one. It is the system's hold on a job, renewed
 // on every tick, and it does not reach the credential a session runs under. An operator who read the
 // two as one number set this to cover their work and got no change to the credential at all, so the
 // line says what it is not, next to the number.
 func TestLimitsSaysTheLeaseIsNotTheLifeOfACredential(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "limits", "me", "--lease", "15m")
 
@@ -58,7 +58,7 @@ func TestLimitsSaysTheLeaseIsNotTheLifeOfACredential(t *testing.T) {
 
 // Setting one number leaves the rest, because the tool reads the row first and sends it back whole.
 func TestSettingOneLimitLeavesTheOthers(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	mustRun(t, client, "limits", "me", "--max-depth", "2", "--max-running", "4")
 
 	said := mustRun(t, client, "limits", "me", "--max-depth", "3")
@@ -72,7 +72,7 @@ func TestSettingOneLimitLeavesTheOthers(t *testing.T) {
 }
 
 func TestALimitThatIsNotANumberIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "limits", "me", "--max-depth", "deep")
 	if err == nil {
@@ -84,7 +84,7 @@ func TestALimitThatIsNotANumberIsRefused(t *testing.T) {
 }
 
 func TestALeaseThatIsNotALengthOfTimeIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "limits", "me", "--lease", "a while")
 	if err == nil {
@@ -95,22 +95,22 @@ func TestALeaseThatIsNotALengthOfTimeIsRefused(t *testing.T) {
 	}
 }
 
-// The crew's refusal reaches the operator whole.
-func TestALimitBelowZeroIsRefusedByTheCrew(t *testing.T) {
-	client := aCrewToJobIn(t)
+// The system's refusal reaches the operator whole.
+func TestALimitBelowZeroIsRefusedByTheSystem(t *testing.T) {
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "limits", "me", "--max-depth", "-1")
 	if err == nil {
 		t.Fatal("a depth below zero was accepted")
 	}
 	if !strings.Contains(err.Error(), "below zero") {
-		t.Fatalf("the refusal says %q, want the crew's own sentence", err)
+		t.Fatalf("the refusal says %q, want the system's own sentence", err)
 	}
 }
 
 // The flags this command takes reach it, and a flag no command takes is still refused.
 func TestTheFlagsLimitsTakesReachTheCommand(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	if _, err := runQuay(t, client, "limits", "me", "--max-running", "2"); err != nil {
 		t.Fatalf("a flag quay limits takes was refused: %v", err)
@@ -130,9 +130,9 @@ func TestLimitsNeedsAWorkspace(t *testing.T) {
 }
 
 // The two times a session's life is measured by. They ship unset, and unset has to say out loud that
-// the crew does nothing: a reader who has met a timeout before reads a missing number as a default.
+// the system does nothing: a reader who has met a timeout before reads a missing number as a default.
 func TestTheReclaimAndArchiveTimesReadAsUnsetAndSayWhatThatMeans(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "limits")
 
@@ -147,7 +147,7 @@ func TestTheReclaimAndArchiveTimesReadAsUnsetAndSayWhatThatMeans(t *testing.T) {
 }
 
 func TestTheReclaimAndArchiveTimesAreSetAndReadBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "limits", "me", "--reclaim", "15m", "--archive", "24h")
 
@@ -167,7 +167,7 @@ func TestTheReclaimAndArchiveTimesAreSetAndReadBack(t *testing.T) {
 }
 
 func TestATimeThatIsNotALengthIsRefused(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	for _, flag := range []string{"--reclaim", "--archive"} {
 		if _, err := runQuay(t, client, "limits", "me", flag, "soon"); err == nil {

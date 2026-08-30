@@ -88,7 +88,7 @@ func TestTheKindIsReadHoweverItIsTyped(t *testing.T) {
 }
 
 // A word that is neither is refused rather than taken for the default. A forge has other kinds, and
-// recording "internal" as public would be the crew writing down a cost fact nobody told it.
+// recording "internal" as public would be the system writing down a cost fact nobody told it.
 func TestAKindThatIsNeitherIsRefused(t *testing.T) {
 	for _, typed := range []string{"internal", "unlisted", "yes", "pubic"} {
 		got, err := repository.Kind(typed)

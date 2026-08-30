@@ -9,7 +9,7 @@ import (
 // a ceiling is: the address, and the three values when you are setting them.
 
 func TestTargetSaysNothingIsDeclaredAndHowToSayIt(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "target")
 
@@ -26,7 +26,7 @@ func TestTargetSaysNothingIsDeclaredAndHowToSayIt(t *testing.T) {
 }
 
 func TestTargetIsDeclaredAndReadBack(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	said := mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
@@ -46,7 +46,7 @@ func TestTargetIsDeclaredAndReadBack(t *testing.T) {
 
 // The row the whole record exists for.
 func TestProjectListSaysWhereEachProjectDeploys(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
 		"--identity", "arn:aws:iam::123456789012:role/quay-deploy")
@@ -60,7 +60,7 @@ func TestProjectListSaysWhereEachProjectDeploys(t *testing.T) {
 
 // Half a target is refused where it is typed, so the operator fixes it before anything is written.
 func TestTargetRefusesHalfOfOne(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "target", "me/house-bills", "--account", "123456789012")
 
@@ -73,7 +73,7 @@ func TestTargetRefusesHalfOfOne(t *testing.T) {
 }
 
 func TestTargetRefusesAnIdentityFromAnotherAccount(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
@@ -89,7 +89,7 @@ func TestTargetRefusesAnIdentityFromAnotherAccount(t *testing.T) {
 
 // A workspace is not a project, and a target belongs to a body of work.
 func TestTargetOnAWorkspaceSaysWhichProject(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	_, err := runQuay(t, client, "target", "me", "--account", "123456789012",
 		"--region", "eu-west-2", "--identity", "arn:aws:iam::123456789012:role/quay-deploy")
@@ -103,7 +103,7 @@ func TestTargetOnAWorkspaceSaysWhichProject(t *testing.T) {
 }
 
 func TestTargetIsCleared(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
 		"--identity", "arn:aws:iam::123456789012:role/quay-deploy")

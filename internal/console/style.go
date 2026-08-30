@@ -98,7 +98,7 @@ func hint(key, label string) string {
 // listings look like each other, and twelve more follow them.
 //
 // Twelve was not enough, and this is measured rather than assumed: over the fourteen workspace and
-// project names on this crew, twelve colours put "atlantic-blue" and "itv" on the same one, and both
+// project names on this system, twelve colours put "atlantic-blue" and "itv" on the same one, and both
 // are workspaces. Ten names into twelve slots collides by arithmetic, so a different hash does not
 // fix it: FNV-1a over the same names collided three times where this one collided once. Twenty four
 // leaves every workspace distinct and collides only between two pairs of projects in different

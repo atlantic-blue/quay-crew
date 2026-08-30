@@ -14,7 +14,7 @@ import (
 //
 // The unit tests next to this one hold the shape of the graph. These hold what a run of it does:
 // where it stops, what the operator is shown, and what has been declared by the time they are
-// asked. The difference matters, because the stop is what keeps the crew from posting to somebody
+// asked. The difference matters, because the stop is what keeps the system from posting to somebody
 // else's pull request on its own, and an edge that reads correctly is not the same as a run that
 // halts.
 
@@ -42,7 +42,7 @@ internal/store/reader.go:40 the call needs the policy this role does not carry.`
 
 // worked lands one step with the answer given and carries the run on, which is what the controller
 // and the poller do between them.
-func worked(t *testing.T, engine *flow.Engine, it *crew, run flow.Run, reply string) flow.Run {
+func worked(t *testing.T, engine *flow.Engine, it *system, run flow.Run, reply string) flow.Run {
 	t.Helper()
 	step := stepOf(t, it, run)
 	lands(t, it, step, "session-of-"+step.Labels["flow.node"], answered(reply))
@@ -51,7 +51,7 @@ func worked(t *testing.T, engine *flow.Engine, it *crew, run flow.Run, reply str
 
 // declaredFor is every job the run declared for one node of the graph, whatever phase it
 // reached. It is the question "has this step ever been sent" rather than "is it out now".
-func declaredFor(t *testing.T, it *crew, run flow.Run, node string) []*job.Job {
+func declaredFor(t *testing.T, it *system, run flow.Run, node string) []*job.Job {
 	t.Helper()
 	listed, err := it.store.ListJobs(context.Background(), job.Filter{
 		LabelKey: "flow.run", LabelValue: run.ID,
@@ -69,7 +69,7 @@ func declaredFor(t *testing.T, it *crew, run flow.Run, node string) []*job.Job {
 }
 
 // asking drives a run of the shipped graph up to the question, which is five steps.
-func asking(t *testing.T, engine *flow.Engine, it *crew, workspace, project string) flow.Run {
+func asking(t *testing.T, engine *flow.Engine, it *system, workspace, project string) flow.Run {
 	t.Helper()
 	run := started(t, engine, it, "pull-request-review", workspace, project)
 	for _, reply := range []string{reviewed, reviewed + "\nno secrets in the diff", reviewed + "\nit is not deployed", reviewed + "\nno scenario", theDraft} {
@@ -82,7 +82,7 @@ func asking(t *testing.T, engine *flow.Engine, it *crew, workspace, project stri
 // nothing has been declared to post it: the operator has not answered yet, so there is nothing on
 // the pull request.
 func TestAReviewStopsAtTheQuestionWithNothingPosted(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, theReviewGraphSource(t))
+	engine, it, workspace, project := aSystem(t, theReviewGraphSource(t))
 
 	run := asking(t, engine, it, workspace, project)
 
@@ -118,7 +118,7 @@ func TestAReviewStopsAtTheQuestionWithNothingPosted(t *testing.T) {
 
 // Answering no ends the run and posts nothing, which is what makes the question real.
 func TestAReviewToldNoPostsNothing(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, theReviewGraphSource(t))
+	engine, it, workspace, project := aSystem(t, theReviewGraphSource(t))
 	run := asking(t, engine, it, workspace, project)
 
 	ended, err := engine.Answer(context.Background(), run, "no")
@@ -137,7 +137,7 @@ func TestAReviewToldNoPostsNothing(t *testing.T) {
 // all. A yes declares the posting step, and it is handed the draft the operator read rather than a
 // fresh one, so what is posted is what they said yes to.
 func TestAReviewToldYesPostsWhatTheOperatorRead(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, theReviewGraphSource(t))
+	engine, it, workspace, project := aSystem(t, theReviewGraphSource(t))
 	run := asking(t, engine, it, workspace, project)
 
 	carried, err := engine.Answer(context.Background(), run, "yes")
@@ -162,7 +162,7 @@ func TestAReviewToldYesPostsWhatTheOperatorRead(t *testing.T) {
 // A run that finds nothing to review ends after the one step it took to find that out, rather than
 // reviewing whatever the pick step was looking at.
 func TestAReviewWithNothingToReviewEndsAfterOneStep(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, theReviewGraphSource(t))
+	engine, it, workspace, project := aSystem(t, theReviewGraphSource(t))
 
 	run := started(t, engine, it, "pull-request-review", workspace, project)
 	run = worked(t, engine, it, run, "none")
@@ -181,7 +181,7 @@ func TestAReviewWithNothingToReviewEndsAfterOneStep(t *testing.T) {
 // container. A review can sit unanswered for a day, and a day of held containers is the cost this
 // checks against.
 func TestAReviewWaitingOnTheOperatorHoldsNoSession(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, theReviewGraphSource(t))
+	engine, it, workspace, project := aSystem(t, theReviewGraphSource(t))
 
 	run := asking(t, engine, it, workspace, project)
 

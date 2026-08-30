@@ -36,8 +36,8 @@ type errBroker struct{}
 
 func (errBroker) Error() string { return "the broker refused this record" }
 
-// crewWithLog is a crew whose event log is the one given.
-func crewWithLog(t *testing.T, log messaging.EventLog) (*controlplane.Server, store.Store) {
+// systemWithLog is a system whose event log is the one given.
+func systemWithLog(t *testing.T, log messaging.EventLog) (*controlplane.Server, store.Store) {
 	t.Helper()
 	kept := store.NewMemory()
 	return controlplane.NewServer(controlplane.Config{
@@ -63,7 +63,7 @@ func declaredIn(t *testing.T, server *controlplane.Server, title string) *quaycr
 // stay in order on one partition.
 func TestDeclaringJobPutsARecordOnTheJobStream(t *testing.T) {
 	log := messaging.NewMemory()
-	server, _ := crewWithLog(t, log)
+	server, _ := systemWithLog(t, log)
 	declared := declaredIn(t, server, "read the electricity bill")
 
 	records := log.RecordsOn("acme.job")
@@ -100,7 +100,7 @@ func TestDeclaringJobPutsARecordOnTheJobStream(t *testing.T) {
 // that refuses everything costs the copy and nothing else.
 func TestAnExportThatFailsDoesNotFailTheJob(t *testing.T) {
 	log := &refusingLog{}
-	server, kept := crewWithLog(t, log)
+	server, kept := systemWithLog(t, log)
 
 	declared := declaredIn(t, server, "read the electricity bill")
 	if log.tried == 0 {
@@ -123,15 +123,15 @@ func TestAnExportThatFailsDoesNotFailTheJob(t *testing.T) {
 		t.Fatalf("%d records are in the store after an export that failed", len(events))
 	}
 
-	// And the crew carries on serving, which is the other half of "never fails a command".
+	// And the system carries on serving, which is the other half of "never fails a command".
 	if _, err := server.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{}); err != nil {
-		t.Fatalf("a crew whose broker refuses stopped answering: %v", err)
+		t.Fatalf("a system whose broker refuses stopped answering: %v", err)
 	}
 }
 
-// A crew with no broker configured is the default. Nothing is exported and the whole record is kept.
+// A system with no broker configured is the default. Nothing is exported and the whole record is kept.
 func TestWithNoBrokerNothingIsExportedAndTheRecordIsWhole(t *testing.T) {
-	server, kept := crewWithLog(t, nil)
+	server, kept := systemWithLog(t, nil)
 	declared := declaredIn(t, server, "read the electricity bill")
 
 	events, err := kept.ListJobEvents(context.Background(), declared.GetId())
@@ -139,19 +139,19 @@ func TestWithNoBrokerNothingIsExportedAndTheRecordIsWhole(t *testing.T) {
 		t.Fatalf("ListJobEvents: %v", err)
 	}
 	if len(events) != 1 {
-		t.Fatalf("%d records are in the store on a crew with no broker", len(events))
+		t.Fatalf("%d records are in the store on a system with no broker", len(events))
 	}
 	if events[0].TraceID == "" {
-		t.Fatal("the record carries no trace on a crew with no broker")
+		t.Fatal("the record carries no trace on a system with no broker")
 	}
 }
 
-// Every detail goes through the crew's redactor before it is written or exported. What a caller
+// Every detail goes through the system's redactor before it is written or exported. What a caller
 // types can be a credential, and everything here is persisted.
 func TestASecretInADetailReachesNeitherTheRecordNorTheLog(t *testing.T) {
 	const secret = "sk-ant-the-value-nobody-should-store"
 	log := messaging.NewMemory()
-	server, kept := crewWithLog(t, log)
+	server, kept := systemWithLog(t, log)
 	workspace, project := newProject(t, server)
 
 	if _, err := server.SetSecret(context.Background(), &quaycrewv1.SetSecretRequest{
@@ -193,7 +193,7 @@ func TestASecretInADetailReachesNeitherTheRecordNorTheLog(t *testing.T) {
 // A movement of a job that was stopped is a record too, and it is the one a reader comes looking for.
 func TestStoppingJobPutsItsReasonOnTheRecordAndTheLog(t *testing.T) {
 	log := messaging.NewMemory()
-	server, kept := crewWithLog(t, log)
+	server, kept := systemWithLog(t, log)
 	declared := declaredIn(t, server, "read the electricity bill")
 
 	if _, err := server.StopJob(context.Background(), &quaycrewv1.StopJobRequest{
@@ -222,7 +222,7 @@ func TestStoppingJobPutsItsReasonOnTheRecordAndTheLog(t *testing.T) {
 // One identifier joins the tree. A job carries the trace of the call that declared it, so
 // a reader holding the row can open the trace and every line written under it.
 func TestJobCarriesTheTraceOfTheCallThatDeclaredIt(t *testing.T) {
-	server, _ := crewWithLog(t, nil)
+	server, _ := systemWithLog(t, nil)
 	declared := declaredIn(t, server, "read the electricity bill")
 	if len(declared.GetTraceId()) != 32 {
 		t.Fatalf("the job traces %q, which joins to nothing", declared.GetTraceId())

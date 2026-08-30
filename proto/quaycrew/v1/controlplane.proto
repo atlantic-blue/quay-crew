@@ -37,7 +37,7 @@ message Project {
   // pipeline's minutes are free on a public repository and metered on a private one, and that
   // decision was being taken in a person's head, once per project.
   //
-  // It is what the operator declared, not what the forge says. The crew does not go and look.
+  // It is what the operator declared, not what the forge says. The system does not go and look.
   string visibility = 7;
 }
 
@@ -63,14 +63,14 @@ message DeployTarget {
 // runs as a session in a sandbox. It carries its workspace too, denormalised from the project so a
 // listing does not need a join; a project never moves workspace.
 message Session {
-  // id is the crew's own identifier for this session. It names the session's sandbox container.
+  // id is the system's own identifier for this session. It names the session's sandbox container.
   string id = 1;
   string workspace = 2;
   // handle is the name a channel dispatches to: dispatch to the same handle and the conversation
   // continues. It is chosen by whoever starts the session, or minted when nobody did.
   string handle = 3;
   // status is where the session is: "idle" when it is waiting for you, "running" while a task is under
-  // way, "failed" when the last task did not land, "reclaimed" when the crew took its container back,
+  // way, "failed" when the last task did not land, "reclaimed" when the system took its container back,
   // and "stopped" when the session was put down.
   string status = 4;
   // model_session_id is the model's own identifier for the conversation, in the model's own word,
@@ -86,7 +86,7 @@ message Session {
   // "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to a task, so
   // a session started to plan something keeps planning.
   string permission_mode = 10;
-  // driver says this session drives the crew rather than doing work inside it. It reaches the
+  // driver says this session drives the system rather than doing work inside it. It reaches the
   // control plane's own interface, and whatever host paths the operator handed it, which an
   // ordinary session does not.
   bool driver = 11;
@@ -101,27 +101,27 @@ message Session {
   // label is what the operator calls this conversation, empty until they say. Nothing automatic ever
   // writes it: a name somebody picked is the one thing in a listing that is certainly right.
   string label = 14;
-  // description is what the crew observed the conversation to be, one line, written by the model that
+  // description is what the system observed the conversation to be, one line, written by the model that
   // had the task. Empty until a task has happened. A listing prefers the label when there is one.
   string description = 15;
   // described_at_task is how many tasks the session had when its description was written, so a
   // conversation that has moved on can be described again. Zero means never described.
   int32 described_at_task = 16;
-  // context_window is how full the model's context window is. Absent where the crew cannot say.
+  // context_window is how full the model's context window is. Absent where the system cannot say.
   ContextWindow context_window = 17;
   // role is the name of the role this session runs as, empty for a session that runs as nobody in
   // particular. It is set when the session is made and never changes: the boundary a role declares
   // has to hold for every task of the session, not only the first, and a sandbox is born with its
   // capabilities anyway.
   string role = 18;
-  // reclaimed_at is when the crew took this session's container back. Unset means it holds one, or
+  // reclaimed_at is when the system took this session's container back. Unset means it holds one, or
   // never had one taken. The row, the conversation handle and the files on the host all stay, so the
   // next task builds a fresh container over the same state and the conversation carries on.
   //
   // It is a stamp of its own rather than a reading of updated_at, because how long a session has been
   // reclaimed is what the archive time is measured against, and updated_at moves on every write.
   google.protobuf.Timestamp reclaimed_at = 19;
-  // presence is what the crew found inside this session's sandbox, and it is the half of "is anything
+  // presence is what the system found inside this session's sandbox, and it is the half of "is anything
   // happening here" that status never knew. status only says whether a dispatched task is open, so a
   // session holding a conversation somebody started by hand read idle, and idle is the word that
   // invites a restart, a drain or a reclaim.
@@ -141,7 +141,7 @@ message Session {
 }
 
 // SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
-// rather than from anything the crew wrote down.
+// rather than from anything the system wrote down.
 //
 // Read from the sandbox because a stamp needs somebody to keep it fresh, how often is a number, and
 // no measurement has set one. The sandbox already knows: its own process table says whether a model
@@ -153,21 +153,21 @@ enum SessionPresence {
   // Nobody asked. It is not an answer, and a caller that reads it as "nothing is there" is making
   // the mistake this field exists to stop.
   SESSION_PRESENCE_UNSPECIFIED = 0;
-  // The crew asked and found nothing: no model runtime, and nobody attached. The only real idle.
+  // The system asked and found nothing: no model runtime, and nobody attached. The only real idle.
   SESSION_PRESENCE_EMPTY = 1;
   // A model runtime is up inside the sandbox with nobody watching it. A conversation somebody
   // started and walked away from is here, and so is one still answering.
   SESSION_PRESENCE_AWAKE = 2;
   // Somebody has the conversation open.
   SESSION_PRESENCE_ATTACHED = 3;
-  // The crew asked and could not be told: the daemon did not answer. Never idle, because a caller
+  // The system asked and could not be told: the daemon did not answer. Never idle, because a caller
   // reads idle as licence to close a container.
   SESSION_PRESENCE_UNTOLD = 4;
 }
 
 // ContextWindow is how full a conversation's context window is.
 //
-// This is the model's context window, not the crew's context documents. It is the number that says
+// This is the model's context window, not the system's context documents. It is the number that says
 // whether a conversation is still worth continuing, and it is not the same thing as what the
 // conversation has cost: cost only grows, while the window empties again when the model compacts.
 message ContextWindow {
@@ -175,7 +175,7 @@ message ContextWindow {
   // back from the cache, because that is the context rather than the part of it charged as new. Read
   // from the transcript the model keeps.
   int64 used = 1;
-  // size is how big the window is. The crew cannot work that out for itself, so this is what the
+  // size is how big the window is. The system cannot work that out for itself, so this is what the
   // model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
   // listing shows as a count rather than as a guessed share.
   int64 size = 2;
@@ -397,12 +397,12 @@ enum SecretProjection {
 
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 message SetSecretRequest {
-  // workspace is the workspace it belongs to, and is ignored when scope is "crew".
+  // workspace is the workspace it belongs to, and is ignored when scope is "system".
   string workspace = 1;
   string key = 2;
   string value = 3;
   SecretProjection projection = 4;
-  // scope is "workspace", which is what an empty value means, or "crew". A secret set on the crew
+  // scope is "workspace", which is what an empty value means, or "system". A secret set on the system
   // reaches every workspace, including the ones made after it, which is the difference between
   // setting a shared token once and setting it again for each workspace. A workspace that sets the
   // same name keeps its own value.
@@ -435,7 +435,7 @@ message DispatchRequest {
   // A workspace that does not hold the named role is refused by name, because a step that names a
   // role nobody attached must fail with a sentence rather than half run.
   string role = 6;
-  // job is the job this task runs for, and only the operator may name one. The crew mints
+  // job is the job this task runs for, and only the operator may name one. The system mints
   // a credential bound to that job for this task and puts it in the environment of this task alone.
   //
   // Per task rather than at sandbox birth, because a sandbox is born with its configuration and keeps
@@ -447,7 +447,7 @@ message DispatchRequest {
   // conversation since.
   //
   // It is what a caller that already knows the name sends. A job is declared with a title, and
-  // without this the crew is handed that name and drops it, which leaves a listing of running jobs
+  // without this the system is handed that name and drops it, which leaves a listing of running jobs
   // waiting for a description written after the work is over.
   string title = 8;
 }
@@ -460,7 +460,7 @@ message DispatchResponse {
 }
 
 // ListSessionsRequest filters by project when set, else by workspace when set, else lists all.
-// OpenDriverRequest asks for a project's driver, the session that drives the crew.
+// OpenDriverRequest asks for a project's driver, the session that drives the system.
 message OpenDriverRequest {
   string project = 1;
 }
@@ -548,7 +548,7 @@ message ArchiveSessionResponse {
 // ReclaimSessionRequest takes a settled session's container back and leaves everything else.
 //
 // It is the controller's move rather than an operator's, and it is not a stop. A stop is somebody's
-// decision and reads as one; a reclaim is the crew saving memory on a session nobody is using, and
+// decision and reads as one; a reclaim is the system saving memory on a session nobody is using, and
 // the next task to arrive builds a fresh container over the same conversation and the same files.
 //
 // A session with a task under way is refused, and so is one an operator already stopped: overwriting
@@ -599,17 +599,17 @@ message ContextDir {
   // state and says nothing about whether context is set up, so this is the difference worth showing.
   bool written = 6;
   // owner is what to name when setting this context: a workspace or project identifier, and empty
-  // for the crew.
+  // for the system.
   string owner = 7;
   // body is what the model is told at this scope. It comes from the store, which is where context
   // lives; the file in a sandbox is a rendering of it.
   string body = 8;
 }
 
-// SetContextRequest records what the model should be told at a scope. The crew's context has no
+// SetContextRequest records what the model should be told at a scope. The system's context has no
 // owner; a workspace's and a project's are owned by their identifier.
 message SetContextRequest {
-  // scope is "crew", "workspace" or "project".
+  // scope is "system", "workspace" or "project".
   string scope = 1;
   string owner = 2;
   string body = 3;
@@ -620,7 +620,7 @@ message SetContextResponse {
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
-// reader is the crew itself, at the moment a task needs it.
+// reader is the system itself, at the moment a task needs it.
 message SecretRef {
   string workspace = 1;
   // workspace_name is what to call that workspace where a human reads it.
@@ -630,13 +630,13 @@ message SecretRef {
   // projection is how this one reaches a sandbox. Where it lands is not carried, because it is
   // derived from the name and every reader would derive the same path.
   SecretProjection projection = 5;
-  // crew says the crew holds this one, so every workspace reads it without setting anything. Its
+  // system says the system holds this one, so every workspace reads it without setting anything. Its
   // workspace is then empty, because it belongs to no single workspace.
-  bool crew = 6;
+  bool system = 6;
 }
 
 // ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty. The
-// crew's own are in both answers, marked, because they reach every workspace either way.
+// system's own are in both answers, marked, because they reach every workspace either way.
 message ListSecretsRequest {
   string workspace = 1;
 }
@@ -648,7 +648,7 @@ message ListSecretsResponse {
 // the secrets it names. It is authored as a directory in a git repository and imported here, pinned to
 // a version, so a skill edited in its repository cannot change a session that is already using it.
 //
-// It carries no secret value and no brief. The brief is a file, and a listing of what a crew can do
+// It carries no secret value and no brief. The brief is a file, and a listing of what a system can do
 // should not be a page per entry.
 message Skill {
   string name = 1;
@@ -660,8 +660,8 @@ message Skill {
   repeated string binaries = 4;
   repeated SkillSecret secrets = 5;
   google.protobuf.Timestamp imported_at = 6;
-  // crew says the crew holds this skill, so every workspace has it without attaching anything.
-  bool crew = 8;
+  // system says the system holds this skill, so every workspace has it without attaching anything.
+  bool system = 8;
   // left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
   // is given. A skill naming a secret the workspace has not set is held and not given, rather than
   // refusing the task, so one unusable skill cannot stop every conversation in the workspace.
@@ -676,7 +676,7 @@ message SkillSecret {
   string purpose = 2;
 }
 
-// SkillFile is one file of a skill's directory, on its way into the crew.
+// SkillFile is one file of a skill's directory, on its way into the system.
 message SkillFile {
   // path is relative to the skill's directory, with forward slashes.
   string path = 1;
@@ -698,9 +698,9 @@ message ImportSkillResponse {
   Skill skill = 1;
 }
 
-// ListSkillsRequest lists what the crew has imported, what one workspace holds when workspace is
+// ListSkillsRequest lists what the system has imported, what one workspace holds when workspace is
 // set, or what one session actually holds when session is set: the same answer the session's sandbox
-// is built from, both the crew's own skills and the workspace's, the workspace winning a name
+// is built from, both the system's own skills and the workspace's, the workspace winning a name
 // collision.
 message ListSkillsRequest {
   string workspace = 1;
@@ -710,15 +710,15 @@ message ListSkillsResponse {
   repeated Skill skills = 1;
 }
 
-// AttachSkillRequest gives a workspace a skill, at the version the crew holds now. Every session in the
+// AttachSkillRequest gives a workspace a skill, at the version the system holds now. Every session in the
 // workspace then holds it.
 message AttachSkillRequest {
-  // workspace is the workspace to give it to, and is ignored when scope is "crew".
+  // workspace is the workspace to give it to, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew". A skill attached to the
-  // crew is held by every workspace, including the ones made after it, which is the difference
-  // between setting a crew up once and setting each workspace up again.
+  // scope is "workspace", which is what an empty value means, or "system". A skill attached to the
+  // system is held by every workspace, including the ones made after it, which is the difference
+  // between setting a system up once and setting each workspace up again.
   string scope = 3;
 }
 message AttachSkillResponse {
@@ -727,10 +727,10 @@ message AttachSkillResponse {
 
 // DetachSkillRequest takes a skill away from a workspace. The skill stays imported.
 message DetachSkillRequest {
-  // workspace is the workspace to take it from, and is ignored when scope is "crew".
+  // workspace is the workspace to take it from, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew".
+  // scope is "workspace", which is what an empty value means, or "system".
   string scope = 3;
 }
 message DetachSkillResponse {}
@@ -751,10 +751,10 @@ message Hook {
   repeated string binaries = 5;
   repeated SkillSecret secrets = 6;
   google.protobuf.Timestamp imported_at = 7;
-  // crew says the crew holds this hook, so every workspace has it without attaching anything. It is
-  // the level most hooks want: a constraint the crew agreed on is not usually a per workspace
+  // system says the system holds this hook, so every workspace has it without attaching anything. It is
+  // the level most hooks want: a constraint the system agreed on is not usually a per workspace
   // opinion.
-  bool crew = 8;
+  bool system = 8;
   // left_out says why a hook the workspace holds is not given to its sessions, and is empty when it
   // is given.
   string left_out = 9;
@@ -793,7 +793,7 @@ message ImportHookResponse {
   Hook hook = 1;
 }
 
-// ListHooksRequest lists what the crew has imported, what one workspace holds when workspace is set,
+// ListHooksRequest lists what the system has imported, what one workspace holds when workspace is set,
 // or what one session actually holds when session is set.
 message ListHooksRequest {
   string workspace = 1;
@@ -803,12 +803,12 @@ message ListHooksResponse {
   repeated Hook hooks = 1;
 }
 
-// AttachHookRequest gives a workspace a hook, at the version the crew holds now.
+// AttachHookRequest gives a workspace a hook, at the version the system holds now.
 message AttachHookRequest {
-  // workspace is the workspace to give it to, and is ignored when scope is "crew".
+  // workspace is the workspace to give it to, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew".
+  // scope is "workspace", which is what an empty value means, or "system".
   string scope = 3;
 }
 message AttachHookResponse {
@@ -817,10 +817,10 @@ message AttachHookResponse {
 
 // DetachHookRequest takes a hook away from a workspace. The hook stays imported.
 message DetachHookRequest {
-  // workspace is the workspace to take it from, and is ignored when scope is "crew".
+  // workspace is the workspace to take it from, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew".
+  // scope is "workspace", which is what an empty value means, or "system".
   string scope = 3;
 }
 message DetachHookResponse {}
@@ -829,7 +829,7 @@ message DetachHookResponse {}
 // and the material it is allowed to receive.
 //
 // The boundary is the point of it. A role that writes tests must not receive the code, or the two
-// sessions are one conversation wearing two names, so receives is a declaration the crew can hold a
+// sessions are one conversation wearing two names, so receives is a declaration the system can hold a
 // session to rather than prose in a brief that asks it nicely.
 message Role {
   string name = 1;
@@ -839,12 +839,12 @@ message Role {
   // model is which model a session running as this role uses, as a tier ("opus") or a full name
   // ("claude-opus-5"). Declared per role because the work differs.
   string model = 4;
-  // receives is the material this role is given, sorted. A name the crew does not hand out is
+  // receives is the material this role is given, sorted. A name the system does not hand out is
   // refused at import, because a boundary that means nothing looks exactly like one that holds.
   repeated string receives = 5;
   google.protobuf.Timestamp imported_at = 6;
-  // crew says the crew holds this role, so every workspace has it without attaching anything.
-  bool crew = 7;
+  // system says the system holds this role, so every workspace has it without attaching anything.
+  bool system = 7;
   // origin is where the files came from, recorded at import. A role nobody can go and read is the
   // failure this exists for: an acceptance run was driven by three roles in a folder on one machine,
   // so no pull request touched them and nobody reviewed them.
@@ -872,7 +872,7 @@ message RoleOrigin {
   bool unpushed = 5;
 }
 
-// RoleFile is one file of a role's directory, on its way into the crew.
+// RoleFile is one file of a role's directory, on its way into the system.
 message RoleFile {
   // path is relative to the role's directory, with forward slashes.
   string path = 1;
@@ -891,7 +891,7 @@ message ImportRoleResponse {
   Role role = 1;
 }
 
-// ListRolesRequest lists what the crew has imported, or what one workspace holds when workspace is
+// ListRolesRequest lists what the system has imported, or what one workspace holds when workspace is
 // set.
 message ListRolesRequest {
   string workspace = 1;
@@ -900,12 +900,12 @@ message ListRolesResponse {
   repeated Role roles = 1;
 }
 
-// AttachRoleRequest gives a workspace a role, at the version the crew holds now.
+// AttachRoleRequest gives a workspace a role, at the version the system holds now.
 message AttachRoleRequest {
-  // workspace is the workspace to give it to, and is ignored when scope is "crew".
+  // workspace is the workspace to give it to, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew".
+  // scope is "workspace", which is what an empty value means, or "system".
   string scope = 3;
 }
 message AttachRoleResponse {
@@ -914,35 +914,35 @@ message AttachRoleResponse {
 
 // DetachRoleRequest takes a role away from a workspace. The role stays imported.
 message DetachRoleRequest {
-  // workspace is the workspace to take it from, and is ignored when scope is "crew".
+  // workspace is the workspace to take it from, and is ignored when scope is "system".
   string workspace = 1;
   string name = 2;
-  // scope is "workspace", which is what an empty value means, or "crew".
+  // scope is "workspace", which is what an empty value means, or "system".
   string scope = 3;
 }
 message DetachRoleResponse {}
 
 // GetRoleRequest asks for one role whole, the brief included, so what a session running as it is
-// told can be read out of the crew rather than out of the directory it was imported from.
+// told can be read out of the system rather than out of the directory it was imported from.
 message GetRoleRequest {
-  // workspace reads the version that workspace pinned. Empty reads what the crew has imported.
+  // workspace reads the version that workspace pinned. Empty reads what the system has imported.
   string workspace = 1;
   string name = 2;
 }
 message GetRoleResponse {
   Role role = 1;
   // brief is the whole instruction a session running as this role is given. It travels here and
-  // nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
+  // nowhere else: a listing was asked what the system holds, not for a copy of every instruction.
   string brief = 2;
   // verbs is what a session running as this role may call, sorted, in the word kubernetes uses for
   // the same question. Empty is a role that may call nothing, which is the default.
   repeated string verbs = 3;
-  // held_by names every workspace that attached this role for itself, sorted. A role the crew holds
+  // held_by names every workspace that attached this role for itself, sorted. A role the system holds
   // says so on the role and reaches every workspace without being named here.
   repeated string held_by = 4;
 }
 
-// ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
+// ListContextsRequest asks where context lives: for one project when set, or for the whole system.
 message ListContextsRequest {
   string project = 1;
 }
@@ -983,7 +983,7 @@ message GetInfoRequest {}
 // GetInfoResponse says what a task dispatched here would actually do.
 //
 // It carries configuration, never a secret and never a health verdict. The console shows it so the
-// operator can see which crew they are about to act on, the way a cluster name does.
+// operator can see which system they are about to act on, the way a cluster name does.
 message GetInfoResponse {
   // model is the backend a task runs against, for example "claude-code" or "echo".
   string model = 1;
@@ -996,25 +996,25 @@ message GetInfoResponse {
   // state is where a session's conversation and files are kept, for example "host directory". Empty
   // means they are kept nowhere: they live in the container and are destroyed with it.
   string state = 4;
-  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
   // wondering why a task stopped working.
   // events is the event log a task is recorded on, for example "redpanda". Empty means nothing is
   // connected to it, which is the truth today: the log is in the compose stack and no service reads
   // from or writes to it.
   string events = 5;
-  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+  // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
   // wondering why a task stopped working.
   string secrets = 6;
-  // sandbox_build is the build of the crew the sandbox image was made from, for example "37b070b".
-  // Sessions run whatever that image holds, so an image older than the tool means the crew moved on
+  // sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
+  // Sessions run whatever that image holds, so an image older than the tool means the system moved on
   // and the containers did not: the `quay` inside one is from that build, or is not there at all.
   // Empty means the image says nothing about which build it came from, which is every image made
   // before this was stamped, and nothing is claimed about it either way.
   string sandbox_build = 7;
-  // version is the build of the crew this control plane was made from, for example "5bf99a0". Empty
-  // means this crew predates the field, so nothing is claimed about which build it is. The tool, the
+  // version is the build of the system this control plane was made from, for example "5bf99a0". Empty
+  // means this system predates the field, so nothing is claimed about which build it is. The tool, the
   // control plane and the sandbox image are built on their own and drift apart, and three defects
   // were investigated as live on 27 August 2026 that were fixed already, because nothing said so.
   string version = 8;
@@ -1022,15 +1022,15 @@ message GetInfoResponse {
 
 // GetHeadroomRequest asks how much room the machine has left for another session.
 message GetHeadroomRequest {}
-// GetHeadroomResponse is the crew's last reading of the machine it runs on.
+// GetHeadroomResponse is the system's last reading of the machine it runs on.
 //
 // Every byte count is a string rather than a number, and the string is either a figure or the word
-// "unknown". The crew knew nothing about its machine while the kernel killed eighteen sandboxes, and
+// "unknown". The system knew nothing about its machine while the kernel killed eighteen sandboxes, and
 // the fix for that must never be a zero standing in for a reading nobody took. A caller that wants
 // to compare numbers reads the bytes fields beside them, which carry -1 for unmeasured.
 message GetHeadroomResponse {
   // used is what every container on the daemon holds, added up. Every container rather than the
-  // crew's own, because the cap binds all of them.
+  // system's own, because the cap binds all of them.
   string used = 1;
   // limit is the memory the daemon may hold, which is the limit that binds. On a Mac it is the
   // Docker virtual machine's cap and never the Mac's own memory.
@@ -1052,11 +1052,11 @@ message GetHeadroomResponse {
   string swap_used = 9;
   // sandboxes is one entry per session container, largest first.
   repeated HeadroomSandbox sandboxes = 10;
-  // taken_at is when the reading was taken. Unset means the crew has never read the machine, which
-  // is a crew with no daemon or a daemon that has never answered.
+  // taken_at is when the reading was taken. Unset means the system has never read the machine, which
+  // is a system with no daemon or a daemon that has never answered.
   google.protobuf.Timestamp taken_at = 11;
   // failed says what could not be read, empty when the whole reading worked. A reading that failed
-  // never fails a command: the figures read unknown and the crew carries on.
+  // never fails a command: the figures read unknown and the system carries on.
   string failed = 12;
   // used_bytes and limit_bytes carry -1 where nothing measured them, so a caller comparing numbers
   // does not have to parse the strings above.
@@ -1070,18 +1070,18 @@ message HeadroomSandbox {
   string held = 2;
   // processor is its share of one processor, for example "12.4%", or "unknown".
   string processor = 3;
-  // idle is how long since this session's last task, for example "12m". Empty means the crew does
+  // idle is how long since this session's last task, for example "12m". Empty means the system does
   // not know, which is a container with no session row beside it.
   string idle = 4;
   // held_bytes carries -1 where nothing measured it.
   int64 held_bytes = 5;
   // status is what the session's row says it is doing, for example "running" or "idle". Empty means
-  // the crew holds no session for this container, which is a stray. An operator deciding what to
+  // the system holds no session for this container, which is a stray. An operator deciding what to
   // stop reads this first: the largest sandbox may be the one doing the work.
   string status = 6;
 }
 
-// GetHealthRequest asks what the crew last found when it probed the parts of itself it has to write
+// GetHealthRequest asks what the system last found when it probed the parts of itself it has to write
 // to before a dispatch can start.
 message GetHealthRequest {}
 // GetHealthResponse is that probe's last reading, one entry per part.
@@ -1094,21 +1094,21 @@ message GetHealthRequest {}
 // and never a verdict; this one is a verdict and goes stale, which is why it carries the time it was
 // taken.
 message GetHealthResponse {
-  // components is what was probed, in the order a dispatch needs them. A part the crew does not
+  // components is what was probed, in the order a dispatch needs them. A part the system does not
   // probe is not in here at all, and a caller reading it must say so rather than filling the gap
   // with a colour: the whole point of this call is that a part nothing checked must not read the
   // same as a part that answered.
   repeated HealthComponent components = 1;
-  // checked_at is when the probe ran. Unset means the crew has never probed, which is a crew that
+  // checked_at is when the probe ran. Unset means the system has never probed, which is a system that
   // started a moment ago.
   google.protobuf.Timestamp checked_at = 2;
 }
-// HealthComponent is one part of the crew and what the last probe of it found.
+// HealthComponent is one part of the system and what the last probe of it found.
 message HealthComponent {
   // name is the part, for example "store" or "events".
   string name = 1;
   // state is one word: "serving" when the probe landed, "down" when it did not, and "not configured"
-  // for a part this crew has none of, which is an event log nothing is connected to. Down has to be
+  // for a part this system has none of, which is an event log nothing is connected to. Down has to be
   // readable without reading the detail beside it.
   string state = 2;
   // detail is why it is down, for example "the event log did not take a record: ...". Empty when
@@ -1116,13 +1116,13 @@ message HealthComponent {
   string detail = 3;
 }
 
-// GetUsageRequest asks what the crew has cost so far.
+// GetUsageRequest asks what the system has cost so far.
 message GetUsageRequest {}
-// GetUsageResponse is every conversation the crew holds, added up.
+// GetUsageResponse is every conversation the system holds, added up.
 message GetUsageResponse {
   Usage total = 1;
   // sessions is how many conversations went into the total, so a number with nothing behind it can be
-  // told from a crew that has genuinely spent nothing.
+  // told from a system that has genuinely spent nothing.
   int64 sessions = 2;
 }
 
@@ -1159,7 +1159,7 @@ message ListTasksResponse {
 // Job is one piece of declared intent. A caller writes it, and a controller makes reality match it.
 //
 // The record is the point: intent lives in a row rather than in a process, so it outlives the caller
-// that asked for it, the session that runs it and the crew that was restarted underneath it.
+// that asked for it, the session that runs it and the system that was restarted underneath it.
 message Job {
   string id = 1;
   string workspace = 2;
@@ -1200,7 +1200,7 @@ message Job {
   // answer names that pull request. Empty claims nothing and is checked as nothing.
   string repository = 33;
 
-  // What the crew assigned, and the caller may not.
+  // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
   // and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
   string parent = 15;
@@ -1222,7 +1222,7 @@ message Job {
   // reason says why a stopped or failed job ended. question is what an asking job waits to be told.
   string reason = 22;
   string question = 23;
-  // told is the last thing a person told this job, and it is what the crew sends the session when
+  // told is the last thing a person told this job, and it is what the system sends the session when
   // the job starts again. It stays on the row after it has been handed over, because what somebody
   // decided is part of the record of the job rather than a message in flight.
   string told = 35;
@@ -1266,12 +1266,12 @@ message CreateJobRequest {
   int64 budget_tokens = 10;
   map<string, string> labels = 11;
   // requires is the material this job cannot be done without, drawn from job, context and
-  // skills. A word the crew does not hand out is refused by name.
+  // skills. A word the system does not hand out is refused by name.
   repeated string requires = 14;
   // repository is where this job's work goes, written owner/name. A job that names one ends in a
   // pull request against it.
   string repository = 15;
-  // id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
+  // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.
   string id = 12;
@@ -1283,7 +1283,7 @@ message CreateJobResponse {
   // because the workspace has not set a secret that skill needs. Each carries, in its own left_out
   // field, the same sentence the skill listing prints.
   //
-  // It is an answer rather than a refusal. The crew cannot know which skill a brief will reach for, so
+  // It is an answer rather than a refusal. The system cannot know which skill a brief will reach for, so
   // refusing here would stop a job that never touches a repository over a token it never wanted. What
   // it can do is say, while the caller is looking, that the session starts without that capability.
   repeated Skill left_out = 2;
@@ -1296,7 +1296,7 @@ message GetJobResponse {
   Job job = 1;
 }
 
-// ListJobsRequest narrows a listing. The zero value is everything the crew holds.
+// ListJobsRequest narrows a listing. The zero value is everything the system holds.
 message ListJobsRequest {
   // project wins over workspace when both are set, being the narrower.
   string workspace = 1;
@@ -1371,29 +1371,29 @@ message WorkspaceLimits {
   // workspace may declare a job at all: default deny, raised deliberately and per workspace.
   int32 max_depth = 2;
   // max_running is how many jobs may run at once in this workspace. Zero is unset, and the
-  // crew ships it unset because no measurement has set it yet.
+  // system ships it unset because no measurement has set it yet.
   int32 max_running = 3;
   // budget_tokens is what a tree of jobs may spend when its root declares none. Zero is unset.
   int64 budget_tokens = 4;
   // lease_seconds is how long a controller holds a job here before another may take it.
-  // Zero takes the crew's own measured default.
+  // Zero takes the system's own measured default.
   int32 lease_seconds = 5;
-  // reclaim_seconds is how long a settled session keeps its container before the crew takes it back.
+  // reclaim_seconds is how long a settled session keeps its container before the system takes it back.
   // Zero is unset, and unset means the controller reclaims nothing here, however long it runs.
   //
-  // The crew ships it unset and invents no number for it. Section 11 of docs/ORCHESTRATION.md names
+  // The system ships it unset and invents no number for it. Section 11 of docs/ORCHESTRATION.md names
   // the three measurements that would set it, and the command that takes each. None of them has been
   // run, so there is no number to write.
   int32 reclaim_seconds = 6;
-  // archive_seconds is how long a reclaimed session waits before the crew files it away. Zero is
+  // archive_seconds is how long a reclaimed session waits before the system files it away. Zero is
   // unset, and unset means the controller archives nothing here.
   int32 archive_seconds = 7;
   // request_memory_mib is the memory one sandbox in this workspace asks for, in mebibytes, which is
-  // the unit the room view prints. The crew adds these up and admits a job only where its runtime
-  // still has that much unallocated. Zero takes the crew's own measured request.
+  // the unit the room view prints. The system adds these up and admits a job only where its runtime
+  // still has that much unallocated. Zero takes the system's own measured request.
   int32 request_memory_mib = 8;
   // request_processor_percent is the processor share one sandbox here asks for, in per cent of one
-  // processor, which is the unit the room view prints beside the memory. Zero takes the crew's own.
+  // processor, which is the unit the room view prints beside the memory. Zero takes the system's own.
   int32 request_processor_percent = 9;
 }
 
@@ -1414,7 +1414,7 @@ message SetWorkspaceLimitsResponse {
 }
 
 // ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
-// session left out asks for the whole crew's, which is what a view of what is going on reads.
+// session left out asks for the whole system's, which is what a view of what is going on reads.
 message ListSessionEventsRequest {
   string session = 1;
   // limit caps how many come back. Zero means a sensible default rather than everything.
@@ -1492,7 +1492,7 @@ service ControlPlaneService {
 
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
 
-  // Job is declared intent the crew keeps. A caller writes it, and a controller makes reality
+  // Job is declared intent the system keeps. A caller writes it, and a controller makes reality
   // match it. Nothing here dispatches anything.
   rpc CreateJob(CreateJobRequest) returns (CreateJobResponse);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
@@ -1509,13 +1509,13 @@ service ControlPlaneService {
   rpc ListSessionEvents(ListSessionEventsRequest) returns (ListSessionEventsResponse);
 
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
-  // GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
+  // GetUsage adds up what every conversation in the system has cost. It is a running total rather than
   // configuration, which is why it is not part of GetInfo.
   rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
-  // GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+  // GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
   // and never from the daemon, so the header may ask it every second.
   rpc GetHeadroom(GetHeadroomRequest) returns (GetHeadroomResponse);
-  // GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+  // GetHealth is the system's last probe of the parts it has to write to before a dispatch can start.
   // It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
   // the reason GetHeadroom answers from the last sample.
   rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);

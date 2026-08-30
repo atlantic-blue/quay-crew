@@ -47,7 +47,7 @@ func initializeWorkingSteps(sc *godog.ScenarioContext) {
 		}
 	})
 
-	sc.Step(`^the crew's one session was asked "([^"]*)" and is still running$`,
+	sc.Step(`^the system's one session was asked "([^"]*)" and is still running$`,
 		func(ctx context.Context, prompt string) error {
 			w := worldFrom(ctx)
 			session, err := theOneSession(ctx, w)
@@ -70,7 +70,7 @@ func initializeWorkingSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew's one session has (\d+) tasks?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system's one session has (\d+) tasks?$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
 		session, err := theOneSession(ctx, w)
 		if err != nil {
@@ -86,7 +86,7 @@ type waitedDispatch struct {
 	err  error
 }
 
-// theOneSession is the crew's single session, for the scenarios that cannot name it: a waited
+// theOneSession is the system's single session, for the scenarios that cannot name it: a waited
 // dispatch has not come back yet, so nothing has told the scenario which session it made.
 func theOneSession(ctx context.Context, w *world) (*quaycrewv1.Session, error) {
 	listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
@@ -94,7 +94,7 @@ func theOneSession(ctx context.Context, w *world) (*quaycrewv1.Session, error) {
 		return nil, err
 	}
 	if len(listed.GetSessions()) != 1 {
-		return nil, fmt.Errorf("the crew has %d sessions, so there is no single one to ask about",
+		return nil, fmt.Errorf("the system has %d sessions, so there is no single one to ask about",
 			len(listed.GetSessions()))
 	}
 	return listed.GetSessions()[0], nil

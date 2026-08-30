@@ -51,7 +51,7 @@ Feature: Projects hold a body of work inside a workspace
     When the operator refers to the project as "ghost"
     Then the project reference is refused as not found
 
-  # A project is a body of work, and the repository is where that body of work goes. The crew held no
+  # A project is a body of work, and the repository is where that body of work goes. The system held no
   # record of it, so a session told to push had a token that worked and nowhere to push to, and the
   # operator was the only index of which repository belonged to which project.
   Scenario: A project says where its work lands
@@ -76,16 +76,16 @@ Feature: Projects hold a body of work inside a workspace
   Scenario: A repository nobody called anything is public
     Given a project named "transcript"
     When the operator says the project's work lands in "atlantic-blue/transcript"
-    Then the repository is public, and the crew says its pipeline minutes are free
+    Then the repository is public, and the system says its pipeline minutes are free
 
   Scenario: A repository the operator calls private is private
     Given a project named "transcript"
     When the operator says the project's private work lands in "atlantic-blue/transcript"
-    Then the repository is private, and the crew says its pipeline minutes are metered
+    Then the repository is private, and the system says its pipeline minutes are metered
 
-  # A forge has other kinds, and recording "internal" as public would be the crew writing down a cost
+  # A forge has other kinds, and recording "internal" as public would be the system writing down a cost
   # fact nobody told it.
-  Scenario: A kind of repository the crew does not know is refused
+  Scenario: A kind of repository the system does not know is refused
     Given a project named "transcript"
     When the operator says the project's work lands in "atlantic-blue/transcript", of kind "internal"
     Then the control plane refuses it as invalid, naming the two kinds

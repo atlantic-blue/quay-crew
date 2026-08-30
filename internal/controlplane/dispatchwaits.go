@@ -19,7 +19,7 @@ const (
 	// waitEventLog is the export of one record to the broker. It is on this list because it is where
 	// a dispatch stopped: the record sat in the producer and the call never came back.
 	waitEventLog = "the event log to take a record"
-	// waitStartAhead is the sandbox start already running, because the crew starts one at a time.
+	// waitStartAhead is the sandbox start already running, because the system starts one at a time.
 	waitStartAhead = "the sandbox start ahead of this one"
 	// waitContainer is the provider making the container.
 	waitContainer = "the sandbox to be created"
@@ -55,19 +55,19 @@ const exportWait = 5 * time.Second
 // when the budget runs out.
 //
 // The line before the step is the point of it. The fault this exists for was silent: the call
-// stopped between two lines that were never written, so the log said nothing at all and the crew
-// looked healthy. A wait now leaves "the crew is waiting" with nothing saying it ended.
+// stopped between two lines that were never written, so the log said nothing at all and the system
+// looked healthy. A wait now leaves "the system is waiting" with nothing saying it ended.
 func waited(ctx context.Context, session, what string, step func(context.Context) error) error {
-	slog.InfoContext(ctx, "the crew is waiting", "session", session, "for", what)
+	slog.InfoContext(ctx, "the system is waiting", "session", session, "for", what)
 	began := time.Now()
 	err := step(ctx)
 	took := time.Since(began)
 	if err == nil {
-		slog.InfoContext(ctx, "the crew waited", "session", session, "for", what, "took", took.String())
+		slog.InfoContext(ctx, "the system waited", "session", session, "for", what, "took", took.String())
 		return nil
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		slog.ErrorContext(ctx, "the crew gave up waiting", "session", session, "for", what,
+		slog.ErrorContext(ctx, "the system gave up waiting", "session", session, "for", what,
 			"took", took.String(), "error", err)
 		return status.Errorf(codes.DeadlineExceeded, "waited %s for %s and gave up", took.Round(time.Second), what)
 	}
@@ -103,7 +103,7 @@ func (s *Server) export(ctx context.Context, sessionID, topic string, value []by
 	})
 }
 
-// takeStart takes the crew's one start slot, or gives up when the budget runs out. The slot is
+// takeStart takes the system's one start slot, or gives up when the budget runs out. The slot is
 // released by whoever took it.
 func (s *Server) takeStart(ctx context.Context) error {
 	select {

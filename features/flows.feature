@@ -15,7 +15,7 @@ Feature: A flow runs a graph across sessions
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: fix-red
       version: 1
@@ -41,27 +41,27 @@ Feature: A flow runs a graph across sessions
   # so starting one lasted as long as the model did and the run could react to nothing while it
   # waited. It writes the step down and returns instead.
   Scenario: Starting a run writes its step down and returns
-    When the operator starts the flow "fix-red" in the project, without driving the crew
+    When the operator starts the flow "fix-red" in the project, without driving the system
     Then the flow run is working
-    And the crew was asked to run 0 tasks
+    And the system was asked to run 0 tasks
     And the run's step is a job under the run, one level deeper
 
   Scenario: A run whose step is running holds no call open
     Given the model takes longer over a task than anybody will wait
-    When the operator starts the flow "fix-red" in the project, without driving the crew
+    When the operator starts the flow "fix-red" in the project, without driving the system
     And the controller ticks
     And a task is under way
     Then the flow run is working
     And the run's step is running while the model has not answered
     When the model finishes the task
-    And the crew is driven
+    And the system is driven
     Then the flow run is done
 
   # The trap issue 354 names by name: a run that waits or asks used to hold its container for the
   # whole wait, because it closed its session only at the end. The step's job ended when it
   # answered, so the run asks its question holding nothing.
   Scenario: A run waiting on a person holds no container
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: careful
       version: 1
@@ -104,9 +104,9 @@ Feature: A flow runs a graph across sessions
     And the run's steps were asked 1 task
 
   # A wait is a row rather than a timer somebody is holding, which is the whole reason it survives
-  # the crew being restarted underneath it.
+  # the system being restarted underneath it.
   Scenario: A run waits, and carries on when its time comes
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: patient
       version: 1
@@ -123,12 +123,12 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "patient" in the project
     Then the flow run is waiting
     And the run's steps were asked 1 task
-    When ten minutes pass and the crew looks for waits that are due
+    When ten minutes pass and the system looks for waits that are due
     Then the flow run is done
     And the run's steps were asked "start the build" and then "is it done"
 
   Scenario: A wait that is not yet due is left alone
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: patient
       version: 1
@@ -143,7 +143,7 @@ Feature: A flow runs a graph across sessions
         - [check, done]
       """
     When the operator starts the flow "patient" in the project
-    And the crew looks for waits that are due
+    And the system looks for waits that are due
     Then the flow run is waiting
     And the run's steps were asked 1 task
 
@@ -151,7 +151,7 @@ Feature: A flow runs a graph across sessions
   # reason a run pins a version. A wait is where that gets tested, because it is the only moment a
   # run sits still long enough for somebody to edit the file underneath it.
   Scenario: A graph edited while a run waits does not change that run
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: patient
       version: 1
@@ -167,7 +167,7 @@ Feature: A flow runs a graph across sessions
       """
     When the operator starts the flow "patient" in the project
     Then the flow run is waiting
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: patient
       version: 2
@@ -181,14 +181,14 @@ Feature: A flow runs a graph across sessions
         - [pause, check]
         - [check, done]
       """
-    When ten minutes pass and the crew looks for waits that are due
+    When ten minutes pass and the system looks for waits that are due
     Then the flow run is done
     And the run's steps were asked "start the build" and then "is it done"
 
   # The whole difference between an automation and a shell script: a person decides whether it goes
   # further. Delivered through the command line, so it needs no chat channel and no bot token.
   Scenario: A run asks the operator, and carries on with what it is told
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: careful
       version: 1
@@ -213,7 +213,7 @@ Feature: A flow runs a graph across sessions
     And the run's steps were asked "fix the build" and then "push it"
 
   Scenario: A run told no does not do the thing it asked about
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: careful
       version: 1
@@ -238,7 +238,7 @@ Feature: A flow runs a graph across sessions
   # A question nobody answered must never answer itself, or an automation asking permission would
   # take silence for a yes.
   Scenario: No timer answers a question
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: careful
       version: 1
@@ -253,14 +253,14 @@ Feature: A flow runs a graph across sessions
         - [push, done]
       """
     When the operator starts the flow "careful" in the project
-    And ten minutes pass and the crew looks for waits that are due
+    And ten minutes pass and the system looks for waits that are due
     Then the flow run is asking "push?"
     And the run's steps were asked 1 task
 
-  # The crew acting on its own, which is the point of the whole thing: without a trigger, an
+  # The system acting on its own, which is the point of the whole thing: without a trigger, an
   # automation is a script somebody still has to remember to run.
   Scenario: A graph runs on its own when its schedule comes due
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: nightly
       version: 1
@@ -274,13 +274,13 @@ Feature: A flow runs a graph across sessions
       """
     When the operator schedules "nightly" in the project
     Then no run of "nightly" has started
-    When a day passes and the crew looks for waits that are due
+    When a day passes and the system looks for waits that are due
     Then a run of "nightly" has started and finished
 
   # Scheduling and starting must not be the same act, or an operator cannot arrange an automation
   # for tonight without also running it now.
   Scenario: Scheduling a graph does not start it
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: nightly
       version: 1
@@ -293,11 +293,11 @@ Feature: A flow runs a graph across sessions
         - [sweep, done]
       """
     When the operator schedules "nightly" in the project
-    And the crew looks for waits that are due
+    And the system looks for waits that are due
     Then no run of "nightly" has started
 
   Scenario: A graph that says nothing about when it runs cannot be scheduled
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: manual
       version: 1
@@ -311,7 +311,7 @@ Feature: A flow runs a graph across sessions
     Then the control plane refuses it as the wrong state
 
   Scenario: An unscheduled graph stops running on its own
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: nightly
       version: 1
@@ -325,11 +325,11 @@ Feature: A flow runs a graph across sessions
       """
     When the operator schedules "nightly" in the project
     And the operator unschedules "nightly" in the project
-    And a day passes and the crew looks for waits that are due
+    And a day passes and the system looks for waits that are due
     Then no run of "nightly" has started
 
   Scenario: A run is pinned to the version it started with
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: fix-red
       version: 2
@@ -342,15 +342,15 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "fix-red" in the project
     Then the flow run is pinned to version 2
 
-  # The first flow ever run against a real crew finished at done, reported four transitions and read
+  # The first flow ever run against a real system finished at done, reported four transitions and read
   # back as a success. None of the job happened: the repository was not there, every task said so,
   # and the run took the success edge anyway, because `result.failed` says the model did not error
   # and nothing else. A task that could not do the work is not a failed task.
   #
-  # So a dispatch node says what will show it worked, and the crew checks that rather than reading
+  # So a dispatch node says what will show it worked, and the system checks that rather than reading
   # the model's account of itself.
   Scenario: A run stops when the job a node said it would do did not happen
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: site-check
       version: 1
@@ -371,7 +371,7 @@ Feature: A flow runs a graph across sessions
   # nothing, so this one is the same graph against a model that does the work.
   Scenario: A run carries on when the job did happen
     Given the model writes "package.json" while it works
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: site-check
       version: 1
@@ -390,7 +390,7 @@ Feature: A flow runs a graph across sessions
   # The weaker check, for a job that leaves no file behind. It is still the model's own prose, and it
   # is here because a graph that runs a command and reads its answer has nothing else to point at.
   Scenario: A run stops when the reply does not carry what the node said it would
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: test-run
       version: 1
@@ -408,8 +408,8 @@ Feature: A flow runs a graph across sessions
   # nothing anywhere else, so `quay flow show` printed one sentence twice and never said what the
   # graph had asked for. `result.failed` read false on the same screen as the line saying the run
   # stopped, which is two fields contradicting each other in front of the reader.
-  Scenario: A run that stopped says what the graph wanted apart from what the crew found
-    Given the crew holds this flow graph:
+  Scenario: A run that stopped says what the graph wanted apart from what the system found
+    Given the system holds this flow graph:
       """
       name: site-check
       version: 1
@@ -428,7 +428,7 @@ Feature: A flow runs a graph across sessions
   # in, and a graph whose first step is "clone this" could not take it: cloning needs the network, and
   # a dispatched task has nobody to ask for permission.
   Scenario: A graph says what its runs may do, and the turns run in it
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: clone-first
       version: 1
@@ -498,7 +498,7 @@ Feature: A flow runs a graph across sessions
   # holds the wait, so the node after the wait merges the pull request and means it. Refusing that
   # would refuse the very graph the refusal tells a caller to write.
   Scenario: A step of a flow merges the pull request its wait was for
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: ship
       version: 1
@@ -521,7 +521,7 @@ Feature: A flow runs a graph across sessions
     And then the model will answer "green"
     When the operator starts the flow "ship" in the project
     Then the flow run is waiting
-    When ten minutes pass and the crew looks for waits that are due
+    When ten minutes pass and the system looks for waits that are due
     Then the flow run is done
     And the run's steps were asked 3 tasks
     And one of the run's steps was asked "merge the pull request, the checks are green"

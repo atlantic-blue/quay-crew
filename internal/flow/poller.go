@@ -10,7 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
-// DefaultPollEvery is how often the crew looks for waits that have come due.
+// DefaultPollEvery is how often the system looks for waits that have come due.
 //
 // A wait is a coarse instrument by nature: an automation that says "leave it ten minutes" does not
 // care about the second it resumes on. Polling this often costs one indexed query and keeps the
@@ -22,7 +22,7 @@ const DefaultPollEvery = 5 * time.Second
 //
 // It exists because a wait is a row rather than a timer somebody is holding: a process holding
 // timers forgets every one of them when it restarts, and a run that was going to resume in ten
-// minutes simply never would. This reads the rows instead, so a crew restarted mid wait picks the
+// minutes simply never would. This reads the rows instead, so a system restarted mid wait picks the
 // run up on its next tick.
 type Poller struct {
 	engine *Engine
@@ -60,7 +60,7 @@ func (p *Poller) Owned(owner string) *Poller {
 func (p *Poller) Run(ctx context.Context) {
 	ticker := time.NewTicker(p.every)
 	defer ticker.Stop()
-	// Once on the way up, before the first tick, so a crew restarted onto a pile of overdue waits
+	// Once on the way up, before the first tick, so a system restarted onto a pile of overdue waits
 	// resumes them now rather than in five seconds.
 	p.Tick(ctx)
 	for {
@@ -89,7 +89,7 @@ func (p *Poller) Tick(ctx context.Context) {
 // started land in one transaction after that, which is what makes it exactly one rather than at most
 // one: a poller that dies in between leaves a row another poller finds and finishes.
 //
-// A trigger the crew cannot start a run from is failed with the sentence that says why, rather than
+// A trigger the system cannot start a run from is failed with the sentence that says why, rather than
 // left pending. It is not retried: a trigger naming a flow nobody imported would otherwise be read,
 // refused and logged every five seconds forever, and the row would still say pending, which reads
 // exactly like a trigger that has not been got to yet.
@@ -131,7 +131,7 @@ func (p *Poller) startTriggered(ctx context.Context) {
 // carryWorked carries on every run whose step has ended.
 //
 // This is what replaced the engine holding its own dispatch open. A run out with a job is
-// a row rather than a goroutine, so a crew restarted while twenty steps were running picks all
+// a row rather than a goroutine, so a system restarted while twenty steps were running picks all
 // twenty up on its next tick rather than losing them.
 func (p *Poller) carryWorked(ctx context.Context) {
 	landed, err := p.engine.store.LandedFlowSteps(ctx, pollBatch)

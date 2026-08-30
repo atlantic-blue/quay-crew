@@ -47,7 +47,7 @@ func (EchoRunner) Run(ctx context.Context, box sandbox.Sandbox, req Request) (Re
 }
 
 // conversationOf is the conversation this task ran in, as a runtime that honours the flag reports it,
-// falling back to a name of its own when it was given none. The crew names a conversation
+// falling back to a name of its own when it was given none. The system names a conversation
 // before the task starts, so a double that answered with its own name regardless would be looser than
 // the thing it stands in for: every task would read as the runtime having ignored the flag.
 func conversationOf(req Request, fallback string) string {

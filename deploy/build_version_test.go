@@ -8,7 +8,7 @@ import (
 
 // A service that cannot say which build it is is the whole of the defect this stamping answers: on
 // 27 August 2026 three defects were investigated as live and every one was fixed already, because
-// the tool in use was older than the crew and nothing said so.
+// the tool in use was older than the system and nothing said so.
 //
 // The stamping is invisible from every Go test: the binary under test is built by `go test`, which
 // stamps nothing, so a build that quietly stopped passing the commit would report "dev" forever and
@@ -28,7 +28,7 @@ func TestTheServiceBinaryIsStampedWithTheBuildItCameFrom(t *testing.T) {
 		t.Fatalf("the Dockerfile takes no QC_VERSION build argument, so nothing can tell it which build it is:\n%s", dockerfile)
 	}
 	if !strings.Contains(dockerfile, "-X main.version=${QC_VERSION}") {
-		t.Fatalf("the Dockerfile does not stamp the build into the binary, so the crew reports the default:\n%s", dockerfile)
+		t.Fatalf("the Dockerfile does not stamp the build into the binary, so the system reports the default:\n%s", dockerfile)
 	}
 }
 
@@ -49,11 +49,11 @@ func TestTheComposeStackTellsTheControlPlaneWhichBuildItIs(t *testing.T) {
 		block = block[:next]
 	}
 	if !strings.Contains(block, "QC_VERSION:") {
-		t.Fatalf("the control plane is built without QC_VERSION, so the crew cannot say which build it is:\n%s", block)
+		t.Fatalf("the control plane is built without QC_VERSION, so the system cannot say which build it is:\n%s", block)
 	}
 }
 
-// The commit, not a fixed word. The stack is built from this checkout, so what the crew reports has
+// The commit, not a fixed word. The stack is built from this checkout, so what the system reports has
 // to be what the checkout is.
 func TestTheUpTargetPassesTheBuildOfThisCheckout(t *testing.T) {
 	contents, err := os.ReadFile(makefile)

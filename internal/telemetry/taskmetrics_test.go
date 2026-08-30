@@ -180,7 +180,7 @@ func TestAFailedTaskIsMeasuredToo(t *testing.T) {
 	}
 }
 
-// Recording on a crew with no telemetry must not be a crash. NewTaskMetrics returning nil is the
+// Recording on a system with no telemetry must not be a crash. NewTaskMetrics returning nil is the
 // shape a caller gets when it ignored the error, and every call site would otherwise need a guard.
 func TestRecordingOnNothingIsSafe(t *testing.T) {
 	var absent *telemetry.TaskMetrics

@@ -2,7 +2,7 @@
 #
 # It exercises every node type this engine has against real work: a dispatch that runs the gates, a
 # choice that branches on what the dispatch replied, an ask that stops for a person, a wait that
-# survives the crew being restarted underneath it, and a dispatch that reads the checks afterwards.
+# survives the system being restarted underneath it, and a dispatch that reads the checks afterwards.
 #
 # It runs in dangerous mode because the gate steps run the repository's own commands and the release
 # step pushes. Read that line before importing this into a workspace of your own.

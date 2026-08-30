@@ -14,7 +14,7 @@ import (
 
 // The two policies point in opposite directions, and that is the design. The driver is refused a
 // named list and holds everything else. A job holds a named list and is refused everything
-// else, which is what makes its credential the narrowest thing the crew hands out.
+// else, which is what makes its credential the narrowest thing the system hands out.
 
 // A hook is a command that runs on a session's own tool use, so a session that could attach one
 // would change what every session in that workspace may do.
@@ -32,7 +32,7 @@ func TestTheDriverMayNotTouchAHook(t *testing.T) {
 	}
 }
 
-// What the driver exists to do stays open, or the deny list would be a crew that cannot be driven.
+// What the driver exists to do stays open, or the deny list would be a system that cannot be driven.
 func TestTheDriverStillDoesWhatItExistsToDo(t *testing.T) {
 	for _, method := range []string{
 		quaycrewv1.ControlPlaneService_Dispatch_FullMethodName,
@@ -48,7 +48,7 @@ func TestTheDriverStillDoesWhatItExistsToDo(t *testing.T) {
 }
 
 // A job may call the verbs its role declared, and the call it needs for each is the one
-// the crew maps it to.
+// the system maps it to.
 func TestAJobMayCallWhatItsRoleDeclared(t *testing.T) {
 	grant := auth.Grant{Job: "job-1", Verbs: []string{role.VerbJobCreate, role.VerbJobRead}}
 
@@ -122,7 +122,7 @@ func TestAJobMayNotRaiseItsOwnCeiling(t *testing.T) {
 	}
 }
 
-// The job a task runs for decides which credential the crew mints, so a session naming one would be
+// The job a task runs for decides which credential the system mints, so a session naming one would be
 // minting itself that job's grant.
 func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
 	grant := auth.Grant{Job: "job-1", Verbs: role.Grantable}
@@ -134,7 +134,7 @@ func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
 		t.Fatalf("a session named the job a task runs for: %v", err)
 	}
 	if !strings.Contains(err.Error(), "credential") {
-		t.Fatalf("the refusal says %q, want it to say where the crew reads it from", err)
+		t.Fatalf("the refusal says %q, want it to say where the system reads it from", err)
 	}
 }
 

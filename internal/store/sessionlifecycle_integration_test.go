@@ -23,9 +23,9 @@ import (
 // against the job table with a phase array in it, and whether that query means the same thing in
 // Postgres as it does in the map is a question only Postgres answers.
 
-// aCrewWithAProviderOnPostgres stands the control plane up on a real database over a provider a test
-// can drive, so a case can be an operator sitting in a container the crew is about to take back.
-func aCrewWithAProviderOnPostgres(t *testing.T, runner model.Runner, provider *sandbox.FakeProvider) (
+// aSystemWithAProviderOnPostgres stands the control plane up on a real database over a provider a test
+// can drive, so a case can be an operator sitting in a container the system is about to take back.
+func aSystemWithAProviderOnPostgres(t *testing.T, runner model.Runner, provider *sandbox.FakeProvider) (
 	*controlplane.Server, store.Store) {
 	t.Helper()
 	truncate(t)
@@ -54,7 +54,7 @@ func reclaimingAfter(t *testing.T, s *controlplane.Server, workspace string, rec
 
 // The rule this slice ships on, against the database that holds it.
 func TestWithBothTimesUnsetNothingIsReclaimedInPostgres(t *testing.T) {
-	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s, _ := aSystemWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 	sent, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Text: "hello"})
@@ -71,7 +71,7 @@ func TestWithBothTimesUnsetNothingIsReclaimedInPostgres(t *testing.T) {
 		t.Fatalf("GetSession: %v", err)
 	}
 	if session.GetSession().GetStatus() != controlplane.StatusIdle {
-		t.Fatalf("the session reads %q after twenty ticks, and no workspace gave the crew a time",
+		t.Fatalf("the session reads %q after twenty ticks, and no workspace gave the system a time",
 			session.GetSession().GetStatus())
 	}
 	if session.GetSession().GetReclaimedAt() != nil {
@@ -84,7 +84,7 @@ func TestWithBothTimesUnsetNothingIsReclaimedInPostgres(t *testing.T) {
 func TestASettledSessionIsReclaimedAndCarriesOnInPostgres(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
 	runner := &model.FakeRunner{Reply: "first", SessionID: "model-1"}
-	s, _ := aCrewWithAProviderOnPostgres(t, runner, provider)
+	s, _ := aSystemWithAProviderOnPostgres(t, runner, provider)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	// One second, which the test then genuinely waits out rather than moving a clock under the code.
@@ -130,7 +130,7 @@ func TestASettledSessionIsReclaimedAndCarriesOnInPostgres(t *testing.T) {
 // A container an operator is typing into is never taken, however long the clock says.
 func TestASessionSomebodyIsInIsNotReclaimedInPostgres(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, provider)
+	s, _ := aSystemWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, provider)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	reclaimingAfter(t, s, workspace, 1, 0)
@@ -157,7 +157,7 @@ func TestASessionSomebodyIsInIsNotReclaimedInPostgres(t *testing.T) {
 func TestJobStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
 	gate := make(chan struct{})
 	provider := &sandbox.FakeProvider{}
-	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, provider)
+	s, _ := aSystemWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, provider)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	reclaimingAfter(t, s, workspace, 1, 0)
@@ -181,10 +181,10 @@ func TestJobStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
 	}
 	held, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: running.GetJob().GetSession()})
 	if held.GetSession().GetStatus() == controlplane.StatusReclaimed {
-		t.Fatal("the crew took the container of a session a job is still running in")
+		t.Fatal("the system took the container of a session a job is still running in")
 	}
 
-	// The job ends, and the same session becomes the crew's to take back.
+	// The job ends, and the same session becomes the system's to take back.
 	close(gate)
 	waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 	time.Sleep(1200 * time.Millisecond)
@@ -199,7 +199,7 @@ func TestJobStillOpenHoldsItsSessionAliveInPostgres(t *testing.T) {
 
 // The second step, measured against the reclaim stamp rather than the row's last write.
 func TestAReclaimedSessionIsArchivedInPostgres(t *testing.T) {
-	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s, _ := aSystemWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	reclaimingAfter(t, s, workspace, 1, 1)
@@ -227,7 +227,7 @@ func TestAReclaimedSessionIsArchivedInPostgres(t *testing.T) {
 // operator's own reason, and the job that was running in it is stopped rather than failed.
 func TestStoppingASessionStopsItsJobInPostgres(t *testing.T) {
 	gate := make(chan struct{})
-	s, _ := aCrewWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, &sandbox.FakeProvider{})
+	s, _ := aSystemWithAProviderOnPostgres(t, &model.FakeRunner{Reply: "done", Gate: gate}, &sandbox.FakeProvider{})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -253,7 +253,7 @@ func TestStoppingASessionStopsItsJobInPostgres(t *testing.T) {
 		t.Fatalf("StopTask: %v", err)
 	}
 	if !stopped.GetStopped() {
-		t.Fatal("the crew says there was nothing to stop, and a task was under way")
+		t.Fatal("the system says there was nothing to stop, and a task was under way")
 	}
 	close(gate)
 

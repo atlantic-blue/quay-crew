@@ -19,7 +19,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The flow scenarios drive the crew the way the crew drives itself. A run declares its step as a
+// The flow scenarios drive the system the way the system drives itself. A run declares its step as a
 // job and returns, so nothing here finishes a run on its own: the job controller sends
 // the task, and the flow poller carries the run on when that job ends. Both are ticked rather than
 // waited for, because a scenario that slept would be slow when it passed and flaky when it did not.
@@ -35,7 +35,7 @@ func (p planeClient) ArchiveSession(ctx context.Context, req *quaycrewv1.Archive
 }
 
 func initializeFlowSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the crew holds this flow graph:$`, func(ctx context.Context, definition *godog.DocString) error {
+	sc.Step(`^the system holds this flow graph:$`, func(ctx context.Context, definition *godog.DocString) error {
 		w := worldFrom(ctx)
 		graph, err := flow.Parse([]byte(definition.Content))
 		if err != nil {
@@ -93,7 +93,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// What the graph asked for and what the crew found, as two lines rather than one sentence
+	// What the graph asked for and what the system found, as two lines rather than one sentence
 	// printed twice. Both are checked here because either alone reads as complete and is not.
 	sc.Step(`^reading the run back says it wanted "([^"]*)" and found "([^"]*)"$`,
 		func(ctx context.Context, wanted, found string) error {
@@ -126,12 +126,12 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return nil
 		}
-		return driveTheCrew(ctx)
+		return driveTheSystem(ctx)
 	})
 
 	// Started and left alone, so a scenario can say what is true the moment the call returns rather
-	// than what is true once the crew has driven the run to a standstill.
-	sc.Step(`^the operator starts the flow "([^"]*)" in the project, without driving the crew$`,
+	// than what is true once the system has driven the run to a standstill.
+	sc.Step(`^the operator starts the flow "([^"]*)" in the project, without driving the system$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server)
@@ -140,8 +140,8 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 			return err
 		})
 
-	sc.Step(`^the crew is driven$`, func(ctx context.Context) error {
-		return driveTheCrew(ctx)
+	sc.Step(`^the system is driven$`, func(ctx context.Context) error {
+		return driveTheSystem(ctx)
 	})
 
 	// A step out with the model, and a run that is not waiting on it. The call that started the run
@@ -318,11 +318,11 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 
 	// The clock is moved rather than slept through: a scenario that waited out ten real minutes
 	// would be a scenario nobody runs.
-	sc.Step(`^ten minutes pass and the crew looks for waits that are due$`, func(ctx context.Context) error {
+	sc.Step(`^ten minutes pass and the system looks for waits that are due$`, func(ctx context.Context) error {
 		return tickFlowPoller(ctx, 11*time.Minute)
 	})
 
-	sc.Step(`^the crew looks for waits that are due$`, func(ctx context.Context) error {
+	sc.Step(`^the system looks for waits that are due$`, func(ctx context.Context) error {
 		return tickFlowPoller(ctx, 0)
 	})
 
@@ -354,7 +354,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		}
 		// The answer moves the run to its next step, and that step is a job a controller
 		// runs rather than a call the answer waits on.
-		return driveTheCrew(ctx)
+		return driveTheSystem(ctx)
 	})
 
 	sc.Step(`^the operator schedules "([^"]*)" in the project$`, func(ctx context.Context, graph string) error {
@@ -373,7 +373,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
-	sc.Step(`^a day passes and the crew looks for waits that are due$`, func(ctx context.Context) error {
+	sc.Step(`^a day passes and the system looks for waits that are due$`, func(ctx context.Context) error {
 		return tickFlowPoller(ctx, 25*time.Hour)
 	})
 
@@ -394,7 +394,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		deadline := time.Now().Add(10 * time.Second)
 		var last string
 		for time.Now().Before(deadline) {
-			if err := driveTheCrew(ctx); err != nil {
+			if err := driveTheSystem(ctx); err != nil {
 				return err
 			}
 			runs, err := flowRunsOf(ctx, graph)
@@ -504,7 +504,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 	})
 
 	// A model that does the work rather than describing it. The file lands in the session's own
-	// working directory, which is the same directory the crew checks, so this proves the whole road
+	// working directory, which is the same directory the system checks, so this proves the whole road
 	// rather than a double agreeing with itself.
 	sc.Step(`^the model writes "([^"]*)" while it works$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
@@ -557,7 +557,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// tickFlowPoller moves the clock forward and runs one tick, which is what the crew's own poller
+// tickFlowPoller moves the clock forward and runs one tick, which is what the system's own poller
 // does every few seconds. Driven directly rather than waited for: a scenario that slept would be
 // slow when it passed and flaky when it did not.
 func tickFlowPoller(ctx context.Context, forward time.Duration) error {
@@ -566,12 +566,12 @@ func tickFlowPoller(ctx context.Context, forward time.Duration) error {
 	engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server).
 		WithClock(func() time.Time { return at })
 	flow.NewPoller(engine, 0, slog.New(slog.NewTextHandler(io.Discard, nil))).Tick(ctx)
-	return driveTheCrew(ctx)
+	return driveTheSystem(ctx)
 }
 
-// driveTheCrew ticks the crew's two loops until nothing is moving.
+// driveTheSystem ticks the system's two loops until nothing is moving.
 //
-// This is what the crew does on its own every few seconds, done in one pass rather than over an
+// This is what the system does on its own every few seconds, done in one pass rather than over an
 // interval: the job controller claims each step and sends its task, the task lands, the controller
 // writes the answer onto the job, and the poller carries the run on to its next step. It ends when
 // no job is open and no run has a step that has ended, which is a run that finished,
@@ -579,7 +579,7 @@ func tickFlowPoller(ctx context.Context, forward time.Duration) error {
 //
 // The cap is a graph's own transition cap plus room, so a run that will not settle fails here rather
 // than hanging.
-func driveTheCrew(ctx context.Context) error {
+func driveTheSystem(ctx context.Context) error {
 	w := worldFrom(ctx)
 	for range flow.DefaultTransitions + 10 {
 		// Send what has not started, let every task land, then write what came back.
@@ -593,7 +593,7 @@ func driveTheCrew(ctx context.Context) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("the crew was still moving after %d passes", flow.DefaultTransitions+10)
+	return fmt.Errorf("the system was still moving after %d passes", flow.DefaultTransitions+10)
 }
 
 // somethingIsMoving says whether any job has yet to end, or any run is sitting on a step
@@ -655,7 +655,7 @@ func sessionsOfRun(ctx context.Context, w *world, id string) ([]*quaycrewv1.Sess
 	for _, wanted := range flow.SessionsIn(run.State) {
 		session, found := held[wanted]
 		if !found {
-			return nil, fmt.Errorf("the run says step session %q did some of its job, and the crew does not hold it", wanted)
+			return nil, fmt.Errorf("the run says step session %q did some of its job, and the system does not hold it", wanted)
 		}
 		out = append(out, session)
 	}

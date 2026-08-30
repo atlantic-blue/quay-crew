@@ -28,7 +28,7 @@ const StatusTaskStopped = "stopped"
 // the model runtime noticing its context is cancelled and the landing being written, which is one
 // process teardown and one store write.
 //
-// Sized against the budget the crew already gives that shape of work. tidyWait is what tearing a half
+// Sized against the budget the system already gives that shape of work. tidyWait is what tearing a half
 // made container down is given, on the reasoning that it is one call to a daemon that ran a container
 // end to end in about two seconds, and this is three of those. Provisional, and what replaces it is
 // the distribution of the gap between a stop being asked for and the task record closing, over the
@@ -75,7 +75,7 @@ func (r *running) stopped() (bool, string) {
 // beginRunning registers a task as the session's one in flight and hands back the context it runs
 // under, so a stop has something to cancel.
 //
-// One task per session, which is what the crew already enforces everywhere else: a dispatch to a
+// One task per session, which is what the system already enforces everywhere else: a dispatch to a
 // session continues its conversation, and two tasks in one conversation at once is not a thing the
 // model runtime does. A second registration replaces the first rather than being refused, because
 // refusing here would fail a task over bookkeeping.
@@ -95,7 +95,7 @@ func (s *Server) beginRunning(ctx context.Context, sessionID string) (context.Co
 func (s *Server) endRunning(sessionID string, held *running) {
 	s.runningMu.Lock()
 	// Only if it is still this task's registration. A dispatch that arrived while this one was
-	// landing owns the slot now, and clearing it would leave the crew unable to stop that one.
+	// landing owns the slot now, and clearing it would leave the system unable to stop that one.
 	if s.running[sessionID] == held {
 		delete(s.running, sessionID)
 	}
@@ -146,7 +146,7 @@ func (s *Server) StopTask(ctx context.Context, req *quaycrewv1.StopTaskRequest) 
 		return &quaycrewv1.StopTaskResponse{Stopped: true, Session: s.reread(ctx, session.GetId())}, nil
 	case <-waiting.Done():
 		// Said rather than reported as done. An operator who reads success stops watching, so a stop
-		// the crew could not confirm has to come back as one it could not confirm.
+		// the system could not confirm has to come back as one it could not confirm.
 		return nil, status.Errorf(codes.DeadlineExceeded,
 			"session %s was asked to stop and its task has not ended yet: watch it with quay task list %s",
 			display.ShortID(session.GetHandle()), display.ShortID(session.GetHandle()))

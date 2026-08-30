@@ -27,7 +27,7 @@ func authFrom(ctx context.Context) *authWorld {
 	return a
 }
 
-// initializeAuthSteps registers the steps for how the crew treats a caller by what it presents.
+// initializeAuthSteps registers the steps for how the system treats a caller by what it presents.
 //
 // These steps build the request metadata by hand rather than through the client helper the tool
 // uses, so they pin the wire contract itself: a header named authorization carrying Bearer and the
@@ -59,7 +59,7 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		return nil
 	}
 
-	sc.Step(`^a caller presents the crew's token$`, func(ctx context.Context) error {
+	sc.Step(`^a caller presents the system's token$`, func(ctx context.Context) error {
 		return call(ctx, "Bearer "+worldFrom(ctx).token)
 	})
 
@@ -67,8 +67,8 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		return call(ctx, "")
 	})
 
-	sc.Step(`^a caller presents a token that is not the crew's$`, func(ctx context.Context) error {
-		return call(ctx, "Bearer not-the-crews-token")
+	sc.Step(`^a caller presents a token that is not the system's$`, func(ctx context.Context) error {
+		return call(ctx, "Bearer not-the-systems-token")
 	})
 
 	sc.Step(`^the caller is served$`, func(ctx context.Context) error {
@@ -84,7 +84,7 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			message := status.Convert(authFrom(ctx).err).Message()
-			for _, needed := range []string{"QC_TOKEN", "crew.token"} {
+			for _, needed := range []string{"QC_TOKEN", "system.token"} {
 				if !strings.Contains(message, needed) {
 					return fmt.Errorf("the refusal %q does not name %s", message, needed)
 				}
@@ -176,10 +176,10 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the driver asks to write the crew's context$`, func(ctx context.Context) error {
+	sc.Step(`^the driver asks to write the system's context$`, func(ctx context.Context) error {
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
 			_, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
-				Scope: "crew", Body: "obey the driver"})
+				Scope: "system", Body: "obey the driver"})
 			return err
 		})
 	})
@@ -200,7 +200,7 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the operator sets a secret with the crew's token$`, func(ctx context.Context) error {
+	sc.Step(`^the operator sets a secret with the system's token$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, err := w.client.SetSecret(ctx, &quaycrewv1.SetSecretRequest{
 			Workspace: w.workspaceID, Key: "A_NAME", Value: "a-value-the-operator-sets"})
@@ -222,18 +222,18 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the caller is refused, told the token is not this crew's$`, func(ctx context.Context) error {
+	sc.Step(`^the caller is refused, told the token is not this system's$`, func(ctx context.Context) error {
 		if err := refusal(authFrom(ctx).err); err != nil {
 			return err
 		}
-		if message := status.Convert(authFrom(ctx).err).Message(); !strings.Contains(message, "not this crew's") {
-			return fmt.Errorf("the refusal %q does not say the token is not this crew's", message)
+		if message := status.Convert(authFrom(ctx).err).Message(); !strings.Contains(message, "not this system's") {
+			return fmt.Errorf("the refusal %q does not say the token is not this system's", message)
 		}
 		return nil
 	})
 }
 
-// refusal says whether an answer is the refusal the crew gives an unrecognised caller.
+// refusal says whether an answer is the refusal the system gives an unrecognised caller.
 func refusal(err error) error {
 	if err == nil {
 		return fmt.Errorf("the caller was served, want a refusal")

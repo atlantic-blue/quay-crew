@@ -12,10 +12,10 @@ import (
 
 // A trigger is something that happened, written down as a row so that a run starts from it.
 //
-// The row is the mechanism, and it is the same one the crew already uses for waits, for dispatch
+// The row is the mechanism, and it is the same one the system already uses for waits, for dispatch
 // idempotency and for job events: write it in the transaction that holds whatever happened, poll an
 // indexed query, and claim the row with a conditional write where it must be acted on once. Nothing
-// is held in a process, so a crew restarted between the thing happening and the run starting still
+// is held in a process, so a system restarted between the thing happening and the run starting still
 // starts the run.
 //
 // A trigger is claimed, and a job event never is. That is why they are two tables: marking an audit
@@ -27,7 +27,7 @@ import (
 const (
 	TriggerPending = "pending"
 	TriggerStarted = "started"
-	// TriggerFailed is a trigger the crew could not start a run from, carrying the sentence that
+	// TriggerFailed is a trigger the system could not start a run from, carrying the sentence that
 	// says why. It is not retried, because a trigger that silently did nothing is the failure this
 	// status exists to make visible.
 	TriggerFailed = "failed"
@@ -39,7 +39,7 @@ const (
 // The same discipline the job controller holds a job under, and the same budget, for a
 // much shorter job: what this has to outlast is one transaction, the one that writes the
 // run and marks the trigger started. A poller that dies inside that window leaves a row nothing has
-// started, and this is how long the crew waits before another one picks it up.
+// started, and this is how long the system waits before another one picks it up.
 const TriggerLease = job.DefaultLease
 
 // ErrTriggerTaken is what a store says when a claim did not apply: another poller holds the row, or
@@ -58,7 +58,7 @@ type Trigger struct {
 	// prompt template reads with {{key}}.
 	Payload map[string]string
 	// Source says what raised this, for a reader: an in process caller, or the ingress that slice 3
-	// of quay-crew#399 adds. The crew does not act on it.
+	// of quay-crew#399 adds. The system does not act on it.
 	Source string
 	// Cause is the job that caused this trigger, empty where nothing did. The run's own
 	// job hangs under it, so a flow started by job that finished is counted by the same depth
@@ -80,7 +80,7 @@ type Trigger struct {
 	RaisedAt time.Time
 }
 
-// Raise writes down that something happened, so the crew starts a run of the graph it names on its
+// Raise writes down that something happened, so the system starts a run of the graph it names on its
 // next tick. This is the whole of the in process source: a caller inside this process writes a row,
 // and the row is what starts the run. The latency is the poll interval.
 //

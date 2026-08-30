@@ -1,12 +1,12 @@
-# Quay Crew. `make up` (or `make start`) brings the whole stack up in Docker.
+# Quay System. `make up` (or `make start`) brings the whole stack up in Docker.
 # Pass PROJECT=<name> for a fully isolated stack, for example: make up PROJECT=demo
 
 PROJECT ?=
 COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 GOBIN := $(shell go env GOPATH)/bin
 
-# QUAY_HOME is where a crew keeps what belongs to it on this machine. It is deliberately outside this
-# checkout: a crew that is installed rather than cloned has no checkout to put configuration in, and
+# QUAY_HOME is where a system keeps what belongs to it on this machine. It is deliberately outside this
+# checkout: a system that is installed rather than cloned has no checkout to put configuration in, and
 # configuration that lives in one cannot be given to anybody. Compose is told the path rather than
 # left to find a file next to its own compose file.
 QUAY_HOME ?= $(HOME)/.quay
@@ -52,14 +52,14 @@ SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 print-%:
 	@echo "$($*)"
 
-## config: create the crew's directory and its configuration file, if they are not there yet
+## config: create the system's directory and its configuration file, if they are not there yet
 #
 # Compose is given the path, so the file has to exist before any compose command runs. Seeding it
 # rather than refusing means a first `make up` works, and the operator edits a file that already says
 # what each key is for.
 #
 # The data directory is made here too, and made first, because docker creates a missing bind mount
-# source itself and creates it as root. That would leave the crew's own directory owned by root, and
+# source itself and creates it as root. That would leave the system's own directory owned by root, and
 # the next `quay use` unable to write the address you are working in into it.
 config:
 	@mkdir -p "$(QUAY_HOME)/data"
@@ -76,39 +76,39 @@ up: config
 ## start: alias for up
 start: up
 
-## up-check: say what bringing a running crew up again costs, and make the operator agree to it
+## up-check: say what bringing a running system up again costs, and make the operator agree to it
 #
 # `make install` is the one command a first run needs, so it is also the command somebody types on a
-# crew that is already working. Compose replaces the services whose build moved, and the control
+# system that is already working. Compose replaces the services whose build moved, and the control
 # plane is one of them: a task in flight is executing inside a sandbox through that process, so
 # replacing it ends the task the way `make upgrade` ends one when it takes a container away.
 #
 # Nothing else is at risk. Conversations, workspaces, secrets and the store are on disk and in
 # Postgres, and the sandbox containers are not compose's to replace.
 #
-# A crew that is not up has nothing to lose, so this passes in silence and the first run is still one
-# command with no question in it. Typing the crew's name back is the guard `quay workspace delete`
+# A system that is not up has nothing to lose, so this passes in silence and the first run is still one
+# command with no question in it. Typing the system's name back is the guard `quay workspace delete`
 # uses, and for the same reason: this Makefile takes no flags a person would think to look for.
 # YES=1 goes over it without being asked, which is what a script gives.
 up-check: config
 	@running="$$($(COMPOSE) ps --status running --quiet 2>/dev/null | grep -c . || true)"; \
 	if [ "$$running" = "0" ]; then exit 0; fi; \
-	echo "this crew is already up, in $$running containers."; \
+	echo "this system is already up, in $$running containers."; \
 	echo "Bringing it up again replaces the services this build moved. A task in flight ends with"; \
 	echo "them. Conversations, workspaces, secrets and the store are untouched."; \
 	echo ""; \
-	echo "  make tool      build the command line tool only, and leave the crew alone"; \
-	echo "  make rebuild   build the tool, the hooks and the image, and leave the crew alone"; \
+	echo "  make tool      build the command line tool only, and leave the system alone"; \
+	echo "  make rebuild   build the tool, the hooks and the image, and leave the system alone"; \
 	echo "  make install YES=1   restart it without being asked"; \
 	echo ""; \
 	if [ -n "$(YES)" ]; then \
-		echo "YES was given, so the crew is being brought up over what is running."; \
+		echo "YES was given, so the system is being brought up over what is running."; \
 		exit 0; \
 	fi; \
 	printf "type quay to bring it up anyway: "; \
 	read typed || typed=""; \
 	if [ "$$typed" != "quay" ]; then \
-		echo "that is not quay, so the crew is still running and nothing was replaced."; \
+		echo "that is not quay, so the system is still running and nothing was replaced."; \
 		exit 1; \
 	fi
 
@@ -116,7 +116,7 @@ up-check: config
 #
 # One command, because these three go together and remembering the third is not a job for a person.
 # The tool is what you type, the hooks are what every session runs under, and the image is what a
-# session is. Leave one behind and the crew is running a mix of two builds, which looks like a bug in
+# session is. Leave one behind and the system is running a mix of two builds, which looks like a bug in
 # whichever part you happen to be reading.
 #
 # `make upgrade` runs this after fetching. Run it directly while working on a branch, where upgrade
@@ -134,7 +134,7 @@ image: sandbox-image
 #
 # An upgrade adds configuration, and nobody's configuration grows with it. Compose fills a key that is
 # not there with an empty string, so the feature it turns on is simply off and nothing says why: a
-# driver whose crew had no address spent an evening reporting that the control plane was refusing
+# driver whose system had no address spent an evening reporting that the control plane was refusing
 # connections, while the control plane was up the whole time.
 env-check:
 	@if [ ! -f "$(ENV_FILE)" ]; then \
@@ -187,7 +187,7 @@ upgrade:
 	@$(MAKE) --no-print-directory rebuild
 	@$(MAKE) --no-print-directory config
 	@$(MAKE) --no-print-directory env-check
-	@echo "clearing whatever sandboxes are left. Draining took the ones the crew knows about; these"
+	@echo "clearing whatever sandboxes are left. Draining took the ones the system knows about; these"
 	@echo "are the containers it has forgotten, and their names would block those sessions from"
 	@echo "starting again."
 	@docker ps -a --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' \
@@ -214,12 +214,12 @@ down: config
 #
 # `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes the
 # task in flight with it, which the operator reads as "model: run exited: exit status 137, and it said
-# nothing about why" against a conversation they were watching. Going through the crew stops each
+# nothing about why" against a conversation they were watching. Going through the system stops each
 # session first, so the row says stopped and the sandbox is closed rather than ripped out.
 #
 # A task still working refuses this. FORCE=1 drains over it, and says whose task went.
 #
-# A crew that is not up has nothing to drain and does not stop the upgrade: the tool says what it
+# A system that is not up has nothing to drain and does not stop the upgrade: the tool says what it
 # could not reach and the sweep below still clears the containers.
 drain:
 	@if ! command -v quay >/dev/null 2>&1; then \
@@ -250,20 +250,20 @@ proto:
 build:
 	go build ./...
 
-## install: everything a first run needs, in one command: configuration, the builds, and the crew up
+## install: everything a first run needs, in one command: configuration, the builds, and the system up
 #
 # A first run used to be four commands, and the order mattered. Miss `make config` and compose reads
 # a file that is not there. Miss `make sandbox-image` and the first task fails on a missing image,
-# which reads as a broken crew rather than a missing step. So this is the whole first run, and the
+# which reads as a broken system rather than a missing step. So this is the whole first run, and the
 # four commands underneath it stay callable on their own for anybody rebuilding one part.
 #
 # Each step is a sub make rather than a prerequisite, because the order is the point and a parallel
 # make is free to run prerequisites in any order it likes. Make stops on the first recipe line that
-# fails, so nothing below a refusal runs and nothing prints "the crew is up" over a build that did
+# fails, so nothing below a refusal runs and nothing prints "the system is up" over a build that did
 # not happen.
 #
 # Running it twice is safe. `config` writes nothing over a configuration file that exists, the builds
-# are builds, and `up-check` is where a crew that is already working gets a say before compose
+# are builds, and `up-check` is where a system that is already working gets a say before compose
 # replaces the services under it.
 #
 # What it cannot do is mint the model credential, so it ends by printing the commands that are the
@@ -275,7 +275,7 @@ install:
 	@$(MAKE) --no-print-directory up-check
 	@$(MAKE) --no-print-directory up
 	@echo ""
-	@echo "the crew is up, and quay is on your path."
+	@echo "the system is up, and quay is on your path."
 	@echo ""
 	@echo "This cannot mint your model credential. Get one with claude setup-token."
 	@echo "Then run these four commands:"
@@ -310,7 +310,7 @@ tool:
 # history: one committed binary runs on one processor type, and this image is built on both arm and
 # amd machines.
 #
-# Each hook is its own module, so this loops rather than building the crew's own packages. Static,
+# Each hook is its own module, so this loops rather than building the system's own packages. Static,
 # because the result is mounted into whatever image a session runs.
 hooks:
 	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \

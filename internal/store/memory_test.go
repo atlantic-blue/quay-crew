@@ -20,7 +20,7 @@ func TestMemoryConformance(t *testing.T) {
 	})
 }
 
-// A probe that answered without writing would make a health check agree with a crew that cannot
+// A probe that answered without writing would make a health check agree with a system that cannot
 // write, which is the fault the check exists for, so the count is what is asserted here.
 func TestAProbeOnTheMemoryStoreWrites(t *testing.T) {
 	memory := store.NewMemory()

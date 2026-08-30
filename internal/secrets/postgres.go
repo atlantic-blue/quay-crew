@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Postgres keeps a workspace's credentials where the rest of the crew's durable state is, so the
+// Postgres keeps a workspace's credentials where the rest of the system's durable state is, so the
 // subscription token stops being lost on every restart. Values are sealed with a key that lives on
 // the host, so this table on its own is worth nothing.
 type Postgres struct {
@@ -97,8 +97,8 @@ func (p *Postgres) Get(ctx context.Context, workspace, name string) (string, err
 	return Open(p.key, sealed)
 }
 
-// SetCrew stores a secret at the crew's level, sealed, where every workspace reads it.
-func (p *Postgres) SetCrew(ctx context.Context, secret Secret) error {
+// SetSystem stores a secret at the system's level, sealed, where every workspace reads it.
+func (p *Postgres) SetSystem(ctx context.Context, secret Secret) error {
 	if err := secret.Validate(); err != nil {
 		return err
 	}
@@ -107,37 +107,37 @@ func (p *Postgres) SetCrew(ctx context.Context, secret Secret) error {
 		return err
 	}
 	_, err = p.pool.Exec(ctx, `
-		insert into crew_secrets (name, sealed, projection) values ($1, $2, $3)
+		insert into system_secrets (name, sealed, projection) values ($1, $2, $3)
 		on conflict (name) do update
 			set sealed = excluded.sealed, projection = excluded.projection, updated_at = now()`,
 		secret.Name, sealed, string(secret.Projection.Or()))
 	if err != nil {
 		// Never the value, and never the sealed bytes: an error is a thing people paste.
-		return fmt.Errorf("secrets: storing %s for the crew: %w", secret.Name, err)
+		return fmt.Errorf("secrets: storing %s for the system: %w", secret.Name, err)
 	}
 	return nil
 }
 
-// GetCrew returns a value the crew holds.
-func (p *Postgres) GetCrew(ctx context.Context, name string) (string, error) {
+// GetSystem returns a value the system holds.
+func (p *Postgres) GetSystem(ctx context.Context, name string) (string, error) {
 	var sealed []byte
 	err := p.pool.QueryRow(ctx,
-		`select sealed from crew_secrets where name = $1`, name).Scan(&sealed)
+		`select sealed from system_secrets where name = $1`, name).Scan(&sealed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("secrets: reading %s for the crew: %w", name, err)
+		return "", fmt.Errorf("secrets: reading %s for the system: %w", name, err)
 	}
 	return Open(p.key, sealed)
 }
 
-// ListCrew says what the crew holds and how each one reaches a sandbox, sorted, and never what any
+// ListSystem says what the system holds and how each one reaches a sandbox, sorted, and never what any
 // of it says. The sealed bytes are not selected at all, so this call cannot leak one by mistake.
-func (p *Postgres) ListCrew(ctx context.Context) ([]Ref, error) {
-	rows, err := p.pool.Query(ctx, `select name, projection from crew_secrets order by name`)
+func (p *Postgres) ListSystem(ctx context.Context) ([]Ref, error) {
+	rows, err := p.pool.Query(ctx, `select name, projection from system_secrets order by name`)
 	if err != nil {
-		return nil, fmt.Errorf("secrets: listing what the crew holds: %w", err)
+		return nil, fmt.Errorf("secrets: listing what the system holds: %w", err)
 	}
 	defer rows.Close()
 
@@ -146,13 +146,13 @@ func (p *Postgres) ListCrew(ctx context.Context) ([]Ref, error) {
 		var ref Ref
 		var projection string
 		if err := rows.Scan(&ref.Name, &projection); err != nil {
-			return nil, fmt.Errorf("secrets: listing what the crew holds: %w", err)
+			return nil, fmt.Errorf("secrets: listing what the system holds: %w", err)
 		}
 		ref.Projection = Projection(projection).Or()
 		refs = append(refs, ref)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("secrets: listing what the crew holds: %w", err)
+		return nil, fmt.Errorf("secrets: listing what the system holds: %w", err)
 	}
 	return refs, nil
 }

@@ -143,7 +143,7 @@ func truncate(t *testing.T) {
 	// them from workspaces, so they survived a truncate that claimed to leave nothing behind: a skill
 	// is keyed by its own name, so one subtest's github was still there for the next one to attach, at
 	// a version it never imported. The cascade then takes skill_secrets, skill_files and
-	// workspace_skills, and hook_events, hook_secrets, hook_files, workspace_hooks and crew_hooks.
+	// workspace_skills, and hook_events, hook_secrets, hook_files, workspace_hooks and system_hooks.
 	//
 	// Hooks landed here the same way and cost the same hour: the memory store gives every subtest a
 	// fresh map and passed, while against real Postgres the first attach in a subtest came back at
@@ -156,7 +156,7 @@ func truncate(t *testing.T) {
 	//
 	// Secrets are the third. They are keyed by a workspace identifier that is a plain string rather
 	// than a reference, so nothing cascades to them, and one test's token was still set for "acme"
-	// when the next one listed what that workspace held. The crew's own are keyed by name alone, so
+	// when the next one listed what that workspace held. The system's own are keyed by name alone, so
 	// they belong here for the same reason as skills.
 	if _, err := pool.Exec(ctx,
 		// Tasks are named here for the same reason as skills. A task is keyed by its own id and
@@ -165,10 +165,10 @@ func truncate(t *testing.T) {
 		// silently. What that looked like was a case reading zero tasks it had just written.
 		//
 		// Session events are the same shape once more. They are keyed by their own id and reference
-		// nothing, so the cascade cannot reach them, and a case that counts what the whole crew has
+		// nothing, so the cascade cannot reach them, and a case that counts what the whole system has
 		// seen was counting another test's sessions. It passed for as long as no test file sorting
 		// before this one happened to dispatch anything.
-		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, roles, secrets, crew_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, roles, secrets, system_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -362,7 +362,7 @@ func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {
 	}
 }
 
-// How a secret reaches a sandbox has to survive a restart the same way the value does. A crew that
+// How a secret reaches a sandbox has to survive a restart the same way the value does. A system that
 // forgot it would put a mounted credential back into the environment of every container, which is
 // the exposure mounting it was for.
 func TestHowASecretReachesASandboxSurvivesARestart(t *testing.T) {
@@ -572,7 +572,7 @@ func TestJobDeclaredBeforeTheRenameStillRequiresWhatItWasGiven(t *testing.T) {
 	}
 }
 
-// A job declared before the crew called it a job reads back whole, under the new name.
+// A job declared before the system called it a job reads back whole, under the new name.
 //
 // Renaming a table is the shape that fails quietly. Every test that writes and then reads passes on
 // a fresh database, because the code and the schema agree with each other about the new word and
@@ -602,7 +602,7 @@ func TestJobsDeclaredBeforeTheyWereCalledJobsReadBackWhole(t *testing.T) {
 		}
 	}
 
-	// Two rows and the history of the first, in the words the crew used then. The second waits for
+	// Two rows and the history of the first, in the words the system used then. The second waits for
 	// the first, which is the column the rename touches beside the table itself.
 	if _, err := pool.Exec(ctx, `
 		insert into workspaces (id, name) values ('w1', 'acme');
@@ -655,7 +655,7 @@ func TestJobsDeclaredBeforeTheyWereCalledJobsReadBackWhole(t *testing.T) {
 		t.Errorf("the job waits for %v, want k1: the ordering is the column the rename touches", waiting.After)
 	}
 
-	// The whole listing, because a rename that lost the table would read as an empty crew rather than
+	// The whole listing, because a rename that lost the table would read as an empty system rather than
 	// as a failure.
 	listed, err := kept.ListJobs(ctx, job.Filter{Project: "p1"})
 	if err != nil {
@@ -665,7 +665,7 @@ func TestJobsDeclaredBeforeTheyWereCalledJobsReadBackWhole(t *testing.T) {
 		t.Errorf("%d jobs survived the rename, want 2", len(listed))
 	}
 
-	// The history, in one vocabulary. A kind is the crew's own word for what happened, so it travels
+	// The history, in one vocabulary. A kind is the system's own word for what happened, so it travels
 	// with the row; a reader spanning the rename must not have to switch on two spellings forever.
 	records, err := kept.ListJobEvents(ctx, "k1")
 	if err != nil {
@@ -747,7 +747,7 @@ func applyThrough(t *testing.T, ctx context.Context, pool *pgxpool.Pool, last st
 
 // A token every workspace needs is set once, and a restart that lost it would put the operator back
 // to setting it again for each workspace, which is the whole thing this level exists to stop.
-func TestTheCrewsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
+func TestTheSystemsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
 	ctx := context.Background()
 	truncate(t)
 
@@ -764,13 +764,13 @@ func TestTheCrewsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
 		t.Fatalf("open secrets: %v", err)
 	}
 	const token = "ghp-shared-not-a-real-one"
-	if err := kept.SetCrew(ctx, secrets.Secret{Name: "GH_TOKEN", Value: token}); err != nil {
-		t.Fatalf("SetCrew: %v", err)
+	if err := kept.SetSystem(ctx, secrets.Secret{Name: "GH_TOKEN", Value: token}); err != nil {
+		t.Fatalf("SetSystem: %v", err)
 	}
-	if err := kept.SetCrew(ctx, secrets.Secret{
+	if err := kept.SetSystem(ctx, secrets.Secret{
 		Name: "gitconfig", Value: "[user]\n\tname = operator\n", Projection: secrets.File,
 	}); err != nil {
-		t.Fatalf("SetCrew mounted: %v", err)
+		t.Fatalf("SetSystem mounted: %v", err)
 	}
 	before.Close()
 
@@ -790,7 +790,7 @@ func TestTheCrewsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 	if got, err := levels.Get(ctx, "me", "GH_TOKEN"); err != nil || got != token {
-		t.Fatalf("a workspace that set nothing reads GH_TOKEN as %q (%v), want the crew's", got, err)
+		t.Fatalf("a workspace that set nothing reads GH_TOKEN as %q (%v), want the system's", got, err)
 	}
 	if got, _ := levels.Get(ctx, "acme", "GH_TOKEN"); got != "ghp-its-own" {
 		t.Fatalf("a workspace that set its own reads GH_TOKEN as %q, want ghp-its-own", got)
@@ -804,21 +804,21 @@ func TestTheCrewsSecretsSurviveARestartAndReachEveryWorkspace(t *testing.T) {
 	}
 	want := map[string]secrets.Projection{"GH_TOKEN": secrets.Env, "gitconfig": secrets.File}
 	if len(refs) != len(want) {
-		t.Fatalf("a workspace that set nothing reads %+v, want %d from the crew", refs, len(want))
+		t.Fatalf("a workspace that set nothing reads %+v, want %d from the system", refs, len(want))
 	}
 	for _, ref := range refs {
 		if ref.Projection != want[ref.Name] {
 			t.Fatalf("%s reaches a sandbox as %q, want %q", ref.Name, ref.Projection, want[ref.Name])
 		}
-		if !ref.Crew {
-			t.Fatalf("%s does not say the crew holds it", ref.Name)
+		if !ref.System {
+			t.Fatalf("%s does not say the system holds it", ref.Name)
 		}
 	}
 
 	// And it is not sitting in the clear in a table anybody might dump.
 	var sealed []byte
 	if err := after.Pool().QueryRow(ctx,
-		`select sealed from crew_secrets where name = 'GH_TOKEN'`).Scan(&sealed); err != nil {
+		`select sealed from system_secrets where name = 'GH_TOKEN'`).Scan(&sealed); err != nil {
 		t.Fatalf("reading the row: %v", err)
 	}
 	if strings.Contains(string(sealed), token) {

@@ -1,6 +1,6 @@
 # The database
 
-Quay Crew keeps its workspaces, projects, sessions, context and channels in Postgres, a service in
+Quay System keeps its workspaces, projects, sessions, context and channels in Postgres, a service in
 the same compose stack as everything else. This document is how to run it, how to look inside it, and what
 each thing in there means.
 
@@ -72,7 +72,7 @@ Once you are at the `quaycrew=#` prompt:
 ## What is in there
 
 The tables an operator meets most often. Most of them are the model, one is the history, one is
-bookkeeping. The crew has more: the flow engine, skills, hooks, roles and secrets each keep their own.
+bookkeeping. The system has more: the flow engine, skills, hooks, roles and secrets each keep their own.
 
 **`workspaces`** is the top level: a body of work with its own secrets, its own channels and its own
 event log topics. It carries `id`, `name`, timestamps and `deleted_at`. Deletion is soft: a deleted
@@ -104,7 +104,7 @@ sandbox. The console calls them sessions too, and `sessions` still opens that vi
   `bypassPermissions` once you press `D` in the console
 - `archived_at` is set when you put a session away with `A`. Archiving hides it from the default
   listing, stops it, and closes its sandbox. It deletes nothing
-- `reclaimed_at` is set when the crew took the container back on its own, which is the status
+- `reclaimed_at` is set when the system took the container back on its own, which is the status
   `reclaimed`. Everything else on the row stays, so the next task builds a fresh container over the
   same conversation and carries on. It is a stamp of its own rather than a reading of `updated_at`,
   because how long a session has been reclaimed is what the archive time is measured against, and
@@ -112,7 +112,7 @@ sandbox. The console calls them sessions too, and `sessions` still opens that vi
   `docs/ORCHESTRATION.md`, which also says why the two times that drive it ship unset
 - `label`, `title` and `description` are the three names a listing can show, read in that order.
   `label` is what the operator typed, `title` is what the session was dispatched with and is written
-  only when the session is made, and `description` is the line the crew wrote about the conversation
+  only when the session is made, and `description` is the line the system wrote about the conversation
 
 ### The order a session listing comes back in
 
@@ -157,8 +157,8 @@ is now unset.
 
 **`contexts`** is the memory the model reads:
  `scope`, `owner`, `body`, timestamps, keyed on the first
-two columns together. `scope` is `crew`, `workspace` or `project`, and `owner` is the workspace or
-project it belongs to, empty for the crew. It has no foreign key for that reason. The `CLAUDE.md`
+two columns together. `scope` is `system`, `workspace` or `project`, and `owner` is the workspace or
+project it belongs to, empty for the system. It has no foreign key for that reason. The `CLAUDE.md`
 inside a sandbox is a rendering of this row, written when the sandbox is made and read back when
 something inside has changed it, so the store is the truth and the file is a copy. `quay context`
 shows it and `quay context edit` changes it.
@@ -180,7 +180,7 @@ is minted where the row is written, so the same identifier travels outward on th
 **`jobs`** is declared intent: one row per job a caller asked for. It carries what the
 caller declared (the title, the brief, the role and the version it was pinned to, the material it
 requires of that role, the mode, what the answer must carry, what it waits for, a deadline, a budget
-and its labels), what the crew assigned
+and its labels), what the system assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
 answer, the reason, the question, what a person told it and what it spent). The intent is a row
 rather than a list held in a process, so it outlives the caller. `quay job list` and `quay job show` read it.
@@ -218,9 +218,9 @@ answer and its history, and reads back whole under the new name.
 
 The kinds move with the rows: `work.declared` becomes `job.declared`, and the same for started,
 answered, failed, asked, stopped, claimed and released. Leaving them reads well as an argument, since
-a record says what happened at the time, and it costs the reader everything: the crew has one
+a record says what happened at the time, and it costs the reader everything: the system has one
 vocabulary and a history that answers in two makes every consumer switch on both spellings forever.
-A kind is the crew word for what happened rather than anything a person typed, so nothing somebody
+A kind is the system word for what happened rather than anything a person typed, so nothing somebody
 wrote is being changed.
 
 ```mermaid
@@ -256,7 +256,7 @@ erDiagram
 
 ## Queries worth knowing
 
-Every session in the order the crew lists them, named by where it sits rather than by its
+Every session in the order the system lists them, named by where it sits rather than by its
 identifier. The order is the one described above, so this reads the way the console and
 `quay sessions` read:
 

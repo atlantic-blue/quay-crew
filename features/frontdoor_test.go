@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// The README is the front door, and a front door that promises what the crew cannot do is worse than
+// The README is the front door, and a front door that promises what the system cannot do is worse than
 // no front door: a reader takes it at its word, types the command, and concludes the product is
 // broken. Its list of what works predated a day of merged work once, so these hold it to the three
 // things it can be wrong about. What commands exist, what make targets exist, and what documents
@@ -23,7 +23,7 @@ import (
 // of it read. So the sections are an exact list rather than a minimum, and there is a line limit
 // underneath that.
 //
-// What none of this checks is whether a sentence is true. A bullet claiming a capability the crew
+// What none of this checks is whether a sentence is true. A bullet claiming a capability the system
 // does not have, in words that name no command, passes every case here. The scenarios in this
 // directory are what say whether a capability is real; this says the front door points at them.
 
@@ -37,7 +37,7 @@ const theFrontDoorsMakefile = "../Makefile"
 // documents the front door points at. The picture used to be in the front door itself.
 const theJobDocumentLink = "docs/ORCHESTRATION.md"
 
-// theFrontDoorsSections is every section the front door carries, in order. It answers what the crew
+// theFrontDoorsSections is every section the front door carries, in order. It answers what the system
 // is before the first one, then those, and stops.
 //
 // The list is exact rather than a minimum, because a limit on length alone is satisfied by a shorter
@@ -204,7 +204,7 @@ func frontDoor(t *testing.T) string {
 
 // TestTheFrontDoorHoldsThreeThingsAndNoOthers.
 //
-// What the crew is, how to start it, and where to read next. The forty item feature list, the
+// What the system is, how to start it, and where to read next. The forty item feature list, the
 // principles, the stack, the roadmap and the prior art all say something already said in docs/ or in
 // features/, and every one of them made the file longer than the reader it was written for.
 func TestTheFrontDoorHoldsThreeThingsAndNoOthers(t *testing.T) {
@@ -304,7 +304,7 @@ func TestEveryDocumentTheFrontDoorPointsAtExists(t *testing.T) {
 
 // TestThePictureOfAJobIsWhereTheFrontDoorSendsAReader.
 //
-// Job as a record the crew keeps is the shape of the product, and it is the thing a paragraph
+// Job as a record the system keeps is the shape of the product, and it is the thing a paragraph
 // explains worst. The picture used to be in the front door, which is one of the reasons the front
 // door was long. It moved to the document that already held the long version, so what is held now is
 // that a reader is still sent somewhere that has it.
@@ -372,7 +372,7 @@ func headingsIn(text string) []string {
 }
 
 // leadIn returns the prose between the title and the first section, which is where the front door
-// answers what the crew is.
+// answers what the system is.
 func leadIn(text string) string {
 	var lead []string
 	for n, line := range strings.Split(text, "\n") {
@@ -407,12 +407,12 @@ func theShapeOf(text string) []string {
 		wrong = append(wrong, "the front door opens with no title, so a reader does not know what they opened")
 	}
 	if words := len(strings.Fields(leadIn(text))); words < theFewestWordsThatSayWhatItIs {
-		wrong = append(wrong, fmt.Sprintf("the front door says what the crew is in %d words, and %d is "+
+		wrong = append(wrong, fmt.Sprintf("the front door says what the system is in %d words, and %d is "+
 			"the fewest that says anything at all", words, theFewestWordsThatSayWhatItIs))
 	}
 	if held := headingsIn(text); !slices.Equal(held, theFrontDoorsSections) {
 		wrong = append(wrong, fmt.Sprintf("the front door holds the sections %v, and it holds %v and "+
-			"nothing else: what the crew is, the words for what it holds, how to start it, and where to read next. Everything a "+
+			"nothing else: what the system is, the words for what it holds, how to start it, and where to read next. Everything a "+
 			"new section would say belongs in docs/ or in features/", held, theFrontDoorsSections))
 	}
 	return wrong
@@ -603,18 +603,18 @@ func TestTheDifferenceBetweenATaskAndAJobIsWhereTheFrontDoorSendsAReader(t *test
 	}
 }
 
-// theResourcesTheCrewKeeps is every resource the front door has to define, in the order it defines
+// theResourcesTheSystemKeeps is every resource the front door has to define, in the order it defines
 // them. Each one is a heading in bold at the start of its paragraph.
 //
 // It is a list here rather than something read out of the code, and that is the weaker choice made
-// deliberately: nothing in the crew enumerates its own resources. The console registers ten views
+// deliberately: nothing in the system enumerates its own resources. The console registers ten views
 // and neither jobs nor flows is among them, and the store's interface is methods rather than a set,
 // so anything derived would be a different list dressed up as this one. What this holds is that the
 // front door and this list agree, and a twelfth resource lands here in the same change that adds it.
 //
 // Exact rather than a minimum, for the same reason the section list is: a front door that defines
 // the eleven and then eight more is the sprawl this file exists to stop.
-var theResourcesTheCrewKeeps = []string{
+var theResourcesTheSystemKeeps = []string{
 	"Workspaces", "Projects", "Jobs", "Sessions", "Tasks", "Flows",
 	"Roles", "Skills", "Hooks", "Secrets", "Context",
 }
@@ -647,15 +647,15 @@ func theWordsFor(frontDoor string) []string {
 	}
 
 	var wrong []string
-	for _, resource := range theResourcesTheCrewKeeps {
+	for _, resource := range theResourcesTheSystemKeeps {
 		if !defined[resource] {
 			wrong = append(wrong, fmt.Sprintf("no paragraph opens by defining %s, so a reader meets the "+
 				"word for the first time in a command", resource))
 		}
 	}
-	if len(wrong) == 0 && !slices.Equal(inOrder, theResourcesTheCrewKeeps) {
+	if len(wrong) == 0 && !slices.Equal(inOrder, theResourcesTheSystemKeeps) {
 		wrong = append(wrong, fmt.Sprintf("the front door defines %v, and it defines %v: outer first, "+
-			"then what runs, then what shapes it", inOrder, theResourcesTheCrewKeeps))
+			"then what runs, then what shapes it", inOrder, theResourcesTheSystemKeeps))
 	}
 
 	// The limits are the one thing in there that is not a resource, and saying so is the point of
@@ -675,11 +675,11 @@ func theWordsFor(frontDoor string) []string {
 	return wrong
 }
 
-// TestTheFrontDoorDefinesEveryResourceTheCrewKeeps.
+// TestTheFrontDoorDefinesEveryResourceTheSystemKeeps.
 //
 // The vocabulary cost real time twice before it was written down. A reader who does not know what a
 // job is cannot tell it from the task they already know how to send.
-func TestTheFrontDoorDefinesEveryResourceTheCrewKeeps(t *testing.T) {
+func TestTheFrontDoorDefinesEveryResourceTheSystemKeeps(t *testing.T) {
 	for _, wrong := range theWordsFor(frontDoor(t)) {
 		t.Error(wrong)
 	}

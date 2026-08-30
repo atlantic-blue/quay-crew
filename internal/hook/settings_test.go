@@ -10,7 +10,7 @@ import (
 
 // The settings file is the only thing that makes a hook run. Everything else about a hook can be
 // right while this is wrong, and the failure is silent: the runtime reads a file that binds nothing
-// and every constraint the crew believes it has is off.
+// and every constraint the system believes it has is off.
 
 func settingsOf(t *testing.T, hooks ...hook.Hook) map[string]any {
 	t.Helper()
@@ -181,8 +181,8 @@ func TestRenderingWithNowhereToMountIsRefused(t *testing.T) {
 	}
 }
 
-// The settings the crew renders are the only thing it can say to the model runtime, so the status
-// line is in here rather than in the sandbox image. The image cannot say it: the crew mounts the
+// The settings the system renders are the only thing it can say to the model runtime, so the status
+// line is in here rather than in the sandbox image. The image cannot say it: the system mounts the
 // workspace's own directory over the conversation directory in every sandbox, and a mount hides
 // whatever the image put underneath it. That cost an operator a feature that passed every test it
 // had, so it is held here, on both paths a session takes.

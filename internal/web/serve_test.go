@@ -14,7 +14,7 @@ import (
 // alone: it binds a socket, says where it came up, answers a request over the network and stops when
 // the operator does. A handler that renders in a recorder proves none of that.
 func TestServeAnswersARealRequestOnThisMachine(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	dispatch(t, client, projectOf(t, client), "", "when is the electricity bill due")
 
 	ctx, stop := context.WithCancel(context.Background())

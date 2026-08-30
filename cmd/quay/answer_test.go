@@ -17,7 +17,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// What a caller reads out of the crew has to be the value and nothing else, because the next thing
+// What a caller reads out of the system has to be the value and nothing else, because the next thing
 // that happens to it is another command. The history listing is the other rendering of the same
 // records, written for a person: it shortens a reply at 120 characters and puts a clock beside it.
 
@@ -60,8 +60,8 @@ func (c *countingRunner) Run(ctx context.Context, _ sandbox.Sandbox, _ model.Req
 	}, nil
 }
 
-// aCrewRunning stands up a crew with one workspace and one project behind the given model.
-func aCrewRunning(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+// aSystemRunning stands up a system with one workspace and one project behind the given model.
+func aSystemRunning(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	client := testClientWith(t, controlplane.Config{
 		Store: store.NewMemory(), Runner: runner,
@@ -72,15 +72,15 @@ func aCrewRunning(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServ
 	return client
 }
 
-// aSessionThatAnswered is a crew with one session whose only task landed.
+// aSessionThatAnswered is a system with one session whose only task landed.
 func aSessionThatAnswered(t *testing.T, reply string) (quaycrewv1.ControlPlaneServiceClient, *quaycrewv1.Session) {
 	t.Helper()
-	client := aCrewRunning(t, &model.FakeRunner{Reply: reply})
+	client := aSystemRunning(t, &model.FakeRunner{Reply: reply})
 	mustRun(t, client, "task", "when is the electricity bill due")
 	return client, onlySession(t, client)
 }
 
-// aDriverSession is a session the crew opened and nobody has dispatched to, which is how a session
+// aDriverSession is a session the system opened and nobody has dispatched to, which is how a session
 // exists with an empty history.
 func aDriverSession(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) *quaycrewv1.Session {
 	t.Helper()
@@ -111,7 +111,7 @@ func aSessionHoldingATask(t *testing.T, after int) (quaycrewv1.ControlPlaneServi
 		holdFrom: after + 1,
 		gate:     make(chan struct{}), started: make(chan struct{}),
 	}
-	client := aCrewRunning(t, runner)
+	client := aSystemRunning(t, runner)
 
 	session := ""
 	for landed := 0; landed < after; landed++ {
@@ -204,7 +204,7 @@ func TestEveryIdentifierOfASessionReachesItsAnswer(t *testing.T) {
 // A caller that pipes this must never be handed a sentence where the value belongs. So a session
 // with nothing to answer with prints nothing at all, and says why on the other stream.
 func TestASessionWithNoLandedTaskPrintsNothingAndIsRefused(t *testing.T) {
-	client := aCrewRunning(t, &model.FakeRunner{Reply: "ok"})
+	client := aSystemRunning(t, &model.FakeRunner{Reply: "ok"})
 	session := aDriverSession(t, client)
 
 	printed, err := runQuay(t, client, "answer", session.GetId())
@@ -258,7 +258,7 @@ func TestATaskStillRunningIsRefusedEvenWhenAnEarlierOneLanded(t *testing.T) {
 // What a task failed with is the answer to what it was asked, so it goes where the answer goes. The
 // exit status is what tells a caller it is reading a failure.
 func TestAFailedTasksFailureIsTheAnswerAndTheCommandFails(t *testing.T) {
-	client := aCrewRunning(t, &model.FakeRunner{Err: errTheModelRefused})
+	client := aSystemRunning(t, &model.FakeRunner{Err: errTheModelRefused})
 	if _, err := runQuay(t, client, "task", "read the repository"); err == nil {
 		t.Fatal("the task was expected to fail and did not")
 	}
@@ -275,7 +275,7 @@ func TestAFailedTasksFailureIsTheAnswerAndTheCommandFails(t *testing.T) {
 
 // Oldest first, one record per line, so a caller reads them in the order they happened.
 func TestEveryAnswerIsPrintedOldestFirst(t *testing.T) {
-	client := aCrewRunning(t, &countingRunner{})
+	client := aSystemRunning(t, &countingRunner{})
 	mustRun(t, client, "task", "first")
 	session := onlySession(t, client)
 	mustRun(t, client, "task", "me/house-bills/"+session.GetHandle()[:8], "second")
@@ -291,7 +291,7 @@ func TestEveryAnswerIsPrintedOldestFirst(t *testing.T) {
 
 // The same refusal as one answer, because a caller reading a stream cannot be given prose either way.
 func TestEveryAnswerOfASessionWithNoLandedTaskIsRefused(t *testing.T) {
-	client := aCrewRunning(t, &model.FakeRunner{Reply: "ok"})
+	client := aSystemRunning(t, &model.FakeRunner{Reply: "ok"})
 	session := aDriverSession(t, client)
 
 	printed, err := runQuay(t, client, "answer", session.GetId(), "--all")

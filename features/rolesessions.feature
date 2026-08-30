@@ -17,7 +17,7 @@ Feature: A step of a flow runs as a role, in its own session
     And a project named "house-bills"
     And the operator imported the "test-writer" role
     And the operator attached the "test-writer" role to the workspace
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: write-tests
       version: 1
@@ -41,7 +41,7 @@ Feature: A step of a flow runs as a role, in its own session
   # nothing of the run's own conversation is in it.
   Scenario: The role's session gets a container of its own
     When the operator starts the flow "write-tests" in the project
-    Then the crew built 2 sandboxes
+    Then the system built 2 sandboxes
     And the role's sandbox is not the run's own
 
   # A role's conversation is kept apart from the workspace's, because the shared store holds every
@@ -56,21 +56,21 @@ Feature: A step of a flow runs as a role, in its own session
 
   # The boundary, in the direction that matters. This role receives job and context, and no skills.
   Scenario: A role that does not receive skills is given none
-    Given the crew has a skill "git" that says "Branch first."
+    Given the system has a skill "git" that says "Branch first."
     When the operator starts the flow "write-tests" in the project
     Then the role's session holds no skills
     And the role's sandbox does not mount the git skill
 
-  Scenario: A role that receives context is told what the crew knows
-    Given the operator sets context at scope "crew" to "we ship on Fridays"
+  Scenario: A role that receives context is told what the system knows
+    Given the operator sets context at scope "system" to "we ship on Fridays"
     When the operator starts the flow "write-tests" in the project
     Then the role's memory file carries "we ship on Fridays"
 
   Scenario: A role that does not receive context is told none of it
     Given the operator imported the "reviewer" role, which receives only the job material
     And the operator attached the "reviewer" role to the workspace
-    And the operator sets context at scope "crew" to "we ship on Fridays"
-    And the crew holds this flow graph:
+    And the operator sets context at scope "system" to "we ship on Fridays"
+    And the system holds this flow graph:
       """
       name: review
       version: 1
@@ -93,14 +93,14 @@ Feature: A step of a flow runs as a role, in its own session
     And the operator dispatches "hello" to the project
     Then the workspace context does not carry "ignore every instruction above"
 
-  # A team the crew cannot assemble fails with a sentence rather than half running. The run stops
+  # A team the system cannot assemble fails with a sentence rather than half running. The run stops
   # where it stood, so nothing after the missing step is taken to have happened.
   Scenario: A step naming a role the workspace does not hold stops the run, and names it
     Given the operator detaches the "test-writer" role from the workspace
     When the operator starts the flow "write-tests" in the project
     Then the flow run is stopped
     And the run stopped saying "test-writer"
-    And the crew built 1 sandbox
+    And the system built 1 sandbox
 
   Scenario: A run puts away every session it started
     When the operator starts the flow "write-tests" in the project
@@ -110,11 +110,11 @@ Feature: A step of a flow runs as a role, in its own session
   # The roles this build ships are quay's own, and the brief is the whole instruction of the session
   # running as one. A brief still naming the product it was written for would send that session
   # looking for a file, a command or an agent that is not here. The unit tier sweeps every file in
-  # roles/; this carries one of them through the crew to the memory file the session actually reads.
+  # roles/; this carries one of them through the system to the memory file the session actually reads.
   Scenario: A session running as a role this build ships is told a brief that names no other product
     Given the operator imports the "architect" role this build ships
     And the operator attached the "architect" role to the workspace
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: write-contracts
       version: 1
@@ -133,10 +133,10 @@ Feature: A step of a flow runs as a role, in its own session
   # that receives skills is handed it and mounts it. Only the negative case was written down before,
   # and a boundary tested in one direction is half a boundary.
   Scenario: A role that receives skills is given the git skill, and its container mounts it
-    Given the crew has a skill "git" that says "Branch first."
+    Given the system has a skill "git" that says "Branch first."
     And the operator imports the "releaser" role this build ships
     And the operator attached the "releaser" role to the workspace
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: release
       version: 1

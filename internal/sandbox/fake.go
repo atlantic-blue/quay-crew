@@ -13,7 +13,7 @@ import (
 type FakeProvider struct {
 	Output string
 	// Missing are the binaries the image behind this provider does not carry, so a scenario can be a
-	// crew whose skill needs something the sandbox cannot run.
+	// system whose skill needs something the sandbox cannot run.
 	Missing []string
 	// Stderr and ExitErr are handed to every sandbox this makes, so a scenario can say the command
 	// inside failed and what it said about it.
@@ -35,16 +35,16 @@ type FakeProvider struct {
 	Hold  chan struct{}
 	Boxes []*FakeSandbox
 	// Watched are the sessions somebody has the conversation open in, so a scenario can be an
-	// operator typing into a container the crew is about to take back.
+	// operator typing into a container the system is about to take back.
 	Watched map[string]bool
 	// AttachErr is the daemon refusing to answer whether anybody is attached, which is not the same
-	// answer as nobody: a crew that cannot tell must leave the container alone.
+	// answer as nobody: a system that cannot tell must leave the container alone.
 	AttachErr error
 	// Running are the sessions whose sandbox holds a model runtime with nobody watching it, so a
 	// scenario can be a conversation answering while the listing decides what to call it.
 	Running map[string]bool
 	// RuntimeErr is the daemon refusing to say what a container is running, which is not the same
-	// answer as nothing: a crew that cannot tell must not report the session as idle.
+	// answer as nothing: a system that cannot tell must not report the session as idle.
 	RuntimeErr error
 	// questions counts what has been asked about the inside of a sandbox, attachment and runtime
 	// alike, so a test can hold how much one listing costs.
@@ -65,7 +65,7 @@ func (f *FakeProvider) Create(ctx context.Context, cfg Config) (Sandbox, error) 
 	// The request is recorded before the hold, so a test can tell that the provider was reached from
 	// one that has not been, and the context is honoured while waiting: the real provider runs the
 	// daemon through it and gives up when it is done. A double that creates whatever the caller's
-	// budget says makes a suite green over a crew that waits without end.
+	// budget says makes a suite green over a system that waits without end.
 	f.mu.Lock()
 	f.Calls = append(f.Calls, cfg)
 	hold := f.Hold
@@ -157,7 +157,7 @@ func (f *FakeProvider) Stranded(context.Context) ([]string, error) {
 //
 // It answers false for a session this provider holds no sandbox for, because the real one asks a
 // container that is not there and gets a non zero exit, which means nobody rather than an error. A
-// double looser than that would let a scenario reclaim a container the real crew would leave alone.
+// double looser than that would let a scenario reclaim a container the real system would leave alone.
 func (f *FakeProvider) Attached(_ context.Context, sessionID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -260,7 +260,7 @@ func (f *FakeSandbox) Exec(_ context.Context, spec Spec) (Process, error) {
 		return nil, f.Err
 	}
 	// Looking for a command answers like the real thing, because a double that says yes to every
-	// binary makes a crew look ready for a skill the image cannot run. The real shell exits non zero
+	// binary makes a system look ready for a skill the image cannot run. The real shell exits non zero
 	// when `command -v` finds nothing.
 	if binary, asking := wantedBinary(spec); asking {
 		if f.without[binary] {
@@ -275,7 +275,7 @@ func (f *FakeSandbox) Exec(_ context.Context, spec Spec) (Process, error) {
 // zero.
 var errNotFound = errors.New("exit status 1")
 
-// wantedBinary reads a `command -v <name>` out of a spec, which is how the crew asks a sandbox what
+// wantedBinary reads a `command -v <name>` out of a spec, which is how the system asks a sandbox what
 // it has.
 func wantedBinary(spec Spec) (string, bool) {
 	if len(spec.Argv) != 3 || spec.Argv[0] != "sh" || spec.Argv[1] != "-c" {

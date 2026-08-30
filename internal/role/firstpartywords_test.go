@@ -104,7 +104,7 @@ func TestTheGuardCatchesAProductNameAnAgentPrefixAndACommand(t *testing.T) {
 		what string
 		line string
 	}{
-		{"the name in prose", "these briefs are greenlight's, and this crew has none of them"},
+		{"the name in prose", "these briefs are greenlight's, and this system has none of them"},
 		{"the name capitalised", "You are the Greenlight architect."},
 		{"the name in a path", "Write `.greenlight/ASSESS.md` following this structure."},
 		{"an agent by its prefix", "Tests are written by gl-test-writer."},

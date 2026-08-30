@@ -56,7 +56,7 @@ func TestMemoryRejectsEmpty(t *testing.T) {
 }
 
 // A secret set before projections existed carries none, and the answer for one is the environment.
-// Every secret already in a running crew is that secret, so getting this wrong would move all of them
+// Every secret already in a running system is that secret, so getting this wrong would move all of them
 // out of the environment at once.
 func TestNoProjectionIsTheEnvironment(t *testing.T) {
 	store := secrets.NewMemory()
@@ -130,14 +130,14 @@ func TestAMountedNameCannotEscapeItsDirectory(t *testing.T) {
 	}
 }
 
-// The crew's level is a level, not a workspace: what is set on it is read by every workspace, and
+// The system's level is a level, not a workspace: what is set on it is read by every workspace, and
 // what is set on a workspace stays that workspace's own.
-func TestTheCrewsSecretsReachEveryWorkspace(t *testing.T) {
+func TestTheSystemsSecretsReachEveryWorkspace(t *testing.T) {
 	levels := secrets.Levels{Store: secrets.NewMemory()}
 	ctx := context.Background()
 
-	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
-		t.Fatalf("SetCrew: %v", err)
+	if err := levels.SetSystem(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetSystem: %v", err)
 	}
 	for _, workspace := range []string{"me", "acme", "one-made-later"} {
 		got, err := levels.Get(ctx, workspace, "GITHUB_TOKEN")
@@ -150,13 +150,13 @@ func TestTheCrewsSecretsReachEveryWorkspace(t *testing.T) {
 	}
 }
 
-// Without this the crew's level would be a floor rather than a default, and the one workspace that
+// Without this the system's level would be a floor rather than a default, and the one workspace that
 // needs a different token could not have one.
 func TestAWorkspaceWinsOnAName(t *testing.T) {
 	levels := secrets.Levels{Store: secrets.NewMemory()}
 	ctx := context.Background()
-	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
-		t.Fatalf("SetCrew: %v", err)
+	if err := levels.SetSystem(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetSystem: %v", err)
 	}
 	if err := levels.Set(ctx, "me", secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-mine"}); err != nil {
 		t.Fatalf("Set: %v", err)
@@ -166,10 +166,10 @@ func TestAWorkspaceWinsOnAName(t *testing.T) {
 		t.Fatalf("me reads GITHUB_TOKEN as %q, want its own ghp-mine", got)
 	}
 	if got, _ := levels.Get(ctx, "acme", "GITHUB_TOKEN"); got != "ghp-shared" {
-		t.Fatalf("acme reads GITHUB_TOKEN as %q, want the crew's ghp-shared", got)
+		t.Fatalf("acme reads GITHUB_TOKEN as %q, want the system's ghp-shared", got)
 	}
 
-	// And one name appears once, held by the workspace, rather than twice with the crew's shadowing
+	// And one name appears once, held by the workspace, rather than twice with the system's shadowing
 	// it further down the listing.
 	refs, err := levels.List(ctx, "me")
 	if err != nil {
@@ -178,8 +178,8 @@ func TestAWorkspaceWinsOnAName(t *testing.T) {
 	if len(refs) != 1 {
 		t.Fatalf("me holds %d secrets, want 1: %+v", len(refs), refs)
 	}
-	if refs[0].Crew {
-		t.Fatalf("the listing says GITHUB_TOKEN is the crew's, and this workspace set its own")
+	if refs[0].System {
+		t.Fatalf("the listing says GITHUB_TOKEN is the system's, and this workspace set its own")
 	}
 }
 
@@ -188,8 +188,8 @@ func TestAWorkspaceWinsOnAName(t *testing.T) {
 func TestAListingSaysWhichLevelHoldsEachSecret(t *testing.T) {
 	levels := secrets.Levels{Store: secrets.NewMemory()}
 	ctx := context.Background()
-	if err := levels.SetCrew(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
-		t.Fatalf("SetCrew: %v", err)
+	if err := levels.SetSystem(ctx, secrets.Secret{Name: "GITHUB_TOKEN", Value: "ghp-shared"}); err != nil {
+		t.Fatalf("SetSystem: %v", err)
 	}
 	if err := levels.Set(ctx, "me", secrets.Secret{Name: "STRIPE_KEY", Value: "sk-mine"}); err != nil {
 		t.Fatalf("Set: %v", err)
@@ -201,7 +201,7 @@ func TestAListingSaysWhichLevelHoldsEachSecret(t *testing.T) {
 	}
 	// Sorted by name, so two levels read as one listing.
 	want := []secrets.Ref{
-		{Name: "GITHUB_TOKEN", Projection: secrets.Env, Crew: true},
+		{Name: "GITHUB_TOKEN", Projection: secrets.Env, System: true},
 		{Name: "STRIPE_KEY", Projection: secrets.Env},
 	}
 	if len(refs) != len(want) {
@@ -214,15 +214,15 @@ func TestAListingSaysWhichLevelHoldsEachSecret(t *testing.T) {
 	}
 }
 
-// A credential that is a file is the case that hurts most to repeat, so the crew's level carries the
+// A credential that is a file is the case that hurts most to repeat, so the system's level carries the
 // projection as well as the bytes.
-func TestTheCrewCanHoldAMountedCredential(t *testing.T) {
+func TestTheSystemCanHoldAMountedCredential(t *testing.T) {
 	levels := secrets.Levels{Store: secrets.NewMemory()}
 	ctx := context.Background()
-	if err := levels.SetCrew(ctx, secrets.Secret{
+	if err := levels.SetSystem(ctx, secrets.Secret{
 		Name: "gitconfig", Value: "[user] name = operator", Projection: secrets.File,
 	}); err != nil {
-		t.Fatalf("SetCrew: %v", err)
+		t.Fatalf("SetSystem: %v", err)
 	}
 
 	refs, err := levels.List(ctx, "me")
@@ -234,14 +234,14 @@ func TestTheCrewCanHoldAMountedCredential(t *testing.T) {
 	}
 }
 
-// A name that would escape its directory is refused at the crew's level too. One reader of the rule
+// A name that would escape its directory is refused at the system's level too. One reader of the rule
 // was the reason it lives on the secret; a second entry point must not be a second chance to skip it.
-func TestTheCrewRefusesAMountedNameThatWouldEscape(t *testing.T) {
+func TestTheSystemRefusesAMountedNameThatWouldEscape(t *testing.T) {
 	levels := secrets.Levels{Store: secrets.NewMemory()}
-	err := levels.SetCrew(context.Background(), secrets.Secret{
+	err := levels.SetSystem(context.Background(), secrets.Secret{
 		Name: "../../etc/passwd", Value: "root", Projection: secrets.File,
 	})
 	if err == nil {
-		t.Fatal("SetCrew accepted a name that would have become a path")
+		t.Fatal("SetSystem accepted a name that would have become a path")
 	}
 }

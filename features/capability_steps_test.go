@@ -15,7 +15,7 @@ import (
 )
 
 // What a session may do, driven the way a session does it: through a call carrying the credential
-// the crew minted for the job that session is running.
+// the system minted for the job that session is running.
 
 type capabilityKey struct{}
 
@@ -135,7 +135,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The job the session declared is itself a job, so the crew mints a credential for it
+	// The job the session declared is itself a job, so the system mints a credential for it
 	// the same way, and that credential is what declares one level deeper.
 	sc.Step(`^the job at depth (\d+) declares another$`, func(ctx context.Context, depth int) error {
 		scenario := capabilityFrom(ctx)
@@ -148,7 +148,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		}
 		token, minted := worldFrom(ctx).server.JobCredentialForTest(ctx, deeper.GetId())
 		if !minted {
-			return fmt.Errorf("the crew minted no credential for the job at depth %d", depth)
+			return fmt.Errorf("the system minted no credential for the job at depth %d", depth)
 		}
 		return declareCarrying(ctx, token, "write a test")
 	})
@@ -176,11 +176,11 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew refuses it and names the verb it lacks$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it and names the verb it lacks$`, func(ctx context.Context) error {
 		return theRefusalSays(role.VerbJobCreate)(ctx)
 	})
 
-	sc.Step(`^the crew refuses it and names the limit and the command that raises it$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it and names the limit and the command that raises it$`, func(ctx context.Context) error {
 		for _, want := range []string{"no deeper than", "quay limits"} {
 			if err := theRefusalSays(want)(ctx); err != nil {
 				return err
@@ -226,11 +226,11 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// What a task is actually handed, read off the task the crew ran rather than off the sandbox: a
+	// What a task is actually handed, read off the task the system ran rather than off the sandbox: a
 	// credential is minted for one job and travels in the environment of one task, because a
 	// sandbox keeps what it was born with and would otherwise label every later task with the first
 	// task's grant.
-	sc.Step(`^the crew runs that job$`, func(ctx context.Context) error {
+	sc.Step(`^the system runs that job$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 			Project: w.projectID, Text: "clear it", Job: capabilityFrom(ctx).running,
@@ -239,10 +239,10 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return err
 	})
 
-	sc.Step(`^the task carries the address of the crew$`, func(ctx context.Context) error {
+	sc.Step(`^the task carries the address of the system$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if got := w.runner.lastRequest().Env["QC_GRPC_ADDR"]; got != w.reachable {
-			return fmt.Errorf("the task was told the crew is at %q, want %q", got, w.reachable)
+			return fmt.Errorf("the task was told the system is at %q, want %q", got, w.reachable)
 		}
 		return nil
 	})
@@ -255,11 +255,11 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 				return fmt.Errorf("the task carries no credential, so it can do nothing at the address it was given")
 			}
 			if presented == w.token || presented == w.driverToken {
-				return fmt.Errorf("the task carries a token that is not its own, so it holds what the crew holds")
+				return fmt.Errorf("the task carries a token that is not its own, so it holds what the system holds")
 			}
 			grant, recognised := w.server.Grants().Grant(presented)
 			if !recognised {
-				return fmt.Errorf("the crew does not recognise the credential it put in the task")
+				return fmt.Errorf("the system does not recognise the credential it put in the task")
 			}
 			if grant.Job != scenario.running {
 				return fmt.Errorf("the credential is bound to %q, want the job the task runs for", grant.Job)
@@ -285,7 +285,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew refuses it and names the verb it lacks and how an operator grants it$`,
+	sc.Step(`^the system refuses it and names the verb it lacks and how an operator grants it$`,
 		func(ctx context.Context) error {
 			for _, want := range []string{role.VerbJobStop, "verbs list", "attaching it"} {
 				if err := theRefusalSays(want)(ctx); err != nil {
@@ -307,7 +307,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew refuses the session that call$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses the session that call$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
 			return fmt.Errorf("the session was allowed the call")
@@ -324,7 +324,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 			scenario := capabilityFrom(ctx)
 			grant, recognised := worldFrom(ctx).server.Grants().Grant(scenario.token)
 			if !recognised {
-				return fmt.Errorf("the crew does not recognise the credential it minted")
+				return fmt.Errorf("the system does not recognise the credential it minted")
 			}
 			if grant.Job != scenario.running {
 				return fmt.Errorf("the credential is bound to %q, want the job the session is running", grant.Job)
@@ -341,12 +341,12 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 			}
 			// It ends, and it ends far enough out to cover the job. The two bounds are the whole of the
 			// lifetime: an end nobody set is a credential that works forever, and an end set by the
-			// crew's hold on the job is sixty seconds, which is less than a job takes.
+			// system's hold on the job is sixty seconds, which is less than a job takes.
 			if grant.ExpiresAt.IsZero() {
 				return fmt.Errorf("the credential never runs out, so one read out of a container works forever")
 			}
 			if lasts := time.Until(grant.ExpiresAt); lasts <= job.DefaultLease {
-				return fmt.Errorf("the credential lasts %s, which is the crew's hold on the job: a session "+
+				return fmt.Errorf("the credential lasts %s, which is the system's hold on the job: a session "+
 					"could not declare anything after that, and a job takes minutes", lasts.Round(time.Second))
 			}
 			if grant.ExpiresAt.After(time.Now().Add(24 * time.Hour)) {
@@ -356,8 +356,8 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	// The clock the crew reads a credential's life against, moved rather than waited out. Nothing
-	// else in the crew reads it, so a scenario half an hour into a job is otherwise the same crew.
+	// The clock the system reads a credential's life against, moved rather than waited out. Nothing
+	// else in the system reads it, so a scenario half an hour into a job is otherwise the same system.
 	sc.Step(`^that job has been running for (\d+) (minutes|days)$`,
 		func(ctx context.Context, count int, unit string) error {
 			every := time.Minute
@@ -376,25 +376,25 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return err
 	})
 
-	sc.Step(`^the crew refuses it, says the credential ran out, and says when$`,
+	sc.Step(`^the system refuses it, says the credential ran out, and says when$`,
 		func(ctx context.Context) error {
 			grant, recognised := worldFrom(ctx).server.Grants().Grant(capabilityFrom(ctx).token)
 			if !recognised {
-				return fmt.Errorf("the crew has forgotten the credential, so it cannot say what became of it")
+				return fmt.Errorf("the system has forgotten the credential, so it cannot say what became of it")
 			}
 			for _, want := range []string{"ran out at", grant.ExpiresAt.UTC().Format(time.RFC3339)} {
 				if err := theRefusalSays(want)(ctx); err != nil {
 					return err
 				}
 			}
-			if strings.Contains(worldFrom(ctx).lastErr.Error(), "not this crew's") {
-				return fmt.Errorf("the refusal says %q, and it was this crew's: it had run out",
+			if strings.Contains(worldFrom(ctx).lastErr.Error(), "not this system's") {
+				return fmt.Errorf("the refusal says %q, and it was this system's: it had run out",
 					worldFrom(ctx).lastErr)
 			}
 			return nil
 		})
 
-	sc.Step(`^the crew refuses it and names the job that ended and the phase it ended in$`,
+	sc.Step(`^the system refuses it and names the job that ended and the phase it ended in$`,
 		func(ctx context.Context) error {
 			for _, want := range []string{capabilityFrom(ctx).running, job.PhaseStopped} {
 				if err := theRefusalSays(want)(ctx); err != nil {
@@ -457,7 +457,7 @@ func aSessionRunning(ctx context.Context, title string, verbs []string) error {
 	scenario.running = declared.GetJob().GetId()
 	token, minted := w.server.JobCredentialForTest(ctx, scenario.running)
 	if !minted {
-		return fmt.Errorf("the crew minted no credential for the job the session runs")
+		return fmt.Errorf("the system minted no credential for the job the session runs")
 	}
 	scenario.token = token
 	return nil

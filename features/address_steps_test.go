@@ -24,7 +24,7 @@ func addressFrom(ctx context.Context) *addressWorld {
 	return a
 }
 
-// initializeAddressSteps registers the steps for addressing the crew by path.
+// initializeAddressSteps registers the steps for addressing the system by path.
 func initializeAddressSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, addressKey{}, &addressWorld{}), nil

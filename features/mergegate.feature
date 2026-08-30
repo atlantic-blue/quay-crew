@@ -1,11 +1,11 @@
-Feature: A merge is refused, and the crew is what refuses it
+Feature: A merge is refused, and the system is what refuses it
 
-  Every role in this crew pushes a branch and opens a pull request, and no role merges. A push
+  Every role in this system pushes a branch and opens a pull request, and no role merges. A push
   applies nothing. A merge runs the pipeline, and the pipeline is what spends money and changes
   infrastructure, so the merge is the operator's gate.
 
   Until this, that gate was a sentence in a brief. What a role may do is a list of the verbs a
-  session calls on the crew, and merging is not one of them: it is a github action a session takes
+  session calls on the system, and merging is not one of them: it is a github action a session takes
   with a credential a skill gave it. So the boundary the whole shape rests on was the one thing
   nothing checked, while smaller boundaries were held by a credential.
 
@@ -18,18 +18,18 @@ Feature: A merge is refused, and the crew is what refuses it
     And a workspace named "acme"
     And a project named "house-bills"
 
-  # A gate somebody has to remember to attach is off in every crew nobody set up, which is where the
+  # A gate somebody has to remember to attach is off in every system nobody set up, which is where the
   # boundary matters most.
-  Scenario: A fresh crew is under the merge gate without anybody attaching it
-    Given a crew seeded with the hooks this build ships
-    Then the crew holds the "merge-gate" hook
+  Scenario: A fresh system is under the merge gate without anybody attaching it
+    Given a system seeded with the hooks this build ships
+    Then the system holds the "merge-gate" hook
     And the workspace runs under the "merge-gate" hook
 
   # An operator who takes it off has said something, and that is the way out. The boundary is a thing
-  # the crew holds and a person can remove deliberately, rather than a sentence a model may keep.
+  # the system holds and a person can remove deliberately, rather than a sentence a model may keep.
   Scenario: An operator who takes the gate off can merge again
-    Given a crew seeded with the hooks this build ships
-    When the operator takes the hook "merge-gate" off the crew
+    Given a system seeded with the hooks this build ships
+    When the operator takes the hook "merge-gate" off the system
     Then the workspace runs under no "merge-gate" hook
 
   Scenario Outline: A session about to merge is refused, and told what to do instead
@@ -58,7 +58,7 @@ Feature: A merge is refused, and the crew is what refuses it
 
   # The other direction, and the one that decides whether this hook is worth having. A hook that
   # refuses wrongly blocks the work, and every role pushes and opens a pull request on every slice,
-  # so a wrong refusal here stops the crew delivering anything.
+  # so a wrong refusal here stops the system delivering anything.
   Scenario Outline: The work every role does on every slice goes through
     When a session is about to run: <command>
     Then the merge gate allows it
@@ -76,7 +76,7 @@ Feature: A merge is refused, and the crew is what refuses it
 
   # It fires on every command every session runs, so a payload it cannot read has to go through. A
   # gate that refuses what it does not understand refuses the work, and a broken hook must not be
-  # able to stop a crew.
+  # able to stop a system.
   Scenario: A payload the gate cannot read lets the command run
     When a session sends the merge gate a payload it cannot read
     Then the merge gate allows it

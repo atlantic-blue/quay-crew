@@ -20,7 +20,7 @@ import (
 //
 // Off a machine that keeps no such accounting, which is every Mac, it used to fail outright:
 // "room: this reads a linux sandbox's own memory accounting, and there is none here". So the
-// operator most likely to need the number was the one who could not have it. Now it asks the crew,
+// operator most likely to need the number was the one who could not have it. Now it asks the system,
 // which reads the daemon on its own timer and knows what the whole machine holds. See issue 405.
 func runRoom(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out io.Writer) error {
 	return roomOf(ctx, client, os.DirFS("/"), out)
@@ -35,36 +35,36 @@ func roomOf(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ro
 		return nil
 	}
 
-	// No accounting here. The crew reads the machine from the other side, so ask it.
+	// No accounting here. The system reads the machine from the other side, so ask it.
 	if client == nil {
 		return err
 	}
-	answer, crewErr := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
-	if crewErr != nil {
+	answer, systemErr := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
+	if systemErr != nil {
 		// Both roads are shut, and the refusal names both rather than the last one tried. An
-		// operator who is told only about the crew goes looking for a crew fault, and the first
+		// operator who is told only about the system goes looking for a system fault, and the first
 		// reason is the one that says which machine they are standing on.
-		return fmt.Errorf("%w\n\nthe crew could not be asked either: %v", err, crewErr)
+		return fmt.Errorf("%w\n\nthe system could not be asked either: %v", err, systemErr)
 	}
-	fmt.Fprint(out, sayCrewRoom(answer))
+	fmt.Fprint(out, saySystemRoom(answer))
 	return nil
 }
 
-// sayCrewRoom writes what the crew read of the machine it runs on.
+// saySystemRoom writes what the system read of the machine it runs on.
 //
 // It states where every figure came from, because the two halves answer different questions. The
 // daemon's own cap is what says whether another sandbox will start. The machine underneath it is
 // what killed eighteen sandboxes on 27 August 2026 while the daemon sat at less than half its cap.
-func sayCrewRoom(answer *quaycrewv1.GetHeadroomResponse) string {
+func saySystemRoom(answer *quaycrewv1.GetHeadroomResponse) string {
 	if answer.GetTakenAt() == nil {
-		out := "there is no memory accounting here, and the crew has not read its machine yet.\n"
+		out := "there is no memory accounting here, and the system has not read its machine yet.\n"
 		if answer.GetFailed() != "" {
 			out += "\n  " + answer.GetFailed() + "\n"
 		}
 		return out
 	}
 
-	out := fmt.Sprintf("there is no memory accounting here, so this is what the crew reads of its "+
+	out := fmt.Sprintf("there is no memory accounting here, so this is what the system reads of its "+
 		"own machine.\n\nthe machine is %s: %s of %s is held.\n\n",
 		answer.GetState(), answer.GetUsed(), answer.GetLimit())
 	out += fmt.Sprintf("  every container holds  %10s\n", answer.GetUsed())

@@ -1,4 +1,4 @@
-// Command gateway is a Quay Crew service skeleton. It boots telemetry and structured logging,
+// Command gateway is a Quay System service skeleton. It boots telemetry and structured logging,
 // then waits for a shutdown signal. The real gateway wiring (channels, event log, control plane)
 // lands in later milestones; this proves the service shape.
 package main

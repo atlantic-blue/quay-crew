@@ -11,8 +11,8 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The first run's scenarios drive the real make, from the repository a directory up, against a crew
-// directory of their own. Nothing here touches the control plane: what a person types to get a crew
+// The first run's scenarios drive the real make, from the repository a directory up, against a system
+// directory of their own. Nothing here touches the control plane: what a person types to get a system
 // is a behaviour they can see, and the file that says what the product does is this one.
 //
 // Docker is a double, written as a program on the path, because make calls docker by name and there
@@ -29,7 +29,7 @@ type installWorld struct {
 	said   string
 	failed bool
 	// ran is whether a scenario has run make at all, so a step cannot assert on a run that never
-	// happened and read an empty log as a crew that was left alone.
+	// happened and read an empty log as a system that was left alone.
 	ran bool
 	// edited is the configuration file exactly as the operator left it, so a later run is compared
 	// against the whole file rather than against one key of it.
@@ -47,7 +47,7 @@ func installFrom(ctx context.Context) *installWorld {
 func (i *installWorld) dockerLog() string { return filepath.Join(i.stubs, "calls") }
 
 // answerDockerWith writes the double. running is what `docker compose ps --status running --quiet`
-// answers: one container id per line, and nothing at all when the crew is down.
+// answers: one container id per line, and nothing at all when the system is down.
 func (i *installWorld) answerDockerWith(running int) error {
 	ids := ""
 	for n := range running {
@@ -64,8 +64,8 @@ func (i *installWorld) answerDockerWith(running int) error {
 
 // run drives one make target, with whatever the operator typed on its standard input.
 func (i *installWorld) run(typed string, args ...string) error {
-	// One run, one log. Counting over a crew that has been run before would read the earlier run's
-	// own compose call as this one's, so a refusal would look like a crew that had been replaced.
+	// One run, one log. Counting over a system that has been run before would read the earlier run's
+	// own compose call as this one's, so a refusal would look like a system that had been replaced.
 	if err := os.Remove(i.dockerLog()); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -108,7 +108,7 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 			return ctx, err
 		}
 		i := &installWorld{
-			home:  filepath.Join(base, "crew"),
+			home:  filepath.Join(base, "system"),
 			bin:   filepath.Join(base, "bin"),
 			stubs: filepath.Join(base, "stubs"),
 		}
@@ -118,13 +118,13 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, installKey{}, i), nil
 	})
 
-	sc.Step(`^a machine with no crew on it$`, func(ctx context.Context) error {
+	sc.Step(`^a machine with no system on it$`, func(ctx context.Context) error {
 		return installFrom(ctx).answerDockerWith(0)
 	})
 
-	sc.Step(`^a machine with a crew already running$`, func(ctx context.Context) error {
+	sc.Step(`^a machine with a system already running$`, func(ctx context.Context) error {
 		i := installFrom(ctx)
-		// It is a crew that was installed once and is up now, not a bare machine with containers on
+		// It is a system that was installed once and is up now, not a bare machine with containers on
 		// it, because the question the refusal answers is what a second run costs.
 		if err := i.answerDockerWith(0); err != nil {
 			return err
@@ -133,7 +133,7 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if i.failed {
-			return fmt.Errorf("the first run failed, so there is no running crew to test against:\n%s", i.said)
+			return fmt.Errorf("the first run failed, so there is no running system to test against:\n%s", i.said)
 		}
 		return i.answerDockerWith(2)
 	})
@@ -180,19 +180,19 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 	// issue 419 is open about one layer up.
 	sc.Step(`^it refuses$`, func(ctx context.Context) error {
 		if i := installFrom(ctx); !i.failed {
-			return fmt.Errorf("it exited 0, so a caller reads the refusal as a crew that came up:\n%s", i.said)
+			return fmt.Errorf("it exited 0, so a caller reads the refusal as a system that came up:\n%s", i.said)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew has a configuration file$`, func(ctx context.Context) error {
+	sc.Step(`^the system has a configuration file$`, func(ctx context.Context) error {
 		if _, err := os.Stat(filepath.Join(installFrom(ctx).home, "env")); err != nil {
 			return fmt.Errorf("there is no configuration file, so compose is pointed at nothing: %w", err)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew has a data directory$`, func(ctx context.Context) error {
+	sc.Step(`^the system has a data directory$`, func(ctx context.Context) error {
 		if _, err := os.Stat(filepath.Join(installFrom(ctx).home, "data")); err != nil {
 			return fmt.Errorf("there is no data directory, so docker would make it as root: %w", err)
 		}
@@ -262,14 +262,14 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 		for _, row := range listed.Rows {
 			one := row.Cells[0].Value
 			if !strings.Contains(i.said, one) {
-				return fmt.Errorf("it never printed %q, so the operator has a crew and no next step:\n%s",
+				return fmt.Errorf("it never printed %q, so the operator has a system and no next step:\n%s",
 					one, i.said)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^it says the crew is already up$`, func(ctx context.Context) error {
+	sc.Step(`^it says the system is already up$`, func(ctx context.Context) error {
 		i := installFrom(ctx)
 		if !strings.Contains(i.said, "already up") {
 			return fmt.Errorf("it never says why it stopped:\n%s", i.said)

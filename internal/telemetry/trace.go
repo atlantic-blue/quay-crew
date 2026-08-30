@@ -17,12 +17,12 @@ import (
 //
 // It goes on the task and never on the sandbox. A sandbox is born with its environment and is reused
 // across tasks, so a value written at birth labels every later task with the first task's span. That
-// is the trap the crew's own refusal message names: a capability granted after birth does not reach
+// is the trap the system's own refusal message names: a capability granted after birth does not reach
 // the container that is already running, and a trace context written at birth never changes again.
 const TraceparentEnv = "QC_TRACEPARENT"
 
-// Tracer is where the crew's own spans come from. One name, so a reader filtering a trace by
-// instrumentation scope gets the crew's spans and not the library's.
+// Tracer is where the system's own spans come from. One name, so a reader filtering a trace by
+// instrumentation scope gets the system's spans and not the library's.
 const Tracer = "github.com/atlantic-blue/quay-crew"
 
 // TraceIDFrom is the trace the context belongs to, and empty when nothing is tracing it. It is the
@@ -51,7 +51,7 @@ func SpanIDFrom(ctx context.Context) string {
 // It is minted rather than left empty because the identifier is what joins the tree together
 // afterwards. A root with none leaves every descendant unjoined.
 func NewTraceID() string {
-	// Minted here rather than by opening a span, because a crew with no tracer provider installed
+	// Minted here rather than by opening a span, because a system with no tracer provider installed
 	// would get nothing from one and the identifier has to exist either way: it is what joins the
 	// rows, and the rows are kept whether or not anybody is exporting spans.
 	var id [16]byte
@@ -93,11 +93,11 @@ func Traceparent(ctx context.Context) string {
 		byte(span.TraceFlags()&trace.FlagsSampled))
 }
 
-// Record emits a span for something that already finished, between two moments the crew knows.
+// Record emits a span for something that already finished, between two moments the system knows.
 //
 // A span is normally opened and closed by the code inside it. A job cannot be: it outlives
 // the process that declared it, it is picked up by whichever controller has the lease, and a span
-// object held in memory across that would be lost with the first controller that died. So the crew
+// object held in memory across that would be lost with the first controller that died. So the system
 // records the span when it knows both ends, from the timestamps on the row.
 //
 // The cost is stated: these spans are siblings under the same parent rather than parents of one

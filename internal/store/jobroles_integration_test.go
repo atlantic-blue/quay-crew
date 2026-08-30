@@ -22,11 +22,11 @@ import (
 //
 // The unit tier proves the controller's decisions against doubles. What only this tier reaches is
 // the crossing: the role and what the job requires are columns, they are read back by a different
-// process than wrote them, and the session the crew builds either carries the role or does not.
+// process than wrote them, and the session the system builds either carries the role or does not.
 
-// aCrewWithRoles stands the control plane up on a real database, with a provider that records every
+// aSystemWithRoles stands the control plane up on a real database, with a provider that records every
 // sandbox it was asked for, which is how a test says no container started.
-func aCrewWithRoles(t *testing.T, runner model.Runner) (*controlplane.Server, *sandbox.FakeProvider) {
+func aSystemWithRoles(t *testing.T, runner model.Runner) (*controlplane.Server, *sandbox.FakeProvider) {
 	t.Helper()
 	truncate(t)
 	kept, err := store.NewPostgres(context.Background(), databaseURL)
@@ -66,7 +66,7 @@ func importRoleOnPostgres(t *testing.T, s *controlplane.Server, workspace, name 
 // The whole of what this slice buys, against the database that holds it: job names a role and the
 // session that runs it runs as that role.
 func TestJobInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{Reply: "nine pull requests are open"})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{Reply: "nine pull requests are open"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	importRoleOnPostgres(t, s, workspace, "backlog-clearer", 1, "job", "context")
@@ -85,7 +85,7 @@ func TestJobInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	// The session, not the row: what decides whether the boundary is real is the conversation the
-	// crew actually built, and the row saying "backlog-clearer" proves nothing about it.
+	// system actually built, and the row saying "backlog-clearer" proves nothing about it.
 	listed, err := s.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
@@ -101,14 +101,14 @@ func TestJobInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("the crew holds no session %s, so nothing can reach the conversation", done.GetSession())
+		t.Fatalf("the system holds no session %s, so nothing can reach the conversation", done.GetSession())
 	}
 }
 
 // The credential that task runs under carries what the role declared it may call. Read here rather
 // than inside a sandbox, because what a credential holds is the whole boundary.
 func TestTheCredentialForJobInARoleCarriesThatRolesVerbsInPostgres(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{Reply: "done"})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	importRoleOnPostgres(t, s, workspace, "backlog-clearer", 1, "job")
@@ -126,7 +126,7 @@ func TestTheCredentialForJobInARoleCarriesThatRolesVerbsInPostgres(t *testing.T)
 	}
 	grant, held := s.Grants().Grant(token)
 	if !held {
-		t.Fatal("the crew does not recognise the credential it minted")
+		t.Fatal("the system does not recognise the credential it minted")
 	}
 	// This role declared no verbs list, so it may call nothing. Default deny, the same direction the
 	// capability model already took.
@@ -142,7 +142,7 @@ func TestTheCredentialForJobInARoleCarriesThatRolesVerbsInPostgres(t *testing.T)
 // role was attached receiving context when the job was declared, and a version that receives less
 // was attached while the job sat pending.
 func TestJobRequiringWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPostgres(t *testing.T) {
-	s, boxes := aCrewWithRoles(t, &model.FakeRunner{Reply: "done"})
+	s, boxes := aSystemWithRoles(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	importRoleOnPostgres(t, s, workspace, "test-writer", 1, "job", "context")
@@ -165,7 +165,7 @@ func TestJobRequiringWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPos
 		}
 	}
 	if boxes.Asked() != 0 {
-		t.Fatalf("the crew was asked for %d sandboxes, want none: job is refused before a container starts",
+		t.Fatalf("the system was asked for %d sandboxes, want none: job is refused before a container starts",
 			boxes.Asked())
 	}
 	if stopped.GetSession() != "" {
@@ -173,10 +173,10 @@ func TestJobRequiringWhatItsRoleStoppedReceivingIsRefusedBeforeAnyContainerInPos
 	}
 }
 
-// Job with no role is untouched by any of this, over the same database, in the same crew that holds
+// Job with no role is untouched by any of this, over the same database, in the same system that holds
 // a role.
 func TestJobWithNoRoleStillRunsAndBuildsItsContainerInPostgres(t *testing.T) {
-	s, boxes := aCrewWithRoles(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	s, boxes := aSystemWithRoles(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	importRoleOnPostgres(t, s, workspace, "test-writer", 1, "job")
@@ -197,14 +197,14 @@ func TestJobWithNoRoleStillRunsAndBuildsItsContainerInPostgres(t *testing.T) {
 		t.Fatalf("the job runs as %q, want as nobody", done.GetRole())
 	}
 	if boxes.Asked() == 0 {
-		t.Fatal("the crew was asked for no sandbox, so the job never ran")
+		t.Fatal("the system was asked for no sandbox, so the job never ran")
 	}
 }
 
 // The record of a refusal reads the way it happened: claimed, then stopped, and no line saying a
 // task was started that never was.
 func TestRefusedJobIsClaimedAndStoppedAndNeverStartedInPostgres(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{Reply: "done"})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	kept, err := store.NewPostgres(ctx, databaseURL)
 	if err != nil {

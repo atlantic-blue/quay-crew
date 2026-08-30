@@ -228,7 +228,7 @@ func TestTheCredentialAJobRunsUnderCarriesItsRolesVerbs(t *testing.T) {
 	}
 	grant, recognised := s.Grants().Grant(token)
 	if !recognised {
-		t.Fatal("the crew does not recognise the credential it minted")
+		t.Fatal("the system does not recognise the credential it minted")
 	}
 	if grant.Job != declared.GetJob().GetId() {
 		t.Fatalf("the credential is bound to %q, want the job it was minted for", grant.Job)
@@ -324,7 +324,7 @@ func TestTheCredentialTravelsOnTheTaskAndNeverAtSandboxBirth(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
 	s := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: runner, Provider: provider, Secrets: secrets.NewMemory(),
-		// A crew a session could reach, because a credential is only written where the address is.
+		// A system a session could reach, because a credential is only written where the address is.
 		Reachable: "controlplane:50051",
 	})
 	_, project := newProject(t, s)
@@ -358,7 +358,7 @@ func TestTheCredentialTravelsOnTheTaskAndNeverAtSandboxBirth(t *testing.T) {
 	}
 }
 
-// A task that runs no job carries no credential at all, which is every task the crew ran
+// A task that runs no job carries no credential at all, which is every task the system ran
 // before this existed.
 func TestATaskThatRunsNoJobCarriesNoCredential(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "done"}

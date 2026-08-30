@@ -18,7 +18,7 @@ import (
 // up, and still not know how close the machine was. See issue 457.
 //
 // The figure is every container on the daemon rather than the rows above it, because the limit binds
-// all of them and the crew's own services are in there too. The line says so: the rows add up to
+// all of them and the system's own services are in there too. The line says so: the rows add up to
 // less than this and an operator who is not told which figure they are reading distrusts both.
 func roomSummary(answer *quaycrewv1.GetHeadroomResponse) (string, State) {
 	if answer == nil {
@@ -27,7 +27,7 @@ func roomSummary(answer *quaycrewv1.GetHeadroomResponse) (string, State) {
 	// Nothing measured this machine. Zeroes here would read as a machine holding nothing, so the line
 	// says the word and the reason, which is what an operator goes and acts on.
 	if answer.GetState() == headroom.StateUnknown || !measuredBoth(answer) {
-		line := headroom.StateUnknown + "   the crew has not read this machine"
+		line := headroom.StateUnknown + "   the system has not read this machine"
 		if why := answer.GetFailed(); why != "" {
 			line += ": " + why
 		}
@@ -59,7 +59,7 @@ func freeBytes(answer *quaycrewv1.GetHeadroomResponse) int64 {
 // fitPhrase is what is left, in the unit the operator acts in: sandboxes.
 //
 // A sandbox asks for a measured 1,536 mebibytes, read every two seconds over 808 samples of the work
-// this crew's sandboxes do. See internal/capacity/measured.go. Dividing megabytes by that in your
+// this system's sandboxes do. See internal/capacity/measured.go. Dividing megabytes by that in your
 // head is exactly the arithmetic this line exists to save.
 func fitPhrase(free int64) string {
 	switch fits := free / capacity.RequestMemory; fits {
@@ -74,7 +74,7 @@ func fitPhrase(free int64) string {
 
 // roomWordOf is the word the line carries and the colour it is drawn in.
 //
-// The crew's own word comes first, so the view and the header never say two different things about
+// The system's own word comes first, so the view and the header never say two different things about
 // one machine. It is a fraction of the binding limit and the repository says plainly that nothing
 // measured those fractions, so one case is added underneath: a margin that will not hold another
 // sandbox is never healthy, however small a fraction of the machine it is. That threshold is
@@ -99,9 +99,9 @@ func roomWordOf(state string, free int64) (string, State) {
 	}
 }
 
-// roomSummaryFrom asks the crew what the machine has left and writes the view's line from it.
+// roomSummaryFrom asks the system what the machine has left and writes the view's line from it.
 //
-// It is a second call beside the listing's own, and it costs nothing: the crew answers both from the
+// It is a second call beside the listing's own, and it costs nothing: the system answers both from the
 // sample it took on its own timer, which is the whole reason the header may ask every second.
 func roomSummaryFrom(client quaycrewv1.ControlPlaneServiceClient) Summariser {
 	return func(ctx context.Context, _ string) (string, State) {

@@ -15,7 +15,7 @@ Feature: An answer comes back out as data
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew listens on an address the tool can dial
+    And the system listens on an address the tool can dial
 
   Scenario: The reply is the whole of standard output
     Given a session that was asked "when is the electricity bill due"

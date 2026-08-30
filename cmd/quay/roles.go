@@ -12,7 +12,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/role"
 )
 
-// runRole drives the crew's roles from the command line: what it holds, what a workspace holds, and
+// runRole drives the system's roles from the command line: what it holds, what a workspace holds, and
 // giving or taking one away.
 //
 // Importing reads the directory here rather than sending a path, for the reason a skill import does:
@@ -91,9 +91,9 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		return fmt.Errorf("usage: quay role list [<workspace>]")
 	}
 
-	// With no address, this is what the crew holds. With a workspace, what that workspace holds.
+	// With no address, this is what the system holds. With a workspace, what that workspace holds.
 	request := &quaycrewv1.ListRolesRequest{}
-	where := "the crew"
+	where := "the system"
 	if typed != "" {
 		located, err := locate(ctx, client, typed)
 		if err != nil {
@@ -107,7 +107,7 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
-	read := heldBy("roles", where, "quay role list on its own reads what the crew holds")
+	read := heldBy("roles", where, "quay role list on its own reads what the system holds")
 	if len(resp.GetRoles()) == 0 {
 		read.nothing(out)
 		return nil
@@ -119,8 +119,8 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		// of its own rather than a word at the end of another one.
 		fmt.Fprintf(out, "%-16s      receives %s\n", "", strings.Join(held.GetReceives(), ", "))
 		writeOrigin(out, fmt.Sprintf("%-16s      ", ""), held)
-		if held.GetCrew() {
-			fmt.Fprintf(out, "%-16s      held by the crew, so every workspace has it\n", "")
+		if held.GetSystem() {
+			fmt.Fprintf(out, "%-16s      held by the system, so every workspace has it\n", "")
 		}
 	}
 	read.counted(out, len(resp.GetRoles()))
@@ -133,7 +133,7 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 // The brief is the role. Everything above it in this output is a line a listing already prints, and
 // the reason they are repeated here is that an operator reading a brief wants to know which brief:
 // the version, the model and the boundary are what a role is, and reading a brief without them is
-// reading a document with no idea which crew is running it.
+// reading a document with no idea which system is running it.
 func runRoleShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	name, typed, err := roleAndAddress(args, "show")
 	if err != nil {
@@ -174,13 +174,13 @@ func writeRole(out io.Writer, resp *quaycrewv1.GetRoleResponse) {
 	} else {
 		fmt.Fprintln(out, "verbs none, so it may call nothing")
 	}
-	if shown.GetCrew() {
-		fmt.Fprintln(out, "held by the crew, so every workspace has it")
+	if shown.GetSystem() {
+		fmt.Fprintln(out, "held by the system, so every workspace has it")
 	}
 	if holders := resp.GetHeldBy(); len(holders) > 0 {
 		fmt.Fprintf(out, "attached by %s\n", strings.Join(holders, ", "))
 	}
-	if !shown.GetCrew() && len(resp.GetHeldBy()) == 0 {
+	if !shown.GetSystem() && len(resp.GetHeldBy()) == 0 {
 		fmt.Fprintln(out, "nothing holds it, so no session runs as it yet")
 	}
 	if stamp := shown.GetImportedAt(); stamp.IsValid() {
@@ -195,14 +195,14 @@ func runRoleAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
-	// "crew" where a workspace goes, the same word quay skill attach and quay context set take, and
-	// it means the same thing: everything this crew does, the workspaces made after today included.
-	if typed == crewScope {
-		resp, err := client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{Scope: crewScope, Name: name})
+	// "system" where a workspace goes, the same word quay skill attach and quay context set take, and
+	// it means the same thing: everything this system does, the workspaces made after today included.
+	if typed == systemScope {
+		resp, err := client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{Scope: systemScope, Name: name})
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "the crew holds the %s role, version %d, so every workspace has it\n",
+		fmt.Fprintf(out, "the system holds the %s role, version %d, so every workspace has it\n",
 			resp.GetRole().GetName(), resp.GetRole().GetVersion())
 		return nil
 	}
@@ -226,13 +226,13 @@ func runRoleDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
-	if typed == crewScope {
+	if typed == systemScope {
 		if _, err := client.DetachRole(ctx, &quaycrewv1.DetachRoleRequest{
-			Scope: crewScope, Name: name,
+			Scope: systemScope, Name: name,
 		}); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "the crew no longer holds the %s role\n", name)
+		fmt.Fprintf(out, "the system no longer holds the %s role\n", name)
 		fmt.Fprintln(out, "a workspace that attached it for itself keeps it")
 		return nil
 	}

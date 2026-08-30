@@ -4,7 +4,7 @@ Feature: A parallel change does not collide in the changelog
   Every conflict was `CHANGELOG.md` and nothing else: every other file merged on its own, including
   the ones worth a human reading. The cause was the shape of the file rather than any of the changes.
   Each one wrote its entry at the top of one shared file, so any two changes written at once collided
-  there by construction, and the answer was always the same and always mechanical. The crew paid a
+  there by construction, and the answer was always the same and always mechanical. The system paid a
   sandbox each to work it out again.
 
   An entry now goes in its own file under `changelog.d/`, named after the issue it closes. Two

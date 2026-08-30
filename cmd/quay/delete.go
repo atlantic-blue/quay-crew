@@ -14,7 +14,7 @@ import (
 
 // runWorkspaceDelete removes a workspace, everything under it, and everything those held.
 //
-// Until this existed a crew only ever grew: a workspace made by a typo was there for good, and
+// Until this existed a system only ever grew: a workspace made by a typo was there for good, and
 // starting again meant going around the tool into Docker and the data directory.
 func runWorkspaceDelete(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) != 1 {
@@ -116,11 +116,11 @@ func whatAWorkspaceHolds(ctx context.Context, client quaycrewv1.ControlPlaneServ
 	if err != nil {
 		return "", "", err
 	}
-	// Only what this workspace set itself. The crew's own reach it and survive it, so counting them
+	// Only what this workspace set itself. The system's own reach it and survive it, so counting them
 	// here would say a removal takes credentials with it that every other workspace still has.
 	own := 0
 	for _, secret := range secrets.GetSecrets() {
-		if !secret.GetCrew() {
+		if !secret.GetSystem() {
 			own++
 		}
 	}

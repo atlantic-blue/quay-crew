@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// A listing narrowed to where the operator is standing looks exactly like a crew that holds
+// A listing narrowed to where the operator is standing looks exactly like a system that holds
 // nothing else. The operator ran `quay job list`, read one row, and asked where the other nine
 // were: they were in the project next door, and nothing on the screen said a scope had been
 // applied. So every listing names what it read.
@@ -22,13 +22,13 @@ func TestEveryListingNamesTheAddressItRead(t *testing.T) {
 		{[]string{"job", "list"}, "me/house-bills"},
 		{[]string{"flow", "list"}, "me/house-bills"},
 		{[]string{"sessions"}, "me/house-bills"},
-		{[]string{"workspace", "list"}, "this crew"},
-		{[]string{"project", "list"}, "this crew"},
+		{[]string{"workspace", "list"}, "this system"},
+		{[]string{"project", "list"}, "this system"},
 		{[]string{"project", "list", "me"}, "me"},
-		{[]string{"secret", "list"}, "this crew"},
-		{[]string{"skill", "list"}, "the crew"},
-		{[]string{"role", "list"}, "the crew"},
-		{[]string{"hook", "list"}, "the crew"},
+		{[]string{"secret", "list"}, "this system"},
+		{[]string{"skill", "list"}, "the system"},
+		{[]string{"role", "list"}, "the system"},
+		{[]string{"hook", "list"}, "the system"},
 	} {
 		said := mustRun(t, client, listing.args...)
 		if !strings.Contains(said, listing.names) {
@@ -55,14 +55,14 @@ func TestANarrowedJobListingSaysWhereItLookedAndHowToWiden(t *testing.T) {
 	if !strings.Contains(narrowed, "1 job in atlantic-blue/transcript") {
 		t.Errorf("the listing does not say what it read:\n%s", narrowed)
 	}
-	if !strings.Contains(narrowed, "quay job list crew") {
+	if !strings.Contains(narrowed, "quay job list system") {
 		t.Errorf("the listing does not say what would widen it:\n%s", narrowed)
 	}
 }
 
 // The word that widens it. A listing that reads every project has to say which project each row is
 // in, or the rows are a heap of identifiers with no address on any of them.
-func TestTheCrewWordReadsEveryProjectAndMarksEachRow(t *testing.T) {
+func TestTheSystemWordReadsEveryProjectAndMarksEachRow(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "atlantic-blue")
 	mustRun(t, client, "project", "create", "quay-crew")
@@ -70,19 +70,19 @@ func TestTheCrewWordReadsEveryProjectAndMarksEachRow(t *testing.T) {
 	mustRun(t, client, "project", "create", "transcript")
 	mustRun(t, client, "job", "create", "--title", "a page that turns a video into text", "--brief", "serve it")
 
-	whole := mustRun(t, client, "job", "list", "crew")
+	whole := mustRun(t, client, "job", "list", "system")
 	if !strings.Contains(whole, "the observability slice") || !strings.Contains(whole, "a page that turns") {
-		t.Fatalf("the crew word did not read every project:\n%s", whole)
+		t.Fatalf("the system word did not read every project:\n%s", whole)
 	}
 	if !strings.Contains(whole, "atlantic-blue/quay-crew") || !strings.Contains(whole, "atlantic-blue/transcript") {
 		t.Errorf("the rows do not say which project each job is in:\n%s", whole)
 	}
-	if !strings.Contains(whole, "2 jobs in this crew") {
-		t.Errorf("the listing does not say it read the whole crew:\n%s", whole)
+	if !strings.Contains(whole, "2 jobs in this system") {
+		t.Errorf("the listing does not say it read the whole system:\n%s", whole)
 	}
 }
 
-// An empty listing has the same problem in reverse: "no jobs here yet" reads as a crew with no work
+// An empty listing has the same problem in reverse: "no jobs here yet" reads as a system with no work
 // in it, when the work is one address away.
 func TestAnEmptyJobListingSaysWhereItLooked(t *testing.T) {
 	client := testClient(t)
@@ -95,13 +95,13 @@ func TestAnEmptyJobListingSaysWhereItLooked(t *testing.T) {
 	if !strings.Contains(empty, "no jobs in atlantic-blue/transcript") {
 		t.Errorf("an empty listing does not say where it looked:\n%s", empty)
 	}
-	if !strings.Contains(empty, "quay job list crew") {
+	if !strings.Contains(empty, "quay job list system") {
 		t.Errorf("an empty listing does not say what would widen it:\n%s", empty)
 	}
 }
 
 // The same word on the other two listings that narrow to where you stand.
-func TestTheCrewWordWidensEveryListingThatNarrows(t *testing.T) {
+func TestTheSystemWordWidensEveryListingThatNarrows(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
@@ -109,16 +109,16 @@ func TestTheCrewWordWidensEveryListingThatNarrows(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "project", "create", "other")
 
-	if said := mustRun(t, client, "sessions", "crew"); !strings.Contains(said, "house-bills") {
-		t.Errorf("quay sessions crew did not read every workspace:\n%s", said)
+	if said := mustRun(t, client, "sessions", "system"); !strings.Contains(said, "house-bills") {
+		t.Errorf("quay sessions system did not read every workspace:\n%s", said)
 	}
-	if said := mustRun(t, client, "flow", "list", "crew"); !strings.Contains(said, "this crew") {
-		t.Errorf("quay flow list crew did not say it read the whole crew:\n%s", said)
+	if said := mustRun(t, client, "flow", "list", "system"); !strings.Contains(said, "this system") {
+		t.Errorf("quay flow list system did not say it read the whole system:\n%s", said)
 	}
 }
 
 // The advice has to be advice that works. The sentence under a narrowed session listing used to
-// read "quay sessions on its own lists the whole crew", and on its own is exactly what the operator
+// read "quay sessions on its own lists the whole system", and on its own is exactly what the operator
 // had just typed: standing somewhere, it narrows again.
 func TestTheWideningAdviceIsTypeable(t *testing.T) {
 	client := testClient(t)
@@ -132,10 +132,10 @@ func TestTheWideningAdviceIsTypeable(t *testing.T) {
 	if strings.Contains(narrowed, "on its own") {
 		t.Errorf("the listing offers advice that narrows again:\n%s", narrowed)
 	}
-	if !strings.Contains(narrowed, "quay sessions crew") {
+	if !strings.Contains(narrowed, "quay sessions system") {
 		t.Errorf("the listing does not say what would widen it:\n%s", narrowed)
 	}
-	if said := mustRun(t, client, "sessions", "crew"); !strings.Contains(said, "house-bills") {
+	if said := mustRun(t, client, "sessions", "system"); !strings.Contains(said, "house-bills") {
 		t.Errorf("the advice it gave does not widen anything:\n%s", said)
 	}
 }

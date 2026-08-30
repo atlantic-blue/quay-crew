@@ -16,8 +16,8 @@ import (
 // The steps that run the real command line tool in its own process.
 //
 // What a caller sees is which stream a thing went to and what the exit status was, and neither of
-// those exists inside the test process. Every other scenario dials the crew over an in memory
-// connection, which a second process cannot reach, so a scenario that runs the tool asks the crew
+// those exists inside the test process. Every other scenario dials the system over an in memory
+// connection, which a second process cannot reach, so a scenario that runs the tool asks the system
 // for a network address of its own first.
 
 // toolBuild is the build the scenarios' copy of the tool reports for itself, stamped the way the
@@ -49,10 +49,10 @@ func initializeToolSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, toolKey{}, &toolWorld{}), nil
 	})
 
-	sc.Step(`^the crew listens on an address the tool can dial$`, listenForTool)
+	sc.Step(`^the system listens on an address the tool can dial$`, listenForTool)
 
-	// An address with nothing on it, which is what a crew that is down looks like from here.
-	sc.Step(`^the crew cannot be reached$`, func(ctx context.Context) error {
+	// An address with nothing on it, which is what a system that is down looks like from here.
+	sc.Step(`^the system cannot be reached$`, func(ctx context.Context) error {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return err
@@ -112,7 +112,7 @@ func initializeToolSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// listenForTool puts the crew on a network address, which is the only way a second process reaches
+// listenForTool puts the system on a network address, which is the only way a second process reaches
 // it. A control plane started again is a different server, so this runs again after any restart.
 func listenForTool(ctx context.Context) error {
 	w, t := worldFrom(ctx), toolFrom(ctx)
@@ -139,7 +139,7 @@ func runTool(ctx context.Context, args ...string) error {
 func runToolSaying(ctx context.Context, in string, args ...string) error {
 	t := toolFrom(ctx)
 	if t.address == "" {
-		return fmt.Errorf("the crew has no address the tool can dial")
+		return fmt.Errorf("the system has no address the tool can dial")
 	}
 	binary, err := quayBinary()
 	if err != nil {

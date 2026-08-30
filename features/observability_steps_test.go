@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// spans holds every span the crew ended during the suite. The provider is installed at package
+// spans holds every span the system ended during the suite. The provider is installed at package
 // initialisation rather than in a hook, because the gRPC instrumentation reads the global provider
 // once when the server is built, and a server built before the provider is set records nothing.
 //
@@ -62,7 +62,7 @@ func (refusingEventLog) ConsumePattern(context.Context, string, string, messagin
 
 func (refusingEventLog) Close() {}
 
-// loggedLines decodes what the crew wrote during this scenario, oldest first.
+// loggedLines decodes what the system wrote during this scenario, oldest first.
 func loggedLines(o *observabilityWorld) ([]map[string]any, error) {
 	read := make([]map[string]any, 0)
 	for _, raw := range bytes.Split(bytes.TrimSpace(o.logs.Bytes()), []byte("\n")) {
@@ -71,14 +71,14 @@ func loggedLines(o *observabilityWorld) ([]map[string]any, error) {
 		}
 		var line map[string]any
 		if err := json.Unmarshal(raw, &line); err != nil {
-			return nil, fmt.Errorf("the crew wrote a line that is not JSON: %w: %s", err, raw)
+			return nil, fmt.Errorf("the system wrote a line that is not JSON: %w: %s", err, raw)
 		}
 		read = append(read, line)
 	}
 	return read, nil
 }
 
-// endedSpanNames is what the crew recorded, so a failure says what was there instead of nothing.
+// endedSpanNames is what the system recorded, so a failure says what was there instead of nothing.
 func endedSpanNames() []string {
 	ended := spans.GetSpans()
 	names := make([]string, 0, len(ended))
@@ -100,7 +100,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 	sc.Step(`^an event log that refuses what it is given$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.eventsRefuse = true
-		// Standing the control plane up again over the same store is what a crew whose broker went bad
+		// Standing the control plane up again over the same store is what a system whose broker went bad
 		// looks like: the workspace and project from the background are still there.
 		return w.restart()
 	})
@@ -109,7 +109,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 	// call after the status has gone back to the caller. So a client that has its answer is not
 	// evidence that the span has landed, and reading once asserts on a set that may still be filling.
 	// The same shape as the exported task below, which waits for the same reason.
-	sc.Step(`^the crew records a span named "([^"]*)"$`, func(ctx context.Context, name string) error {
+	sc.Step(`^the system records a span named "([^"]*)"$`, func(ctx context.Context, name string) error {
 		deadline := time.Now().Add(2 * time.Second)
 		for {
 			ended := endedSpanNames()
@@ -119,13 +119,13 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 				}
 			}
 			if time.Now().After(deadline) {
-				return fmt.Errorf("no span named %q was recorded; the crew recorded %v", name, ended)
+				return fmt.Errorf("no span named %q was recorded; the system recorded %v", name, ended)
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	})
 
-	sc.Step(`^the crew says the task could not be exported$`, func(ctx context.Context) error {
+	sc.Step(`^the system says the task could not be exported$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		// The export happens inside a task, which runs detached from the call that started it, so
 		// asserting before the task lands would assert on a line not written yet.
@@ -143,7 +143,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 				return nil
 			}
 		}
-		return fmt.Errorf("the crew never said the task could not be exported; it wrote %d lines", len(lines))
+		return fmt.Errorf("the system never said the task could not be exported; it wrote %d lines", len(lines))
 	})
 
 	// The span is waited for, for the reason the step above gives: a stats handler sees the end of a
@@ -172,7 +172,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		}
 	})
 
-	sc.Step(`^the crew logs on its way up$`, func(ctx context.Context) error {
+	sc.Step(`^the system logs on its way up$`, func(ctx context.Context) error {
 		slog.Info("control plane serving")
 		return nil
 	})
@@ -195,6 +195,6 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		}
-		return fmt.Errorf("the crew wrote no line on its way up")
+		return fmt.Errorf("the system wrote no line on its way up")
 	})
 }

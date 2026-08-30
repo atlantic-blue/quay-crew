@@ -10,7 +10,7 @@ import (
 
 // The hooks this build ships, in hooks/ at the root of this repository, held to the same rules an
 // imported hook answers to. A first party hook that does not load is worse than none: it is the
-// example everybody copies, and a constraint the crew believes it seeded.
+// example everybody copies, and a constraint the system believes it seeded.
 //
 // The entry points are built rather than committed, so `make hooks` comes first. Every failure here
 // that names a missing entry point means that step was skipped.
@@ -79,8 +79,8 @@ func TestTheAnalyserCarriesNoneOfTheTypeScriptItReplaced(t *testing.T) {
 	}
 }
 
-// A hook is a plugin: somebody reviews it, versions it and hands it to another crew. It does not
-// share the crew's dependencies and it cannot import the crew's internals, and its own module is
+// A hook is a plugin: somebody reviews it, versions it and hands it to another system. It does not
+// share the system's dependencies and it cannot import the system's internals, and its own module is
 // what enforces both.
 func TestEachShippedHookIsItsOwnModuleWithNothingBehindIt(t *testing.T) {
 	hooks, err := Load("../../hooks")
@@ -90,7 +90,7 @@ func TestEachShippedHookIsItsOwnModuleWithNothingBehindIt(t *testing.T) {
 	for _, one := range hooks {
 		body, err := os.ReadFile(filepath.Join("../../hooks", one.Name, "go.mod"))
 		if err != nil {
-			t.Errorf("%s has no go.mod, so it is part of the crew rather than a plugin: %v", one.Name, err)
+			t.Errorf("%s has no go.mod, so it is part of the system rather than a plugin: %v", one.Name, err)
 			continue
 		}
 		if strings.Contains(string(body), "require") {
@@ -150,10 +150,10 @@ func TestTheAnalyserIsConfiguredForASandboxRatherThanTheOperatorsMachine(t *test
 		t.Fatalf("the config is not valid json: %v", err)
 	}
 	if len(config.SkillDirs) != 1 || config.SkillDirs[0] != "/home/agent/skills" {
-		t.Errorf("the analyser looks for skills in %v, and the crew mounts them at /home/agent/skills",
+		t.Errorf("the analyser looks for skills in %v, and the system mounts them at /home/agent/skills",
 			config.SkillDirs)
 	}
-	// The crew renders what a session is told into its memory file. There is no RULES.md in a sandbox.
+	// The system renders what a session is told into its memory file. There is no RULES.md in a sandbox.
 	if !strings.HasPrefix(config.RulesFile, "/home/agent/") {
 		t.Errorf("the analyser reads its rules from %q, which is not a path inside a sandbox", config.RulesFile)
 	}

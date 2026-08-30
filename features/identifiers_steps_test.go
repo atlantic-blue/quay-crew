@@ -118,7 +118,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator copies the handle out of the crew$`, func(ctx context.Context) error {
+	sc.Step(`^the operator copies the handle out of the system$`, func(ctx context.Context) error {
 		session, _, err := listedSession(ctx)
 		if err != nil {
 			return err
@@ -137,8 +137,8 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Each of these does what its command does: resolve what was typed, then make the crew call, then
-	// read the crew back. What is asserted is the state the session is left in, never the call.
+	// Each of these does what its command does: resolve what was typed, then make the system call, then
+	// read the system back. What is asserted is the state the session is left in, never the call.
 	sc.Step(`^dispatch on what was copied continues that session$`, func(ctx context.Context) error {
 		w, held := worldFrom(ctx), identifiersFrom(ctx)
 		before, err := w.lastTask()
@@ -292,7 +292,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator opens the console over the crew$`, func(ctx context.Context) error {
+	sc.Step(`^the operator opens the console over the system$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).openModel(worldFrom(ctx))
 	})
 
@@ -323,14 +323,14 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew holds (\d+) session$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system holds (\d+) session$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
 		resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
 		if len(resp.GetSessions()) != want {
-			return fmt.Errorf("the crew holds %d sessions, want %d: the refused word started one",
+			return fmt.Errorf("the system holds %d sessions, want %d: the refused word started one",
 				len(resp.GetSessions()), want)
 		}
 		return nil
@@ -361,7 +361,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the command is %q, want the sandbox of %s", line,
 				display.ShortID(current.sessionID))
 		}
-		// And the crew agrees: opening a conversation names one, so the session now holds it.
+		// And the system agrees: opening a conversation names one, so the session now holds it.
 		read, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: current.sessionID})
 		if err != nil {
 			return err
@@ -370,7 +370,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the session holds no conversation, so nothing was opened")
 		}
 		if !strings.Contains(line, read.GetSession().GetModelSessionId()) {
-			return fmt.Errorf("the command is %q, want the conversation %q the crew holds",
+			return fmt.Errorf("the command is %q, want the conversation %q the system holds",
 				line, read.GetSession().GetModelSessionId())
 		}
 		return nil

@@ -14,10 +14,10 @@ import (
 var conversationDir = sandbox.ConversationPath
 
 // rememberWindowSize writes down how big the model's context window is, inside the conversation
-// directory the crew mounts into this sandbox.
+// directory the system mounts into this sandbox.
 //
-// It is the only way the crew can ever learn the size. The size is not in the transcript, and a list
-// of models in the crew's own code would be right today and quietly wrong at the next one. The
+// It is the only way the system can ever learn the size. The size is not in the transcript, and a list
+// of models in the system's own code would be right today and quietly wrong at the next one. The
 // runtime says it here, to the status line, and nowhere else.
 //
 // A failure is silent. This runs on every draw of a line under somebody's prompt, and a status line

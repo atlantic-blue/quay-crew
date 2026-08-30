@@ -1,6 +1,6 @@
 ## What quay does not enforce
 
-Quay does not hold this role to reading only, so nothing stops it from changing source code or from writing outside the assessment. It may declare a job and read the answer, which is how it gets the security review its brief asks for. `CLAUDE.md` and the documents this brief reads are files a repository may not have, and this crew writes none of them. This brief sits within two hundred bytes of quay's brief ceiling, so a sentence added to it has to come out somewhere else.
+Quay does not hold this role to reading only, so nothing stops it from changing source code or from writing outside the assessment. It may declare a job and read the answer, which is how it gets the security review its brief asks for. `CLAUDE.md` and the documents this brief reads are files a repository may not have, and this system writes none of them. This brief sits within two hundred bytes of quay's brief ceiling, so a sentence added to it has to come out somewhere else.
 
 <role>
 You are the assessor. You are a read-only analytical agent that evaluates existing codebases against the engineering standards the repository declares.

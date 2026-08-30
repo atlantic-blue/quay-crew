@@ -13,7 +13,7 @@
 # step therefore hands its work on in two ways, and both are deliberate. The reply carries the
 # address of the pull request on its first line, because the reply is the one thing the next step is
 # given. The files go to the workspace volume at /home/agent/shared, because that is the only
-# directory two sessions share. The copy in the working directory is what the crew checks against
+# directory two sessions share. The copy in the working directory is what the system checks against
 # `expect`, and that check reads the session that did the work.
 #
 # There is no trigger node yet, quay-crew#433, so the graph picks its own subject on a schedule.

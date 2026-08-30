@@ -42,8 +42,8 @@ edges:
   - [push, done]
 `
 
-// driveFlow ticks the two loops the crew runs on its own until the run reaches a status, which is
-// what the crew does every few seconds.
+// driveFlow ticks the two loops the system runs on its own until the run reaches a status, which is
+// what the system does every few seconds.
 func driveFlow(t *testing.T, s *controlplane.Server, id, want string) *quaycrewv1.FlowRun {
 	t.Helper()
 	ctx := context.Background()
@@ -87,7 +87,7 @@ func startedFlow(t *testing.T, s *controlplane.Server, project, definition strin
 //
 // model.FakeRunner hands back one canned reply whatever it is asked, which is right for a test about
 // a phase and useless for a test about an answer: every step would carry the same string, and the
-// assertion would hold just as well if the crew wrote one step's answer onto the other's row. This is
+// assertion would hold just as well if the system wrote one step's answer onto the other's row. This is
 // what lets the answer be traced back to the task that gave it.
 type echoingRunner struct {
 	mu    sync.Mutex
@@ -107,7 +107,7 @@ func (e *echoingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Requ
 // The whole of what this slice buys, against the database that holds it: a run declares its step and
 // returns, a controller runs it, and the run carries on from the row.
 func TestAFlowRunDeclaresItsStepsAsJobInPostgres(t *testing.T) {
-	s, _ := aCrewWithAController(t, &echoingRunner{})
+	s, _ := aSystemWithAController(t, &echoingRunner{})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -185,7 +185,7 @@ func TestAFlowRunDeclaresItsStepsAsJobInPostgres(t *testing.T) {
 // The records quay-crew#349 named, against the database that keeps them. They are job events on the
 // job that carries the run, so one history covers the run and everything it did.
 func TestARunsOwnRecordsAreOnItsJobInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "done"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -219,7 +219,7 @@ func TestARunsOwnRecordsAreOnItsJobInPostgres(t *testing.T) {
 // the whole run. This is the case the bound exists for: a job that starts a flow that
 // starts more job.
 func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
-	s, _ := aCrewWithAController(t, &model.FakeRunner{Reply: "done"})
+	s, _ := aSystemWithAController(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -234,7 +234,7 @@ func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	// The credential a task of that job runs under, which is what makes the parent the crew's to
+	// The credential a task of that job runs under, which is what makes the parent the system's to
 	// assign rather than the caller's to claim.
 	token, minted := s.JobCredentialForTest(ctx, declared.GetJob().GetId())
 	if !minted {
@@ -242,7 +242,7 @@ func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
 	}
 	grant, recognised := s.Grants().Grant(token)
 	if !recognised {
-		t.Fatal("the crew does not recognise the credential it minted")
+		t.Fatal("the system does not recognise the credential it minted")
 	}
 	// The context a task of that job runs its calls under, which is what the interceptor builds from
 	// the credential in the sandbox.
@@ -301,7 +301,7 @@ func (m *modeRecordingRunner) modeOf(prompt string) string {
 // Both steps, because a mode read once and forgotten would pass on the first and fail on the second.
 func TestEveryStepOfARunIsDispatchedInTheModeItsGraphDeclaresInPostgres(t *testing.T) {
 	runner := &modeRecordingRunner{}
-	s, _ := aCrewWithAController(t, runner)
+	s, _ := aSystemWithAController(t, runner)
 	_, project := aProjectOnPostgres(t, s)
 
 	run := startedFlow(t, s, project, `
@@ -328,11 +328,11 @@ edges:
 	}
 }
 
-// The other mode, or a crew that handed every task bypassPermissions whatever the graph said would
+// The other mode, or a system that handed every task bypassPermissions whatever the graph said would
 // pass the test above and be the more dangerous of the two faults.
 func TestARunInANarrowerModeGetsThatModeInPostgres(t *testing.T) {
 	runner := &modeRecordingRunner{}
-	s, _ := aCrewWithAController(t, runner)
+	s, _ := aSystemWithAController(t, runner)
 	_, project := aProjectOnPostgres(t, s)
 
 	run := startedFlow(t, s, project, `

@@ -23,7 +23,7 @@ const OAuthToken = "CLAUDE_CODE_OAUTH_TOKEN"
 // sandbox. Claude Code removes OAuthToken from the environment of every process it starts, by that
 // name and no other, and the hook is one of those processes. It kept the name it was never given.
 //
-// So the crew writes the value under this name as well, beside QC_TOKEN and GH_TOKEN, which already
+// So the system writes the value under this name as well, beside QC_TOKEN and GH_TOKEN, which already
 // survive. The hook reads it and hands the child the name the command line expects.
 const ModelToken = "QUAY_MODEL_TOKEN"
 

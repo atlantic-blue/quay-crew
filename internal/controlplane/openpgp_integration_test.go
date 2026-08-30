@@ -119,7 +119,7 @@ func aCommitSignedWith(t *testing.T, image string, mounted map[string]string) st
 	container := sandbox.ContainerName(dispatched.GetId())
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", container).Run() })
 
-	// Everything from here runs through docker exec, because asking the crew whether the sandbox can
+	// Everything from here runs through docker exec, because asking the system whether the sandbox can
 	// sign is not evidence that it can. The keyring is read back with it: the key is imported into a
 	// memory backed directory, so it never reaches the writable layer the daemon keeps on disk.
 	return inTheSandbox(ctx, t, container, `set -e
@@ -160,7 +160,7 @@ func assertSignedBy(t *testing.T, said, fingerprint string) {
 // only, and no expiry: it lives as long as the temporary directory holding it.
 func anOpenPGPKey(t *testing.T, home, address, passphrase string) string {
 	t.Helper()
-	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay Crew Test <"+address+">", "ed25519", "sign", "0")
+	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay System Test <"+address+">", "ed25519", "sign", "0")
 	listed := gpgSays(t, home, passphrase, "--list-secret-keys", "--with-colons", address)
 	for _, line := range strings.Split(listed, "\n") {
 		if fields := strings.Split(line, ":"); fields[0] == "fpr" && len(fields) > 9 {

@@ -313,7 +313,7 @@ func cloneRun(run flow.Run) flow.Run {
 	return run
 }
 
-// schedule is one graph the crew starts on its own, as the memory store keeps it.
+// schedule is one graph the system starts on its own, as the memory store keeps it.
 type schedule struct {
 	every  time.Duration
 	nextAt time.Time

@@ -23,7 +23,7 @@ const (
 )
 
 // SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
-// rather than from anything the crew wrote down.
+// rather than from anything the system wrote down.
 //
 // Read from the sandbox because a stamp needs somebody to keep it fresh, how often is a number, and
 // no measurement has set one. The sandbox already knows: its own process table says whether a model
@@ -37,14 +37,14 @@ const (
 	// Nobody asked. It is not an answer, and a caller that reads it as "nothing is there" is making
 	// the mistake this field exists to stop.
 	SessionPresence_SESSION_PRESENCE_UNSPECIFIED SessionPresence = 0
-	// The crew asked and found nothing: no model runtime, and nobody attached. The only real idle.
+	// The system asked and found nothing: no model runtime, and nobody attached. The only real idle.
 	SessionPresence_SESSION_PRESENCE_EMPTY SessionPresence = 1
 	// A model runtime is up inside the sandbox with nobody watching it. A conversation somebody
 	// started and walked away from is here, and so is one still answering.
 	SessionPresence_SESSION_PRESENCE_AWAKE SessionPresence = 2
 	// Somebody has the conversation open.
 	SessionPresence_SESSION_PRESENCE_ATTACHED SessionPresence = 3
-	// The crew asked and could not be told: the daemon did not answer. Never idle, because a caller
+	// The system asked and could not be told: the daemon did not answer. Never idle, because a caller
 	// reads idle as licence to close a container.
 	SessionPresence_SESSION_PRESENCE_UNTOLD SessionPresence = 4
 )
@@ -292,7 +292,7 @@ type Project struct {
 	// pipeline's minutes are free on a public repository and metered on a private one, and that
 	// decision was being taken in a person's head, once per project.
 	//
-	// It is what the operator declared, not what the forge says. The crew does not go and look.
+	// It is what the operator declared, not what the forge says. The system does not go and look.
 	Visibility    string `protobuf:"bytes,7,opt,name=visibility,proto3" json:"visibility,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -454,14 +454,14 @@ func (x *DeployTarget) GetIdentity() string {
 // listing does not need a join; a project never moves workspace.
 type Session struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the crew's own identifier for this session. It names the session's sandbox container.
+	// id is the system's own identifier for this session. It names the session's sandbox container.
 	Id        string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Workspace string `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	// handle is the name a channel dispatches to: dispatch to the same handle and the conversation
 	// continues. It is chosen by whoever starts the session, or minted when nobody did.
 	Handle string `protobuf:"bytes,3,opt,name=handle,proto3" json:"handle,omitempty"`
 	// status is where the session is: "idle" when it is waiting for you, "running" while a task is under
-	// way, "failed" when the last task did not land, "reclaimed" when the crew took its container back,
+	// way, "failed" when the last task did not land, "reclaimed" when the system took its container back,
 	// and "stopped" when the session was put down.
 	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	// model_session_id is the model's own identifier for the conversation, in the model's own word,
@@ -477,7 +477,7 @@ type Session struct {
 	// "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to a task, so
 	// a session started to plan something keeps planning.
 	PermissionMode string `protobuf:"bytes,10,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
-	// driver says this session drives the crew rather than doing work inside it. It reaches the
+	// driver says this session drives the system rather than doing work inside it. It reaches the
 	// control plane's own interface, and whatever host paths the operator handed it, which an
 	// ordinary session does not.
 	Driver bool `protobuf:"varint,11,opt,name=driver,proto3" json:"driver,omitempty"`
@@ -492,27 +492,27 @@ type Session struct {
 	// label is what the operator calls this conversation, empty until they say. Nothing automatic ever
 	// writes it: a name somebody picked is the one thing in a listing that is certainly right.
 	Label string `protobuf:"bytes,14,opt,name=label,proto3" json:"label,omitempty"`
-	// description is what the crew observed the conversation to be, one line, written by the model that
+	// description is what the system observed the conversation to be, one line, written by the model that
 	// had the task. Empty until a task has happened. A listing prefers the label when there is one.
 	Description string `protobuf:"bytes,15,opt,name=description,proto3" json:"description,omitempty"`
 	// described_at_task is how many tasks the session had when its description was written, so a
 	// conversation that has moved on can be described again. Zero means never described.
 	DescribedAtTask int32 `protobuf:"varint,16,opt,name=described_at_task,json=describedAtTask,proto3" json:"described_at_task,omitempty"`
-	// context_window is how full the model's context window is. Absent where the crew cannot say.
+	// context_window is how full the model's context window is. Absent where the system cannot say.
 	ContextWindow *ContextWindow `protobuf:"bytes,17,opt,name=context_window,json=contextWindow,proto3" json:"context_window,omitempty"`
 	// role is the name of the role this session runs as, empty for a session that runs as nobody in
 	// particular. It is set when the session is made and never changes: the boundary a role declares
 	// has to hold for every task of the session, not only the first, and a sandbox is born with its
 	// capabilities anyway.
 	Role string `protobuf:"bytes,18,opt,name=role,proto3" json:"role,omitempty"`
-	// reclaimed_at is when the crew took this session's container back. Unset means it holds one, or
+	// reclaimed_at is when the system took this session's container back. Unset means it holds one, or
 	// never had one taken. The row, the conversation handle and the files on the host all stay, so the
 	// next task builds a fresh container over the same state and the conversation carries on.
 	//
 	// It is a stamp of its own rather than a reading of updated_at, because how long a session has been
 	// reclaimed is what the archive time is measured against, and updated_at moves on every write.
 	ReclaimedAt *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=reclaimed_at,json=reclaimedAt,proto3" json:"reclaimed_at,omitempty"`
-	// presence is what the crew found inside this session's sandbox, and it is the half of "is anything
+	// presence is what the system found inside this session's sandbox, and it is the half of "is anything
 	// happening here" that status never knew. status only says whether a dispatched task is open, so a
 	// session holding a conversation somebody started by hand read idle, and idle is the word that
 	// invites a restart, a drain or a reclaim.
@@ -712,7 +712,7 @@ func (x *Session) GetTitle() string {
 
 // ContextWindow is how full a conversation's context window is.
 //
-// This is the model's context window, not the crew's context documents. It is the number that says
+// This is the model's context window, not the system's context documents. It is the number that says
 // whether a conversation is still worth continuing, and it is not the same thing as what the
 // conversation has cost: cost only grows, while the window empties again when the model compacts.
 type ContextWindow struct {
@@ -721,7 +721,7 @@ type ContextWindow struct {
 	// back from the cache, because that is the context rather than the part of it charged as new. Read
 	// from the transcript the model keeps.
 	Used int64 `protobuf:"varint,1,opt,name=used,proto3" json:"used,omitempty"`
-	// size is how big the window is. The crew cannot work that out for itself, so this is what the
+	// size is how big the window is. The system cannot work that out for itself, so this is what the
 	// model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
 	// listing shows as a count rather than as a guessed share.
 	Size          int64 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
@@ -2788,12 +2788,12 @@ func (x *AttachChannelResponse) GetChannel() *Channel {
 // SetSecretRequest carries a secret value that is stored in the secrets backend, never returned.
 type SetSecretRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace it belongs to, and is ignored when scope is "crew".
+	// workspace is the workspace it belongs to, and is ignored when scope is "system".
 	Workspace  string           `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Key        string           `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Value      string           `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
 	Projection SecretProjection `protobuf:"varint,4,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew". A secret set on the crew
+	// scope is "workspace", which is what an empty value means, or "system". A secret set on the system
 	// reaches every workspace, including the ones made after it, which is the difference between
 	// setting a shared token once and setting it again for each workspace. A workspace that sets the
 	// same name keeps its own value.
@@ -2929,7 +2929,7 @@ type DispatchRequest struct {
 	// A workspace that does not hold the named role is refused by name, because a step that names a
 	// role nobody attached must fail with a sentence rather than half run.
 	Role string `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`
-	// job is the job this task runs for, and only the operator may name one. The crew mints
+	// job is the job this task runs for, and only the operator may name one. The system mints
 	// a credential bound to that job for this task and puts it in the environment of this task alone.
 	//
 	// Per task rather than at sandbox birth, because a sandbox is born with its configuration and keeps
@@ -2941,7 +2941,7 @@ type DispatchRequest struct {
 	// conversation since.
 	//
 	// It is what a caller that already knows the name sends. A job is declared with a title, and
-	// without this the crew is handed that name and drops it, which leaves a listing of running jobs
+	// without this the system is handed that name and drops it, which leaves a listing of running jobs
 	// waiting for a description written after the work is over.
 	Title         string `protobuf:"bytes,8,opt,name=title,proto3" json:"title,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3097,7 +3097,7 @@ func (x *DispatchResponse) GetReply() string {
 }
 
 // ListSessionsRequest filters by project when set, else by workspace when set, else lists all.
-// OpenDriverRequest asks for a project's driver, the session that drives the crew.
+// OpenDriverRequest asks for a project's driver, the session that drives the system.
 type OpenDriverRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -3864,7 +3864,7 @@ func (x *ArchiveSessionResponse) GetSession() *Session {
 // ReclaimSessionRequest takes a settled session's container back and leaves everything else.
 //
 // It is the controller's move rather than an operator's, and it is not a stop. A stop is somebody's
-// decision and reads as one; a reclaim is the crew saving memory on a session nobody is using, and
+// decision and reads as one; a reclaim is the system saving memory on a session nobody is using, and
 // the next task to arrive builds a fresh container over the same conversation and the same files.
 //
 // A session with a task under way is refused, and so is one an operator already stopped: overwriting
@@ -4092,7 +4092,7 @@ type ContextDir struct {
 	// state and says nothing about whether context is set up, so this is the difference worth showing.
 	Written bool `protobuf:"varint,6,opt,name=written,proto3" json:"written,omitempty"`
 	// owner is what to name when setting this context: a workspace or project identifier, and empty
-	// for the crew.
+	// for the system.
 	Owner string `protobuf:"bytes,7,opt,name=owner,proto3" json:"owner,omitempty"`
 	// body is what the model is told at this scope. It comes from the store, which is where context
 	// lives; the file in a sandbox is a rendering of it.
@@ -4187,11 +4187,11 @@ func (x *ContextDir) GetBody() string {
 	return ""
 }
 
-// SetContextRequest records what the model should be told at a scope. The crew's context has no
+// SetContextRequest records what the model should be told at a scope. The system's context has no
 // owner; a workspace's and a project's are owned by their identifier.
 type SetContextRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// scope is "crew", "workspace" or "project".
+	// scope is "system", "workspace" or "project".
 	Scope         string `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
 	Owner         string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
 	Body          string `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
@@ -4296,7 +4296,7 @@ func (x *SetContextResponse) GetDir() *ContextDir {
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
-// reader is the crew itself, at the moment a task needs it.
+// reader is the system itself, at the moment a task needs it.
 type SecretRef struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Workspace string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -4307,9 +4307,9 @@ type SecretRef struct {
 	// projection is how this one reaches a sandbox. Where it lands is not carried, because it is
 	// derived from the name and every reader would derive the same path.
 	Projection SecretProjection `protobuf:"varint,5,opt,name=projection,proto3,enum=quaycrew.v1.SecretProjection" json:"projection,omitempty"`
-	// crew says the crew holds this one, so every workspace reads it without setting anything. Its
+	// system says the system holds this one, so every workspace reads it without setting anything. Its
 	// workspace is then empty, because it belongs to no single workspace.
-	Crew          bool `protobuf:"varint,6,opt,name=crew,proto3" json:"crew,omitempty"`
+	System        bool `protobuf:"varint,6,opt,name=system,proto3" json:"system,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4379,15 +4379,15 @@ func (x *SecretRef) GetProjection() SecretProjection {
 	return SecretProjection_SECRET_PROJECTION_UNSPECIFIED
 }
 
-func (x *SecretRef) GetCrew() bool {
+func (x *SecretRef) GetSystem() bool {
 	if x != nil {
-		return x.Crew
+		return x.System
 	}
 	return false
 }
 
 // ListSecretsRequest lists what one workspace has set, or every workspace's when it is empty. The
-// crew's own are in both answers, marked, because they reach every workspace either way.
+// system's own are in both answers, marked, because they reach every workspace either way.
 type ListSecretsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -4480,7 +4480,7 @@ func (x *ListSecretsResponse) GetSecrets() []*SecretRef {
 // the secrets it names. It is authored as a directory in a git repository and imported here, pinned to
 // a version, so a skill edited in its repository cannot change a session that is already using it.
 //
-// It carries no secret value and no brief. The brief is a file, and a listing of what a crew can do
+// It carries no secret value and no brief. The brief is a file, and a listing of what a system can do
 // should not be a page per entry.
 type Skill struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -4493,8 +4493,8 @@ type Skill struct {
 	Binaries   []string               `protobuf:"bytes,4,rep,name=binaries,proto3" json:"binaries,omitempty"`
 	Secrets    []*SkillSecret         `protobuf:"bytes,5,rep,name=secrets,proto3" json:"secrets,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
-	// crew says the crew holds this skill, so every workspace has it without attaching anything.
-	Crew bool `protobuf:"varint,8,opt,name=crew,proto3" json:"crew,omitempty"`
+	// system says the system holds this skill, so every workspace has it without attaching anything.
+	System bool `protobuf:"varint,8,opt,name=system,proto3" json:"system,omitempty"`
 	// left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
 	// is given. A skill naming a secret the workspace has not set is held and not given, rather than
 	// refusing the task, so one unusable skill cannot stop every conversation in the workspace.
@@ -4575,9 +4575,9 @@ func (x *Skill) GetImportedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Skill) GetCrew() bool {
+func (x *Skill) GetSystem() bool {
 	if x != nil {
-		return x.Crew
+		return x.System
 	}
 	return false
 }
@@ -4644,7 +4644,7 @@ func (x *SkillSecret) GetPurpose() string {
 	return ""
 }
 
-// SkillFile is one file of a skill's directory, on its way into the crew.
+// SkillFile is one file of a skill's directory, on its way into the system.
 type SkillFile struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// path is relative to the skill's directory, with forward slashes.
@@ -4801,9 +4801,9 @@ func (x *ImportSkillResponse) GetSkill() *Skill {
 	return nil
 }
 
-// ListSkillsRequest lists what the crew has imported, what one workspace holds when workspace is
+// ListSkillsRequest lists what the system has imported, what one workspace holds when workspace is
 // set, or what one session actually holds when session is set: the same answer the session's sandbox
-// is built from, both the crew's own skills and the workspace's, the workspace winning a name
+// is built from, both the system's own skills and the workspace's, the workspace winning a name
 // collision.
 type ListSkillsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4901,16 +4901,16 @@ func (x *ListSkillsResponse) GetSkills() []*Skill {
 	return nil
 }
 
-// AttachSkillRequest gives a workspace a skill, at the version the crew holds now. Every session in the
+// AttachSkillRequest gives a workspace a skill, at the version the system holds now. Every session in the
 // workspace then holds it.
 type AttachSkillRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to give it to, and is ignored when scope is "crew".
+	// workspace is the workspace to give it to, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew". A skill attached to the
-	// crew is held by every workspace, including the ones made after it, which is the difference
-	// between setting a crew up once and setting each workspace up again.
+	// scope is "workspace", which is what an empty value means, or "system". A skill attached to the
+	// system is held by every workspace, including the ones made after it, which is the difference
+	// between setting a system up once and setting each workspace up again.
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5014,10 +5014,10 @@ func (x *AttachSkillResponse) GetSkill() *Skill {
 // DetachSkillRequest takes a skill away from a workspace. The skill stays imported.
 type DetachSkillRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to take it from, and is ignored when scope is "crew".
+	// workspace is the workspace to take it from, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew".
+	// scope is "workspace", which is what an empty value means, or "system".
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5127,10 +5127,10 @@ type Hook struct {
 	Binaries   []string               `protobuf:"bytes,5,rep,name=binaries,proto3" json:"binaries,omitempty"`
 	Secrets    []*SkillSecret         `protobuf:"bytes,6,rep,name=secrets,proto3" json:"secrets,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
-	// crew says the crew holds this hook, so every workspace has it without attaching anything. It is
-	// the level most hooks want: a constraint the crew agreed on is not usually a per workspace
+	// system says the system holds this hook, so every workspace has it without attaching anything. It is
+	// the level most hooks want: a constraint the system agreed on is not usually a per workspace
 	// opinion.
-	Crew bool `protobuf:"varint,8,opt,name=crew,proto3" json:"crew,omitempty"`
+	System bool `protobuf:"varint,8,opt,name=system,proto3" json:"system,omitempty"`
 	// left_out says why a hook the workspace holds is not given to its sessions, and is empty when it
 	// is given.
 	LeftOut       string `protobuf:"bytes,9,opt,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
@@ -5217,9 +5217,9 @@ func (x *Hook) GetImportedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Hook) GetCrew() bool {
+func (x *Hook) GetSystem() bool {
 	if x != nil {
-		return x.Crew
+		return x.System
 	}
 	return false
 }
@@ -5460,7 +5460,7 @@ func (x *ImportHookResponse) GetHook() *Hook {
 	return nil
 }
 
-// ListHooksRequest lists what the crew has imported, what one workspace holds when workspace is set,
+// ListHooksRequest lists what the system has imported, what one workspace holds when workspace is set,
 // or what one session actually holds when session is set.
 type ListHooksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -5558,13 +5558,13 @@ func (x *ListHooksResponse) GetHooks() []*Hook {
 	return nil
 }
 
-// AttachHookRequest gives a workspace a hook, at the version the crew holds now.
+// AttachHookRequest gives a workspace a hook, at the version the system holds now.
 type AttachHookRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to give it to, and is ignored when scope is "crew".
+	// workspace is the workspace to give it to, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew".
+	// scope is "workspace", which is what an empty value means, or "system".
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5668,10 +5668,10 @@ func (x *AttachHookResponse) GetHook() *Hook {
 // DetachHookRequest takes a hook away from a workspace. The hook stays imported.
 type DetachHookRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to take it from, and is ignored when scope is "crew".
+	// workspace is the workspace to take it from, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew".
+	// scope is "workspace", which is what an empty value means, or "system".
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5768,7 +5768,7 @@ func (*DetachHookResponse) Descriptor() ([]byte, []int) {
 // and the material it is allowed to receive.
 //
 // The boundary is the point of it. A role that writes tests must not receive the code, or the two
-// sessions are one conversation wearing two names, so receives is a declaration the crew can hold a
+// sessions are one conversation wearing two names, so receives is a declaration the system can hold a
 // session to rather than prose in a brief that asks it nicely.
 type Role struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -5779,12 +5779,12 @@ type Role struct {
 	// model is which model a session running as this role uses, as a tier ("opus") or a full name
 	// ("claude-opus-5"). Declared per role because the work differs.
 	Model string `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
-	// receives is the material this role is given, sorted. A name the crew does not hand out is
+	// receives is the material this role is given, sorted. A name the system does not hand out is
 	// refused at import, because a boundary that means nothing looks exactly like one that holds.
 	Receives   []string               `protobuf:"bytes,5,rep,name=receives,proto3" json:"receives,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
-	// crew says the crew holds this role, so every workspace has it without attaching anything.
-	Crew bool `protobuf:"varint,7,opt,name=crew,proto3" json:"crew,omitempty"`
+	// system says the system holds this role, so every workspace has it without attaching anything.
+	System bool `protobuf:"varint,7,opt,name=system,proto3" json:"system,omitempty"`
 	// origin is where the files came from, recorded at import. A role nobody can go and read is the
 	// failure this exists for: an acceptance run was driven by three roles in a folder on one machine,
 	// so no pull request touched them and nobody reviewed them.
@@ -5865,9 +5865,9 @@ func (x *Role) GetImportedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Role) GetCrew() bool {
+func (x *Role) GetSystem() bool {
 	if x != nil {
-		return x.Crew
+		return x.System
 	}
 	return false
 }
@@ -5968,7 +5968,7 @@ func (x *RoleOrigin) GetUnpushed() bool {
 	return false
 }
 
-// RoleFile is one file of a role's directory, on its way into the crew.
+// RoleFile is one file of a role's directory, on its way into the system.
 type RoleFile struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// path is relative to the role's directory, with forward slashes.
@@ -6122,7 +6122,7 @@ func (x *ImportRoleResponse) GetRole() *Role {
 	return nil
 }
 
-// ListRolesRequest lists what the crew has imported, or what one workspace holds when workspace is
+// ListRolesRequest lists what the system has imported, or what one workspace holds when workspace is
 // set.
 type ListRolesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -6212,13 +6212,13 @@ func (x *ListRolesResponse) GetRoles() []*Role {
 	return nil
 }
 
-// AttachRoleRequest gives a workspace a role, at the version the crew holds now.
+// AttachRoleRequest gives a workspace a role, at the version the system holds now.
 type AttachRoleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to give it to, and is ignored when scope is "crew".
+	// workspace is the workspace to give it to, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew".
+	// scope is "workspace", which is what an empty value means, or "system".
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -6322,10 +6322,10 @@ func (x *AttachRoleResponse) GetRole() *Role {
 // DetachRoleRequest takes a role away from a workspace. The role stays imported.
 type DetachRoleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace is the workspace to take it from, and is ignored when scope is "crew".
+	// workspace is the workspace to take it from, and is ignored when scope is "system".
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name      string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// scope is "workspace", which is what an empty value means, or "crew".
+	// scope is "workspace", which is what an empty value means, or "system".
 	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -6419,10 +6419,10 @@ func (*DetachRoleResponse) Descriptor() ([]byte, []int) {
 }
 
 // GetRoleRequest asks for one role whole, the brief included, so what a session running as it is
-// told can be read out of the crew rather than out of the directory it was imported from.
+// told can be read out of the system rather than out of the directory it was imported from.
 type GetRoleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// workspace reads the version that workspace pinned. Empty reads what the crew has imported.
+	// workspace reads the version that workspace pinned. Empty reads what the system has imported.
 	Workspace     string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -6477,12 +6477,12 @@ type GetRoleResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Role  *Role                  `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	// brief is the whole instruction a session running as this role is given. It travels here and
-	// nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
+	// nowhere else: a listing was asked what the system holds, not for a copy of every instruction.
 	Brief string `protobuf:"bytes,2,opt,name=brief,proto3" json:"brief,omitempty"`
 	// verbs is what a session running as this role may call, sorted, in the word kubernetes uses for
 	// the same question. Empty is a role that may call nothing, which is the default.
 	Verbs []string `protobuf:"bytes,3,rep,name=verbs,proto3" json:"verbs,omitempty"`
-	// held_by names every workspace that attached this role for itself, sorted. A role the crew holds
+	// held_by names every workspace that attached this role for itself, sorted. A role the system holds
 	// says so on the role and reaches every workspace without being named here.
 	HeldBy        []string `protobuf:"bytes,4,rep,name=held_by,json=heldBy,proto3" json:"held_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -6547,7 +6547,7 @@ func (x *GetRoleResponse) GetHeldBy() []string {
 	return nil
 }
 
-// ListContextsRequest asks where context lives: for one project when set, or for the whole crew.
+// ListContextsRequest asks where context lives: for one project when set, or for the whole system.
 type ListContextsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -6962,7 +6962,7 @@ func (*GetInfoRequest) Descriptor() ([]byte, []int) {
 // GetInfoResponse says what a task dispatched here would actually do.
 //
 // It carries configuration, never a secret and never a health verdict. The console shows it so the
-// operator can see which crew they are about to act on, the way a cluster name does.
+// operator can see which system they are about to act on, the way a cluster name does.
 type GetInfoResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// model is the backend a task runs against, for example "claude-code" or "echo".
@@ -6976,25 +6976,25 @@ type GetInfoResponse struct {
 	// state is where a session's conversation and files are kept, for example "host directory". Empty
 	// means they are kept nowhere: they live in the container and are destroyed with it.
 	State string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
-	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
 	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
 	// wondering why a task stopped working.
 	// events is the event log a task is recorded on, for example "redpanda". Empty means nothing is
 	// connected to it, which is the truth today: the log is in the compose stack and no service reads
 	// from or writes to it.
 	Events string `protobuf:"bytes,5,opt,name=events,proto3" json:"events,omitempty"`
-	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A crew that
+	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
 	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
 	// wondering why a task stopped working.
 	Secrets string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
-	// sandbox_build is the build of the crew the sandbox image was made from, for example "37b070b".
-	// Sessions run whatever that image holds, so an image older than the tool means the crew moved on
+	// sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
+	// Sessions run whatever that image holds, so an image older than the tool means the system moved on
 	// and the containers did not: the `quay` inside one is from that build, or is not there at all.
 	// Empty means the image says nothing about which build it came from, which is every image made
 	// before this was stamped, and nothing is claimed about it either way.
 	SandboxBuild string `protobuf:"bytes,7,opt,name=sandbox_build,json=sandboxBuild,proto3" json:"sandbox_build,omitempty"`
-	// version is the build of the crew this control plane was made from, for example "5bf99a0". Empty
-	// means this crew predates the field, so nothing is claimed about which build it is. The tool, the
+	// version is the build of the system this control plane was made from, for example "5bf99a0". Empty
+	// means this system predates the field, so nothing is claimed about which build it is. The tool, the
 	// control plane and the sandbox image are built on their own and drift apart, and three defects
 	// were investigated as live on 27 August 2026 that were fixed already, because nothing said so.
 	Version       string `protobuf:"bytes,8,opt,name=version,proto3" json:"version,omitempty"`
@@ -7125,16 +7125,16 @@ func (*GetHeadroomRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{121}
 }
 
-// GetHeadroomResponse is the crew's last reading of the machine it runs on.
+// GetHeadroomResponse is the system's last reading of the machine it runs on.
 //
 // Every byte count is a string rather than a number, and the string is either a figure or the word
-// "unknown". The crew knew nothing about its machine while the kernel killed eighteen sandboxes, and
+// "unknown". The system knew nothing about its machine while the kernel killed eighteen sandboxes, and
 // the fix for that must never be a zero standing in for a reading nobody took. A caller that wants
 // to compare numbers reads the bytes fields beside them, which carry -1 for unmeasured.
 type GetHeadroomResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// used is what every container on the daemon holds, added up. Every container rather than the
-	// crew's own, because the cap binds all of them.
+	// system's own, because the cap binds all of them.
 	Used string `protobuf:"bytes,1,opt,name=used,proto3" json:"used,omitempty"`
 	// limit is the memory the daemon may hold, which is the limit that binds. On a Mac it is the
 	// Docker virtual machine's cap and never the Mac's own memory.
@@ -7156,11 +7156,11 @@ type GetHeadroomResponse struct {
 	SwapUsed         string `protobuf:"bytes,9,opt,name=swap_used,json=swapUsed,proto3" json:"swap_used,omitempty"`
 	// sandboxes is one entry per session container, largest first.
 	Sandboxes []*HeadroomSandbox `protobuf:"bytes,10,rep,name=sandboxes,proto3" json:"sandboxes,omitempty"`
-	// taken_at is when the reading was taken. Unset means the crew has never read the machine, which
-	// is a crew with no daemon or a daemon that has never answered.
+	// taken_at is when the reading was taken. Unset means the system has never read the machine, which
+	// is a system with no daemon or a daemon that has never answered.
 	TakenAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=taken_at,json=takenAt,proto3" json:"taken_at,omitempty"`
 	// failed says what could not be read, empty when the whole reading worked. A reading that failed
-	// never fails a command: the figures read unknown and the crew carries on.
+	// never fails a command: the figures read unknown and the system carries on.
 	Failed string `protobuf:"bytes,12,opt,name=failed,proto3" json:"failed,omitempty"`
 	// used_bytes and limit_bytes carry -1 where nothing measured them, so a caller comparing numbers
 	// does not have to parse the strings above.
@@ -7306,13 +7306,13 @@ type HeadroomSandbox struct {
 	Held string `protobuf:"bytes,2,opt,name=held,proto3" json:"held,omitempty"`
 	// processor is its share of one processor, for example "12.4%", or "unknown".
 	Processor string `protobuf:"bytes,3,opt,name=processor,proto3" json:"processor,omitempty"`
-	// idle is how long since this session's last task, for example "12m". Empty means the crew does
+	// idle is how long since this session's last task, for example "12m". Empty means the system does
 	// not know, which is a container with no session row beside it.
 	Idle string `protobuf:"bytes,4,opt,name=idle,proto3" json:"idle,omitempty"`
 	// held_bytes carries -1 where nothing measured it.
 	HeldBytes int64 `protobuf:"varint,5,opt,name=held_bytes,json=heldBytes,proto3" json:"held_bytes,omitempty"`
 	// status is what the session's row says it is doing, for example "running" or "idle". Empty means
-	// the crew holds no session for this container, which is a stray. An operator deciding what to
+	// the system holds no session for this container, which is a stray. An operator deciding what to
 	// stop reads this first: the largest sandbox may be the one doing the work.
 	Status        string `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -7391,7 +7391,7 @@ func (x *HeadroomSandbox) GetStatus() string {
 	return ""
 }
 
-// GetHealthRequest asks what the crew last found when it probed the parts of itself it has to write
+// GetHealthRequest asks what the system last found when it probed the parts of itself it has to write
 // to before a dispatch can start.
 type GetHealthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -7440,12 +7440,12 @@ func (*GetHealthRequest) Descriptor() ([]byte, []int) {
 // taken.
 type GetHealthResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// components is what was probed, in the order a dispatch needs them. A part the crew does not
+	// components is what was probed, in the order a dispatch needs them. A part the system does not
 	// probe is not in here at all, and a caller reading it must say so rather than filling the gap
 	// with a colour: the whole point of this call is that a part nothing checked must not read the
 	// same as a part that answered.
 	Components []*HealthComponent `protobuf:"bytes,1,rep,name=components,proto3" json:"components,omitempty"`
-	// checked_at is when the probe ran. Unset means the crew has never probed, which is a crew that
+	// checked_at is when the probe ran. Unset means the system has never probed, which is a system that
 	// started a moment ago.
 	CheckedAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -7496,13 +7496,13 @@ func (x *GetHealthResponse) GetCheckedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// HealthComponent is one part of the crew and what the last probe of it found.
+// HealthComponent is one part of the system and what the last probe of it found.
 type HealthComponent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// name is the part, for example "store" or "events".
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// state is one word: "serving" when the probe landed, "down" when it did not, and "not configured"
-	// for a part this crew has none of, which is an event log nothing is connected to. Down has to be
+	// for a part this system has none of, which is an event log nothing is connected to. Down has to be
 	// readable without reading the detail beside it.
 	State string `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
 	// detail is why it is down, for example "the event log did not take a record: ...". Empty when
@@ -7563,7 +7563,7 @@ func (x *HealthComponent) GetDetail() string {
 	return ""
 }
 
-// GetUsageRequest asks what the crew has cost so far.
+// GetUsageRequest asks what the system has cost so far.
 type GetUsageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -7600,12 +7600,12 @@ func (*GetUsageRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{127}
 }
 
-// GetUsageResponse is every conversation the crew holds, added up.
+// GetUsageResponse is every conversation the system holds, added up.
 type GetUsageResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Total *Usage                 `protobuf:"bytes,1,opt,name=total,proto3" json:"total,omitempty"`
 	// sessions is how many conversations went into the total, so a number with nothing behind it can be
-	// told from a crew that has genuinely spent nothing.
+	// told from a system that has genuinely spent nothing.
 	Sessions      int64 `protobuf:"varint,2,opt,name=sessions,proto3" json:"sessions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7865,7 +7865,7 @@ func (x *ListTasksResponse) GetTasks() []*Task {
 // Job is one piece of declared intent. A caller writes it, and a controller makes reality match it.
 //
 // The record is the point: intent lives in a row rather than in a process, so it outlives the caller
-// that asked for it, the session that runs it and the crew that was restarted underneath it.
+// that asked for it, the session that runs it and the system that was restarted underneath it.
 type Job struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -7905,7 +7905,7 @@ type Job struct {
 	// ends: the session pushes its branch and opens a pull request, and the job is not done until its
 	// answer names that pull request. Empty claims nothing and is checked as nothing.
 	Repository string `protobuf:"bytes,33,opt,name=repository,proto3" json:"repository,omitempty"`
-	// What the crew assigned, and the caller may not.
+	// What the system assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
 	Parent string `protobuf:"bytes,15,opt,name=parent,proto3" json:"parent,omitempty"`
@@ -7926,7 +7926,7 @@ type Job struct {
 	// reason says why a stopped or failed job ended. question is what an asking job waits to be told.
 	Reason   string `protobuf:"bytes,22,opt,name=reason,proto3" json:"reason,omitempty"`
 	Question string `protobuf:"bytes,23,opt,name=question,proto3" json:"question,omitempty"`
-	// told is the last thing a person told this job, and it is what the crew sends the session when
+	// told is the last thing a person told this job, and it is what the system sends the session when
 	// the job starts again. It stays on the row after it has been handed over, because what somebody
 	// decided is part of the record of the job rather than a message in flight.
 	Told string `protobuf:"bytes,35,opt,name=told,proto3" json:"told,omitempty"`
@@ -8246,12 +8246,12 @@ type CreateJobRequest struct {
 	BudgetTokens   int64                  `protobuf:"varint,10,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
 	Labels         map[string]string      `protobuf:"bytes,11,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// requires is the material this job cannot be done without, drawn from job, context and
-	// skills. A word the crew does not hand out is refused by name.
+	// skills. A word the system does not hand out is refused by name.
 	Requires []string `protobuf:"bytes,14,rep,name=requires,proto3" json:"requires,omitempty"`
 	// repository is where this job's work goes, written owner/name. A job that names one ends in a
 	// pull request against it.
 	Repository string `protobuf:"bytes,15,opt,name=repository,proto3" json:"repository,omitempty"`
-	// id and parent are here to be refused rather than ignored. The crew assigns the identifier, and
+	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
 	Id            string `protobuf:"bytes,12,opt,name=id,proto3" json:"id,omitempty"`
@@ -8402,7 +8402,7 @@ type CreateJobResponse struct {
 	// because the workspace has not set a secret that skill needs. Each carries, in its own left_out
 	// field, the same sentence the skill listing prints.
 	//
-	// It is an answer rather than a refusal. The crew cannot know which skill a brief will reach for, so
+	// It is an answer rather than a refusal. The system cannot know which skill a brief will reach for, so
 	// refusing here would stop a job that never touches a repository over a token it never wanted. What
 	// it can do is say, while the caller is looking, that the session starts without that capability.
 	LeftOut       []*Skill `protobuf:"bytes,2,rep,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
@@ -8542,7 +8542,7 @@ func (x *GetJobResponse) GetJob() *Job {
 	return nil
 }
 
-// ListJobsRequest narrows a listing. The zero value is everything the crew holds.
+// ListJobsRequest narrows a listing. The zero value is everything the system holds.
 type ListJobsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// project wins over workspace when both are set, being the narrower.
@@ -9005,29 +9005,29 @@ type WorkspaceLimits struct {
 	// workspace may declare a job at all: default deny, raised deliberately and per workspace.
 	MaxDepth int32 `protobuf:"varint,2,opt,name=max_depth,json=maxDepth,proto3" json:"max_depth,omitempty"`
 	// max_running is how many jobs may run at once in this workspace. Zero is unset, and the
-	// crew ships it unset because no measurement has set it yet.
+	// system ships it unset because no measurement has set it yet.
 	MaxRunning int32 `protobuf:"varint,3,opt,name=max_running,json=maxRunning,proto3" json:"max_running,omitempty"`
 	// budget_tokens is what a tree of jobs may spend when its root declares none. Zero is unset.
 	BudgetTokens int64 `protobuf:"varint,4,opt,name=budget_tokens,json=budgetTokens,proto3" json:"budget_tokens,omitempty"`
 	// lease_seconds is how long a controller holds a job here before another may take it.
-	// Zero takes the crew's own measured default.
+	// Zero takes the system's own measured default.
 	LeaseSeconds int32 `protobuf:"varint,5,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
-	// reclaim_seconds is how long a settled session keeps its container before the crew takes it back.
+	// reclaim_seconds is how long a settled session keeps its container before the system takes it back.
 	// Zero is unset, and unset means the controller reclaims nothing here, however long it runs.
 	//
-	// The crew ships it unset and invents no number for it. Section 11 of docs/ORCHESTRATION.md names
+	// The system ships it unset and invents no number for it. Section 11 of docs/ORCHESTRATION.md names
 	// the three measurements that would set it, and the command that takes each. None of them has been
 	// run, so there is no number to write.
 	ReclaimSeconds int32 `protobuf:"varint,6,opt,name=reclaim_seconds,json=reclaimSeconds,proto3" json:"reclaim_seconds,omitempty"`
-	// archive_seconds is how long a reclaimed session waits before the crew files it away. Zero is
+	// archive_seconds is how long a reclaimed session waits before the system files it away. Zero is
 	// unset, and unset means the controller archives nothing here.
 	ArchiveSeconds int32 `protobuf:"varint,7,opt,name=archive_seconds,json=archiveSeconds,proto3" json:"archive_seconds,omitempty"`
 	// request_memory_mib is the memory one sandbox in this workspace asks for, in mebibytes, which is
-	// the unit the room view prints. The crew adds these up and admits a job only where its runtime
-	// still has that much unallocated. Zero takes the crew's own measured request.
+	// the unit the room view prints. The system adds these up and admits a job only where its runtime
+	// still has that much unallocated. Zero takes the system's own measured request.
 	RequestMemoryMib int32 `protobuf:"varint,8,opt,name=request_memory_mib,json=requestMemoryMib,proto3" json:"request_memory_mib,omitempty"`
 	// request_processor_percent is the processor share one sandbox here asks for, in per cent of one
-	// processor, which is the unit the room view prints beside the memory. Zero takes the crew's own.
+	// processor, which is the unit the room view prints beside the memory. Zero takes the system's own.
 	RequestProcessorPercent int32 `protobuf:"varint,9,opt,name=request_processor_percent,json=requestProcessorPercent,proto3" json:"request_processor_percent,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -9305,7 +9305,7 @@ func (x *SetWorkspaceLimitsResponse) GetLimits() *WorkspaceLimits {
 }
 
 // ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
-// session left out asks for the whole crew's, which is what a view of what is going on reads.
+// session left out asks for the whole system's, which is what a view of what is going on reads.
 type ListSessionEventsRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Session string                 `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
@@ -9673,7 +9673,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05owner\x18\x02 \x01(\tR\x05owner\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\"?\n" +
 	"\x12SetContextResponse\x12)\n" +
-	"\x03dir\x18\x01 \x01(\v2\x17.quaycrew.v1.ContextDirR\x03dir\"\xf2\x01\n" +
+	"\x03dir\x18\x01 \x01(\v2\x17.quaycrew.v1.ContextDirR\x03dir\"\xf6\x01\n" +
 	"\tSecretRef\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12%\n" +
 	"\x0eworkspace_name\x18\x02 \x01(\tR\rworkspaceName\x12\x12\n" +
@@ -9682,12 +9682,12 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12=\n" +
 	"\n" +
 	"projection\x18\x05 \x01(\x0e2\x1d.quaycrew.v1.SecretProjectionR\n" +
-	"projection\x12\x12\n" +
-	"\x04crew\x18\x06 \x01(\bR\x04crew\"2\n" +
+	"projection\x12\x16\n" +
+	"\x06system\x18\x06 \x01(\bR\x06system\"2\n" +
 	"\x12ListSecretsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"G\n" +
 	"\x13ListSecretsResponse\x120\n" +
-	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\x8b\x02\n" +
+	"\asecrets\x18\x01 \x03(\v2\x16.quaycrew.v1.SecretRefR\asecrets\"\x8f\x02\n" +
 	"\x05Skill\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x18\n" +
@@ -9695,8 +9695,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bbinaries\x18\x04 \x03(\tR\bbinaries\x122\n" +
 	"\asecrets\x18\x05 \x03(\v2\x18.quaycrew.v1.SkillSecretR\asecrets\x12;\n" +
 	"\vimported_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"importedAt\x12\x12\n" +
-	"\x04crew\x18\b \x01(\bR\x04crew\x12\x19\n" +
+	"importedAt\x12\x16\n" +
+	"\x06system\x18\b \x01(\bR\x06system\x12\x19\n" +
 	"\bleft_out\x18\a \x01(\tR\aleftOut\";\n" +
 	"\vSkillSecret\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
@@ -9726,7 +9726,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05scope\x18\x03 \x01(\tR\x05scope\"\x15\n" +
-	"\x13DetachSkillResponse\"\xbc\x02\n" +
+	"\x13DetachSkillResponse\"\xc0\x02\n" +
 	"\x04Hook\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x18\n" +
@@ -9735,8 +9735,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bbinaries\x18\x05 \x03(\tR\bbinaries\x122\n" +
 	"\asecrets\x18\x06 \x03(\v2\x18.quaycrew.v1.SkillSecretR\asecrets\x12;\n" +
 	"\vimported_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"importedAt\x12\x12\n" +
-	"\x04crew\x18\b \x01(\bR\x04crew\x12\x19\n" +
+	"importedAt\x12\x16\n" +
+	"\x06system\x18\b \x01(\bR\x06system\x12\x19\n" +
 	"\bleft_out\x18\t \x01(\tR\aleftOut\"v\n" +
 	"\vHookBinding\x12\x0e\n" +
 	"\x02on\x18\x01 \x01(\tR\x02on\x12\x18\n" +
@@ -9768,7 +9768,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05scope\x18\x03 \x01(\tR\x05scope\"\x14\n" +
-	"\x12DetachHookResponse\"\x82\x02\n" +
+	"\x12DetachHookResponse\"\x86\x02\n" +
 	"\x04Role\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x18\n" +
@@ -9776,8 +9776,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x1a\n" +
 	"\breceives\x18\x05 \x03(\tR\breceives\x12;\n" +
 	"\vimported_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"importedAt\x12\x12\n" +
-	"\x04crew\x18\a \x01(\bR\x04crew\x12/\n" +
+	"importedAt\x12\x16\n" +
+	"\x06system\x18\a \x01(\bR\x06system\x12/\n" +
 	"\x06origin\x18\b \x01(\v2\x17.quaycrew.v1.RoleOriginR\x06origin\"\x8a\x01\n" +
 	"\n" +
 	"RoleOrigin\x12\x1e\n" +

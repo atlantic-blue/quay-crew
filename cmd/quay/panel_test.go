@@ -56,14 +56,14 @@ func TestThePanelSkipsWhatCannotBeOpened(t *testing.T) {
 // closed by tmux, so the layout would collapse to one pane and read as the panel being broken.
 func TestThePanelRefusesRatherThanOpeningHalfOfOne(t *testing.T) {
 	if _, found := newestSession(nil); found {
-		t.Fatal("a conversation was chosen from an empty crew")
+		t.Fatal("a conversation was chosen from an empty system")
 	}
 	if _, found := newestSession([]*quaycrewv1.Session{{Id: "never-had-a-task", UpdatedAt: at(10)}}); found {
 		t.Fatal("a session that has never had a task was offered as something to open")
 	}
 }
 
-// TestWhereNamesTheAddressInTheRefusal, so the refusal says which crew it looked in rather than
+// TestWhereNamesTheAddressInTheRefusal, so the refusal says which system it looked in rather than
 // leaving the operator to guess whether they are standing somewhere unexpected.
 func TestWhereNamesTheAddressInTheRefusal(t *testing.T) {
 	for _, test := range []struct {
@@ -84,36 +84,36 @@ func TestWhereNamesTheAddressInTheRefusal(t *testing.T) {
 	}
 }
 
-// TestQuayOpensTheCrewNotJustTheConsole. One command: `quay` opens the header, the console and a
+// TestQuayOpensTheSystemNotJustTheConsole. One command: `quay` opens the header, the console and a
 // conversation. Nothing tested this until a mutation that made `quay` open the console alone stayed
 // green, which is the whole of what was asked for going unwatched.
-func TestQuayOpensTheCrewNotJustTheConsole(t *testing.T) {
+func TestQuayOpensTheSystemNotJustTheConsole(t *testing.T) {
 	panelRan, aloneRan := false, false
-	err := openTheCrew(
+	err := openTheSystem(
 		func() error { panelRan = true; return nil },
 		func() error { aloneRan = true; return nil },
 	)
 	if err != nil {
-		t.Fatalf("openTheCrew: %v", err)
+		t.Fatalf("openTheSystem: %v", err)
 	}
 	if !panelRan {
-		t.Fatal("quay did not open the crew")
+		t.Fatal("quay did not open the system")
 	}
 	if aloneRan {
-		t.Fatal("quay opened the console as well as the crew")
+		t.Fatal("quay opened the console as well as the system")
 	}
 }
 
-// TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt: a crew with no conversation in it is the
+// TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt: a system with no conversation in it is the
 // first run, and refusing to open at all then would be absurd.
 func TestQuayOpensTheConsoleWhenThereIsNothingToPutBesideIt(t *testing.T) {
 	aloneRan := false
-	err := openTheCrew(
+	err := openTheSystem(
 		func() error { return fmt.Errorf("%w: no conversation yet", errNothingBeside) },
 		func() error { aloneRan = true; return nil },
 	)
 	if err != nil {
-		t.Fatalf("openTheCrew: %v", err)
+		t.Fatalf("openTheSystem: %v", err)
 	}
 	if !aloneRan {
 		t.Fatal("quay refused to open at all with nothing to put beside the console")
@@ -137,20 +137,20 @@ func TestThePanelCommandIsRefused(t *testing.T) {
 	}
 }
 
-// TestQuaySaysWhyTheCrewCouldNotOpen. Every failure to open the panel used to come out as a single
-// console pane: tmux missing, a crew with two projects and nowhere named to open, a header with no
+// TestQuaySaysWhyTheSystemCouldNotOpen. Every failure to open the panel used to come out as a single
+// console pane: tmux missing, a system with two projects and nowhere named to open, a header with no
 // room to draw in. All of them looked the same from the outside, so the panel read as a thing that
 // sometimes does not appear, and the reason was never printed anywhere.
-func TestQuaySaysWhyTheCrewCouldNotOpen(t *testing.T) {
+func TestQuaySaysWhyTheSystemCouldNotOpen(t *testing.T) {
 	aloneRan := false
-	err := openTheCrew(
+	err := openTheSystem(
 		func() error {
 			return fmt.Errorf("panel: new-session: exec: \"tmux\": executable file not found in $PATH")
 		},
 		func() error { aloneRan = true; return nil },
 	)
 	if err == nil {
-		t.Fatal("opening the crew failed and quay said nothing about it")
+		t.Fatal("opening the system failed and quay said nothing about it")
 	}
 	if !strings.Contains(err.Error(), "tmux") {
 		t.Fatalf("the failure is reported as %q, and it does not say what went wrong", err)
@@ -212,13 +212,13 @@ func TestEndingAConversationSaysWhenItCouldNotEndIt(t *testing.T) {
 	}
 }
 
-// TestASessionSaysWhenItWasNotToldWhereTheCrewIs.
+// TestASessionSaysWhenItWasNotToldWhereTheSystemIs.
 //
-// A session that was never told where the crew is falls back to localhost, and localhost inside a
+// A session that was never told where the system is falls back to localhost, and localhost inside a
 // container is the container. The dial error names an address nobody chose and nothing can be at,
-// which reads as the crew being down: "dial tcp [::1]:50051: connect: connection refused" from inside
+// which reads as the system being down: "dial tcp [::1]:50051: connect: connection refused" from inside
 // a sandbox, while the control plane was up the whole time.
-func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
+func TestASessionSaysWhenItWasNotToldWhereTheSystemIs(t *testing.T) {
 	refused := status.Error(codes.Unavailable, `connection error: desc = "transport: Error while `+
 		`dialing: dial tcp [::1]:50051: connect: connection refused"`)
 
@@ -238,7 +238,7 @@ func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
 		{
 			name: "refused inside a sandbox that was given an address", err: refused, sandboxed: true,
 			told:    "controlplane:50051",
-			because: "the crew was named, so this is the crew being unreachable and the address is worth reading",
+			because: "the system was named, so this is the system being unreachable and the address is worth reading",
 		},
 		{
 			name: "refused on the operator's own machine", err: refused,
@@ -247,7 +247,7 @@ func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
 		{
 			name: "a refusal that is not about reaching anything", sandboxed: true,
 			err:     status.Error(codes.NotFound, "session not found"),
-			because: "the crew answered, so where it lives is not the problem",
+			because: "the system answered, so where it lives is not the problem",
 		},
 		{
 			name: "nothing went wrong", sandboxed: true, because: "there is nothing to explain",
@@ -276,9 +276,9 @@ func TestASessionSaysWhenItWasNotToldWhereTheCrewIs(t *testing.T) {
 // a conversation beside the console.
 //
 // It had no test at all, and it was wrong in the way an untested branch usually is: it read where you
-// are standing only when you stood in a project, then counted projects across the whole crew. So
+// are standing only when you stood in a project, then counted projects across the whole system. So
 // `quay use atlantic-blue` printed "now in atlantic-blue", and `quay` then refused to open, because
-// the crew held eight projects and it would not choose between them. The workspace the operator had
+// the system held eight projects and it would not choose between them. The workspace the operator had
 // just named counted for nothing.
 func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 	for _, one := range []struct {
@@ -331,7 +331,7 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 				}
 				if !errors.Is(err, errNothingBeside) {
 					t.Fatalf("driverProject refused with %v, and every refusal here has to let the "+
-						"console open on its own: quay opens the crew", err)
+						"console open on its own: quay opens the system", err)
 				}
 				return
 			}
@@ -350,7 +350,7 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 					return
 				}
 			}
-			t.Fatalf("the driver opened in %q, which is no project this crew has", project)
+			t.Fatalf("the driver opened in %q, which is no project this system has", project)
 		})
 	}
 }

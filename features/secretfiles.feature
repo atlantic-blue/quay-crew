@@ -13,7 +13,7 @@ Feature: A secret can reach a session as a file
   A container's environment is readable through docker inspect for the life of that container, and a
   file in a memory backed directory is not.
 
-  These scenarios use a sandbox double, so they say what the crew asks a sandbox to do and not that a
+  These scenarios use a sandbox double, so they say what the system asks a sandbox to do and not that a
   real daemon honours it. The real thing is proved against Docker in
   TestAMountedSecretIsAFileTheSandboxUserCanReadAndNobodyElseCan.
 
@@ -41,7 +41,7 @@ Feature: A secret can reach a session as a file
     When the operator dispatches "hello" to the project
     Then no command run in the sandbox carries "[user] name = operator" in its arguments
 
-  # Every secret a running crew already holds is one of these. Getting this wrong would move all of
+  # Every secret a running system already holds is one of these. Getting this wrong would move all of
   # them out of the environment at once, and every session would lose every credential it had.
   Scenario: A secret that says nothing about how it travels still reaches the environment
     Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-1234"
@@ -60,7 +60,7 @@ Feature: A secret can reach a session as a file
   # is refused when it is set rather than at the moment of writing.
   Scenario: A mounted name that would escape its directory is refused
     When the operator mounts the secret "../../etc/passwd" holding "root"
-    Then the crew refuses it, saying it cannot be a file name
+    Then the system refuses it, saying it cannot be a file name
 
   # Reading a listing is how the operator finds out where a session should look. Two secrets that
   # arrive in different places and read identically in a listing is the same as not saying.

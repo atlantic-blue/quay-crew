@@ -63,9 +63,9 @@ func TestStopTakesAtMostASessionAndAReason(t *testing.T) {
 	}
 }
 
-// A word nobody can act on is worth no more than no word at all, so a session the crew does not have
+// A word nobody can act on is worth no more than no word at all, so a session the system does not have
 // is refused rather than reported as having nothing to stop.
-func TestStopRefusesASessionTheCrewDoesNotHave(t *testing.T) {
+func TestStopRefusesASessionTheSystemDoesNotHave(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 
 	var out bytes.Buffer

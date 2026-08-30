@@ -14,14 +14,14 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// The crew's settings say two things now: which hooks a session runs under, and the line the runtime
+// The system's settings say two things now: which hooks a session runs under, and the line the runtime
 // draws under the conversation. Every session gets them, because an operator attached to a session
 // with no hooks needs that line as much as anybody.
 //
 // The file has to be there before a task is told to load it. The runtime refuses to start on a
 // settings file that is missing, saying only "Settings file not found", and that would be every task
-// on the crew rather than one.
-func TestATaskLoadsTheCrewsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
+// on the system rather than one.
+func TestATaskLoadsTheSystemsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	server := NewServer(Config{
 		Store: store.NewMemory(), Runner: model.EchoRunner{},
@@ -43,7 +43,7 @@ func TestATaskLoadsTheCrewsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
 		t.Errorf("the task was told to load %q, want %q", got, want)
 	}
 
-	// A crew whose data directory has been taken away underneath it. Naming the file anyway is a
+	// A system whose data directory has been taken away underneath it. Naming the file anyway is a
 	// task that dies before the model sees it.
 	at, _ := server.storage.WorkspaceHooksDir(session.GetWorkspace())
 	if err := os.Remove(filepath.Join(at, hook.SettingsFile)); err != nil {

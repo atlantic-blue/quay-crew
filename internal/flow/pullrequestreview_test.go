@@ -54,7 +54,7 @@ func TestTheReviewMakesItsThreePassesInThatOrder(t *testing.T) {
 }
 
 // Posting a review is sending a message to a person, so it is the operator's call and not the
-// crew's. Every road to the posting step goes through an ask, and this walks the graph rather than
+// system's. Every road to the posting step goes through an ask, and this walks the graph rather than
 // looking at one edge: a second road to the same node would be the way this fails.
 func TestNothingIsPostedWithoutPassingTheAsk(t *testing.T) {
 	graph := theReviewGraph(t)
@@ -133,7 +133,7 @@ func TestEveryStepOfTheReviewSaysWhatWouldShowItWorked(t *testing.T) {
 			continue
 		}
 		if node.Expect == nil || node.Expect.File == "" {
-			t.Errorf("the %s step claims no file, so the crew has only its own account of itself", name)
+			t.Errorf("the %s step claims no file, so the system has only its own account of itself", name)
 		}
 	}
 }
@@ -172,7 +172,7 @@ func TestThePassesReadTheRepositoryAndNotOnlyTheDiff(t *testing.T) {
 func TestTheReviewRunsOnItsOwn(t *testing.T) {
 	graph := theReviewGraph(t)
 	if graph.Every < MinimumEvery {
-		t.Fatalf("the graph runs every %s, and the crew refuses anything under %s", graph.Every, MinimumEvery)
+		t.Fatalf("the graph runs every %s, and the system refuses anything under %s", graph.Every, MinimumEvery)
 	}
 }
 

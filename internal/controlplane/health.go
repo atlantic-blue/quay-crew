@@ -16,22 +16,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// healthStream is where a health probe writes its record. It is a stream of the crew rather than of
-// a workspace, because the question is about the crew and no workspace owns it.
+// healthStream is where a health probe writes its record. It is a stream of the system rather than of
+// a workspace, because the question is about the system and no workspace owns it.
 const healthStream = "health"
 
 // healthWorkspace namespaces that stream. A workspace of this name would share the topic, which
 // costs nothing: the record carries no workspace and nothing consumes it.
-const healthWorkspace = "crew"
+const healthWorkspace = "system"
 
 // probeEvery is the floor under how stale the reading a view reads may be.
 //
 // It matches the interval the compose stack's health check runs at, because that check is what keeps
-// the reading fresh wherever there is one. The timer only probes when nothing else has, so a crew
-// under a health check writes what it always wrote, and a crew nobody checks still knows what it is.
+// the reading fresh wherever there is one. The timer only probes when nothing else has, so a system
+// under a health check writes what it always wrote, and a system nobody checks still knows what it is.
 const probeEvery = 30 * time.Second
 
-// ComponentHealth is one part of the crew and what the last probe of it found.
+// ComponentHealth is one part of the system and what the last probe of it found.
 type ComponentHealth struct {
 	Name  string
 	State string
@@ -39,14 +39,14 @@ type ComponentHealth struct {
 	Detail string
 }
 
-// HealthReading is the crew's last probe of everything it has to write to before a dispatch starts.
+// HealthReading is the system's last probe of everything it has to write to before a dispatch starts.
 //
 // It is remembered rather than taken on demand. A broker that is down costs the whole export budget
 // on every write, so a view that probed when it drew would stall for as long as the thing it reports
 // on stays broken, and the operator would read a hung console instead of a dead event log.
 type HealthReading struct {
 	Components []ComponentHealth
-	// TakenAt is when the probe ran. The zero time is a crew that has never probed.
+	// TakenAt is when the probe ran. The zero time is a system that has never probed.
 	TakenAt time.Time
 }
 
@@ -54,7 +54,7 @@ type HealthReading struct {
 func (r HealthReading) Taken() bool { return !r.TakenAt.IsZero() }
 
 // Failure is what did not land, or nil when every part answered. It is what the log line says, so
-// whoever is diagnosing a crew reads which write failed rather than that one did.
+// whoever is diagnosing a system reads which write failed rather than that one did.
 func (r HealthReading) Failure() error {
 	var failures []error
 	for _, component := range r.Components {
@@ -65,11 +65,11 @@ func (r HealthReading) Failure() error {
 	return errors.Join(failures...)
 }
 
-// Health says whether this crew can start job, which is not the same question as whether its
+// Health says whether this system can start job, which is not the same question as whether its
 // process is up.
 //
 // A control plane served every listing in under a second and dispatched nothing for an hour. Every
-// read answered, so every view of the crew looked well, and the operator read the dispatches as a
+// read answered, so every view of the system looked well, and the operator read the dispatches as a
 // slow model. A check that only reads would have agreed with them. So this one writes: the store
 // takes a row, and the event log takes a record, which are the two writes every dispatch makes
 // before a sandbox is ever asked for. See issue 400.
@@ -79,7 +79,7 @@ type Health struct {
 
 var _ grpc_health_v1.HealthServer = (*Health)(nil)
 
-// NewHealth answers for the crew this server is.
+// NewHealth answers for the system this server is.
 func NewHealth(server *Server) *Health {
 	return &Health{server: server}
 }
@@ -90,7 +90,7 @@ func NewHealth(server *Server) *Health {
 // is readable from a console rather than from a container's log.
 func (h *Health) Check(ctx context.Context, _ *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error) {
 	if err := h.server.ProbeHealth(ctx).Failure(); err != nil {
-		slog.WarnContext(ctx, "this crew is not serving", "error", err)
+		slog.WarnContext(ctx, "this system is not serving", "error", err)
 		return &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_NOT_SERVING}, nil
 	}
 	return &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_SERVING}, nil
@@ -111,10 +111,10 @@ func (h *Health) List(ctx context.Context, _ *grpc_health_v1.HealthListRequest) 
 
 // Watch is not served. A caller that wants to know now asks now.
 func (h *Health) Watch(_ *grpc_health_v1.HealthCheckRequest, _ grpc_health_v1.Health_WatchServer) error {
-	return status.Error(codes.Unimplemented, "this crew answers a health check when it is asked")
+	return status.Error(codes.Unimplemented, "this system answers a health check when it is asked")
 }
 
-// GetHealth is the crew's last probe, one entry per part.
+// GetHealth is the system's last probe, one entry per part.
 //
 // It reads the remembered reading and never probes, the way GetHeadroom reads the last sample and
 // never the daemon. A view draws on a timer, and a part that is down is exactly the part that takes
@@ -135,7 +135,7 @@ func (s *Server) GetHealth(_ context.Context, _ *quaycrewv1.GetHealthRequest) (*
 	return resp, nil
 }
 
-// LastHealth is the reading whoever probed last took. A crew that has never probed answers a reading
+// LastHealth is the reading whoever probed last took. A system that has never probed answers a reading
 // with nothing in it, and a caller must say so rather than filling the gap: a part nobody checked
 // must never read the same as a part that answered.
 func (s *Server) LastHealth() HealthReading {
@@ -167,12 +167,12 @@ func (s *Server) ProbeHealth(ctx context.Context) HealthReading {
 // nobody can see.
 //
 // It probes only when nothing else has inside the interval. The compose stack's health check already
-// writes every thirty seconds, and a second timer beside it would double what a crew writes to say
+// writes every thirty seconds, and a second timer beside it would double what a system writes to say
 // the same thing twice.
 func (s *Server) RunHealth(ctx context.Context) {
 	ticker := time.NewTicker(probeEvery)
 	defer ticker.Stop()
-	// Once at the start, so the first operator to open a view of a crew that came up a moment ago
+	// Once at the start, so the first operator to open a view of a system that came up a moment ago
 	// reads what it found rather than that it has not looked.
 	s.ProbeHealth(ctx)
 	for {
@@ -202,7 +202,7 @@ func (s *Server) probeStore(ctx context.Context) ComponentHealth {
 
 // probeEvents puts a record on the event log, which is the second.
 //
-// A crew with no log configured is not serving and not down: it is a crew whose tasks are recorded
+// A system with no log configured is not serving and not down: it is a system whose tasks are recorded
 // nowhere, and it says that. The redpanda that died on 29 August 2026 was configured and answering
 // nothing, and the two must not read alike.
 func (s *Server) probeEvents(ctx context.Context) ComponentHealth {
@@ -227,9 +227,9 @@ func (s *Server) probeEvents(ctx context.Context) ComponentHealth {
 	return ComponentHealth{Name: display.HealthEvents, State: display.HealthServing}
 }
 
-// hasEventLog says whether anything is connected to the log. A crew configured with none is given a
+// hasEventLog says whether anything is connected to the log. A system configured with none is given a
 // log that discards, so every write to it succeeds, and a probe that read that as an answer would
-// report a crew recording nothing as a crew in good health.
+// report a system recording nothing as a system in good health.
 func (s *Server) hasEventLog() bool {
 	_, discards := s.events.(messaging.Discard)
 	return !discards

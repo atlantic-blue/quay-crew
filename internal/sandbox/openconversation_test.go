@@ -14,7 +14,7 @@ import (
 // TestOpeningAConversationResumesOneThatExistsAndStartsOneThatDoesNot runs the script the image
 // ships, with a stand in for the model's command line tool, and reads back what it was asked to do.
 //
-// It matters that this is run rather than read. The crew names a conversation before anybody has
+// It matters that this is run rather than read. The system names a conversation before anybody has
 // spoken in it, so the name arrives at a sandbox with no transcript behind it, and resuming a name
 // that is not there prints "No conversation found" and exits. From the console that looks like the
 // key doing nothing at all.
@@ -30,7 +30,7 @@ func TestOpeningAConversationResumesOneThatExistsAndStartsOneThatDoesNot(t *test
 		because    string
 	}{
 		{
-			name: "a conversation the crew has named but nobody has opened", id: conversation,
+			name: "a conversation the system has named but nobody has opened", id: conversation,
 			want: "--session-id " + conversation, absent: "--resume",
 			because: "starting it under that name is what makes the name true",
 		},

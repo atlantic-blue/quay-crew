@@ -14,8 +14,8 @@ A role is imported, pinned to a version, and attached at a level:
 quay role import <directory>
 quay role list [<workspace>]
 quay role show [<workspace>] <name>
-quay role attach [<workspace>|crew] <name>
-quay role detach [<workspace>|crew] <name>
+quay role attach [<workspace>|system] <name>
+quay role detach [<workspace>|system] <name>
 ```
 
 And a step of a flow runs as one. A dispatch node names a role, and that step runs in a session of
@@ -48,7 +48,7 @@ quay job create me/quay-crew --role backlog-clearer \
 ```
 
 The role is on the record, never on the call that runs the task. A caller that could name its own
-role could name one granting more than the job was declared with, and the credential the crew mints
+role could name one granting more than the job was declared with, and the credential the system mints
 for that task carries what the role's `verbs` list declares.
 
 `--requires` is the other side of `receives`: it says what this job cannot be done without.
@@ -69,7 +69,7 @@ flowchart LR
 
 The check happens twice, and the second one is the one that matters. At the write, so the refusal
 reaches whoever wrote the declaration. And again at the dispatch, because a role can be detached,
-imported at a new version and attached again while a job sits pending, so what the crew would put in
+imported at a new version and attached again while a job sits pending, so what the system would put in
 front of a session is only settled at the moment it hands it over.
 
 Refused rather than withheld, and that is the difference from a flow step. A flow step naming a role
@@ -85,7 +85,7 @@ plan. A second opinion that read the first opinion is not a second opinion.
 
 The fix is not a personality. It is what the session is given. A role that writes the tests must not
 receive the code. A role that writes the code may receive the test names and not the test bodies. So
-`receives` is a declaration the crew can hold a session to, rather than a paragraph in a brief asking
+`receives` is a declaration the system can hold a session to, rather than a paragraph in a brief asking
 the model nicely.
 
 ## What a role declares
@@ -112,7 +112,7 @@ workspace moves by attaching again.
 
 `model` is a tier such as `opus` or a full name such as `claude-opus-5`. It is declared per role
 because the job differs: naming a team is worth the larger model and writing one file to a
-specification is not. The crew does not check the name against a list, because a tier the model's own
+specification is not. The system does not check the name against a list, because a tier the model's own
 tool stops accepting would otherwise fail every task with nothing an operator could configure around
 it.
 
@@ -121,10 +121,10 @@ name:
 
 - `job` is the job the role was given. Every role receives it, because a session with no
   job to do is not a task.
-- `context` is what the crew, the workspace and the project know, as the memory files carry it.
+- `context` is what the system, the workspace and the project know, as the memory files carry it.
 - `skills` are the skills the workspace holds.
 
-Three, because those are what the crew puts in front of a session today. A word for material nobody
+Three, because those are what the system puts in front of a session today. A word for material nobody
 assembles yet would be a boundary that means nothing, and a boundary that means nothing looks exactly
 like one that holds.
 
@@ -180,7 +180,7 @@ flowchart LR
 A brief may be 16,384 bytes, which is about four pages. A skill's brief may be 4,096.
 
 The difference is who pays. A skill's summary reaches every session on every conversation, so it is
-held to a sentence, and the measurement behind that is in [`SKILLS.md`](SKILLS.md): one crew reached
+held to a sentence, and the measurement behind that is in [`SKILLS.md`](SKILLS.md): one system reached
 51,727 bytes of context per session. A role's brief reaches one session, once, and that session
 exists to do this one job. The ceiling is still here because a brief nobody reads to the end is a
 brief nobody follows.
@@ -192,10 +192,10 @@ summary, the model, what it receives, the verbs it may call, and who holds it. A
 current address can see, and a workspace level address reads the version that workspace pinned.
 
 The brief is the role, so a role that could not be read back was a run nobody could audit. There was
-no way to diff what the crew holds against the file it came from, and no way to tell whether the crew
+no way to diff what the system holds against the file it came from, and no way to tell whether the system
 was running the version somebody edited an hour ago. The acceptance run turned on exactly this: one
 clause of the orchestrator brief decided the whole outcome, and the only way to find that clause was
-to open a file on the host disk the crew knows nothing about.
+to open a file on the host disk the system knows nothing about.
 
 A name nothing holds is refused with the names that are there: the near spellings when there are any,
 and everything held when there are not. A short list of real names is more use than a correct
@@ -206,10 +206,10 @@ silence.
 A role is imported from a directory, and a directory is anywhere. That makes the first import easy
 and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
 on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
-listing the crew printed showed them looking exactly like the fifteen that ship in
+listing the system printed showed them looking exactly like the fifteen that ship in
 [`roles/`](../roles).
 
-So `quay role import` records where it read the files, and the crew says it back in every place a
+So `quay role import` records where it read the files, and the system says it back in every place a
 role is printed:
 
 ```
@@ -230,27 +230,27 @@ rather than a path.
 
 Nothing is refused over any of it. A role written in a scratch directory while somebody finds the
 shape of it is ordinary, and what was missing was not a gate, it was anybody being able to see. A
-role imported before the crew recorded any of this says only that, because calling it loose would be
-an accusation the crew cannot support.
+role imported before the system recorded any of this says only that, because calling it loose would be
+an accusation the system cannot support.
 
 Importing the same role again records where it was read this time. That is the way out: commit the
-role, push it, import it again, and the warning clears. A crew that kept the first answer would leave
+role, push it, import it again, and the warning clears. A system that kept the first answer would leave
 the operator fixing it and watching nothing change. It is safe because where a role came from is not
 part of what a role is: it is not in the fingerprint, so the same bytes read out of two checkouts are
 one role, read in two places, rather than a version already imported being refused as a different one.
 
 What this does not do is put the role in the repository for anybody. A project cannot yet declare a
-roles directory the crew imports from, because nothing in the crew knows what repository a project
+roles directory the system imports from, because nothing in the system knows what repository a project
 has. That is [quay-crew#443](https://github.com/atlantic-blue/quay-crew/issues/443).
 
 ## The two levels
 
-A role attaches at the crew or at one workspace, which is the outer two of the four levels context
+A role attaches at the system or at one workspace, which is the outer two of the four levels context
 has. Skills stop in the same place, and nothing has wanted the inner two yet.
 
-`quay role attach crew <name>` gives it to every workspace, including the ones made after today.
+`quay role attach system <name>` gives it to every workspace, including the ones made after today.
 `quay role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
-off the crew leaves a workspace's own attachment alone.
+off the system leaves a workspace's own attachment alone.
 
 ## Who may attach one
 
@@ -269,7 +269,7 @@ A session running as a role is a new session in a new container, and what it hol
 declares:
 
 - **`job`** is the prompt of the step that named the role. Every role receives it.
-- **`context`** is the crew's, the workspace's, the project's and the session's context, as the
+- **`context`** is the system's, the workspace's, the project's and the session's context, as the
   memory files carry it. A role without it is told its brief and nothing else.
 - **`skills`** are the skills the workspace holds. A role without them holds none: no index in its
   memory file and no skill directory mounted into its container.
@@ -284,9 +284,9 @@ conversation store, so a role that must not see the code could otherwise read th
 session that wrote it. A role session's store sits under the session instead. The cost is that its
 conversation cannot be resumed from another project, which is not something a sub task does.
 
-**Nothing a role writes reaches the crew's memory.** An ordinary session's memory file is read back
+**Nothing a role writes reaches the system's memory.** An ordinary session's memory file is read back
 into the store, because something that wrote into its own memory has learned something. A role
-session's is not. It was given a brief rather than the crew's context, so what is in its file is not
+session's is not. It was given a brief rather than the system's context, so what is in its file is not
 an edit of what the store holds, and reading it back would let a session that was given nothing
 write what every session in the workspace is told.
 
@@ -366,11 +366,11 @@ had built until the job ended. So each of the three briefs ends a slice the same
 the branch, open a pull request describing what changed and why in two to five sentences, say the
 address in the answer, and move to the next phase.
 
-**The merge is refused rather than asked for.** `may` grants the verbs a session calls on the crew,
+**The merge is refused rather than asked for.** `may` grants the verbs a session calls on the system,
 and merging is not one of them: it is a github action a session takes with a credential a skill gave
 it, so the control plane never sees it and cannot refuse it. The place it can be refused is the
 sandbox, at the moment the command runs, and that is a hook. `merge-gate` ships in `hooks/` and a
-fresh crew is put under it, so a session that runs `gh pr merge` is refused and told to open a pull
+fresh system is put under it, so a session that runs `gh pr merge` is refused and told to open a pull
 request instead. An operator who takes the hook off has decided otherwise, deliberately, which is the
 difference between a boundary and a sentence.
 
@@ -383,7 +383,7 @@ anything telling an orchestrator to use them.
 
 **A refusal it cannot act on stops the run.** There is exactly one refusal an orchestrator may work
 around, the workspace depth limit, and only by doing that one child's work. Anything else, an
-unknown verb or a credential the crew will not accept, means writing the refusal into the answer and
+unknown verb or a credential the system will not accept, means writing the refusal into the answer and
 ending. In the acceptance run the brief said to do the work itself when a declaration was refused,
 which was written for the depth limit and applied to a credential failure, so one session wrote the
 whole product and no child ever ran.
@@ -396,15 +396,15 @@ words, `job`, `context` and `skills`, and none of the three is about the content
 So `test-writer` saying it never sees implementation code, `implementer` saying it never edits a test
 file, `verifier` and `assessor` and `codebase-mapper` saying they are read only, `wrapper` saying it
 writes to `tests/locking/` and nowhere else, and `security` saying it writes the failing test rather
-than the fix, are each a promise the model keeps or does not. The crew cannot hold a session to any
+than the fix, are each a promise the model keeps or does not. The system cannot hold a session to any
 of them, and every role's own file says so at the top under `## What quay does not enforce`.
 
 Two more limits fall out of the same gap. A role session cannot put a question to the operator, so
-the interactive parts of `designer` and `marketing` have nothing behind them here. And this crew
+the interactive parts of `designer` and `marketing` have nothing behind them here. And this system
 ships no web search skill, so the research `marketing-researcher` and `designer` are told to do has
 no tool behind it.
 
-A brief also names documents the crew does not create: `CLAUDE.md`, `docs/DESIGN.md`,
+A brief also names documents the system does not create: `CLAUDE.md`, `docs/DESIGN.md`,
 `docs/CONTRACTS.md`, `docs/GRAPH.json`, `docs/ASSESS.md`, `docs/MARKETING.md`,
 `references/deviation-rules.md` and the rest. Nothing seeds any of them into a repository. The role
 that reads one is the role after the role that writes it, so a phase run out of order finds nothing
@@ -423,11 +423,11 @@ room, and it is the operator's to make.
 
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
   and it is the reason every one of the fifteen carries a line saying so.
-- A fresh crew is seeded with none of them. Skills and hooks are seeded and roles are not, so an
+- A fresh system is seeded with none of them. Skills and hooks are seeded and roles are not, so an
   operator runs `quay role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
   the workspace has to hold it already.
-- Nothing runs the phase. The twelve describe an order and the crew does not keep it: a role names
+- Nothing runs the phase. The twelve describe an order and the system does not keep it: a role names
   the role that comes next in its own output, and it is the operator who writes that order into a
   flow graph or declares the next job.
 - Nothing hands one role's output to the next. Each writes a document into the repository, and the
@@ -444,7 +444,7 @@ them.
 ## What is not built
 
 - No product manager role, so nothing chooses a team while a run is under way.
-- A role declares its model and nothing reads it: the runner takes one model per crew.
+- A role declares its model and nothing reads it: the runner takes one model per system.
 - No sub tasks, so a step is one session rather than several, and there is no limit on how many run
   at once.
 - A session running as a role emits no event when it finishes.
@@ -456,7 +456,7 @@ them.
 - A job in a role is a root job only. A job under a parent and a job that waits for something are each
   their own slice, whether or not they name a role.
 - Where a role came from is recorded and printed, and nothing acts on it: no import is refused, no
-  run is stopped, and a project cannot declare a roles directory the crew imports from.
+  run is stopped, and a project cannot declare a roles directory the system imports from.
 
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),

@@ -13,10 +13,10 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// aCrewWatchingItsSandboxes keeps the sandbox double, because the only honest way to check a secret
+// aSystemWatchingItsSandboxes keeps the sandbox double, because the only honest way to check a secret
 // was stored correctly is to look at what a session is actually given: nothing reads a value back,
 // by design.
-func aCrewWatchingItsSandboxes(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *sandbox.FakeProvider) {
+func aSystemWatchingItsSandboxes(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *sandbox.FakeProvider) {
 	t.Helper()
 	boxes := &sandbox.FakeProvider{}
 	client := testClientWith(t, controlplane.Config{
@@ -43,7 +43,7 @@ func carried(boxes *sandbox.FakeProvider, name string) (string, bool) {
 // The point of the whole change: a credential that never appears in an argument still reaches the
 // session, with exactly the value that was piped in.
 func TestAPipedSecretReachesTheSessionUnchanged(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "ghp-piped-not-typed")
 	if said := mustRun(t, client, "secret", "set", "GH_TOKEN"); !strings.Contains(said, "GH_TOKEN") {
@@ -66,7 +66,7 @@ func TestAPipedSecretReachesTheSessionUnchanged(t *testing.T) {
 // Every tool that prints a credential ends with a newline. `gh auth token` does, and a token
 // carrying one authenticates nothing while looking exactly right in every listing.
 func TestATrailingNewlineIsNotPartOfTheSecret(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "ghp-with-a-newline\n")
 	mustRun(t, client, "secret", "set", "GH_TOKEN")
@@ -80,7 +80,7 @@ func TestATrailingNewlineIsNotPartOfTheSecret(t *testing.T) {
 // With a pipe, both arguments are an address and a name. Without one, the last argument is still the
 // value, so every script that already exists keeps working.
 func TestTheWorkspaceCanBeNamedWithThePipedForm(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 	// A second workspace, and we stay standing in the first, so naming one has to be what decides
 	// where the secret lands. Without this the test cannot tell the argument from the fallback.
 	mustRun(t, client, "workspace", "create", "elsewhere")
@@ -99,7 +99,7 @@ func TestTheWorkspaceCanBeNamedWithThePipedForm(t *testing.T) {
 }
 
 func TestAValueAsAnArgumentStillWorks(t *testing.T) {
-	client, boxes := aCrewWatchingItsSandboxes(t)
+	client, boxes := aSystemWatchingItsSandboxes(t)
 
 	mustRun(t, client, "secret", "set", "GH_TOKEN", "ghp-typed")
 	mustRun(t, client, "secret", "set", "me", "OTHER", "also-typed")
@@ -116,7 +116,7 @@ func TestAValueAsAnArgumentStillWorks(t *testing.T) {
 // A name with no value and nothing coming in is somebody who meant to pipe, so the refusal shows
 // them how rather than repeating the usage.
 func TestANameWithNoValueSaysHowToPipeItIn(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	err := refused(t, client, "secret", "set", "GH_TOKEN")
 	for _, want := range []string{"GH_TOKEN", "nothing is being piped in", "quay secret set GH_TOKEN"} {
@@ -129,19 +129,19 @@ func TestANameWithNoValueSaysHowToPipeItIn(t *testing.T) {
 // An empty pipe is a file that turned out to have nothing in it, and storing an empty credential
 // leaves a session failing to authenticate with a secret the listing says is set.
 func TestAnEmptyPipeIsRefusedRatherThanStored(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "   \n")
 	if err := refused(t, client, "secret", "set", "GH_TOKEN"); !strings.Contains(err.Error(), "was not set") {
 		t.Errorf("an empty pipe was stored: %s", err)
 	}
-	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this crew") {
+	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this system") {
 		t.Errorf("an empty value was stored anyway: %q", listed)
 	}
 }
 
 func TestTheUsageOffersThePipedForm(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	printed := mustRun(t, client, "help")
 	if !strings.Contains(printed, "standard input") {
@@ -149,9 +149,9 @@ func TestTheUsageOffersThePipedForm(t *testing.T) {
 	}
 }
 
-// The command every workspace stops repeating. "crew" where a workspace goes, the same word a skill,
+// The command every workspace stops repeating. "system" where a workspace goes, the same word a skill,
 // a hook and a piece of context already take.
-func TestASecretSetOnTheCrewReachesAWorkspaceMadeAfterwards(t *testing.T) {
+func TestASecretSetOnTheSystemReachesAWorkspaceMadeAfterwards(t *testing.T) {
 	boxes := &sandbox.FakeProvider{}
 	client := testClientWith(t, controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
@@ -159,9 +159,9 @@ func TestASecretSetOnTheCrewReachesAWorkspaceMadeAfterwards(t *testing.T) {
 	})
 
 	saying(t, "ghp-shared")
-	said := mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+	said := mustRun(t, client, "secret", "set", "system", "GH_TOKEN")
 	if !strings.Contains(said, "every workspace") {
-		t.Fatalf("setting on the crew did not say who gets it: %q", said)
+		t.Fatalf("setting on the system did not say who gets it: %q", said)
 	}
 
 	// Made after the secret was set, which is the case that used to cost a round of setting up.
@@ -171,26 +171,26 @@ func TestASecretSetOnTheCrewReachesAWorkspaceMadeAfterwards(t *testing.T) {
 
 	got, given := carried(boxes, "GH_TOKEN")
 	if !given {
-		t.Fatal("the session was not given GH_TOKEN, and the crew holds it")
+		t.Fatal("the session was not given GH_TOKEN, and the system holds it")
 	}
 	if got != "ghp-shared" {
 		t.Fatalf("the session was given %q, want ghp-shared", got)
 	}
 }
 
-// A listing that showed the crew's secrets under a workspace name would say a workspace set
+// A listing that showed the system's secrets under a workspace name would say a workspace set
 // something it never set, and one that hid them would say a token is missing that is already there.
-func TestAListingSaysWhichSecretsTheCrewHolds(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+func TestAListingSaysWhichSecretsTheSystemHolds(t *testing.T) {
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "ghp-shared")
-	mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+	mustRun(t, client, "secret", "set", "system", "GH_TOKEN")
 	saying(t, "sk-mine")
 	mustRun(t, client, "secret", "set", "STRIPE_KEY")
 
 	listed := mustRun(t, client, "secret", "list")
-	if !strings.Contains(listed, "crew") {
-		t.Fatalf("the listing does not say the crew holds one: %q", listed)
+	if !strings.Contains(listed, "system") {
+		t.Fatalf("the listing does not say the system holds one: %q", listed)
 	}
 	for _, want := range []string{"GH_TOKEN", "STRIPE_KEY"} {
 		if !strings.Contains(listed, want) {
@@ -198,23 +198,23 @@ func TestAListingSaysWhichSecretsTheCrewHolds(t *testing.T) {
 		}
 	}
 
-	// Narrowed to the crew, only the crew's.
-	only := mustRun(t, client, "secret", "list", "crew")
+	// Narrowed to the system, only the system's.
+	only := mustRun(t, client, "secret", "list", "system")
 	if !strings.Contains(only, "GH_TOKEN") {
-		t.Fatalf("quay secret list crew does not name the crew's own: %q", only)
+		t.Fatalf("quay secret list system does not name the system's own: %q", only)
 	}
 	if strings.Contains(only, "STRIPE_KEY") {
-		t.Fatalf("quay secret list crew named a workspace's own: %q", only)
+		t.Fatalf("quay secret list system named a workspace's own: %q", only)
 	}
 }
 
-// A crew secret belongs to no workspace and survives every one of them, so a removal that counted it
+// A system secret belongs to no workspace and survives every one of them, so a removal that counted it
 // would say a shared token is about to be lost with the workspace.
-func TestRemovingAWorkspaceDoesNotClaimTheCrewsSecrets(t *testing.T) {
-	client, _ := aCrewWatchingItsSandboxes(t)
+func TestRemovingAWorkspaceDoesNotClaimTheSystemsSecrets(t *testing.T) {
+	client, _ := aSystemWatchingItsSandboxes(t)
 
 	saying(t, "ghp-shared")
-	mustRun(t, client, "secret", "set", "crew", "GH_TOKEN")
+	mustRun(t, client, "secret", "set", "system", "GH_TOKEN")
 
 	name, holds, err := whatAWorkspaceHolds(context.Background(), client, workspaceIDOf(t, client, "me"))
 	if err != nil {
@@ -224,7 +224,7 @@ func TestRemovingAWorkspaceDoesNotClaimTheCrewsSecrets(t *testing.T) {
 		t.Fatalf("it names %q, want me", name)
 	}
 	if !strings.Contains(holds, "0 secrets") {
-		t.Fatalf("removing the workspace says it holds %q, and the crew's secret is not its to lose", holds)
+		t.Fatalf("removing the workspace says it holds %q, and the system's secret is not its to lose", holds)
 	}
 }
 

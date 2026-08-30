@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ImportRole takes a role into the crew, refusing a version that already exists carrying something
+// ImportRole takes a role into the system, refusing a version that already exists carrying something
 // different.
 func (p *Postgres) ImportRole(ctx context.Context, imported ImportedRole) error {
 	var held string
@@ -59,7 +59,7 @@ func (p *Postgres) ListRoles(ctx context.Context) ([]ImportedRole, error) {
 		order by r.name`)
 }
 
-// AttachRole gives a workspace a role at the newest revision the crew holds.
+// AttachRole gives a workspace a role at the newest revision the system holds.
 func (p *Postgres) AttachRole(ctx context.Context, workspace, name string) (ImportedRole, error) {
 	if _, err := p.GetWorkspace(ctx, workspace); err != nil {
 		return ImportedRole{}, err
@@ -101,27 +101,27 @@ func (p *Postgres) WorkspaceRoles(ctx context.Context, workspace string) ([]Impo
 		order by r.name`, workspace)
 }
 
-// AttachCrewRole gives the whole crew a role at the newest revision it holds.
-func (p *Postgres) AttachCrewRole(ctx context.Context, name string) (ImportedRole, error) {
+// AttachSystemRole gives the whole system a role at the newest revision it holds.
+func (p *Postgres) AttachSystemRole(ctx context.Context, name string) (ImportedRole, error) {
 	newest, err := p.roleRow(ctx, `where name = $1 order by version desc limit 1`, name)
 	if err != nil {
 		return ImportedRole{}, err
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into crew_roles (name, version) values ($1, $2)
+		insert into system_roles (name, version) values ($1, $2)
 		on conflict (name) do update
 		  set version = excluded.version, attached_at = now()`,
 		newest.Name, newest.Version); err != nil {
-		return ImportedRole{}, fmt.Errorf("attach crew role %s: %w", name, err)
+		return ImportedRole{}, fmt.Errorf("attach system role %s: %w", name, err)
 	}
 	return newest, nil
 }
 
-// DetachCrewRole takes a role away from the crew.
-func (p *Postgres) DetachCrewRole(ctx context.Context, name string) error {
-	tag, err := p.pool.Exec(ctx, `delete from crew_roles where name = $1`, name)
+// DetachSystemRole takes a role away from the system.
+func (p *Postgres) DetachSystemRole(ctx context.Context, name string) error {
+	tag, err := p.pool.Exec(ctx, `delete from system_roles where name = $1`, name)
 	if err != nil {
-		return fmt.Errorf("detach crew role %s: %w", name, err)
+		return fmt.Errorf("detach system role %s: %w", name, err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -129,11 +129,11 @@ func (p *Postgres) DetachCrewRole(ctx context.Context, name string) error {
 	return nil
 }
 
-// CrewRoles returns what the crew holds, at the versions it pinned.
-func (p *Postgres) CrewRoles(ctx context.Context) ([]ImportedRole, error) {
+// SystemRoles returns what the system holds, at the versions it pinned.
+func (p *Postgres) SystemRoles(ctx context.Context) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
 		select `+roleColumns("r")+`
-		from crew_roles c
+		from system_roles c
 		join roles r on r.name = c.name and r.version = c.version
 		order by r.name`)
 }
@@ -200,7 +200,7 @@ func intoRole(held *ImportedRole) []any {
 		&held.Origin.Path, &held.Origin.Dirty, &held.Origin.Unpushed}
 }
 
-// roleReadAt records where a role the crew already holds was read this time.
+// roleReadAt records where a role the system already holds was read this time.
 //
 // The role itself is untouched: the fingerprint matched, so these are the same bytes, and only the
 // question of who else can read them has an answer that moves.

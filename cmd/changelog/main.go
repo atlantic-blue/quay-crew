@@ -4,8 +4,8 @@
 // CHANGELOG.md and deletes the fragments in the same commit, so the release is one reviewable change
 // by a person rather than a file a command rewrote.
 //
-// It is a repository tool rather than a crew capability, which is why it is not a quay subcommand: an
-// operator's crew has no changelog.d, and a command that cannot work anywhere but here does not
+// It is a repository tool rather than a system capability, which is why it is not a quay subcommand: an
+// operator's system has no changelog.d, and a command that cannot work anywhere but here does not
 // belong in the binary they install.
 package main
 

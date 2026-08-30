@@ -13,11 +13,11 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The crew's own address, handed to a session so `quay` inside a sandbox needs no arguments. It is an
+// The system's own address, handed to a session so `quay` inside a sandbox needs no arguments. It is an
 // address rather than a credential, and reaching it also needs a network that can, which is the same
 // decision made once in configuration.
 func initializeReachableSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^a crew that sessions can reach at "([^"]*)"$`, func(ctx context.Context, at string) error {
+	sc.Step(`^a system that sessions can reach at "([^"]*)"$`, func(ctx context.Context, at string) error {
 		w := worldFrom(ctx)
 		w.reachable = at
 		return w.restart()
@@ -67,14 +67,14 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^a crew whose commits are by "([^"]*)" at "([^"]*)"$`,
+	sc.Step(`^a system whose commits are by "([^"]*)" at "([^"]*)"$`,
 		func(ctx context.Context, name, email string) error {
 			w := worldFrom(ctx)
 			w.gitAuthor = controlplane.Identity{Name: name, Email: email}
 			return w.restart()
 		})
 
-	sc.Step(`^a crew whose commits are by "([^"]*)" at no address$`, func(ctx context.Context, name string) error {
+	sc.Step(`^a system whose commits are by "([^"]*)" at no address$`, func(ctx context.Context, name string) error {
 		w := worldFrom(ctx)
 		w.gitAuthor = controlplane.Identity{Name: name}
 		return w.restart()
@@ -112,14 +112,14 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the sandbox carries the address of the crew$`, func(ctx context.Context) error {
+	sc.Step(`^the sandbox carries the address of the system$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		env, err := onlySandboxEnv(w)
 		if err != nil {
 			return err
 		}
 		if got := env["QC_GRPC_ADDR"]; got != w.reachable {
-			return fmt.Errorf("the sandbox was told the crew is at %q, want %q", got, w.reachable)
+			return fmt.Errorf("the sandbox was told the system is at %q, want %q", got, w.reachable)
 		}
 		return nil
 	})
@@ -140,7 +140,7 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the sandbox carries no crew token$`, func(ctx context.Context) error {
+	sc.Step(`^the sandbox carries no system token$`, func(ctx context.Context) error {
 		env, err := onlySandboxEnv(worldFrom(ctx))
 		if err != nil {
 			return err
@@ -157,13 +157,13 @@ func initializeReachableSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if got, set := env["QC_GRPC_ADDR"]; set {
-			return fmt.Errorf("the sandbox was told the crew is at %q, and it was not meant to be reachable", got)
+			return fmt.Errorf("the sandbox was told the system is at %q, and it was not meant to be reachable", got)
 		}
 		return nil
 	})
 
 	// A session's own name for whatever it puts in the volume it shares with every other session in
-	// the workspace. It is the identifier the crew shows, so what the console names and what a working
+	// the workspace. It is the identifier the system shows, so what the console names and what a working
 	// tree in the volume is called are the same string.
 	sc.Step(`^the sandbox carries its own session identifier$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
@@ -237,7 +237,7 @@ func onlySandboxEnv(w *world) (map[string]string, error) {
 	return env, nil
 }
 
-// The driver: the one session that drives the crew rather than doing work inside it.
+// The driver: the one session that drives the system rather than doing work inside it.
 func initializeDriverSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator opens the driver$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
@@ -283,7 +283,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the driver was opened %d times, want 2", len(w.drivers))
 		}
 		if w.drivers[0].GetId() != w.drivers[1].GetId() {
-			return fmt.Errorf("opening the crew twice gave two drivers, %s and %s",
+			return fmt.Errorf("opening the system twice gave two drivers, %s and %s",
 				w.drivers[0].GetId(), w.drivers[1].GetId())
 		}
 		if !w.drivers[0].GetDriver() {
@@ -294,7 +294,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 
 	// One per project. Two would each think they were the one, and the second would be reached by
 	// nobody.
-	sc.Step(`^the crew has one driver$`, func(ctx context.Context) error {
+	sc.Step(`^the system has one driver$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
 		if err != nil {
@@ -313,7 +313,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// What the driver has been told, which is the crew describing itself.
+// What the driver has been told, which is the system describing itself.
 func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the driver has been told what quay is$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
@@ -330,7 +330,7 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^what it was told names the words a crew is made of$`, func(ctx context.Context) error {
+	sc.Step(`^what it was told names the words a system is made of$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		told, err := w.store.GetContext(ctx, store.ContextSession, w.drivers[0].GetId())
 		if err != nil {
@@ -344,9 +344,9 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// A driver from before the crew described itself: it exists, and nothing has ever been written
+	// A driver from before the system described itself: it exists, and nothing has ever been written
 	// into its context.
-	sc.Step(`^a driver made before the crew described itself$`, func(ctx context.Context) error {
+	sc.Step(`^a driver made before the system described itself$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		opened, err := w.client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: w.projectID})
 		if err != nil {

@@ -20,7 +20,7 @@ import (
 // the old column, before the migration that renames it exists.
 //
 // What it costs to get wrong is the whole boundary: a role whose verbs did not survive the store
-// grants nothing, its session is refused at its first call, and nothing in the crew says why. That
+// grants nothing, its session is refused at its first call, and nothing in the system says why. That
 // is what quay-crew#459 was, arriving through the column being absent rather than renamed.
 func TestARoleImportedBeforeTheRenameKeepsTheVerbsItDeclared(t *testing.T) {
 	ctx := context.Background()

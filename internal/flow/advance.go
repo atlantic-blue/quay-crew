@@ -15,7 +15,7 @@ const (
 	StatusFailed  = "failed"
 	// StatusWaiting is a run sitting on a wait node until its time comes. It is a live run that
 	// costs nothing: the due time is a column a poller reads, not a timer somebody is holding, so
-	// a crew restarted underneath a waiting run still resumes it.
+	// a system restarted underneath a waiting run still resumes it.
 	StatusWaiting = "waiting"
 	// StatusAsking is a run waiting on a person. Nothing but an answer moves it: no timer, no
 	// poller, because an automation nobody answered must never carry on by itself.
@@ -185,7 +185,7 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 		// followed, so no choice node can ever see this case.
 		run.State["result.failed"] = fmt.Sprintf("%t", event.Failed || event.Unmet != "")
 		// A step that did not do what the graph said would show it worked stops the run, rather than
-		// carrying on down the edge a reply happens to be sitting on. There is no recovery the crew
+		// carrying on down the edge a reply happens to be sitting on. There is no recovery the system
 		// could pick: it knows the job did not happen and it does not know why. A run that walks its
 		// success path through job that never happened is worse than one that halts, because the
 		// summary it ends with is the model's plausible account of it.

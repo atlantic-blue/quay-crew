@@ -25,7 +25,7 @@ var spokenModes = map[string]string{
 // it was a mode at all.
 //
 // It lives here because every surface that takes a mode needs the same answer: the command line, the
-// console's wizard, and the crew's own configuration. Three tables of the same five words drift, and
+// console's wizard, and the system's own configuration. Three tables of the same five words drift, and
 // the drift shows up as one surface taking a word another refuses.
 func PermissionModeNamed(spoken string) (string, bool) {
 	mode, known := spokenModes[strings.ToLower(strings.TrimSpace(spoken))]
@@ -38,7 +38,7 @@ func PermissionModesOffered() []string {
 	return append([]string(nil), modeOrder...)
 }
 
-// PermissionModeBornIn is what a session's tasks may do when it is created: the crew's own choice when
+// PermissionModeBornIn is what a session's tasks may do when it is created: the system's own choice when
 // it made one, and otherwise the mode every session had before this was configurable.
 //
 // The fallback is here rather than at each caller so a store, a server and a test cannot each pick a

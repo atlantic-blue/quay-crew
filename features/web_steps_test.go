@@ -53,7 +53,7 @@ func initializeWebSteps(sc *godog.ScenarioContext) {
 		if len(tasks) == 0 {
 			return fmt.Errorf("no session has been dispatched to yet")
 		}
-		// sessionID is the crew's own identifier, which is what a link in the listing carries.
+		// sessionID is the system's own identifier, which is what a link in the listing carries.
 		// handle beside it names the conversation rather than the row.
 		return webFrom(ctx).visit(ctx, "/session/"+tasks[len(tasks)-1].sessionID)
 	})

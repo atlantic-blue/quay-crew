@@ -8,7 +8,7 @@ import (
 )
 
 // TestTheUsageNamesWeb keeps the command and the manual from drifting apart. The manual is what a
-// session is told the tool can do, so a command missing from it does not exist as far as the crew is
+// session is told the tool can do, so a command missing from it does not exist as far as the system is
 // concerned.
 func TestTheUsageNamesWeb(t *testing.T) {
 	if !strings.Contains(usage, "web [<address>]") {

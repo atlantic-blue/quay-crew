@@ -46,7 +46,7 @@ func TestAProjectIsToldWhichRepositoryItsWorkLandsIn(t *testing.T) {
 	}
 }
 
-// A private repository is the deliberate one, so the crew says what it costs.
+// A private repository is the deliberate one, so the system says what it costs.
 func TestAPrivateRepositorySaysItsMinutesAreMetered(t *testing.T) {
 	client := testClient(t)
 	aProject(t, client)
@@ -112,7 +112,7 @@ func TestARepositoryThatIsNotAnOwnerAndANameIsRefusedByTheTool(t *testing.T) {
 	}
 }
 
-func TestAKindOfRepositoryTheCrewDoesNotKnowIsRefusedByTheTool(t *testing.T) {
+func TestAKindOfRepositoryTheSystemDoesNotKnowIsRefusedByTheTool(t *testing.T) {
 	client := testClient(t)
 	aProject(t, client)
 

@@ -286,7 +286,7 @@ func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session str
 		return nil, false, err
 	}
 	// The mode is written here rather than left to the column's default, because the default is one
-	// value for every crew and this is the crew's own choice.
+	// value for every system and this is the system's own choice.
 	//
 	// Whether a row was written is read from the insert rather than by looking first: two callers
 	// racing for one handle would both find nothing and both call it a creation, and the session
@@ -315,7 +315,7 @@ func (p *Postgres) RecordTask(ctx context.Context, id, modelSessionID, status st
 		set model_session_id = case when $2 = '' then model_session_id else $2 end,
 		    status = $3,
 		    -- A task is running or has landed, so the session holds a container again and the stamp
-		    -- that said the crew took the last one back is no longer true. Left behind, the archive
+		    -- that said the system took the last one back is no longer true. Left behind, the archive
 		    -- rule would go on measuring against a reclaim that a dispatch already undid.
 		    reclaimed_at = null,
 		    updated_at = now()
@@ -388,7 +388,7 @@ func (p *Postgres) StopSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// ReclaimSession records that the crew took the session's container back.
+// ReclaimSession records that the system took the session's container back.
 //
 // The stamp is written beside the status rather than read off updated_at, because the archive time is
 // measured against how long the session has been reclaimed, and updated_at moves on every write.
@@ -520,7 +520,7 @@ func (p *Postgres) SetLabel(ctx context.Context, id, label string) error {
 	return nil
 }
 
-// SetDescription records what the crew observed a session to be, with the task count it was written
+// SetDescription records what the system observed a session to be, with the task count it was written
 // at, in one statement so the two can never disagree about how current it is.
 func (p *Postgres) SetDescription(ctx context.Context, id, description string, atTask int) error {
 	tag, err := p.pool.Exec(ctx,
@@ -571,7 +571,7 @@ func (p *Postgres) stampArchived(ctx context.Context, id, clause string) error {
 }
 
 // Pool is the connection this store holds, so another durable thing can sit beside it rather than
-// opening a second connection to the same database for the same crew.
+// opening a second connection to the same database for the same system.
 func (p *Postgres) Pool() *pgxpool.Pool { return p.pool }
 
 // GetContext returns what the model should be told at a scope. Nothing written is the normal state
@@ -754,7 +754,7 @@ func (p *Postgres) AppendSessionEvent(ctx context.Context, event *quaycrewv1.Ses
 	return nil
 }
 
-// ListSessionEvents returns a session's lifecycle oldest first, or the whole crew's when no session
+// ListSessionEvents returns a session's lifecycle oldest first, or the whole system's when no session
 // is named.
 //
 // Read newest first so the cap keeps the recent end, then turned back the right way round, the same
@@ -791,7 +791,7 @@ func (p *Postgres) ListSessionEvents(ctx context.Context, session string, limit 
 	return events, nil
 }
 
-// FindOrCreateDriver returns the project's driver, the session that drives the crew, creating it the
+// FindOrCreateDriver returns the project's driver, the session that drives the system, creating it the
 // first time somebody opens it.
 //
 // One per project, held by a unique index rather than by reading first and writing after: two opened

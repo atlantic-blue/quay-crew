@@ -52,7 +52,7 @@ func TaskLimit(limit int) int {
 // ErrNotFound covers deleted as well as never existed.
 var ErrNotFound = errors.New("store: not found")
 
-// StatusReclaimed is the session status this store writes when the crew takes a container back. The
+// StatusReclaimed is the session status this store writes when the system takes a container back. The
 // control plane owns the whole vocabulary; this one is here because two queries below are written in
 // terms of it and the store must not depend on the package that calls it.
 const StatusReclaimed = "reclaimed"
@@ -61,7 +61,7 @@ const StatusReclaimed = "reclaimed"
 // job, holding a failed last task, or already reclaimed and waiting to be filed.
 //
 // "running" is absent because a task is in flight. "stopped" is absent because an operator put the
-// session down, and a crew that archived what somebody halted would be overwriting a decision with
+// session down, and a system that archived what somebody halted would be overwriting a decision with
 // bookkeeping.
 func settledStatuses() []string { return []string{"idle", "failed", StatusReclaimed} }
 
@@ -84,7 +84,7 @@ func terminalPhases() []string {
 // for. The way forward is to raise the version in the manifest.
 var ErrSkillChanged = errors.New("store: that version of the skill is already imported and differs")
 
-// Imported is a skill the crew holds: the skill as its author wrote it, and when it came in.
+// Imported is a skill the system holds: the skill as its author wrote it, and when it came in.
 type Imported struct {
 	skill.Skill
 	ImportedAt time.Time
@@ -97,7 +97,7 @@ type Imported struct {
 // as it is told to work. The way forward is to raise the version in the manifest.
 var ErrRoleChanged = errors.New("store: that version of the role is already imported and differs")
 
-// ImportedRole is a role the crew holds: the role as its author wrote it, when it came in, and where
+// ImportedRole is a role the system holds: the role as its author wrote it, when it came in, and where
 // it came from.
 type ImportedRole struct {
 	role.Role
@@ -115,7 +115,7 @@ type ImportedRole struct {
 // stops gating. The way forward is to raise the version in the manifest.
 var ErrHookChanged = errors.New("store: that version of the hook is already imported and differs")
 
-// ImportedHook is a hook the crew holds: the hook as its author wrote it, and when it came in.
+// ImportedHook is a hook the system holds: the hook as its author wrote it, and when it came in.
 type ImportedHook struct {
 	hook.Hook
 	ImportedAt time.Time
@@ -125,11 +125,11 @@ type ImportedHook struct {
 //
 // Both fields are read once, when the row is written, and ignored for a session that already exists.
 // A session's sandbox is born with its capabilities and never drifts, and these are the same
-// statement one level up: changing the crew's configuration must not widen a conversation already
+// statement one level up: changing the system's configuration must not widen a conversation already
 // running, and a role's boundary must hold for every task of the session rather than for the first.
 type Birth struct {
-	// Mode is what the session's tasks may do without asking, from the crew's configuration. An
-	// unknown or empty one is the mode every session had before this was configurable, so a crew
+	// Mode is what the session's tasks may do without asking, from the system's configuration. An
+	// unknown or empty one is the mode every session had before this was configurable, so a system
 	// that says nothing does not change under an upgrade.
 	Mode string
 	// Role is the role the session works as, empty for a session that works as nobody in particular.
@@ -140,7 +140,7 @@ type Birth struct {
 	Title string
 }
 
-// SessionFilter narrows a listing. The zero value is every live session the crew has.
+// SessionFilter narrows a listing. The zero value is every live session the system has.
 type SessionFilter struct {
 	// Project wins over Workspace when both are set, being the narrower.
 	Workspace string
@@ -199,7 +199,7 @@ type Store interface {
 	// surface, so the console, the command line and the web page cannot drift apart.
 	ListSessions(ctx context.Context, filter SessionFilter) ([]*quaycrewv1.Session, error)
 	StopSession(ctx context.Context, id string) error
-	// ReclaimSession records that the crew took a session's container back: the status becomes
+	// ReclaimSession records that the system took a session's container back: the status becomes
 	// reclaimed and the moment is stamped. Nothing else moves. The conversation handle, the workspace's
 	// conversation store and the project's files are all untouched, so the next task builds a fresh
 	// container over the same state and the conversation carries on.
@@ -224,7 +224,7 @@ type Store interface {
 	// SetPermissionMode records what a session's tasks may do without asking. Whether the mode is one
 	// the model understands is the control plane's question, not the store's.
 	SetPermissionMode(ctx context.Context, id, mode string) error
-	// SetDescription records what the crew observed a session to be, and how many tasks it had when
+	// SetDescription records what the system observed a session to be, and how many tasks it had when
 	// that was written, so the two can never disagree about how current the description is.
 	SetDescription(ctx context.Context, id, description string, atTask int) error
 	// CountTasks is how many tasks a session has had, which is what decides whether a description has
@@ -245,7 +245,7 @@ type Store interface {
 	// SetContext records what the model should be told at a scope.
 	SetContext(ctx context.Context, scope ContextScope, owner, body string) error
 
-	// ImportSkill takes a skill into the crew at the version its manifest declares.
+	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//
 	// Importing the same name and version again is fine when it is the same skill and refused when it
 	// is not, because a workspace pins a version: a version that changed underneath it would be a
@@ -253,10 +253,10 @@ type Store interface {
 	ImportSkill(ctx context.Context, imported Imported) error
 	// GetSkill returns one revision of a skill, its files included.
 	GetSkill(ctx context.Context, name string, version int) (Imported, error)
-	// ListSkills returns the newest revision of every skill the crew holds, without their files. A
+	// ListSkills returns the newest revision of every skill the system holds, without their files. A
 	// listing is read to see what exists, and the files are the largest part of a skill.
 	ListSkills(ctx context.Context) ([]Imported, error)
-	// AttachSkill gives a workspace a skill, pinned to the newest revision the crew holds now.
+	// AttachSkill gives a workspace a skill, pinned to the newest revision the system holds now.
 	// Attaching one it already holds moves it to that revision.
 	AttachSkill(ctx context.Context, workspace, name string) (Imported, error)
 	// DetachSkill takes a skill away from a workspace. The skill stays imported, because another
@@ -265,71 +265,71 @@ type Store interface {
 	// WorkspaceSkills returns the skills a workspace holds, at the versions it pinned, files included,
 	// which is what a sandbox needs to be built.
 	WorkspaceSkills(ctx context.Context, workspace string) ([]Imported, error)
-	// AttachCrewSkill gives the skill to the whole crew, pinned to the newest revision the crew holds
+	// AttachSystemSkill gives the skill to the whole system, pinned to the newest revision the system holds
 	// now, so every workspace has it and a workspace made tomorrow has it too. Attaching again is how
-	// the crew moves to a newer revision.
-	AttachCrewSkill(ctx context.Context, name string) (Imported, error)
-	// DetachCrewSkill takes a skill away from the crew. A workspace that attached it for itself keeps
+	// the system moves to a newer revision.
+	AttachSystemSkill(ctx context.Context, name string) (Imported, error)
+	// DetachSystemSkill takes a skill away from the system. A workspace that attached it for itself keeps
 	// it: the two are separate statements, and the narrower one is not undone by the wider one.
-	DetachCrewSkill(ctx context.Context, name string) error
-	// CrewSkills returns what the crew holds, at the versions it pinned, files included.
-	CrewSkills(ctx context.Context) ([]Imported, error)
+	DetachSystemSkill(ctx context.Context, name string) error
+	// SystemSkills returns what the system holds, at the versions it pinned, files included.
+	SystemSkills(ctx context.Context) ([]Imported, error)
 
 	// The same six questions again for hooks. A hook is the same kind of thing as a skill, authored
 	// as files and attached at a level, and it is a separate set of calls rather than one generic
 	// set because the two entities are separate: a session refused a skill still runs, and a session
 	// refused a hook is a session running without the constraint it was supposed to have.
 	//
-	// ImportHook takes a hook into the crew at the version its manifest declares. The same name and
+	// ImportHook takes a hook into the system at the version its manifest declares. The same name and
 	// version again is fine when it is the same hook and refused when it is not, for the reason
 	// ImportSkill gives.
 	ImportHook(ctx context.Context, imported ImportedHook) error
 	// GetHook returns one revision of a hook, its files included.
 	GetHook(ctx context.Context, name string, version int) (ImportedHook, error)
-	// ListHooks returns the newest revision of every hook the crew holds, without their files.
+	// ListHooks returns the newest revision of every hook the system holds, without their files.
 	ListHooks(ctx context.Context) ([]ImportedHook, error)
-	// AttachHook gives a workspace a hook, pinned to the newest revision the crew holds now.
+	// AttachHook gives a workspace a hook, pinned to the newest revision the system holds now.
 	AttachHook(ctx context.Context, workspace, name string) (ImportedHook, error)
 	// DetachHook takes a hook away from a workspace. The hook stays imported.
 	DetachHook(ctx context.Context, workspace, name string) error
 	// WorkspaceHooks returns the hooks a workspace holds, at the versions it pinned, files included,
 	// which is what a sandbox needs to be built.
 	WorkspaceHooks(ctx context.Context, workspace string) ([]ImportedHook, error)
-	// AttachCrewHook gives the hook to the whole crew, so every workspace has it and one made
-	// tomorrow has it too. This is the level most hooks want: a constraint the crew agreed on is not
+	// AttachSystemHook gives the hook to the whole system, so every workspace has it and one made
+	// tomorrow has it too. This is the level most hooks want: a constraint the system agreed on is not
 	// usually a per workspace opinion.
-	AttachCrewHook(ctx context.Context, name string) (ImportedHook, error)
-	// DetachCrewHook takes a hook away from the crew. A workspace that attached it for itself keeps
+	AttachSystemHook(ctx context.Context, name string) (ImportedHook, error)
+	// DetachSystemHook takes a hook away from the system. A workspace that attached it for itself keeps
 	// it: the two are separate statements, and the narrower one is not undone by the wider one.
-	DetachCrewHook(ctx context.Context, name string) error
-	// CrewHooks returns what the crew holds, at the versions it pinned, files included.
-	CrewHooks(ctx context.Context) ([]ImportedHook, error)
+	DetachSystemHook(ctx context.Context, name string) error
+	// SystemHooks returns what the system holds, at the versions it pinned, files included.
+	SystemHooks(ctx context.Context) ([]ImportedHook, error)
 
 	// The same questions again for roles, and a separate set of calls for the same reason hooks are
 	// separate: a role is its own entity, and a workspace that holds a skill has said nothing about
 	// which roles its job may be split into.
 	//
-	// ImportRole takes a role into the crew at the version its manifest declares. The same name and
+	// ImportRole takes a role into the system at the version its manifest declares. The same name and
 	// version again is fine when it is the same role and refused when it is not.
 	ImportRole(ctx context.Context, imported ImportedRole) error
 	// GetRole returns one revision of a role.
 	GetRole(ctx context.Context, name string, version int) (ImportedRole, error)
-	// ListRoles returns the newest revision of every role the crew holds.
+	// ListRoles returns the newest revision of every role the system holds.
 	ListRoles(ctx context.Context) ([]ImportedRole, error)
-	// AttachRole gives a workspace a role, pinned to the newest revision the crew holds now.
+	// AttachRole gives a workspace a role, pinned to the newest revision the system holds now.
 	AttachRole(ctx context.Context, workspace, name string) (ImportedRole, error)
 	// DetachRole takes a role away from a workspace. The role stays imported.
 	DetachRole(ctx context.Context, workspace, name string) error
 	// WorkspaceRoles returns the roles a workspace holds, at the versions it pinned.
 	WorkspaceRoles(ctx context.Context, workspace string) ([]ImportedRole, error)
-	// AttachCrewRole gives the role to the whole crew, so every workspace has it and one made
+	// AttachSystemRole gives the role to the whole system, so every workspace has it and one made
 	// tomorrow has it too.
-	AttachCrewRole(ctx context.Context, name string) (ImportedRole, error)
-	// DetachCrewRole takes a role away from the crew. A workspace that attached it for itself keeps
+	AttachSystemRole(ctx context.Context, name string) (ImportedRole, error)
+	// DetachSystemRole takes a role away from the system. A workspace that attached it for itself keeps
 	// it: the two are separate statements, and the narrower one is not undone by the wider one.
-	DetachCrewRole(ctx context.Context, name string) error
-	// CrewRoles returns what the crew holds, at the versions it pinned.
-	CrewRoles(ctx context.Context) ([]ImportedRole, error)
+	DetachSystemRole(ctx context.Context, name string) error
+	// SystemRoles returns what the system holds, at the versions it pinned.
+	SystemRoles(ctx context.Context) ([]ImportedRole, error)
 
 	// AppendTask records one task of a session's history, and is safe to call twice with the same
 	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has
@@ -347,7 +347,7 @@ type Store interface {
 	// the same event for the same reason AppendTask is: the event's Id is what makes a repeat harmless.
 	AppendSessionEvent(ctx context.Context, event *quaycrewv1.SessionEvent) error
 	// ListSessionEvents returns a session's lifecycle oldest first, capped at limit, so it reads the
-	// way it happened. An empty session asks for the whole crew's, which is what a view of what is
+	// way it happened. An empty session asks for the whole system's, which is what a view of what is
 	// going on right now reads. A limit of zero or less means the default.
 	ListSessionEvents(ctx context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error)
 
@@ -422,7 +422,7 @@ type Store interface {
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
-	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a crew
+	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a system
 	// nobody configured refuses rather than allows.
 	WorkspaceLimits(ctx context.Context, workspace string) (job.Limits, error)
 	SetWorkspaceLimits(ctx context.Context, limits job.Limits) (job.Limits, error)
@@ -431,7 +431,7 @@ type Store interface {
 	// the way it happened. A limit of zero or less means the default.
 	ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error)
 
-	// Probe writes, so a caller can prove the store still takes one. A crew whose reads all answer
+	// Probe writes, so a caller can prove the store still takes one. A system whose reads all answer
 	// and whose writes never land looks healthy from every listing, which is how a control plane that
 	// dispatched nothing went unnoticed for an hour. It writes one row and keeps writing over it, so
 	// asking often costs one row and never grows.
@@ -441,13 +441,13 @@ type Store interface {
 	Close()
 }
 
-// ContextScope is which level a piece of context belongs to. They layer: the crew's is true
+// ContextScope is which level a piece of context belongs to. They layer: the system's is true
 // everywhere, a workspace's inside it, a project's inside that.
 type ContextScope string
 
 const (
-	// ContextCrew is true of everything this crew does. Its owner is empty.
-	ContextCrew ContextScope = "crew"
+	// ContextSystem is true of everything this system does. Its owner is empty.
+	ContextSystem ContextScope = "system"
 	// ContextWorkspace is true of one workspace, owned by its id.
 	ContextWorkspace ContextScope = "workspace"
 	// ContextProject is true of one project, owned by its id.
@@ -457,16 +457,16 @@ const (
 	ContextSession ContextScope = "session"
 )
 
-// ContextLevels are the scopes in order, outermost first. They layer: everything the crew knows, then
+// ContextLevels are the scopes in order, outermost first. They layer: everything the system knows, then
 // the workspace, then the project, then this one conversation.
 func ContextLevels() []ContextScope {
-	return []ContextScope{ContextCrew, ContextWorkspace, ContextProject, ContextSession}
+	return []ContextScope{ContextSystem, ContextWorkspace, ContextProject, ContextSession}
 }
 
 // KnownContextScope says whether a scope is one of the three.
 func KnownContextScope(scope ContextScope) bool {
 	switch scope {
-	case ContextCrew, ContextWorkspace, ContextProject, ContextSession:
+	case ContextSystem, ContextWorkspace, ContextProject, ContextSession:
 		return true
 	default:
 		return false
@@ -483,9 +483,9 @@ func NewID() string {
 // NewConversationID returns an identifier for a conversation with the model.
 //
 // It is a version 4 identifier rather than one of ours, because the model's command line tool is
-// given it with `--session-id` and rejects anything that is not one. The crew chooses it rather than
+// given it with `--session-id` and rejects anything that is not one. The system chooses it rather than
 // reading it back afterwards: a conversation started interactively never tells anybody what it picked,
-// so every conversation opened from the panel was one the crew could not name, could not show a
+// so every conversation opened from the panel was one the system could not name, could not show a
 // history for, and could not count the tokens of.
 func NewConversationID() string {
 	return uuid.NewString()

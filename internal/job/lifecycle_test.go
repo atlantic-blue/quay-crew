@@ -18,7 +18,7 @@ import (
 // operator writes a number, because a mechanism nobody can turn on is not shipped either.
 
 // eyes is an attachment double: it says who is in a session, and can refuse to answer at all, which
-// is the case a crew has to read as attached rather than as nobody.
+// is the case a system has to read as attached rather than as nobody.
 type eyes struct {
 	watching map[string]bool
 	refuse   error
@@ -41,7 +41,7 @@ func aSettledSession(id string, idleFor time.Duration) *quaycrewv1.Session {
 	}
 }
 
-// aReclaimedSession is one the crew already took the container back from, that long ago.
+// aReclaimedSession is one the system already took the container back from, that long ago.
 func aReclaimedSession(id string, reclaimedFor time.Duration) *quaycrewv1.Session {
 	at := timestamppb.New(time.Now().UTC().Add(-reclaimedFor))
 	return &quaycrewv1.Session{
@@ -51,9 +51,9 @@ func aReclaimedSession(id string, reclaimedFor time.Duration) *quaycrewv1.Sessio
 }
 
 // aLifecycleController is a controller that can see sessions and can tell who is in them.
-func aLifecycleController(t *testing.T) (*job.Controller, *rows, *crew, *eyes) {
+func aLifecycleController(t *testing.T) (*job.Controller, *rows, *system, *eyes) {
 	t.Helper()
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	plane.store = kept
 	watching := &eyes{watching: map[string]bool{}}
 	return job.NewController(kept, plane, nil, nil, nil).Watching(watching), kept, plane, watching
@@ -81,10 +81,10 @@ func TestWithBothTimesUnsetNothingIsReclaimedAndNothingIsArchived(t *testing.T) 
 	if kept.sessionStatus("session-idle-for-a-year") != "idle" {
 		t.Fatalf("the idle session reads %q, want it untouched", kept.sessionStatus("session-idle-for-a-year"))
 	}
-	// Nothing was even asked, which is the cost claim: a crew with no times set pays no exec per
+	// Nothing was even asked, which is the cost claim: a system with no times set pays no exec per
 	// session per tick for a signal it will not act on.
 	if len(watching.asked) != 0 {
-		t.Fatalf("the crew asked whether somebody was in %v, and it had no reason to look", watching.asked)
+		t.Fatalf("the system asked whether somebody was in %v, and it had no reason to look", watching.asked)
 	}
 }
 
@@ -140,8 +140,8 @@ func TestASessionSomebodyIsInIsNeverReclaimed(t *testing.T) {
 	}
 }
 
-// A crew that cannot tell must read that as attached. The two mistakes are not the same size.
-func TestASessionTheCrewCannotSeeIntoIsNeverReclaimed(t *testing.T) {
+// A system that cannot tell must read that as attached. The two mistakes are not the same size.
+func TestASessionTheSystemCannotSeeIntoIsNeverReclaimed(t *testing.T) {
 	controller, kept, plane, watching := aLifecycleController(t)
 	kept.allow(job.Limits{Workspace: "workspace-1", ReclaimSeconds: 60})
 	kept.addSession(aSettledSession("session-unreadable", 365*24*time.Hour))
@@ -158,7 +158,7 @@ func TestASessionTheCrewCannotSeeIntoIsNeverReclaimed(t *testing.T) {
 // A controller nobody wired a signal into reclaims nothing, so turning the mechanism on is wiring
 // rather than a number alone.
 func TestAControllerWithNoWayToLookReclaimsNothing(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	plane.store = kept
 	controller := job.NewController(kept, plane, nil, nil, nil)
 	kept.allow(job.Limits{Workspace: "workspace-1", ReclaimSeconds: 60})
@@ -282,7 +282,7 @@ func TestOneWorkspacesReclaimTimeDoesNotReachAnother(t *testing.T) {
 	}
 }
 
-// A refusal from the crew is a session that moved between the query and the write. It is logged and
+// A refusal from the system is a session that moved between the query and the write. It is logged and
 // the tick carries on, because one row that would not move must not stop the others.
 func TestASessionThatRefusesToBeReclaimedDoesNotStopTheOthers(t *testing.T) {
 	controller, kept, plane, _ := aLifecycleController(t)

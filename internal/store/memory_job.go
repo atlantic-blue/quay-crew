@@ -334,7 +334,7 @@ func (m *Memory) StartJob(_ context.Context, id string, lease job.Lease, events 
 }
 
 // HoldJob says on a pending job why it is not being started. The phase does not move: the job is
-// still pending and still the next thing this crew will run, and the reason is what tells an
+// still pending and still the next thing this system will run, and the reason is what tells an
 // operator whether it is waiting its turn or waiting for a machine.
 func (m *Memory) HoldJob(_ context.Context, id, reason string, event *job.Event) (*job.Job, error) {
 	m.mu.Lock()
@@ -399,7 +399,7 @@ func (m *Memory) ReleaseJob(_ context.Context, id string, events []*job.Event) (
 	return &kept, nil
 }
 
-// RequeueJob puts a running job back to pending because the crew could not start it. Only where
+// RequeueJob puts a running job back to pending because the system could not start it. Only where
 // this controller still holds the lease, so a controller that lost the row cannot put another
 // controller's job back under it.
 func (m *Memory) RequeueJob(_ context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error) {

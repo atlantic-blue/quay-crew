@@ -8,7 +8,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
-// theCredentials records what the crew was asked to take back, which is the whole of what a
+// theCredentials records what the system was asked to take back, which is the whole of what a
 // controller does about a credential: it never holds one.
 type theCredentials struct {
 	mu    sync.Mutex
@@ -33,22 +33,22 @@ func (c *theCredentials) took() []string {
 func TestACredentialIsTakenBackWheneverItsJobEnds(t *testing.T) {
 	for _, one := range []struct {
 		name string
-		end  func(plane *crew)
+		end  func(plane *system)
 		want string
 	}{
 		{
 			name: "the task answered",
-			end:  func(plane *crew) { plane.lands("the bill is due on the 14th") },
+			end:  func(plane *system) { plane.lands("the bill is due on the 14th") },
 			want: "job-1 " + job.PhaseDone,
 		},
 		{
 			name: "the task failed",
-			end:  func(plane *crew) { plane.fails("the sandbox went away") },
+			end:  func(plane *system) { plane.fails("the sandbox went away") },
 			want: "job-1 " + job.PhaseFailed,
 		},
 	} {
 		t.Run(one.name, func(t *testing.T) {
-			kept, plane := newRows(), newCrew()
+			kept, plane := newRows(), newSystem()
 			credentials := &theCredentials{}
 			controller := job.NewController(kept, plane, nil, nil, nil).Revoking(credentials)
 			kept.add(declaredJob("read the electricity bill"))
@@ -56,7 +56,7 @@ func TestACredentialIsTakenBackWheneverItsJobEnds(t *testing.T) {
 
 			controller.Tick(ctx)
 			if took := credentials.took(); len(took) != 0 {
-				t.Fatalf("the crew took %v back while the job was still running", took)
+				t.Fatalf("the system took %v back while the job was still running", took)
 			}
 
 			one.end(plane)
@@ -64,13 +64,13 @@ func TestACredentialIsTakenBackWheneverItsJobEnds(t *testing.T) {
 
 			took := credentials.took()
 			if len(took) != 1 || took[0] != one.want {
-				t.Fatalf("the crew took back %v, want [%q]", took, one.want)
+				t.Fatalf("the system took back %v, want [%q]", took, one.want)
 			}
 		})
 	}
 }
 
-// A crew with no revoker runs the job exactly the same. It is the crew a test builds, and a
+// A system with no revoker runs the job exactly the same. It is the system a test builds, and a
 // controller that needed one to finish a job would be a controller that could not run without a
 // control plane beside it.
 func TestAControllerWithNoRevokerStillRunsTheJob(t *testing.T) {
@@ -83,6 +83,6 @@ func TestAControllerWithNoRevokerStillRunsTheJob(t *testing.T) {
 	controller.Tick(ctx)
 
 	if got := kept.get(one.ID); got.Phase != job.PhaseDone {
-		t.Fatalf("the job is %q on a crew that takes no credential back", got.Phase)
+		t.Fatalf("the job is %q on a system that takes no credential back", got.Phase)
 	}
 }

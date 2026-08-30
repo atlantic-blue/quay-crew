@@ -138,7 +138,7 @@ edges:
 }
 
 // The path is read inside the session's own working directory, so a graph cannot point the check at
-// the machine the crew runs on.
+// the machine the system runs on.
 func TestAnExpectedFileOutsideTheSessionIsRefused(t *testing.T) {
 	for _, path := range []string{"/etc/passwd", "../../etc/passwd", "up/../../out"} {
 		_, err := Parse([]byte(`

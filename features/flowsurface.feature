@@ -57,7 +57,7 @@ Feature: The operator drives flows from the command line
     Then the control plane refuses it as invalid
 
   # A run dispatches tasks on its own. Without a way to stop one, the only lever an operator has is
-  # taking the crew down, which takes every other conversation with it.
+  # taking the system down, which takes every other conversation with it.
   Scenario: The operator stops a run in flight, and the reason is kept
     Given a task takes a moment
     When the operator imports a flow graph that cycles, capped at 50 transitions
@@ -85,7 +85,7 @@ Feature: The operator drives flows from the command line
     When the operator stops a run that does not exist
     Then the control plane refuses it as not found
 
-  # The driver is a session that can drive the crew. Writing an automation down is the operator's
+  # The driver is a session that can drive the system. Writing an automation down is the operator's
   # act, the way importing a skill is; running one is dispatch, which the driver already has.
   Scenario: The driver cannot import a flow graph
     When the driver imports a flow graph

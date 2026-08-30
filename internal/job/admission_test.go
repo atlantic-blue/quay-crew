@@ -55,10 +55,10 @@ func (m *aMachine) holding() int {
 }
 
 // The acceptance test for the whole change, in one scenario: a job the machine cannot host waits,
-// and the crew says which resource ran out. It is not dispatched, so it cannot be failed on a
+// and the system says which resource ran out. It is not dispatched, so it cannot be failed on a
 // timeout two minutes later, which is what took the runtime down on 30 August 2026.
 func TestAJobTheMachineHasNoRoomForWaitsRatherThanRunning(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	machine := newMachine()
 	machine.full = true
 	controller := job.NewController(kept, plane, nil, nil, nil).Placing(machine)
@@ -67,7 +67,7 @@ func TestAJobTheMachineHasNoRoomForWaitsRatherThanRunning(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks on a full machine, want 0", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks on a full machine, want 0", plane.sent())
 	}
 	got := kept.get(one.ID)
 	if got.Phase != job.PhasePending {
@@ -84,7 +84,7 @@ func TestAJobTheMachineHasNoRoomForWaitsRatherThanRunning(t *testing.T) {
 // And it runs the moment there is room, without anybody touching it. The job was never failed, so
 // there is nothing to declare again.
 func TestTheHeldJobRunsOnceTheMachineHasRoom(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	machine := newMachine()
 	machine.full = true
 	controller := job.NewController(kept, plane, nil, nil, nil).Placing(machine)
@@ -102,7 +102,7 @@ func TestTheHeldJobRunsOnceTheMachineHasRoom(t *testing.T) {
 	controller.Tick(ctx)
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks once there was room, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks once there was room, want 1", plane.sent())
 	}
 	got := kept.get(one.ID)
 	if got.Phase != job.PhaseRunning {
@@ -117,7 +117,7 @@ func TestTheHeldJobRunsOnceTheMachineHasRoom(t *testing.T) {
 // machine stays full for minutes, so a write per tick is a row update and a record a second saying
 // what the last one said.
 func TestAHeldJobIsWrittenOnceForOneReason(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	machine := newMachine()
 	machine.full = true
 	controller := job.NewController(kept, plane, nil, nil, nil).Placing(machine)
@@ -141,7 +141,7 @@ func TestAHeldJobIsWrittenOnceForOneReason(t *testing.T) {
 // Room taken for a job that never became a sandbox goes back. Otherwise a machine loses a sandbox's
 // worth of capacity to every dispatch that failed, and admits less work after every failure.
 func TestRoomIsGivenBackWhenTheDispatchFails(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	machine := newMachine()
 	controller := job.NewController(kept, plane, nil, nil, nil).Placing(machine)
 	plane.refuse = errors.New("no sandbox could be made")
@@ -158,11 +158,11 @@ func TestRoomIsGivenBackWhenTheDispatchFails(t *testing.T) {
 	}
 }
 
-// A job that reaches a container keeps its room, under the key the crew will place the container
+// A job that reaches a container keeps its room, under the key the system will place the container
 // with. Releasing here would let the next job in against capacity that is already spoken for, which
 // is the burst that put nine jobs on a machine with room for eight.
 func TestAJobThatDispatchedKeepsItsRoom(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	machine := newMachine()
 	controller := job.NewController(kept, plane, nil, nil, nil).Placing(machine)
 	one := kept.add(declaredJob("read the electricity bill"))
@@ -176,13 +176,13 @@ func TestAJobThatDispatchedKeepsItsRoom(t *testing.T) {
 	machine.mu.Lock()
 	defer machine.mu.Unlock()
 	if _, found := machine.held[key]; !found {
-		t.Fatalf("the room is held under %v, and the crew will place the container under %q",
+		t.Fatalf("the room is held under %v, and the system will place the container under %q",
 			keysOf(machine.held), key)
 	}
 }
 
 // A controller with no machine to ask runs what it reads, which is what every controller did before
-// admission was arithmetic. A crew whose sessions do not run on a daemon has no runtime to read.
+// admission was arithmetic. A system whose sessions do not run on a daemon has no runtime to read.
 func TestAControllerWithNoMachineStillRunsJobs(t *testing.T) {
 	controller, kept, plane := aController(t)
 	kept.add(declaredJob("read the electricity bill"))
@@ -190,7 +190,7 @@ func TestAControllerWithNoMachineStillRunsJobs(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 }
 

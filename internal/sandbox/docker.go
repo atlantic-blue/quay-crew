@@ -25,17 +25,17 @@ type DockerProvider struct {
 	Mounts []string
 	// Storage keeps the workspace's conversation store and the project's files on the host.
 	Storage Storage
-	// Network is the crew's own network, and the driver is the only sandbox on it. It carries the
+	// Network is the system's own network, and the driver is the only sandbox on it. It carries the
 	// store, the broker and the observability stack as well as the control plane, so it is a real
 	// widening, and it is configuration rather than a default. Empty puts the driver on the session
-	// network below, which is all it needs to drive the crew.
+	// network below, which is all it needs to drive the system.
 	Network string
 	// SessionNetwork is the network every sandbox joins to reach the control plane. The control plane
-	// is on it and nothing else of the crew's is, so a session can reach the crew and no store, no
+	// is on it and nothing else of the system's is, so a session can reach the system and no store, no
 	// broker and no dashboard.
 	//
-	// Reaching the crew is not permission to do anything there. A session is refused every call until
-	// it presents a credential the crew minted for the job it is running, and that credential
+	// Reaching the system is not permission to do anything there. A session is refused every call until
+	// it presents a credential the system minted for the job it is running, and that credential
 	// carries the verbs its role declared and expires with the job. So this decides what
 	// a session can address, and the credential decides what it may do.
 	//
@@ -44,7 +44,7 @@ type DockerProvider struct {
 	SessionNetwork string
 	// DriverMounts are host paths the driver gets and an ordinary session does not, each
 	// "host:container[:ro]". They are what makes the driver the glue between the machine and the
-	// crew: without them it can reach the control plane and see nothing to bring to it.
+	// system: without them it can reach the control plane and see nothing to bring to it.
 	DriverMounts []string
 	// Memory is how much memory one session may take, as the daemon spells it, for example "4g".
 	// Empty gives a session no limit, which is what every session had before this existed.
@@ -194,7 +194,7 @@ func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
 //   - a client listed, so somebody is attached.
 //   - the command ran and exited non zero, so there is no tmux server, no such conversation, or no
 //     such container. In every one of those, nobody is typing into it.
-//   - the command could not be run at all, so the daemon is unreachable and the crew cannot tell. The
+//   - the command could not be run at all, so the daemon is unreachable and the system cannot tell. The
 //     error is returned rather than swallowed, because a caller must not read it as nobody.
 func (d DockerProvider) Attached(ctx context.Context, sessionID string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID),
@@ -224,14 +224,14 @@ func (d DockerProvider) Attached(ctx context.Context, sessionID string) (bool, e
 // does fail here is docker itself, which is the answer the caller needs.
 //
 // The arguments arrive separated by a zero byte, which is how the kernel writes them, and they are
-// left that way. Translating them here would put one more command between the crew and the answer,
+// left that way. Translating them here would put one more command between the system and the answer,
 // and a sandbox image whose translation flag behaved differently would report every container as
 // empty. Go splits them instead.
 const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; echo; done; exit 0`
 
 // RuntimeRunning asks the container's own process table whether a model runtime is up in it.
 //
-// This is the state the crew could not see. `quay attach` opens the conversation in tmux inside the
+// This is the state the system could not see. `quay attach` opens the conversation in tmux inside the
 // sandbox, and detaching leaves the runtime answering with nobody watching it, so the tmux question
 // says nobody is there and the row says no task is open, and both are true while a conversation is
 // mid answer.
@@ -244,7 +244,7 @@ const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; ec
 //   - a matching command line, so a runtime is up.
 //   - the command ran and exited non zero, so there is no container, or no shell in it. Nothing is
 //     running in either.
-//   - the command could not be run at all, so the daemon is unreachable and the crew cannot tell. The
+//   - the command could not be run at all, so the daemon is unreachable and the system cannot tell. The
 //     error is returned rather than swallowed, because a caller must not read it as nothing.
 func (d DockerProvider) RuntimeRunning(ctx context.Context, sessionID string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID), "sh", "-c", processTable)
@@ -312,7 +312,7 @@ func cpuShares(percent int) int {
 
 // runArgs is the whole `docker run` for a session's sandbox. It is a function of its own so a test can
 // read what the daemon would be asked for without a daemon: whether the sandbox joins a network at all
-// is the difference between a session that can drive the crew and one that cannot.
+// is the difference between a session that can drive the system and one that cannot.
 func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
 	args := []string{"run", "--detach", "--name", name, "--tmpfs", secretsMount()}
 	if shares := cpuShares(cfg.Request.Processor); shares > 0 {
@@ -353,10 +353,10 @@ func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string 
 
 // networkFor is the one network this sandbox joins, decided here because a sandbox keeps what it was
 // created with. There is no promotion: a container that is already running joins nothing later, so a
-// session that has to reach the crew has to be born able to.
+// session that has to reach the system has to be born able to.
 //
-// A session joins the session network, where the control plane is and nothing else of the crew's is.
-// The driver joins the crew's own network when the operator named one, because that is the wider
+// A session joins the session network, where the control plane is and nothing else of the system's is.
+// The driver joins the system's own network when the operator named one, because that is the wider
 // access it was given deliberately, and falls back to the session network, which is all it needs.
 func (d DockerProvider) networkFor(cfg Config) string {
 	if cfg.Driver && d.Network != "" {
@@ -371,12 +371,12 @@ func (d DockerProvider) networkFor(cfg Config) string {
 // a secret needs a fresh container to get the directory.
 //
 // It is owned by the sandbox user and shut to everybody else. Without the owner it belongs to root,
-// and the crew, which writes into it as the sandbox's own user, is refused.
+// and the system, which writes into it as the sandbox's own user, is refused.
 func secretsMount() string {
 	return fmt.Sprintf("%s:mode=0700,uid=%d,gid=%d", SecretsPath, UserID, UserID)
 }
 
-// BuildLabel is where a sandbox image records which build of the crew it was made from. `make
+// BuildLabel is where a sandbox image records which build of the system it was made from. `make
 // sandbox-image` stamps it; anything reading it treats an image without one as saying nothing.
 const BuildLabel = "com.quaycrew.build"
 
@@ -384,7 +384,7 @@ const BuildLabel = "com.quaycrew.build"
 // no answer to be had: no image name, no daemon, no image pulled yet, or an image made before this
 // was stamped.
 //
-// Empty is deliberately not a verdict. A crew that cannot see which build its image came from should
+// Empty is deliberately not a verdict. A system that cannot see which build its image came from should
 // say nothing about it rather than accuse a perfectly good image of being stale, so every caller
 // treats empty as "unknown" and shows nothing.
 func ImageBuild(ctx context.Context, image string) string {

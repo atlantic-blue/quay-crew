@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ImportSkill takes a skill into the crew, in one transaction, refusing a version that already exists
+// ImportSkill takes a skill into the system, in one transaction, refusing a version that already exists
 // carrying something different.
 //
 // The whole skill goes in together: a skill whose manifest landed and whose files did not is a
@@ -77,7 +77,7 @@ func (p *Postgres) GetSkill(ctx context.Context, name string, version int) (Impo
 
 // ListSkills returns the newest revision of every skill, without their files.
 //
-// Without the files deliberately. A listing is read to see what the crew can do, and the files are by
+// Without the files deliberately. A listing is read to see what the system can do, and the files are by
 // far the largest part of a skill, so carrying them would make the cheapest call the most expensive.
 func (p *Postgres) ListSkills(ctx context.Context) ([]Imported, error) {
 	rows, err := p.pool.Query(ctx, `
@@ -111,7 +111,7 @@ func (p *Postgres) ListSkills(ctx context.Context) ([]Imported, error) {
 	return out, nil
 }
 
-// AttachSkill gives a workspace a skill at the newest revision the crew holds.
+// AttachSkill gives a workspace a skill at the newest revision the system holds.
 func (p *Postgres) AttachSkill(ctx context.Context, workspace, name string) (Imported, error) {
 	if _, err := p.GetWorkspace(ctx, workspace); err != nil {
 		return Imported{}, err
@@ -180,18 +180,18 @@ func (p *Postgres) WorkspaceSkills(ctx context.Context, workspace string) ([]Imp
 	return out, nil
 }
 
-// AttachCrewSkill gives the whole crew a skill at the newest revision it holds.
-func (p *Postgres) AttachCrewSkill(ctx context.Context, name string) (Imported, error) {
+// AttachSystemSkill gives the whole system a skill at the newest revision it holds.
+func (p *Postgres) AttachSystemSkill(ctx context.Context, name string) (Imported, error) {
 	newest, err := p.skillRow(ctx, `where name = $1 order by version desc limit 1`, name)
 	if err != nil {
 		return Imported{}, err
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into crew_skills (name, version) values ($1, $2)
+		insert into system_skills (name, version) values ($1, $2)
 		on conflict (name) do update
 		  set version = excluded.version, attached_at = now()`,
 		newest.Name, newest.Version); err != nil {
-		return Imported{}, fmt.Errorf("attach crew skill %s: %w", name, err)
+		return Imported{}, fmt.Errorf("attach system skill %s: %w", name, err)
 	}
 	if err := p.fillSkill(ctx, &newest); err != nil {
 		return Imported{}, err
@@ -199,11 +199,11 @@ func (p *Postgres) AttachCrewSkill(ctx context.Context, name string) (Imported, 
 	return newest, nil
 }
 
-// DetachCrewSkill takes a skill away from the crew.
-func (p *Postgres) DetachCrewSkill(ctx context.Context, name string) error {
-	tag, err := p.pool.Exec(ctx, `delete from crew_skills where name = $1`, name)
+// DetachSystemSkill takes a skill away from the system.
+func (p *Postgres) DetachSystemSkill(ctx context.Context, name string) error {
+	tag, err := p.pool.Exec(ctx, `delete from system_skills where name = $1`, name)
 	if err != nil {
-		return fmt.Errorf("detach crew skill %s: %w", name, err)
+		return fmt.Errorf("detach system skill %s: %w", name, err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -211,15 +211,15 @@ func (p *Postgres) DetachCrewSkill(ctx context.Context, name string) error {
 	return nil
 }
 
-// CrewSkills returns what the crew holds, at the versions it pinned, files included.
-func (p *Postgres) CrewSkills(ctx context.Context) ([]Imported, error) {
+// SystemSkills returns what the system holds, at the versions it pinned, files included.
+func (p *Postgres) SystemSkills(ctx context.Context) ([]Imported, error) {
 	rows, err := p.pool.Query(ctx, `
 		select s.name, s.version, s.summary, s.binaries, s.brief, s.imported_at
-		from crew_skills c
+		from system_skills c
 		join skills s on s.name = c.name and s.version = c.version
 		order by s.name`)
 	if err != nil {
-		return nil, fmt.Errorf("list crew skills: %w", err)
+		return nil, fmt.Errorf("list system skills: %w", err)
 	}
 	defer rows.Close()
 
@@ -228,12 +228,12 @@ func (p *Postgres) CrewSkills(ctx context.Context) ([]Imported, error) {
 		var held Imported
 		if err := rows.Scan(&held.Name, &held.Version, &held.Summary, &held.Binaries, &held.Brief,
 			&held.ImportedAt); err != nil {
-			return nil, fmt.Errorf("list crew skills: %w", err)
+			return nil, fmt.Errorf("list system skills: %w", err)
 		}
 		out = append(out, held)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list crew skills: %w", err)
+		return nil, fmt.Errorf("list system skills: %w", err)
 	}
 	for at := range out {
 		if err := p.fillSkill(ctx, &out[at]); err != nil {
@@ -318,7 +318,7 @@ func (p *Postgres) fillFiles(ctx context.Context, held *Imported) error {
 // A nil slice arrives as an explicit NULL rather than as an absent value, so the column's default of
 // '{}' never applies and the insert is refused. Every skill shipped until now declared at least one
 // binary, so a skill that needs nothing from the sandbox was the first thing to hit it, and it hit it
-// on a real crew rather than in a test.
+// on a real system rather than in a test.
 func textArray(values []string) []string {
 	if values == nil {
 		return []string{}

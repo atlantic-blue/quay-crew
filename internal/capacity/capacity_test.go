@@ -7,7 +7,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/capacity"
 )
 
-// The machine that broke: a runtime holding 7,653 mebibytes and fourteen processors, with the crew's
+// The machine that broke: a runtime holding 7,653 mebibytes and fourteen processors, with the system's
 // own containers taking 2,048 mebibytes and two processors out of it. What is left for sandboxes is
 // 5,605 mebibytes and 1,200 per cent.
 func aMachine() capacity.Node {
@@ -26,7 +26,7 @@ func TestAnEmptyMachineAdmitsASandbox(t *testing.T) {
 		t.Fatalf("an empty machine refused a sandbox: %s", verdict.Reason)
 	}
 	if verdict.Unmeasured {
-		t.Error("a machine the crew read reads as unmeasured")
+		t.Error("a machine the system read reads as unmeasured")
 	}
 }
 
@@ -52,7 +52,7 @@ func TestTheBoundaryIsTheLastSandboxThatFits(t *testing.T) {
 }
 
 // Exactly what is left, to the byte. A machine with room for precisely one more sandbox admits it:
-// the check is what fits, not what fits comfortably, and a crew that refused this would strand the
+// the check is what fits, not what fits comfortably, and a system that refused this would strand the
 // last sandbox on every machine.
 func TestASandboxThatFitsExactlyIsAdmitted(t *testing.T) {
 	node := capacity.Node{
@@ -110,12 +110,12 @@ func TestTheRefusalSaysWhatWasAskedForAndWhatWasLeft(t *testing.T) {
 	}
 }
 
-// A crew that cannot read its runtime admits work and says so. Refusing everything would stop dead
-// every crew whose sessions do not run on a daemon at all, and there is no arithmetic to do for one.
+// A system that cannot read its runtime admits work and says so. Refusing everything would stop dead
+// every system whose sessions do not run on a daemon at all, and there is no arithmetic to do for one.
 func TestAMachineNobodyReadAdmitsAndSaysItIsUnmeasured(t *testing.T) {
 	verdict := capacity.Fits(capacity.Node{}, capacity.Request{}, capacity.DefaultRequest())
 	if !verdict.OK {
-		t.Fatal("a crew with no runtime to read refused a job")
+		t.Fatal("a system with no runtime to read refused a job")
 	}
 	if !verdict.Unmeasured {
 		t.Fatal("it admitted the job without saying the arithmetic never happened")
@@ -138,15 +138,15 @@ func TestAReserveLargerThanTheMachineAdmitsNothing(t *testing.T) {
 	}
 }
 
-// A workspace that declared one half of a request takes the crew's own for the other. Two numbers,
+// A workspace that declared one half of a request takes the system's own for the other. Two numbers,
 // separately, because a workspace whose jobs are memory heavy and processor light is a real thing.
-func TestAWorkspaceRequestStandsInFrontOfTheCrewsOwn(t *testing.T) {
+func TestAWorkspaceRequestStandsInFrontOfTheSystemsOwn(t *testing.T) {
 	want := capacity.Request{Memory: mib(4096)}.Or(capacity.DefaultRequest())
 	if want.Memory != mib(4096) {
 		t.Errorf("the workspace's memory was overwritten: %s", want)
 	}
 	if want.Processor != capacity.RequestProcessor {
-		t.Errorf("the crew's own processor request was not taken: %s", want)
+		t.Errorf("the system's own processor request was not taken: %s", want)
 	}
 }
 

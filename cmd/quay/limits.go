@@ -17,13 +17,13 @@ const (
 	flagMaxDepth   = "--max-depth"
 	flagMaxRunning = "--max-running"
 	// What one sandbox in this workspace asks the machine for, in the units the room view prints:
-	// mebibytes, and per cent of one processor. The crew adds these up and starts a job only where
+	// mebibytes, and per cent of one processor. The system adds these up and starts a job only where
 	// its runtime still has that much unallocated, so a workspace whose jobs compile says so here
 	// rather than being counted the same as one whose jobs read a mailbox.
 	flagRequestMemory    = "--request-memory"
 	flagRequestProcessor = "--request-processor"
 	flagLease            = "--lease"
-	// The two times a session's life is measured by. Both ship unset, and unset means the crew takes
+	// The two times a session's life is measured by. Both ship unset, and unset means the system takes
 	// no container back and files nothing away. No number is written for them anywhere in this
 	// repository: three measurements decide them, section 11 of docs/ORCHESTRATION.md names each and
 	// the command that would take it, and none has been run.
@@ -119,7 +119,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "%s\n", located.Path)
 	fmt.Fprintf(out, "max depth      %d%s\n", asked.GetMaxDepth(), depthMeans(asked.GetMaxDepth()))
 	fmt.Fprintf(out, "max running    %s\n", unsetOr(int64(asked.GetMaxRunning())))
-	fmt.Fprintf(out, "request        %s%s\n", requestOf(asked), crewsOwn(asked))
+	fmt.Fprintf(out, "request        %s%s\n", requestOf(asked), systemsOwn(asked))
 	fmt.Fprintf(out, "budget tokens  %s\n", unsetOr(asked.GetBudgetTokens()))
 	fmt.Fprintf(out, "lease          %s%s\n", leaseOr(asked.GetLeaseSeconds()), leaseMeans)
 	fmt.Fprintf(out, "reclaim        %s%s\n", lengthOr(asked.GetReclaimSeconds()),
@@ -133,7 +133,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 }
 
 // requestOf is what one sandbox here asks the machine for, in the units the room view prints. A
-// workspace that has set neither reads the crew's own, so an operator sees the number that is
+// workspace that has set neither reads the system's own, so an operator sees the number that is
 // actually being used rather than two zeroes.
 func requestOf(limits *quaycrewv1.WorkspaceLimits) string {
 	want := capacity.Request{
@@ -143,13 +143,13 @@ func requestOf(limits *quaycrewv1.WorkspaceLimits) string {
 	return want.Or(capacity.DefaultRequest()).String()
 }
 
-// crewsOwn says when the figures beside it are the crew's rather than this workspace's, because a
+// systemsOwn says when the figures beside it are the system's rather than this workspace's, because a
 // number with no source reads as a decision somebody made about this workspace.
-func crewsOwn(limits *quaycrewv1.WorkspaceLimits) string {
+func systemsOwn(limits *quaycrewv1.WorkspaceLimits) string {
 	if limits.GetRequestMemoryMib() > 0 && limits.GetRequestProcessorPercent() > 0 {
 		return ""
 	}
-	return "  (the crew's own, until this workspace sets its own)"
+	return "  (the system's own, until this workspace sets its own)"
 }
 
 // depthMeans says out loud what the number does, because zero reads as "no limit" to everybody who
@@ -187,15 +187,15 @@ func unsetOr(value int64) string {
 
 // leaseMeans says what the lease is not, next to the number an operator sets.
 //
-// It reads as the length of a job and it is not one: it is the crew's hold on a job, renewed on
+// It reads as the length of a job and it is not one: it is the system's hold on a job, renewed on
 // every tick for as long as the job runs. The credential a session runs under is a different
 // lifetime and this setting does not reach it. An operator who read the two as one number set the
 // lease to fifteen minutes to cover their work and got no change to the credential at all.
-const leaseMeans = "  (the crew's hold on a job, not the life of a session's credential)"
+const leaseMeans = "  (the system's hold on a job, not the life of a session's credential)"
 
 func leaseOr(seconds int32) string {
 	if seconds == 0 {
-		return "the crew's own"
+		return "the system's own"
 	}
 	return (time.Duration(seconds) * time.Second).String()
 }

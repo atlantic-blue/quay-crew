@@ -14,14 +14,14 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// aSession is a crew with one session in it, since every case here needs the same three steps first.
+// aSession is a system with one session in it, since every case here needs the same three steps first.
 func aSession(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
 	t.Helper()
 	client, _ := aSessionWatchingTheModel(t)
 	return client, sessionOf(t, client)
 }
 
-// aSessionWatchingTheModel is the same crew, keeping hold of the model double, for the case that has
+// aSessionWatchingTheModel is the same system, keeping hold of the model double, for the case that has
 // to see what a later task was actually run with.
 func aSessionWatchingTheModel(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeRunner) {
 	t.Helper()
@@ -36,7 +36,7 @@ func aSessionWatchingTheModel(t *testing.T) (quaycrewv1.ControlPlaneServiceClien
 	return client, runner
 }
 
-// sessionOf is the id of the one session the crew has, which is what a session scoped command takes,
+// sessionOf is the id of the one session the system has, which is what a session scoped command takes,
 // the same as attach and tasks.
 func sessionOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) string {
 	t.Helper()
@@ -60,7 +60,7 @@ func onlySession(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) *qua
 }
 
 // The one that matters: setting the mode is worth nothing unless the next task runs in it. Every
-// case above stops at what the crew reports about itself, and a command that recorded the mode
+// case above stops at what the system reports about itself, and a command that recorded the mode
 // without it reaching the model would pass all of them.
 func TestTheNextTaskRunsInTheModeThatWasSet(t *testing.T) {
 	client, runner := aSessionWatchingTheModel(t)

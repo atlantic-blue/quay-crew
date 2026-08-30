@@ -110,7 +110,7 @@ func TestNoFlagIsBothTakenAndRemoved(t *testing.T) {
 // way whichever word carries it, and `job create` is the one word with a value after the flag for
 // the refusal to swallow.
 func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 	if len(removedFlags) == 0 {
 		t.Fatal("the removed flag table is empty, so this test proves nothing")
 	}
@@ -137,7 +137,7 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 // proves the entry says the word to type instead. A caller with --hands in their fingers, their
 // scripts and their notes gets sent to --requires and nowhere else.
 func TestTheHandsFlagRefusesAndNamesRequires(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	err := refused(t, client, "job", "create",
 		"--title", "read the electricity bill", "--brief", "open it", "--hands", "context")
@@ -200,9 +200,9 @@ func TestNoRemovedWordIsAlsoACommandTheToolStillRuns(t *testing.T) {
 //
 // It is driven with the flags a person actually had in their fingers, because a refusal that blames
 // one of them sends the operator to correct part of a command that is gone whole. And it is driven
-// against a real crew, so the row count afterwards means something.
+// against a real system, so the row count afterwards means something.
 func TestTheWorkCommandRefusesAndNamesJob(t *testing.T) {
-	client := aCrewToJobIn(t)
+	client := aSystemToJobIn(t)
 
 	err := refused(t, client, "work", "create",
 		"--title", "read the electricity bill", "--brief", "open it")

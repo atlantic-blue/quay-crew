@@ -47,15 +47,15 @@ func initializeDetachSteps(sc *godog.ScenarioContext) {
 		return w.settled(ctx)
 	})
 
-	// Read off the crew rather than off the console, because what matters is what the session holds.
-	sc.Step(`^the crew's one session is reported as (\w+)$`, func(ctx context.Context, want string) error {
+	// Read off the system rather than off the console, because what matters is what the session holds.
+	sc.Step(`^the system's one session is reported as (\w+)$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, so there is no single one to ask about",
+			return fmt.Errorf("the system has %d sessions, so there is no single one to ask about",
 				len(listed.GetSessions()))
 		}
 		if got := listed.GetSessions()[0].GetStatus(); got != want {
@@ -71,7 +71,7 @@ func initializeDetachSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want exactly 1", len(listed.GetSessions()))
+			return fmt.Errorf("the system has %d sessions, want exactly 1", len(listed.GetSessions()))
 		}
 		tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{
 			Session: listed.GetSessions()[0].GetId(),

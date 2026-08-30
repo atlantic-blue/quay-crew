@@ -1,18 +1,18 @@
 // Package headroom says how much room the machine has left for another session.
 //
-// The crew knew nothing about the machine it ran on. On 27 August 2026 the host ran out of memory
+// The system knew nothing about the machine it ran on. On 27 August 2026 the host ran out of memory
 // and the kernel killed eighteen sandboxes, three monitors and a build in one event. Nothing in quay
-// reported it before, during or after: the console kept drawing a healthy crew, and every number
+// reported it before, during or after: the console kept drawing a healthy system, and every number
 // that mattered had to be read from outside quay with `docker stats`. See issue 405.
 //
 // So this reads the daemon the control plane already talks to and reports four things: what every
 // container holds, the limit that binds, what each sandbox holds, and the memory pressure on the
 // machine the daemon runs on. Two of those are different questions and the incident is why. Docker
 // sat at less than half its cap the whole time while the machine it ran on was at 94 per cent of its
-// swap, so a crew that reported only the daemon's own figure would have said there was room.
+// swap, so a system that reported only the daemon's own figure would have said there was room.
 //
 // Nothing here estimates. A figure is measured or it is unknown, and unknown is printed as the word
-// rather than as a zero. An operator stops a session on these numbers, and a number the crew guessed
+// rather than as a zero. An operator stops a session on these numbers, and a number the system guessed
 // is a session stopped for nothing.
 package headroom
 
@@ -21,18 +21,18 @@ import (
 	"time"
 )
 
-// A Figure is a byte count the crew measured, or the absence of one. There is no third case on
-// purpose: a crew that fills a gap with an estimate hands the operator a number to act on that
+// A Figure is a byte count the system measured, or the absence of one. There is no third case on
+// purpose: a system that fills a gap with an estimate hands the operator a number to act on that
 // nothing measured.
 type Figure struct {
 	bytes int64
 	known bool
 }
 
-// Measured is a figure the crew read from the machine.
+// Measured is a figure the system read from the machine.
 func Measured(bytes int64) Figure { return Figure{bytes: bytes, known: true} }
 
-// Unknown is the answer when the crew could not read it. It is a value rather than an error,
+// Unknown is the answer when the system could not read it. It is a value rather than an error,
 // because one figure the daemon would not give up must never stop the rest being reported.
 func Unknown() Figure { return Figure{} }
 
@@ -86,8 +86,8 @@ const (
 	StateTight = "tight"
 	// StateFull means do not start another session.
 	StateFull = "full"
-	// StateUnknown means the crew could not read the machine. It is never "room": a crew that
-	// reports room it did not measure is the crew that drew a healthy header through eighteen kills.
+	// StateUnknown means the system could not read the machine. It is never "room": a system that
+	// reports room it did not measure is the system that drew a healthy header through eighteen kills.
 	StateUnknown = "unknown"
 )
 
@@ -109,7 +109,7 @@ const (
 // from what the daemon may hold.
 //
 // On a Mac that machine is the Docker virtual machine and not the Mac, because nothing inside a
-// Linux container can read what macOS is doing. The crew names the machine it actually read rather
+// Linux container can read what macOS is doing. The system names the machine it actually read rather
 // than claiming to know the one it did not.
 type Machine struct {
 	// Name is what the daemon calls the operating system it runs on, for example "Docker Desktop".
@@ -140,7 +140,7 @@ type Sandbox struct {
 	Held Figure
 	// Processor is its share of one processor.
 	Processor Share
-	// Idle is how long since the session's last task landed, and false when the crew does not know.
+	// Idle is how long since the session's last task landed, and false when the system does not know.
 	// The daemon cannot answer this: it comes from the session row beside the container.
 	Idle      time.Duration
 	IdleKnown bool
@@ -149,7 +149,7 @@ type Sandbox struct {
 // A Sample is one look at the machine, taken on the sampler's own timer and read by everything else.
 type Sample struct {
 	// Used is what every container on the daemon holds, added up. Every container rather than the
-	// crew's own, because the cap binds all of them and the question is whether another sandbox will
+	// system's own, because the cap binds all of them and the question is whether another sandbox will
 	// start.
 	Used Figure
 	// Limit is the memory the daemon may hold. On a Mac that is the Docker virtual machine's cap and
@@ -167,9 +167,9 @@ type Sample struct {
 	// Sandboxes is one entry per session container, in the order the source returned them.
 	Sandboxes []Sandbox
 	// TakenAt is when this sample was taken. The zero time means no sample has ever landed, which is
-	// what a crew reports before its first tick and after a daemon that never answered.
+	// what a system reports before its first tick and after a daemon that never answered.
 	TakenAt time.Time
-	// Failed is what went wrong the last time the crew tried, empty when the last try worked. It is
+	// Failed is what went wrong the last time the system tried, empty when the last try worked. It is
 	// carried rather than returned, because a collection that failed must never fail a command.
 	Failed string
 }
@@ -209,7 +209,7 @@ func (s Sample) Fraction() (float64, bool) {
 	return float64(s.Used.Bytes()) / float64(s.Limit.Bytes()), true
 }
 
-// State is the one word the header carries. A sample the crew could not take is unknown rather than
+// State is the one word the header carries. A sample the system could not take is unknown rather than
 // room, because the header that said everything was fine through eighteen kills is the reason this
 // package exists.
 func (s Sample) State() string {

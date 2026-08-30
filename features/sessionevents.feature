@@ -1,8 +1,8 @@
 Feature: A session says what happened to it
 
-  The crew emitted one event, a finished task, so nothing could tell that a session was made, that
+  The system emitted one event, a finished task, so nothing could tell that a session was made, that
   work had begun, or that a session had been put away. Nothing could react to a change, and no view
-  could say what the crew is doing right now.
+  could say what the system is doing right now.
 
   Every session emits its lifecycle. A kind names something that happened, in the past tense, at one
   moment, and it is the field a consumer switches on. "idle" and "running" are not kinds: they are
@@ -50,9 +50,9 @@ Feature: A session says what happened to it
     Then 3 session events are on the log for "acme"
     And every published session event is keyed by its session
 
-  # The store is the truth, so a crew with no broker keeps everything and loses only the export.
-  Scenario: A crew with no broker still says what happened
-    Given the crew has no event log configured
+  # The store is the truth, so a system with no broker keeps everything and loses only the export.
+  Scenario: A system with no broker still says what happened
+    Given the system has no event log configured
     When the operator dispatches "hello" to the project
     Then the session's events read "session.created", "session.started", "session.completed"
 

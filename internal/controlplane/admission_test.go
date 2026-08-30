@@ -18,18 +18,18 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// These drive the whole path a job takes through a real crew: the controller decides, the ledger
+// These drive the whole path a job takes through a real system: the controller decides, the ledger
 // counts, the reading of the runtime says what there is, and the store holds what came of it. The
 // runtime is the one thing stood in for, because a test cannot fill a machine on purpose.
 
-// aRuntime is a container runtime of a given size, as the crew reads one. A test changes what it
-// says and asks the crew to read it again, because a machine that fills up and empties again is the
+// aRuntime is a container runtime of a given size, as the system reads one. A test changes what it
+// says and asks the system to read it again, because a machine that fills up and empties again is the
 // whole point and a scenario cannot fill a real one.
 type aRuntime struct {
 	mu        sync.Mutex
 	memory    int64
 	processor float64
-	// held is what its containers are using, which is what the crew's own reserve is measured from.
+	// held is what its containers are using, which is what the system's own reserve is measured from.
 	held      int64
 	heldShare float64
 }
@@ -46,7 +46,7 @@ func (r *aRuntime) Sample(context.Context) (headroom.Sample, error) {
 	}, nil
 }
 
-// frees is the crew's own containers letting go of memory, which is what makes room for a sandbox.
+// frees is the system's own containers letting go of memory, which is what makes room for a sandbox.
 func (r *aRuntime) frees(held int64, share float64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -55,13 +55,13 @@ func (r *aRuntime) frees(held int64, share float64) {
 
 func mebibytes(count int64) int64 { return count << 20 }
 
-// aCrewOn is a crew running on a runtime of that size, with the tick driven by the test.
-func aCrewOn(t *testing.T, runtime *aRuntime, reserve capacity.Request) *controlplane.Server {
+// aSystemOn is a system running on a runtime of that size, with the tick driven by the test.
+func aSystemOn(t *testing.T, runtime *aRuntime, reserve capacity.Request) *controlplane.Server {
 	t.Helper()
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "the bill is due on the 14th"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
-		Headroom: runtime, HeadroomEvery: time.Hour, CrewReserve: reserve,
+		Headroom: runtime, HeadroomEvery: time.Hour, SystemReserve: reserve,
 	})
 	// One reading, taken now rather than on the sampler's own timer: a test that waited for a tick
 	// would be a test with a clock in it.
@@ -98,9 +98,9 @@ func jobNow(t *testing.T, s *controlplane.Server, id string) *quaycrewv1.Job {
 
 // The acceptance test for the whole change: a job the runtime cannot host waits, and it is never
 // admitted and then killed. The runtime here is the one that went down, 7,653 mebibytes and fourteen
-// processors, with the crew's own containers holding 6,000 of that memory.
+// processors, with the system's own containers holding 6,000 of that memory.
 func TestAJobIsHeldPendingOnAFullRuntimeRatherThanFailed(t *testing.T) {
-	server := aCrewOn(t, &aRuntime{
+	server := aSystemOn(t, &aRuntime{
 		memory: mebibytes(7653), processor: 1400, held: mebibytes(6500), heldShare: 200,
 	}, capacity.Request{Memory: mebibytes(2048), Processor: 200})
 	ctx := context.Background()
@@ -125,7 +125,7 @@ func TestAJobIsHeldPendingOnAFullRuntimeRatherThanFailed(t *testing.T) {
 // because nothing failed.
 func TestTheHeldJobRunsWhenTheRuntimeHasRoomAgain(t *testing.T) {
 	full := &aRuntime{memory: mebibytes(7653), processor: 1400, held: mebibytes(6500), heldShare: 200}
-	server := aCrewOn(t, full, capacity.Request{Memory: mebibytes(2048), Processor: 200})
+	server := aSystemOn(t, full, capacity.Request{Memory: mebibytes(2048), Processor: 200})
 	ctx := context.Background()
 	workspace, project := newProject(t, server)
 	one := aJobIn(t, server, workspace, project, "read the electricity bill")
@@ -135,7 +135,7 @@ func TestTheHeldJobRunsWhenTheRuntimeHasRoomAgain(t *testing.T) {
 		t.Fatal("the job did not wait on a full runtime")
 	}
 
-	// The crew's own containers let go of four gibibytes, and the crew reads its machine again.
+	// The system's own containers let go of four gibibytes, and the system reads its machine again.
 	full.frees(mebibytes(2000), 100)
 	server.SampleHeadroom(ctx)
 	server.TickJob(ctx)
@@ -151,11 +151,11 @@ func TestTheHeldJobRunsWhenTheRuntimeHasRoomAgain(t *testing.T) {
 
 // The burst. Nine jobs were declared against a runtime with room for fewer, and every one of them
 // was admitted because a container appears seconds after the job that asked for it. The ledger is
-// what makes the second job count the first, so the crew admits what fits and holds the rest.
+// what makes the second job count the first, so the system admits what fits and holds the rest.
 func TestABurstOfJobsIsAdmittedOnlyAsFarAsTheRuntimeGoes(t *testing.T) {
 	// 7,653 mebibytes with 2,048 reserved leaves 5,605, which is three sandboxes at 1,536 and no
 	// fourth. The processors are wide open, so memory is what binds.
-	server := aCrewOn(t, &aRuntime{memory: mebibytes(7653), processor: 1400, held: 0, heldShare: 0},
+	server := aSystemOn(t, &aRuntime{memory: mebibytes(7653), processor: 1400, held: 0, heldShare: 0},
 		capacity.Request{Memory: mebibytes(2048), Processor: 200})
 	ctx := context.Background()
 	workspace, project := newProject(t, server)
@@ -187,12 +187,12 @@ func TestABurstOfJobsIsAdmittedOnlyAsFarAsTheRuntimeGoes(t *testing.T) {
 	}
 }
 
-// The crew's own containers are the reserve, and they are measured rather than declared: a kubelet
-// runs outside the pods it manages and the control plane does not. A crew whose own containers grow
+// The system's own containers are the reserve, and they are measured rather than declared: a kubelet
+// runs outside the pods it manages and the control plane does not. A system whose own containers grow
 // hands out less, without anybody changing a setting.
-func TestTheCrewsOwnContainersAreReservedAsTheyGrow(t *testing.T) {
-	// The floor is small, and the crew's own containers are holding far more than it.
-	server := aCrewOn(t, &aRuntime{memory: mebibytes(8192), processor: 1400, held: mebibytes(7000), heldShare: 100},
+func TestTheSystemsOwnContainersAreReservedAsTheyGrow(t *testing.T) {
+	// The floor is small, and the system's own containers are holding far more than it.
+	server := aSystemOn(t, &aRuntime{memory: mebibytes(8192), processor: 1400, held: mebibytes(7000), heldShare: 100},
 		capacity.Request{Memory: mebibytes(256), Processor: 100})
 	ctx := context.Background()
 	workspace, project := newProject(t, server)
@@ -202,15 +202,15 @@ func TestTheCrewsOwnContainersAreReservedAsTheyGrow(t *testing.T) {
 
 	got := jobNow(t, server, one)
 	if got.GetPhase() != job.PhasePending {
-		t.Fatalf("the job is %q: the crew handed out memory its own containers are holding",
+		t.Fatalf("the job is %q: the system handed out memory its own containers are holding",
 			got.GetPhase())
 	}
 }
 
-// A crew that cannot read its runtime runs the work. There is no arithmetic to do for a crew whose
-// sessions do not run on a container runtime at all, and stopping dead would be worse than the crew
+// A system that cannot read its runtime runs the work. There is no arithmetic to do for a system whose
+// sessions do not run on a container runtime at all, and stopping dead would be worse than the system
 // that counted.
-func TestACrewWithNoRuntimeToReadStillRunsJobs(t *testing.T) {
+func TestASystemWithNoRuntimeToReadStillRunsJobs(t *testing.T) {
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "done"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
@@ -222,6 +222,6 @@ func TestACrewWithNoRuntimeToReadStillRunsJobs(t *testing.T) {
 	server.TickJob(ctx)
 
 	if got := jobNow(t, server, one); got.GetPhase() == job.PhasePending {
-		t.Fatalf("a crew with no runtime to read held a job: %s", got.GetReason())
+		t.Fatalf("a system with no runtime to read held a job: %s", got.GetReason())
 	}
 }

@@ -9,9 +9,9 @@ import (
 
 // The fourth query, and what the controller does with it: putting sessions away.
 //
-// The crew never put a session away on its own before this. Nothing in the code removed a container
+// The system never put a session away on its own before this. Nothing in the code removed a container
 // without somebody asking, so a session that answered one question in March still held its container
-// in August unless the crew had restarted.
+// in August unless the system had restarted.
 //
 // A session is not a second resource with a declaration of its own. What is wanted of it is derived
 // from the job that names it, which is why this belongs to the same loop rather than to a second
@@ -29,7 +29,7 @@ import (
 // not a placeholder. Three measurements decide the numbers and none has been taken: the distribution
 // of the gap between one task landing in a session and the next starting, what a resume costs, and
 // what an idle container holds. Section 11 of docs/ORCHESTRATION.md names each and the command that
-// would take it. Until those runs exist the crew refuses a number it was never given rather than
+// would take it. Until those runs exist the system refuses a number it was never given rather than
 // choosing one, because a reclaim time set below the real idle gap throws away containers that were
 // about to be used.
 
@@ -51,7 +51,7 @@ func (c *Controller) putAway(ctx context.Context) {
 	}
 }
 
-// putOneAway moves one settled session on, if its workspace has given the crew a number to move it by.
+// putOneAway moves one settled session on, if its workspace has given the system a number to move it by.
 func (c *Controller) putOneAway(ctx context.Context, session *quaycrewv1.Session, now time.Time) {
 	limits, err := c.store.WorkspaceLimits(ctx, session.GetWorkspace())
 	if err != nil {
@@ -77,7 +77,7 @@ func (c *Controller) reclaimIdle(ctx context.Context, session *quaycrewv1.Sessio
 		return
 	}
 	// Asked last, so the exec this costs is spent only on a session that is otherwise about to be
-	// reclaimed. A crew whose reclaim time is unset never reaches this line at all, which is why the
+	// reclaimed. A system whose reclaim time is unset never reaches this line at all, which is why the
 	// unmeasured cost of the signal is not a reason to hold the mechanism back.
 	if c.attachedTo(ctx, session.GetId()) {
 		return
@@ -103,7 +103,7 @@ func (c *Controller) archiveAged(ctx context.Context, session *quaycrewv1.Sessio
 	}
 	at := session.GetReclaimedAt()
 	if at == nil {
-		// Reclaimed with no stamp is a row this crew did not write, so there is nothing to measure
+		// Reclaimed with no stamp is a row this system did not write, so there is nothing to measure
 		// against and nothing is done. Guessing at updated_at here would file it away on the first
 		// tick after an upgrade.
 		return
@@ -118,7 +118,7 @@ func (c *Controller) archiveAged(ctx context.Context, session *quaycrewv1.Sessio
 }
 
 // attachedTo says whether somebody has this session's conversation open, and answers yes whenever the
-// crew cannot tell.
+// system cannot tell.
 //
 // A controller with no way to ask must never reclaim, which is why nil answers attached rather than
 // being treated as no. Wiring the signal is what turns the mechanism on, not a flag.
@@ -135,7 +135,7 @@ func (c *Controller) attachedTo(ctx context.Context, session string) bool {
 	return open
 }
 
-// StatusReclaimed is the session status the crew writes when it takes a container back. It is the
+// StatusReclaimed is the session status the system writes when it takes a container back. It is the
 // control plane's word, kept here so the controller reads a session without depending on the package
 // that writes one, the way the task statuses above already are.
 const StatusReclaimed = "reclaimed"

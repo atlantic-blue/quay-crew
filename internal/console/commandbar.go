@@ -40,7 +40,7 @@ var needTerminal = map[string]bool{
 // tell which one they are typing into.
 var alreadyHere = map[string]string{
 	"console": "you are already in the console",
-	toolName:  "you are already in the crew",
+	toolName:  "you are already in the system",
 }
 
 // toolName is what the tool is called, which is also the word an operator types out of habit at the
@@ -48,7 +48,7 @@ var alreadyHere = map[string]string{
 const toolName = "quay"
 
 // commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
-// crew, short enough that a command which will never answer gives the console back.
+// system, short enough that a command which will never answer gives the console back.
 const commandTimeout = 30 * time.Second
 
 // waitDelay is how long to keep reading a killed command's output before giving up on its pipes.
@@ -119,7 +119,7 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 		})
 	}
 	if m.runCommand == nil {
-		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the crew with quay", typed)
+		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the system with quay", typed)
 		return m, nil
 	}
 

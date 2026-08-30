@@ -17,11 +17,11 @@ const StatusLineCommand = "quay statusline"
 // settings is the runtime's settings document: the hooks a session runs under, and the line the
 // runtime keeps under the conversation.
 //
-// The crew owns this file completely. The alternative was rendering into the conversation directory's
+// The system owns this file completely. The alternative was rendering into the conversation directory's
 // own settings, which the runtime writes and the operator edits, and that would mean merging on every
 // task and losing somebody's edit the first time the merge was wrong.
 //
-// The status line is here rather than in the image for a harder reason than ownership: the crew
+// The status line is here rather than in the image for a harder reason than ownership: the system
 // mounts the workspace's own directory over the conversation directory in every sandbox, and a mount
 // hides whatever the image put at that path. Settings shipped in the image are settings no session
 // ever reads.
@@ -54,7 +54,7 @@ type action struct {
 	Timeout int `json:"timeout,omitempty"`
 }
 
-// Settings renders what the crew tells the model runtime: the hooks a session holds, and the line the
+// Settings renders what the system tells the model runtime: the hooks a session holds, and the line the
 // runtime keeps under the conversation.
 //
 // root is where the hooks are mounted as the sandbox sees them, because the command the runtime runs

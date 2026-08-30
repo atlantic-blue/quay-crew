@@ -14,14 +14,14 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/role"
 )
 
-// Reading a role back out of the crew, against the real database.
+// Reading a role back out of the system, against the real database.
 //
 // The unit tier proves the rendering and the refusal against a store in memory. What only this tier
 // reaches is the crossing that the command exists for: a brief goes into a column as one process
 // writes it and comes out as another reads it, and the answer an operator audits a run against is
 // whatever came out of that column. A truncation, an encoding or a column that silently holds the
 // first few thousand bytes shows here and nowhere else, and each of them would make this command
-// agree with a role the crew does not hold.
+// agree with a role the system does not hold.
 //
 // What a role may call is compared against the file too, and it is the reason this file exists in
 // the shape it does. The roles table carried no may column until quay-crew#459, so the verbs a
@@ -41,13 +41,13 @@ func TestEveryShippedBriefComesBackByteForByteThroughGetRole(t *testing.T) {
 	if len(onDisk) == 0 {
 		t.Fatal("roles/ holds none, so this test would sweep nothing and report a pass")
 	}
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{})
 	ctx := context.Background()
 
 	read := 0
 	for _, one := range onDisk {
 		if _, err := s.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: filesOfRole(t, one.Dir)}); err != nil {
-			t.Fatalf("the crew refused the %s role, which ships with it: %v", one.Name, err)
+			t.Fatalf("the system refused the %s role, which ships with it: %v", one.Name, err)
 		}
 		got, err := s.GetRole(ctx, &quaycrewv1.GetRoleRequest{Name: one.Name})
 		if err != nil {
@@ -88,7 +88,7 @@ func TestEveryShippedBriefComesBackByteForByteThroughGetRole(t *testing.T) {
 // version even after a newer one is imported. Getting this wrong is the failure the command exists
 // to end: an operator diffing a brief against a run that was never given it.
 func TestAWorkspaceReadsThePinnedBriefAfterANewerOneIsImported(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{})
 	ctx := context.Background()
 	workspace, _ := aProjectOnPostgres(t, s)
 
@@ -113,30 +113,30 @@ func TestAWorkspaceReadsThePinnedBriefAfterANewerOneIsImported(t *testing.T) {
 
 	newest, err := s.GetRole(ctx, &quaycrewv1.GetRoleRequest{Name: "test-writer"})
 	if err != nil {
-		t.Fatalf("GetRole at the crew: %v", err)
+		t.Fatalf("GetRole at the system: %v", err)
 	}
 	if newest.GetBrief() != "Version two says something else." {
-		t.Errorf("the crew read %q, and it holds version 2", newest.GetBrief())
+		t.Errorf("the system read %q, and it holds version 2", newest.GetBrief())
 	}
 }
 
 // A name nothing holds is refused with the names that are there, off the real database, so the
 // refusal cannot be a list assembled from something the process happened to still be holding.
 func TestANameTheDatabaseDoesNotHoldIsRefusedWithTheOnesItDoes(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{})
 	ctx := context.Background()
 
 	empty, err := s.GetRole(ctx, &quaycrewv1.GetRoleRequest{Name: "orchestrator"})
 	if err == nil {
-		t.Fatalf("a crew holding no roles answered with %+v", empty)
+		t.Fatalf("a system holding no roles answered with %+v", empty)
 	}
 	if !strings.Contains(err.Error(), "holds no roles at all") {
-		t.Errorf("the refusal does not say the crew holds nothing: %v", err)
+		t.Errorf("the refusal does not say the system holds nothing: %v", err)
 	}
 
 	importBriefOnPostgres(t, s, "test-writer", 1, "Write the tests.")
 	if _, err := s.GetRole(ctx, &quaycrewv1.GetRoleRequest{Name: "test-writter"}); err == nil {
-		t.Error("a name the crew does not hold was answered")
+		t.Error("a name the system does not hold was answered")
 	} else if !strings.Contains(err.Error(), "test-writer") {
 		t.Errorf("the refusal does not name the role that is there: %v", err)
 	}

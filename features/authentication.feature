@@ -1,24 +1,24 @@
-Feature: The crew refuses a caller it cannot recognise
-  The control plane's port is the whole crew: every secret name, every session,
+Feature: The system refuses a caller it cannot recognise
+  The control plane's port is the whole system: every secret name, every session,
   the context injected into every sandbox. A caller proves it is the operator's
-  tool by presenting the crew's token, and a call that does not carry it is
+  tool by presenting the system's token, and a call that does not carry it is
   refused before it reaches anything.
 
-  Scenario: a caller presenting the crew's token is served
-    When a caller presents the crew's token
+  Scenario: a caller presenting the system's token is served
+    When a caller presents the system's token
     Then the caller is served
 
   Scenario: a caller presenting nothing is refused and told what is missing
     When a caller presents no token
     Then the caller is refused, told a token is missing and where quay reads one from
 
-  Scenario: a caller presenting a token that is not the crew's is refused
-    When a caller presents a token that is not the crew's
-    Then the caller is refused, told the token is not this crew's
+  Scenario: a caller presenting a token that is not the system's is refused
+    When a caller presents a token that is not the system's
+    Then the caller is refused, told the token is not this system's
 
-  # The driver drives the crew; it does not widen it. Its token is its own, so the crew can tell
+  # The driver drives the system; it does not widen it. Its token is its own, so the system can tell
   # its calls apart, and the calls that grant capability are refused to it: a session that can
-  # drive the crew must never be able to grant itself anything.
+  # drive the system must never be able to grant itself anything.
   Scenario: the driver cannot set a secret
     When the driver asks to set a secret
     Then the driver is refused, told the call is the operator's to make
@@ -57,8 +57,8 @@ Feature: The crew refuses a caller it cannot recognise
     When the driver asks to change a session's permission mode
     Then the driver is refused, told the call is the operator's to make
 
-  Scenario: the driver cannot write the crew's context
-    When the driver asks to write the crew's context
+  Scenario: the driver cannot write the system's context
+    When the driver asks to write the system's context
     Then the driver is refused, told the call is the operator's to make
 
   Scenario: the driver can still write a project's context
@@ -73,5 +73,5 @@ Feature: The crew refuses a caller it cannot recognise
 
   Scenario: the operator is refused none of what the driver is
     Given a workspace named "acme"
-    When the operator sets a secret with the crew's token
+    When the operator sets a secret with the system's token
     Then the caller is served

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// A job cannot wait, so the crew refuses a brief that asks it to.
+// A job cannot wait, so the system refuses a brief that asks it to.
 //
 // The brief is the one the acceptance run was given. It pushed, it opened
 // https://github.com/atlantic-blue/quay-crew/pull/462, and then it said it would hold until the

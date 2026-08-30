@@ -89,7 +89,7 @@ func TestAMovementLandsInPostgresAndOnARealBroker(t *testing.T) {
 	}
 
 	// The controller lets go of its task, so the record of it is written by the goroutine running it.
-	// Waited for rather than slept on: this is the same wait the crew's own shutdown does.
+	// Waited for rather than slept on: this is the same wait the system's own shutdown does.
 	waiting, doneWaiting := context.WithTimeout(ctx, 30*time.Second)
 	server.WaitForTasks(waiting)
 	doneWaiting()
@@ -151,7 +151,7 @@ func TestABrokerThatIsNotThereDoesNotCostTheRecord(t *testing.T) {
 
 	durable := aRealStore(t, ctx)
 	// A broker at an address nothing is listening on. The producer connects lazily, so this is a
-	// crew that believes it has a log and does not.
+	// system that believes it has a log and does not.
 	log, err := messaging.NewClient("127.0.0.1:1")
 	if err != nil {
 		t.Fatalf("event log: %v", err)
@@ -230,7 +230,7 @@ func aRealStore(t *testing.T, ctx context.Context) *store.Postgres {
 	return durable
 }
 
-// servedOver puts the crew behind the real gRPC interface, which is the one every caller speaks.
+// servedOver puts the system behind the real gRPC interface, which is the one every caller speaks.
 func servedOver(t *testing.T, server *controlplane.Server) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)

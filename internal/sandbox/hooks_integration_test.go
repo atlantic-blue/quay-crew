@@ -21,13 +21,13 @@ import (
 // executable bit, and both failures are silent: the runtime reports a hook that did not run, from
 // inside a container, and nothing outside says why.
 //
-// So this mounts what the crew actually writes into a real container and runs the command the
+// So this mounts what the system actually writes into a real container and runs the command the
 // settings file actually names.
 func TestAHookTheSettingsFileNamesIsRunnableInsideARealContainer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// What the crew writes on the host, through the same function the control plane calls.
+	// What the system writes on the host, through the same function the control plane calls.
 	root := t.TempDir()
 	hooks := []hook.Hook{{
 		Name: "git-approval", Version: 1, Summary: "Refuses a commit nobody approved.",

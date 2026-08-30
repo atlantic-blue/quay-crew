@@ -24,9 +24,9 @@ import (
 // the write are one statement, so two controllers racing over one row leave one winner. A mutex in a
 // process cannot say anything about two processes.
 
-// aCrewNamed stands the control plane up on the shared database with a named controller and a lease
+// aSystemNamed stands the control plane up on the shared database with a named controller and a lease
 // of its own, which is what two control planes over one store look like.
-func aCrewNamed(t *testing.T, kept store.Store, name string, lease time.Duration, runner model.Runner) *controlplane.Server {
+func aSystemNamed(t *testing.T, kept store.Store, name string, lease time.Duration, runner model.Runner) *controlplane.Server {
 	t.Helper()
 	return controlplane.NewServer(controlplane.Config{
 		Store: kept, Runner: runner, Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
@@ -52,7 +52,7 @@ func TestAControllerThatDiedMidTaskLeavesItsJobToBeAdoptedOnceInPostgres(t *test
 	kept := openPostgres(t)
 	ctx := context.Background()
 	// A hold that runs out at once is a controller that stopped renewing.
-	dying := aCrewNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	dying := aSystemNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	_, project := aProjectOnPostgres(t, dying)
 
 	declared, err := dying.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
@@ -72,10 +72,10 @@ func TestAControllerThatDiedMidTaskLeavesItsJobToBeAdoptedOnceInPostgres(t *test
 		t.Fatalf("the job is %q held by %q, want running under the controller that started it",
 			started.Phase, started.LeaseOwner)
 	}
-	// That controller is gone from here on. Its task lands anyway, because the sandbox is the crew's.
+	// That controller is gone from here on. Its task lands anyway, because the sandbox is the system's.
 	waitForTheLeaseToExpire(t, kept, id)
 
-	next := aCrewNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "a second task nobody asked for"})
+	next := aSystemNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "a second task nobody asked for"})
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		next.TickJob(ctx)
@@ -129,10 +129,10 @@ func TestAControllerThatDiedMidTaskLeavesItsJobToBeAdoptedOnceInPostgres(t *test
 func TestTwoControllersClaimingOneRowAtOnceLeaveOneHolderInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	ctx := context.Background()
-	crew := aCrewNamed(t, kept, "controller-a", time.Minute, &model.FakeRunner{Reply: "done"})
-	workspace, project := aProjectOnPostgres(t, crew)
+	system := aSystemNamed(t, kept, "controller-a", time.Minute, &model.FakeRunner{Reply: "done"})
+	workspace, project := aProjectOnPostgres(t, system)
 
-	declared, err := crew.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+	declared, err := system.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
@@ -173,17 +173,17 @@ func TestTwoControllersClaimingOneRowAtOnceLeaveOneHolderInPostgres(t *testing.T
 func TestTwoControllersTakingOverOneRowAtOnceLeaveOneHolderInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	ctx := context.Background()
-	crew := aCrewNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "done"})
-	workspace, project := aProjectOnPostgres(t, crew)
+	system := aSystemNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "done"})
+	workspace, project := aProjectOnPostgres(t, system)
 
-	declared, err := crew.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+	declared, err := system.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
 	id := declared.GetJob().GetId()
-	crew.TickJob(ctx)
+	system.TickJob(ctx)
 	waitForTheLeaseToExpire(t, kept, id)
 
 	takes := make(chan error, 2)
@@ -218,7 +218,7 @@ func TestTwoControllersTakingOverOneRowAtOnceLeaveOneHolderInPostgres(t *testing
 func TestJobUnderALeaseThatStillRunsIsNotTakenInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	ctx := context.Background()
-	holder := aCrewNamed(t, kept, "controller-a", time.Minute,
+	holder := aSystemNamed(t, kept, "controller-a", time.Minute,
 		&model.FakeRunner{Reply: "done", Gate: make(chan struct{}), Started: make(chan struct{})})
 	_, project := aProjectOnPostgres(t, holder)
 
@@ -231,7 +231,7 @@ func TestJobUnderALeaseThatStillRunsIsNotTakenInPostgres(t *testing.T) {
 	id := declared.GetJob().GetId()
 	holder.TickJob(ctx)
 
-	other := aCrewNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "done"})
+	other := aSystemNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "done"})
 	for range 3 {
 		other.TickJob(ctx)
 	}
@@ -254,10 +254,10 @@ func TestJobUnderALeaseThatStillRunsIsNotTakenInPostgres(t *testing.T) {
 func TestJobAbandonedBeforeItsTaskWasSentRunsAgainInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	ctx := context.Background()
-	crew := aCrewNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "done"})
-	workspace, project := aProjectOnPostgres(t, crew)
+	system := aSystemNamed(t, kept, "controller-a", time.Millisecond, &model.FakeRunner{Reply: "done"})
+	workspace, project := aProjectOnPostgres(t, system)
 
-	declared, err := crew.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+	declared, err := system.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it",
 	})
 	if err != nil {
@@ -273,7 +273,7 @@ func TestJobAbandonedBeforeItsTaskWasSentRunsAgainInPostgres(t *testing.T) {
 		t.Fatalf("StartJob: %v", err)
 	}
 
-	next := aCrewNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	next := aSystemNamed(t, kept, "controller-b", time.Minute, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		next.TickJob(ctx)

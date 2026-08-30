@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The git skill is the first skill the crew ships, in skills/ at the root of this repository, and this
+// The git skill is the first skill the system ships, in skills/ at the root of this repository, and this
 // holds it to the same rules an imported skill answers to. A first party skill that does not load is
 // worse than none: it is the example everybody copies.
 func TestTheShippedGitSkillLoads(t *testing.T) {

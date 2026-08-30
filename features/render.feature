@@ -14,7 +14,7 @@ Feature: A session can see what it built
   it reads the picture back and says what it is of, which is the label a screenshot has to carry
   before it can be shown to anybody.
 
-  These scenarios use a browser double, so they say what the crew asks a browser for and not that a
+  These scenarios use a browser double, so they say what the system asks a browser for and not that a
   browser honours it. The real thing is proved against the image in
   TestASessionRendersAPageAndReadsItBack, which draws a page in a fresh container and reads the
   picture back.

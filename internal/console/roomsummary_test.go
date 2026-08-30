@@ -19,7 +19,7 @@ func theIncident() *quaycrewv1.GetHeadroomResponse {
 	return answerOf(3628*mebibyte, 7837*mebibyte)
 }
 
-// answerOf is what the crew answers for a machine holding one figure of another, in the words the
+// answerOf is what the system answers for a machine holding one figure of another, in the words the
 // control plane writes them in.
 func answerOf(used, limit int64) *quaycrewv1.GetHeadroomResponse {
 	sample := headroom.Sample{Used: headroom.Measured(used), Limit: headroom.Measured(limit)}
@@ -43,7 +43,7 @@ func TestTheSummarySaysWhatIsHeldWhatBindsAndWhatIsLeft(t *testing.T) {
 }
 
 // What the rows add up to is not what the limit binds: the figure is every container on the daemon,
-// including the crew's own, so an operator adding eighteen rows in their head gets a smaller number
+// including the system's own, so an operator adding eighteen rows in their head gets a smaller number
 // and has to be told which one this is.
 func TestTheSummarySaysTheFigureIsEveryContainerAndNotJustTheSandboxes(t *testing.T) {
 	line, _ := roomSummary(theIncident())
@@ -68,9 +68,9 @@ func TestTheSummaryPutsWhatIsLeftInSandboxes(t *testing.T) {
 	}
 }
 
-// The word is the crew's own, so the view and the header never carry two different answers about one
+// The word is the system's own, so the view and the header never carry two different answers about one
 // machine.
-func TestTheSummaryCarriesTheCrewsWord(t *testing.T) {
+func TestTheSummaryCarriesTheSystemsWord(t *testing.T) {
 	line, state := roomSummary(theIncident())
 	if !strings.Contains(line, headroom.StateRoom) {
 		t.Errorf("the summary does not say the machine is %q:\n%s", headroom.StateRoom, line)
@@ -103,7 +103,7 @@ func TestAFullMachineIsReadableWithoutTheNumberOrTheColour(t *testing.T) {
 func TestAMarginTooThinForASandboxTurnsEvenWhereTheFractionSaysRoom(t *testing.T) {
 	answer := answerOf(2600*mebibyte, 4096*mebibyte)
 	if answer.GetState() != headroom.StateRoom {
-		t.Fatalf("the crew calls this machine %q, and this case is about the one it calls room",
+		t.Fatalf("the system calls this machine %q, and this case is about the one it calls room",
 			answer.GetState())
 	}
 
@@ -118,9 +118,9 @@ func TestAMarginTooThinForASandboxTurnsEvenWhereTheFractionSaysRoom(t *testing.T
 	}
 }
 
-// Nothing here estimates. A crew that never read its machine says so and names the reason, rather
+// Nothing here estimates. A system that never read its machine says so and names the reason, rather
 // than drawing zeroes that read as a machine holding nothing.
-func TestACrewThatReadNothingSaysSoRatherThanDrawingZeroes(t *testing.T) {
+func TestASystemThatReadNothingSaysSoRatherThanDrawingZeroes(t *testing.T) {
 	line, state := roomSummary(&quaycrewv1.GetHeadroomResponse{
 		Used: "unknown", Limit: "unknown", Free: "unknown", State: headroom.StateUnknown,
 		UsedBytes: -1, LimitBytes: -1, Failed: "the daemon is not answering",
@@ -130,7 +130,7 @@ func TestACrewThatReadNothingSaysSoRatherThanDrawingZeroes(t *testing.T) {
 		t.Errorf("a machine nobody read does not read unknown:\n%s", line)
 	}
 	if !strings.Contains(line, "the daemon is not answering") {
-		t.Errorf("the summary does not say why the crew knows nothing:\n%s", line)
+		t.Errorf("the summary does not say why the system knows nothing:\n%s", line)
 	}
 	if strings.Contains(line, "0 MiB") {
 		t.Errorf("the summary draws a zero for a figure nobody measured:\n%s", line)
@@ -140,7 +140,7 @@ func TestACrewThatReadNothingSaysSoRatherThanDrawingZeroes(t *testing.T) {
 	}
 }
 
-// A crew too old to answer at all leaves the view its rows rather than a line about nothing.
+// A system too old to answer at all leaves the view its rows rather than a line about nothing.
 func TestAViewWithNothingToSummariseDrawsNoLine(t *testing.T) {
 	if line, _ := roomSummary(nil); line != "" {
 		t.Errorf("a summary was drawn from no answer at all: %q", line)

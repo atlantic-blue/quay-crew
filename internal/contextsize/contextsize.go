@@ -1,12 +1,12 @@
 // Package contextsize says how big a level of context is, and when it is big enough to be a problem
 // on its own.
 //
-// Context has levels, and the outer ones reach furthest. The crew's level is read by every session
+// Context has levels, and the outer ones reach furthest. The system's level is read by every session
 // in every workspace, before that session has read a line of the repository it was made to work on.
-// Nothing anywhere said how big any level was, so the crew's grew to 100,179 characters without
+// Nothing anywhere said how big any level was, so the system's grew to 100,179 characters without
 // anybody deciding to make it that big. A rule added to a level that size is a rule nobody finds,
-// and on 29 August 2026 a cost rule went onto a workspace instead, because the crew's level would
-// have buried it. That is the crew level's whole purpose undone.
+// and on 29 August 2026 a cost rule went onto a workspace instead, because the system's level would
+// have buried it. That is the system level's whole purpose undone.
 //
 // So a level states its size wherever it is listed or written, and states what to do about it once
 // it is over the mark. It is the shape the sandbox memory reading already has: the number is always
@@ -25,13 +25,13 @@ import (
 // tokens at four characters a token, which is a rule of thumb and not a measurement: every model
 // counts them its own way.
 //
-// It is a mark and not a limit. Nothing is refused for being over it: a crew that wants a long level
+// It is a mark and not a limit. Nothing is refused for being over it: a system that wants a long level
 // keeps one, and the point is that it chose to.
 const Mark = 20_000
 
 // A Reading is one level of context and how big it is.
 type Reading struct {
-	// Scope is "crew", "workspace", "project" or "session".
+	// Scope is "system", "workspace", "project" or "session".
 	Scope string
 	// Name is what that level is called where a person reads it.
 	Name string
@@ -42,7 +42,7 @@ type Reading struct {
 // Read measures one level.
 //
 // Characters and not bytes. The number this exists to report is the one `select length(body) from
-// contexts` gives, and Postgres counts characters, so counting bytes would make the crew and its own
+// contexts` gives, and Postgres counts characters, so counting bytes would make the system and its own
 // database disagree by one for every accented letter in the level.
 func Read(scope, name, body string) Reading {
 	return Reading{Scope: scope, Name: name, Characters: utf8.RuneCountInString(body)}
@@ -52,7 +52,7 @@ func Read(scope, name, body string) Reading {
 func (r Reading) Over() bool { return r.Characters > Mark }
 
 // Cell is the size as a listing shows it, in one column. A level nobody has written to says so:
-// zero characters is the normal state of a fresh crew, and a column of noughts reads as a defect.
+// zero characters is the normal state of a fresh system, and a column of noughts reads as a defect.
 func (r Reading) Cell() string {
 	if r.Characters == 0 {
 		return "nothing written yet"
@@ -82,21 +82,21 @@ func (r Reading) Say() string {
 	return fmt.Sprintf("%s\n\n%s\n\n%s", r.Note(), r.cost(), r.advice())
 }
 
-// Label names the level the way a person says it: "crew", or "workspace atlantic-blue". The crew is
-// the crew, because there is one and it has no name of its own, and a line built from the scope and
-// the name side by side read "crew crew".
+// Label names the level the way a person says it: "system", or "workspace atlantic-blue". The system is
+// the system, because there is one and it has no name of its own, and a line built from the scope and
+// the name side by side read "system system".
 func (r Reading) Label() string {
-	if r.Scope == "crew" || r.Name == "" {
+	if r.Scope == "system" || r.Name == "" {
 		return r.Scope
 	}
 	return r.Scope + " " + r.Name
 }
 
 // reach is who carries this level, which is the whole reason its size matters. A level read by one
-// session costs that session; the crew's is read by all of them.
+// session costs that session; the system's is read by all of them.
 func (r Reading) reach() string {
 	switch r.Scope {
-	case "crew":
+	case "system":
 		return "Every session in every workspace reads it."
 	case "workspace":
 		return "Every session in this workspace reads it."
@@ -119,7 +119,7 @@ func (r Reading) cost() string {
 // which the session reads anyway.
 func (r Reading) advice() string {
 	switch r.Scope {
-	case "crew":
+	case "system":
 		return "Move what is not true of every workspace down a level:\n" +
 			"  quay context set <workspace>            what one organisation does\n" +
 			"  quay context set <workspace>/<project>  what one piece of work does"

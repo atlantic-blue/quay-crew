@@ -10,8 +10,8 @@
 //
 //	make promises
 //
-// It is a repository tool rather than a crew capability, for the same reason cmd/changelog is: an
-// operator's crew has no changelog.d and no features directory, and a command that cannot work
+// It is a repository tool rather than a system capability, for the same reason cmd/changelog is: an
+// operator's system has no changelog.d and no features directory, and a command that cannot work
 // anywhere but here does not belong in the binary they install.
 package main
 

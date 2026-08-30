@@ -13,7 +13,7 @@ import (
 // moves: hold a container open through a five minute pipeline and pay for it, or answer and stop. It
 // takes a third. It reports that it will wait, and nothing ever wakes it.
 //
-// The crew already has the wait, and it is not in a job. A flow has a wait node, so shipping is a
+// The system already has the wait, and it is not in a job. A flow has a wait node, so shipping is a
 // graph: a dispatch that pushes and opens the pull request, a wait, then a choice on the check
 // result. The refusal names that graph.
 //
@@ -47,7 +47,7 @@ var mergesOnAResult = regexp.MustCompile(
 		`\b(green|pull request|pull requests|pr|checks|continuous integration|ci)\b`)
 
 // negations are the words that turn one of the phrases above into an instruction not to do it. "Do
-// not merge the pull request" is the line the crew itself adds, so a brief repeating it back must
+// not merge the pull request" is the line the system itself adds, so a brief repeating it back must
 // not be refused.
 var negations = []string{
 	"not", "n't", "never", "no ", "without", "nobody", "somebody else", "someone else",
@@ -93,7 +93,7 @@ func negated(said string, at int) bool {
 	return false
 }
 
-// RefusedWait is what the crew says to a brief that asks the job to wait. It names the graph,
+// RefusedWait is what the system says to a brief that asks the job to wait. It names the graph,
 // because a refusal a caller cannot act on sends them looking.
 func RefusedWait(asked string) error {
 	return fmt.Errorf("job's brief says %q, and a job cannot wait: it runs once and answers, so nothing "+
@@ -106,7 +106,7 @@ func RefusedWait(asked string) error {
 
 // Declared is the rule applied to what a caller declared, and it is where the rule belongs.
 //
-// A caller writes one brief and the crew runs it once. A flow's step is a different thing: the graph
+// A caller writes one brief and the system runs it once. A flow's step is a different thing: the graph
 // around it holds the wait, so its third node says "merge the pull request" and means it. Holding a
 // step to this rule would refuse the very graph the refusal tells a caller to write.
 func Declared(brief string) error {

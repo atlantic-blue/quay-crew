@@ -13,7 +13,7 @@ import (
 // The reason is what the operator saw: a three hour run produced one readable thing, at the end. For
 // three hours the record said a session was busy and nothing else, because nothing in the tool said a
 // phase ends in a push. A brief could say so, and briefs forget. So the expectation moves onto the
-// job, where it is declared once and checked by the crew rather than believed from the model.
+// job, where it is declared once and checked by the system rather than believed from the model.
 //
 // The check is read off the answer, the way `expect_contains` is, and for the same reason: the model
 // reporting on its own job is the thing this exists to stop.
@@ -26,7 +26,7 @@ const RepositoryLimit = repository.Limit
 // browser's address bar taken back down to it.
 func TidyRepository(address string) string { return repository.Tidy(address) }
 
-// usableRepository refuses an address the crew could not then look for in an answer.
+// usableRepository refuses an address the system could not then look for in an answer.
 //
 // Held to a shape at the write, while the person who typed it is looking, because the alternative is
 // a job that runs for an hour and stops on an address that was never going to match anything.
@@ -49,7 +49,7 @@ func usableRepository(address string) error {
 // rather than kept as one pattern, because the point is to find the address of *this* job's pull
 // request: an answer that names somebody else's pull request has not said where this work went.
 //
-// The host is left open. The crew ships a github skill and nothing else, but the address of a pull
+// The host is left open. The system ships a github skill and nothing else, but the address of a pull
 // request is the same three parts everywhere it matters, and pinning github.com here would refuse a
 // self hosted forge for no gain.
 func pullRequestShape(repository string) *regexp.Regexp {
@@ -73,7 +73,7 @@ func PullRequestIn(repository, answer string) string {
 
 // EndsInAPullRequest is the line a session doing this job is given beside its brief.
 //
-// It is added by the crew rather than left to whoever wrote the brief, which is the whole change: a
+// It is added by the system rather than left to whoever wrote the brief, which is the whole change: a
 // brief that forgets to ask for a push produces work nobody can see, and every brief forgets
 // eventually.
 //
@@ -85,7 +85,7 @@ func EndsInAPullRequest(repository string) string {
 		"the merge is somebody else's.", repository)
 }
 
-// Asked is the text the crew sends a session for this job: the brief, and where the job names a
+// Asked is the text the system sends a session for this job: the brief, and where the job names a
 // repository, the line above.
 //
 // A job that has been told something starts again from what it was told rather than from its brief.
@@ -101,7 +101,7 @@ func Asked(one *Job) string {
 	return one.Brief + "\n\n" + EndsInAPullRequest(one.Repository)
 }
 
-// AskedForThePullRequest is what the crew sends a session that answered without one. It is the
+// AskedForThePullRequest is what the system sends a session that answered without one. It is the
 // second half of the refusal: the job is not landed, and the session that did the work is asked for
 // the one thing missing.
 func AskedForThePullRequest(repository string) string {

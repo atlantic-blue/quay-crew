@@ -18,7 +18,7 @@ import (
 // Admit says whether the runtime can host one more sandbox, and takes the room for it when it can.
 //
 // The reservation is the part a reading cannot do on its own. A dispatch is detached, so the
-// container appears seconds after the job that asked for it was admitted, and the crew reads its
+// container appears seconds after the job that asked for it was admitted, and the system reads its
 // runtime on a ten second timer. Nine jobs asking the same reading whether the machine is empty are
 // all told yes. So the answer and the reservation are one movement, and the tenth job counts the
 // nine before it. Kubernetes does the same and calls it assuming the pod onto the node.
@@ -43,18 +43,18 @@ func (s *Server) Admit(ctx context.Context, key string, want capacity.Request) c
 // Release gives back room that was taken for a sandbox that will not be made.
 func (s *Server) Release(key string) { s.placed.Release(key) }
 
-// node is the runtime as the crew last read it, with what the crew keeps back for itself.
+// node is the runtime as the system last read it, with what the system keeps back for itself.
 //
 // It reads the last sample and never the daemon. Admission runs on every job, and reading the daemon
 // takes as long as the daemon takes: `docker stats` waits for it to sample every container. That is
-// rule one of issue 405 and it holds harder here, because this is on the path of every job the crew
+// rule one of issue 405 and it holds harder here, because this is on the path of every job the system
 // starts rather than of a header nobody is waiting for.
 func (s *Server) node() capacity.Node {
 	return nodeFrom(s.headroom.Latest(), s.reserve)
 }
 
 // requestFor is what one sandbox in this workspace asks the machine for: what the workspace declared,
-// or the crew's own measured request where it declared nothing.
+// or the system's own measured request where it declared nothing.
 func (s *Server) requestFor(ctx context.Context, workspace string) capacity.Request {
 	standard := capacity.DefaultRequest()
 	limits, err := s.store.WorkspaceLimits(ctx, workspace)
@@ -64,7 +64,7 @@ func (s *Server) requestFor(ctx context.Context, workspace string) capacity.Requ
 	return limits.Request(standard)
 }
 
-// placeSandbox takes the room one session's container needs, at the moment the crew is about to make
+// placeSandbox takes the room one session's container needs, at the moment the system is about to make
 // it, and refuses when the runtime has none.
 //
 // This is the second half of the kubernetes shape. The controller is the scheduler: it decides what
@@ -87,15 +87,15 @@ func (s *Server) placeSandbox(ctx context.Context, session *quaycrewv1.Session) 
 // unplaceSandbox gives back the room a container held, when the container goes.
 func (s *Server) unplaceSandbox(sessionID string) { s.placed.ReleaseSession(sessionID) }
 
-// SeedCapacity counts the sandboxes that were already running when this crew started.
+// SeedCapacity counts the sandboxes that were already running when this system started.
 //
-// The containers outlive the process that made them. A crew that started counting from zero would
+// The containers outlive the process that made them. A system that started counting from zero would
 // admit a whole machine's worth of work onto a machine that is already full, which is the same
 // failure as counting jobs and arrives on every restart.
 func (s *Server) SeedCapacity(ctx context.Context) {
 	running, err := s.provider.Stranded(ctx)
 	if err != nil {
-		slog.WarnContext(ctx, "the crew could not read which sandboxes were already running, "+
+		slog.WarnContext(ctx, "the system could not read which sandboxes were already running, "+
 			"so it is admitting work as though the machine were empty", "error", err)
 		return
 	}
@@ -103,33 +103,33 @@ func (s *Server) SeedCapacity(ctx context.Context) {
 		return
 	}
 	s.placed.Seed(running, capacity.DefaultRequest())
-	slog.InfoContext(ctx, "the crew counted the sandboxes that were already running",
+	slog.InfoContext(ctx, "the system counted the sandboxes that were already running",
 		"sandboxes", len(running), "placed", s.placed.Placed().String())
 }
 
-// CrewReserve is what the crew holds back for itself, from the crew's configuration.
+// SystemReserve is what the system holds back for itself, from the system's configuration.
 //
 // This is the one thing that is not kubernetes. A kubelet runs on the node, outside the pods it
-// manages, so what it reserves is somebody else's memory. The crew's control plane, database and
-// event log are containers inside the same runtime the work fills, so a crew that reserves nothing
+// manages, so what it reserves is somebody else's memory. The system's control plane, database and
+// event log are containers inside the same runtime the work fills, so a system that reserves nothing
 // goes down with its own workload. On 30 August 2026 it did.
 //
 // The figure here is a floor. What actually binds is measured on every sample: everything the
-// runtime holds, less what the sandboxes hold, is the crew's own containers.
-func CrewReserve(memory, processor string, logger *slog.Logger) capacity.Request {
+// runtime holds, less what the sandboxes hold, is the system's own containers.
+func SystemReserve(memory, processor string, logger *slog.Logger) capacity.Request {
 	reserve := capacity.DefaultReserve()
-	if mebibytes, ok := wholeNumber(memory, logger, "QC_CREW_RESERVE_MEMORY"); ok {
+	if mebibytes, ok := wholeNumber(memory, logger, "QC_SYSTEM_RESERVE_MEMORY"); ok {
 		reserve.Memory = int64(mebibytes) << 20
 	}
-	if percent, ok := wholeNumber(processor, logger, "QC_CREW_RESERVE_PROCESSOR"); ok {
+	if percent, ok := wholeNumber(processor, logger, "QC_SYSTEM_RESERVE_PROCESSOR"); ok {
 		reserve.Processor = percent
 	}
 	return reserve
 }
 
 // wholeNumber reads one of the two reserve settings. A setting that is not a number leaves the
-// measured floor and says so: a crew that will not start over a misspelled number is worse than a
-// crew running the number it was already running.
+// measured floor and says so: a system that will not start over a misspelled number is worse than a
+// system running the number it was already running.
 func wholeNumber(value string, logger *slog.Logger, named string) (int, bool) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -138,7 +138,7 @@ func wholeNumber(value string, logger *slog.Logger, named string) (int, bool) {
 	number, err := strconv.Atoi(trimmed)
 	if err != nil || number < 0 {
 		if logger != nil {
-			logger.Warn("this setting is not a whole number, so the crew's own floor is used instead",
+			logger.Warn("this setting is not a whole number, so the system's own floor is used instead",
 				"setting", named, "configured", value)
 		}
 		return 0, false
@@ -153,19 +153,44 @@ var _ job.Room = (*Server)(nil)
 // EnvReserve reads the two reserve settings from the environment, which is how the compose stack and
 // the operator's own configuration file set them.
 func EnvReserve(logger *slog.Logger) capacity.Request {
-	return CrewReserve(os.Getenv("QC_CREW_RESERVE_MEMORY"), os.Getenv("QC_CREW_RESERVE_PROCESSOR"), logger)
+	return SystemReserve(
+		setting("QC_SYSTEM_RESERVE_MEMORY", "QC_CREW_RESERVE_MEMORY", logger),
+		setting("QC_SYSTEM_RESERVE_PROCESSOR", "QC_CREW_RESERVE_PROCESSOR", logger),
+		logger)
 }
 
-// NodeFrom is the runtime as the crew last read it: what it has, and what its own containers are
+// setting reads one reserve setting, and reads the name it had before this level was called the
+// system when that is the only one set.
+//
+// A configuration file is written once and kept for a year. Dropping the old name would leave the
+// operator's floor silently back at the default, on the one setting whose whole job is to stop the
+// machine going down under its own work, so the old name still counts and says out loud that it
+// moved. The new name wins where both are set, because that is the one that was typed on purpose.
+func setting(named, was string, logger *slog.Logger) string {
+	if value := strings.TrimSpace(os.Getenv(named)); value != "" {
+		return value
+	}
+	value := strings.TrimSpace(os.Getenv(was))
+	if value == "" {
+		return ""
+	}
+	if logger != nil {
+		logger.Warn("this setting has been renamed, and is still read under the name it had. Set the new one",
+			"setting", was, "now", named)
+	}
+	return value
+}
+
+// NodeFrom is the runtime as the system last read it: what it has, and what its own containers are
 // taking out of that.
 //
 // It reads the runtime and never the host. On 30 August 2026 the host had 36 gibibytes free while
-// the runtime it holds had 7.65 and was full, so a crew that admitted against the host would have
+// the runtime it holds had 7.65 and was full, so a system that admitted against the host would have
 // called that machine empty while it died.
 //
 // A sample nothing has taken, or one whose figures the daemon would not give up, leaves the node
 // unknown. An unknown node admits work rather than refusing it: the local sandbox provider has no
-// runtime to read at all, and a crew that stopped dead there would be worse than the crew that
+// runtime to read at all, and a system that stopped dead there would be worse than the system that
 // counted. The caller says out loud that it is admitting unmeasured.
 func nodeFrom(sample headroom.Sample, floor capacity.Request) capacity.Node {
 	node := capacity.Node{Reserve: floor}
@@ -175,23 +200,23 @@ func nodeFrom(sample headroom.Sample, floor capacity.Request) capacity.Node {
 	node.Known = true
 	node.Capacity = capacity.Request{
 		Memory: sample.Limit.Bytes(),
-		// Down, because a processor the crew rounded into existence is a processor it would hand out.
+		// Down, because a processor the system rounded into existence is a processor it would hand out.
 		Processor: int(sample.Processors.Percent()),
 	}
 	node.Reserve = larger(floor, measuredReserve(sample))
 	return node
 }
 
-// MeasuredReserve is what the crew's own containers are taking: everything the runtime holds, less
+// MeasuredReserve is what the system's own containers are taking: everything the runtime holds, less
 // what the sandboxes hold.
 //
 // This is the number kubernetes does not need. A kubelet runs on the node, outside the pods it
-// manages, so what it holds back is a flag somebody sets. The crew's control plane, database and
+// manages, so what it holds back is a flag somebody sets. The system's control plane, database and
 // event log are containers inside the same runtime the work fills, so what it has to hold back is
 // whatever they are actually using, and that is measurable rather than declared.
 //
 // A stray container nobody can account for lands on this side of the line, which is the safe side:
-// it is real memory the crew must not hand out twice.
+// it is real memory the system must not hand out twice.
 func measuredReserve(sample headroom.Sample) capacity.Request {
 	reserve := capacity.Request{}
 	if sample.Used.Known() {
@@ -210,13 +235,13 @@ func measuredReserve(sample headroom.Sample) capacity.Request {
 				busy -= box.Processor.Percent()
 			}
 		}
-		// Up, because a reserve rounded down is capacity the crew hands out and then needs back.
+		// Up, because a reserve rounded down is capacity the system hands out and then needs back.
 		reserve.Processor = int(atLeastZero(int64(busy + 0.999)))
 	}
 	return reserve
 }
 
-// larger is the bigger of two requests on each axis, taken separately: a crew whose own containers
+// larger is the bigger of two requests on each axis, taken separately: a system whose own containers
 // are using more memory than the floor and fewer processors than it must still keep both.
 func larger(one, other capacity.Request) capacity.Request {
 	answer := one
@@ -229,7 +254,7 @@ func larger(one, other capacity.Request) capacity.Request {
 	return answer
 }
 
-// atLeastZero keeps a subtraction on the sensible side of nothing: a crew whose sandboxes report
+// atLeastZero keeps a subtraction on the sensible side of nothing: a system whose sandboxes report
 // more than the runtime does has read two commands a moment apart, not a machine holding less than
 // nothing.
 func atLeastZero(figure int64) int64 {

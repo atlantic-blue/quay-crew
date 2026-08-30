@@ -21,12 +21,12 @@ func TestAWorkspaceKeepsItsColourAndTwoWorkspacesDiffer(t *testing.T) {
 	}
 
 	// Not a guarantee for every possible pair, since a hash into a palette collides eventually. These
-	// are the names actually on this crew, and they have to be told apart.
+	// are the names actually on this system, and they have to be told apart.
 	seen := map[string]string{}
 	for _, name := range []string{"atlantic-blue", "itv", "fanalysis", "juliantellez"} {
 		colour := colourOfName(name)
 		if was, taken := seen[colour]; taken {
-			t.Errorf("%q and %q share a colour, and both are workspaces on this crew", was, name)
+			t.Errorf("%q and %q share a colour, and both are workspaces on this system", was, name)
 		}
 		seen[colour] = name
 	}
@@ -292,10 +292,10 @@ func TestASessionHoldingAConversationIsNotColouredReady(t *testing.T) {
 	if colourOfStatus(display.StatusAwake+" stale") != colourOfStatus(display.StatusAwake) {
 		t.Error("a stale awake session loses its colour")
 	}
-	// Unknown is the crew saying it could not tell, so it is left uncoloured rather than dressed as
+	// Unknown is the system saying it could not tell, so it is left uncoloured rather than dressed as
 	// ready or as busy.
 	if colourOfStatus(display.StatusUnknown) != "" {
-		t.Error("a session the crew could not read is being coloured, which is a guess shown as a fact")
+		t.Error("a session the system could not read is being coloured, which is a guess shown as a fact")
 	}
 }
 

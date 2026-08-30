@@ -62,7 +62,7 @@ func TestEveryShippedRoleSaysWhatQuayDoesNotEnforce(t *testing.T) {
 	}
 	for _, one := range roles {
 		if !strings.HasPrefix(one.Brief, "## What quay does not enforce") {
-			t.Errorf("%s does not open by saying what quay does not enforce, so its brief reads as a boundary the crew keeps",
+			t.Errorf("%s does not open by saying what quay does not enforce, so its brief reads as a boundary the system keeps",
 				one.Name)
 		}
 	}
@@ -169,9 +169,9 @@ func TestEveryShippedRoleReceivesTheSkillsItWouldPushWith(t *testing.T) {
 
 // The claim a brief may no longer make.
 //
-// The orchestrator's brief used to say that merging is not a verb the crew has, so nothing stops a
+// The orchestrator's brief used to say that merging is not a verb the system has, so nothing stops a
 // session merging except the brief itself. That was honest when it was written and it is false now:
-// the crew ships a hook that reads each command before it runs and refuses one that merges.
+// the system ships a hook that reads each command before it runs and refuses one that merges.
 //
 // A brief is prose, so nothing but this stops the sentence coming back. It is written as the claim
 // rather than as the correction, because what matters is that no role tells a session the gate is
@@ -211,7 +211,7 @@ func TestTheOrchestratorSaysTheMergeIsRefusedByAHook(t *testing.T) {
 //
 // A cost rule in prose is advice, and a model can read it, agree with it and still choose a store
 // that bills a minimum capacity continuously, which is what happened on 29 August 2026. Advice is
-// all this line is too, and the difference is that the crew now has somewhere for the session to
+// all this line is too, and the difference is that the system now has somewhere for the session to
 // stop: it can name the resources and their cost at rest, ask, and wait. A brief that does not name
 // the command is a brief that leaves guessing as the only move it knows about.
 func TestTheOrchestratorStatesWhatItWillCreateBeforeItBuilds(t *testing.T) {

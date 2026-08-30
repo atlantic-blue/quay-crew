@@ -14,11 +14,11 @@ import (
 
 // What a session may do when it is born was a constant in this file. Every session that did not come
 // through the console's wizard arrived in acceptEdits, and the only way to change that was to edit
-// the binary. It comes from the crew's configuration now.
+// the binary. It comes from the system's configuration now.
 
-// aCrewBornIn is a crew whose configuration says what a session may do, and the runner it dispatches
+// aSystemBornIn is a system whose configuration says what a session may do, and the runner it dispatches
 // to, because what the store recorded is not the question: what the model was run with is.
-func aCrewBornIn(t *testing.T, mode string) (quaycrewv1.ControlPlaneServiceServer, *model.FakeRunner) {
+func aSystemBornIn(t *testing.T, mode string) (quaycrewv1.ControlPlaneServiceServer, *model.FakeRunner) {
 	t.Helper()
 	runner := &model.FakeRunner{Reply: "ok"}
 	server := controlplane.NewServer(controlplane.Config{
@@ -50,31 +50,31 @@ func dispatched(t *testing.T, server quaycrewv1.ControlPlaneServiceServer) {
 	}
 }
 
-// The one that matters. A crew that recorded the mode on the session and ran the task in something
+// The one that matters. A system that recorded the mode on the session and ran the task in something
 // else would pass any assertion made against the listing, and the operator would find out when the
 // model asked for an approval nobody was there to give.
-func TestATaskRunsInTheModeTheCrewIsConfiguredToBornSessionsIn(t *testing.T) {
+func TestATaskRunsInTheModeTheSystemIsConfiguredToBornSessionsIn(t *testing.T) {
 	for _, mode := range []string{model.PermissionPlan, model.PermissionBypass, model.PermissionAcceptEdits} {
 		t.Run(mode, func(t *testing.T) {
-			server, runner := aCrewBornIn(t, mode)
+			server, runner := aSystemBornIn(t, mode)
 
 			dispatched(t, server)
 
 			if was := runner.LastReq.PermissionMode; was != mode {
-				t.Fatalf("the first task ran in %q, want %q, which is what the crew is configured for", was, mode)
+				t.Fatalf("the first task ran in %q, want %q, which is what the system is configured for", was, mode)
 			}
 		})
 	}
 }
 
-// A crew that says nothing keeps what every crew has had until now, because an upgrade that quietly
+// A system that says nothing keeps what every system has had until now, because an upgrade that quietly
 // widens what a session may do is the worst way to find out this setting exists.
-func TestACrewThatSaysNothingKeepsTheModeItAlwaysHad(t *testing.T) {
-	server, runner := aCrewBornIn(t, "")
+func TestASystemThatSaysNothingKeepsTheModeItAlwaysHad(t *testing.T) {
+	server, runner := aSystemBornIn(t, "")
 
 	dispatched(t, server)
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionAcceptEdits {
-		t.Fatalf("a crew with nothing configured ran its first task in %q, want %q", was, model.PermissionAcceptEdits)
+		t.Fatalf("a system with nothing configured ran its first task in %q, want %q", was, model.PermissionAcceptEdits)
 	}
 }

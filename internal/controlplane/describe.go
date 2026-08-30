@@ -11,11 +11,11 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/model"
 )
 
-// A session says what it is about, written by the crew rather than by the operator.
+// A session says what it is about, written by the system rather than by the operator.
 //
 // A listing is a column of hexadecimal, and a label fixes that only for the sessions somebody stopped
 // to name. Naming things is job and nobody does it consistently, so the half that actually gets used
-// is the one the crew writes itself.
+// is the one the system writes itself.
 //
 // It never touches the label. A name somebody picked is the one thing in a listing that is certainly
 // right, and nothing automatic is allowed to overwrite it.
@@ -26,7 +26,7 @@ const (
 	//
 	// Ten is a starting number, not a measured one. Nothing here has been running long enough to say
 	// how far a conversation drifts per task, so this is set where it can be changed rather than
-	// presented as derived: QC_DESCRIBE_EVERY in the crew's configuration. What would replace it is a
+	// presented as derived: QC_DESCRIBE_EVERY in the system's configuration. What would replace it is a
 	// count of how often a re-description actually differs from the one before it.
 	describeEveryDefault = 10
 	// descriptionLimit is how much of a description is kept. It shares a column with the operator's
@@ -39,11 +39,11 @@ const (
 	describeTasks = 6
 )
 
-// DescribeEvery reads how often a session is described from what the crew was configured with.
+// DescribeEvery reads how often a session is described from what the system was configured with.
 //
-// "off" and zero both task it off, because a crew running automation makes a session per run and
+// "off" and zero both task it off, because a system running automation makes a session per run and
 // should be able to pay for none of this. Anything unreadable keeps the default rather than refusing:
-// the crew starting matters more than this setting being exactly right, which is the opposite of the
+// the system starting matters more than this setting being exactly right, which is the opposite of the
 // permission mode, where being wrong changes what a session may do.
 func DescribeEvery(configured string) int {
 	value := strings.ToLower(strings.TrimSpace(configured))
@@ -130,7 +130,7 @@ func oneLine(text string, limit int) string {
 // else is still reading. That is the same mistake that made `quay flow start` fail one run in six.
 //
 // Every failure is a log line and nothing else. A description is a convenience, and a task that
-// worked must not be reported as failed because the crew could not think of a name for it.
+// worked must not be reported as failed because the system could not think of a name for it.
 func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	if s.describeEvery <= 0 {
 		return
@@ -184,7 +184,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 // isTheQuestionBack says whether what came back is the question rather than an answer to it.
 //
 // A backend that echoes is the obvious case, and continuous integration runs one, so without this the
-// crew names every session "Here is the start of a conversation:". It is worth guarding beyond that
+// system names every session "Here is the start of a conversation:". It is worth guarding beyond that
 // though: a model that answers badly enough to hand the instruction back would put the instruction in
 // the listing, where it is worse than the identifier it replaced, and nothing else would notice.
 //

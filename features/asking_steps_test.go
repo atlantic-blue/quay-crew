@@ -13,7 +13,7 @@ import (
 )
 
 // A job putting a question to a person, driven the way both sides drive it: the session calls
-// carrying the credential the crew minted for its job, and the operator calls as the operator.
+// carrying the credential the system minted for its job, and the operator calls as the operator.
 //
 // The assertions go past the row. What decides whether this works is what the session is handed
 // next, so the scenarios read the task record rather than stopping at the phase.
@@ -26,7 +26,7 @@ func initializeAskingSteps(sc *godog.ScenarioContext) {
 	// A job whose task is under way, which is the only state a question can be put from: a session
 	// that has not started has nothing to ask about, and one that has answered has stopped.
 	//
-	// It runs as a role holding every verb the crew grants, which is what makes the refusal below
+	// It runs as a role holding every verb the system grants, which is what makes the refusal below
 	// mean anything: a session that cannot answer because its role is narrow says nothing about
 	// whether any session can.
 	sc.Step(`^a job titled "([^"]*)" whose session is still working$`, func(ctx context.Context, title string) error {
@@ -167,14 +167,14 @@ func initializeAskingSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew refuses it, and the job is still asking$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it, and the job is still asking$`, func(ctx context.Context) error {
 		if worldFrom(ctx).lastErr == nil {
 			return fmt.Errorf("the session answered the question a person was asked")
 		}
 		return jobIs(ctx, 0, job.PhaseAsking)
 	})
 
-	sc.Step(`^the crew refuses it, naming the job the credential is for$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it, naming the job the credential is for$`, func(ctx context.Context) error {
 		one, err := readJob(ctx, 0)
 		if err != nil {
 			return err
@@ -189,8 +189,8 @@ func initializeAskingSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// everyVerbRole is a role granting every verb the crew has, so a refusal in these scenarios is the
-// crew's boundary rather than a narrow grant.
+// everyVerbRole is a role granting every verb the system has, so a refusal in these scenarios is the
+// system's boundary rather than a narrow grant.
 const everyVerbRole = "planner"
 
 // aRoleHoldingEveryVerb imports and attaches that role.
@@ -208,8 +208,8 @@ func aRoleHoldingEveryVerb(ctx context.Context) error {
 }
 
 // askAsTheSession puts a question the way the session doing the job puts one: over the credential
-// the crew minted for that job. `about` is the job named in the request, and empty is the caller's
-// own, which is the only one the crew accepts.
+// the system minted for that job. `about` is the job named in the request, and empty is the caller's
+// own, which is the only one the system accepts.
 func askAsTheSession(ctx context.Context, question, about string) error {
 	w := worldFrom(ctx)
 	one, err := readJob(ctx, 0)
@@ -224,18 +224,18 @@ func askAsTheSession(ctx context.Context, question, about string) error {
 	return nil
 }
 
-// theSessionRunning is a caller holding the credential the crew minted for this job, which is what
+// theSessionRunning is a caller holding the credential the system minted for this job, which is what
 // the session inside the container holds.
 func theSessionRunning(ctx context.Context, id string) (quaycrewv1.ControlPlaneServiceClient, error) {
 	w := worldFrom(ctx)
 	token, minted := w.server.JobCredentialForTest(ctx, id)
 	if !minted {
-		return nil, fmt.Errorf("the crew minted no credential for the job %s", id)
+		return nil, fmt.Errorf("the system minted no credential for the job %s", id)
 	}
 	return w.dialAs(token), nil
 }
 
-// tasksSentForTheJob is what the crew sent the session doing this job, waited for rather than read
+// tasksSentForTheJob is what the system sent the session doing this job, waited for rather than read
 // once: a dispatch lets go, so the row is written by the goroutine running the task.
 func tasksSentForTheJob(ctx context.Context, want int) ([]*quaycrewv1.Task, error) {
 	one, err := readJob(ctx, 0)
@@ -243,7 +243,7 @@ func tasksSentForTheJob(ctx context.Context, want int) ([]*quaycrewv1.Task, erro
 		return nil, err
 	}
 	if one.GetSession() == "" {
-		return nil, fmt.Errorf("the job says no session, so nothing was asked of the crew")
+		return nil, fmt.Errorf("the job says no session, so nothing was asked of the system")
 	}
 	var sent []*quaycrewv1.Task
 	deadline := time.Now().Add(10 * time.Second)

@@ -4,7 +4,7 @@
 # uses, branch on whether it answered, and write what is missing when it did not. It reports and it
 # never repairs, which is why it runs in edits mode rather than dangerous.
 #
-# Every fifteen minutes is the shortest schedule the crew accepts, flow.MinimumEvery in
+# Every fifteen minutes is the shortest schedule the system accepts, flow.MinimumEvery in
 # internal/flow/graph.go. A page that serves stored text from a cache does not need a faster one.
 name: transcript-watch
 version: 1

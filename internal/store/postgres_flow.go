@@ -59,7 +59,7 @@ func (p *Postgres) FlowGraph(ctx context.Context, name string, version int) (str
 	return definition, nil
 }
 
-// DueFlowRuns are the waiting runs whose time has come. Only those: a crew with a thousand finished
+// DueFlowRuns are the waiting runs whose time has come. Only those: a system with a thousand finished
 // runs and one waiting does one row's job per tick, which is what the partial index is for.
 func (p *Postgres) DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error) {
 	rows, err := p.pool.Query(ctx, `
@@ -140,7 +140,7 @@ func (p *Postgres) FlowRunCarrier(ctx context.Context, run string) (string, erro
 }
 
 // LandedFlowSteps are the runs whose step has ended: working runs whose step reached a terminal
-// phase. The poller reads these and nothing else, so a crew with a thousand finished runs does the
+// phase. The poller reads these and nothing else, so a system with a thousand finished runs does the
 // job of the few that are out with a step.
 //
 // The step is read back by identifier rather than joined, because a join of two tables that both

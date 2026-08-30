@@ -12,7 +12,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The roles a crew holds, driven over the control plane's real interface. What a session running as
+// The roles a system holds, driven over the control plane's real interface. What a session running as
 // a role receives is a different question, and no session runs as one yet.
 func initializeRoleSteps(sc *godog.ScenarioContext) {
 	importRole := func(ctx context.Context, files []*quaycrewv1.RoleFile) error {
@@ -63,7 +63,7 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 		return worldFrom(ctx).lastErr
 	})
 
-	// The way off the retired key. A role file lives in somebody's repository, so the crew meets the
+	// The way off the retired key. A role file lives in somebody's repository, so the system meets the
 	// old spelling long after it stopped using it.
 	sc.Step(`^the operator imports a role saying "may" where it should say "verbs"$`, func(ctx context.Context) error {
 		return importRole(ctx, roleFiles("test-writer", 1, roleManifest{
@@ -104,11 +104,11 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the operator (?:attaches|attached) the "([^"]*)" role to the crew$`,
+	sc.Step(`^the operator (?:attaches|attached) the "([^"]*)" role to the system$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			_, w.lastErr = w.client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{
-				Scope: "crew", Name: name,
+				Scope: "system", Name: name,
 			})
 			return w.lastErr
 		})
@@ -122,16 +122,16 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 			return w.lastErr
 		})
 
-	sc.Step(`^the operator detaches the "([^"]*)" role from the crew$`,
+	sc.Step(`^the operator detaches the "([^"]*)" role from the system$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			_, w.lastErr = w.client.DetachRole(ctx, &quaycrewv1.DetachRoleRequest{
-				Scope: "crew", Name: name,
+				Scope: "system", Name: name,
 			})
 			return w.lastErr
 		})
 
-	sc.Step(`^the operator lists the crew's roles$`, func(ctx context.Context) error {
+	sc.Step(`^the operator lists the system's roles$`, func(ctx context.Context) error {
 		return listRoles(ctx, "")
 	})
 
@@ -139,11 +139,11 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 		return listRoles(ctx, worldFrom(ctx).workspaceID)
 	})
 
-	sc.Step(`^the crew holds no roles$`, func(ctx context.Context) error {
+	sc.Step(`^the system holds no roles$`, func(ctx context.Context) error {
 		return rolesHeld(ctx, "", nil)
 	})
 
-	sc.Step(`^the crew holds the "([^"]*)" role$`, func(ctx context.Context, name string) error {
+	sc.Step(`^the system holds the "([^"]*)" role$`, func(ctx context.Context, name string) error {
 		return rolesHeld(ctx, "", []string{name})
 	})
 
@@ -199,19 +199,19 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the listing says the "([^"]*)" role is held by the crew$`,
+	sc.Step(`^the listing says the "([^"]*)" role is held by the system$`,
 		func(ctx context.Context, name string) error {
 			held, err := roleNamed(ctx, worldFrom(ctx).workspaceID, name)
 			if err != nil {
 				return err
 			}
-			if !held.GetCrew() {
-				return fmt.Errorf("the listing does not say the %s role came from the crew", name)
+			if !held.GetSystem() {
+				return fmt.Errorf("the listing does not say the %s role came from the system", name)
 			}
 			return nil
 		})
 
-	// Reading a role back whole. The brief is the role, so a crew that cannot hand it back is a crew
+	// Reading a role back whole. The brief is the role, so a system that cannot hand it back is a system
 	// nobody can audit: there is no way to diff what it holds against the file it came from.
 	sc.Step(`^the operator reads the "([^"]*)" role back$`, func(ctx context.Context, name string) error {
 		return readRole(ctx, "", name)
@@ -266,10 +266,10 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the crew refuses the role saying "([^"]*)"$`, func(ctx context.Context, said string) error {
+	sc.Step(`^the system refuses the role saying "([^"]*)"$`, func(ctx context.Context, said string) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the crew accepted it, and it should have been refused")
+			return fmt.Errorf("the system accepted it, and it should have been refused")
 		}
 		if !strings.Contains(w.lastErr.Error(), said) {
 			return fmt.Errorf("the refusal does not say %q: %v", said, w.lastErr)
@@ -284,7 +284,7 @@ type roleManifest struct {
 	model    string
 	receives []string
 	verbs    []string
-	// verbsKey is the key the verbs are written under. Empty writes the one the crew takes, and a
+	// verbsKey is the key the verbs are written under. Empty writes the one the system takes, and a
 	// scenario naming the retired one is how the way off the old spelling is held to a test.
 	verbsKey string
 	brief    string
@@ -389,7 +389,7 @@ func initializeShippedRoleSteps(sc *godog.ScenarioContext) {
 			}
 			_, err = worldFrom(ctx).client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files})
 			if err != nil {
-				return fmt.Errorf("the crew refused the %s role, which ships with it: %w", name, err)
+				return fmt.Errorf("the system refused the %s role, which ships with it: %w", name, err)
 			}
 			return nil
 		})
@@ -406,13 +406,13 @@ func initializeShippedRoleSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			if _, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files}); err != nil {
-				return fmt.Errorf("the crew refused the %s role, which ships with it: %w", one.Name, err)
+				return fmt.Errorf("the system refused the %s role, which ships with it: %w", one.Name, err)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew holds every role this build ships$`, func(ctx context.Context) error {
+	sc.Step(`^the system holds every role this build ships$`, func(ctx context.Context) error {
 		ships, err := role.All(shippedRoles)
 		if err != nil {
 			return err
@@ -432,13 +432,13 @@ func initializeShippedRoleSteps(sc *godog.ScenarioContext) {
 		}
 		sort.Strings(wanted)
 		if strings.Join(names, ", ") != strings.Join(wanted, ", ") {
-			return fmt.Errorf("the crew holds %q and roles/ ships %q",
+			return fmt.Errorf("the system holds %q and roles/ ships %q",
 				strings.Join(names, ", "), strings.Join(wanted, ", "))
 		}
 		return nil
 	})
 
-	// A ported brief carrying a word the crew does not hand out is the failure this scenario exists
+	// A ported brief carrying a word the system does not hand out is the failure this scenario exists
 	// to catch, so it is a shipped role with one word changed rather than a role invented here.
 	sc.Step(`^the operator imports a shipped role receiving "([^"]*)"$`,
 		func(ctx context.Context, material string) error {
@@ -474,7 +474,7 @@ func roleFilesFrom(dir string) ([]*quaycrewv1.RoleFile, error) {
 
 // What a role this build ships may actually do, driven through the credential a job running as it
 // carries. A listing cannot answer this: it says what a role receives and not what it may call, and
-// what the crew holds a session to is the credential.
+// what the system holds a session to is the credential.
 func initializeShippedRoleVerbSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a job running as the "([^"]*)" role this build ships$`,
 		func(ctx context.Context, name string) error {
@@ -493,7 +493,7 @@ func initializeShippedRoleVerbSteps(sc *godog.ScenarioContext) {
 			scenario.running = declared.GetJob().GetId()
 			token, minted := w.server.JobCredentialForTest(ctx, scenario.running)
 			if !minted {
-				return fmt.Errorf("the crew minted no credential for the job running as %s", name)
+				return fmt.Errorf("the system minted no credential for the job running as %s", name)
 			}
 			scenario.token = token
 			return nil
@@ -525,7 +525,7 @@ func initializeShippedRoleVerbSteps(sc *godog.ScenarioContext) {
 			Id: scenario.running, Reason: "changed my mind",
 		})
 		if err == nil {
-			return fmt.Errorf("the crew let it stop a job, and its role grants no %s", role.VerbJobStop)
+			return fmt.Errorf("the system let it stop a job, and its role grants no %s", role.VerbJobStop)
 		}
 		if !strings.Contains(err.Error(), role.VerbJobStop) {
 			return fmt.Errorf("the refusal does not name %s: %v", role.VerbJobStop, err)
@@ -544,7 +544,7 @@ func importAndAttachShipped(ctx context.Context, name string) error {
 		return err
 	}
 	if _, err := w.client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files}); err != nil {
-		return fmt.Errorf("the crew refused the %s role, which ships with it: %w", name, err)
+		return fmt.Errorf("the system refused the %s role, which ships with it: %w", name, err)
 	}
 	if _, err := w.client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{
 		Workspace: w.workspaceID, Name: name,
@@ -558,7 +558,7 @@ func importAndAttachShipped(ctx context.Context, name string) error {
 // compares against the text that went in rather than against "something came back".
 const roleBrief = "Write the tests. Do not write the code."
 
-// readRole asks the crew for one role whole, at the crew's level or at a workspace's.
+// readRole asks the system for one role whole, at the system's level or at a workspace's.
 func readRole(ctx context.Context, workspace, name string) error {
 	w := worldFrom(ctx)
 	read, err := w.client.GetRole(ctx, &quaycrewv1.GetRoleRequest{Workspace: workspace, Name: name})

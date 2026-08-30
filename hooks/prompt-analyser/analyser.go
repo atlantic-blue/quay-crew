@@ -583,14 +583,14 @@ func Trouble(timedOut, err error, said string, config Config) string {
 //
 // Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it starts, while
 // passing nine other CLAUDE_ variables through, so the token reaches the session and not what the
-// session starts. A hook is one of those processes. The crew now writes the same value under
+// session starts. A hook is one of those processes. The system now writes the same value under
 // QUAY_MODEL_TOKEN too, which survives, and reaching this sentence means neither name arrived.
 const NotLoggedIn = "the model call is not logged in, so this hook cannot analyse anything. " +
-	"The crew carries the workspace's subscription token into a sandbox under two names, because " +
+	"The system carries the workspace's subscription token into a sandbox under two names, because " +
 	"Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from every process a session starts and a hook is " +
 	"one of those. Neither name arrived here. Set the token with: quay secret set <workspace> " +
 	"CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>, or turn the hook off with: " +
-	"quay hook detach crew prompt-analyser"
+	"quay hook detach system prompt-analyser"
 
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(text, "\n")

@@ -14,7 +14,7 @@ import (
 // A listing is drawn while somebody waits for it, so a daemon that has stopped answering has to cost
 // the view a moment rather than the whole view, and the cost must not grow with the number of rows:
 // one budget for the sweep rather than one per session is what holds that. A row still waiting when
-// it runs out reads untold, never empty, because the point of the field is that the crew says when
+// it runs out reads untold, never empty, because the point of the field is that the system says when
 // it does not know.
 const presenceSweep = 5 * time.Second
 
@@ -30,7 +30,7 @@ const presenceAtOnce = 8
 //
 // Only the sessions that would otherwise read idle are asked. Every other word already says
 // something is happening or that the container has gone, so asking would cost a round trip to learn
-// nothing: a crew where nothing is idle pays nothing here.
+// nothing: a system where nothing is idle pays nothing here.
 //
 // Nothing is created to answer. The provider is asked by name, because the sandbox handles are a map
 // in one process and the containers are not, so a question that built a sandbox would start the very
@@ -47,7 +47,7 @@ func (s *Server) withPresence(ctx context.Context, sessions []*quaycrewv1.Sessio
 	}
 
 	// The whole sweep, not each question, because a listing is drawn while somebody waits for it and
-	// a crew of forty rows must not cost twice what a crew of twenty costs when the daemon is wedged.
+	// a system of forty rows must not cost twice what a system of twenty costs when the daemon is wedged.
 	ctx, cancel := context.WithTimeout(ctx, presenceSweep)
 	defer cancel()
 
@@ -77,7 +77,7 @@ func (s *Server) withPresence(ctx context.Context, sessions []*quaycrewv1.Sessio
 // belongs to: a person is in there.
 //
 // Either question failing is untold, which is the whole reason the value exists. The provider
-// returns an error when it cannot reach the daemon at all, and the crew must not turn that into
+// returns an error when it cannot reach the daemon at all, and the system must not turn that into
 // "nothing is there": a caller reads that as licence to take the container.
 func (s *Server) presenceOf(ctx context.Context, sessionID string) quaycrewv1.SessionPresence {
 	var attached, awake bool

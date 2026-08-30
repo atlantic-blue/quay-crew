@@ -9,12 +9,12 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
-// probed is a reading of one part, the way the crew answers one.
+// probed is a reading of one part, the way the system answers one.
 func probed(name, state string) *quaycrewv1.HealthComponent {
 	return &quaycrewv1.HealthComponent{Name: name, State: state}
 }
 
-// statsRows lists the stats view against a crew that last found this.
+// statsRows lists the stats view against a system that last found this.
 func statsRows(t *testing.T, client *fakeClient) map[string]Row {
 	t.Helper()
 	rows, err := Stats(client).List(context.Background(), "")
@@ -95,25 +95,25 @@ func TestEveryStatsRowSaysHowItIs(t *testing.T) {
 			t.Fatalf("the %s row says %q, which is not one of the words a state is said in", what, row.Cells[1])
 		}
 	}
-	// A crew with no event log says so, rather than reading as one whose log is working.
+	// A system with no event log says so, rather than reading as one whose log is working.
 	if got := rows["Events engine"].Cells[1]; got != display.HealthNotConfigured {
-		t.Fatalf("a crew with no event log reads %q", got)
+		t.Fatalf("a system with no event log reads %q", got)
 	}
 	if rows["Events engine"].State != StateUnknown {
-		t.Fatal("a crew with no event log is drawn as though somebody checked it")
+		t.Fatal("a system with no event log is drawn as though somebody checked it")
 	}
 }
 
-// TestTheStatsViewStillDrawsWhenTheCrewWillNotSayHowItIs. An older control plane does not answer the
+// TestTheStatsViewStillDrawsWhenTheSystemWillNotSayHowItIs. An older control plane does not answer the
 // health call at all, and the six lines an operator opened this view for are still worth drawing.
-func TestTheStatsViewStillDrawsWhenTheCrewWillNotSayHowItIs(t *testing.T) {
+func TestTheStatsViewStillDrawsWhenTheSystemWillNotSayHowItIs(t *testing.T) {
 	rows := statsRows(t, &fakeClient{healthErr: errors.New("unknown method GetHealth")})
 	if len(rows) != 6 {
-		t.Fatalf("the stats view listed %d rows when the crew would not say how it is", len(rows))
+		t.Fatalf("the stats view listed %d rows when the system would not say how it is", len(rows))
 	}
 	for what, row := range rows {
 		if got := row.Cells[1]; got != display.HealthNotChecked {
-			t.Fatalf("the %s row reads %q from a crew that answered nothing", what, got)
+			t.Fatalf("the %s row reads %q from a system that answered nothing", what, got)
 		}
 	}
 }

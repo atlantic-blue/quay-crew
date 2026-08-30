@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// The roles a crew holds, in memory. The same nine calls the Postgres store answers, held to the
+// The roles a system holds, in memory. The same nine calls the Postgres store answers, held to the
 // same conformance suite, so a behaviour proven against one is proven against the other.
 
-// ImportRole takes a role into the crew, refusing a version that already exists carrying something
+// ImportRole takes a role into the system, refusing a version that already exists carrying something
 // different.
 func (m *Memory) ImportRole(_ context.Context, imported ImportedRole) error {
 	m.mu.Lock()
@@ -70,7 +70,7 @@ func (m *Memory) ListRoles(_ context.Context) ([]ImportedRole, error) {
 	return out, nil
 }
 
-// AttachRole gives a workspace a role at the newest revision the crew holds.
+// AttachRole gives a workspace a role at the newest revision the system holds.
 func (m *Memory) AttachRole(_ context.Context, workspace, name string) (ImportedRole, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -122,38 +122,38 @@ func (m *Memory) WorkspaceRoles(_ context.Context, workspace string) ([]Imported
 	return out, nil
 }
 
-// AttachCrewRole gives the whole crew a role at the newest revision it holds.
-func (m *Memory) AttachCrewRole(_ context.Context, name string) (ImportedRole, error) {
+// AttachSystemRole gives the whole system a role at the newest revision it holds.
+func (m *Memory) AttachSystemRole(_ context.Context, name string) (ImportedRole, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	newest, found := m.newestRole(name)
 	if !found {
 		return ImportedRole{}, ErrNotFound
 	}
-	if m.crewRoles == nil {
-		m.crewRoles = make(map[string]int)
+	if m.systemRoles == nil {
+		m.systemRoles = make(map[string]int)
 	}
-	m.crewRoles[name] = newest.Version
+	m.systemRoles[name] = newest.Version
 	return newest, nil
 }
 
-// DetachCrewRole takes a role away from the crew.
-func (m *Memory) DetachCrewRole(_ context.Context, name string) error {
+// DetachSystemRole takes a role away from the system.
+func (m *Memory) DetachSystemRole(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, found := m.crewRoles[name]; !found {
+	if _, found := m.systemRoles[name]; !found {
 		return ErrNotFound
 	}
-	delete(m.crewRoles, name)
+	delete(m.systemRoles, name)
 	return nil
 }
 
-// CrewRoles returns what the crew holds, at the versions it pinned.
-func (m *Memory) CrewRoles(_ context.Context) ([]ImportedRole, error) {
+// SystemRoles returns what the system holds, at the versions it pinned.
+func (m *Memory) SystemRoles(_ context.Context) ([]ImportedRole, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]ImportedRole, 0, len(m.crewRoles))
-	for name, version := range m.crewRoles {
+	out := make([]ImportedRole, 0, len(m.systemRoles))
+	for name, version := range m.systemRoles {
 		held, found := m.roles[roleKey(name, version)]
 		if !found {
 			continue
@@ -164,7 +164,7 @@ func (m *Memory) CrewRoles(_ context.Context) ([]ImportedRole, error) {
 	return out, nil
 }
 
-// newestRole is the highest version of a name the crew holds. Callers hold the lock.
+// newestRole is the highest version of a name the system holds. Callers hold the lock.
 func (m *Memory) newestRole(name string) (ImportedRole, bool) {
 	var newest ImportedRole
 	var found bool

@@ -137,7 +137,7 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				Also:  []string{"e"},
 				Label: "Edit",
 				// A scratch file, not the rendered one. A level's context is rendered into every
-				// session that reads it, so there is no single file to open, and the crew's is
+				// session that reads it, so there is no single file to open, and the system's is
 				// rendered into every workspace. The store is what is being edited; this is a
 				// window onto it.
 				Shell: func(row Row) (*exec.Cmd, error) {
@@ -152,7 +152,7 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					}
 					return editorFor(draft)
 				},
-				// The editor wrote the scratch file; this is what tells the crew.
+				// The editor wrote the scratch file; this is what tells the system.
 				After: func(ctx context.Context, row Row) error {
 					body, err := os.ReadFile(draftFor(row))
 					if err != nil {
@@ -227,7 +227,7 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 	if dir.GetWritten() {
 		state = StateReady
 	}
-	// How big the level is rather than whether it exists. The crew level reached 100,179 characters
+	// How big the level is rather than whether it exists. The system level reached 100,179 characters
 	// while this column said "written", which answers a question nobody was asking.
 	size := contextsize.Read(dir.GetScope(), dir.GetName(), dir.GetBody())
 	return Row{
@@ -262,12 +262,12 @@ func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			}
 			rows := make([]Row, 0, len(resp.GetSecrets()))
 			for _, secret := range resp.GetSecrets() {
-				// The crew's own belong to no workspace, so the column says the level. A row reading
-				// "crew" is how the console says every workspace has this one.
+				// The system's own belong to no workspace, so the column says the level. A row reading
+				// "system" is how the console says every workspace has this one.
 				where := display.Name(secret.GetWorkspaceName(), secret.GetWorkspace())
 				parent := secret.GetWorkspace()
-				if secret.GetCrew() {
-					where, parent = name.Crew, name.Crew
+				if secret.GetSystem() {
+					where, parent = name.System, name.System
 				}
 				rows = append(rows, Row{
 					ID:     parent + "/" + secret.GetName(),
@@ -520,7 +520,7 @@ func sessionRow(session *quaycrewv1.Session, workspaceName, projectName string) 
 	return Row{
 		ID:     session.GetId(),
 		Parent: session.GetProject(),
-		// What to call it: the name the operator gave it, then the crew's own, then the identifier. The
+		// What to call it: the name the operator gave it, then the system's own, then the identifier. The
 		// breadcrumb reads this, so drilling into a named session says what it is about rather than
 		// eight characters of hexadecimal.
 		Label: display.SessionName(session),
@@ -755,16 +755,16 @@ func stateFromStatus(status string) State {
 		return StateStopped
 	case "failed":
 		return StateFailed
-	// Unknown falls through on purpose: the crew asked the sandbox and was not told, so the row is
+	// Unknown falls through on purpose: the system asked the sandbox and was not told, so the row is
 	// left uncoloured rather than dressed as ready or as busy.
 	default:
 		return StateUnknown
 	}
 }
 
-// Stats is what the crew is running underneath: which model backend, which sandbox and store engines,
+// Stats is what the system is running underneath: which model backend, which sandbox and store engines,
 // where secrets and state are kept, whether anything is reading the event log. Every row says what
-// the crew last found when it probed that part, or says that nothing probes it.
+// the system last found when it probed that part, or says that nothing probes it.
 //
 // A view rather than more header. Six lines of this in the header makes it ten lines tall, and a
 // header that tall in a pane of its own scrolls, which loses its own top line. The header keeps what
@@ -777,7 +777,7 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "stats",
 		Aliases: []string{"stat", "engines", "status"},
-		// A key, what the crew last found about it, and its value: cyan on the left, the state in the
+		// A key, what the system last found about it, and its value: cyan on the left, the state in the
 		// colour of the state, plain on the right.
 		Columns: []Column{
 			{Title: "what", Width: 22, Colour: place},
@@ -794,7 +794,7 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// In the order they matter when something is wrong: what runs a task, where it runs,
 			// what survives a restart, then what is watching.
 			//
-			// A row with no component beside it is a part the crew runs no probe against, and it
+			// A row with no component beside it is a part the system runs no probe against, and it
 			// says not checked. Four of the six are that today. It is deliberately not green: this
 			// view claiming health it never measured is the whole finding.
 			stats := []struct{ what, component, running string }{
@@ -876,8 +876,8 @@ func Room(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// sandboxStatus is what the session beside a container says it is doing. A container the crew holds
-// no session for is a stray, and saying so is more useful than an empty cell: the crew does not know
+// sandboxStatus is what the session beside a container says it is doing. A container the system holds
+// no session for is a stray, and saying so is more useful than an empty cell: the system does not know
 // what it is, and nothing will ever stop it.
 func sandboxStatus(status string) string {
 	if status == "" {
@@ -930,10 +930,10 @@ func Keys(registry *Registry) Resource {
 	}
 }
 
-// lastProbed is what the crew last found about each part of itself, keyed by the part's name.
+// lastProbed is what the system last found about each part of itself, keyed by the part's name.
 //
-// A crew that will not answer is not a failed listing. The stats view's job is to say what the crew
-// is running, and an older crew that has no such call still has that to say; every row then reads
+// A system that will not answer is not a failed listing. The stats view's job is to say what the system
+// is running, and an older system that has no such call still has that to say; every row then reads
 // not checked, which is exactly what it is. Refusing to draw the view because the health call is
 // missing would take away the six lines an operator opened it for.
 func lastProbed(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
@@ -951,7 +951,7 @@ func lastProbed(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 // stateFromHealth colours a row by what the last probe of it found. Down is the one that takes the
 // whole line, because a component that is down is the reason somebody opened this view.
 //
-// Not checked and not configured are unknown on purpose: no colour, no claim. A crew that has never
+// Not checked and not configured are unknown on purpose: no colour, no claim. A system that has never
 // probed and a part nothing probes are both the absence of a reading, and dressing either as ready
 // is the failure the state column was added to stop.
 func stateFromHealth(state string) State {

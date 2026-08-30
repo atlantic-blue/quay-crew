@@ -58,9 +58,9 @@ func TestALineUnderACallCarriesTheTraceIDAsItsCorrelationID(t *testing.T) {
 	}
 }
 
-// The bug this package exists to fix: the crew logs through the package level slog, so a logger that
+// The bug this package exists to fix: the system logs through the package level slog, so a logger that
 // is built and not made the default leaves every line inside internal/ unstructured and uncorrelated.
-func TestThePackageLevelSlogIsTheCrewsLogger(t *testing.T) {
+func TestThePackageLevelSlogIsTheSystemsLogger(t *testing.T) {
 	var out bytes.Buffer
 	logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
@@ -151,7 +151,7 @@ func TestExportingKeepsWritingToStdout(t *testing.T) {
 	}
 }
 
-// The exporting logger is the default one too, since almost everything the crew logs goes through
+// The exporting logger is the default one too, since almost everything the system logs goes through
 // the package level slog rather than through a logger it was handed.
 func TestExportingLoggerBecomesTheDefault(t *testing.T) {
 	var out bytes.Buffer

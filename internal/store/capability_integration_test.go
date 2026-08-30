@@ -20,7 +20,7 @@ import (
 // The ceiling against a real database.
 //
 // The default is the one that has to hold here: a workspace with no row must read as depth zero
-// rather than as a row that is missing. A store that answered "not found" would make a crew that
+// rather than as a row that is missing. A store that answered "not found" would make a system that
 // grants everything until somebody configures it, which is the wrong way round to fail.
 
 // aRoleThatMay imports and attaches a role declaring the verbs named.
@@ -49,7 +49,7 @@ func aRoleThatMay(t *testing.T, s *controlplane.Server, workspace, name string, 
 
 func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
 	kept := openPostgres(t)
-	s := aCrewNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
+	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -77,10 +77,10 @@ func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
 }
 
 // The whole path, against the database that holds it: an operator raises the ceiling, a session
-// declares job under its own, and the row carries the parent and the depth the crew assigned.
+// declares job under its own, and the row carries the parent and the depth the system assigned.
 func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 	kept := openPostgres(t)
-	s := aCrewNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
+	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	aRoleThatMay(t, s, workspace, "backlog-clearer", role.VerbJobCreate)
@@ -131,7 +131,7 @@ func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 // The ceiling survives the process that set it, which is the whole reason it is a row.
 func TestACeilingOutlivesTheProcessThatSetItInPostgres(t *testing.T) {
 	kept := openPostgres(t)
-	s := aCrewNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
+	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, _ := aProjectOnPostgres(t, s)
 
@@ -160,7 +160,7 @@ func TestACeilingOutlivesTheProcessThatSetItInPostgres(t *testing.T) {
 // database on every claim rather than remembered.
 func TestTheLeaseAWorkspaceNamesIsWhatAControllerUsesInPostgres(t *testing.T) {
 	kept := openPostgres(t)
-	s := aCrewNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
+	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
@@ -184,7 +184,7 @@ func TestTheLeaseAWorkspaceNamesIsWhatAControllerUsesInPostgres(t *testing.T) {
 	if found.LeaseUntil == nil {
 		t.Fatal("the job is held with no end to the hold")
 	}
-	// An hour, not the crew's own minute, which is what says the workspace's number was read.
+	// An hour, not the system's own minute, which is what says the workspace's number was read.
 	if held := found.LeaseUntil.Sub(found.UpdatedAt); held < 50*time.Minute {
 		t.Fatalf("the hold lasts %s, want the hour the workspace named", held)
 	}

@@ -63,7 +63,7 @@ func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if len(sessions.GetSessions()) != 1 {
-		t.Fatalf("the crew has %d sessions, want 1", len(sessions.GetSessions()))
+		t.Fatalf("the system has %d sessions, want 1", len(sessions.GetSessions()))
 	}
 	working := sessions.GetSessions()[0]
 	if working.GetStatus() != StatusRunning {
@@ -157,7 +157,7 @@ func TestARestartSaysWhichTaskDiedWithIt(t *testing.T) {
 		t.Fatalf("the settled task does not say what died: %+v", settled[0])
 	}
 	if !strings.Contains(settled[0].GetFailure(), "restarted") {
-		t.Fatalf("the settled task does not say the crew restarted: %+v", settled[0])
+		t.Fatalf("the settled task does not say the system restarted: %+v", settled[0])
 	}
 
 	close(runner.Gate)

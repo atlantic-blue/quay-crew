@@ -13,7 +13,7 @@ import (
 // The role half of the contract, held against both implementations.
 //
 // A double whose behaviour is looser than the real store manufactures a green suite over a broken
-// crew, and what a role declares is a boundary: a role that does not survive the round trip is a
+// system, and what a role declares is a boundary: a role that does not survive the round trip is a
 // session receiving material nobody meant it to have.
 func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
@@ -42,7 +42,7 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Error("the brief did not survive, and the brief is the whole instruction")
 		}
 		// What it receives is the boundary. A role whose receives list is dropped somewhere in the
-		// round trip is a role the crew would give everything to.
+		// round trip is a role the system would give everything to.
 		if len(got.Receives) != 2 || !got.Gets(role.MaterialJob) || !got.Gets(role.MaterialContext) {
 			t.Errorf("what it receives did not survive: %+v", got.Receives)
 		}
@@ -88,8 +88,8 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if _, err := s.AttachRole(ctx, workspace.GetId(), "orchestrator"); err != nil {
 			t.Fatalf("AttachRole: %v", err)
 		}
-		if _, err := s.AttachCrewRole(ctx, "orchestrator"); err != nil {
-			t.Fatalf("AttachCrewRole: %v", err)
+		if _, err := s.AttachSystemRole(ctx, "orchestrator"); err != nil {
+			t.Fatalf("AttachSystemRole: %v", err)
 		}
 		listed, err := s.ListRoles(ctx)
 		if err != nil {
@@ -99,12 +99,12 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("WorkspaceRoles: %v", err)
 		}
-		crew, err := s.CrewRoles(ctx)
+		system, err := s.SystemRoles(ctx)
 		if err != nil {
-			t.Fatalf("CrewRoles: %v", err)
+			t.Fatalf("SystemRoles: %v", err)
 		}
 		for what, from := range map[string][]store.ImportedRole{
-			"the listing": listed, "the workspace": held, "the crew": crew,
+			"the listing": listed, "the workspace": held, "the system": system,
 		} {
 			if len(from) != 1 {
 				t.Fatalf("%s holds %d roles, want the one that was imported", what, len(from))
@@ -155,8 +155,8 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if _, err := s.AttachRole(ctx, workspace.GetId(), "test-writer"); err != nil {
 			t.Fatalf("AttachRole: %v", err)
 		}
-		if _, err := s.AttachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("AttachCrewRole: %v", err)
+		if _, err := s.AttachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("AttachSystemRole: %v", err)
 		}
 		listed, err := s.ListRoles(ctx)
 		if err != nil {
@@ -166,12 +166,12 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("WorkspaceRoles: %v", err)
 		}
-		crew, err := s.CrewRoles(ctx)
+		system, err := s.SystemRoles(ctx)
 		if err != nil {
-			t.Fatalf("CrewRoles: %v", err)
+			t.Fatalf("SystemRoles: %v", err)
 		}
 		for what, from := range map[string][]store.ImportedRole{
-			"the listing": listed, "the workspace": held, "the crew": crew,
+			"the listing": listed, "the workspace": held, "the system": system,
 		} {
 			if len(from) != 1 {
 				t.Fatalf("%s holds %d roles, want the one that was imported", what, len(from))
@@ -206,7 +206,7 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	// The same bytes imported again from somewhere else. The import is the crew's only sight of a
+	// The same bytes imported again from somewhere else. The import is the system's only sight of a
 	// role, so it says where the role was last seen: committing a loose role and importing it again
 	// is how an operator clears the warning, and a store that kept the first answer would leave them
 	// fixing it and watching nothing change.
@@ -369,7 +369,7 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateWorkspace: %v", err)
 		}
 		if _, err := s.AttachRole(ctx, workspace.GetId(), "architect"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a role the crew has not imported returned %v, want ErrNotFound", err)
+			t.Errorf("attaching a role the system has not imported returned %v, want ErrNotFound", err)
 		}
 		if err := s.DetachRole(ctx, workspace.GetId(), "architect"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("detaching a role the workspace does not hold returned %v, want ErrNotFound", err)
@@ -382,53 +382,53 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("the crew holds a role for every workspace, pinned to a version", func(t *testing.T) {
+	t.Run("the system holds a role for every workspace, pinned to a version", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		if held, err := s.CrewRoles(ctx); err != nil || len(held) != 0 {
-			t.Fatalf("a fresh crew holds %d roles (%v), want none", len(held), err)
+		if held, err := s.SystemRoles(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("a fresh system holds %d roles (%v), want none", len(held), err)
 		}
 		if err := s.ImportRole(ctx, aRole("test-writer", 1)); err != nil {
 			t.Fatalf("ImportRole: %v", err)
 		}
-		if _, err := s.AttachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("AttachCrewRole: %v", err)
+		if _, err := s.AttachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("AttachSystemRole: %v", err)
 		}
 
-		held, err := s.CrewRoles(ctx)
+		held, err := s.SystemRoles(ctx)
 		if err != nil {
-			t.Fatalf("CrewRoles: %v", err)
+			t.Fatalf("SystemRoles: %v", err)
 		}
 		if len(held) != 1 || held[0].Name != "test-writer" || held[0].Brief == "" {
-			t.Fatalf("the crew holds %+v, want the test-writer role with its brief", held)
+			t.Fatalf("the system holds %+v, want the test-writer role with its brief", held)
 		}
 
 		if err := s.ImportRole(ctx, aRole("test-writer", 2)); err != nil {
 			t.Fatalf("ImportRole v2: %v", err)
 		}
-		if held, err := s.CrewRoles(ctx); err != nil || held[0].Version != 1 {
-			t.Fatalf("the crew moved to %+v on its own (%v), want it pinned at version 1", held, err)
+		if held, err := s.SystemRoles(ctx); err != nil || held[0].Version != 1 {
+			t.Fatalf("the system moved to %+v on its own (%v), want it pinned at version 1", held, err)
 		}
-		if _, err := s.AttachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("AttachCrewRole again: %v", err)
+		if _, err := s.AttachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("AttachSystemRole again: %v", err)
 		}
-		if held, err := s.CrewRoles(ctx); err != nil || held[0].Version != 2 {
-			t.Fatalf("re-attaching left the crew at %+v (%v), want version 2", held, err)
+		if held, err := s.SystemRoles(ctx); err != nil || held[0].Version != 2 {
+			t.Fatalf("re-attaching left the system at %+v (%v), want version 2", held, err)
 		}
 
-		if err := s.DetachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("DetachCrewRole: %v", err)
+		if err := s.DetachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("DetachSystemRole: %v", err)
 		}
-		if held, err := s.CrewRoles(ctx); err != nil || len(held) != 0 {
-			t.Fatalf("the crew still holds %d roles (%v) after detaching", len(held), err)
+		if held, err := s.SystemRoles(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("the system still holds %d roles (%v) after detaching", len(held), err)
 		}
 		if _, err := s.GetRole(ctx, "test-writer", 2); err != nil {
-			t.Errorf("detaching from the crew removed the role from the catalogue: %v", err)
+			t.Errorf("detaching from the system removed the role from the catalogue: %v", err)
 		}
 	})
 
-	t.Run("the crew's holding of a role and a workspace's are separate statements", func(t *testing.T) {
+	t.Run("the system's holding of a role and a workspace's are separate statements", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, err := s.CreateWorkspace(ctx, "acme")
@@ -438,29 +438,29 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err := s.ImportRole(ctx, aRole("test-writer", 1)); err != nil {
 			t.Fatalf("ImportRole: %v", err)
 		}
-		if _, err := s.AttachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("AttachCrewRole: %v", err)
+		if _, err := s.AttachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("AttachSystemRole: %v", err)
 		}
 		if _, err := s.AttachRole(ctx, workspace.GetId(), "test-writer"); err != nil {
 			t.Fatalf("AttachRole: %v", err)
 		}
 
-		if err := s.DetachCrewRole(ctx, "test-writer"); err != nil {
-			t.Fatalf("DetachCrewRole: %v", err)
+		if err := s.DetachSystemRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("DetachSystemRole: %v", err)
 		}
 		if held, err := s.WorkspaceRoles(ctx, workspace.GetId()); err != nil || len(held) != 1 {
-			t.Fatalf("the workspace holds %d roles (%v) after the crew let go, want 1", len(held), err)
+			t.Fatalf("the workspace holds %d roles (%v) after the system let go, want 1", len(held), err)
 		}
 	})
 
-	t.Run("attaching to the crew a role that does not exist is not found", func(t *testing.T) {
+	t.Run("attaching to the system a role that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		if _, err := s.AttachCrewRole(ctx, "architect"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a role the crew has not imported returned %v, want ErrNotFound", err)
+		if _, err := s.AttachSystemRole(ctx, "architect"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching a role the system has not imported returned %v, want ErrNotFound", err)
 		}
-		if err := s.DetachCrewRole(ctx, "architect"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("detaching a role the crew does not hold returned %v, want ErrNotFound", err)
+		if err := s.DetachSystemRole(ctx, "architect"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("detaching a role the system does not hold returned %v, want ErrNotFound", err)
 		}
 	})
 }

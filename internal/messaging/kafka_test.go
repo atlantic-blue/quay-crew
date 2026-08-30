@@ -56,7 +56,7 @@ func TestConsumeRejectsIncompleteRequests(t *testing.T) {
 	}
 }
 
-// A broker that accepts the connection and never answers is what wedged a whole crew. The producer
+// A broker that accepts the connection and never answers is what wedged a whole system. The producer
 // keeps a record for as long as it is given, because franz-go leaves delivery unlimited by default,
 // so the only thing that ends the wait is the caller's own budget. This proves the budget works,
 // which is what the control plane's export now relies on.

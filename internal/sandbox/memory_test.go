@@ -9,7 +9,7 @@ import (
 
 func TestComposeLeavesOutLevelsWithNothingToSay(t *testing.T) {
 	body := sandbox.Compose([]sandbox.Section{
-		{Scope: "crew", Body: "no acronyms"},
+		{Scope: "system", Body: "no acronyms"},
 		{Scope: "workspace", Body: "   "},
 		{Scope: "project", Body: "pay the water bill first"},
 	})
@@ -25,12 +25,12 @@ func TestComposeLeavesOutLevelsWithNothingToSay(t *testing.T) {
 }
 
 // TestComposeAndDecomposeAreTheSameThingBothWays is what makes reading an edit back possible: a level
-// has to come out of the file as what went into it, or every task would quietly rewrite the crew's
+// has to come out of the file as what went into it, or every task would quietly rewrite the system's
 // memory.
 func TestComposeAndDecomposeAreTheSameThingBothWays(t *testing.T) {
-	scopes := []string{"crew", "workspace"}
+	scopes := []string{"system", "workspace"}
 	sections := []sandbox.Section{
-		{Scope: "crew", Body: "no acronyms\nno em dashes"},
+		{Scope: "system", Body: "no acronyms\nno em dashes"},
 		{Scope: "workspace", Body: "this is the house"},
 	}
 
@@ -43,7 +43,7 @@ func TestComposeAndDecomposeAreTheSameThingBothWays(t *testing.T) {
 }
 
 // TestSomethingAppendedBelongsToTheInnermostLevel: an agent writing a note about the job it is doing
-// writes at the end of the file, and that note is about this job rather than about the crew.
+// writes at the end of the file, and that note is about this job rather than about the system.
 func TestSomethingAppendedBelongsToTheInnermostLevel(t *testing.T) {
 	scopes := []string{"project", "session"}
 	file := sandbox.Compose([]sandbox.Section{

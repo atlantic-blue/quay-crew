@@ -32,7 +32,7 @@ func TestTheListingHasTheSameColumnsAsTheConsole(t *testing.T) {
 	}
 }
 
-// A listing narrowed to where you are standing looks exactly like a crew with fewer sessions in it.
+// A listing narrowed to where you are standing looks exactly like a system with fewer sessions in it.
 func TestANarrowedListingSaysWhatItWasNarrowedTo(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
@@ -42,28 +42,28 @@ func TestANarrowedListingSaysWhatItWasNarrowedTo(t *testing.T) {
 	mustRun(t, client, "project", "create", "other")
 	mustRun(t, client, "task", "hello there")
 
-	// Standing in the second one, so the listing is narrower than the crew.
+	// Standing in the second one, so the listing is narrower than the system.
 	narrowed := mustRun(t, client, "sessions")
 	if !strings.Contains(narrowed, "elsewhere/other") {
 		t.Errorf("the listing does not say what it was narrowed to:\n%s", narrowed)
 	}
 	// The advice has to be typeable. "quay sessions on its own" was what the operator had just
 	// typed, and standing somewhere it narrows again.
-	if !strings.Contains(narrowed, "quay sessions crew") {
+	if !strings.Contains(narrowed, "quay sessions system") {
 		t.Errorf("the listing does not say how to see everything:\n%s", narrowed)
 	}
 	if strings.Contains(narrowed, "house-bills") {
 		t.Fatalf("the listing was not narrowed at all:\n%s", narrowed)
 	}
 
-	// And the whole crew is still one command away.
+	// And the whole system is still one command away.
 	whole := mustRun(t, client, "sessions", "me")
 	if !strings.Contains(whole, "house-bills") {
 		t.Errorf("naming a workspace did not widen the listing:\n%s", whole)
 	}
 }
 
-// An empty listing has the same problem in reverse: "no sessions" reads as an empty crew.
+// An empty listing has the same problem in reverse: "no sessions" reads as an empty system.
 func TestAnEmptyListingSaysWhereItLooked(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")

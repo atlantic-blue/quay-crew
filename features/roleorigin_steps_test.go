@@ -17,7 +17,7 @@ import (
 // Where a role came from, driven from real directories on disk.
 //
 // The directories are real repositories rather than an origin built here, because the question a
-// scenario is asking is whether the crew can tell a role somebody could review from a role in a
+// scenario is asking is whether the system can tell a role somebody could review from a role in a
 // folder on one machine, and an origin written by the test would be the test answering it.
 func initializeRoleOriginSteps(sc *godog.ScenarioContext) {
 	importFrom := func(ctx context.Context, dir string) error {
@@ -55,7 +55,7 @@ func initializeRoleOriginSteps(sc *godog.ScenarioContext) {
 	})
 
 	// The same role, byte for byte, read somewhere a reviewer can open. It is the way out of the
-	// warning, so the crew has to notice it.
+	// warning, so the system has to notice it.
 	sc.Step(`^the operator imports that role again from a repository$`, func(ctx context.Context) error {
 		return importFrom(ctx, aRoleInARepository(ctx, pushedToARemote))
 	})
@@ -121,7 +121,7 @@ func listingSays(ctx context.Context, want string) error {
 	return nil
 }
 
-// whatTheListingSaysAboutOrigin is what an operator reads under the one role the crew holds. It
+// whatTheListingSaysAboutOrigin is what an operator reads under the one role the system holds. It
 // renders from the listing rather than from GetRole, because a listing is where somebody would
 // notice a role nobody can read without going looking for it.
 func whatTheListingSaysAboutOrigin(ctx context.Context) (string, error) {
@@ -130,7 +130,7 @@ func whatTheListingSaysAboutOrigin(ctx context.Context) (string, error) {
 	}
 	held := worldFrom(ctx).lastRoles.GetRoles()
 	if len(held) != 1 {
-		return "", fmt.Errorf("the crew holds %d roles, and the scenario imported one", len(held))
+		return "", fmt.Errorf("the system holds %d roles, and the scenario imported one", len(held))
 	}
 	from := held[0].GetOrigin()
 	return strings.Join(origin.Origin{
@@ -149,13 +149,13 @@ const (
 )
 
 // aRoleInARepository writes the test-writer role into a real repository and takes it as far as the
-// scenario asked, so what the crew is told is what git says rather than what this file decided.
+// scenario asked, so what the system is told is what git says rather than what this file decided.
 func aRoleInARepository(ctx context.Context, got gotAsFarAs) string {
 	w := worldFrom(ctx)
 	repository := w.tempDir()
 	git(repository, "init", "--initial-branch=main")
-	git(repository, "config", "user.email", "crew@example.com")
-	git(repository, "config", "user.name", "crew")
+	git(repository, "config", "user.email", "system@example.com")
+	git(repository, "config", "user.name", "system")
 	git(repository, "remote", "add", "origin", "https://github.com/atlantic-blue/quay-crew.git")
 
 	dir := writeRoleFiles(filepath.Join(repository, "roles", "test-writer"))

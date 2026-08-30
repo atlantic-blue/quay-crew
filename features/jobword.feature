@@ -4,7 +4,7 @@ Feature: One word for declared intent, and the word it replaced refuses
   sent a task cannot tell what "work" is from the word alone, and neither could the person reading
   the command list.
 
-  Kubernetes had already answered it, and the crew had borrowed half of its vocabulary: a lease, a
+  Kubernetes had already answered it, and the system had borrowed half of its vocabulary: a lease, a
   phase, a role, verbs on a resource. A Kubernetes Job is declared intent, run to completion, watched
   by a controller, with a disposable container underneath, which is this down to the phase field. So
   it is a job.
@@ -25,7 +25,7 @@ Feature: One word for declared intent, and the word it replaced refuses
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew listens on an address the tool can dial
+    And the system listens on an address the tool can dial
 
   Scenario: The word declares a job and says how to read it back
     When the caller declares a job through the tool, titled "read the electricity bill"
@@ -61,9 +61,9 @@ Feature: One word for declared intent, and the word it replaced refuses
   Scenario: A role that asks to receive the word that went is refused, and named
     When the operator imports a role that receives "work"
     Then the refusal names "job"
-    And the crew holds no such role
+    And the system holds no such role
 
   Scenario: A role that asks to call the verb that went is refused, and named
     When the operator imports a role that may "work.create"
     Then the refusal names "job.create"
-    And the crew holds no such role
+    And the system holds no such role

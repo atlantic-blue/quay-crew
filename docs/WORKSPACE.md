@@ -4,7 +4,7 @@ A workspace is who a session works as. It holds the credentials, the context, th
 hooks that every session inside it is born with.
 
 The quick start in the [README](../README.md) makes a workspace in four commands. This page is the
-long version. Follow it when you move a real body of work into the crew, and a session must read a
+long version. Follow it when you move a real body of work into the system, and a session must read a
 repository, commit as you, and hold the credentials the job needs.
 
 The examples use a workspace called `acme` and a project called `billing`. Replace both.
@@ -18,7 +18,7 @@ flowchart LR
     secrets[["secret store"]]
   end
   subgraph box["one session's sandbox"]
-    claude["/home/agent/.claude<br/>crew and workspace context"]
+    claude["/home/agent/.claude<br/>system and workspace context"]
     wd["/home/agent/workspace<br/>project and session context"]
     shared["/home/agent/shared<br/>the workspace volume"]
     skills["/home/agent/skills<br/>read only"]
@@ -91,22 +91,22 @@ nothing. The bytes stored are the bytes of your file.
 
 ### A secret every workspace needs
 
-Say `crew` where a workspace goes. The secret is then held by the crew, and every workspace reads
+Say `system` where a workspace goes. The secret is then held by the system, and every workspace reads
 it, including the ones you make tomorrow.
 
 ```sh
-claude setup-token | quay secret set crew CLAUDE_CODE_OAUTH_TOKEN
-gh auth token | quay secret set crew GH_TOKEN
-quay secret mount crew gitconfig < ~/.gitconfig
-quay secret list crew
+claude setup-token | quay secret set system CLAUDE_CODE_OAUTH_TOKEN
+gh auth token | quay secret set system GH_TOKEN
+quay secret mount system gitconfig < ~/.gitconfig
+quay secret list system
 ```
 
-A workspace wins on a name. Set `GH_TOKEN` on the crew and on one workspace, and that workspace
-reads its own while every other workspace reads the crew's. `quay secret list` says which level
+A workspace wins on a name. Set `GH_TOKEN` on the system and on one workspace, and that workspace
+reads its own while every other workspace reads the system's. `quay secret list` says which level
 holds each one, so a workspace you set nothing on says where its secrets came from.
 
-`crew` is the same word `quay skill attach`, `quay hook attach` and `quay context set` already take.
-No workspace may be called `crew`, because a workspace with that name would take what every
+`system` is the same word `quay skill attach`, `quay hook attach` and `quay context set` already take.
+No workspace may be called `system`, because a workspace with that name would take what every
 workspace reads.
 
 ### Mounting from a script
@@ -136,7 +136,7 @@ quay secret mount acme gitconfig < ~/.gitconfig
 
 Signing is decided for the whole workspace, and a session is told not to change it. A workspace that
 mounts a signing key signs. A workspace that mounts none is told `commit.gpgsign false` and
-`tag.gpgsign false`. The crew writes that after the include, because git takes the last value it
+`tag.gpgsign false`. The system writes that after the include, because git takes the last value it
 reads. Without this half, an operator configuration that signs everything fails every commit a
 session makes, on a key the container was never going to have.
 
@@ -181,14 +181,14 @@ context is not charged for it.
 
 There are four levels. They land in two files.
 
-`/home/agent/.claude/CLAUDE.md` carries the crew's context, the workspace's context, and the index
+`/home/agent/.claude/CLAUDE.md` carries the system's context, the workspace's context, and the index
 of the skills the session holds. Every session in the workspace reads it.
 
 `/home/agent/workspace/CLAUDE.md` carries the project's context and the session's own. Only that one
 session reads it.
 
 ```sh
-quay context set crew < rules.md            # everything the crew does
+quay context set system < rules.md            # everything the system does
 quay context set acme < context.md          # every session in the workspace
 quay context set acme/billing < brief.md    # one project
 quay context                                # every level, how big it is, and its first words
@@ -196,7 +196,7 @@ quay context edit acme/billing              # open it in $EDITOR
 quay context clear acme/billing
 ```
 
-Both files are read and write. A session can add to its own context, and the crew reads that back
+Both files are read and write. A session can add to its own context, and the system reads that back
 rather than overwriting it.
 
 ## 6. Files a workspace shares
@@ -232,11 +232,11 @@ volume keeps a directory per session that ever worked in a repository. That half
 A skill is a capability written down as text, which a session follows.
 
 ```sh
-quay skill import ./skills/git      # take one into the crew
-quay skill list                     # what the crew holds
+quay skill import ./skills/git      # take one into the system
+quay skill list                     # what the system holds
 quay skill list acme                # what one workspace holds
 quay skill attach acme aws          # give it to one workspace
-quay skill attach crew git          # give it to every workspace, including later ones
+quay skill attach system git          # give it to every workspace, including later ones
 quay skill detach acme aws
 ```
 
@@ -254,7 +254,7 @@ A hook is a constraint a session runs under, checked when the session acts.
 quay hook import ./hooks/prompt-analyser
 quay hook list acme
 quay hook attach acme prompt-analyser
-quay hook attach crew prompt-analyser
+quay hook attach system prompt-analyser
 quay hook detach acme prompt-analyser
 ```
 

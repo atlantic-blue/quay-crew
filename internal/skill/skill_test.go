@@ -31,7 +31,7 @@ func write(t *testing.T, dir, name, manifest, brief string) string {
 
 const gitManifest = `name: git
 version: 3
-summary: Branch, stage and commit, the way this crew does it.
+summary: Branch, stage and commit, the way this system does it.
 binaries: [git]
 secrets:
   GH_TOKEN: a token that can read the repository
@@ -147,14 +147,14 @@ func TestASkillNobodyCanUseIsRefusedRatherThanSkipped(t *testing.T) {
 			manifest: "name: git\nversion: 1\nsummary: A binary that is a shell fragment.\nbinaries: [\"git; rm -rf /\"]\n",
 			brief:    "# git\n",
 			says:     "not a command name",
-			because:  "the crew looks for these inside a sandbox and must not be handed something to run",
+			because:  "the system looks for these inside a sandbox and must not be handed something to run",
 		},
 		{
 			name:     "a secret that is not a name",
 			manifest: "name: git\nversion: 1\nsummary: A secret that is not a name.\nsecrets:\n  \"GH TOKEN=x\": nonsense\n",
 			brief:    "# git\n",
 			says:     "not an environment variable name",
-			because:  "the crew puts these in an environment and cannot quote its way out of that",
+			because:  "the system puts these in an environment and cannot quote its way out of that",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestASkillNobodyCanUseIsRefusedRatherThanSkipped(t *testing.T) {
 	}
 }
 
-// TestNoSkillsAtAllIsNotAFailure. A crew with no skills directory is every crew today.
+// TestNoSkillsAtAllIsNotAFailure. A system with no skills directory is every system today.
 func TestNoSkillsAtAllIsNotAFailure(t *testing.T) {
 	for _, dir := range []string{"", filepath.Join(t.TempDir(), "nothing-here")} {
 		skills, err := skill.Load(dir)

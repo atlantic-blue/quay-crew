@@ -1,6 +1,6 @@
 Feature: A session gives its container back and keeps its history
 
-  The crew never put a session away on its own. Nothing removed a container without somebody asking,
+  The system never put a session away on its own. Nothing removed a container without somebody asking,
   so a session that answered one question in March still held its container in August.
 
   This is the loop that does. It is the same controller that runs jobs, reading a fourth query: the
@@ -9,11 +9,11 @@ Feature: A session gives its container back and keeps its history
   container over the same conversation and carries on.
 
   Reclaimed is not stopped, deliberately. A stop is somebody's decision and a reader goes looking for
-  who made it. A reclaim is the crew saving memory on a session nobody is using, and a reader looks
+  who made it. A reclaim is the system saving memory on a session nobody is using, and a reader looks
   for nothing, because the next dispatch fixes it.
 
   Both times ship unset, and unset means the controller does nothing at all. Three measurements decide
-  the numbers and none has been taken, so this crew refuses a number it was never given.
+  the numbers and none has been taken, so this system refuses a number it was never given.
 
   Background:
     Given a running control plane
@@ -25,7 +25,7 @@ Feature: A session gives its container back and keeps its history
     Given a session started by dispatching "hello"
     When the controller ticks 20 times
     Then the session is reported as idle
-    And the crew still holds its container
+    And the system still holds its container
 
   Scenario: A workspace nobody configured says both times are unset
     Then the workspace's reclaim time is unset
@@ -50,7 +50,7 @@ Feature: A session gives its container back and keeps its history
     And the session still holds both tasks, oldest first
     And the session is reported as idle
 
-  # The dangerous one. The crew could not tell who was in a container before this slice.
+  # The dangerous one. The system could not tell who was in a container before this slice.
   Scenario: A container an operator is typing into is never taken
     Given the workspace reclaims a session after 1 second
     And a session started by dispatching "hello"
@@ -58,7 +58,7 @@ Feature: A session gives its container back and keeps its history
     When the reclaim time passes
     And the controller ticks 5 times
     Then the session is reported as idle
-    And the crew still holds its container
+    And the system still holds its container
 
   Scenario: A session a job is still running in is never taken
     Given the workspace reclaims a session after 1 second
@@ -87,7 +87,7 @@ Feature: A session gives its container back and keeps its history
     Then the session is reported as reclaimed
     And the session is not archived
 
-  # Issue 395. There was no way to stop one session: quay drain puts the whole crew down, and killing
+  # Issue 395. There was no way to stop one session: quay drain puts the whole system down, and killing
   # the dispatch client is not an interface. The same kill ended one task at once and left another
   # working for sixteen more minutes, merging two pull requests after the operator believed it had
   # stopped.
@@ -98,7 +98,7 @@ Feature: A session gives its container back and keeps its history
     When the operator stops the session saying "it is doing the wrong thing"
     Then the task reads stopped, with that reason
     And the session is reported as idle
-    And the crew still holds its container
+    And the system still holds its container
 
   Scenario: A stopped session continues on the next dispatch
     Given the model takes longer over a task than anybody will wait
@@ -113,7 +113,7 @@ Feature: A session gives its container back and keeps its history
   Scenario: Stopping a session with nothing running says so and changes nothing
     Given a session started by dispatching "hello"
     When the operator stops the session saying "just in case"
-    Then the crew says there was nothing to stop
+    Then the system says there was nothing to stop
     And the session still holds 1 task
 
   # What happens to the job that was running in it. A stop is not a crash, so the job is stopped

@@ -46,7 +46,7 @@ func TestADaemonThatWillNotSayItsMemoryIsUnknown(t *testing.T) {
 }
 
 func TestEveryContainerCountsTowardsWhatTheDaemonHolds(t *testing.T) {
-	// One sandbox, one of the crew's own services, and one container belonging to something else.
+	// One sandbox, one of the system's own services, and one container belonging to something else.
 	// All three take memory from the same cap, so all three count.
 	out := strings.Join([]string{
 		"quaycrew-a00d36d6454a3de66d02c6a3\t1.201GiB / 7.653GiB\t42.50%",
@@ -106,7 +106,7 @@ func TestADaemonHoldingNothingIsAMeasuredZero(t *testing.T) {
 	}
 }
 
-func TestALineTheCrewCannotReadLeavesTheTotalUnknown(t *testing.T) {
+func TestALineTheSystemCannotReadLeavesTheTotalUnknown(t *testing.T) {
 	used, _, _ := parseStats([]byte("quaycrew-postgres-1\t34MiB"))
 	if used.Known() {
 		t.Fatalf("a line with a field missing still gave a total of %s", used)
@@ -161,7 +161,7 @@ func TestAProcessorShareNothingMeasuredIsUnknown(t *testing.T) {
 }
 
 // Only a container named after a session is a sandbox. The compose project is called quaycrew too,
-// so its own services carry the same prefix, and stopping one of those is stopping the crew.
+// so its own services carry the same prefix, and stopping one of those is stopping the system.
 func TestOnlyAContainerNamedAfterASessionIsASandbox(t *testing.T) {
 	tests := []struct {
 		container string

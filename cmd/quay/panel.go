@@ -19,8 +19,8 @@ import (
 	"github.com/charmbracelet/x/term"
 )
 
-// errNothingBeside is the one reason opening the crew falls back to the console on its own: there is
-// nothing to put beside it yet, which is what a crew nobody has used yet looks like. Every other
+// errNothingBeside is the one reason opening the system falls back to the console on its own: there is
+// nothing to put beside it yet, which is what a system nobody has used yet looks like. Every other
 // failure is the operator's to see.
 var errNothingBeside = errors.New("nothing to put beside the console yet")
 
@@ -28,7 +28,7 @@ var errNothingBeside = errors.New("nothing to put beside the console yet")
 //
 // Named a session opens that one. Named nothing it opens the newest conversation where you are
 // standing, which is the one you were last talking to.
-// runPanel is what `quay` does: it opens the crew. The header across the top, the console under it on
+// runPanel is what `quay` does: it opens the system. The header across the top, the console under it on
 // the left, and a conversation on the right.
 //
 // There is no separate command for it: a second command to open the thing the first command is for
@@ -111,8 +111,8 @@ func panelSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		return "", err
 	}
 
-	// The driver, made the first time the crew is opened. Not whichever conversation happens to be
-	// newest: that is somebody else's job, and opening the crew should not drop you into it.
+	// The driver, made the first time the system is opened. Not whichever conversation happens to be
+	// newest: that is somebody else's job, and opening the system should not drop you into it.
 	opened, err := client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: project})
 	if err != nil {
 		return "", err
@@ -235,7 +235,7 @@ func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	}
 
 	// Narrowed to the workspace you are standing in. `quay use atlantic-blue` said something, and
-	// counting projects across the whole crew threw it away: a crew with eight projects refused to
+	// counting projects across the whole system threw it away: a system with eight projects refused to
 	// open even though the workspace it was standing in held one.
 	request := &quaycrewv1.ListProjectsRequest{}
 	if current.Workspace != "" {
@@ -253,17 +253,17 @@ func driverProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 
 	// None to choose from, or too many to choose between. Both mean the same thing to the operator:
 	// there is nothing to put beside the console, so the console opens on its own and they pick from
-	// it. `quay` opens the crew. It does not refuse to open the crew and tell them to type something
+	// it. `quay` opens the system. It does not refuse to open the system and tell them to type something
 	// first, which is what it did with more than one project in reach.
 	return "", fmt.Errorf("%w: %s", errNothingBeside, whyNoConversation(current, len(listed.GetProjects())))
 }
 
 // whyNoConversation is the reason nothing opened beside the console, for a caller that reports it.
-// Opening the crew swallows this by design, because the console is the answer rather than a message.
+// Opening the system swallows this by design, because the console is the answer rather than a message.
 func whyNoConversation(current workspace.Path, projects int) string {
 	if projects == 0 {
 		if current.Workspace == "" {
-			return "there is no project for the crew to open in, press o and choose project"
+			return "there is no project for the system to open in, press o and choose project"
 		}
 		return "there is no project in " + current.Workspace + ", press o and choose project"
 	}
@@ -310,7 +310,7 @@ func inTheSandbox(box string, argv ...string) ([]byte, error) {
 // one is still running afterwards.
 func endConversation(box string, run func(box string, argv ...string) ([]byte, error)) error {
 	if box == "" {
-		return fmt.Errorf("the crew did not say which sandbox the conversation is in")
+		return fmt.Errorf("the system did not say which sandbox the conversation is in")
 	}
 	out, err := run(box, "tmux", "kill-session", "-t", sandbox.AttachedSessionName)
 	if err == nil {

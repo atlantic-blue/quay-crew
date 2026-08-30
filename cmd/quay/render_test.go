@@ -8,7 +8,7 @@ import (
 )
 
 // TestTheUsageNamesRender keeps the command and the manual from drifting apart. The manual is what a
-// session is told the tool can do, so a command missing from it does not exist as far as the crew is
+// session is told the tool can do, so a command missing from it does not exist as far as the system is
 // concerned.
 func TestTheUsageNamesRender(t *testing.T) {
 	if !strings.Contains(usage, "render <url>") {
@@ -16,7 +16,7 @@ func TestTheUsageNamesRender(t *testing.T) {
 	}
 }
 
-// The command answers without the crew. The page a session wants to see is one it is serving inside
+// The command answers without the system. The page a session wants to see is one it is serving inside
 // its own sandbox, so needing a control plane to look at it would be a reason not to look.
 func TestRenderNeedsNoControlPlane(t *testing.T) {
 	err := run(context.Background(), nil, []string{"render"}, io.Discard, "")

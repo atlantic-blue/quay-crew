@@ -17,10 +17,10 @@ import (
 
 // The guided setup's scenarios drive the console's own reducer against the real control plane, the
 // same way the wizard's do: what has to be true is that a person who answered the questions is left
-// with a crew that works, and only the real one can say so.
+// with a system that works, and only the real one can say so.
 
 func initializeFirstRunSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the operator opens the console on the empty crew$`, func(ctx context.Context) error {
+	sc.Step(`^the operator opens the console on the empty system$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		registry, err := console.NewDefaultRegistry(w.client)
 		if err != nil {

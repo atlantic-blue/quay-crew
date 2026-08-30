@@ -8,17 +8,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// A crew that has not been told which model to run still runs Opus.
+// A system that has not been told which model to run still runs Opus.
 //
-// The choice lives in the compose file rather than in the code, so a crew whose configuration file
+// The choice lives in the compose file rather than in the code, so a system whose configuration file
 // was written before the key existed gets it anyway. That makes the compose default the thing the
 // behaviour actually rests on: delete it and the control plane passes no model, the command line
 // tool picks Sonnet for itself, every session quietly drops a tier, and every test in internal/model
 // stays green because each half is still correct on its own.
-func TestACrewThatWasNotToldWhichModelStillRunsOpus(t *testing.T) {
+func TestASystemThatWasNotToldWhichModelStillRunsOpus(t *testing.T) {
 	fallback := composeDefault(t, "QC_CLAUDE_MODEL")
 	if !strings.HasPrefix(fallback, "claude-opus-") {
-		t.Errorf("with nothing configured the crew runs %q, so a session that should be on Opus is on "+
+		t.Errorf("with nothing configured the system runs %q, so a session that should be on Opus is on "+
 			"whatever the command line tool picks, which is Sonnet", fallback)
 	}
 }
@@ -37,7 +37,7 @@ func TestTheConfigurationTemplateNamesTheModel(t *testing.T) {
 	}
 }
 
-// composeDefault returns what an environment key falls back to when the crew's configuration file does
+// composeDefault returns what an environment key falls back to when the system's configuration file does
 // not set it, read out of the ${KEY:-default} the compose file interpolates.
 func composeDefault(t *testing.T, key string) string {
 	t.Helper()
@@ -60,7 +60,7 @@ func composeDefault(t *testing.T, key string) string {
 		}
 		_, fallback, found := strings.Cut(value, ":-")
 		if !found {
-			t.Fatalf("service %s sets %s to %q, which has no default, so a crew that does not "+
+			t.Fatalf("service %s sets %s to %q, which has no default, so a system that does not "+
 				"configure it gets an empty value", name, key, value)
 		}
 		return strings.TrimSuffix(fallback, "}")

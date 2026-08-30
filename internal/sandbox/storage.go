@@ -239,7 +239,7 @@ func WriteMemory(dir, body string) error {
 }
 
 // SkillsDir is what a workspace's own skills directory is called under its directory in the data
-// directory. The crew's skills live wherever the operator keeps them and do not come through here.
+// directory. The system's skills live wherever the operator keeps them and do not come through here.
 const SkillsDir = "skills"
 
 // WorkspaceSkillsDir is where this process writes a workspace's own skills, and whether there is
@@ -266,8 +266,8 @@ func (s Storage) WorkspaceSkillsHost(workspace string) (string, bool) {
 // ones it no longer holds.
 //
 // The files are written rather than mounted from wherever they were authored, because a skill lives in
-// the store: a crew on a pod has no host directory to go back to, and a skill has to be whole wherever
-// the crew runs. This is the same shape as the memory file, which is a rendering of the store too.
+// the store: a system on a pod has no host directory to go back to, and a skill has to be whole wherever
+// the system runs. This is the same shape as the memory file, which is a rendering of the store too.
 //
 // Detaching removes the directory. A brief left behind is a capability the model can still read about
 // and no longer has, which is worse than not having it, because it will try.

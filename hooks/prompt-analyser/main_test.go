@@ -55,9 +55,9 @@ func TestTheChildKeepsTheCredentialItNeedsToAuthenticate(t *testing.T) {
 // 2026 recorded "no answer 770ms" against every message, and the child had exited 1 in 851
 // milliseconds with nothing to authenticate with.
 func TestTheChildIsGivenTheCredentialUnderTheNameTheCommandLineReads(t *testing.T) {
-	child := childEnv([]string{"PATH=/usr/bin", ModelToken + "=from-the-crew", "GH_TOKEN=other"})
+	child := childEnv([]string{"PATH=/usr/bin", ModelToken + "=from-the-system", "GH_TOKEN=other"})
 
-	if !has(child, OAuthToken+"=from-the-crew") {
+	if !has(child, OAuthToken+"=from-the-system") {
 		t.Errorf("the child was never given a credential, so it cannot authenticate: %v", child)
 	}
 	if count(child, OAuthToken) != 1 {
@@ -67,8 +67,8 @@ func TestTheChildIsGivenTheCredentialUnderTheNameTheCommandLineReads(t *testing.
 }
 
 // A person on a laptop has the first name and nothing else, and their own value is the one that runs.
-func TestTheCredentialAPersonSetsWinsOverTheOneTheCrewCarries(t *testing.T) {
-	child := childEnv([]string{OAuthToken + "=mine", ModelToken + "=the-crews"})
+func TestTheCredentialAPersonSetsWinsOverTheOneTheSystemCarries(t *testing.T) {
+	child := childEnv([]string{OAuthToken + "=mine", ModelToken + "=the-systems"})
 
 	if !has(child, OAuthToken+"=mine") {
 		t.Errorf("the credential the person set was replaced: %v", child)

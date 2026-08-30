@@ -64,7 +64,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, contextKey{}, &contextWorld{}), nil
 	})
 
-	// The manual is what a session is told when it is asked to drive the crew. Loading it is the
+	// The manual is what a session is told when it is asked to drive the system. Loading it is the
 	// ordinary context path, so this says the document is loadable and carries what a session needs,
 	// not that setting a context works.
 	sc.Step(`^the operator loads the manual as the project's context$`, func(ctx context.Context) error {
@@ -75,7 +75,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
-	sc.Step(`^the project's context names the words a crew is made of$`, func(ctx context.Context) error {
+	sc.Step(`^the project's context names the words a system is made of$`, func(ctx context.Context) error {
 		projects := contextFrom(ctx).scoped("project")
 		if len(projects) != 1 {
 			return fmt.Errorf("%d project directories, want 1", len(projects))
@@ -110,16 +110,16 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Every level the crew has, so nobody has to know which ones exist to find them.
-	sc.Step(`^it names the crew, a workspace and a project$`, func(ctx context.Context) error {
+	// Every level the system has, so nobody has to know which ones exist to find them.
+	sc.Step(`^it names the system, a workspace and a project$`, func(ctx context.Context) error {
 		c := contextFrom(ctx)
-		for _, scope := range []string{"crew", "workspace", "project"} {
+		for _, scope := range []string{"system", "workspace", "project"} {
 			if len(c.scoped(scope)) == 0 {
 				return fmt.Errorf("the listing has no %s level in it", scope)
 			}
 		}
-		if got := len(c.scoped("crew")); got != 1 {
-			return fmt.Errorf("%d crew levels, want exactly 1: there is one crew", got)
+		if got := len(c.scoped("system")); got != 1 {
+			return fmt.Errorf("%d system levels, want exactly 1: there is one system", got)
 		}
 		return nil
 	})
@@ -136,9 +136,9 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 			if dir.GetName() == "" {
 				return fmt.Errorf("a %s level has no name, so a listing of them says nothing", dir.GetScope())
 			}
-			// The crew's context belongs to no directory: it is rendered into every workspace's file,
+			// The system's context belongs to no directory: it is rendered into every workspace's file,
 			// so there is no one file to name and nothing to say here.
-			if dir.GetScope() != "crew" && dir.GetHost() == "" {
+			if dir.GetScope() != "system" && dir.GetHost() == "" {
 				return fmt.Errorf("the %s directory does not say where it is on the host", dir.GetScope())
 			}
 		}
@@ -147,7 +147,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each one says where it appears inside a sandbox$`, func(ctx context.Context) error {
 		for _, dir := range contextFrom(ctx).dirs {
-			if dir.GetScope() == "crew" {
+			if dir.GetScope() == "system" {
 				continue
 			}
 			want := sandbox.WorkingPath
@@ -164,7 +164,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each one names the memory file the model reads$`, func(ctx context.Context) error {
 		for _, dir := range contextFrom(ctx).dirs {
-			if dir.GetScope() == "crew" {
+			if dir.GetScope() == "system" {
 				continue
 			}
 			// It has to sit inside the directory it belongs to, or editing it edits nothing the model
@@ -208,7 +208,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return w.lastErr
 	})
 
-	// A CLAUDE.md that was there before the crew ever wrote one: no marks in it, because nothing
+	// A CLAUDE.md that was there before the system ever wrote one: no marks in it, because nothing
 	// composed it. An operator who dropped a file into the working directory leaves exactly this.
 	sc.Step(`^the sandbox's memory file is replaced with "([^"]*)" and no marks$`,
 		func(ctx context.Context, body string) error {
@@ -222,10 +222,10 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator sets context at scope "([^"]*)" to "([^"]*)"$`,
 		func(ctx context.Context, scope, body string) error {
 			w := worldFrom(ctx)
-			// The crew's context is the one level with nothing to own it: it is true everywhere.
+			// The system's context is the one level with nothing to own it: it is true everywhere.
 			owner := w.projectID
 			switch store.ContextScope(scope) {
-			case store.ContextCrew:
+			case store.ContextSystem:
 				owner = ""
 			case store.ContextWorkspace:
 				owner = w.workspaceID
@@ -249,7 +249,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 	})
 
 	// The conversation store's directory, shared by every session in the workspace, which is where the
-	// crew's and the workspace's context land.
+	// system's and the workspace's context land.
 	sc.Step(`^the workspace's memory file carries "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		dir := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "claude")
@@ -339,8 +339,8 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return runTool(ctx, "context", "show", whereTheProjectIs(ctx))
 	})
 
-	sc.Step(`^the caller reads the crew's context back$`, func(ctx context.Context) error {
-		return runTool(ctx, "context", "show", string(store.ContextCrew))
+	sc.Step(`^the caller reads the system's context back$`, func(ctx context.Context) error {
+		return runTool(ctx, "context", "show", string(store.ContextSystem))
 	})
 
 	// What came out of the last read goes straight back in, which is the pair the command exists for.
@@ -369,10 +369,10 @@ func initializeContextSizeSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the operator sets the (crew|workspace|project)'s context with the tool$`,
+	sc.Step(`^the operator sets the (system|workspace|project)'s context with the tool$`,
 		func(ctx context.Context, scope string) error {
 			w := worldFrom(ctx)
-			target := "crew"
+			target := "system"
 			switch scope {
 			case "workspace":
 				target = w.workspaceName

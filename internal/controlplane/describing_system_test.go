@@ -14,15 +14,15 @@ import (
 )
 
 // describingRunner answers a task and a description differently, because a fake that answers both
-// with the same string cannot tell whether the crew described the session or just stored the task.
+// with the same string cannot tell whether the system described the session or just stored the task.
 type describingRunner struct {
 	mu sync.Mutex
-	// Described counts the descriptions asked for, which is what proves a crew with it switched off
+	// Described counts the descriptions asked for, which is what proves a system with it switched off
 	// asks for none rather than asking and throwing the answer away.
 	Described int
 	// DescribeErr fails the describing call alone, leaving ordinary tasks working.
 	DescribeErr error
-	// Says is what a description comes back as, before the crew tidies it.
+	// Says is what a description comes back as, before the system tidies it.
 	Says string
 	// Echoes answers with the question, the way the echo backend continuous integration runs does.
 	Echoes bool
@@ -30,7 +30,7 @@ type describingRunner struct {
 
 func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	// A description is the call that carries no conversation to resume and asks the question this
-	// crew asks. Matching on the question rather than on the absence alone, so an ordinary first task
+	// system asks. Matching on the question rather than on the absence alone, so an ordinary first task
 	// is never counted as one.
 	if strings.Contains(req.Text, "say what this conversation is for") {
 		r.mu.Lock()
@@ -51,8 +51,8 @@ func (r *describingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.R
 	return model.Response{Reply: "ok", ModelSessionID: "conversation-1"}, nil
 }
 
-// describingCrew is a crew with one session, and the parts a case needs to look at afterwards.
-type describingCrew struct {
+// describingSystem is a system with one session, and the parts a case needs to look at afterwards.
+type describingSystem struct {
 	server    *Server
 	store     store.Store
 	runner    *describingRunner
@@ -64,7 +64,7 @@ type describingCrew struct {
 	project string
 }
 
-func describingCrewOf(t *testing.T, every int) *describingCrew {
+func describingSystemOf(t *testing.T, every int) *describingSystem {
 	t.Helper()
 	runner := &describingRunner{}
 	memory := store.NewMemory()
@@ -84,13 +84,13 @@ func describingCrewOf(t *testing.T, every int) *describingCrew {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	return &describingCrew{server: server, store: memory, runner: runner, project: project.GetProject().GetId()}
+	return &describingSystem{server: server, store: memory, runner: runner, project: project.GetProject().GetId()}
 }
 
 // dispatch runs a task and waits for any describing behind it, so a case reads the result rather than
 // racing it. Describing runs behind the answer on purpose, and a test that slept would be slow when
 // it passed and flaky when it failed.
-func (c *describingCrew) dispatch(t *testing.T, text string) string {
+func (c *describingSystem) dispatch(t *testing.T, text string) string {
 	t.Helper()
 	resp, err := c.server.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
 		Project: c.project, Handle: c.handle, Text: text,
@@ -109,7 +109,7 @@ func (c *describingCrew) dispatch(t *testing.T, text string) string {
 	return resp.GetReply()
 }
 
-func (c *describingCrew) description(t *testing.T) string {
+func (c *describingSystem) description(t *testing.T) string {
 	t.Helper()
 	session, err := c.store.GetSession(context.Background(), c.sessionID)
 	if err != nil {

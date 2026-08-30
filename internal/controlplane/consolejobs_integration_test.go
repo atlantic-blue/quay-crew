@@ -20,10 +20,10 @@ import (
 // gRPC interface, with nothing stood in for but the model.
 //
 // The table tests in internal/console prove how a row is built from a job. What they cannot answer is
-// whether the rows are the crew's actual jobs: they are built from a double that hands back whatever
+// whether the rows are the system's actual jobs: they are built from a double that hands back whatever
 // the case wrote. So this declares jobs the way the command line does, lets the controller start one,
 // and reads the listing the operator would be looking at.
-func TestTheConsoleListsTheJobsTheCrewActuallyHolds(t *testing.T) {
+func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -73,13 +73,13 @@ func TestTheConsoleListsTheJobsTheCrewActuallyHolds(t *testing.T) {
 		t.Fatal("the console has no jobs view")
 	}
 
-	// Every job the crew holds, which is what the view opens on.
+	// Every job the system holds, which is what the view opens on.
 	rows, err := jobs.List(ctx, "")
 	if err != nil {
 		t.Fatalf("listing jobs: %v", err)
 	}
 	if len(rows) != 3 {
-		t.Fatalf("the console lists %d jobs, want the 3 the crew holds", len(rows))
+		t.Fatalf("the console lists %d jobs, want the 3 the system holds", len(rows))
 	}
 
 	running, ok := rowFor(rows, started.GetId())
@@ -132,7 +132,7 @@ func TestTheConsoleListsTheJobsTheCrewActuallyHolds(t *testing.T) {
 		t.Fatal("the job's session ran no task, so enter opens an empty screen")
 	}
 
-	// Stopping from the view, against the real crew: the key writes through the control plane and the
+	// Stopping from the view, against the real system: the key writes through the control plane and the
 	// next listing says so.
 	stop, foundStop := actionNamed(jobs, "Stop")
 	if !foundStop {

@@ -35,13 +35,13 @@ const anOperatorsConfiguration = `[user]
 
 // A session commits, and the commit is the operator's.
 //
-// The scenarios say what the crew asks a sandbox to do. This says git honours it, which is a
+// The scenarios say what the system asks a sandbox to do. This says git honours it, which is a
 // separate claim and the one that matters: the include has to sit where git reads it, the mounted
-// file has to land where the include points, and the crew's own writes have to come after both. Any
+// file has to land where the include points, and the system's own writes have to come after both. Any
 // one of those wrong and the scenarios still pass while every commit in every sandbox fails.
 //
 // So the assertion is a commit that exists and carries the right author, made through docker exec
-// rather than through the crew's own handle.
+// rather than through the system's own handle.
 func TestAnOperatorsConfigurationDecidesWhoCommits(t *testing.T) {
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
@@ -67,13 +67,13 @@ git log --format='%an <%ae>|%G?' -1`)
 		t.Fatalf("the commit is by %q, want the identity the workspace mounted", author)
 	}
 	// N is git's answer for a commit with no signature. The mounted configuration asked for one, and
-	// this workspace holds no key, so the crew's own answer has to be the one git reads last.
+	// this workspace holds no key, so the system's own answer has to be the one git reads last.
 	if signature != "N" {
 		t.Fatalf("git says the signature is %q, want N: this workspace holds no key to sign with", signature)
 	}
 }
 
-// A workspace that mounts nothing is unchanged, which is what makes this safe to ship to a crew that
+// A workspace that mounts nothing is unchanged, which is what makes this safe to ship to a system that
 // has never heard of it. Git treats an include pointing at nothing as no include at all, so the only
 // way to find out is to run one.
 func TestASessionWhoseWorkspaceMountsNothingIsUnchanged(t *testing.T) {
@@ -97,8 +97,8 @@ echo READY`)
 	}
 }
 
-// aSessionWhoseWorkspaceMounts makes a crew, mounts the given configuration unless it is empty,
-// dispatches a task, and returns the name of the container the crew built for it.
+// aSessionWhoseWorkspaceMounts makes a system, mounts the given configuration unless it is empty,
+// dispatches a task, and returns the name of the container the system built for it.
 func aSessionWhoseWorkspaceMounts(ctx context.Context, t *testing.T, image, configuration string) string {
 	t.Helper()
 

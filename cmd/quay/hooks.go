@@ -10,7 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 )
 
-// runHook drives the crew's hooks from the command line: what it enforces, what a workspace runs
+// runHook drives the system's hooks from the command line: what it enforces, what a workspace runs
 // under, and giving or taking one away.
 //
 // Importing reads the directory here rather than sending a path, for the reason skill import does:
@@ -61,7 +61,7 @@ func runHookImport(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	fmt.Fprintf(out, "imported %s version %d: %s\n",
 		imported.GetName(), imported.GetVersion(), imported.GetSummary())
 	fmt.Fprintf(out, "it fires on %s\n", firesOn(imported))
-	fmt.Fprintf(out, "attach it with: quay hook attach crew %s\n", imported.GetName())
+	fmt.Fprintf(out, "attach it with: quay hook attach system %s\n", imported.GetName())
 	return nil
 }
 
@@ -75,7 +75,7 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 
 	req := &quaycrewv1.ListHooksRequest{}
-	where := crewLevel
+	where := systemLevel
 	if typed != "" {
 		located, err := locate(ctx, client, typed)
 		if err != nil {
@@ -88,21 +88,21 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		}
 		where = located.Path.String()
 	}
-	read := heldBy("hooks", where, "quay hook list on its own reads what the crew holds")
+	read := heldBy("hooks", where, "quay hook list on its own reads what the system holds")
 	resp, err := client.ListHooks(ctx, req)
 	if err != nil {
 		return err
 	}
 	if len(resp.GetHooks()) == 0 {
 		read.nothing(out)
-		fmt.Fprintln(out, "nothing is enforced there: every rule the crew carries is advice the model may take or leave")
+		fmt.Fprintln(out, "nothing is enforced there: every rule the system carries is advice the model may take or leave")
 		fmt.Fprintln(out, "import one with: quay hook import <directory>")
 		return nil
 	}
 	for _, one := range resp.GetHooks() {
 		owner := ""
-		if one.GetCrew() {
-			owner = "  (the crew's)"
+		if one.GetSystem() {
+			owner = "  (the system's)"
 		}
 		fmt.Fprintf(out, "%-20s v%-3d %s%s\n", one.GetName(), one.GetVersion(), one.GetSummary(), owner)
 		fmt.Fprintf(out, "%-20s      fires on %s\n", "", firesOn(one))
@@ -125,17 +125,17 @@ func runHookAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
-	// "crew" where a workspace goes, the same word quay context set and quay skill attach take. It is
-	// the level most hooks want: a constraint the crew agreed on is not usually a per workspace
+	// "system" where a workspace goes, the same word quay context set and quay skill attach take. It is
+	// the level most hooks want: a constraint the system agreed on is not usually a per workspace
 	// opinion.
-	if typed == crewScope {
+	if typed == systemScope {
 		resp, err := client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
-			Scope: crewScope, Name: name,
+			Scope: systemScope, Name: name,
 		})
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "the crew runs under %s version %d, so every workspace does\n",
+		fmt.Fprintf(out, "the system runs under %s version %d, so every workspace does\n",
 			resp.GetHook().GetName(), resp.GetHook().GetVersion())
 		fmt.Fprintln(out, staleWarning)
 		return nil
@@ -161,13 +161,13 @@ func runHookDetach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
-	if typed == crewScope {
+	if typed == systemScope {
 		if _, err := client.DetachHook(ctx, &quaycrewv1.DetachHookRequest{
-			Scope: crewScope, Name: name,
+			Scope: systemScope, Name: name,
 		}); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "the crew no longer runs under %s\n", name)
+		fmt.Fprintf(out, "the system no longer runs under %s\n", name)
 		fmt.Fprintln(out, "a workspace that attached it for itself keeps it")
 		return nil
 	}

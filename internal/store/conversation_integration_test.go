@@ -21,14 +21,14 @@ import (
 
 // Naming a conversation, over a real database, a real control plane and the real model adapter.
 //
-// Only the container is a double here, and it is the boundary the crew cannot cross in a test: it
+// Only the container is a double here, and it is the boundary the system cannot cross in a test: it
 // records the command line the model would have been run with and streams back what the runtime
-// streams. Everything the defect was made of is real. The crew names the conversation, writes it to
+// streams. Everything the defect was made of is real. The system names the conversation, writes it to
 // the database, hands it to the adapter, the adapter builds the command line, and attaching reads the
 // name back out of the database while the task is still running.
 //
 // The unit tier proves each of those in isolation and none of them proves this: the whole failure was
-// that the name arrived after the task, so a test that looks once the task has landed finds a crew
+// that the name arrived after the task, so a test that looks once the task has landed finds a system
 // that already knew the name and reports the defect as fixed while it is still there.
 
 // heldSandbox is the container a task runs in: it records every command line, and holds the task open
@@ -63,7 +63,7 @@ func (h *heldSandbox) Exec(ctx context.Context, spec sandbox.Spec) (sandbox.Proc
 		return nil, ctx.Err()
 	}
 	// What the runtime streams back, carrying the conversation it was told to use. A runtime that
-	// honours the flag reports the name it was given, and the crew reads this as its check.
+	// honours the flag reports the name it was given, and the system reads this as its check.
 	return &streamed{body: strings.NewReader(fmt.Sprintf(
 		"{\"type\":\"result\",\"session_id\":%q,\"result\":\"done\"}\n", conversationOn(spec.Argv)))}, nil
 }
@@ -136,9 +136,9 @@ func flagOn(argv []string) string {
 	return ""
 }
 
-// aCrewOnPostgresRunningTheModelAdapter is the real control plane, over the real database, running
+// aSystemOnPostgresRunningTheModelAdapter is the real control plane, over the real database, running
 // tasks through the real Claude Code adapter into a container a test can hold open.
-func aCrewOnPostgresRunningTheModelAdapter(t *testing.T, box *heldSandbox) *controlplane.Server {
+func aSystemOnPostgresRunningTheModelAdapter(t *testing.T, box *heldSandbox) *controlplane.Server {
 	t.Helper()
 	truncate(t)
 	kept, err := store.NewPostgres(context.Background(), databaseURL)
@@ -156,12 +156,12 @@ func aCrewOnPostgresRunningTheModelAdapter(t *testing.T, box *heldSandbox) *cont
 // attaches to watch it.
 //
 // Everything asserted here is asserted while the task is still in flight, because that is the whole
-// of it. The crew used to pass no name on a first task, read the name the runtime chose out of the
+// of it. The system used to pass no name on a first task, read the name the runtime chose out of the
 // output stream and record it once the task had landed, so for the life of that task the session held
 // nothing, attaching found an empty field, named a second conversation and opened that one instead.
 func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsInOnPostgres(t *testing.T) {
 	box := newHeldSandbox()
-	s := aCrewOnPostgresRunningTheModelAdapter(t, box)
+	s := aSystemOnPostgresRunningTheModelAdapter(t, box)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -243,12 +243,12 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsInOnPostgres(t
 	}
 }
 
-// A session carried over from a crew that named conversations after the task, caught mid task. The
-// crew cannot know that conversation's name until the task lands, so attaching says so rather than
+// A session carried over from a system that named conversations after the task, caught mid task. The
+// system cannot know that conversation's name until the task lands, so attaching says so rather than
 // naming a second one and opening an empty conversation beside the job.
 func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefusedOnPostgres(t *testing.T) {
 	box := newHeldSandbox()
-	s := aCrewOnPostgresRunningTheModelAdapter(t, box)
+	s := aSystemOnPostgresRunningTheModelAdapter(t, box)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -261,7 +261,7 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefusedOnPostgre
 	if err != nil {
 		t.Fatalf("FindOrCreateSession: %v", err)
 	}
-	// Running, with no conversation on it: exactly what the old crew left behind while a first task
+	// Running, with no conversation on it: exactly what the old system left behind while a first task
 	// was in flight.
 	if err := kept.RecordTask(ctx, session.GetId(), "", controlplane.StatusRunning); err != nil {
 		t.Fatalf("RecordTask: %v", err)
@@ -288,7 +288,7 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefusedOnPostgre
 }
 
 // waitForConversation waits for a detached task to land and leave the session holding the name the
-// crew gave it.
+// system gave it.
 func waitForConversation(t *testing.T, s *controlplane.Server, session, want string) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)

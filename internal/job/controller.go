@@ -16,14 +16,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// DefaultTickEvery is how often the controller looks at the job the crew holds.
+// DefaultTickEvery is how often the controller looks at the job the system holds.
 //
 // A tick costs one indexed query when there is nothing to do, which is the property the flow poller
 // already has and is worth keeping. Job takes minutes, so a few seconds of delay before it starts
 // is not worth a mechanism with its own timers and its own failure modes.
 const DefaultTickEvery = 5 * time.Second
 
-// DefaultBatch is how much job one tick will look at. A crew with a thousand jobs is not
+// DefaultBatch is how much job one tick will look at. A system with a thousand jobs is not
 // a reason for one tick to hold the store open.
 const DefaultBatch = 20
 
@@ -31,7 +31,7 @@ const DefaultBatch = 20
 //
 // Measured rather than chosen, and the measurement is of the loop rather than of the job. A holder
 // renews its lease on every tick while its task is open, so what the lease has to outlast is a gap
-// between renewals, not a task: a task killed at seventeen minutes is on this crew's own record, and
+// between renewals, not a task: a task killed at seventeen minutes is on this system's own record, and
 // a lease that had to outlast one would leave a dead controller unnoticed for that long.
 //
 // On this machine, against the real control plane and the real store with a model that answers at
@@ -39,7 +39,7 @@ const DefaultBatch = 20
 // jobs cost under a millisecond, and a whole job from declared to done cost 2
 // milliseconds over twenty runs. So the renewal rate is set by DefaultTickEvery and not by the job,
 // and this is twelve of those intervals: a holder has to miss twelve renewals in a row before its
-// job is taken. It is the same budget the crew already gives the longest healthy operation it has,
+// job is taken. It is the same budget the system already gives the longest healthy operation it has,
 // the whole path from a session row to a sandbox ready for its first task.
 //
 // Provisional. What replaces it is the ninety fifth percentile of the gap between renewals over the
@@ -108,7 +108,7 @@ type Store interface {
 	WorkspaceLimits(ctx context.Context, workspace string) (Limits, error)
 	// HoldJob says on a pending job why it was not started, leaving it pending. A job the machine
 	// has no room for is not failed and not moved: it waits, and the reason is what tells an
-	// operator that the crew is full rather than stalled.
+	// operator that the system is full rather than stalled.
 	HoldJob(ctx context.Context, id, reason string, event *Event) (*Job, error)
 	// StartJob claims one job and takes a lease on it. It applies only to a job that is
 	// still pending, which is what keeps two controllers from both starting it, and it is what makes
@@ -121,7 +121,7 @@ type Store interface {
 	// ReleaseJob puts job back to pending. It applies only to running job with no session under a
 	// lease that has run out, which is the one state that says for certain no task was ever sent.
 	ReleaseJob(ctx context.Context, id string, events []*Event) (*Job, error)
-	// RequeueJob puts a running job back to pending because the crew could not start it. It applies
+	// RequeueJob puts a running job back to pending because the system could not start it. It applies
 	// only where this controller still holds the lease, in the same statement, so a controller that
 	// lost the row cannot put another controller's job back under it.
 	//
@@ -131,7 +131,7 @@ type Store interface {
 	// RenewLease moves this controller's hold on further. Only the holder renews: a controller that
 	// lost the row must not take it back by renewing.
 	RenewLease(ctx context.Context, id string, lease Lease) error
-	// RecordJobSession writes the session the crew made for a job. It is not a movement,
+	// RecordJobSession writes the session the system made for a job. It is not a movement,
 	// so it carries no record of its own: a reader learns which conversation did the job from the
 	// row, and the row is where quay attach reads it.
 	RecordJobSession(ctx context.Context, id, session string) error
@@ -144,7 +144,7 @@ type Store interface {
 	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 }
 
-// ControlPlane is what a controller may do on the crew. It is the same interface every other caller
+// ControlPlane is what a controller may do on the system. It is the same interface every other caller
 // speaks to, deliberately: a controller holds no privileged road into anything, so it can move out
 // of this process later without changing a line of its logic.
 type ControlPlane interface {
@@ -164,7 +164,7 @@ type ControlPlane interface {
 // Attachment says whether an operator has a session's conversation open.
 //
 // It exists because the controller must never close a container somebody is typing into, and the
-// crew could not tell before this: `quay attach` hands the operator a command to run against the
+// system could not tell before this: `quay attach` hands the operator a command to run against the
 // container and then records nothing about it. The implementation asks the container itself.
 //
 // An implementation that cannot answer returns an error, and the controller reads that as attached.
@@ -179,7 +179,7 @@ type Attachment interface {
 // This is the kubernetes shape and it is deliberate. A scheduler places a pod only where the
 // requests already on the node plus this one still fit, and a pod that fits nowhere stays pending
 // with a reason naming the resource, for as long as it takes. It is never admitted and then killed,
-// which is what the crew did: nine jobs against a runtime with room for eight, and the ninth waited
+// which is what the system did: nine jobs against a runtime with room for eight, and the ninth waited
 // two minutes for a container, was failed, and took the runtime down with it. See issue 466.
 //
 // Admit reserves the room in the same movement as the decision, under the caller's key. It has to:
@@ -196,36 +196,36 @@ type Spend interface {
 	SessionTokens(ctx context.Context, session string) int64
 }
 
-// Redactor takes what the crew is about to write down and removes anything the workspace keeps
+// Redactor takes what the system is about to write down and removes anything the workspace keeps
 // sealed. Everything recorded here is persisted, and what a model says can carry a value somebody
 // pasted into a conversation. A nil redactor writes the text as it is, which is what a test wants
-// and what a crew must never do.
+// and what a system must never do.
 type Redactor interface {
 	RedactFor(ctx context.Context, workspace, text string) string
 }
 
 // Exporter offers each record of a movement to the event log, after the transaction that wrote it.
 //
-// The store is the truth and the log is the copy, so this never fails what it describes and a crew
-// with no broker configured loses the export and nothing else. A nil exporter is exactly that crew.
+// The store is the truth and the log is the copy, so this never fails what it describes and a system
+// with no broker configured loses the export and nothing else. A nil exporter is exactly that system.
 type Exporter interface {
 	ExportJob(ctx context.Context, events ...*Event)
 }
 
 // Roles is how a controller reads the role a job names, as the workspace holds it now.
 //
-// Now rather than at the version the job pinned, because it is the same role the crew would build
+// Now rather than at the version the job pinned, because it is the same role the system would build
 // the session from: two answers to "which role is this" is how a boundary comes to be checked
-// against one role and applied against another. A crew that cannot answer refuses the job, because
+// against one role and applied against another. A system that cannot answer refuses the job, because
 // running it would run it as nobody.
 type Roles interface {
 	RoleFor(ctx context.Context, workspace, named string) (Receiver, error)
 }
 
-// Revoker takes back the credentials the crew minted for a job, once that job has ended.
+// Revoker takes back the credentials the system minted for a job, once that job has ended.
 //
-// It is what ends a session's credential in a working crew: a session stops being able to call
-// because its job is over, and the credential's own expiry is only the backstop behind that. A crew
+// It is what ends a session's credential in a working system: a session stops being able to call
+// because its job is over, and the credential's own expiry is only the backstop behind that. A system
 // with no revoker leans on the clock and nothing else.
 type Revoker interface {
 	RevokeJobCredentials(job, phase string)
@@ -239,7 +239,7 @@ type Prover interface {
 	SessionHolds(ctx context.Context, session, path string) (bool, error)
 }
 
-// Controller makes reality match the job the crew holds.
+// Controller makes reality match the job the system holds.
 //
 // It reads the rows, compares them against the world, and closes the gap: it sends a task for a job
 // that has not started, and writes what came back onto the row for a job whose task has landed. It
@@ -256,9 +256,9 @@ type Controller struct {
 	roles    Roles
 	redactor Redactor
 	// attached is how the controller asks whether an operator has a session's conversation open. Nil
-	// means the crew cannot tell, and a crew that cannot tell reclaims nothing.
+	// means the system cannot tell, and a system that cannot tell reclaims nothing.
 	attached Attachment
-	// room is the machine. Nil admits everything, which is the crew this controller had before
+	// room is the machine. Nil admits everything, which is the system this controller had before
 	// admission was arithmetic, and it says so in the log rather than quietly.
 	room     Room
 	exporter Exporter
@@ -300,7 +300,7 @@ func NewController(store Store, plane ControlPlane, spend Spend, prover Prover, 
 }
 
 // Owned returns a controller that writes this name on the leases it takes. An investigator reading
-// a released record wants the name of the thing that stopped, so a crew names its own.
+// a released record wants the name of the thing that stopped, so a system names its own.
 func (c *Controller) Owned(owner string) *Controller {
 	if strings.TrimSpace(owner) != "" {
 		c.owner = strings.TrimSpace(owner)
@@ -345,7 +345,7 @@ func (c *Controller) Reading(roles Roles) *Controller {
 }
 
 // Exporting returns a controller that offers each record it writes to the event log, after the
-// transaction that wrote it. Without one nothing is exported, which is a crew with no broker.
+// transaction that wrote it. Without one nothing is exported, which is a system with no broker.
 func (c *Controller) Exporting(exporter Exporter) *Controller {
 	c.exporter = exporter
 	return c
@@ -361,7 +361,7 @@ func (c *Controller) exported(ctx context.Context, events ...*Event) {
 	c.exporter.ExportJob(ctx, events...)
 }
 
-// Redacting returns a controller that takes every line it writes through the crew redactor.
+// Redacting returns a controller that takes every line it writes through the system redactor.
 func (c *Controller) Redacting(redactor Redactor) *Controller {
 	c.redactor = redactor
 	return c
@@ -412,7 +412,7 @@ func (c *Controller) Every(every time.Duration) *Controller {
 func (c *Controller) Run(ctx context.Context) {
 	ticker := time.NewTicker(c.every)
 	defer ticker.Stop()
-	// Once on the way up, so a crew restarted onto job that was declared while it was down starts
+	// Once on the way up, so a system restarted onto job that was declared while it was down starts
 	// it now rather than one interval later.
 	c.Tick(ctx)
 	for {
@@ -523,10 +523,10 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 		// dispatch made again after a controller died cannot put it over a label the operator has set.
 		Title: claimed.Title,
 		// The role comes off the row and never from a caller. A caller that could name its own role
-		// could name one granting more than the job was declared with, and the credential the crew
+		// could name one granting more than the job was declared with, and the credential the system
 		// mints for this task carries what that role declared it may call.
 		Role: claimed.Role,
-		// Which job this task runs, so the crew mints the credential for it and puts it in
+		// Which job this task runs, so the system mints the credential for it and puts it in
 		// the environment of this task alone.
 		Job: claimed.ID,
 	})
@@ -546,14 +546,14 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 
 // admit asks the machine for room for this job's sandbox. A controller with no machine to ask admits
 // everything, which is what every controller did before this, and it says so once rather than
-// quietly: a crew running blind should read as running blind.
+// quietly: a system running blind should read as running blind.
 func (c *Controller) admit(ctx context.Context, key string, want capacity.Request) capacity.Verdict {
 	if c.room == nil {
 		return capacity.Verdict{OK: true, Unmeasured: true}
 	}
 	verdict := c.room.Admit(ctx, key, want)
 	if verdict.Unmeasured {
-		c.logger.WarnContext(ctx, "the crew cannot read its runtime, so this job was admitted without arithmetic",
+		c.logger.WarnContext(ctx, "the system cannot read its runtime, so this job was admitted without arithmetic",
 			"job", key, "wants", want.String())
 	}
 	return verdict
@@ -566,12 +566,12 @@ func (c *Controller) releaseRoom(key string) {
 	}
 }
 
-// hold says on a pending job why the crew is not starting it.
+// hold says on a pending job why the system is not starting it.
 //
-// The phase does not move. The job is still the next thing this crew will run and nothing about it
+// The phase does not move. The job is still the next thing this system will run and nothing about it
 // has failed, which is the whole difference between this and stopping it: a machine that is full
 // now has room in ten minutes, and the job is still there when it does. What an operator gets is the
-// sentence, because "pending" alone reads the same on a busy crew and a stalled one.
+// sentence, because "pending" alone reads the same on a busy system and a stalled one.
 //
 // Written only when the sentence changes. A controller ticks every few seconds and a machine stays
 // full for minutes, so writing every tick would be a row update and a record a second saying the
@@ -595,8 +595,8 @@ func (c *Controller) hold(ctx context.Context, one *Job, reason string) {
 // boundary holds or there is no role.
 //
 // Read here rather than only at the write, because a role can be detached, imported again at a new
-// version and attached again while a job sits pending: what the crew would put in front of a session
-// is settled at the moment it hands it over. A crew that cannot read the role refuses the job, for
+// version and attached again while a job sits pending: what the system would put in front of a session
+// is settled at the moment it hands it over. A system that cannot read the role refuses the job, for
 // the reason an unprovable expectation stops it: a check that quietly passes when it could not be
 // run is the same false green as no check at all.
 func (c *Controller) refusedMaterial(ctx context.Context, one *Job) string {
@@ -604,7 +604,7 @@ func (c *Controller) refusedMaterial(ctx context.Context, one *Job) string {
 		return ""
 	}
 	if c.roles == nil {
-		return fmt.Sprintf("this job runs as the %s role and this crew cannot read its roles, "+
+		return fmt.Sprintf("this job runs as the %s role and this system cannot read its roles, "+
 			"so what the role receives could not be checked", one.Role)
 	}
 	held, err := c.roles.RoleFor(ctx, one.Workspace, one.Role)
@@ -621,7 +621,7 @@ func (c *Controller) refusedMaterial(ctx context.Context, one *Job) string {
 //
 // A controller is disposable and the job is not. The task it started keeps running, because the
 // sandbox belongs to the control plane rather than to the controller, and the model does not know
-// anybody stopped watching. So the rule here is: read what the crew actually did before doing
+// anybody stopped watching. So the rule here is: read what the system actually did before doing
 // anything, and never send a second task for a job that has already been paid for.
 func (c *Controller) recoverAbandoned(ctx context.Context) {
 	abandoned, err := c.store.ExpiredJob(ctx, c.batch)
@@ -637,7 +637,7 @@ func (c *Controller) recoverAbandoned(ctx context.Context) {
 // recover takes one abandoned job back in hand.
 //
 // The session it ran in is what decides between the two outcomes, and where the row does not say,
-// the crew is asked: the session is named after the job, so a task sent by a controller that died
+// the system is asked: the session is named after the job, so a task sent by a controller that died
 // before it could write the name down is still found. Only job with no task anywhere goes back to
 // pending, and that is the one state that says for certain nothing was paid for.
 func (c *Controller) recover(ctx context.Context, one *Job) {
@@ -671,7 +671,7 @@ func (c *Controller) recover(ctx context.Context, one *Job) {
 	}
 	c.exported(ctx, records...)
 	// The session goes onto the row now, so the next reader learns it from the record rather than by
-	// asking the crew again.
+	// asking the system again.
 	if one.Session == "" {
 		if err := c.store.RecordJobSession(ctx, one.ID, session); err != nil {
 			c.logger.WarnContext(ctx, "could not record which session job that was left behind ran in",
@@ -697,7 +697,7 @@ func (c *Controller) release(ctx context.Context, one *Job) {
 	c.exported(ctx, records...)
 }
 
-// sessionNamedAfter is the conversation this job would have run in, if the crew holds one.
+// sessionNamedAfter is the conversation this job would have run in, if the system holds one.
 //
 // This closes the gap between a dispatch and the row that records its session. A controller that
 // died in between left a task running with nothing on the row to say so, and putting that job back
@@ -705,7 +705,7 @@ func (c *Controller) release(ctx context.Context, one *Job) {
 func (c *Controller) sessionNamedAfter(ctx context.Context, one *Job) string {
 	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: one.Project})
 	if err != nil {
-		c.logger.WarnContext(ctx, "could not read the crew's sessions", "job", one.ID, "error", err)
+		c.logger.WarnContext(ctx, "could not read the system's sessions", "job", one.ID, "error", err)
 		// Nothing is released on a read that failed: releasing here is what would pay twice.
 		return unknownSession
 	}
@@ -750,7 +750,7 @@ func (c *Controller) adoptAnswers(ctx context.Context, turnedAway givenUp) {
 // adopt reads the task row for the job's session and moves the job on if it has landed.
 //
 // Reading rather than remembering is what makes this safe to run twice: the task row is the record
-// of what the crew actually did, so a controller that has just started the job and one that has
+// of what the system actually did, so a controller that has just started the job and one that has
 // come back to it read the same thing.
 func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	resp, err := c.plane.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: one.Session})
@@ -772,7 +772,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		c.renew(ctx, one)
 		return
 	}
-	// The crew never started this one, so there is nothing to write down about how it went. The
+	// The system never started this one, so there is nothing to write down about how it went. The
 	// machine was busy, which is a moment and not a verdict, so the job goes back to pending and a
 	// later tick tries it again. Failing it here is how declared work was lost with nothing raised.
 	if last.GetStatus() == StatusFailed && NeverStarted(last.GetFailure()) {
@@ -790,7 +790,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		landing.Phase, landing.Reason, kind = PhaseFailed, oneLine(last.GetFailure()), EventFailed
 	// An operator stopped the task, so the job stops too, carrying their reason. Job that went
 	// quiet and a job that was halted must never read the same, and a stop that came back as done
-	// would have the crew report an answer nobody gave: the task ended before it had one.
+	// would have the system report an answer nobody gave: the task ended before it had one.
 	case last.GetStatus() == StatusTaskStopped:
 		landing.Phase, landing.Answer, landing.Reason, kind =
 			PhaseStopped, "", oneLine(last.GetFailure()), EventStopped
@@ -816,12 +816,12 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	c.land(ctx, one, landing, kind)
 }
 
-// requeue puts a job the crew could not start back to pending, with the record of it.
+// requeue puts a job the system could not start back to pending, with the record of it.
 //
 // There is no ceiling on how often this happens, and that is deliberate. A machine that is busy now
 // has room later, and how many tries are enough is a number nobody has measured: the job stays
 // declared until it runs, until its deadline passes, or until a person stops it. Each attempt costs
-// one start, and the crew starts one sandbox at a time, so a job that keeps being turned away asks
+// one start, and the system starts one sandbox at a time, so a job that keeps being turned away asks
 // again about as often as a start takes rather than on every tick.
 func (c *Controller) requeue(ctx context.Context, one *Job, reason string, turnedAway givenUp) {
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
@@ -829,7 +829,7 @@ func (c *Controller) requeue(ctx context.Context, one *Job, reason string, turne
 	back := Requeue{Owner: c.owner, Reason: reason}
 	if _, err := c.store.RequeueJob(ctx, one.ID, back, []*Event{record}); err != nil {
 		if !errors.Is(err, ErrHeld) {
-			c.logger.WarnContext(ctx, "could not put a job the crew could not start back",
+			c.logger.WarnContext(ctx, "could not put a job the system could not start back",
 				"job", one.ID, "error", err)
 		}
 		return
@@ -843,15 +843,15 @@ func (c *Controller) requeue(ctx context.Context, one *Job, reason string, turne
 }
 
 // waitingForRoom is what a job waiting for a machine with room says on the listing, carrying what
-// the crew said underneath it.
+// the system said underneath it.
 func waitingForRoom(failure string) string {
-	return oneLine("the crew could not give this job a sandbox, so it waits for room: " + failure)
+	return oneLine("the system could not give this job a sandbox, so it waits for room: " + failure)
 }
 
 // askForThePullRequest sends the session back for the address its answer did not carry, and says
 // whether it went. `asked` is how many tasks the session has already run.
 //
-// Asked once and no more. The bound is the count of tasks rather than a counter of the crew's own,
+// Asked once and no more. The bound is the count of tasks rather than a counter of the system's own,
 // because the session is named after the job and holds this job's tasks alone: one is the work, two
 // is the work and this ask. A controller that took the row over after another died reads the same
 // number and does not ask a third time, which is the property every other decision in this loop has.
@@ -859,7 +859,7 @@ func waitingForRoom(failure string) string {
 // No record of its own is written. The second task is the record, in the session `quay job show`
 // already names, and a record needs a store write that this does not otherwise need.
 //
-// This is the one expectation the crew asks again about rather than stopping on, and the difference
+// This is the one expectation the system asks again about rather than stopping on, and the difference
 // is what is missing. An answer that does not carry what it claimed is work that was not done, so
 // asking again is asking a model to do it twice. A pull request is work that was done and not
 // published: the branch is in the session, the session is open, and opening it is one command. That
@@ -873,7 +873,7 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 		Project: one.Project, Handle: SessionFor(one.ID), Text: AskedForThePullRequest(one.Repository),
 		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
 	}); err != nil {
-		// A crew that cannot ask again lands the job below with the reason, rather than holding a row
+		// A system that cannot ask again lands the job below with the reason, rather than holding a row
 		// open waiting for a task nobody sent.
 		c.logger.WarnContext(ctx, "could not ask a session again for the pull request",
 			"job", one.ID, "session", one.Session, "error", err)
@@ -917,7 +917,7 @@ func (c *Controller) land(ctx context.Context, one *Job, landed Landing, kind st
 	c.drawSpans(ctx, ended)
 }
 
-// drawSpans puts the life of a job on the trace, once the crew knows both ends of it.
+// drawSpans puts the life of a job on the trace, once the system knows both ends of it.
 //
 // One span for the attempt that just landed and one for the whole job. They are recorded
 // here rather than opened when the job started, because a job outlives the process that
@@ -963,7 +963,7 @@ func (c *Controller) unmet(ctx context.Context, one *Job, reply string) string {
 		return ""
 	}
 	if c.prover == nil {
-		return fmt.Sprintf("%s could not be checked: this crew cannot read a session's files", path)
+		return fmt.Sprintf("%s could not be checked: this system cannot read a session's files", path)
 	}
 	held, err := c.prover.SessionHolds(ctx, one.Session, path)
 	if err != nil {
@@ -975,7 +975,7 @@ func (c *Controller) unmet(ctx context.Context, one *Job, reply string) string {
 	return ""
 }
 
-// spentBy is what the job's own conversation has cost. A crew with no reader wired answers zero,
+// spentBy is what the job's own conversation has cost. A system with no reader wired answers zero,
 // because a cost nobody can read is not a number worth inventing.
 func (c *Controller) spentBy(ctx context.Context, session string) int64 {
 	if c.spend == nil || session == "" {
@@ -1022,7 +1022,7 @@ const (
 	StatusTaskStopped = "stopped"
 )
 
-// NoSandbox is what the crew writes on a task it could not give a container.
+// NoSandbox is what the system writes on a task it could not give a container.
 //
 // It is a constant rather than the same sentence written in two places, because two ends depend on
 // it: the control plane writes it onto the task, and the controller reads it to tell a job that
@@ -1030,7 +1030,7 @@ const (
 const NoSandbox = "the session's sandbox could not be created"
 
 // NeverStarted says whether a task failed for want of a sandbox rather than for anything the job
-// asked for. A job the crew could not start is not a job that was wrong.
+// asked for. A job the system could not start is not a job that was wrong.
 func NeverStarted(failure string) bool { return strings.Contains(failure, NoSandbox) }
 
 // oneLine keeps a reason readable on a listing: a record is read on one line beside others.

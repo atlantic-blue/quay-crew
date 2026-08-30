@@ -12,7 +12,7 @@ import (
 // WorkspaceLimits reads what a workspace lets its sessions declare.
 //
 // A workspace with no row takes the defaults, and the default for max_depth is zero: no session may
-// declare job until an operator raises it. Default deny, so a crew that was never configured grants
+// declare job until an operator raises it. Default deny, so a system that was never configured grants
 // nothing rather than everything.
 func (p *Postgres) WorkspaceLimits(ctx context.Context, workspace string) (job.Limits, error) {
 	limits := job.Limits{Workspace: workspace}

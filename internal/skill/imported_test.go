@@ -7,7 +7,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 )
 
-// files is a whole skill on its way to the crew, the way a client sends one after reading a directory.
+// files is a whole skill on its way to the system, the way a client sends one after reading a directory.
 func files(manifest, brief string) []skill.File {
 	return []skill.File{
 		{Path: skill.ManifestFile, Body: []byte(manifest)},
@@ -79,7 +79,7 @@ func TestASkillFromTheWireIsRefusedAndSaysWhy(t *testing.T) {
 			says:  []string{skill.BriefFile, "how the work gets done"},
 		},
 		{
-			name:  "a field the crew does not know",
+			name:  "a field the system does not know",
 			files: files(wireManifest+"on_failure: retry\n", "brief\n"),
 			says:  []string{"on_failure"},
 		},

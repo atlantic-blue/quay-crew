@@ -6,7 +6,7 @@ Today a person outside quay decides what to dispatch, watches it, reads the answ
 next thing. The intent lives in that conversation. When the process dies, the intent dies with it.
 That happened twice on 27 August 2026.
 
-**The one sentence: move the intent out of the conversation and into a record the crew stores, and
+**The one sentence: move the intent out of the conversation and into a record the system stores, and
 let an ordinary loop make reality match that record.**
 
 This document is a delta. It does not replace the two designs that already cover this ground.
@@ -19,7 +19,7 @@ the word orchestration. Two designs cover most of this ground, and this document
 
 **`quay-crew#354`, "Roles: a sub task runs as a named role, in its own session and container".**
 Open. It is the closest existing design and it decides the part this document does not repeat: a
-role is the boundary, a team is chosen at run time, and the crew starts one session per role named.
+role is the boundary, a team is chosen at run time, and the system starts one session per role named.
 Its slice 1 has shipped. This document supplies the substrate that its slices 5, 6 and 7 need, and
 it changes none of its decisions.
 
@@ -58,8 +58,8 @@ in. `which quay` answers `/usr/local/bin/quay`, so the tool is in the image. `qu
 answers:
 
 ```
-quay: this session was not told where the crew is, so there is nothing at the address it fell
-back to. It reaches the control plane only when the crew is set up for it: QC_SANDBOX_NETWORK
+quay: this session was not told where the system is, so there is nothing at the address it fell
+back to. It reaches the control plane only when the system is set up for it: QC_SANDBOX_NETWORK
 and QC_SANDBOX_CONTROL_PLANE on the control plane ... Then start this session again, because a
 sandbox keeps the configuration it was made with.
 ```
@@ -68,7 +68,7 @@ That last sentence is the trap. A sandbox is born with its environment. A capabi
 birth does not reach the container that is already running.
 
 That capture is what the tool said that day and it says something else now: a task is told where the
-crew is when it runs a job, and `quay sessions` is not a job verb, so a session running
+system is when it runs a job, and `quay sessions` is not a job verb, so a session running
 one is refused it by name. The trap in the last sentence is unchanged and is the reason the network
 is joined at birth.
 
@@ -86,7 +86,7 @@ entire defect, and section 15 fixes it first.
 
 `quay-crew#376` described exactly this symptom. Its fix merged as `e53befc` on 27 August 2026, hours
 before this document. A task is now written to the `tasks` table when it starts, on every path, and
-`cmd/quay/tasks.go` prints `still running` for a task whose row is still open. A crew that shows the
+`cmd/quay/tasks.go` prints `still running` for a task whose row is still open. A system that shows the
 old behaviour is running a build older than `e53befc`.
 
 This matters more than it reads. A controller that dies mid task can only recover because the task
@@ -113,7 +113,7 @@ row exists before the answer does. Section 4 depends on it.
 - **A role is imported, pinned and attached.** `internal/role/role.go`, migration 0024,
   `quay role import|list|attach|detach`. A role declares `name`, `version`, `summary`, `model` and
   `receives`. `receives` is one of `job`, `context` or `skills`.
-- **A caller is recognised by a token.** `internal/auth`. One crew token, one driver token, and a
+- **A caller is recognised by a token.** `internal/auth`. One system token, one driver token, and a
   deny policy over the driver's.
 - **Every task carries its cost.** `internal/telemetry/taskmetrics.go` publishes `quaycrew.tasks`,
   `quaycrew.tokens` and `quaycrew.cost.usd`.
@@ -144,7 +144,7 @@ row exists before the answer does. Section 4 depends on it.
 ## 3. The resource
 
 The declared unit is a **job**, and the table is called `jobs`. The word is already the
-crew's own. A role declares `receives: job`, and `quay-crew#354` says the product manager reads the
+system's own. A role declares `receives: job`, and `quay-crew#354` says the product manager reads the
 job first.
 
 A caller writes a job. A controller makes reality match it. Nothing dispatches.
@@ -157,7 +157,7 @@ controller disposable is in it.
 ```mermaid
 flowchart TD
     DECLARE["you declare a job:<br/>a title, a brief, a role, what it requires"]
-    DECLARE --> ROW["the crew writes the row, phase pending.<br/>Every rule is checked here, so a refusal<br/>reaches you while you are still looking"]
+    DECLARE --> ROW["the system writes the row, phase pending.<br/>Every rule is checked here, so a refusal<br/>reaches you while you are still looking"]
     ROW --> CLAIM{"a controller claims it<br/>and takes a lease"}
     CLAIM -->|"another controller won the race"| ROW
     CLAIM -->|"claimed"| RECEIVES{"does the role receive<br/>everything this job requires?"}
@@ -182,7 +182,7 @@ at the moment of the write, never at the moment of the dispatch, for the reason 
 already gives: a refusal in the middle of a run arrives hours later with nothing pointing back at
 the declaration.
 
-**`id`, text, assigned by the crew.** Twenty four hexadecimal characters, the shape
+**`id`, text, assigned by the system.** Twenty four hexadecimal characters, the shape
 `flow.newRunID` already mints. A caller that sets it is refused. Reason: an identifier the caller
 chooses is an identifier the caller can collide.
 
@@ -201,17 +201,17 @@ Empty is refused. Over the ceiling is refused, and the refusal says how long it 
 reads to the end is a brief nobody follows.
 
 **`role`, text, optional, default empty.** Names a role. Empty means the session runs with no role,
-which is what every session does today. A role the workspace does not hold, at the crew level or at
+which is what every session does today. A role the workspace does not hold, at the system level or at
 its own, is refused by name at the write. This is the acceptance criterion `quay-crew#354` already
 states, moved earlier: refusing at the write is refusing while somebody is looking.
 
-**`role_version`, integer, assigned by the crew.** The version attached at the moment of the write.
+**`role_version`, integer, assigned by the system.** The version attached at the moment of the write.
 Zero when no role. A job is pinned the way a run pins its graph, so editing a role cannot
 change a job that is already declared.
 
 **`requires`, text array, optional, default empty.** The material this job cannot be done
 without, drawn from the same three words a role receives: `job`, `context` and `skills`. A word the
-crew does not hand out is refused by name at the write, with the three offered back.
+system does not hand out is refused by name at the write, with the three offered back.
 
 The column was called `hands` until August 2026. The word needed explaining every time somebody read
 it, and it read correctly in neither direction; `requires` comes from the Amazon Elastic Container
@@ -231,7 +231,7 @@ the two ways out: widen the role and import it again, or declare the job without
 It is checked twice, and the second check is the one that matters. At the write, because a refusal
 that arrives hours later has nothing pointing back at the declaration. And again at the dispatch,
 because a role can be detached, imported at a new version and attached again while a job sits pending,
-so what the crew would put in front of a session is only settled at the moment it hands it over. A job
+so what the system would put in front of a session is only settled at the moment it hands it over. A job
 refused there is `stopped` with the reason on the row, and no container is ever built for it.
 
 ```mermaid
@@ -246,7 +246,7 @@ stateDiagram-v2
     failed --> [*]
 ```
 
-What this does not do: it holds the three words the crew hands out and nothing else. There is no way
+What this does not do: it holds the three words the system hands out and nothing else. There is no way
 to require a named file, a named repository or a named secret, and a role that receives `context`
 receives all of it rather than a part.
 
@@ -272,7 +272,7 @@ plausibly instead of stopping.
 **`repository`, text, optional, default empty.** The repository this job works in, written
 `owner/name`. Both spellings of the address are accepted and stored as one, so a person pasting from
 a browser and a person typing from memory declare the same thing. Anything that is not an owner and a
-name is refused at the write, because a repository the crew cannot then look for in an answer is an
+name is refused at the write, because a repository the system cannot then look for in an answer is an
 expectation that was never going to hold.
 
 **Empty takes the project's.** A project records the repository its work lands in, so a job declared
@@ -280,12 +280,12 @@ there and naming none works in that one and is held to it like any other. A job 
 keeps it: the project's is the default, not a ceiling. Before this the address was passed to every job
 by hand, and a job that was not given one produced work nobody could read.
 
-Naming one says how the job ends. The crew adds a line to what the session is asked, saying to push
+Naming one says how the job ends. The system adds a line to what the session is asked, saying to push
 the branch, open the pull request, name its address in the answer, and not to merge it. The job is
-not done until an answer names a pull request against that repository, and the address the crew read
+not done until an answer names a pull request against that repository, and the address the system read
 lands on the row as `pull_request`, which is what `quay job show` prints beside the answer.
 
-**A session that answered without one is asked again, once.** It is the only expectation the crew
+**A session that answered without one is asked again, once.** It is the only expectation the system
 asks again about rather than stopping on, and the difference is what is missing. An answer that does
 not carry what it claimed is work that was not done, so asking again is asking a model to do it
 twice. A pull request is work that was done and not published: the branch is in the session, the
@@ -293,7 +293,7 @@ session is still open, and opening it is one command. A second answer that still
 job, with a reason saying it was asked twice.
 
 **No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
-runs the pipeline, so nothing here lets a session merge and the line the crew adds says so.
+runs the pipeline, so nothing here lets a session merge and the line the system adds says so.
 
 **A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
 "push, watch the checks and merge on green" asks for something the runtime does not have, and the
@@ -311,7 +311,7 @@ a brief, rather than on the declaration the flow engine builds for each of its n
 The rule reads English, so it is held narrow. A waiting word has to point at a pipeline and a merge
 has to point at a pull request or at the result of one, and a phrase the brief negates is left alone.
 `merge origin/main into the branch` and `do not merge the pull request` both stay legal. A brief that
-gets past it is a brief the crew still cannot run, and that is the trade: a refusal that fires on
+gets past it is a brief the system still cannot run, and that is the trade: a refusal that fires on
 ordinary work is the rule everybody learns to word around.
 
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
@@ -333,10 +333,10 @@ refused. A value above the parent's remaining budget is refused, and the refusal
 At most 16 pairs. Each key and each value at most 63 characters, which is the ceiling Kubernetes
 puts on a label value. Anything larger is refused.
 
-### What the crew assigns and the caller may not
+### What the system assigns and the caller may not
 
 **`parent`, text, empty for a root.** Which job asked for this one. **The caller never
-sets this.** The crew reads it from the credential the caller presented, and a caller presenting an
+sets this.** The system reads it from the credential the caller presented, and a caller presenting an
 operator's credential creates a root. This is the mechanism that bounds depth, and it only works
 because the caller cannot lie about it. A `parent` in the request body is refused, not ignored.
 
@@ -351,7 +351,7 @@ parent otherwise. One trace covers a whole tree.
 inside when it declared this job. Section 8c explains why both live on the row rather than in a
 process.
 
-**`created_at`, `updated_at`, timestamptz.** Every table in this crew carries them.
+**`created_at`, `updated_at`, timestamptz.** Every table in this system carries them.
 
 ### What the controller writes, and nobody else
 
@@ -378,7 +378,7 @@ reader gets from the job to the conversation, and it is what `quay attach` takes
 
 **`attempts`, integer, default 0.** How many times a controller started a session for this job.
 
-**`answer`, text, default empty.** What came back, whole, redacted by the crew's own redactor before
+**`answer`, text, default empty.** What came back, whole, redacted by the system's own redactor before
 it is written, exactly as `landTask` already redacts a reply. **This field is the read path.** It is
 the difference between an answer that lives in a conversation and an answer a caller can read.
 
@@ -472,7 +472,7 @@ the control plane makes it privileged.
 
 A controller runs inside the control plane, started the way the flow poller is: something owns its
 lifetime, and the goroutine is not hidden inside a constructor. It ticks every five seconds and on
-the way up, so a job declared while the crew was down starts when the crew comes back.
+the way up, so a job declared while the system was down starts when the system comes back.
 
 What one tick does today:
 
@@ -541,7 +541,7 @@ take over, so the two moments a race can happen are guarded the same way.
 record for its session first. A task that already answered is adopted; a task still open leaves the
 job running under a new hold. Only job with no task anywhere goes back to `pending`, because that
 is the one state that says for certain nothing was paid for. Where the row carries no session, the
-crew is asked for one named after the job, which closes the gap between a dispatch and the row that
+system is asked for one named after the job, which closes the gap between a dispatch and the row that
 records it: a task sent by a controller that died a moment later is still found, and never sent twice.
 
 **The lease length, and where the number comes from.** It is a minute, and it is derived rather than
@@ -550,14 +550,14 @@ gap between renewals rather than a task. Measured on one machine against the rea
 the real store, with a model that answers at once: a tick with nothing to do cost 1 to 4
 microseconds, a tick that dispatched a hundred jobs cost under a millisecond, and a whole
 a job from declared to done cost 2 milliseconds over twenty runs. Reproduce it by timing
-`Server.TickJob` around a crew holding jobs with the fake model runner. So the renewal rate is set
+`Server.TickJob` around a system holding jobs with the fake model runner. So the renewal rate is set
 by the five second tick and not by the job, and a minute is twelve of those: a holder misses twelve
-renewals in a row before its job is taken. It is also the budget the crew already gives the longest
+renewals in a row before its job is taken. It is also the budget the system already gives the longest
 healthy operation it has, the whole path from a session row to a sandbox ready for its first task.
 
 **This number is provisional.** What replaces it is the ninety fifth percentile of the gap between
 renewals over the first fifty completed jobs, which needs the metric slice 6 adds. Until
-then `QC_JOB_LEASE` sets it, and a crew that says nothing gets the measured default rather than
+then `QC_JOB_LEASE` sets it, and a system that says nothing gets the measured default rather than
 refusing to start.
 
 **What the lease does not do yet.** It does not cover a job in `asking`, because nothing asks yet. It
@@ -625,7 +625,7 @@ Three queries per tick, each on an index:
 - jobs in `waiting` whose dependencies have now ended, which moves it back to `pending`;
 - jobs in `running` or `asking` whose `lease_until` has passed.
 
-A crew with a thousand finished jobs and one pending does one row of work per tick. That
+A system with a thousand finished jobs and one pending does one row of work per tick. That
 is the property `DueFlowRuns` already has and it is worth keeping.
 
 ### What it compares
@@ -661,7 +661,7 @@ the compare and set the log cannot give, and `flow_dispatches` already uses the 
 The lease length is provisional. It must be longer than the longest task a job runs, and a
 task takes minutes rather than seconds. The measurement that would set it is the ninety fifth
 percentile of `quaycrew.job.duration` over the first fifty completed jobs. Until that
-exists the operator sets it, and the crew refuses to start with it unset rather than choosing a
+exists the operator sets it, and the system refuses to start with it unset rather than choosing a
 number nobody measured.
 
 Now the phases, and what a death in each one costs.
@@ -728,13 +728,13 @@ role declared and lasting as long as that job may run: the job's own deadline wh
 twelve hours where it does not. It reaches the session in the
 environment of one task and never at sandbox birth: a sandbox keeps the configuration it was made
 with, so a credential written at birth would label every later task with the first task's grant, and
-one minted afterwards would never reach the container at all. The crew holds the minted credentials
+one minted afterwards would never reach the container at all. The system holds the minted credentials
 in the control plane process, so a restart forgets them, which costs nothing because a restart also
 ends every task they belonged to.
 
-**What ends it.** The job ending. The crew takes the credential back the moment the job reaches a
+**What ends it.** The job ending. The system takes the credential back the moment the job reaches a
 phase nothing moves it out of, so a session stops being able to call because its job is over rather
-than because a clock ran out, and the expiry above is the backstop for a job whose end the crew never
+than because a clock ran out, and the expiry above is the backstop for a job whose end the system never
 saw. The credential's life is deliberately not the controller's hold on the job, which is a different
 lifetime: a hold is renewed on every tick, and a credential is handed to a sandbox once at dispatch
 and never refreshed, because refreshing it would mean re entering a running container. The two were
@@ -744,9 +744,9 @@ hold and only the hold, and it does not reach the credential.
 
 **What a session is told when it is refused.** Three different sentences, because the three causes
 need three different things done about them: a credential that ran out says so and says when, one the
-crew took back names the job that ended and the phase it ended in, and a token nobody minted is told
-it is not this crew's. They were two. An expired credential got the refusal a forgery gets, and a
-session told the token is not this crew's reads that as holding a bad credential and stops calling,
+system took back names the job that ended and the phase it ended in, and a token nobody minted is told
+it is not this system's. They were two. An expired credential got the refusal a forgery gets, and a
+session told the token is not this system's reads that as holding a bad credential and stops calling,
 which is what ended the run in `quay-crew#449`.
 
 **What it holds.** Four verbs and nothing else, and the deny policy points the opposite way from the
@@ -761,7 +761,7 @@ session is under. That last one is the difference from a skill, whose listing st
 a capability a session already holds and uses by name.
 
 **What is enforced, and what is only stored.** `max_depth` is enforced at the write, and the refusal
-names the limit and the command that raises it. The request is enforced at every start: the crew adds
+names the limit and the command that raises it. The request is enforced at every start: the system adds
 up what its sandboxes asked for and holds a job that does not fit. `max_running` and `budget_tokens`
 are stored, read and set, and nothing enforces them yet: nothing runs a child, so there is no fan out to bound. The
 slice that runs a job in a role is where they start to bite. The lease length is read by the
@@ -774,8 +774,8 @@ question is put to a person, and only the operator answers one.
 **What it did not do until 29 August 2026, and now does.** It did not put a session's container on a
 network that could reach the control plane, so every call a session made died resolving the name and
 the boundary above had never refused a real call. `quay-crew#435` closed it: every sandbox joins a
-second network that the control plane is also on, and nothing else of the crew's is. A session can
-address the crew and cannot address the store, the broker or the dashboards.
+second network that the control plane is also on, and nothing else of the system's is. A session can
+address the system and cannot address the store, the broker or the dashboards.
 
 The two halves are still two decisions and that is deliberate. The network says what a session can
 address, and the credential says what it may do there. A session on the network holding no credential
@@ -816,7 +816,7 @@ Not through the `driver` flag. The flag makes the boundary locality, which is th
 
 A session that is running a job gets a credential minted for that job: a token
 bound to the job identifier, the verbs its role declares, and a life as long as the job's own, which
-the crew ends when the job ends. It reaches the sandbox the way the driver's token reaches the driver, through the
+the system ends when the job ends. It reaches the sandbox the way the driver's token reaches the driver, through the
 environment at task time. The control plane recognises it, reads the job identifier from it, and
 that identifier is the `parent` of anything the session declares.
 
@@ -835,7 +835,7 @@ it expires.
 
 **The role carries the grant.** A role declares which verbs a session running as it may use, in a
 new `verbs` list beside `receives`. Validated as an allow list at import, refused by name for a word
-the crew does not know, exactly as `role.Material` is validated today.
+the system does not know, exactly as `role.Material` is validated today.
 
 The reason is the reason `docs/ARCHITECTURE.md` already gives for putting `mode` on the graph rather
 than on the operator: what an automation is allowed to do should be versioned and reviewable beside
@@ -855,7 +855,7 @@ and secrets, skills, channels and isolation are all scoped there. A quota is a t
 `max_depth` is zero creates nothing, and the refusal names the workspace limit rather than the role,
 because that is the thing an operator would change.
 
-**Why not one of the two alone.** A role alone gives no ceiling, so a role attached to the crew
+**Why not one of the two alone.** A role alone gives no ceiling, so a role attached to the system
 would grant the same power everywhere including workspaces the operator never thought about. A
 workspace alone gives no review, so a session in a permitted workspace would hold every verb the
 workspace holds, and the boundary between a role that plans and a role that writes code would be
@@ -889,7 +889,7 @@ Three limits, and each catches a different failure.
   `internal/flow/advance.go`. The dispatch that would cross the line is never made and never paid
   for.
 - **The request.** What one sandbox asks the machine for, per workspace, in memory and processors.
-  This is what bounds a fan out, and it is arithmetic rather than a count: the crew reads what its
+  This is what bounds a fan out, and it is arithmetic rather than a count: the system reads what its
   runtime has, holds back what its own containers are using, and starts a job only where what is
   already placed plus this one still fits. A job that does not fit stays pending and says which
   resource ran out. See section 5.1.
@@ -898,7 +898,7 @@ Three limits, and each catches a different failure.
   `quay-crew#466` is about.
 - **The deadline.** Wall clock rather than tokens, for a job that has stopped being useful.
 
-No default value is named here for `budget_tokens` or `max_running`. The crew ships them unset, and
+No default value is named here for `budget_tokens` or `max_running`. The system ships them unset, and
 jobs run bounded by depth and by the deadline alone. The measurement that would set the budget is
 the median `quaycrew.tokens` for a completed job over the first fifty. `max_running` no longer
 carries the machine: the request does, and that one is measured, in `internal/capacity`.
@@ -910,26 +910,26 @@ jobs went onto a runtime with room for fewer, and the runtime exited with the co
 database and eight running jobs inside it. Ten sandboxes measured on that machine held between 4.3
 and 764.5 megabytes, and `max_running` said they were the same.
 
-So the crew does what a scheduler does.
+So the system does what a scheduler does.
 
 **A sandbox declares a request.** Memory and processor, per workspace, in the units the room view
 prints: `quay limits <workspace> --request-memory 1536 --request-processor 100`. A workspace that
-declares nothing takes the crew's own measured request. The container carries the processor half of
-it as a share, so the runtime divides its processors in the proportions the crew reserved.
+declares nothing takes the system's own measured request. The container carries the processor half of
+it as a share, so the runtime divides its processors in the proportions the system reserved.
 
-**The crew reads what its runtime has, and holds back what it is using itself.** The capacity is the
+**The system reads what its runtime has, and holds back what it is using itself.** The capacity is the
 runtime's own memory and processor count, read from the daemon and never from the host: the host had
 36 gibibytes free while the runtime had 7.65 and was full. The reserve is measured rather than
-declared, because the crew's control plane, database and event log are containers inside the same
-runtime the work fills. Everything the runtime holds, less what the sandboxes hold, is the crew's
-own, and `QC_CREW_RESERVE_MEMORY` and `QC_CREW_RESERVE_PROCESSOR` are a floor under it for the
+declared, because the system's control plane, database and event log are containers inside the same
+runtime the work fills. Everything the runtime holds, less what the sandboxes hold, is the system's
+own, and `QC_SYSTEM_RESERVE_MEMORY` and `QC_SYSTEM_RESERVE_PROCESSOR` are a floor under it for the
 minutes after a restart when those containers are cold. This is the one place the design differs
 from kubernetes, where the kubelet sits outside the pods it manages.
 
 **Admission is arithmetic.** What is already placed, plus this one, against capacity less the
 reserve. A job that does not fit stays pending, for as long as it takes, and carries a reason naming
 the resource that ran out. It is never admitted and then killed. `quay job list` shows it as `held`
-rather than `pending`, because a full machine and a stalled crew must not read the same.
+rather than `pending`, because a full machine and a stalled system must not read the same.
 
 **The room is taken in the same movement as the decision.** A dispatch is detached, so a container
 appears seconds after the job that asked for it, and the reading of the machine is ten seconds wide.
@@ -937,8 +937,8 @@ Nine jobs asking one reading whether the machine is empty are all told yes, whic
 incident. So the ledger in `internal/capacity` records what has been promised as well as what has
 been built, and the next job counts it. Kubernetes calls this assuming the pod onto the node.
 
-**A crew that cannot read its runtime admits the work and says so.** A crew whose sessions do not run
-on a container runtime has no arithmetic to do, and stopping dead there would be worse than the crew
+**A system that cannot read its runtime admits the work and says so.** A system whose sessions do not run
+on a container runtime has no arithmetic to do, and stopping dead there would be worse than the system
 that counted.
 
 **What this does not do.** Nothing holds a sandbox to what it asked for, which is issue 477, and
@@ -948,28 +948,28 @@ nothing stops anything once a machine is in trouble anyway, which is issue 478.
 
 **A system workspace is the wrong boundary, and this is a decision rather than an omission.**
 
-The crew already has a level above the workspace and it is called `crew`. `name.Crew` is the word.
-`quay skill attach crew`, `quay hook attach crew`, `quay secret set crew` and `quay context set crew`
+The system already has a level above the workspace and it is called `system`. `name.System` is the word.
+`quay skill attach system`, `quay hook attach system`, `quay secret set system` and `quay context set system`
 all take it, and no workspace may be called it, because a workspace with that name would take what
 every workspace reads.
 
 A system workspace would be a fifth thing that looks like a workspace, occupies the workspace name
-space, needs its own reserved name, and needs a rule that already exists for `crew`. It would also
+space, needs its own reserved name, and needs a rule that already exists for `system`. It would also
 put the boundary back on locality: power would follow from which workspace a session sits in. That
 is the idea this design is trying to replace.
 
 **So an orchestrator runs in an ordinary workspace.** What makes it an orchestrator is the role
 attached to it and the credential that role earns, not where it lives. Identity, not locality.
 
-**What holds the crew level.** The limits an operator wants to state once: a default `max_depth`, a
+**What holds the system level.** The limits an operator wants to state once: a default `max_depth`, a
 default `max_running`, a default budget and the lease length. A workspace's own row wins where it
 sets one, which is the rule secrets already follow: a workspace wins on a name and every other
-workspace reads the crew's.
+workspace reads the system's.
 
 **What stops an ordinary workspace reaching the same power.** Three things, in order of how much
 work each costs an attacker.
 
-- The crew's default `max_depth` is 0. A workspace that was never given a limit row grants nothing.
+- The system's default `max_depth` is 0. A workspace that was never given a limit row grants nothing.
 - A role granting `job.create` must be imported and attached by an operator. Import and attach are
   already refused to a session's own token in `DeniedToDriver`, and a job token grants strictly less
   than the driver's.
@@ -977,8 +977,8 @@ work each costs an attacker.
   declaration. A session cannot mint one, cannot widen one, and cannot use one after its job ends.
 
 **What this deliberately does not do.** It does not stop an operator granting an ordinary workspace
-everything. It cannot: there is one operator and no second reviewer, and a crew that refused its own
-operator would be a crew nobody could set up. The protection is default deny plus a listing that
+everything. It cannot: there is one operator and no second reviewer, and a system that refused its own
+operator would be a system nobody could set up. The protection is default deny plus a listing that
 says which workspaces hold what.
 
 ## 7. The read path
@@ -1019,7 +1019,7 @@ Three reasons, and the third is the one that matters.
   the history outlives the container.
 - **A caller reads a field rather than parsing prose.** The whole difference between orchestration
   inside quay and orchestration outside it is whether the next decision reads a value or reads a
-  transcript. A transcript is what a person outside the crew has been doing.
+  transcript. A transcript is what a person outside the system has been doing.
 
 ### What a machine reads, and what a person reads
 
@@ -1039,7 +1039,7 @@ Written to a `job_events` table in the same transaction as the row they describe
 on one partition. That is the shape `session_events` already has.
 
 Each carries `id`, `kind`, `job`, `workspace`, `project`, `parent`, `depth`, `trace_id` and
-`occurred_at`, plus the fields named below. Each `detail` goes through the crew's redactor.
+`occurred_at`, plus the fields named below. Each `detail` goes through the system's redactor.
 
 **The contract, which another service may depend on:**
 
@@ -1055,7 +1055,7 @@ Each carries `id`, `kind`, `job`, `workspace`, `project`, `parent`, `depth`, `tr
 - `job.claimed`, fields: `lease_owner`, `lease_until`.
 - `job.released`, fields: `previous_owner`, `phase_found`.
 
-The split is the useful part. A dashboard counting jobs should never break because the crew changed
+The split is the useful part. A dashboard counting jobs should never break because the system changed
 how it leases. A dashboard counting leases has taken a dependency it was told not to take.
 
 **A correction, forced by reading the code on 27 August 2026.** No such service exists, and none is
@@ -1074,7 +1074,7 @@ contract and section 8b uses them.
 
 **One identifier ties everything: the trace identifier.**
 
-It is already the crew's answer. `internal/logging` says the correlation identifier equals the trace
+It is already the system's answer. `internal/logging` says the correlation identifier equals the trace
 identifier rather than sitting beside it, and Grafana pivots between a log line and a trace on that
 one value. This design extends the same value rather than adding a second.
 
@@ -1102,7 +1102,7 @@ sitting there watching the reply arrive.
 **A correction, forced by reading the code on 27 August 2026.** Letting go is a flag rather than the
 default. Merged pull request 378 made a second command let go, and the one word that replaced the
 three carries it as `--dispatch`. `sendTask` in `cmd/quay/task.go` sets `Detach` on the request, the
-control plane runs the task in a goroutine, and the command prints "started. the crew has it, and
+control plane runs the task in a goroutine, and the command prints "started. the system has it, and
 nothing here is waiting for it." `quay task` with no flag waits and prints the reply. So a person
 watching a reply arrive types `quay task`, and the paragraph above holds for that. `quay task
 --dispatch` is closer to declaring a job than it was: it starts a task and reads nothing back, which
@@ -1135,7 +1135,7 @@ and is exported to `<workspace>.sessions`. The contract is the kind field. There
 here.
 
 One record also lands on `<workspace>.tasks` as a `TaskEvent`. It has no kind and only `status`
-varies, which `docs/EVENTS.md` says plainly, so a consumer that wants to know what the crew is doing
+varies, which `docs/EVENTS.md` says plainly, so a consumer that wants to know what the system is doing
 subscribes to the sessions stream instead. Neither stream has a consumer today, and the export runs
 only where `QC_KAFKA_SEEDS` is set, so the two sentences above describe a contract rather than a
 delivery anybody depends on.
@@ -1166,7 +1166,7 @@ Nothing measures how long the task took. `quay-crew#333` is that gap.
   thing.
 - *Why did it stop.* `quay task list <session>` prints `failed:` and the reason. Exists.
 - *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.
-  Exists, with no dashboard on it. The console's `stats` view shows what the crew and a session have
+  Exists, with no dashboard on it. The console's `stats` view shows what the system and a session have
   cost.
 
 **What limit applies.** None. A single dispatch is bounded by nothing today: no deadline, no token
@@ -1238,7 +1238,7 @@ The records, in order:
 6. The operator answers with `quay flow answer <run> yes`.
 7. The run moves to `push`, which declares a second job, and then to `done`.
 
-**A step that fails.** Two shapes, and the crew already tells them apart.
+**A step that fails.** Two shapes, and the system already tells them apart.
 
 *The model did not finish.* The job reaches `failed` with the reason. The controller writes
 `result.failed` as `true` into the run's state and wakes the run. A graph that branches on
@@ -1247,7 +1247,7 @@ author's decision and is visible in the file.
 
 *The job did not do what the graph said proves it worked.* `expect_file` names a path that is not
 in the session. The job reaches `stopped`, and its reason names the path. **The run stops rather
-than branching.** That is the existing rule in `advance.go` and it is right: the crew knows the job
+than branching.** That is the existing rule in `advance.go` and it is right: the system knows the job
 did not happen and does not know why, and a run that halts is read correctly while a run that
 finishes is believed. `result.expected` carries the reason and the session is left alone, because
 that is where the evidence is.
@@ -1305,7 +1305,7 @@ rather than a metric a dashboard computes:
 - `quaycrew.job.pending`, up down counter, unit records. Jobs waiting to start.
 - `quaycrew.job.running`, up down counter, unit records.
 - `quaycrew.job.first_action`, histogram, unit seconds. From declared to started. This is the number
-  that says whether the crew is keeping up.
+  that says whether the system is keeping up.
 - `quaycrew.job.duration`, histogram, unit seconds. From declared to a terminal phase.
 - `quaycrew.job.failures`, counter, unit records, attribute `reason` from a closed list: `model`,
   `sandbox`, `unmet`, `budget`, `depth`, `deadline`, `stopped`, `lease`.
@@ -1540,14 +1540,14 @@ One trace covers the whole run, from the operator's `quay job create` to the las
 
 **How the context travels, exactly.** This is the hard part and it has three parts.
 
-*Part one, the crew's own side.* `trace_id` and `parent_span_id` are columns on the job row. A
+*Part one, the system's own side.* `trace_id` and `parent_span_id` are columns on the job row. A
 controller that picks up a job reads both and opens its span under them. It does not
 inherit a context from the process it happens to be in. **That is what makes the trace survive a
 controller restart:** the context is in the declaration, not in memory. This is the same reason a
 wait is a column rather than a timer.
 
 *Part two, into the container.* A child session runs in its own container as its own process. The
-crew sets `QC_TRACEPARENT` on the task, formatted as the standard trace context header,
+system sets `QC_TRACEPARENT` on the task, formatted as the standard trace context header,
 `00-<trace id>-<span id>-01`, where the span identifier is the `job.attempt` span. It goes on the
 task rather than on the sandbox, through `sandbox.Spec.Env`, which already exists and is already how
 per task environment reaches a command. It must not go on the sandbox at birth: a sandbox is born
@@ -1556,8 +1556,8 @@ later task with the first task's span. That is the same trap the refusal message
 describes.
 
 *Part three, and the honest limit.* The model's own tool does not read `QC_TRACEPARENT` today.
-Nothing inside the container adopts it. So what the crew gets is one span per attempt, written by the
-crew, around a job whose inside is opaque. Anything finer needs the hook mechanism in `docs/HOOKS.md`,
+Nothing inside the container adopts it. So what the system gets is one span per attempt, written by the
+system, around a job whose inside is opaque. Anything finer needs the hook mechanism in `docs/HOOKS.md`,
 which raises `PreToolUse` and `PostToolUse`, and no hook emits a span today. **This is a real gap and
 this design does not close it.** What it does close is the break between sessions: without the two
 columns, a tree of eleven sessions is eleven unrelated traces.
@@ -1704,7 +1704,7 @@ sequenceDiagram
 
 ## 10. What is deliberately left out
 
-**The largest omission, and it is a decision: this design gives the crew no judgement.** It executes
+**The largest omission, and it is a decision: this design gives the system no judgement.** It executes
 declared intent and never generates it. There is no planner, no team chooser and no product manager
 role here. A person or a model still writes every brief.
 
@@ -1723,7 +1723,7 @@ argument that joins are where every workflow engine turns into a product and whi
 will not be knowable until two real automations exist. This adds exactly one, on a relation the store
 already indexes, because scenario 8c cannot be written without it.
 
-**Nothing cancels job already inside a sandbox.** Stopping a job stops the crew taking
+**Nothing cancels job already inside a sandbox.** Stopping a job stops the system taking
 another step. It does not kill a model mid sentence. That is the rule `quay flow stop` already
 follows, and it is inherited rather than decided again here.
 
@@ -1743,14 +1743,14 @@ streams that already exist.
 design is written so it can be, but slice 3 puts it where the flow poller already is. Moving it is a
 deployment change and not a logic change, and it needs slices 1 and 5 first.
 
-**No backup.** A crew can still be destroyed by an ordinary Docker command. `quay-crew#266`.
+**No backup.** A system can still be destroyed by an ordinary Docker command. `quay-crew#266`.
 
-**Nothing inside the container adopts the trace context.** Named in 8c. The crew writes one span per
+**Nothing inside the container adopts the trace context.** Named in 8c. The system writes one span per
 attempt and the inside of the attempt is opaque.
 
 ## 11. The session lifecycle
 
-The question is when the crew starts putting sessions away. The answer today is that it never does.
+The question is when the system starts putting sessions away. The answer today is that it never does.
 Nothing in the code removes a container on its own. A person removes it, or it stays.
 
 This section designs the states a session moves through, and it names the controller that moves it.
@@ -1779,7 +1779,7 @@ A container goes away in five ways, and every one of them needs somebody to ask:
 - `ReapStrays`, at startup only, for containers whose session is gone, archived or stopped.
 
 There is no timer, no idle sweep and no reclaim. A session that answered one question in March still
-holds its container in August, if the crew has not restarted.
+holds its container in August, if the system has not restarted.
 
 ### What drain does, and how it differs from archiving
 
@@ -1794,13 +1794,13 @@ holds its container in August, if the crew has not restarted.
 
 Archiving is a different action for a different reason.
 
-- It works on one session, not on the crew.
+- It works on one session, not on the system.
 - It stops the session and closes the sandbox first, for the same reason drain does.
 - It then stamps `archived_at`, which moves the session out of the default listing into the console's
   `archived` view.
 - `Dispatch` to an archived session is refused, and the refusal says to restore it first.
 
-The one line difference: drain is a shutdown step for the whole crew, and archiving is a filing step
+The one line difference: drain is a shutdown step for the whole system, and archiving is a filing step
 for one session. Both close the container. Neither deletes a conversation, a file or a row.
 
 ### What an archived session already means, checked against the code
@@ -1821,7 +1821,7 @@ What the title does not cover: **attaching to an archived session brings it back
 (`internal/controlplane/server.go:1798`). The comment above that code says why. The row used to be
 the gate. An archived session then refused every action, including the one action that would fix it.
 
-So archived means two things today. The crew starts nothing in it, and one operator command undoes
+So archived means two things today. The system starts nothing in it, and one operator command undoes
 it without asking. The lifecycle below keeps both, and it says which of them the controller may use.
 
 ### The states, and what moves a session between them
@@ -1830,16 +1830,16 @@ Six states. Four exist in the code. Two are new, and this document names them.
 
 - `running`, a task is in flight and the container is up. Exists.
 - `idle`, no task is in flight and the container is up. Exists.
-- `reclaimed`, no task is in flight and the crew took the container back. **New.** The row keeps its
+- `reclaimed`, no task is in flight and the system took the container back. **New.** The row keeps its
   conversation handle, and the next task builds a fresh container over the same host state.
-- `archived`, filed away by the crew or by the operator. The container is gone and nothing starts it.
+- `archived`, filed away by the system or by the operator. The container is gone and nothing starts it.
   Exists as a stamp.
 - `stopped`, a person put it down. Exists.
 - `deleted`, the row is gone. Exists.
 
 **Why `reclaimed` is not `stopped`.** This document already holds the rule that a thing which went
 quiet and a thing which was halted must never read the same. `stopped` is an operator's decision, and
-it is what drain writes over the whole crew. `reclaimed` is the crew saving memory on a session
+it is what drain writes over the whole system. `reclaimed` is the system saving memory on a session
 nobody is using. An operator who sees `stopped` looks for who stopped it. An operator who sees
 `reclaimed` looks for nothing, because the next dispatch fixes it.
 
@@ -1886,12 +1886,12 @@ So a listing derives its word from three inputs rather than one field, and it sa
 - **`awake`**, a model runtime is up inside the sandbox with nobody watching it. The container's own
   process table says so.
 - **`idle`**, none of those. The only real idle.
-- **`unknown`**, the crew asked the sandbox and was not told. Never `idle`.
+- **`unknown`**, the system asked the sandbox and was not told. Never `idle`.
 
-**Why those words.** `awake` rather than `thinking` or `busy`: what the crew reads is a runtime
+**Why those words.** `awake` rather than `thinking` or `busy`: what the system reads is a runtime
 process, and that process is up both while it answers and while it waits at a prompt, so `thinking`
 claims more than was measured, and `busy` is what `running` already means to an operator. `attached`
-is the word the operator typed to get there. `unknown` says the crew could not tell, which is a
+is the word the operator typed to get there. `unknown` says the system could not tell, which is a
 different thing from nothing being there, and a listing that guessed `idle` there would hand an
 operator the one word that invites them to take the container.
 
@@ -1917,8 +1917,8 @@ that made a sandbox to answer would start the very container it is asked about t
 **What it costs.** Two questions to the sandbox for every row that would otherwise read `idle`, and
 nothing at all for any other row. They are docker execs, so a listing overlaps them, eight at a time,
 and gives the whole sweep five seconds, after which every row still waiting reads `unknown` rather
-than holding the view open. The budget belongs to the listing rather than to each session, so a crew
-of forty rows costs no more of an operator's patience than a crew of twenty when the daemon is
+than holding the view open. The budget belongs to the listing rather than to each session, so a system
+of forty rows costs no more of an operator's patience than a system of twenty when the daemon is
 wedged.
 The figures, measured against a real daemon by
 `TestWhatOneListingOfTwentySessionsCosts` in the continuous integration `integration` job:
@@ -1971,7 +1971,7 @@ nothing in memory, which is the property section 4 depends on.
 flowchart TD
     TICK(["tick"]) --> READ["read every session whose job is terminal"]
     READ --> ATTACHED{"is somebody attached<br/>to the conversation?"}
-    ATTACHED -->|"yes, or the crew cannot tell"| LEAVE["leave it alone"]
+    ATTACHED -->|"yes, or the system cannot tell"| LEAVE["leave it alone"]
     ATTACHED -->|"no"| RECLAIM{"has it been idle longer<br/>than the reclaim time?"}
     RECLAIM -->|"no"| LEAVE
     RECLAIM -->|"yes"| CLOSE["close the sandbox<br/>write reclaimed"]
@@ -1981,12 +1981,12 @@ flowchart TD
     FILE --> LEAVE
 ```
 
-**One gap this design did not close, and it was the dangerous one.** The crew could not tell whether
+**One gap this design did not close, and it was the dangerous one.** The system could not tell whether
 an operator was attached. `AttachSession` returns a `tmux` command that the operator runs against the
-container, and the crew recorded nothing about it afterwards, so a controller that reclaimed on idle
+container, and the system recorded nothing about it afterwards, so a controller that reclaimed on idle
 time alone would close a container an operator is typing into.
 
-Two signals would work, and the first is built. The crew asks the container whether the `quay` tmux
+Two signals would work, and the first is built. The system asks the container whether the `quay` tmux
 session inside it has a client, through one exec: `DockerProvider.Attached`, and the controller reads
 it before every reclaim. The other, stamping the row on attach and refreshing the stamp while the
 pane is open, was rejected: a stamp needs somebody to keep it fresh, how often is a number, and no
@@ -2051,7 +2051,7 @@ docker stats --no-stream --format "{{.Name}} {{.MemUsage}}"
 That number times the count of idle sessions is the whole benefit. If it is small, the reclaim time
 should be long, and the honest answer may be that reclaiming is not worth building yet.
 
-**Until those three runs exist, the crew ships with the reclaim time and the archive time unset, and
+**Until those three runs exist, the system ships with the reclaim time and the archive time unset, and
 an unset time means the controller does nothing.** That is today's behaviour, so the first version of
 this loop changes nothing until an operator sets a number. It refuses a number it was never given
 rather than choosing one.
@@ -2084,7 +2084,7 @@ controller reads a failure as attached, never as nobody, so a daemon that will n
 container held longer rather than a conversation closed under somebody's hands. A controller with no
 signal wired reclaims nothing at all.
 
-The exec is asked last, after the clock, so a crew whose reclaim time is unset never runs it. That is
+The exec is asked last, after the clock, so a system whose reclaim time is unset never runs it. That is
 why the unmeasured cost of the signal is not a reason to hold the mechanism back: with the number
 absent, the cost is zero.
 
@@ -2117,7 +2117,7 @@ stateDiagram-v2
 
 **What this slice does not do.**
 
-- It sets no number, and it will not until the three runs above exist. A crew upgraded to this build
+- It sets no number, and it will not until the three runs above exist. A system upgraded to this build
   behaves exactly as the one before it.
 - The controller does not reclaim a session an operator stopped, and never archives one.
 - It does not stop a container it cannot ask about. After a control plane restart the provider is
@@ -2136,12 +2136,12 @@ exists, and why the right half cannot be an ordinary session.
 Two corrections first, because the design brief for this section described it differently.
 
 **There is no `quay panel` command.** `cmd/quay/quay.go:159` refuses the word and says that `quay` on
-its own opens the crew, and that `p` shows or hides the conversation beside the console. The layout
+its own opens the system, and that `p` shows or hides the conversation beside the console. The layout
 itself lives in `internal/panel/panel.go`.
 
 **The right half already opens the driver, not an ordinary worker session.**
 `cmd/quay/panel.go:116` calls `OpenDriver` for the project the operator is standing in. The comment
-beside it says why. Opening the crew should not drop the operator into somebody else's job. Naming a
+beside it says why. Opening the system should not drop the operator into somebody else's job. Naming a
 session on the command line opens that one instead.
 
 What `internal/panel/panel.go` builds, from `Layout.Commands` at line 62:
@@ -2170,18 +2170,18 @@ is created. A third used to, and no longer does.
 
 - **The driver's own token, and the address beside it.** `taskEnv` in
   `internal/controlplane/server.go` writes `QC_GRPC_ADDR` and the driver's token when
-  `session.GetDriver()` is true. That token is the crew's own interface, refused the named list in
+  `session.GetDriver()` is true. That token is the system's own interface, refused the named list in
   `deny.go` and holding everything else. It is not the same thing as the credential a session gets:
   that one is minted for one job, carries the verbs its role declared, and expires with the job.
 - **The extra host paths.** `runArgs` in `internal/sandbox/docker.go` adds the driver mounts, and an
   ordinary session gets none of them. That is what makes the driver the glue between the machine and
-  the crew.
+  the system.
 - **The network is no longer one of them.** It was, and the two halves of this document disagreed
   about it for two days: this section said an ordinary session's container is not on a network that
   reaches the control plane, while section 5 handed that session a credential for an address it could
   not resolve. `quay-crew#435` settled it the way section 5 needs. Every sandbox joins a network the
   control plane is on, and only the control plane is on it. `QC_SANDBOX_NETWORK` still names the
-  crew's own network, which carries the store, the broker and the dashboards, and only the driver
+  system's own network, which carries the store, the broker and the dashboards, and only the driver
   joins that, when an operator asks for it.
 
 So the boundary is no longer locality. What a session may do is the credential, and the flag decides
@@ -2207,7 +2207,7 @@ Three things follow, and they decide the design rather than decorating it.
   one command. **So the job credential in section 5 travels per task, and it must not be written at
   sandbox birth.** A value written at birth would label every later task with the first task's
   grant. That is the same trap section 8c names for the trace context.
-- **An upgraded crew adopts containers born under the old build.** That is section 13's problem, and
+- **An upgraded system adopts containers born under the old build.** That is section 13's problem, and
   it is the reason it is a separate section.
 
 ### What the driver may do, and what it may not
@@ -2218,7 +2218,7 @@ driver's token only.
 Ten calls are refused outright, at `internal/controlplane/deny.go:33` to line 42: `SetSecret`,
 `ListSecrets`, `ImportSkill`, `AttachSkill`, `DetachSkill`, `ImportRole`, `AttachRole`, `DetachRole`,
 `SetSessionPermissionMode` and `ImportFlow`. An eleventh case is conditional: `SetContext` is refused
-only when the scope is `crew` (line 44). So the count depends on how a conditional refusal is
+only when the scope is `system` (line 44). So the count depends on how a conditional refusal is
 counted. Ten methods can never be called. One more can be called at two of its four scopes.
 
 `Dispatch` and `StartFlow` are not in the list, and the comment at line 20 says why. Starting a run
@@ -2230,7 +2230,7 @@ So the driver may do these things:
 - dispatch a task;
 - start, stop and answer a flow;
 - set context at the workspace, project and session scopes;
-- read what the crew already holds.
+- read what the system already holds.
 
 The driver may not do these things:
 
@@ -2238,7 +2238,7 @@ The driver may not do these things:
 - import, attach or detach a skill or a role;
 - set a session's permission mode;
 - import a flow;
-- write the crew's own context.
+- write the system's own context.
 
 **One gap worth naming, because it is the same argument as a skill.** `ImportHook` and `AttachHook`
 are not in the deny list. A hook is a command that runs on the session's own tool use. So a session
@@ -2288,7 +2288,7 @@ what the right half asked for.
 
 `quay-crew#397` records the cost. Taking a fix costs every running session, and nothing tells an
 operator that the stack is behind. On 27 August 2026 three symptoms were investigated as live
-defects. All three were already fixed, and the crew was running a build from five days earlier.
+defects. All three were already fixed, and the system was running a build from five days earlier.
 
 ### What drain already gives, and why it is not enough
 
@@ -2304,9 +2304,9 @@ It is not enough for three reasons, and none of them is a defect in drain.
   better than hiding one, and it is not the same as keeping the job.
 - **A task runs inside the control plane process.** `SettleTasks` runs once at startup and marks
   every session the store still calls running as failed
-  (`internal/controlplane/server.go:762`). The reason it writes is "the crew restarted while this
+  (`internal/controlplane/server.go:762`). The reason it writes is "the system restarted while this
   task was running, so it did not finish". So even without drain, a restart ends every task in
-  flight as far as the crew's records are concerned.
+  flight as far as the system's records are concerned.
 
 ### Where the job state must live
 
@@ -2331,7 +2331,7 @@ stream dies. Whether the process inside the container also stops is a property o
 was not tested for this document. The measurement is one run: start a long task, kill the control
 plane container, then run `docker exec quaycrew-<session id> ps -ef` and look for the model process.
 Until that run exists, the design assumes the answer is lost either way. That is the safe assumption,
-because the crew cannot read a stream it no longer holds.
+because the system cannot read a stream it no longer holds.
 
 ### What an in flight job does across a restart
 
@@ -2376,11 +2376,11 @@ it. That is a change to where the model runs, and this design does not make it.
 
 ### A version drift warning
 
-**Shipped on 27 August 2026.** The crew reports its own build, `quay version` prints all three, and
-any command says on standard error when the tool and the crew are different builds. What follows
+**Shipped on 27 August 2026.** The system reports its own build, `quay version` prints all three, and
+any command says on standard error when the tool and the system are different builds. What follows
 describes what was true before that, and it is kept because it says why the shape is this one.
 
-**Today the client cannot learn the crew's version at all.** This was checked against the code.
+**Today the client cannot learn the system's version at all.** This was checked against the code.
 
 - `quay version` prints the tool's own stamped build and nothing else
   (`cmd/quay/quay.go:134`, `cmd/quay/main.go:23`).
@@ -2393,9 +2393,9 @@ describes what was true before that, and it is kept because it says why the shap
   is about the image rather than about the control plane.
 - The only signal about the control plane itself is coarse. `internal/console/model.go:583` turns an
   `Unimplemented` answer from `GetInfo` into "this control plane is older than the tool". That fires
-  only when the crew is old enough to lack the call entirely.
+  only when the system is old enough to lack the call entirely.
 
-So a crew nineteen commits behind reports nothing, which is exactly the case `quay-crew#397`
+So a system nineteen commits behind reports nothing, which is exactly the case `quay-crew#397`
 describes.
 
 The fix is small and it is one field.
@@ -2403,7 +2403,7 @@ The fix is small and it is one field.
 - Stamp the control plane binary with its build at compile time, the way `make install` already
   stamps the tool.
 - Add `version` to `GetInfoResponse`, beside `sandbox_build`.
-- `quay version` prints three lines: this tool, the crew, and the sandbox image. Where any two
+- `quay version` prints three lines: this tool, the system, and the sandbox image. Where any two
   differ, it says so in one sentence and names `make upgrade`.
 - The header pane shows the same difference, because that is the surface an operator is already
   looking at.
@@ -2414,9 +2414,9 @@ command the operator runs, and the sentence names it.
 
 **Test the way off, as `quay-crew#397` asks.** Two scenarios, and both belong in the same change.
 
-- A client whose build differs from the crew's reports the difference, and the report names both
+- A client whose build differs from the system's reports the difference, and the report names both
   builds.
-- A client against a crew with no `version` field at all says the crew is too old to say, rather than
+- A client against a system with no `version` field at all says the system is too old to say, rather than
   showing a blank column.
 
 ### Upgrading without taking the job away
@@ -2433,7 +2433,7 @@ of it already does. Three steps in order, and each is worth having on its own.
   instead. This step carries a constraint, and `quay-crew#397` names it. A sandbox keeps the
   configuration it was made with. So an adopted container runs the `quay` from the older image, and
   it holds the environment it was born with. An adopted container is therefore safe for a
-  conversation and unsafe for a new capability. The crew must say which build a container was born
+  conversation and unsafe for a new capability. The system must say which build a container was born
   from, rather than assume. The session listing already has a column for how stale a session is.
 
 ## 14. Job and flow runs, after the trigger node
@@ -2576,8 +2576,8 @@ Where the trigger names the job that caused it, the run's own job hangs under th
 what makes the depth limit bound a flow that triggers itself.
 
 **What it does not do.** Nothing outside this process can raise a trigger. There is no ingress and no
-broker: `QC_KAFKA_SEEDS` is untouched, a crew with it unset loses the export and nothing else, and
-reading the event log to write a trigger row is slice 3 of the issue. Nothing in the crew raises one
+broker: `QC_KAFKA_SEEDS` is untouched, a system with it unset loses the export and nothing else, and
+reading the event log to write a trigger row is slice 3 of the issue. Nothing in the system raises one
 either: a job reaching a terminal phase does not write a trigger row yet, because which
 flows a finished job should trigger is a matching rule this slice does not decide. There is
 no command that lists triggers or shows why one failed, so a failed row is read from the log line or
@@ -2588,7 +2588,7 @@ from the database. `quay flow` is unchanged.
 They are **two tables and one mechanism.** The shapes look the same on purpose, and merging them
 would break both.
 
-The mechanism, which the crew already uses three times, for waits, for dispatch idempotency and for
+The mechanism, which the system already uses three times, for waits, for dispatch idempotency and for
 job events:
 
 - Write the row in the same transaction as the thing that happened, so there is no gap for a crash
@@ -2619,7 +2619,7 @@ than the audit export is.
 
 ### A job finishing is an event. Can it trigger a flow
 
-Yes, and it should. It is the case the crew needs most: a review finishes, so a fix starts.
+Yes, and it should. It is the case the system needs most: a review finishes, so a fix starts.
 
 The path, and every part of it already exists or is designed above:
 
@@ -2679,8 +2679,8 @@ caller outside quay can already read an answer as data. Ship it first for that r
 already prints the reply of a task it waited for. This closes the other half, which is reading back
 an answer the caller did not wait for. That is now the default for `quay task --dispatch`.
 
-**2. The crew says which build it is.** A `version` field on `GetInfoResponse`, stamped into the
-control plane binary at build time. `quay version` prints the tool, the crew and the sandbox image,
+**2. The system says which build it is.** A `version` field on `GetInfoResponse`, stamped into the
+control plane binary at build time. `quay version` prints the tool, the system and the sandbox image,
 and says when any two differ.
 
 *Removes no blocker, and removes the largest recorded waste.* `quay-crew#397` counts hours spent
@@ -2723,7 +2723,7 @@ is a state change nobody can replay.
 the archive time on the workspace, and an attached signal so a container an operator is typing into is
 never taken. Both times ship unset, and unset means the controller does nothing.
 
-*Removes nothing, and it is the slice that keeps a crew running for a month.* It cannot ship its
+*Removes nothing, and it is the slice that keeps a system running for a month.* It cannot ship its
 numbers until the three measurements in section 11 exist. It is written so that shipping it with no
 numbers changes no behaviour at all.
 
@@ -2777,5 +2777,5 @@ The five that are worth writing before the code:
   names the limit and the command that raises it.
 - Given a job running when the control plane restarts, when it comes back up, then the job
   is still declared, the task is marked failed, and attempt 2 runs in the same session.
-- Given a client whose build differs from the crew's, when any command runs, then the difference is
+- Given a client whose build differs from the system's, when any command runs, then the difference is
   reported and both builds are named.

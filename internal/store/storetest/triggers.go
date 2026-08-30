@@ -14,7 +14,7 @@ import (
 //
 // The claim is the part that has to be exact, and it is exactly the part a looser double would let
 // through: a memory store that claimed a row somebody else already held would keep a suite green
-// while the real crew started two runs, and paid for two, from one thing happening.
+// while the real system started two runs, and paid for two, from one thing happening.
 func runTriggerConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
@@ -190,7 +190,7 @@ func runTriggerConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the trigger reads %q saying %q, want it failed with the reason", failed.Status, failed.Reason)
 		}
 		// Not offered again, and not claimable again: a trigger nobody can start must not be read,
-		// refused and logged on every tick for as long as the crew runs.
+		// refused and logged on every tick for as long as the system runs.
 		waiting, err := s.PendingTriggers(ctx, 0)
 		if err != nil {
 			t.Fatalf("PendingTriggers: %v", err)

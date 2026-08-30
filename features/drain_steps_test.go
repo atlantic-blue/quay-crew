@@ -10,13 +10,13 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for putting the whole crew down before something else takes its containers away.
+// Steps for putting the whole system down before something else takes its containers away.
 func initializeDrainSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the operator drains the crew$`, func(ctx context.Context) error {
+	sc.Step(`^the operator drains the system$`, func(ctx context.Context) error {
 		return drain(ctx, false)
 	})
 
-	sc.Step(`^the operator drains the crew anyway$`, func(ctx context.Context) error {
+	sc.Step(`^the operator drains the system anyway$`, func(ctx context.Context) error {
 		return drain(ctx, true)
 	})
 
@@ -58,7 +58,7 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the refusal names what is still working$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the crew drained over a task that was still working")
+			return fmt.Errorf("the system drained over a task that was still working")
 		}
 		current, err := w.lastTask()
 		if err != nil {
@@ -72,7 +72,7 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^no sandbox the crew made is closed$`, func(ctx context.Context) error {
+	sc.Step(`^no sandbox the system made is closed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.provider.Boxes) == 0 {
 			return fmt.Errorf("no sandbox was ever created, so this scenario is not testing anything")
@@ -86,7 +86,7 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// drain asks the crew to put every live session down, keeping both the answer and the refusal: a
+// drain asks the system to put every live session down, keeping both the answer and the refusal: a
 // scenario about a refusal needs the error, and one about what went down needs the response.
 func drain(ctx context.Context, force bool) error {
 	w := worldFrom(ctx)

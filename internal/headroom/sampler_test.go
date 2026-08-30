@@ -54,7 +54,7 @@ func TestReadingTheLastSampleNeverReachesTheMachine(t *testing.T) {
 	}
 }
 
-// A crew that has not sampled yet says unknown rather than nothing at all, and it never says room.
+// A system that has not sampled yet says unknown rather than nothing at all, and it never says room.
 func TestASamplerNobodyHasRunSaysUnknown(t *testing.T) {
 	sampler := headroom.NewSampler(&countingSource{}, time.Hour)
 	latest := sampler.Latest()
@@ -66,16 +66,16 @@ func TestASamplerNobodyHasRunSaysUnknown(t *testing.T) {
 	}
 }
 
-// A crew with no source is a crew with no daemon to ask. It reports unknown for ever and never
+// A system with no source is a system with no daemon to ask. It reports unknown for ever and never
 // refuses to start.
-func TestACrewWithNothingToReadTheMachineWithReportsUnknown(t *testing.T) {
+func TestASystemWithNothingToReadTheMachineWithReportsUnknown(t *testing.T) {
 	sampler := headroom.NewSampler(nil, time.Hour)
 	ctx, stop := context.WithCancel(context.Background())
 	stop()
 	sampler.Run(ctx)
 	sampler.Once(context.Background())
 	if sampler.Latest().State() != headroom.StateUnknown {
-		t.Fatalf("a crew with no source says %q", sampler.Latest().State())
+		t.Fatalf("a system with no source says %q", sampler.Latest().State())
 	}
 	if sampler.Taken() != 0 {
 		t.Fatalf("it took %d samples with nothing to sample", sampler.Taken())
@@ -101,7 +101,7 @@ func TestASourceThatFailsLeavesUnknownAndSaysWhy(t *testing.T) {
 	}
 }
 
-// A read that works after one that failed replaces it, so a crew recovers on its own.
+// A read that works after one that failed replaces it, so a system recovers on its own.
 func TestAReadThatWorksAfterAFailureReplacesIt(t *testing.T) {
 	source := &countingSource{err: fmt.Errorf("the daemon is not answering")}
 	sampler := headroom.NewSampler(source, time.Hour)
@@ -117,14 +117,14 @@ func TestAReadThatWorksAfterAFailureReplacesIt(t *testing.T) {
 
 	latest := sampler.Latest()
 	if !latest.Used.Known() {
-		t.Fatal("the crew did not recover from a daemon that came back")
+		t.Fatal("the system did not recover from a daemon that came back")
 	}
 	if latest.Failed != "" {
 		t.Fatalf("it still carries %q from the read before", latest.Failed)
 	}
 }
 
-// The timer is the sampler's own. Run takes one immediately, because a crew that started ten seconds
+// The timer is the sampler's own. Run takes one immediately, because a system that started ten seconds
 // ago should not report unknown to the first operator who looks.
 func TestRunTakesOneSampleImmediatelyAndThenOnItsOwnTimer(t *testing.T) {
 	source := &countingSource{sample: headroom.Sample{

@@ -18,22 +18,22 @@ import (
 
 // A controller reads what is declared, compares it against the world, and closes the gap. These
 // tests drive one tick at a time against doubles for the two things it touches: the rows, and the
-// one interface every other caller of the crew uses.
+// one interface every other caller of the system uses.
 
-// crew is a control plane double. It records what it was asked to run and answers with a session,
+// system is a control plane double. It records what it was asked to run and answers with a session,
 // the way a dispatch that lets go of its task answers.
-type crew struct {
+type system struct {
 	mu sync.Mutex
-	// dispatched is every task the controller asked the crew to run.
+	// dispatched is every task the controller asked the system to run.
 	dispatched []*quaycrewv1.DispatchRequest
 	// tasks is the history each session has, which is what the controller reads an answer off.
 	tasks map[string][]*quaycrewv1.Task
-	// sessions are the conversations the crew holds, which is what a controller reads when a row
+	// sessions are the conversations the system holds, which is what a controller reads when a row
 	// says nothing about which one its job ran in.
 	sessions []*quaycrewv1.Session
-	// refuse makes the next dispatch fail, which is a crew that could not make a sandbox.
+	// refuse makes the next dispatch fail, which is a system that could not make a sandbox.
 	refuse error
-	// store is the rows this crew writes through, the way the real control plane writes a reclaim or
+	// store is the rows this system writes through, the way the real control plane writes a reclaim or
 	// an archive into the store rather than keeping it in the process. Nil leaves the two calls
 	// recording what they were asked and changing nothing, which is enough for the tests that do not
 	// read a session back.
@@ -48,10 +48,10 @@ type crew struct {
 	seen context.Context
 }
 
-func newCrew() *crew { return &crew{tasks: map[string][]*quaycrewv1.Task{}} }
+func newSystem() *system { return &system{tasks: map[string][]*quaycrewv1.Task{}} }
 
 // ReclaimSession takes a session's container back, the way the control plane does.
-func (c *crew) ReclaimSession(_ context.Context, req *quaycrewv1.ReclaimSessionRequest) (
+func (c *system) ReclaimSession(_ context.Context, req *quaycrewv1.ReclaimSessionRequest) (
 	*quaycrewv1.ReclaimSessionResponse, error) {
 	c.mu.Lock()
 	if c.refuseReclaim != nil {
@@ -70,7 +70,7 @@ func (c *crew) ReclaimSession(_ context.Context, req *quaycrewv1.ReclaimSessionR
 }
 
 // ArchiveSession files a session away, the way the control plane does.
-func (c *crew) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest) (
+func (c *system) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest) (
 	*quaycrewv1.ArchiveSessionResponse, error) {
 	c.mu.Lock()
 	c.archives = append(c.archives, req.GetId())
@@ -82,19 +82,19 @@ func (c *crew) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionR
 	return &quaycrewv1.ArchiveSessionResponse{}, nil
 }
 
-func (c *crew) reclaimed() []string {
+func (c *system) reclaimed() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.reclaims...)
 }
 
-func (c *crew) archived() []string {
+func (c *system) archived() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.archives...)
 }
 
-func (c *crew) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
+func (c *system) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.seen = ctx
@@ -114,14 +114,14 @@ func (c *crew) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*
 	return &quaycrewv1.DispatchResponse{Id: session, Handle: req.GetHandle()}, nil
 }
 
-func (c *crew) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error) {
+func (c *system) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return &quaycrewv1.ListTasksResponse{Tasks: c.tasks[req.GetSession()]}, nil
 }
 
 // lands closes the open task of the session the controller started, the way a model answering does.
-func (c *crew) lands(reply string) {
+func (c *system) lands(reply string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, tasks := range c.tasks {
@@ -134,7 +134,7 @@ func (c *crew) lands(reply string) {
 }
 
 // fails closes the open task as the model refusing it.
-func (c *crew) fails(why string) {
+func (c *system) fails(why string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, tasks := range c.tasks {
@@ -146,9 +146,9 @@ func (c *crew) fails(why string) {
 	}
 }
 
-// dispatchedInto is a task the crew is already running in a session, which is what a controller that
+// dispatchedInto is a task the system is already running in a session, which is what a controller that
 // died between the dispatch and writing the session onto the row left behind.
-func (c *crew) dispatchedInto(handle, project, text string) {
+func (c *system) dispatchedInto(handle, project, text string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.dispatched = append(c.dispatched, &quaycrewv1.DispatchRequest{Project: project, Handle: handle, Text: text})
@@ -159,14 +159,14 @@ func (c *crew) dispatchedInto(handle, project, text string) {
 	})
 }
 
-func (c *crew) ListSessions(_ context.Context, _ *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
+func (c *system) ListSessions(_ context.Context, _ *quaycrewv1.ListSessionsRequest) (*quaycrewv1.ListSessionsResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return &quaycrewv1.ListSessionsResponse{Sessions: append([]*quaycrewv1.Session(nil), c.sessions...)}, nil
 }
 
 // lastContext is what the last dispatch arrived under.
-func (c *crew) lastContext() context.Context {
+func (c *system) lastContext() context.Context {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.seen == nil {
@@ -175,7 +175,7 @@ func (c *crew) lastContext() context.Context {
 	return c.seen
 }
 
-func (c *crew) sent() int {
+func (c *system) sent() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.dispatched)
@@ -195,7 +195,7 @@ type rows struct {
 	beforeTakeOver func()
 	// limits is what each workspace allows, for the tests about a hold as long as the workspace says.
 	limits map[string]job.Limits
-	// sessions are the conversations the crew holds, which the fourth query reads.
+	// sessions are the conversations the system holds, which the fourth query reads.
 	sessions map[string]*quaycrewv1.Session
 	// sessionOrder keeps them in the order they were added, so a listing is stable.
 	sessionOrder []string
@@ -568,9 +568,9 @@ func declaredJob(title string) *job.Job {
 }
 
 // aController is a controller over the two doubles.
-func aController(t *testing.T) (*job.Controller, *rows, *crew) {
+func aController(t *testing.T) (*job.Controller, *rows, *system) {
 	t.Helper()
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	return job.NewController(kept, plane, nil, nil, nil), kept, plane
 }
 
@@ -582,7 +582,7 @@ func TestDeclaredJobRunsAndTheAnswerLandsOnTheRecord(t *testing.T) {
 
 	controller.Tick(ctx)
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhaseRunning || got.Session == "" {
 		t.Fatalf("the job is %q in session %q, want running in a session", got.Phase, got.Session)
@@ -640,14 +640,14 @@ func TestTickingAgainNeverSendsTheTaskTwice(t *testing.T) {
 	}
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1 however often the loop ticks", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1 however often the loop ticks", plane.sent())
 	}
 }
 
 // Two controllers over the same row is the same question asked concurrently, and the claim is what
 // answers it: one wins the row, the other finds it no longer pending.
 func TestTwoControllersOverOneRowSendOneTask(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	first := job.NewController(kept, plane, nil, nil, nil)
 	second := job.NewController(kept, plane, nil, nil, nil)
 	kept.add(declaredJob("read the electricity bill"))
@@ -669,7 +669,7 @@ func TestTwoControllersOverOneRowSendOneTask(t *testing.T) {
 	waiting.Wait()
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 }
 
@@ -690,7 +690,7 @@ func TestJobWhoseTaskIsStillOpenIsLeftAlone(t *testing.T) {
 		t.Fatal("job whose task is still open carries an answer or a finish")
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks", plane.sent())
 	}
 }
 
@@ -717,7 +717,7 @@ func TestATaskThatFailedLeavesTheJobFailedSayingWhy(t *testing.T) {
 //
 // It used to be failed, which lost the work: nothing raised it, and the operator had one word in a
 // listing that reads the same as a job that ran and did not work. See issue 465.
-func TestAJobTheCrewCouldNotGiveASandboxGoesBackToPending(t *testing.T) {
+func TestAJobTheSystemCouldNotGiveASandboxGoesBackToPending(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(declaredJob("read the electricity bill"))
 	ctx := context.Background()
@@ -761,7 +761,7 @@ func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
 	controller.Tick(ctx)
 
 	if plane.sent() != 2 {
-		t.Fatalf("the crew was asked to run %d tasks, want the first and the one after the machine had room",
+		t.Fatalf("the system was asked to run %d tasks, want the first and the one after the machine had room",
 			plane.sent())
 	}
 	running := kept.get(one.ID)
@@ -791,9 +791,9 @@ func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
 	}
 }
 
-// A dispatch the crew refuses is job that cannot run. It is failed with the reason rather than left
+// A dispatch the system refuses is job that cannot run. It is failed with the reason rather than left
 // running forever with nothing behind it.
-func TestADispatchTheCrewRefusesFailsTheJobWithTheReason(t *testing.T) {
+func TestADispatchTheSystemRefusesFailsTheJobWithTheReason(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(declaredJob("read the electricity bill"))
 	plane.refuse = errors.New("no sandbox could be made")
@@ -805,11 +805,11 @@ func TestADispatchTheCrewRefusesFailsTheJobWithTheReason(t *testing.T) {
 		t.Fatalf("the job is %q, want failed", got.Phase)
 	}
 	if !strings.Contains(got.Reason, "no sandbox could be made") {
-		t.Fatalf("the reason is %q, want what the crew said", got.Reason)
+		t.Fatalf("the reason is %q, want what the system said", got.Reason)
 	}
 }
 
-// The claim is checked by the crew rather than believed from the model, which is what it is for.
+// The claim is checked by the system rather than believed from the model, which is what it is for.
 func TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheJob(t *testing.T) {
 	controller, kept, plane := aController(t)
 	declared := declaredJob("read the electricity bill")
@@ -852,7 +852,7 @@ func TestAnAnswerThatCarriesWhatWasClaimedIsDone(t *testing.T) {
 
 // A file the job said would be there is asked about, not believed.
 func TestAFileTheJobClaimedIsCheckedAndItsAbsenceStopsTheJob(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, holds(false), nil)
 	declared := declaredJob("read the electricity bill")
 	declared.ExpectFile = "notes/bill.md"
@@ -872,7 +872,7 @@ func TestAFileTheJobClaimedIsCheckedAndItsAbsenceStopsTheJob(t *testing.T) {
 	}
 }
 
-// A crew that cannot answer the question stops the job rather than passing it. A check that
+// A system that cannot answer the question stops the job rather than passing it. A check that
 // quietly passes when it could not be run is the same false green as no check at all.
 func TestAClaimAboutAFileThatCannotBeCheckedStopsTheJob(t *testing.T) {
 	controller, kept, plane := aController(t)
@@ -895,7 +895,7 @@ func TestAClaimAboutAFileThatCannotBeCheckedStopsTheJob(t *testing.T) {
 }
 
 func TestAFileThatIsThereLeavesTheJobDone(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, holds(true), nil)
 	declared := declaredJob("read the electricity bill")
 	declared.ExpectFile = "notes/bill.md"
@@ -914,7 +914,7 @@ func TestAFileThatIsThereLeavesTheJobDone(t *testing.T) {
 // What a job cost is read from the conversation rather than from what the model said about
 // itself.
 func TestWhatTheJobSpentIsWrittenOntoTheRecord(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, spent(1234), nil, nil)
 	one := kept.add(declaredJob("read the electricity bill"))
 	ctx := context.Background()
@@ -940,7 +940,7 @@ func TestJobThatWaitsForSomethingIsLeftAlone(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks, want none", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want none", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhasePending {
 		t.Fatalf("the job is %q, want left pending", got.Phase)
@@ -958,7 +958,7 @@ func TestJobUnderAParentIsRun(t *testing.T) {
 	controller.Tick(context.Background())
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want one", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want one", plane.sent())
 	}
 	if got := kept.get(one.ID); got.Phase != job.PhaseRunning {
 		t.Fatalf("the job is %q, want it running", got.Phase)
@@ -976,7 +976,7 @@ func TestJobThatIsNotPendingIsNeverStarted(t *testing.T) {
 		controller.Tick(context.Background())
 
 		if plane.sent() != 0 {
-			t.Errorf("%s job was sent to the crew", phase)
+			t.Errorf("%s job was sent to the system", phase)
 		}
 	}
 }
@@ -1015,7 +1015,7 @@ func TestJobThatFailedRecordsThatItFailed(t *testing.T) {
 }
 
 // One job that cannot be claimed must not stop the others. A tick that gave up on the
-// first row would leave a crew where one bad row stops every good one.
+// first row would leave a system where one bad row stops every good one.
 func TestJobThatCannotBeClaimedDoesNotStopTheRest(t *testing.T) {
 	controller, kept, plane := aController(t)
 	kept.refuseStart = errors.New("the database went away")
@@ -1030,18 +1030,18 @@ func TestJobThatCannotBeClaimedDoesNotStopTheRest(t *testing.T) {
 	kept.refuseStart = nil
 	controller.Tick(context.Background())
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks after the store came back, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks after the store came back, want 1", plane.sent())
 	}
 }
 
-// A tick over an empty crew asks for nothing and writes nothing.
+// A tick over an empty system asks for nothing and writes nothing.
 func TestATickWithNothingToDoDoesNothing(t *testing.T) {
 	controller, _, plane := aController(t)
 
 	controller.Tick(context.Background())
 
 	if plane.sent() != 0 {
-		t.Fatalf("the crew was asked to run %d tasks over an empty crew", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks over an empty system", plane.sent())
 	}
 }
 

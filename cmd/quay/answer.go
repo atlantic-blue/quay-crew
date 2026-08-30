@@ -23,7 +23,7 @@ const (
 
 // runAnswer writes what a session came back with, and nothing else.
 //
-// This is the way an answer leaves the crew as data. Asking waits for its own answer and prints it,
+// This is the way an answer leaves the system as data. Asking waits for its own answer and prints it,
 // a dispatch lets go, and the history listing is written for a person: it shortens a reply at 120
 // characters and puts a clock and a speaker beside it. A caller piping that reads a listing where
 // the value belongs.

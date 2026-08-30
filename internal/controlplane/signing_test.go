@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Every script the crew runs at sandbox birth is valid shell.
+// Every script the system runs at sandbox birth is valid shell.
 //
 // The sandbox swallows a failure here on purpose, because a sandbox that cannot be told to sign
 // should not take the conversation down with it, so a script with a typo in it configures nothing

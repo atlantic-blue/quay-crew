@@ -1,4 +1,4 @@
-Feature: The crew is addressed by path
+Feature: The system is addressed by path
 
   You work in one place at a time and say where with an address: workspace, then project, then
   session. "me/house-bills" is a body of work; "me/house-bills/3cb04bf5" is one conversation in it.

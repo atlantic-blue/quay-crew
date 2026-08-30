@@ -28,20 +28,20 @@ edges:
   - [say, done]
 `
 
-// flowCrew is a crew with its two loops running, which is what a flow needs now: a run declares its
+// flowSystem is a system with its two loops running, which is what a flow needs now: a run declares its
 // step as a job and returns, the job controller sends the task, and the poller carries the
-// run on when the job ends. A crew with the loops stopped holds a run at its first step forever.
-func flowCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+// run on when the job ends. A system with the loops stopped holds a run at its first step forever.
+func flowSystem(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	return flowCrewWith(t, controlplane.Config{
+	return flowSystemWith(t, controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
 	})
 }
 
-func flowCrewWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
+func flowSystemWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	// Faster than the crew ticks in production, because these tests poll for an answer and the real
+	// Faster than the system ticks in production, because these tests poll for an answer and the real
 	// five seconds would be five seconds of sleeping per step.
 	cfg.JobTickEvery, cfg.FlowPollEvery = 5*time.Millisecond, 5*time.Millisecond
 	srv := controlplane.NewServer(cfg)
@@ -66,7 +66,7 @@ func graphFile(t *testing.T, body string) string {
 // back. A run advances behind the answer that started it, so the listing is polled rather than read
 // once.
 func TestQuayFlowImportsStartsAndShows(t *testing.T) {
-	client := flowCrew(t)
+	client := flowSystem(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -110,7 +110,7 @@ func TestQuayFlowImportsStartsAndShows(t *testing.T) {
 // A run that was halted and a run that went quiet must not read the same, so showing a stopped run
 // says why on its own line.
 func TestQuayFlowShowSaysWhyARunStopped(t *testing.T) {
-	client := flowCrew(t)
+	client := flowSystem(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -161,7 +161,7 @@ func TestQuayFlowStopHaltsARunAndSaysWhat(t *testing.T) {
 	// A model that takes a moment, so the run is genuinely still working when the stop lands.
 	// With an instant one the automation reaches its cap before a second command can be typed, and
 	// this would be racing rather than testing.
-	client := flowCrewWith(t, controlplane.Config{
+	client := flowSystemWith(t, controlplane.Config{
 		Store:    store.NewMemory(),
 		Runner:   &model.FakeRunner{Reply: "ok", Takes: 200 * time.Millisecond},
 		Provider: &sandbox.FakeProvider{},
@@ -209,7 +209,7 @@ edges:
 // A run waiting on a person is the one state the operator has to act on, so showing it says the
 // question and how to answer, and answering it carries the run on.
 func TestQuayFlowAnswerCarriesARunOn(t *testing.T) {
-	client := flowCrew(t)
+	client := flowSystem(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
@@ -345,7 +345,7 @@ func showWhen(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, run, wa
 // was empty. Showing the run printed a session identifier and the command that reads a session refused
 // that exact identifier, so the record was reachable through the database alone.
 func TestShowingAFinishedRunPrintsAWorkingWayToReadItsTasks(t *testing.T) {
-	client := flowCrew(t)
+	client := flowSystem(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))
@@ -400,7 +400,7 @@ func typedCommandIn(t *testing.T, output, starting string) []string {
 // answer is a field rather than a line of a transcript. That is worth nothing if reading a run does
 // not say how to get there.
 func TestShowingARunPrintsAWorkingWayToReadItsSteps(t *testing.T) {
-	client := flowCrew(t)
+	client := flowSystem(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 	mustRun(t, client, "flow", "import", graphFile(t, oneStepGraph))

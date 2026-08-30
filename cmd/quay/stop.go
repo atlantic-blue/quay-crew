@@ -14,7 +14,7 @@ import (
 
 // runStop halts the task one session is running, and keeps the session.
 //
-// There was no way to stop one session before this. `quay drain` puts the whole crew down for the
+// There was no way to stop one session before this. `quay drain` puts the whole system down for the
 // sake of one conversation, and what people reached for instead was killing the dispatch client,
 // which is not an interface and does not reliably end anything: on 27 August 2026 the same kill ended
 // one task at once and left another working for sixteen more minutes, merging two pull requests after
@@ -28,7 +28,7 @@ func runStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 			"a session is its id, its handle, or its address. The reason is kept on the task record,\n" +
 			"so whoever reads it later learns why it ended. The session itself stays: its conversation,\n" +
 			"its container and its history are untouched, and the next dispatch continues it.\n\n" +
-			"to put a whole session down instead, use the console. To put the crew down, quay drain")
+			"to put a whole session down instead, use the console. To put the system down, quay drain")
 	}
 	reason := ""
 	if len(args) == 2 {
@@ -42,8 +42,8 @@ func runStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 	resp, err := client.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: sessionID, Reason: reason})
 	if err != nil {
 		if status.Code(err) == codes.Unimplemented {
-			return fmt.Errorf("this crew is from before stopping one session was possible: " +
-				"upgrade it, or put the whole crew down with quay drain")
+			return fmt.Errorf("this system is from before stopping one session was possible: " +
+				"upgrade it, or put the whole system down with quay drain")
 		}
 		return err
 	}

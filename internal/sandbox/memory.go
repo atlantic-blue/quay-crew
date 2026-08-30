@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// A sandbox's memory files are composed: the model reads two files and the crew has four levels to
+// A sandbox's memory files are composed: the model reads two files and the system has four levels to
 // say something at, so each file carries the levels that belong to it, in order, marked.
 //
 // The marks are how an edit is read back. Something inside the sandbox writing into its own memory has
-// learned something, and the crew has to be able to tell which level it belongs to rather than
+// learned something, and the system has to be able to tell which level it belongs to rather than
 // throwing the lot into one. They are HTML comments, which is what markdown has for a note the reader
 // does not need.
 const (
@@ -20,7 +20,7 @@ const (
 // SkillsScope is the mark the index of a workspace's skills is written under.
 //
 // It is a section like a level of context and deliberately not one of them. A level is something
-// somebody wrote and the crew keeps; this is rendered from the skills the workspace holds, so reading
+// somebody wrote and the system keeps; this is rendered from the skills the workspace holds, so reading
 // it back would store a derived thing as though a person had typed it.
 //
 // It still has to be named when a memory file is read back, because text under a mark the build does
@@ -31,13 +31,13 @@ const SkillsScope = "skills"
 // RoleScope is the mark a session's role brief is written under.
 //
 // A section like the skills index and deliberately not a level of context: it is rendered from the
-// role the session runs as, so reading it back would store the crew's own rendering as though a
+// role the session runs as, so reading it back would store the system's own rendering as though a
 // person had typed it, and the next task would render it again underneath itself.
 const RoleScope = "role"
 
 // Section is one level's contribution to a memory file.
 type Section struct {
-	// Scope names the level, for example "crew".
+	// Scope names the level, for example "system".
 	Scope string
 	Body  string
 }
@@ -56,7 +56,7 @@ func Compose(sections []Section) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
-// Marked says whether a memory file was composed by the crew, which is what its marks are evidence
+// Marked says whether a memory file was composed by the system, which is what its marks are evidence
 // of. A file with none of them was written by somebody else: it may be a note an agent left, or a
 // CLAUDE.md that was there before any of this existed, but whoever wrote it had never seen what the
 // store holds, so it cannot be read as an edit of it.

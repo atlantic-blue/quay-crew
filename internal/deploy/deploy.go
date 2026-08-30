@@ -3,12 +3,12 @@
 // A workspace is a bag of secrets and a project is a name, so which cloud account a body of work
 // deploys into lived in one person's memory and was said out loud when somebody asked. The cost of
 // getting that wrong is a tree of jobs that writes correct infrastructure for an account it can
-// never reach, and nothing in the crew could tell.
+// never reach, and nothing in the system could tell.
 //
 // The rule lives here rather than in the command line tool because every way in writes through the
 // same control plane: the tool, the console, and every channel.
 //
-// It is written for one cloud, because this crew has one and a free text field is a record nobody
+// It is written for one cloud, because this system has one and a free text field is a record nobody
 // can check. The shapes below are what an account, a region and an assumable role look like on
 // Amazon Web Services.
 package deploy

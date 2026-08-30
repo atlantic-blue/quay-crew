@@ -27,7 +27,7 @@ You need Docker and a Claude subscription.
 
    This prints a token. Treat it like a password: it can spend your subscription.
 
-2. Install the crew. This is one command:
+2. Install the system. This is one command:
 
    ```
    make install
@@ -43,7 +43,7 @@ You need Docker and a Claude subscription.
        CONFIG --> TOOL["tool: build quay over the copy your shell runs"]
        TOOL --> HOOKS["hooks: build what every session runs under"]
        HOOKS --> IMAGE["sandbox-image: build the container a session is"]
-       IMAGE --> ASK{"is this crew already up?"}
+       IMAGE --> ASK{"is this system already up?"}
        ASK -- "no" --> UP["up: bring the stack up"]
        ASK -- "yes" --> COST["say what replacing the services costs, and wait"]
        COST -- "quay typed, or YES=1" --> UP
@@ -52,12 +52,12 @@ You need Docker and a Claude subscription.
    ```
 
    Run it again whenever you want. It never writes over the configuration file you edited. It never
-   replaces the services under a crew that is already working without telling you what that costs
+   replaces the services under a system that is already working without telling you what that costs
    and waiting for you to agree, because a task in flight ends with the control plane that runs it.
 
    The four pieces still work on their own. `make tool` builds the command line tool. `make hooks`
    builds the hooks. `make sandbox-image` builds the image. `make up` brings the stack up.
-   `make rebuild` is the three builds together and leaves a running crew alone, which is what to
+   `make rebuild` is the three builds together and leaves a running system alone, which is what to
    type when you want a new build and not a restart.
 
 3. Create a workspace, a project, and give it the token:
@@ -83,7 +83,7 @@ You need Docker and a Claude subscription.
    one task without moving, put the address first: `quay task demo/gardening "order the bulbs"`.
 
    `quay task` waits for the answer, which is what a short question wants. Real work takes minutes, so
-   `quay task --dispatch` starts the task and lets go of it: the crew runs it, and
+   `quay task --dispatch` starts the task and lets go of it: the system runs it, and
    `quay task list <session>` reads it back.
 
    A new sandbox container (`quaycrew-<session id>`) starts on the first task and is reused for the
@@ -100,24 +100,24 @@ Three keys decide what a task is. `QC_MODEL` is the backend: `claude-code` runs 
 your subscription, `echo` runs `echo` in the sandbox instead, which is what continuous integration
 runs because it has no subscription. `QC_CLAUDE_MODEL` is which model that backend runs against,
 either an alias for the newest of a tier (`opus`, `sonnet`) or a full name (`claude-opus-5`, which is
-what a crew gets when it says nothing). `QC_SANDBOX_IMAGE` is the container it all runs in.
+what a system gets when it says nothing). `QC_SANDBOX_IMAGE` is the container it all runs in.
 
 Say nothing about the model and the command line tool chooses for itself, and it chooses Sonnet.
-That is worth knowing, because a crew configured for Claude Code, holding an Opus subscription, was
+That is worth knowing, because a system configured for Claude Code, holding an Opus subscription, was
 running every session on Sonnet and nothing anywhere said so.
 
 ### What one command does not do
 
 It does not mint your model credential, which is why step 1 is yours and step 3 names it again.
 
-It does not upgrade a crew. `make upgrade` is that, and it does more: it fetches, it puts every live
-session down cleanly first, and it clears the sandbox containers the crew has forgotten. Running
+It does not upgrade a system. `make upgrade` is that, and it does more: it fetches, it puts every live
+session down cleanly first, and it clears the sandbox containers the system has forgotten. Running
 `make install` on a checkout you have just pulled builds the new code and restarts the stack, and it
 leaves those sessions to be ended by the replacement rather than put down.
 
 It does not check that the stack came up healthy. It exits when compose has started the containers,
 which is not the same as Postgres accepting connections. `make ps` and `quay version` say whether the
-crew is answering.
+system is answering.
 
 ## The gated integration test
 
@@ -154,9 +154,9 @@ at the first line of the daemon's answer, and nothing local says so.
 
 Two rules follow, and they cost nothing:
 
-- **A fixture proves itself before the test measures anything.** `aCrewOverRealContainers` asks the
+- **A fixture proves itself before the test measures anything.** `aSystemOverRealContainers` asks the
   daemon which containers it holds and names each session it needs, so a helper that built nothing
-  fails on the fixture rather than on a measurement that quietly says the crew is empty.
+  fails on the fixture rather than on a measurement that quietly says the system is empty.
 - **A tier that did not run gets reported as unrun, never as green.** On a machine with no daemon the
   only run is the `integration` job in continuous integration, so the number to read is in that job's
   log, and the job has to have finished before anything is claimed from it.
@@ -167,9 +167,9 @@ all three died in the helper. They compiled, they vetted, and they had never onc
 
 ## Naming a conversation
 
-The crew names a session's conversation, before anything runs in it. The name is a version 4
+The system names a session's conversation, before anything runs in it. The name is a version 4
 identifier, it is written on the session, and both roads into that conversation carry it: the task
-the crew dispatches, and the terminal an operator opens.
+the system dispatches, and the terminal an operator opens.
 
 ```mermaid
 sequenceDiagram
@@ -188,7 +188,7 @@ sequenceDiagram
     CP-->>YOU: "open-conversation <conversation>"
     Note over YOU,SBX: "the operator lands in the conversation doing the work"
     SBX-->>CP: "the stream reports its conversation"
-    Note over CP,DB: "checked against the name the crew gave, not adopted"
+    Note over CP,DB: "checked against the name the system gave, not adopted"
 ```
 
 Which flag carries the name depends on one question, and getting it wrong fails the task either way.
@@ -204,23 +204,23 @@ of the same file from inside the container, so the two cannot disagree.
 The identifier the model reports in its output stream is a check rather than the source. It used to be
 the source, which is why it arrived too late to be any use: it is read once the task is over, and
 attaching happens while the task runs. Now, a stream naming a different conversation means the runtime
-ignored the flag, and the crew says so in a line carrying both names, keeps its own, and leaves the
+ignored the flag, and the system says so in a line carrying both names, keeps its own, and leaves the
 other name findable rather than quietly adopting it.
 
 ### What this does not do
 
 - **A session running a task that named its own conversation cannot be opened.** That is a session
-  carried over from before this, caught mid task: the crew does not know that conversation's name and
+  carried over from before this, caught mid task: the system does not know that conversation's name and
   cannot until the task lands. Attaching is refused, in those words, rather than naming a second
   conversation and opening an empty one beside the job. The name lands on the session when the task
   finishes, and attaching works from then on.
 - **A transcript written under a name a session does not hold is not deleted, and not shown either.**
   Attaching used to name a conversation of its own while a first task was running, so a sandbox built
   before this can hold two transcripts for one session. Both are still on the host, under
-  `~/.quay/data/workspaces/<workspace>/claude/projects/`, and the crew reads the one the session holds.
+  `~/.quay/data/workspaces/<workspace>/claude/projects/`, and the system reads the one the session holds.
   Open another by name from inside the container:
   `docker exec -it quaycrew-<session id> claude --resume <conversation id>`.
-- **A crew with no data directory cannot see any transcript**, so it falls back to what this process
+- **A system with no data directory cannot see any transcript**, so it falls back to what this process
   has watched a model runtime open. That memory does not survive a restart, and a session whose first
   task ran before the restart would be told to start its conversation again. Set `QC_DATA_DIR`, which
   `make up` does.
@@ -265,7 +265,7 @@ docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
 shows you the conversation.
 
-### What the crew can ask a sandbox about itself
+### What the system can ask a sandbox about itself
 
 Two questions, both asked of the container by name and neither needing anything written down:
 
@@ -365,7 +365,7 @@ There are two networks, and the split is the whole of the answer.
 
 ```mermaid
 flowchart LR
-    subgraph CREW["the crew's own network"]
+    subgraph SYSTEM["the system's own network"]
         POSTGRES["postgres"]
         REDPANDA["redpanda"]
         OBS["grafana, loki, tempo, prometheus, otel collector"]
@@ -388,12 +388,12 @@ reach.
 
 **Every sandbox joins the sessions network, and it joins it at birth.** A sandbox keeps the
 configuration it was made with and there is no promotion: a network added when a task starts would
-miss every container already running. So a session that has to reach the crew has to be born able to,
+miss every container already running. So a session that has to reach the system has to be born able to,
 which is also why a change here needs the session started again rather than a task run again.
 
 **The network is not the permission.** Reaching the control plane buys nothing on its own. Every call
 is refused until the caller presents a credential, and the only credential a session ever holds is
-the one the crew mints for the job that task is running: bound to that job, carrying the
+the one the system mints for the job that task is running: bound to that job, carrying the
 verbs the job's role declared, expiring with the job. A session on the network holding no
 credential can do nothing at all, which is what an ordinary task is. See `docs/ORCHESTRATION.md`
 section 5 for what a role grants and `internal/controlplane/deny.go` for the refusals.
@@ -401,13 +401,13 @@ section 5 for what a role grants and `internal/controlplane/deny.go` for the ref
 **Nothing is configured for this.** The compose file creates the network and puts the control plane
 on it, and the makefile names it after the stack, so two stacks on one machine do not share one.
 `QC_SANDBOX_CONTROL_PLANE` is the address a session dials, `controlplane:50051` in the composed
-stack. Unset it and the crew tells a session nothing, and a session running a job then
+stack. Unset it and the system tells a session nothing, and a session running a job then
 holds a credential it cannot spend. The control plane says so on startup when the two disagree.
 
-**The driver is the one deliberate widening, and it is off.** `QC_SANDBOX_NETWORK` names the crew's
+**The driver is the one deliberate widening, and it is off.** `QC_SANDBOX_NETWORK` names the system's
 own network, and only the driver joins it. Left empty, which is what a fresh configuration ships
 with, the driver joins the sessions network like everything else, which is all it needs to drive the
-crew. Set it to `quaycrew_default` only when a driver on this machine has to reach the rest of the
+system. Set it to `quaycrew_default` only when a driver on this machine has to reach the rest of the
 stack, and read `docs/DRIVERS.md` first.
 
 ### What this does not do
@@ -417,14 +417,14 @@ stack, and read `docs/DRIVERS.md` first.
   session runs is a tmux socket inside the container rather than anything on the network, so there is
   nothing there to answer today. A network for each session is the shape that would close it, and
   nothing has needed it yet.
-- **It does not bound what a session reaches outside the crew.** A sandbox has the internet, because
-  a session clones repositories and installs packages. What is bounded here is the crew's own
+- **It does not bound what a session reaches outside the system.** A sandbox has the internet, because
+  a session clones repositories and installs packages. What is bounded here is the system's own
   services.
 - **It does not hide a port the host publishes.** A container reaches the host at its network's
   gateway, so anything the compose file publishes on every address of the machine is reachable from a
   sandbox as it is from anywhere else on the machine. The control plane's own port is published to
   loopback only, and the store publishes none.
-- **It does not reach a crew running its sessions on the host.** `QC_SANDBOX=local` has no container
+- **It does not reach a system running its sessions on the host.** `QC_SANDBOX=local` has no container
   and no network, and none of this applies to it.
 
 ## What the image pins
@@ -485,10 +485,10 @@ what you mount reaches every git process in the sandbox: your identity, your ali
 from any shell rather than only the process a task runs in. A workspace that mounts nothing is
 unchanged, because git ignores an include that is not there.
 
-Signing is the one part the crew decides rather than you, and it has to. Most configurations that
+Signing is the one part the system decides rather than you, and it has to. Most configurations that
 sign have it on for everything, against a key your machine holds and a container does not, so left
 alone it fails every commit a session makes. A workspace that mounts a signing key signs with it; a
-workspace that mounts none is told not to sign. The crew writes its answer after the include, and git
+workspace that mounts none is told not to sign. The system writes its answer after the include, and git
 takes the last value it reads.
 
 ```
@@ -497,7 +497,7 @@ quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519
 
 Mounted, not set. Setting it is refused, and the refusal says this instead. A private key in the
 environment is readable through `docker inspect` for the life of the container, which is the exposure
-mounting exists to avoid, and the key is the most sensitive thing this crew carries. Put the public
+mounting exists to avoid, and the key is the most sensitive thing this system carries. Put the public
 half on the account you push to as a signing key, alongside the one your own machine signs with: a
 commit signed in a sandbox is signed by a different key from one signed on your laptop.
 
@@ -573,11 +573,11 @@ volume is the answer: one clone, and a working tree per session.
 /home/agent/shared/worktrees/$QC_SESSION_ID/<name>  this session's working tree, on branch quay/$QC_SESSION_ID
 ```
 
-`QC_SESSION_ID` is on every sandbox, and it is the identifier the crew shows for the session. The
+`QC_SESSION_ID` is on every sandbox, and it is the identifier the system shows for the session. The
 working tree carries it because a clone records where its working trees are and every session sees the
 same paths: two sessions adding a tree at one path take each other's away.
 
-This is a convention, written down in the git skill's brief, rather than something the crew does for
+This is a convention, written down in the git skill's brief, rather than something the system does for
 you. Nothing removes a working tree when a session ends yet, so the volume keeps one directory per
 session that ever worked in a repository.
 

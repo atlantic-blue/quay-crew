@@ -1,4 +1,4 @@
-// Package repository holds what the crew knows about a repository address, and what kind of
+// Package repository holds what the system knows about a repository address, and what kind of
 // repository it is.
 //
 // Two things name a repository now: a job says where its work goes, and a project says where its
@@ -21,7 +21,7 @@ const Limit = 200
 //
 // The characters are the ones a forge allows in either segment. A segment that starts or ends with a
 // separator is refused, which is what keeps a stray slash or a trailing dot out of an address the
-// crew will later go looking for in an answer.
+// system will later go looking for in an answer.
 var shape = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // Tidy is the address as it is stored: owner/name, with the spellings that arrive from a browser's
@@ -48,7 +48,7 @@ func Shaped(address string) bool { return shape.MatchString(address) }
 // TooLong says whether an address is longer than anything a repository address is.
 func TooLong(address string) bool { return len(address) > Limit }
 
-// The two kinds of repository the crew knows, and the words the operator types.
+// The two kinds of repository the system knows, and the words the operator types.
 //
 // Public is the default everywhere one is chosen. A pipeline's minutes are free on a public
 // repository and metered on a private one, which is the cost rule that was living in a person's head
@@ -61,7 +61,7 @@ const (
 // Kind is the visibility a word names, and public where nothing was said.
 //
 // A word that is neither is refused rather than taken for the default: "internal" and "unlisted" are
-// both things a forge has, and quietly recording either as public would be the crew writing down a
+// both things a forge has, and quietly recording either as public would be the system writing down a
 // cost fact nobody told it.
 func Kind(word string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(word)) {
@@ -76,7 +76,7 @@ func Kind(word string) (string, error) {
 	}
 }
 
-// Usable refuses an address the crew could not act on.
+// Usable refuses an address the system could not act on.
 //
 // Held to the shape at the write, while the person who typed it is looking, because the alternative
 // is work that runs for an hour and then stops on an address that was never going to match anything.
@@ -97,7 +97,7 @@ func Usable(address string) error {
 //
 // It is the whole reason the kind is recorded. The acceptance run had the operator say "it should be
 // a public repository so we can use the CI", which is a cost rule that holds for every project this
-// crew will ever run and was written down nowhere.
+// system will ever run and was written down nowhere.
 func Costs(visibility string) string {
 	if visibility == Private {
 		return "a private repository, so its pipeline minutes are metered"
