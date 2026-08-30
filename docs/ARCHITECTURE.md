@@ -224,6 +224,15 @@ the moment anybody labelled the session. Every surface takes either identifier, 
 is what a channel sends and it is in notes and in scripts, but only one of them is printed and a
 refusal offers only that one.
 
+**Decided 29 August 2026: the `name` column reads three names, in the order of how much a reader
+should trust them.** The label the operator set, then the title the session was dispatched with, then
+the line the crew wrote about it. The label is first because it is the last word of the person who
+has seen the session, and the only one of the three they can change. The title is next because a
+person typed it too, at declaration, about the job the session was made for. A job is one long task
+and a description is written behind a task that has answered, so before this a screen of running jobs
+was a column of blank name cells. A title reaches a session only when the session is made, so a
+dispatch made again cannot rename a conversation the operator has since labelled.
+
 **Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
 two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
 learn both. `turn` came from conversation analysis and never said how long the job takes.
@@ -364,9 +373,15 @@ the blocking is done by an executor beside the reducer: it takes the commands th
 makes the call, and feeds the result back in as an event. One goroutine per outstanding dispatch,
 never one per run, and the reducer itself still touches no Docker, no Postgres and no model.
 
-Graphs are authored as files, loaded into the store, and versioned. A run is addressed at a project,
-because that is what a dispatch needs, so the trigger carries `workspace/project` and no node names a
-session:
+Graphs are authored as files, loaded into the store, and versioned. Two worked examples live in
+[`flows/`](../flows) at the root of this repository, beside `roles/` and `skills/` for the same reason:
+they are authored artefacts an operator imports rather than code the build links in. `quay flow import
+flows/transcript-release.yaml` imports one. Between them they use every node type above except
+`trigger`, and a unit test parses each one, because an example that dies at its first movement teaches
+the wrong shape to everybody who copies it.
+
+A run is addressed at a project, because that is what a dispatch needs, so the trigger carries
+`workspace/project` and no node names a session:
 
 ```yaml
 name: fix-red-pull-request

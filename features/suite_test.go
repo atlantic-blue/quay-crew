@@ -326,6 +326,7 @@ type world struct {
 	lastSecrets        *quaycrewv1.ListSecretsResponse
 	lastSkills         *quaycrewv1.ListSkillsResponse
 	lastRoles          *quaycrewv1.ListRolesResponse
+	lastRole           *quaycrewv1.GetRoleResponse
 }
 
 type worldKey struct{}
@@ -677,6 +678,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSeededHookSteps(sc)
 	initializeRoleSteps(sc)
 	initializeShippedRoleSteps(sc)
+	initializeShippedRoleVerbSteps(sc)
+	initializeRoleSkillSteps(sc)
 	initializeRoleSessionSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)

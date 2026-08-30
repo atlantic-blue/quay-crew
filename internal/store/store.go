@@ -127,6 +127,10 @@ type Birth struct {
 	Mode string
 	// Role is the role the session works as, empty for a session that works as nobody in particular.
 	Role string
+	// Title is what to call the session, from whoever dispatched it. A job puts its declared title
+	// here, so the name is on the row before the first task runs. Empty for a caller that has no name
+	// for the conversation yet.
+	Title string
 }
 
 // SessionFilter narrows a listing. The zero value is every live session the crew has.
