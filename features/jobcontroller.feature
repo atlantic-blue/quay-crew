@@ -48,7 +48,6 @@ Feature: A controller makes declared jobs happen
     And the controller ticks again
     Then the job is failed, and the reason says what the model said
 
-  # The model reporting on its own job is what the claim exists to stop.
   # A machine with no room to make a container is not a job that was wrong. This used to be failed,
   # which lost the work: nothing raised it, and the operator had one word in a listing to notice it
   # by. Pending is the state that exists for exactly this. See issue 465.
@@ -73,6 +72,7 @@ Feature: A controller makes declared jobs happen
     And the controller ticks again
     Then the job is done, and its answer is what the model said
 
+  # The model reporting on its own job is what the claim exists to stop.
   Scenario: A job whose answer does not carry what it claimed is stopped
     Given a job titled "read the electricity bill" that claims the answer carries "paid"
     When the controller ticks
