@@ -1,8 +1,10 @@
 package workspace_test
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/atlantic-blue/quay-crew/internal/name"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
 
@@ -61,5 +63,23 @@ func TestPathRoundTripsThroughItsString(t *testing.T) {
 	partial := workspace.Path{Workspace: "me", Session: "3cb04bf5"}
 	if partial.String() != "me" {
 		t.Errorf("a path with no project renders as %q, want %q", partial.String(), "me")
+	}
+}
+
+// The word the level above every workspace used to take is not an address, and no workspace may be
+// called it, so every command that takes an address refuses it here rather than sending the operator
+// away to look for a workspace that could never have existed.
+func TestParsePathRefusesTheWordTheLevelUsedToTake(t *testing.T) {
+	_, err := workspace.ParsePath(name.Retired)
+	if err == nil {
+		t.Fatalf("ParsePath(%q) = nil, want a refusal", name.Retired)
+	}
+	if !strings.Contains(err.Error(), name.System) {
+		t.Fatalf("the refusal is %q, and it never says to type %q", err, name.System)
+	}
+	// The word it became is not an address either, and it is refused by the rule that refuses any
+	// name a workspace cannot take rather than by this one, so it is only checked here for company.
+	if _, err := workspace.ParsePath("crew-quarters"); err != nil {
+		t.Fatalf("ParsePath(\"crew-quarters\") = %v, want an ordinary workspace name", err)
 	}
 }
