@@ -367,6 +367,7 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			Title: "read the electricity bill", Brief: "open it", Version: 3,
 			Phase: job.PhaseDone, Session: "session-1", Attempts: 2,
 			Answer: "the bill is due on the 14th", Reason: "it answered", Question: "which bill",
+			Told:        "the electricity one",
 			SpentTokens: 1234, ObservedVersion: 3, StartedAt: &started, FinishedAt: &finished,
 		}
 		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
@@ -387,6 +388,7 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			{"answer", found.Answer, declared.Answer},
 			{"reason", found.Reason, declared.Reason},
 			{"question", found.Question, declared.Question},
+			{"told", found.Told, declared.Told},
 			{"spent tokens", found.SpentTokens, declared.SpentTokens},
 			{"version", found.Version, declared.Version},
 			{"observed version", found.ObservedVersion, declared.ObservedVersion},

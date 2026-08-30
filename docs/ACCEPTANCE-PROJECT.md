@@ -16,9 +16,11 @@ a finding.
 
 The operator declares one job. After that the operator only answers questions.
 
-**Answering** is a reply to a question the crew asked. The command is `quay flow answer`. A job
-cannot put a question to a person yet: `job.asked` is named in the code and nothing writes it, so a
-run that needs a job to ask records a finding.
+**Answering** is a reply to a question the crew asked. There are two commands, because there are two
+things that ask. `quay flow answer` answers an ask node in a graph. `quay job answer` answers a
+question a session put about the job it is running, which shipped on 30 August 2026 out of the first
+run's own finding, `quay-crew#446`: a session chose a store that bills while idle and the operator
+found out by asking.
 
 **Driving** is anything else the operator types that changes the job. A second `quay job create` is
 driving. A `quay task --dispatch` is driving. A `quay job stop` is driving. An edit to a file is

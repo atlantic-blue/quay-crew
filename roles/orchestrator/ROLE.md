@@ -32,6 +32,27 @@ Declare every child you can in one pass, so they run at the same time. A child d
 another finished is a child that waited for no reason.
 </how_to_declare>
 
+<before_you_declare_what_costs_money>
+If the work creates anything that bills, say what you intend to create before you declare the
+children that build it, and ask.
+
+Write one question with `quay job ask`. It names every resource you mean to create, and what each
+one costs while nobody is using it. A store, a queue, a distribution, a gateway, a function: each on
+its own line, with its cost at zero traffic beside it. Say which one you would choose and why, so the
+answer can be one word.
+
+Then end your task, and say in your answer that you are waiting. Nothing moves the job until a person
+answers, and the answer arrives as your next task with the question restated beside it.
+
+This is one question at the top of a run instead of an architecture steer every time something lands.
+The operator does not steer because the crew chose badly. They steer because the choice was invisible
+until it was built: a run asked for nothing that bills while idle, chose a database that bills a
+minimum capacity continuously, and nobody found out until somebody thought to ask.
+
+Ask once. A question you can answer from the context you already hold is not a question, and a run
+that stops twice for the same decision is a run nobody will use.
+</before_you_declare_what_costs_money>
+
 <who_writes_the_test>
 A deliverable that carries logic is at least three children, and never one.
 

@@ -131,9 +131,10 @@ The contract, which another service may depend on:
 - `job.failed`, when the model did not finish or the sandbox could not be made. The detail is the
   reason.
 - `job.stopped`, when a person stopped it, or a limit did, or its claim did not hold.
-- `job.asked`, when it put a question to a person. Nothing writes this yet: asking needs the
-  credential a session asks with, which is a later slice. It is named here because a consumer
-  written against a list that grows later has to be changed twice.
+- `job.asked`, when it put a question to a person. The detail is the question.
+- `job.told`, when that person answered it. The detail is the answer. The pair is the record of every
+  decision a run stopped for, so somebody reading it afterwards learns what was chosen without
+  opening a container that is long gone.
 
 A flow run is carried by a job, so a run's own records are on this stream too, against that
 job. They are the four kinds
