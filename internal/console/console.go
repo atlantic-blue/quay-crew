@@ -46,7 +46,7 @@ var movedViews = map[string]string{
 }
 
 // featuresAreACommand is what to type instead of the view that went.
-const featuresAreACommand = "what this build does is a command now: type features"
+const featuresAreACommand = "what this build does is a command now, so type features"
 
 // moved says whether a word the console used to open has gone, and what to type instead of it.
 func moved(typed string) (string, bool) {
