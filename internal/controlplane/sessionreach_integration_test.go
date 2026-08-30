@@ -299,7 +299,7 @@ func aCrewWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachableC
 // grants: job running as none holds a credential that may call nothing.
 func (c *reachableCrew) holdRole(ctx context.Context, t *testing.T, name string, verbs ...string) {
 	t.Helper()
-	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nmay:\n",
+	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nverbs:\n",
 		name)
 	for _, verb := range verbs {
 		manifest += "  - " + verb + "\n"

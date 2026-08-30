@@ -121,16 +121,16 @@ func TestEachShippedRoleMayOnlyWhatItsBriefAsksFor(t *testing.T) {
 	for _, one := range roles {
 		expected, known := want[one.Name]
 		if !known {
-			if len(one.May_) != 0 {
+			if len(one.Verbs) != 0 {
 				t.Errorf("%s may %s, and its brief declares nothing; default deny is what makes a grant mean something",
-					one.Name, strings.Join(one.May_, ", "))
+					one.Name, strings.Join(one.Verbs, ", "))
 			}
 			continue
 		}
 		granted++
-		if strings.Join(one.May_, ", ") != strings.Join(sorted(expected), ", ") {
+		if strings.Join(one.Verbs, ", ") != strings.Join(sorted(expected), ", ") {
 			t.Errorf("%s may %s, and this build grants it %s",
-				one.Name, strings.Join(one.May_, ", "), strings.Join(sorted(expected), ", "))
+				one.Name, strings.Join(one.Verbs, ", "), strings.Join(sorted(expected), ", "))
 		}
 	}
 	if granted != len(want) {

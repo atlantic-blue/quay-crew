@@ -853,9 +853,9 @@ message GetRoleResponse {
   // brief is the whole instruction a session running as this role is given. It travels here and
   // nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
   string brief = 2;
-  // may is what a session running as this role may call, sorted. Empty is a role that may call
-  // nothing, which is the default.
-  repeated string may = 3;
+  // verbs is what a session running as this role may call, sorted, in the word kubernetes uses for
+  // the same question. Empty is a role that may call nothing, which is the default.
+  repeated string verbs = 3;
   // held_by names every workspace that attached this role for itself, sorted. A role the crew holds
   // says so on the role and reaches every workspace without being named here.
   repeated string held_by = 4;

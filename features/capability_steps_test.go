@@ -494,7 +494,7 @@ func asTheSession(ctx context.Context) quaycrewv1.ControlPlaneServiceClient {
 func roleFilesThatMay(name string, verbs []string) []*quaycrewv1.RoleFile {
 	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n", name)
 	if len(verbs) > 0 {
-		manifest += "may:\n"
+		manifest += "verbs:\n"
 		for _, verb := range verbs {
 			manifest += "  - " + verb + "\n"
 		}

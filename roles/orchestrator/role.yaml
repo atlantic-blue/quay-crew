@@ -6,7 +6,7 @@ receives:
   - job
   - context
   - skills
-may:
+verbs:
   - job.create
   - job.read
   - job.stop
