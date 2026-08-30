@@ -409,6 +409,18 @@ func (p *Postgres) ReleaseJob(ctx context.Context, id string, events []*job.Even
 		job.PhasePending, job.PhaseRunning)
 }
 
+// RequeueJob puts a running job back to pending because the crew could not start it.
+//
+// The condition on the lease owner is in the same statement as the write, so a controller that lost
+// the row cannot put another controller's job back under it.
+func (p *Postgres) RequeueJob(ctx context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "requeue job", job.ErrHeld, events, `
+		update jobs set phase = $2, reason = $3, lease_owner = '', lease_until = null,
+			started_at = null, updated_at = now()
+		where id = $1 and phase = $4 and lease_owner = $5`,
+		job.PhasePending, back.Reason, job.PhaseRunning, back.Owner)
+}
+
 // RenewLease moves the holder's hold on. Only the holder renews, so a controller that lost a row
 // cannot take it back by renewing.
 func (p *Postgres) RenewLease(ctx context.Context, id string, lease job.Lease) error {

@@ -394,6 +394,7 @@ type Store interface {
 	HoldJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
 	TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
 	ReleaseJob(ctx context.Context, id string, events []*job.Event) (*job.Job, error)
+	RequeueJob(ctx context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error)
 	RenewLease(ctx context.Context, id string, lease job.Lease) error
 	RecordJobSession(ctx context.Context, id, session string) error
 	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)

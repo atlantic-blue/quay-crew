@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,6 +208,63 @@ func TestJobWhoseTaskFailedIsFailedOnTheRowInPostgres(t *testing.T) {
 
 	if failed.GetReason() == "" {
 		t.Fatal("the job failed and the row says nothing about why")
+	}
+}
+
+// The failure this exists for, against the database that holds the row: a machine with no room to
+// make a container leaves the job pending rather than failed, and the job runs when the room comes
+// back. Failing it is how declared work was lost. See issue 465.
+func TestJobTheCrewCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.T) {
+	truncate(t)
+	kept, err := store.NewPostgres(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	t.Cleanup(kept.Close)
+	// The daemon has taken the request and not answered, which is what a busy machine looks like from
+	// here. The budget is short because a test that waits the real minute out is a test nobody runs.
+	provider := &sandbox.FakeProvider{Hold: make(chan struct{})}
+	s := controlplane.NewServer(controlplane.Config{
+		Store: kept, Runner: &model.FakeRunner{Reply: "the bill is due on the 14th"},
+		Provider: provider, Secrets: secrets.NewMemory(),
+		StartWait: 200 * time.Millisecond, ExportWait: 200 * time.Millisecond,
+	})
+	ctx := context.Background()
+	_, project := aProjectOnPostgres(t, s)
+
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "read the electricity bill", Brief: "open it and say when it is due",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	id := declared.GetJob().GetId()
+
+	waiting := waitForJob(t, s, id, job.PhasePending)
+	if !strings.Contains(waiting.GetReason(), "waits for room") {
+		t.Fatalf("the job says %q, and an operator reading it cannot tell it is waiting", waiting.GetReason())
+	}
+	if waiting.GetFinishedAt() != nil {
+		t.Fatal("a job that never started carries the moment it finished")
+	}
+
+	close(provider.Hold)
+
+	done := waitForJob(t, s, id, job.PhaseDone)
+	if done.GetAnswer() != "the bill is due on the 14th" {
+		t.Fatalf("the answer on the row is %q", done.GetAnswer())
+	}
+	if done.GetAttempts() < 2 {
+		t.Fatalf("the job ran on attempt %d, want the one after the machine had room", done.GetAttempts())
+	}
+	// One conversation, however many times the crew had to try: the retry lands where the job has
+	// been all along rather than starting a second one.
+	sessions, err := s.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions.GetSessions()) != 1 {
+		t.Fatalf("the crew holds %d sessions, want the one the job ran in", len(sessions.GetSessions()))
 	}
 }
 

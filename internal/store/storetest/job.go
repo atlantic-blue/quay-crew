@@ -806,6 +806,14 @@ func titlesOf(listed []*job.Job) []string {
 	return titles
 }
 
+func eventKindsOf(events []*job.Event) []string {
+	kinds := make([]string, 0, len(events))
+	for _, event := range events {
+		kinds = append(kinds, event.Kind)
+	}
+	return kinds
+}
+
 func startedEvent(id, workspace, project string) *job.Event {
 	return &job.Event{
 		ID: store.NewID(), Kind: job.EventStarted, Job: id,
@@ -1006,6 +1014,103 @@ func runJobLeaseConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		runnable, _ := s.RunnableJob(ctx, 0)
 		if len(runnable) != 1 || runnable[0].ID != id {
 			t.Fatalf("the runnable job is %v, want the one that was released", titlesOf(runnable))
+		}
+	})
+
+	// The holder giving up an attempt it made, which is a different movement from a release: the job
+	// has a session and a live lease, and the controller that holds it is the one putting it back.
+	t.Run("a job the crew could not start goes back to pending, and is offered again", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if err := s.RecordJobSession(ctx, id, "session-1"); err != nil {
+			t.Fatalf("RecordJobSession: %v", err)
+		}
+
+		back := job.Requeue{Owner: "controller-a", Reason: "it waits for room"}
+		put, err := s.RequeueJob(ctx, id, back, []*job.Event{releasedEvent(id, workspace, project)})
+		if err != nil {
+			t.Fatalf("RequeueJob: %v", err)
+		}
+		if put.Phase != job.PhasePending {
+			t.Fatalf("the job is %q, want pending", put.Phase)
+		}
+		if put.Reason != "it waits for room" {
+			t.Fatalf("the job says %q, want why it is waiting", put.Reason)
+		}
+		if put.LeaseOwner != "" || put.LeaseUntil != nil {
+			t.Fatalf("the job is still held by %q until %v", put.LeaseOwner, put.LeaseUntil)
+		}
+		if put.FinishedAt != nil {
+			t.Fatalf("a job that never started carries a finish at %v", put.FinishedAt)
+		}
+		// What it has already cost stays on the row: attempts is how many times it was tried.
+		if put.Attempts != 1 {
+			t.Fatalf("the job has been tried %d times, want 1", put.Attempts)
+		}
+		// And the record of the movement landed with it, in the same transaction.
+		events, err := s.ListJobEvents(ctx, id)
+		if err != nil {
+			t.Fatalf("ListJobEvents: %v", err)
+		}
+		if kinds := eventKindsOf(events); kinds[len(kinds)-1] != job.EventReleased {
+			t.Fatalf("the records read %v, want the last to say the job was given up", kinds)
+		}
+
+		runnable, _ := s.RunnableJob(ctx, 0)
+		if len(runnable) != 1 || runnable[0].ID != id {
+			t.Fatalf("the runnable job is %v, want the one that was put back", titlesOf(runnable))
+		}
+	})
+
+	t.Run("a job another controller holds is not one this controller may put back", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+
+		back := job.Requeue{Owner: "controller-b", Reason: "it waits for room"}
+		if _, err := s.RequeueJob(ctx, id, back,
+			[]*job.Event{releasedEvent(id, workspace, project)}); !errors.Is(err, job.ErrHeld) {
+			t.Fatalf("a controller put another controller's job back and got %v, want ErrHeld", err)
+		}
+		found, _ := s.GetJob(ctx, id)
+		if found.Phase != job.PhaseRunning || found.LeaseOwner != "controller-a" {
+			t.Fatalf("the job is %q held by %q, want running and still held", found.Phase, found.LeaseOwner)
+		}
+	})
+
+	t.Run("a job that already ended is never put back", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if _, err := s.LandJob(ctx, id, job.Landing{Phase: job.PhaseDone, Answer: "the 14th"},
+			answeredEvent(id, workspace, project)); err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+
+		back := job.Requeue{Owner: "controller-a", Reason: "it waits for room"}
+		if _, err := s.RequeueJob(ctx, id, back,
+			[]*job.Event{releasedEvent(id, workspace, project)}); !errors.Is(err, job.ErrHeld) {
+			t.Fatalf("a job that had already ended was put back and got %v, want ErrHeld", err)
+		}
+		found, _ := s.GetJob(ctx, id)
+		if found.Phase != job.PhaseDone || found.Answer != "the 14th" {
+			t.Fatalf("the job is %q answering %q, want the answer it ended with", found.Phase, found.Answer)
 		}
 	})
 

@@ -459,6 +459,26 @@ func (r *rows) ReleaseJob(_ context.Context, id string, events []*job.Event) (*j
 	return &kept, nil
 }
 
+// RequeueJob puts a running job back to pending, the way a store does when the controller holding it
+// could not start it. Only where this controller still holds the lease.
+func (r *rows) RequeueJob(_ context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning || one.LeaseOwner != back.Owner {
+		return nil, job.ErrHeld
+	}
+	one.Phase, one.Reason = job.PhasePending, back.Reason
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.StartedAt, one.UpdatedAt = nil, time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
 func (r *rows) RenewLease(_ context.Context, id string, lease job.Lease) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -689,6 +709,85 @@ func TestATaskThatFailedLeavesTheJobFailedSayingWhy(t *testing.T) {
 	}
 	if !strings.Contains(got.Reason, "the model refused this task") {
 		t.Fatalf("the reason is %q, want what the model said", got.Reason)
+	}
+}
+
+// The failure this whole slice exists for. A machine with no room to make a container is not a job
+// that was wrong, so the job goes back to pending and a later tick tries it again.
+//
+// It used to be failed, which lost the work: nothing raised it, and the operator had one word in a
+// listing that reads the same as a job that ran and did not work. See issue 465.
+func TestAJobTheCrewCouldNotGiveASandboxGoesBackToPending(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(declaredJob("read the electricity bill"))
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	plane.fails(job.NoSandbox + ": rpc error: code = DeadlineExceeded desc = " +
+		"waited 2m7s for the sandbox to be created and gave up")
+	controller.Tick(ctx)
+
+	got := kept.get(one.ID)
+	if got.Phase != job.PhasePending {
+		t.Fatalf("the job is %q saying %q, want pending", got.Phase, got.Reason)
+	}
+	if got.FinishedAt != nil {
+		t.Fatal("a job that never started carries the moment it finished")
+	}
+	if !strings.Contains(got.Reason, "waits for room") {
+		t.Fatalf("the reason is %q, and it does not say the job is waiting", got.Reason)
+	}
+	if got.LeaseOwner != "" || got.LeaseUntil != nil {
+		t.Fatalf("the job is still held by %q, so no controller may pick it up", got.LeaseOwner)
+	}
+	// The record says it was given up rather than that it failed, so a reader is never told the job
+	// was wrong.
+	kinds := kept.kinds(one.ID)
+	if kinds[len(kinds)-1] != job.EventReleased {
+		t.Fatalf("the records read %v, want the last one to say the job was given up", kinds)
+	}
+}
+
+// Pending is only the right answer if something comes back for it, so this is the half that proves
+// the work is not lost: a later tick starts it again, and the answer lands on the row.
+func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(declaredJob("read the electricity bill"))
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	plane.fails(job.NoSandbox + ": the daemon had no room")
+	controller.Tick(ctx)
+	controller.Tick(ctx)
+
+	if plane.sent() != 2 {
+		t.Fatalf("the crew was asked to run %d tasks, want the first and the one after the machine had room",
+			plane.sent())
+	}
+	running := kept.get(one.ID)
+	if running.Attempts != 2 {
+		t.Fatalf("the job has been tried %d times, want 2", running.Attempts)
+	}
+	// The line about waiting went with the pending phase it described. A running job that still says
+	// it is waiting for room is a row that reads as two things at once.
+	if running.Reason != "" {
+		t.Fatalf("the job is running and still says %q", running.Reason)
+	}
+
+	plane.lands("the bill is due on the 14th")
+	controller.Tick(ctx)
+
+	got := kept.get(one.ID)
+	if got.Phase != job.PhaseDone {
+		t.Fatalf("the job is %q saying %q, want done", got.Phase, got.Reason)
+	}
+	if got.Answer != "the bill is due on the 14th" {
+		t.Fatalf("the answer is %q", got.Answer)
+	}
+	// The reason the wait was written under is gone, so nothing says the job is waiting for a machine
+	// it has already run on.
+	if got.Reason != "" {
+		t.Fatalf("the finished job still says %q", got.Reason)
 	}
 }
 

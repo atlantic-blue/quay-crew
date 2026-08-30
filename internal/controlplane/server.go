@@ -1246,18 +1246,26 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		// operator will type into while its first task is still running. The task itself marks it
 		// running too, which covers the waited path, and doing it twice costs a row update.
 		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+		// The task is written down before the answer, for the same reason and one more. A caller told
+		// the dispatch happened reads the history next, and a history that still ends on the task
+		// before this one reads as though this one was never asked for. The one more is that a
+		// controller sending a job's task again reads that history to decide what came of it: written
+		// inside the goroutine, the record of the attempt before is still the last one there for as
+		// long as the goroutine takes to start, and the controller would answer for this attempt with
+		// the last attempt's failure.
+		opened := s.beginTask(ctx, session, req.GetText())
 		// Detached from the caller's context as well as from its patience. The caller is a console that
 		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
 		// carrying that context would be killed by the very thing that started it.
 		s.tasking.Add(1)
-		go func(session *quaycrewv1.Session, text, credential string) {
+		go func(session *quaycrewv1.Session, text, credential string, opened *quaycrewv1.TaskEvent) {
 			defer s.tasking.Done()
-			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential)
-		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()))
+			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, opened)
+		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()), opened)
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()))
+	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1267,7 +1275,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // task runs one task of a session and records what came of it, whichever way it was dispatched. Both
 // roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
-func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string) (string, error) {
+//
+// opened is the task record a caller has already written, which a detached dispatch does before it
+// answers. Nil opens one here, which is what the waited road does.
+func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string,
+	opened *quaycrewv1.TaskEvent) (string, error) {
 	// Registered before anything runs, so a stop that arrives a moment after the dispatch has
 	// something to cancel. The task runs under this context from here down, which is what makes
 	// `quay stop` end the model rather than only mark a row.
@@ -1278,7 +1290,10 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
 	// working for half an hour read idle, with the task burning its tokens invisible.
 	s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
-	task := s.beginTask(ctx, session, text)
+	task := opened
+	if task == nil {
+		task = s.beginTask(ctx, session, text)
+	}
 	// Emitted here rather than where the task was asked for, so both roads say the same thing: a
 	// detached task and a waited one are one path from this line down.
 	s.emit(ctx, session, KindSessionStarted, text)
@@ -1289,7 +1304,10 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 			return "", s.landStopped(ctx, session, task, model.Response{}, reason)
 		}
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
-		failure := "the session's sandbox could not be created: " + err.Error()
+		// The crew's own words for a task it never started, from the one place they are written down.
+		// The controller reads this to tell a job it could not start from a job that was wrong, and
+		// puts the first back to pending rather than failing it.
+		failure := job.NoSandbox + ": " + err.Error()
 		s.landTask(ctx, session, task, StatusFailed, "", failure)
 		s.emit(ctx, session, KindSessionErrored, failure)
 		return "", sandboxError(err, "create sandbox")
