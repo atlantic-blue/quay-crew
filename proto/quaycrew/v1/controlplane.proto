@@ -1180,6 +1180,13 @@ message WorkspaceLimits {
   // archive_seconds is how long a reclaimed session waits before the crew files it away. Zero is
   // unset, and unset means the controller archives nothing here.
   int32 archive_seconds = 7;
+  // request_memory_mib is the memory one sandbox in this workspace asks for, in mebibytes, which is
+  // the unit the room view prints. The crew adds these up and admits a job only where its runtime
+  // still has that much unallocated. Zero takes the crew's own measured request.
+  int32 request_memory_mib = 8;
+  // request_processor_percent is the processor share one sandbox here asks for, in per cent of one
+  // processor, which is the unit the room view prints beside the memory. Zero takes the crew's own.
+  int32 request_processor_percent = 9;
 }
 
 message GetWorkspaceLimitsRequest {

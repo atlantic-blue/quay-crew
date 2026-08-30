@@ -387,6 +387,7 @@ type Store interface {
 	HeldJob(ctx context.Context, owner string, limit int) ([]*job.Job, error)
 	ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error)
 	StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
+	HoldJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
 	TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
 	ReleaseJob(ctx context.Context, id string, events []*job.Event) (*job.Job, error)
 	RenewLease(ctx context.Context, id string, lease job.Lease) error

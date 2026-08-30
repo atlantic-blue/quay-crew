@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 )
@@ -153,6 +154,10 @@ const (
 	EventClaimed  = "job.claimed"
 	EventReleased = "job.released"
 	EventStarted  = "job.started"
+	// EventHeld is written when the crew will not start a job yet: the machine has no room for its
+	// sandbox. It is not a movement, because the job stays pending, and it is written once per
+	// reason rather than once per tick.
+	EventHeld     = "job.held"
 	EventAnswered = "job.answered"
 	EventFailed   = "job.failed"
 	EventStopped  = "job.stopped"
@@ -417,6 +422,17 @@ type Limits struct {
 	// ArchiveSeconds is how long a reclaimed session here waits before the crew files it away. Zero
 	// is unset, and it ships unset for the same reason.
 	ArchiveSeconds int
+	// RequestMemoryBytes and RequestProcessor are what one sandbox in this workspace asks the machine
+	// for. The crew adds up what it has placed and admits a job only where its runtime still has that
+	// much unallocated, so a workspace whose jobs run heavier says so here rather than being counted
+	// the same as every other. Zero on either takes the crew's own measured request.
+	RequestMemoryBytes int64
+	RequestProcessor   int
+}
+
+// Request is what one sandbox in this workspace asks for, or the crew's own where it says nothing.
+func (l Limits) Request(standard capacity.Request) capacity.Request {
+	return capacity.Request{Memory: l.RequestMemoryBytes, Processor: l.RequestProcessor}.Or(standard)
 }
 
 // Lease is how long a hold lasts in this workspace, or the default where the workspace says nothing.

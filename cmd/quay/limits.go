@@ -8,6 +8,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 )
 
 // The flags a ceiling is set with. Each is its own number, so setting one and leaving the rest is a
@@ -15,7 +16,13 @@ import (
 const (
 	flagMaxDepth   = "--max-depth"
 	flagMaxRunning = "--max-running"
-	flagLease      = "--lease"
+	// What one sandbox in this workspace asks the machine for, in the units the room view prints:
+	// mebibytes, and per cent of one processor. The crew adds these up and starts a job only where
+	// its runtime still has that much unallocated, so a workspace whose jobs compile says so here
+	// rather than being counted the same as one whose jobs read a mailbox.
+	flagRequestMemory    = "--request-memory"
+	flagRequestProcessor = "--request-processor"
+	flagLease            = "--lease"
 	// The two times a session's life is measured by. Both ship unset, and unset means the crew takes
 	// no container back and files nothing away. No number is written for them anywhere in this
 	// repository: three measurements decide them, section 11 of docs/ORCHESTRATION.md names each and
@@ -36,8 +43,9 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: quay limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] "+
-			"[%s <duration>] [%s <duration>] [%s <duration>]",
-			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive)
+			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] [%s <per cent>]",
+			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive,
+			flagRequestMemory, flagRequestProcessor)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -67,6 +75,8 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		{flagMaxDepth, func(n int64) { asked.MaxDepth = int32(n) }},
 		{flagMaxRunning, func(n int64) { asked.MaxRunning = int32(n) }},
 		{flagBudgetTokens, func(n int64) { asked.BudgetTokens = n }},
+		{flagRequestMemory, func(n int64) { asked.RequestMemoryMib = int32(n) }},
+		{flagRequestProcessor, func(n int64) { asked.RequestProcessorPercent = int32(n) }},
 	} {
 		if !values.has(given.flag) {
 			continue
@@ -109,6 +119,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "%s\n", located.Path)
 	fmt.Fprintf(out, "max depth      %d%s\n", asked.GetMaxDepth(), depthMeans(asked.GetMaxDepth()))
 	fmt.Fprintf(out, "max running    %s\n", unsetOr(int64(asked.GetMaxRunning())))
+	fmt.Fprintf(out, "request        %s%s\n", requestOf(asked), crewsOwn(asked))
 	fmt.Fprintf(out, "budget tokens  %s\n", unsetOr(asked.GetBudgetTokens()))
 	fmt.Fprintf(out, "lease          %s\n", leaseOr(asked.GetLeaseSeconds()))
 	fmt.Fprintf(out, "reclaim        %s%s\n", lengthOr(asked.GetReclaimSeconds()),
@@ -119,6 +130,26 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		fmt.Fprintf(out, "\nraise one with quay limits %s %s <n>\n", located.Path, flagMaxDepth)
 	}
 	return nil
+}
+
+// requestOf is what one sandbox here asks the machine for, in the units the room view prints. A
+// workspace that has set neither reads the crew's own, so an operator sees the number that is
+// actually being used rather than two zeroes.
+func requestOf(limits *quaycrewv1.WorkspaceLimits) string {
+	want := capacity.Request{
+		Memory:    int64(limits.GetRequestMemoryMib()) << 20,
+		Processor: int(limits.GetRequestProcessorPercent()),
+	}
+	return want.Or(capacity.DefaultRequest()).String()
+}
+
+// crewsOwn says when the figures beside it are the crew's rather than this workspace's, because a
+// number with no source reads as a decision somebody made about this workspace.
+func crewsOwn(limits *quaycrewv1.WorkspaceLimits) string {
+	if limits.GetRequestMemoryMib() > 0 && limits.GetRequestProcessorPercent() > 0 {
+		return ""
+	}
+	return "  (the crew's own, until this workspace sets its own)"
 }
 
 // depthMeans says out loud what the number does, because zero reads as "no limit" to everybody who
@@ -167,5 +198,6 @@ func limitsFlagsTaken() map[string]bool {
 	return map[string]bool{
 		flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
 		flagReclaim: true, flagArchive: true,
+		flagRequestMemory: true, flagRequestProcessor: true,
 	}
 }

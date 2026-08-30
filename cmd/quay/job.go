@@ -11,6 +11,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -204,11 +205,35 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "no jobs here yet; declare one with quay job create %s \"...\" %s \"...\"\n", flagTitle, flagBrief)
 		return nil
 	}
+	holding := ""
 	for _, one := range resp.GetJobs() {
 		fmt.Fprintf(out, "%-10s %-2d %-8s %s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), one.GetPhase(), truncateLine(one.GetTitle()))
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), truncateLine(one.GetTitle()))
+		if holding == "" && heldForRoom(one) {
+			holding = one.GetReason()
+		}
+	}
+	// Said once, under the listing, because an operator reading a column of "held" needs to know it
+	// is the machine and not the crew. A full machine and a stalled crew look identical otherwise.
+	if holding != "" {
+		fmt.Fprintf(out, "\nheld: %s\n", holding)
 	}
 	return nil
+}
+
+// phaseOf is the word the listing carries. A pending job the crew is holding back reads "held"
+// rather than "pending": both are waiting, and only one of them is waiting for a machine.
+func phaseOf(one *quaycrewv1.Job) string {
+	if heldForRoom(one) {
+		return "held"
+	}
+	return one.GetPhase()
+}
+
+// heldForRoom says whether this job is pending because the crew would not start it. Only the crew
+// writes a reason on a pending job, and it writes one only when it holds the job back.
+func heldForRoom(one *quaycrewv1.Job) bool {
+	return one.GetPhase() == job.PhasePending && one.GetReason() != ""
 }
 
 // runJobShow reads one job back: what it is, where it got to, and what came of it.
