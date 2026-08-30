@@ -1238,6 +1238,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // task runs one task of a session and records what came of it, whichever way it was dispatched. Both
 // roads meet here so a detached task and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
+//
 // opened is the task record a caller has already written, which a detached dispatch does before it
 // answers. Nil opens one here, which is what the waited road does.
 func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string,
