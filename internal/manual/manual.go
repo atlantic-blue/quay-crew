@@ -89,6 +89,15 @@ commands:
                                           answer arrives as your next task
   job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
                                           again with the answer, in the session that asked
+  steer [<job>] "<what you said>"         mark one moment you had to say something the system should
+                                          have known, asked for, or refused on its own. With no job
+                                          it lands on the one in flight where you stand. The count
+                                          is the score of that job, so mark it while it happens
+  steers [<job>]                          the marks read back. With a job, every steer of that whole
+                                          tree in order, with the time and the job each landed on.
+                                          With none, every job where you stand against the one
+                                          before it, which is how you tell whether this went better
+                                          than last time
   target [<address>]                      where a project ships: the account, the region inside it,
     [--account <id>]                      and the role a pipeline assumes to get there. With no
     [--region <name>]                     values it reads what the project declared, and with them
