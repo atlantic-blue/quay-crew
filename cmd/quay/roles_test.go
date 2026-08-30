@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -310,5 +311,123 @@ func TestARoleWithNoBriefStillPrintsWhatItIs(t *testing.T) {
 		if !strings.Contains(printed, want) {
 			t.Errorf("a role with no brief does not say %q: %q", want, printed)
 		}
+	}
+}
+
+// aRoleDirInARepository writes a role's directory inside a real repository, commits it and puts the
+// commit on a remote branch, which is what a role that somebody could review looks like on disk.
+func aRoleDirInARepository(t *testing.T, name, manifest string) string {
+	t.Helper()
+	repository := t.TempDir()
+	git(t, repository, "init", "--initial-branch=main")
+	git(t, repository, "config", "user.email", "crew@example.com")
+	git(t, repository, "config", "user.name", "crew")
+	git(t, repository, "remote", "add", "origin", "https://github.com/atlantic-blue/quay-crew.git")
+
+	dir := filepath.Join(repository, "roles", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "role.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ROLE.md"),
+		[]byte("Write the tests. Do not write the code."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, repository, "add", "-A")
+	git(t, repository, "commit", "-m", "the roles this build ships")
+	git(t, repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+	return dir
+}
+
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	command := exec.Command("git", args...)
+	command.Dir = dir
+	if out, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
+	}
+}
+
+// A role that lives in a repository says which one, at which commit, in every place a role is
+// printed. Until this, the crew held a role and nobody could tell where it came from.
+func TestARoleImportedFromARepositorySaysWhichOneAndAtWhatCommit(t *testing.T) {
+	client := testClient(t)
+	dir := aRoleDirInARepository(t, "test-writer", testWriterManifest)
+
+	for _, printed := range []string{
+		mustRun(t, client, "role", "import", dir),
+		mustRun(t, client, "role", "list"),
+		mustRun(t, client, "role", "show", "test-writer"),
+	} {
+		if !strings.Contains(printed, "github.com/atlantic-blue/quay-crew roles/test-writer at ") {
+			t.Errorf("it does not say where the role came from: %q", printed)
+		}
+		if strings.Contains(printed, "nobody else can read these files") {
+			t.Errorf("a committed, pushed role is called unreadable: %q", printed)
+		}
+	}
+}
+
+// The failure the acceptance run hit: three roles in a folder on one machine, printed by the crew
+// exactly like the roles that ship in this repository.
+func TestARoleImportedFromALooseDirectorySaysNobodyElseCanReadIt(t *testing.T) {
+	client := testClient(t)
+	dir := aRoleDir(t, "orchestrator", strings.Replace(testWriterManifest, "test-writer", "orchestrator", 1))
+
+	for _, printed := range []string{
+		mustRun(t, client, "role", "import", dir),
+		mustRun(t, client, "role", "list"),
+		mustRun(t, client, "role", "show", "orchestrator"),
+	} {
+		if !strings.Contains(printed, "not in a repository") {
+			t.Errorf("it does not say the role is not in a repository: %q", printed)
+		}
+		if !strings.Contains(printed, dir) {
+			t.Errorf("it does not say where on the machine the role came from: %q", printed)
+		}
+		if !strings.Contains(printed, "nobody else can read these files") {
+			t.Errorf("nothing tells the operator to put the role in the code: %q", printed)
+		}
+	}
+}
+
+// Committing the role and importing it again is the way out, so the warning has to clear. A crew
+// that kept the first answer would leave the operator fixing it and watching nothing change.
+func TestCommittingALooseRoleAndImportingItAgainClearsTheWarning(t *testing.T) {
+	client := testClient(t)
+	loose := aRoleDir(t, "test-writer", testWriterManifest)
+	mustRun(t, client, "role", "import", loose)
+
+	if printed := mustRun(t, client, "role", "list"); !strings.Contains(printed, "nobody else can read these files") {
+		t.Fatalf("the loose import was not warned about at all: %q", printed)
+	}
+	mustRun(t, client, "role", "import", aRoleDirInARepository(t, "test-writer", testWriterManifest))
+
+	printed := mustRun(t, client, "role", "list")
+	if strings.Contains(printed, "nobody else can read these files") {
+		t.Errorf("the warning survived the role being committed and imported again: %q", printed)
+	}
+	if !strings.Contains(printed, "github.com/atlantic-blue/quay-crew roles/test-writer at ") {
+		t.Errorf("it does not say the role now comes from the repository: %q", printed)
+	}
+}
+
+// A role edited after the commit it names. The commit reads as evidence of what the crew holds, and
+// for an edited directory it is evidence of something else.
+func TestARoleEditedAfterItsCommitSaysTheFilesAreUncommitted(t *testing.T) {
+	client := testClient(t)
+	dir := aRoleDirInARepository(t, "test-writer", testWriterManifest)
+	if err := os.WriteFile(filepath.Join(dir, "ROLE.md"), []byte("Write the product yourself."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	printed := mustRun(t, client, "role", "import", dir)
+	if !strings.Contains(printed, "uncommitted changes") {
+		t.Errorf("it does not say the files are uncommitted: %q", printed)
+	}
+	if !strings.Contains(printed, "nobody else can read these files") {
+		t.Errorf("nothing tells the operator to commit it: %q", printed)
 	}
 }

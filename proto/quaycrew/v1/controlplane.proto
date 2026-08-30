@@ -792,6 +792,31 @@ message Role {
   google.protobuf.Timestamp imported_at = 6;
   // crew says the crew holds this role, so every workspace has it without attaching anything.
   bool crew = 7;
+  // origin is where the files came from, recorded at import. A role nobody can go and read is the
+  // failure this exists for: an acceptance run was driven by three roles in a folder on one machine,
+  // so no pull request touched them and nobody reviewed them.
+  RoleOrigin origin = 8;
+}
+
+// RoleOrigin is where a role's files came from, as the machine that imported them saw it.
+//
+// It is not part of what a role is, so it is not in the fingerprint that decides whether two imports
+// of one version are the same role. The same bytes imported from two checkouts are one role, read in
+// two places.
+message RoleOrigin {
+  // repository is where the repository is, written host/owner/name. Empty when the directory is not
+  // in one, or is in one with no remote.
+  string repository = 1;
+  // commit is the commit the checkout was at, in full.
+  string commit = 2;
+  // path is the directory inside the repository, or the path on the importing machine when there is
+  // no repository.
+  string path = 3;
+  // dirty says the directory's own files are not what the commit holds, so the commit names
+  // something else.
+  bool dirty = 4;
+  // unpushed says the commit is on no remote branch, so it is on one machine.
+  bool unpushed = 5;
 }
 
 // RoleFile is one file of a role's directory, on its way into the crew.
@@ -805,6 +830,9 @@ message RoleFile {
 // control plane runs in a container where a path on the operator's machine means nothing.
 message ImportRoleRequest {
   repeated RoleFile files = 1;
+  // origin is where the client read the files from. The client reads it because only the client can:
+  // the repository is on the operator's machine and the control plane runs in a container.
+  RoleOrigin origin = 2;
 }
 message ImportRoleResponse {
   Role role = 1;
