@@ -18,3 +18,7 @@ is the reviewer's to judge; the check only makes it impossible to say nothing at
 
 A run that read no files refuses too. An empty diff keeps every promise there is, so a check pointed
 at the wrong base ref would report success forever.
+
+An author who writes their entry at the top of `CHANGELOG.md`, which is where every entry went until
+[`changelog.d/`](changelog.d/) landed, is told where an entry goes now rather than told they wrote
+none.

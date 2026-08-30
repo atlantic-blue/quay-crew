@@ -212,3 +212,34 @@ func TestOnlyTheFilesThatPutItUnderTheRuleAreNamed(t *testing.T) {
 		t.Fatalf("the refusal blames %v, want internal/job/waiting.go alone", got)
 	}
 }
+
+// TestWritingStraightIntoTheSharedFileIsNamed.
+//
+// An entry is its own file now, and this is the mistake an author who remembers the old convention
+// makes. Telling them they wrote no entry, when they wrote one at the top of CHANGELOG.md, reads as
+// the check being wrong and is how a gate gets turned off. It already happened once: the change that
+// put a job back to pending wrote thirty one lines into the shared file the week fragments landed.
+func TestWritingStraightIntoTheSharedFileIsNamed(t *testing.T) {
+	findings := Check(Change{Files: join(
+		edited("internal/job/waiting.go", "CHANGELOG.md"),
+		added("features/promises.feature"),
+	)})
+	if len(findings) != 1 || findings[0].Promise != ChangelogEntry {
+		t.Fatalf("the check asks for %v, want the changelog entry alone", missing(findings))
+	}
+	if said := findings[0].String(); !strings.Contains(said, "CHANGELOG.md") {
+		t.Errorf("the refusal never mentions the file the entry was written into:\n%s", said)
+	}
+}
+
+// TestTheSharedFileIsOnlyNamedWhenItWasTouched keeps the refusal from carrying a paragraph about a
+// mistake this author did not make.
+func TestTheSharedFileIsOnlyNamedWhenItWasTouched(t *testing.T) {
+	findings := Check(Change{Files: join(edited("internal/job/waiting.go"), added("features/promises.feature"))})
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want the changelog entry alone", len(findings))
+	}
+	if said := findings[0].String(); strings.Contains(said, "CHANGELOG.md") {
+		t.Errorf("the refusal talks about a file the change never touched:\n%s", said)
+	}
+}

@@ -228,6 +228,20 @@ func initializePromisesSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^it also edits "([^"]*)"$`, func(ctx context.Context, path string) error {
+		p := promisesFrom(ctx)
+		p.ops = append(p.ops, changeOp{path: path, what: "edits"})
+		return nil
+	})
+
+	sc.Step(`^it says an entry is its own file now$`, func(ctx context.Context) error {
+		p := promisesFrom(ctx)
+		if !strings.Contains(p.said, "CHANGELOG.md") || !strings.Contains(p.said, "its own file under changelog.d") {
+			return fmt.Errorf("it never says where an entry goes now:\n%s", p.said)
+		}
+		return nil
+	})
+
 	sc.Step(`^it prints the line that would say why there is none$`, func(ctx context.Context) error {
 		p := promisesFrom(ctx)
 		if !strings.Contains(p.said, "No changelog entry:") {

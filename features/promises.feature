@@ -84,3 +84,12 @@ Feature: A change carries a scenario and a changelog entry, or says why not
     When the check reads a range that holds nothing
     Then the check refuses
     And it says it read no files at all
+
+  Scenario: An entry written into the shared file is told where an entry goes now
+    Given a change that edits "internal/job/waiting.go"
+    And it writes "features/promises.feature"
+    And it also edits "CHANGELOG.md"
+    When the check reads the change
+    Then the check refuses
+    And it says the change carries no "changelog entry"
+    And it says an entry is its own file now

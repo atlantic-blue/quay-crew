@@ -60,6 +60,9 @@ type Finding struct {
 	// Wanted is what writing the promise looks like, and Excuse is the line that stands in for it.
 	Wanted string
 	Excuse string
+	// Note is the mistake this particular change looks like it made, when it looks like one. Empty
+	// on a change that simply has none.
+	Note string
 }
 
 // String is the refusal a person reads, which says what is missing, what made this a behaviour
@@ -73,6 +76,9 @@ func (f Finding) String() string {
 	}
 	fmt.Fprintf(&out, "\nWrite one:\n\n  %s\n", f.Wanted)
 	fmt.Fprintf(&out, "\nOr say in the pull request body why this change has none:\n\n  %s <why>\n", f.Excuse)
+	if f.Note != "" {
+		fmt.Fprintf(&out, "\n%s\n", f.Note)
+	}
 	return out.String()
 }
 
@@ -94,6 +100,7 @@ func Check(change Change) []Finding {
 			Because: because,
 			Wanted:  "changelog.d/<issue>-<words-joined-with-hyphens>.md",
 			Excuse:  excuseLine(ChangelogEntry),
+			Note:    sharedFileNote(change.Files),
 		})
 	}
 	if !carries(change.Files, isScenario) && !excused(change.Body, Scenario) {
@@ -183,4 +190,19 @@ func excused(body, promise string) bool {
 		}
 	}
 	return false
+}
+
+// sharedFileNote is what to say to an author who wrote their entry at the top of CHANGELOG.md, which
+// is where every entry went until fragments landed. Telling them they wrote no entry, when they wrote
+// one, reads as the check being wrong, and a check that reads as wrong gets turned off.
+func sharedFileNote(files []File) string {
+	for _, file := range files {
+		if file.Path != "CHANGELOG.md" || file.Status == Deleted {
+			continue
+		}
+		return "This change edits CHANGELOG.md. An entry is its own file under changelog.d now, so that\n" +
+			"two changes written at once never touch the same lines. Move it there and the release\n" +
+			"assembles it back."
+	}
+	return ""
 }
