@@ -6,6 +6,30 @@ landed on `main` rather than version numbers, and anything not listed here does 
 The behaviour of each of these is written out as scenarios in [`features/`](features/), which you can
 read, or run with `make features`.
 
+## 30 August 2026
+
+- **Every listing says which address it read.** The operator ran `quay job list`, read one row, and
+  asked where the other nine jobs were. They were in the project next door. The listing was correct
+  and it was misleading, because nothing on the screen said a scope had been applied, and a narrowed
+  result and an empty crew look identical. Each listing now ends by naming what it read, the way k9s
+  keeps the namespace in its header: `1 job in atlantic-blue/transcript`, `2 jobs in this crew`,
+  `no secrets in this crew`. That is `job list`, `flow list`, `sessions`, `task list`, `workspace
+  list`, `project list`, `secret list`, `skill list`, `role list` and `hook list`, so learning one
+  teaches the rest.
+
+  **A bare listing still reads where you are standing, and now says the word that widens it.** That
+  word is `crew`, which already means the level above every workspace in `quay secret list crew` and
+  `quay context set crew`, and it works on the three listings that narrow: `quay job list crew`,
+  `quay flow list crew` and `quay sessions crew`. A crew wide job or flow listing carries the address
+  of each row, because rows from nine projects with no project on them are a heap of identifiers.
+  Reading the whole crew by default was the other option and it was not taken: `quay use` is what
+  sets the place you work in and every other verb obeys it, so the silence was the defect rather than
+  the narrowing.
+
+  **The advice a narrowed listing gave could not be typed.** It offered "quay sessions on its own
+  lists the whole crew", and on its own is exactly what the operator had just typed: standing
+  somewhere, it narrows again.
+
 ## 29 August 2026
 
 - **The three roles the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
