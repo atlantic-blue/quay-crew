@@ -283,10 +283,17 @@ func (m *modeRecordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req mode
 	return model.Response{Reply: "done", ModelSessionID: "conversation-" + req.Text}, nil
 }
 
+// modeOf is the mode the task carrying this prompt ran in. Matched on what the graph wrote rather
+// than on the whole text, because the system adds its own lines beside a step's prompt.
 func (m *modeRecordingRunner) modeOf(prompt string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.modes[prompt]
+	for asked, mode := range m.modes {
+		if strings.Contains(asked, prompt) {
+			return mode
+		}
+	}
+	return ""
 }
 
 // quay-crew#461, over the whole road rather than the reducer alone.
