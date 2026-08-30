@@ -23,6 +23,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/quay-crew/internal/origin"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
@@ -96,10 +97,15 @@ type Imported struct {
 // as it is told to work. The way forward is to raise the version in the manifest.
 var ErrRoleChanged = errors.New("store: that version of the role is already imported and differs")
 
-// ImportedRole is a role the crew holds: the role as its author wrote it, and when it came in.
+// ImportedRole is a role the crew holds: the role as its author wrote it, when it came in, and where
+// it came from.
 type ImportedRole struct {
 	role.Role
 	ImportedAt time.Time
+	// Origin is where the files were read from, as the machine that imported them saw it. It is not
+	// part of the fingerprint: the same bytes imported from two checkouts are one role, read in two
+	// places, and a fingerprint that disagreed would refuse the second import as a different role.
+	Origin origin.Origin
 }
 
 // ErrHookChanged is returned when a version of a hook is imported again carrying a different hook.

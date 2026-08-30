@@ -287,6 +287,8 @@ type world struct {
 	// told when it tried something.
 	flowRunID string
 	driverErr error
+	// scratch is every directory a scenario wrote on disk, removed when the scenario ends.
+	scratch []string
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
@@ -741,6 +743,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializePresenceToolSteps(sc)
 	initializePresenceToolReadingSteps(sc)
 	initializeChangelogSteps(sc)
+	initializeRoleOriginSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
 	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
@@ -751,6 +754,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			// up here rather than in stop.
 			if w.storage.Dir != "" {
 				_ = os.RemoveAll(w.storage.Dir)
+			}
+			for _, dir := range w.scratch {
+				_ = os.RemoveAll(dir)
 			}
 		}
 		return ctx, nil

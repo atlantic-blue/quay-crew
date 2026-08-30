@@ -24,6 +24,12 @@ func (m *Memory) ImportRole(_ context.Context, imported ImportedRole) error {
 		if held.Fingerprint() != imported.Fingerprint() {
 			return fmt.Errorf("%w: %s version %d", ErrRoleChanged, imported.Name, imported.Version)
 		}
+		// The same role, read somewhere else. Where it was last seen is the answer that moves:
+		// committing a role somebody kept in a folder and importing it again is how the operator
+		// clears the warning, and keeping the first answer would leave them fixing it and watching
+		// nothing change.
+		held.Origin = imported.Origin
+		m.roles[key] = held
 		return nil
 	}
 	// Stamped here because Postgres stamps it in the table's default, and a store that leaves it

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/atlantic-blue/quay-crew/internal/origin"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
@@ -112,6 +113,125 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 				t.Errorf("%s gives back a role that may %v, and it declared %s",
 					what, from[0].Verbs, role.VerbJobCreate)
 			}
+		}
+	})
+
+	// Where a role came from, read back out of every listing a person or a credential reads.
+	//
+	// It is the answer to "can anybody but the importer read this role", and a column that goes
+	// missing takes the answer with it: a role imported from a repository comes back looking exactly
+	// like one somebody kept in a folder on their laptop, which is the failure this recorded in the
+	// first place. The `may` column was dropped in exactly this shape and only Postgres knew.
+	t.Run("where a role came from survives the round trip", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportRole(ctx, aRoleFrom("test-writer", 1, origin.Origin{
+			Repository: "github.com/atlantic-blue/quay-crew",
+			Commit:     "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567",
+			Path:       "roles/test-writer",
+		})); err != nil {
+			t.Fatalf("ImportRole: %v", err)
+		}
+		got, err := s.GetRole(ctx, "test-writer", 1)
+		if err != nil {
+			t.Fatalf("GetRole: %v", err)
+		}
+		if got.Origin.Repository != "github.com/atlantic-blue/quay-crew" ||
+			got.Origin.Commit != "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567" ||
+			got.Origin.Path != "roles/test-writer" {
+			t.Errorf("it came back from %+v, and it was imported from the repository", got.Origin)
+		}
+		if !got.Origin.Reviewable() {
+			t.Errorf("a role imported from a pushed commit came back unreviewable: %s", got.Origin.Line())
+		}
+
+		// Every read the console and the command line print from, because a listing is where an
+		// operator would see this and GetRole is not.
+		workspace, err := s.CreateWorkspace(ctx, "acme")
+		if err != nil {
+			t.Fatalf("CreateWorkspace: %v", err)
+		}
+		if _, err := s.AttachRole(ctx, workspace.GetId(), "test-writer"); err != nil {
+			t.Fatalf("AttachRole: %v", err)
+		}
+		if _, err := s.AttachCrewRole(ctx, "test-writer"); err != nil {
+			t.Fatalf("AttachCrewRole: %v", err)
+		}
+		listed, err := s.ListRoles(ctx)
+		if err != nil {
+			t.Fatalf("ListRoles: %v", err)
+		}
+		held, err := s.WorkspaceRoles(ctx, workspace.GetId())
+		if err != nil {
+			t.Fatalf("WorkspaceRoles: %v", err)
+		}
+		crew, err := s.CrewRoles(ctx)
+		if err != nil {
+			t.Fatalf("CrewRoles: %v", err)
+		}
+		for what, from := range map[string][]store.ImportedRole{
+			"the listing": listed, "the workspace": held, "the crew": crew,
+		} {
+			if len(from) != 1 {
+				t.Fatalf("%s holds %d roles, want the one that was imported", what, len(from))
+			}
+			if from[0].Origin.Repository != "github.com/atlantic-blue/quay-crew" {
+				t.Errorf("%s says the role came from %q, and it came from the repository",
+					what, from[0].Origin.Repository)
+			}
+		}
+	})
+
+	// A role kept in a folder is imported all the same, and the store keeps what it was told rather
+	// than an empty origin that would read as a role imported before any of this was recorded.
+	t.Run("a role from a loose directory keeps the path it came from", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportRole(ctx, aRoleFrom("orchestrator", 1, origin.Origin{
+			Path: "/home/someone/roles/orchestrator",
+		})); err != nil {
+			t.Fatalf("ImportRole: %v", err)
+		}
+		got, err := s.GetRole(ctx, "orchestrator", 1)
+		if err != nil {
+			t.Fatalf("GetRole: %v", err)
+		}
+		if got.Origin.Path != "/home/someone/roles/orchestrator" {
+			t.Errorf("it came back from %q, and it was read from a folder", got.Origin.Path)
+		}
+		if got.Origin.Reviewable() {
+			t.Errorf("a role from a folder came back reviewable: %s", got.Origin.Line())
+		}
+	})
+
+	// The same bytes imported again from somewhere else. The import is the crew's only sight of a
+	// role, so it says where the role was last seen: committing a loose role and importing it again
+	// is how an operator clears the warning, and a store that kept the first answer would leave them
+	// fixing it and watching nothing change.
+	t.Run("importing the same role again records where it was read this time", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if err := s.ImportRole(ctx, aRoleFrom("orchestrator", 1, origin.Origin{
+			Path: "/home/someone/roles/orchestrator", Dirty: true, Unpushed: true,
+		})); err != nil {
+			t.Fatalf("ImportRole: %v", err)
+		}
+		if err := s.ImportRole(ctx, aRoleFrom("orchestrator", 1, origin.Origin{
+			Repository: "github.com/atlantic-blue/quay-crew",
+			Commit:     "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567",
+			Path:       "roles/orchestrator",
+		})); err != nil {
+			t.Fatalf("importing the same role from the repository: %v", err)
+		}
+		got, err := s.GetRole(ctx, "orchestrator", 1)
+		if err != nil {
+			t.Fatalf("GetRole: %v", err)
+		}
+		if got.Origin.Repository != "github.com/atlantic-blue/quay-crew" || got.Origin.Dirty || got.Origin.Unpushed {
+			t.Errorf("it still says %s, and it was imported again from the repository", got.Origin.Line())
 		}
 	})
 
@@ -363,5 +483,13 @@ func aRole(name string, version int) store.ImportedRole {
 func aRoleThatMay(name string, version int, verbs ...string) store.ImportedRole {
 	one := aRole(name, version)
 	one.Verbs = verbs
+	return one
+}
+
+// aRoleFrom is a role that came from somewhere, so the round trip is asserted on an origin with
+// something in it. aRole records none, and a store that dropped the columns would agree with it.
+func aRoleFrom(name string, version int, from origin.Origin) store.ImportedRole {
+	one := aRole(name, version)
+	one.Origin = from
 	return one
 }

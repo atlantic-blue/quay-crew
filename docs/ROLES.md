@@ -201,6 +201,48 @@ A name nothing holds is refused with the names that are there: the near spelling
 and everything held when there are not. A short list of real names is more use than a correct
 silence.
 
+## Where a role came from
+
+A role is imported from a directory, and a directory is anywhere. That makes the first import easy
+and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
+on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
+listing the crew printed showed them looking exactly like the fifteen that ship in
+[`roles/`](../roles).
+
+So `quay role import` records where it read the files, and the crew says it back in every place a
+role is printed:
+
+```
+test-writer      v1   writes the tests for a job, from the job alone
+                      runs on opus
+                      receives context, job
+                      from github.com/atlantic-blue/quay-crew roles/test-writer at 4f2a1b9c
+```
+
+Five facts, because an operator acts on them separately: the repository to open, the commit to open
+it at, the directory inside it, whether the files were edited after that commit, and whether the
+commit is on a remote branch. A role that fails any of them gets a second line saying nobody else can
+read it and what to do about that.
+
+The client reads it, because only the client can. The repository is on the operator's machine and the
+control plane runs in a container that cannot see it, which is the same reason the files travel
+rather than a path.
+
+Nothing is refused over any of it. A role written in a scratch directory while somebody finds the
+shape of it is ordinary, and what was missing was not a gate, it was anybody being able to see. A
+role imported before the crew recorded any of this says only that, because calling it loose would be
+an accusation the crew cannot support.
+
+Importing the same role again records where it was read this time. That is the way out: commit the
+role, push it, import it again, and the warning clears. A crew that kept the first answer would leave
+the operator fixing it and watching nothing change. It is safe because where a role came from is not
+part of what a role is: it is not in the fingerprint, so the same bytes read out of two checkouts are
+one role, read in two places, rather than a version already imported being refused as a different one.
+
+What this does not do is put the role in the repository for anybody. A project cannot yet declare a
+roles directory the crew imports from, because nothing in the crew knows what repository a project
+has. That is [quay-crew#443](https://github.com/atlantic-blue/quay-crew/issues/443).
+
 ## The two levels
 
 A role attaches at the crew or at one workspace, which is the outer two of the four levels context
@@ -413,6 +455,8 @@ them.
   written.
 - A job in a role is a root job only. A job under a parent and a job that waits for something are each
   their own slice, whether or not they name a role.
+- Where a role came from is recorded and printed, and nothing acts on it: no import is refused, no
+  run is stopped, and a project cannot declare a roles directory the crew imports from.
 
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),
