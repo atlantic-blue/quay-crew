@@ -190,6 +190,14 @@ The header carries it while you job. The room view is one line per sandbox, larg
 each one holds, its share of one processor, how long since its last task, and what its session is
 doing. The last column matters: the largest sandbox may be the one doing the work.
 
+Above those rows is one line about the machine: what every container holds, the limit that binds,
+what is left, how many more sandboxes that will hold, and the word. The rows answer which session to
+stop and this answers whether one has to be stopped at all, which is issue 457. The figure is every
+container rather than the rows underneath it, so the rows add up to less than it and the line says
+which figure it is. The word is the crew's, with one rule of its own: a margin too thin to hold
+another sandbox is never drawn as healthy, however small a fraction of the machine it is. That
+threshold is the measured request in `internal/capacity/measured.go`, not a fraction.
+
 ```
 quay room
 ```
