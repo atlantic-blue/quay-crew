@@ -191,7 +191,7 @@ session reads it.
 quay context set crew < rules.md            # everything the crew does
 quay context set acme < context.md          # every session in the workspace
 quay context set acme/billing < brief.md    # one project
-quay context                                # every level, with its first words
+quay context                                # every level, how big it is, and its first words
 quay context edit acme/billing              # open it in $EDITOR
 quay context clear acme/billing
 ```
