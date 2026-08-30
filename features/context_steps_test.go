@@ -326,6 +326,36 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	// The steps that read a level back through the real command line tool.
+	//
+	// A level could be written and never read back, so it could only be overwritten: adding a
+	// paragraph meant already holding the whole text. These run the tool in its own process, because
+	// what is specified here is what a redirection captures. Standard output has to be the body and
+	// nothing else, and a level that says nothing has to be told apart from a read that broke, which
+	// is the exit status and exists nowhere inside the test process.
+
+	sc.Step(`^the caller reads the project's context back$`, func(ctx context.Context) error {
+		return runTool(ctx, "context", "show", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller reads the crew's context back$`, func(ctx context.Context) error {
+		return runTool(ctx, "context", "show", string(store.ContextCrew))
+	})
+
+	// What came out of the last read goes straight back in, which is the pair the command exists for.
+	sc.Step(`^the caller writes back what it read$`, func(ctx context.Context) error {
+		return runToolSaying(ctx, toolFrom(ctx).stdout, "context", "set", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller writes back what it read with "([^"]*)" added$`,
+		func(ctx context.Context, added string) error {
+			held := toolFrom(ctx).stdout
+			if strings.TrimSpace(held) == "" {
+				return fmt.Errorf("the read gave nothing back, so there is nothing to add to")
+			}
+			return runToolSaying(ctx, held+"\n"+added+"\n", "context", "set", whereTheProjectIs(ctx))
+		})
 }
 
 // The steps that write and read context through the real command line tool.
@@ -349,13 +379,10 @@ func initializeContextSizeSteps(sc *godog.ScenarioContext) {
 			case "project":
 				target = w.workspaceName + "/" + w.projectName
 			}
-			return runTool(ctx, "context", "set", target)
+			return runToolSaying(ctx, toolFrom(ctx).stdin, "context", "set", target)
 		})
 
 	sc.Step(`^the operator lists the context levels with the tool$`, func(ctx context.Context) error {
-		// Nothing on standard input for a listing, and a listing handed the body of the last write
-		// would be reading a pipe nobody wrote to.
-		toolFrom(ctx).stdin = ""
 		return runTool(ctx, "context")
 	})
 }
