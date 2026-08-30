@@ -45,7 +45,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks changelog help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -348,6 +348,15 @@ test: hooks
 ## features: run the behaviour specifications and print what the product does
 features: hooks
 	go test ./features/... -v -count=1
+
+## changelog: assemble the pending changelog fragments into one dated section
+#
+# Every change writes its entry as its own file under changelog.d, so two changes made at once never
+# write the same file. This is where they come back together. It prints, and writes nothing: paste
+# the section under the heading in CHANGELOG.md and delete the fragments in the same commit, so a
+# release is one change a person read rather than a file a command rewrote.
+changelog:
+	@go run ./cmd/changelog
 
 ## lint: run buf and golangci-lint (generated code is not linted)
 lint:
