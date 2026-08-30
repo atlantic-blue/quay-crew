@@ -239,6 +239,9 @@ func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*
 		return nil, storeError(err, "stop job")
 	}
 	s.ExportJob(ctx, stoppedEvent)
+	// The job is over, so the credentials minted for it are too. Without this a session whose job an
+	// operator stopped would keep calling until its credential ran out on its own.
+	s.RevokeJobCredentials(stopped.ID, stopped.Phase)
 	return &quaycrewv1.StopJobResponse{Job: asJob(stopped)}, nil
 }
 

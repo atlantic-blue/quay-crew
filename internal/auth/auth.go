@@ -95,9 +95,16 @@ type Grant struct {
 	Project   string
 	// Verbs are what the job's role declared it may call. Empty may call nothing.
 	Verbs []string
-	// ExpiresAt is when the credential stops working. Zero never expires, which is what a test wants
-	// and what a crew should not have.
+	// ExpiresAt is when the credential stops working on its own. Zero never expires, which is what a
+	// test wants and what a crew should not have.
+	//
+	// It is the backstop rather than the control. What normally ends a credential is Ended below: a
+	// job that is over is a better reason to refuse a session than a clock nobody watches, and a
+	// credential handed to a sandbox at dispatch is never refreshed.
 	ExpiresAt time.Time
+	// Ended is the phase the job this credential belongs to finished in, and it is empty while that
+	// job runs. The crew writes it when it takes the credential back.
+	Ended string
 }
 
 // May says whether this grant holds a verb.
@@ -138,6 +145,12 @@ type Policy struct {
 	// Grants recognises a job credential, and DeniedToJob judges it.
 	Grants      Grants
 	DeniedToJob JobDeny
+	// Now is the clock a credential's life is read against. Nil is the real one.
+	//
+	// A test hands its own. What is worth proving about a credential is what a session still holds
+	// half an hour into its job, and a test that waits half an hour to prove it is a test nobody
+	// runs.
+	Now func() time.Time
 }
 
 // grantKey is how a recognised grant travels to the handler.
@@ -252,11 +265,41 @@ func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
 		return callerDriver, Grant{}, nil
 	}
 	if p.Grants != nil {
-		if grant, minted := p.Grants.Grant(presented); minted && !grant.expired(time.Now()) {
-			return callerJob, grant, nil
+		if grant, minted := p.Grants.Grant(presented); minted {
+			return p.judgeCredential(grant)
 		}
 	}
 	return 0, Grant{}, status.Error(codes.Unauthenticated, "the token this call carries is not this crew's")
+}
+
+// judgeCredential answers with the job a live credential names, or with why one this crew minted no
+// longer works.
+//
+// Each refusal names its own cause. A credential that had run out used to fall through to the
+// refusal a forged token gets, and a session told the token is not this crew's reads that as holding
+// a bad credential and stops calling. That is what a root job did for twenty eight of its twenty
+// nine minutes, in issue 449.
+func (p Policy) judgeCredential(grant Grant) (caller, Grant, error) {
+	if grant.Ended != "" {
+		return 0, Grant{}, status.Errorf(codes.Unauthenticated,
+			"the crew took this credential back when job %s ended, and that job is %s: a credential lasts "+
+				"as long as the job it was minted for", grant.Job, grant.Ended)
+	}
+	if now := p.now(); grant.expired(now) {
+		return 0, Grant{}, status.Errorf(codes.Unauthenticated,
+			"the credential this call carries ran out at %s and it is now %s: it was minted for job %s, "+
+				"and nothing refreshes a credential inside a sandbox",
+			grant.ExpiresAt.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), grant.Job)
+	}
+	return callerJob, grant, nil
+}
+
+// now is the clock this policy reads a credential's life against.
+func (p Policy) now() time.Time {
+	if p.Now != nil {
+		return p.Now()
+	}
+	return time.Now()
 }
 
 // presentedToken reads the token a call carries, or nothing when it carries none.

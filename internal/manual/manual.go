@@ -79,8 +79,10 @@ commands:
     [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
     [--archive <duration>]                zero, so no session declares a job until you raise it. The
                                           reclaim and archive times start unset, and unset means the
-                                          crew does nothing. A session may read none of this and set
-                                          none of it
+                                          crew does nothing. The lease is the crew's hold on a job
+                                          and not the credential a session runs under: a credential
+                                          lasts as long as its job, and this setting does not reach
+                                          it. A session may read none of this and set none of it
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point
