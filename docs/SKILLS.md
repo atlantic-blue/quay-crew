@@ -104,7 +104,10 @@ narrow belongs, because a capability for one kind of work should not be in front
 system has.
 
 A system whose catalogue is empty is given the skills this build ships with when the control plane
-starts: all seven imported, git and github taken at the system level, the rest waiting to be attached.
+starts: all nine imported, with git, github and outbound taken at the system level and the rest waiting
+to be attached. The first two are how work is done in any repository. outbound is a rule rather than a
+tool, about code a session has already decided to write, so it is taken at the system level for the
+opposite reason: the job that needs it is the one that does not know it does.
 It happens only on an empty catalogue, so it is where a system begins rather than a policy that undoes a
 decision later.
 

@@ -231,6 +231,20 @@ Feature: A session is given the skills the system has
     Then the system holds the "terraform" skill
     And the workspace does not hold the "terraform" skill
 
+  # A rule about how to write code reaches the jobs that were never going to break it, when reaching
+  # it is a decision somebody makes first. The one about calling something outside this process is
+  # taken at the system level for that reason: a job writing its first call to another service is
+  # given it without being told to, in a workspace that has set no credential and attached nothing.
+  #
+  # It is here because a deployed page answered "No video with that id" for a video that was there.
+  # The code read a page, could not find a title in it, and threw the one failure it knew the name of.
+  Scenario: Every session is given the rule for calling something outside itself
+    When the system starts, seeded from the skills this build ships with
+    And the operator dispatches "hello" to the project
+    Then the memory file names the "outbound" skill and where its brief is
+    And the workspace holds the "outbound" skill
+    And the listing says the "outbound" skill is held by the system
+
   # Seeding is what a fresh system gets, never a policy that reasserts itself. An operator who takes a
   # skill off the system has said something, and starting the control plane again must not undo it.
   Scenario: Starting again leaves what the operator decided alone
