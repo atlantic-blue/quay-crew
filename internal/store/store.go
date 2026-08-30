@@ -382,6 +382,12 @@ type Store interface {
 	// beside it. Job that already ended is refused rather than overwritten: how it ended is the
 	// useful part.
 	StopJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
+	// AskJob puts a running job's question on the record and stops it there. AnswerJob is the other
+	// half: it writes what a person decided and puts the job back to pending, so the controller
+	// starts it again and hands the answer to the session that asked. Each applies only from the one
+	// phase it moves out of, in the same statement, so a question cannot be answered twice.
+	AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
+	AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
 	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
 	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps

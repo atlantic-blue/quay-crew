@@ -2079,6 +2079,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runJobConformance(t, newDataset)
 	runJobControllerConformance(t, newDataset)
 	runJobLeaseConformance(t, newDataset)
+	runJobAskingConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
 	runTriggerConformance(t, newDataset)

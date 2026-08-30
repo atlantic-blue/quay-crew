@@ -1,0 +1,14 @@
+-- A job keeps what a person told it, so an answer can reach the session that asked.
+--
+-- The question column has been here since jobs existed and nothing ever wrote it: a session could
+-- not put a question to a person, so a session that had to choose between two things no measurement
+-- settles either guessed or ended the job. This is the other half of the pair. A person answers, the
+-- answer lands here, and the controller starts the job again and hands it over.
+--
+-- It stays on the row after it has been handed over, because what somebody decided is part of the
+-- record of the job. It is cleared when the job asks again, so the question on the row and the
+-- answer beside it are always about the same decision.
+--
+-- Empty string rather than null, the way every other text column on this table already is: a reader
+-- that has to tell null from empty is a reader with two cases where there is one.
+alter table jobs add column if not exists told text not null default '';

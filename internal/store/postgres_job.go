@@ -14,7 +14,7 @@ import (
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
-	phase, session, attempts, answer, reason, question, spent_tokens, observed_version,
+	phase, session, attempts, answer, reason, question, told, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request,
 	created_at, updated_at, started_at, finished_at`
 
@@ -56,16 +56,16 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 	if _, err := tx.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
-			session, attempts, answer, reason, question, spent_tokens, observed_version, started_at, finished_at,
-			lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request)
+			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
+			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
 		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
-		declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
+		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest); err != nil {
 		return fmt.Errorf("create job: %w", err)
@@ -181,8 +181,38 @@ func (p *Postgres) StopJob(ctx context.Context, id, reason string, event *job.Ev
 	return p.GetJob(ctx, id)
 }
 
-// ListJobEvents returns one job's own history, in the order it was written.
+// AskJob puts a running job's question on the record and stops it there.
 //
+// The condition on the phase is in the same statement as the write, so a session asking about a job
+// that has already ended writes nothing. The hold goes with it: nobody is holding an asking job,
+// because there is nothing to come back for until a person answers.
+//
+// What it was last told is cleared, so the question on the row and the answer beside it are always
+// about the same decision.
+func (p *Postgres) AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "ask job", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, question = $3, told = '', lease_owner = '', lease_until = null,
+			updated_at = now()
+		where id = $1 and phase = $4`,
+		job.PhaseAsking, question, job.PhaseRunning)
+}
+
+// AnswerJob writes what a person decided and puts the job back to pending, so a controller starts it
+// again and hands the answer to the session that asked.
+//
+// Conditional on the asking phase in the same statement, so two people answering at once leave one
+// answer and one task rather than two of each.
+func (p *Postgres) AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error) {
+	// The start goes with the attempt that is over, so the moment on the row is the moment the
+	// attempt carrying the answer began. The attempt that asked is on the record.
+	return p.moveJob(ctx, id, "answer job", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = $3, started_at = null, updated_at = now()
+		where id = $1 and phase = $4`,
+		job.PhasePending, answer, job.PhaseAsking)
+}
+
+// ListJobEvents returns one job's own history, in the order it was written.
+
 // By the sequence rather than by the moment. Two records written in one transaction are stamped in
 // the same microsecond, and an order broken by a random identifier is an order that reads back wrong
 // about once in a few runs: "claimed" after "started", which is a controller that appears to have
@@ -243,7 +273,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
-		&found.Question, &found.SpentTokens, &found.ObservedVersion,
+		&found.Question, &found.Told, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
