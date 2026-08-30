@@ -138,7 +138,9 @@ commands:
   mode <session> [<mode>]                  what a session's tasks may do without asking: plan, edits
                                           or dangerous. A task nobody waits for has nobody to approve
                                           anything, so this is how it is given room to work
-  context [<address>]                     where the files the model reads live
+  context [<address>]                     where the files the model reads live, and how big each
+                                          level is. A level past 20,000 characters also says who
+                                          reads it and what to move down a level
   context show [<address>]                what a level says, printed as it is stored. This and set
                                           are a pair: quay context show crew > file, edit the file,
                                           then quay context set crew < file, which is how a level is

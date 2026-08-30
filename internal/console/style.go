@@ -221,13 +221,18 @@ func colourOfAge(cell string) string {
 	}
 }
 
-// colourOfWritten says whether a level of context exists, which is the only question that view is
-// asked. Green for a level that says something, dim for one that says nothing yet.
-func colourOfWritten(cell string) string {
-	if cell == "written" {
+// colourOfSize draws how big a level of context is. Yellow once it is over the mark, which is the
+// same yellow the line under a prompt turns at thirty per cent of a context window, green for a
+// level that says something and is small, and dim for one that says nothing yet.
+func colourOfSize(cell string) string {
+	switch {
+	case strings.Contains(cell, "over the mark"):
+		return ansiYellowCode
+	case cell == "nothing written yet":
+		return dimCode
+	default:
 		return ansiGreenCode
 	}
-	return dimCode
 }
 
 // place is a path, a repository or an engine: somewhere rather than something. Cyan is where the

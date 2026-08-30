@@ -19,6 +19,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/quay-crew/internal/contextsize"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/repository"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
@@ -873,12 +874,25 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintln(out, "no context directories: this crew keeps a session's state in its container")
 		return nil
 	}
+	fmt.Fprintf(out, "%-10s %-20s %-22s %s\n", "scope", "name", "characters", "what it says")
+	var notes []string
 	for _, dir := range resp.GetDirs() {
 		state := "nothing written yet"
 		if dir.GetWritten() {
 			state = firstLine(dir.GetBody())
 		}
-		fmt.Fprintf(out, "%-10s %-20s %s\n", dir.GetScope(), dir.GetName(), state)
+		size := contextsize.Read(dir.GetScope(), dir.GetName(), dir.GetBody())
+		fmt.Fprintf(out, "%-10s %-20s %-22s %s\n",
+			dir.GetScope(), dir.GetName(), size.Cell(), state)
+		if note := size.Note(); note != "" {
+			notes = append(notes, note)
+		}
+	}
+	// A row that says a level is over the mark does not say what that costs, and the number on its own
+	// is what nobody acted on for a hundred thousand characters. One line per level that is over, and
+	// nothing at all for a listing where every level is small.
+	for _, note := range notes {
+		fmt.Fprintf(out, "\n%s\n", note)
 	}
 	return nil
 }
@@ -954,6 +968,7 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if err != nil {
 		return err
 	}
+	level := contextsize.Read(scope, name, "")
 
 	body, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -966,19 +981,27 @@ func runContextSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	if len(strings.TrimSpace(string(body))) == 0 {
 		held, err := contextLength(ctx, client, scope, owner)
 		if err != nil || held == 0 {
-			fmt.Fprintf(out, "%s %s was already empty, and nothing was on standard input\n", scope, name)
+			fmt.Fprintf(out, "%s was already empty, and nothing was on standard input\n", level.Label())
 			return nil
 		}
-		return fmt.Errorf("nothing was on standard input, so %s %s is untouched and still says %d "+
-			"characters\n\npipe something in: cat notes.md | quay context set %s"+
-			"\nor empty it deliberately: quay context clear %s", scope, name, held, typed, typed)
+		return fmt.Errorf("nothing was on standard input, so %s is untouched and still says %s"+
+			"\n\npipe something in: cat notes.md | quay context set %s"+
+			"\nor empty it deliberately: quay context clear %s",
+			level.Label(), contextsize.Characters(held), typed, typed)
 	}
 	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
 		Scope: scope, Owner: owner, Body: string(body),
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s %s now says %d characters\n", scope, name, len(body))
+	written := contextsize.Read(scope, name, string(body))
+	fmt.Fprintf(out, "%s now says %s\n", written.Label(), contextsize.Characters(written.Characters))
+	// The size on its own is a number nobody acts on: the crew level reached 100,179 characters while
+	// every write reported its own length. So a level over the mark also says who reads it and what to
+	// move down a level, at the moment somebody makes it that big.
+	if said := written.Say(); said != "" {
+		fmt.Fprintf(out, "\n%s\n", said)
+	}
 	return nil
 }
 
@@ -996,12 +1019,13 @@ func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceC
 	if err != nil {
 		return err
 	}
+	level := contextsize.Read(scope, name, "")
 	held, err := contextLength(ctx, client, scope, owner)
 	if err != nil {
 		return err
 	}
 	if held == 0 {
-		fmt.Fprintf(out, "%s %s was already empty\n", scope, name)
+		fmt.Fprintf(out, "%s was already empty\n", level.Label())
 		return nil
 	}
 	if _, err := client.SetContext(ctx, &quaycrewv1.SetContextRequest{
@@ -1009,7 +1033,7 @@ func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceC
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s %s emptied, and it said %d characters\n", scope, name, held)
+	fmt.Fprintf(out, "%s emptied, and it said %s\n", level.Label(), contextsize.Characters(held))
 	return nil
 }
 
@@ -1043,7 +1067,7 @@ func pickContext(dirs []*quaycrewv1.ContextDir, scope, owner string) string {
 // clearing can say what it removed.
 func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (int, error) {
 	body, err := contextBody(ctx, client, scope, owner)
-	return len(body), err
+	return contextsize.Read(scope, "", body).Characters, err
 }
 
 // contextTarget works out which level an address means. The word "crew" is the level above every

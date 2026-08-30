@@ -144,3 +144,37 @@ Feature: The operator can find the files the model reads
     Then standard output is empty
     And standard error says "says nothing yet"
     And the command fails
+
+  # A hundred thousand characters at the crew level, read out of the contexts table in Postgres
+  # because nothing in the crew would say it. Every session in every workspace carries that level
+  # before it reads a line of the repository it works on, so a rule added there is a rule nobody
+  # finds. During the acceptance run of 29 August 2026 a cost rule went onto a workspace instead,
+  # which undoes the whole point of having a crew level.
+  #
+  # The mark is a mark and not a limit. Nothing is refused for being over it.
+  Scenario: A level says how big it is at the moment it is written
+    Given the crew listens on an address the tool can dial
+    And the operator has 1886 characters to say
+    When the operator sets the workspace's context with the tool
+    Then standard output carries "1,886 characters"
+    And standard output does not carry "over the mark"
+    And the command succeeds
+
+  Scenario: A level over the mark says who reads it and what to move down
+    Given the crew listens on an address the tool can dial
+    And the operator has 100179 characters to say
+    When the operator sets the crew's context with the tool
+    Then standard output carries "100,179 characters"
+    And standard output carries "over the 20,000 character mark"
+    And standard output carries "Every session in every workspace reads it"
+    And standard output carries "quay context set <workspace>"
+    And the command succeeds
+
+  Scenario: The listing says how big every level is, and warns about the one that is large
+    Given the crew listens on an address the tool can dial
+    And the operator has 100179 characters to say
+    And the operator sets the crew's context with the tool
+    When the operator lists the context levels with the tool
+    Then standard output carries "100,179 over the mark"
+    And standard output carries "Every session in every workspace reads it"
+    And the command succeeds

@@ -29,7 +29,10 @@ type toolKey struct{}
 
 // toolWorld is what came back out of the last run of the tool.
 type toolWorld struct {
-	address  string
+	address string
+	// stdin is what one step prepares for a later step to pipe in. Context is read from standard
+	// input rather than from an argument, so the body has to survive between the two.
+	stdin    string
 	stdout   string
 	stderr   string
 	exitCode int

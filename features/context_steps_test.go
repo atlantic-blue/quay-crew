@@ -357,3 +357,32 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 			return runToolSaying(ctx, held+"\n"+added+"\n", "context", "set", whereTheProjectIs(ctx))
 		})
 }
+
+// The steps that write and read context through the real command line tool.
+//
+// How big a level is only matters where a person sees it, and the person sees it on standard output.
+// So these run the tool in its own process rather than calling the control plane, which is the only
+// place the size is rendered at all.
+func initializeContextSizeSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator has (\d+) characters to say$`, func(ctx context.Context, length int) error {
+		toolFrom(ctx).stdin = strings.Repeat("a", length)
+		return nil
+	})
+
+	sc.Step(`^the operator sets the (crew|workspace|project)'s context with the tool$`,
+		func(ctx context.Context, scope string) error {
+			w := worldFrom(ctx)
+			target := "crew"
+			switch scope {
+			case "workspace":
+				target = w.workspaceName
+			case "project":
+				target = w.workspaceName + "/" + w.projectName
+			}
+			return runToolSaying(ctx, toolFrom(ctx).stdin, "context", "set", target)
+		})
+
+	sc.Step(`^the operator lists the context levels with the tool$`, func(ctx context.Context) error {
+		return runTool(ctx, "context")
+	})
+}
