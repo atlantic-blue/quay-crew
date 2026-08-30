@@ -155,6 +155,13 @@ type Sample struct {
 	// Limit is the memory the daemon may hold. On a Mac that is the Docker virtual machine's cap and
 	// not the machine's memory. A machine with 36 gigabytes and a 7.8 gigabyte cap is full at 7.8.
 	Limit Figure
+	// Held and Processors are the same pair on the other axis: what every container is using of the
+	// machine's processors, and how many the daemon has, both as a share of one processor. Memory
+	// alone does not say whether a machine can host another sandbox. On 29 August 2026 the daemon
+	// stopped answering while its containers held 913 per cent of a processor, nine of the host's
+	// fourteen, and it took the whole runtime down with twenty six containers in it.
+	Held       Share
+	Processors Share
 	// Machine is the pressure on the machine the daemon runs on.
 	Machine Machine
 	// Sandboxes is one entry per session container, in the order the source returned them.
@@ -179,6 +186,19 @@ func (s Sample) Free() Figure {
 		return Measured(0)
 	}
 	return Measured(s.Limit.Bytes() - s.Used.Bytes())
+}
+
+// ProcessorFree is what the machine's processors have left, and unknown unless both sides were
+// measured. A daemon holding more than its machine has is reported as nothing free rather than as a
+// negative share: the figures come from two commands and a container started between them is real.
+func (s Sample) ProcessorFree() Share {
+	if !s.Held.Known() || !s.Processors.Known() {
+		return UnknownShare()
+	}
+	if s.Processors.Percent() < s.Held.Percent() {
+		return MeasuredShare(0)
+	}
+	return MeasuredShare(s.Processors.Percent() - s.Held.Percent())
 }
 
 // Fraction is how much of the binding limit is in use, and false unless both sides were measured.

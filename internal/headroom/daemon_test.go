@@ -13,7 +13,10 @@ import (
 // wrong session.
 
 func TestTheLimitIsReadFromTheDaemonRatherThanTheMachine(t *testing.T) {
-	limit, name := parseInfo([]byte("8217579520\tDocker Desktop\n"))
+	limit, processors, name := parseInfo([]byte("8217579520\t14\tDocker Desktop\n"))
+	if !processors.Known() || processors.Percent() != 1400 {
+		t.Errorf("processors = %v, want 1400 per cent, which is fourteen of them", processors)
+	}
 	if !limit.Known() || limit.Bytes() != 8217579520 {
 		t.Fatalf("the limit reads %s", limit)
 	}
@@ -34,7 +37,7 @@ func TestADaemonThatWillNotSayItsMemoryIsUnknown(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			limit, _ := parseInfo([]byte(test.out))
+			limit, _, _ := parseInfo([]byte(test.out))
 			if limit.Known() {
 				t.Fatalf("the limit reads %s, and nothing measured it", limit)
 			}
@@ -50,7 +53,7 @@ func TestEveryContainerCountsTowardsWhatTheDaemonHolds(t *testing.T) {
 		"quaycrew-postgres-1\t34MiB / 7.653GiB\t0.10%",
 		"somebody-elses-build\t512MiB / 7.653GiB\t7.00%",
 	}, "\n")
-	used, boxes := parseStats([]byte(out))
+	used, _, boxes := parseStats([]byte(out))
 	if !used.Known() {
 		t.Fatal("the total is unknown and every line was readable")
 	}
@@ -76,7 +79,7 @@ func TestAContainerTheDaemonCouldNotReadLeavesTheTotalUnknown(t *testing.T) {
 		"quaycrew-a00d36d6454a3de66d02c6a3\t1.201GiB / 7.653GiB\t42.50%",
 		"quaycrew-b11e47e7565b4ef77e13d7b4\t-- / --\t--",
 	}, "\n")
-	used, boxes := parseStats([]byte(out))
+	used, _, boxes := parseStats([]byte(out))
 	if used.Known() {
 		t.Fatalf("the total reads %s while one container was not readable", used)
 	}
@@ -94,7 +97,7 @@ func TestAContainerTheDaemonCouldNotReadLeavesTheTotalUnknown(t *testing.T) {
 // A daemon holding nothing is a reading. It is not the same answer as a daemon that would not say,
 // and the two must not collapse into one.
 func TestADaemonHoldingNothingIsAMeasuredZero(t *testing.T) {
-	used, boxes := parseStats([]byte("  \n"))
+	used, _, boxes := parseStats([]byte("  \n"))
 	if !used.Known() || used.Bytes() != 0 {
 		t.Fatalf("an empty daemon reads %s, want a measured zero", used)
 	}
@@ -104,7 +107,7 @@ func TestADaemonHoldingNothingIsAMeasuredZero(t *testing.T) {
 }
 
 func TestALineTheCrewCannotReadLeavesTheTotalUnknown(t *testing.T) {
-	used, _ := parseStats([]byte("quaycrew-postgres-1\t34MiB"))
+	used, _, _ := parseStats([]byte("quaycrew-postgres-1\t34MiB"))
 	if used.Known() {
 		t.Fatalf("a line with a field missing still gave a total of %s", used)
 	}
@@ -190,7 +193,7 @@ func TestOneReadFailingLeavesTheRestOfTheSampleStanding(t *testing.T) {
 		Root: machineWith("MemTotal:       8024876 kB\nMemAvailable:   1539300 kB\n"),
 		Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
 			if args[0] == "info" {
-				return []byte("8217579520\tDocker Desktop"), nil
+				return []byte("8217579520\t14\tDocker Desktop"), nil
 			}
 			return nil, fmt.Errorf("the daemon is not answering")
 		},
@@ -220,7 +223,7 @@ func TestAMachineWithNoAccountingLeavesTheDaemonsFiguresStanding(t *testing.T) {
 		Root: fstest.MapFS{},
 		Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
 			if args[0] == "info" {
-				return []byte("8217579520\tDocker Desktop"), nil
+				return []byte("8217579520\t14\tDocker Desktop"), nil
 			}
 			return []byte("quaycrew-postgres-1\t34MiB / 7.653GiB\t0.10%"), nil
 		},
@@ -298,4 +301,35 @@ func gibibytes(count float64) int64 {
 
 func machineWith(meminfo string) fstest.MapFS {
 	return fstest.MapFS{"proc/meminfo": &fstest.MapFile{Data: []byte(meminfo)}}
+}
+
+// The processor axis exists because memory was not the axis that broke. On 29 August 2026 eight
+// sandboxes held 7,488 megabytes of a 7,653 megabyte runtime and 913 per cent of a processor at the
+// same moment, and what stopped answering was the daemon.
+func TestEveryContainerCountsTowardsTheProcessorsToo(t *testing.T) {
+	out := strings.Join([]string{
+		"quaycrew-a00d36d6454a3de66d02c6a3\t1.201GiB / 7.653GiB\t420.50%",
+		"quaycrew-postgres-1\t34MiB / 7.653GiB\t12.00%",
+	}, "\n")
+	_, busy, _ := parseStats([]byte(out))
+	if !busy.Known() {
+		t.Fatal("the processor total is unknown and every line was readable")
+	}
+	if busy.Percent() != 432.5 {
+		t.Errorf("the containers hold %s of the processors, want 432.5%%", busy)
+	}
+}
+
+// A figure the daemon would not give up leaves that axis unknown and takes nothing else down with
+// it: a reading missing one container is a reserve that is too small on the machine that needs it
+// most, and a memory total that was fine is still worth having.
+func TestAProcessorFigureTheDaemonWithheldLeavesThatAxisUnknown(t *testing.T) {
+	out := "quaycrew-a00d36d6454a3de66d02c6a3\t1.201GiB / 7.653GiB\t--"
+	used, busy, _ := parseStats([]byte(out))
+	if busy.Known() {
+		t.Errorf("the processor total reads %s, and nothing measured it", busy)
+	}
+	if !used.Known() {
+		t.Error("the memory total went unknown with the processor figure, and it was readable")
+	}
 }

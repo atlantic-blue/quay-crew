@@ -266,10 +266,36 @@ func (m *Memory) StartJob(_ context.Context, id string, lease job.Lease, events 
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Attempts = job.PhaseRunning, found.Attempts+1
+	// The reason goes with the pending phase it described. A job held for want of room and then
+	// admitted must not carry "there is not enough memory" while it runs.
+	found.Reason = ""
 	found.LeaseOwner, found.LeaseUntil = lease.Owner, leaseEnd(lease)
 	found.StartedAt, found.UpdatedAt = &now, now
 	if err := m.appendJobEvents(events); err != nil {
 		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// HoldJob says on a pending job why it is not being started. The phase does not move: the job is
+// still pending and still the next thing this crew will run, and the reason is what tells an
+// operator whether it is waiting its turn or waiting for a machine.
+func (m *Memory) HoldJob(_ context.Context, id, reason string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending {
+		return nil, job.ErrNotPending
+	}
+	found.Reason, found.UpdatedAt = reason, time.Now().UTC()
+	if event != nil {
+		if err := m.appendJobEvents([]*job.Event{event}); err != nil {
+			return nil, err
+		}
 	}
 	kept := cloneJob(*found)
 	return &kept, nil

@@ -173,12 +173,16 @@ func main() {
 		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
 		// to a command that is not there.
 		Headroom: headroomSource(sandboxKind, logger),
-		Store:    durable,
-		Runner:   runner,
-		Provider: provider,
-		Secrets:  credentials,
-		Storage:  storage,
-		Events:   events,
+		// What the crew holds back for its own containers before it admits any sandbox. The control
+		// plane, the database and the event log are containers inside the same runtime the work
+		// fills, so a crew that reserves nothing goes down with its own workload.
+		CrewReserve: controlplane.EnvReserve(logger),
+		Store:       durable,
+		Runner:      runner,
+		Provider:    provider,
+		Secrets:     credentials,
+		Storage:     storage,
+		Events:      events,
 		// What a session's tasks may do when it is born, from the crew's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
@@ -227,6 +231,11 @@ func main() {
 	// What strayed while the crew was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
+
+	// And what survived is counted, before a single job is admitted. Containers outlive the process
+	// that made them, so a crew that started counting from zero would admit a whole machine's worth
+	// of work onto a machine that is already full.
+	server.SeedCapacity(ctx)
 
 	// And what was mid task when the crew went down is settled the same way: a task runs in this
 	// process, so a session the store still calls running is one whose task died with the last one.

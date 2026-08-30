@@ -7,7 +7,10 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
@@ -290,11 +293,34 @@ func (s *dockerSandbox) Close(ctx context.Context) error {
 	return nil
 }
 
+// cpuShares turns a processor request into the weight the runtime shares processors out by.
+//
+// One whole processor is 1024, which is the runtime's own default, so a sandbox asking for one
+// processor is weighted exactly as every sandbox was before requests existed. It is the same
+// arithmetic kubernetes does when it turns a pod's processor request into a weight.
+func cpuShares(percent int) int {
+	if percent <= 0 {
+		return 0
+	}
+	shares := percent * 1024 / capacity.OneProcessor
+	// The runtime refuses a weight below two.
+	if shares < 2 {
+		return 2
+	}
+	return shares
+}
+
 // runArgs is the whole `docker run` for a session's sandbox. It is a function of its own so a test can
 // read what the daemon would be asked for without a daemon: whether the sandbox joins a network at all
 // is the difference between a session that can drive the crew and one that cannot.
 func (d DockerProvider) runArgs(name string, cfg Config, kept []Mount) []string {
 	args := []string{"run", "--detach", "--name", name, "--tmpfs", secretsMount()}
+	if shares := cpuShares(cfg.Request.Processor); shares > 0 {
+		// The processor half of what this sandbox asked for, in the units the runtime shares
+		// processors out in. It binds only when the machine is contended, which is the difference
+		// between a request and a limit: a sandbox alone on an idle machine still gets all of it.
+		args = append(args, "--cpu-shares", strconv.Itoa(shares))
+	}
 	if d.Memory != "" {
 		// Swap is capped with it, at the same figure. Told a memory limit and nothing else, the
 		// daemon allows swap of the same size again, so a session may take twice what the operator

@@ -361,11 +361,31 @@ func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, arg
 // keeps two controllers from both starting the same job. A row that moved on first is refused, and
 // the refusal is not a failure: it means somebody else has it.
 func (p *Postgres) StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error) {
+	// The reason is cleared with the same statement that starts the job. It described the pending
+	// phase the job is leaving, and a job that was held for want of room and then admitted must not
+	// run carrying "there is not enough memory".
 	return p.moveJob(ctx, id, "start job", job.ErrNotPending, events, `
 		update jobs set phase = $2, attempts = attempts + 1, lease_owner = $3, lease_until = $4,
-			started_at = now(), updated_at = now()
+			reason = '', started_at = now(), updated_at = now()
 		where id = $1 and phase = $5`,
 		job.PhaseRunning, lease.Owner, lease.Until, job.PhasePending)
+}
+
+// HoldJob says on a pending job why it is not being started, without moving it.
+//
+// The phase stays pending on purpose. The job is still the next thing this crew will run, and what
+// an operator needs is the difference between waiting its turn and waiting for a machine, which is
+// a sentence rather than a phase. It applies only to a pending job, so a hold can never overwrite
+// how a job ended.
+func (p *Postgres) HoldJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error) {
+	events := []*job.Event{}
+	if event != nil {
+		events = append(events, event)
+	}
+	return p.moveJob(ctx, id, "hold job", job.ErrNotPending, events, `
+		update jobs set reason = $2, updated_at = now()
+		where id = $1 and phase = $3`,
+		reason, job.PhasePending)
 }
 
 // TakeOverJob takes the lease on a job whose holder went away.

@@ -48,14 +48,18 @@ var _ Source = Daemon{}
 // still answers the question the header asks, and the alternative is a header that goes blank
 // because one of three reads did not answer.
 func (d Daemon) Sample(ctx context.Context) (Sample, error) {
-	sample := Sample{TakenAt: time.Now(), Used: Unknown(), Limit: Unknown()}
+	sample := Sample{
+		TakenAt: time.Now(), Used: Unknown(), Limit: Unknown(),
+		Held: UnknownShare(), Processors: UnknownShare(),
+	}
 	var refused []string
 
-	info, err := d.run(ctx, "docker", "info", "--format", "{{.MemTotal}}"+field+"{{.OperatingSystem}}")
+	info, err := d.run(ctx, "docker", "info", "--format",
+		"{{.MemTotal}}"+field+"{{.NCPU}}"+field+"{{.OperatingSystem}}")
 	if err != nil {
 		refused = append(refused, "the daemon did not say how much memory it may hold: "+err.Error())
 	} else {
-		sample.Limit, sample.Machine.Name = parseInfo(info)
+		sample.Limit, sample.Processors, sample.Machine.Name = parseInfo(info)
 	}
 
 	stats, err := d.run(ctx, "docker", "stats", "--no-stream", "--format",
@@ -63,7 +67,7 @@ func (d Daemon) Sample(ctx context.Context) (Sample, error) {
 	if err != nil {
 		refused = append(refused, "the daemon did not say what its containers hold: "+err.Error())
 	} else {
-		sample.Used, sample.Sandboxes = parseStats(stats)
+		sample.Used, sample.Held, sample.Sandboxes = parseStats(stats)
 	}
 
 	machine, err := d.machine()
@@ -114,55 +118,75 @@ func (d Daemon) run(ctx context.Context, name string, args ...string) ([]byte, e
 	return exec.CommandContext(ctx, name, args...).Output()
 }
 
-// parseInfo reads the memory the daemon may hold, and what it calls the machine it runs on.
+// parseInfo reads the two ceilings the daemon works under, and what it calls the machine it runs on.
 //
 // The memory is the limit that binds. On a Mac it is the Docker virtual machine's cap rather than
 // the Mac's memory, which is the whole reason this figure is read from the daemon rather than from
 // the machine: a Mac with 36 gigabytes and a 7.8 gigabyte cap is full at 7.8.
-func parseInfo(out []byte) (Figure, string) {
+//
+// The processors are the second ceiling. On 29 August 2026 eight jobs held 7,488 megabytes of a
+// 7,653 megabyte cap and 913 per cent of a processor at the same moment, and what stopped answering
+// was the daemon rather than the memory. A crew that read memory alone would have admitted a ninth.
+func parseInfo(out []byte) (Figure, Share, string) {
 	line := strings.TrimSpace(string(out))
 	if line == "" {
-		return Unknown(), ""
+		return Unknown(), UnknownShare(), ""
 	}
 	parts := strings.Split(line, field)
-	total, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
-	if err != nil || total <= 0 {
-		return Unknown(), name(parts)
+	limit := Unknown()
+	if total, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64); err == nil && total > 0 {
+		limit = Measured(total)
 	}
-	return Measured(total), name(parts)
+	return limit, processors(parts), name(parts)
+}
+
+// processors is what every container on this daemon may hold together, as a share of one processor:
+// a machine with fourteen of them may hold 1400 per cent. It is the unit the daemon already prints
+// for one container, so the ceiling and the figures under it are read in one language.
+func processors(parts []string) Share {
+	if len(parts) < 2 {
+		return UnknownShare()
+	}
+	count, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil || count <= 0 {
+		return UnknownShare()
+	}
+	return MeasuredShare(float64(count) * 100)
 }
 
 func name(parts []string) string {
-	if len(parts) < 2 {
+	if len(parts) < 3 {
 		return ""
 	}
-	return strings.TrimSpace(parts[1])
+	return strings.TrimSpace(parts[2])
 }
 
-// parseStats adds up what every container holds and pulls the sandboxes out of the list.
+// parseStats adds up what every container holds, on both axes, and pulls the sandboxes out of the
+// list.
 //
 // Every container rather than the crew's own, because the cap binds all of them: the question the
 // figure answers is whether another sandbox will start, and a container belonging to something else
-// takes the same memory.
+// takes the same memory and the same processors.
 //
 // A container the daemon could not read is skipped rather than counted as zero. A total that
 // silently leaves one out is worse than a total that is missing, so a line the crew cannot read
 // leaves the total unknown.
-func parseStats(out []byte) (Figure, []Sandbox) {
+func parseStats(out []byte) (Figure, Share, []Sandbox) {
 	body := strings.TrimSpace(string(out))
 	if body == "" {
 		// The daemon answered and it is holding nothing. Zero is measured here, and it is not the
 		// same answer as a daemon that would not say.
-		return Measured(0), nil
+		return Measured(0), MeasuredShare(0), nil
 	}
 
 	var total int64
+	var busy float64
 	var boxes []Sandbox
-	readable := true
+	readable, readableShare := true, true
 	for _, line := range strings.Split(body, "\n") {
 		parts := strings.Split(strings.TrimSpace(line), field)
 		if len(parts) < 3 {
-			readable = false
+			readable, readableShare = false, false
 			continue
 		}
 		held, ok := parseSize(parts[1])
@@ -171,6 +195,12 @@ func parseStats(out []byte) (Figure, []Sandbox) {
 		} else {
 			total += held.Bytes()
 		}
+		share := parsePercent(parts[2])
+		if !share.Known() {
+			readableShare = false
+		} else {
+			busy += share.Percent()
+		}
 		session, isSandbox := sessionOf(strings.TrimSpace(parts[0]))
 		if !isSandbox {
 			continue
@@ -178,13 +208,20 @@ func parseStats(out []byte) (Figure, []Sandbox) {
 		boxes = append(boxes, Sandbox{
 			Session:   session,
 			Held:      held,
-			Processor: parsePercent(parts[2]),
+			Processor: share,
 		})
 	}
+	// The two axes are reported apart, because one unreadable figure must not take the other down
+	// with it: a daemon that gave every memory figure and one bad processor figure has still said
+	// what the machine holds.
+	used, running := Measured(total), MeasuredShare(busy)
 	if !readable {
-		return Unknown(), boxes
+		used = Unknown()
 	}
-	return Measured(total), boxes
+	if !readableShare {
+		running = UnknownShare()
+	}
+	return used, running, boxes
 }
 
 // sessionOf is the session a container belongs to, and false for a container that is not a sandbox.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/capacity"
 	"github.com/atlantic-blue/quay-crew/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -90,6 +91,10 @@ type Store interface {
 	// WorkspaceLimits is what a workspace lets its job do, which the controller reads for the lease
 	// length: a workspace whose store is slow is the operator's to give a longer hold.
 	WorkspaceLimits(ctx context.Context, workspace string) (Limits, error)
+	// HoldJob says on a pending job why it was not started, leaving it pending. A job the machine
+	// has no room for is not failed and not moved: it waits, and the reason is what tells an
+	// operator that the crew is full rather than stalled.
+	HoldJob(ctx context.Context, id, reason string, event *Event) (*Job, error)
 	// StartJob claims one job and takes a lease on it. It applies only to a job that is
 	// still pending, which is what keeps two controllers from both starting it, and it is what makes
 	// a tick safe to run twice.
@@ -145,6 +150,23 @@ type ControlPlane interface {
 // being wrong the other way closes a conversation under somebody's hands.
 type Attachment interface {
 	SessionAttached(ctx context.Context, session string) (bool, error)
+}
+
+// Room is the machine, asked whether it can host one more sandbox before a job is started.
+//
+// This is the kubernetes shape and it is deliberate. A scheduler places a pod only where the
+// requests already on the node plus this one still fit, and a pod that fits nowhere stays pending
+// with a reason naming the resource, for as long as it takes. It is never admitted and then killed,
+// which is what the crew did: nine jobs against a runtime with room for eight, and the ninth waited
+// two minutes for a container, was failed, and took the runtime down with it. See issue 466.
+//
+// Admit reserves the room in the same movement as the decision, under the caller's key. It has to:
+// a dispatch is detached, so the container appears seconds later, and nine jobs admitted against one
+// reading of an empty machine all fit. Whoever admits is responsible for releasing what it took on
+// every road that does not end in a sandbox.
+type Room interface {
+	Admit(ctx context.Context, key string, want capacity.Request) capacity.Verdict
+	Release(key string)
 }
 
 // Spend is what one session's conversation has cost. An implementation that cannot tell answers zero.
@@ -214,6 +236,9 @@ type Controller struct {
 	// attached is how the controller asks whether an operator has a session's conversation open. Nil
 	// means the crew cannot tell, and a crew that cannot tell reclaims nothing.
 	attached Attachment
+	// room is the machine. Nil admits everything, which is the crew this controller had before
+	// admission was arithmetic, and it says so in the log rather than quietly.
+	room     Room
 	exporter Exporter
 	// revoker takes a job's credentials back when the job ends. Nil takes none back, and then a
 	// credential lasts until it runs out.
@@ -264,19 +289,21 @@ func (c *Controller) Leasing(lease time.Duration) *Controller {
 	return c
 }
 
-// leaseNow is a hold that starts now and runs for this controller's lease.
-func (c *Controller) leaseNow() Lease {
-	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(c.lease)}
-}
-
 // leaseIn is a hold as long as that workspace says, or as long as this controller's own where the
 // workspace says nothing. A workspace whose store is slow is the operator's to give more room.
 func (c *Controller) leaseIn(ctx context.Context, workspace string) Lease {
+	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(c.limitsIn(ctx, workspace).Lease(c.lease))}
+}
+
+// limitsIn is what this workspace says about its jobs, and nothing where it could not be read. A
+// start reads them once and takes two answers from them, the length of the hold and the size of the
+// sandbox, rather than asking the store the same question twice for one job.
+func (c *Controller) limitsIn(ctx context.Context, workspace string) Limits {
 	limits, err := c.store.WorkspaceLimits(ctx, workspace)
 	if err != nil {
-		return c.leaseNow()
+		return Limits{Workspace: workspace}
 	}
-	return Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
+	return limits
 }
 
 // Reading returns a controller that reads the role a job names. Without one, job that
@@ -306,6 +333,13 @@ func (c *Controller) exported(ctx context.Context, events ...*Event) {
 // Redacting returns a controller that takes every line it writes through the crew redactor.
 func (c *Controller) Redacting(redactor Redactor) *Controller {
 	c.redactor = redactor
+	return c
+}
+
+// Placing returns a controller that asks the machine for room before it starts a job. Without one
+// it starts whatever it reads, which is admission by count with the count taken off.
+func (c *Controller) Placing(room Room) *Controller {
+	c.room = room
 	return c
 }
 
@@ -398,7 +432,20 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 
 	handle := SessionFor(one.ID)
-	lease := c.leaseIn(ctx, one.Workspace)
+	limits := c.limitsIn(ctx, one.Workspace)
+	lease := Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
+
+	// The machine is asked before the row is claimed, because a job the machine cannot host must
+	// stay pending rather than start and be killed. The room is taken in the same movement as the
+	// answer, so the next job in this same pass counts it: nine jobs asking one ten second old
+	// reading whether it is empty all get told yes, which is how nine went onto a machine with room
+	// for eight. Every road below that does not end in a dispatch gives it back.
+	key := capacity.KeyFor(one.Project, handle)
+	if verdict := c.admit(ctx, key, limits.Request(capacity.DefaultRequest())); !verdict.OK {
+		c.hold(ctx, one, verdict.Reason)
+		return
+	}
+
 	// The boundary is read before the claim is described, so job that is refused carries a claim and
 	// a refusal on its record and no line saying a task was started that never was.
 	refusal := c.refusedMaterial(ctx, one)
@@ -413,12 +460,15 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 			// One row that cannot be claimed must not stop the others: the next tick tries it again.
 			c.logger.WarnContext(ctx, "could not claim a job", "job", one.ID, "error", err)
 		}
+		// The row is somebody else's, so the room this controller took for it is not its to hold.
+		c.releaseRoom(key)
 		return
 	}
 	c.exported(ctx, records...)
 	// Claimed and then stopped, with nothing dispatched. The claim is what keeps another controller
 	// from picking the same row up while this one writes the refusal.
 	if refusal != "" {
+		c.releaseRoom(key)
 		c.land(ctx, claimed, Landing{Phase: PhaseStopped, Reason: refusal}, EventStopped)
 		return
 	}
@@ -451,8 +501,57 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 		return
 	}
 	// A job whose task could not be started is failed with the reason rather than left running with
-	// nothing behind it, which is a row nobody can tell from job in progress.
+	// nothing behind it, which is a row nobody can tell from job in progress. Its room goes back:
+	// there is no sandbox and there is not going to be one.
+	c.releaseRoom(key)
 	c.land(ctx, claimed, Landing{Phase: PhaseFailed, Reason: oneLine(err.Error())}, EventFailed)
+}
+
+// admit asks the machine for room for this job's sandbox. A controller with no machine to ask admits
+// everything, which is what every controller did before this, and it says so once rather than
+// quietly: a crew running blind should read as running blind.
+func (c *Controller) admit(ctx context.Context, key string, want capacity.Request) capacity.Verdict {
+	if c.room == nil {
+		return capacity.Verdict{OK: true, Unmeasured: true}
+	}
+	verdict := c.room.Admit(ctx, key, want)
+	if verdict.Unmeasured {
+		c.logger.WarnContext(ctx, "the crew cannot read its runtime, so this job was admitted without arithmetic",
+			"job", key, "wants", want.String())
+	}
+	return verdict
+}
+
+// releaseRoom gives back what this controller reserved for a sandbox that will not be made.
+func (c *Controller) releaseRoom(key string) {
+	if c.room != nil {
+		c.room.Release(key)
+	}
+}
+
+// hold says on a pending job why the crew is not starting it.
+//
+// The phase does not move. The job is still the next thing this crew will run and nothing about it
+// has failed, which is the whole difference between this and stopping it: a machine that is full
+// now has room in ten minutes, and the job is still there when it does. What an operator gets is the
+// sentence, because "pending" alone reads the same on a busy crew and a stalled one.
+//
+// Written only when the sentence changes. A controller ticks every few seconds and a machine stays
+// full for minutes, so writing every tick would be a row update and a record a second saying the
+// same thing.
+func (c *Controller) hold(ctx context.Context, one *Job, reason string) {
+	if one.Reason == reason {
+		return
+	}
+	record := c.event(ctx, one, EventHeld, reason)
+	if _, err := c.store.HoldJob(ctx, one.ID, reason, record); err != nil {
+		if !errors.Is(err, ErrNotPending) {
+			c.logger.WarnContext(ctx, "could not say why a job is being held", "job", one.ID, "error", err)
+		}
+		return
+	}
+	c.exported(ctx, record)
+	c.logger.InfoContext(ctx, "a job is waiting for room on the machine", "job", one.ID, "reason", reason)
 }
 
 // refusedMaterial is why a job cannot be given to the role it names, and empty where the

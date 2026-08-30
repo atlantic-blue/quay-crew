@@ -731,8 +731,9 @@ session is under. That last one is the difference from a skill, whose listing st
 a capability a session already holds and uses by name.
 
 **What is enforced, and what is only stored.** `max_depth` is enforced at the write, and the refusal
-names the limit and the command that raises it. `max_running` and `budget_tokens` are stored, read
-and set, and nothing enforces them yet: nothing runs a child, so there is no fan out to bound. The
+names the limit and the command that raises it. The request is enforced at every start: the crew adds
+up what its sandboxes asked for and holds a job that does not fit. `max_running` and `budget_tokens`
+are stored, read and set, and nothing enforces them yet: nothing runs a child, so there is no fan out to bound. The
 slice that runs a job in a role is where they start to bite. The lease length is read by the
 controller when it claims that workspace's job.
 
@@ -846,18 +847,61 @@ Three limits, and each catches a different failure.
   controller checks it before each dispatch, never after, which is what `brake` already does in
   `internal/flow/advance.go`. The dispatch that would cross the line is never made and never paid
   for.
-- **The concurrency limit.** `max_running` per workspace. It bounds the rate of spend rather than
-  the total, and it also bounds memory. Two open issues make that concrete: `quay-crew#381` says the
-  core services share one memory pool with the sandboxes, so a session can kill the crew, and
-  `quay-crew#373` says a session already runs out of memory running a repository's own gates. Until
-  those are closed, the limit is the only thing standing between a fan out and a dead crew.
+- **The request.** What one sandbox asks the machine for, per workspace, in memory and processors.
+  This is what bounds a fan out, and it is arithmetic rather than a count: the crew reads what its
+  runtime has, holds back what its own containers are using, and starts a job only where what is
+  already placed plus this one still fits. A job that does not fit stays pending and says which
+  resource ran out. See section 5.1.
+- **The concurrency limit.** `max_running` per workspace. It bounds the rate of spend, and it no
+  longer has to bound memory: a count cannot, because sandboxes are not the same size, which is what
+  `quay-crew#466` is about.
 - **The deadline.** Wall clock rather than tokens, for a job that has stopped being useful.
 
 No default value is named here for `budget_tokens` or `max_running`. The crew ships them unset, and
 jobs run bounded by depth and by the deadline alone. The measurement that would set the budget is
-the median `quaycrew.tokens` for a completed job over the first fifty. The measurement
-that would set `max_running` is the number of concurrent sandboxes at which the host's memory
-pressure first appears, which is exactly what `quay-crew#381` asks somebody to measure.
+the median `quaycrew.tokens` for a completed job over the first fifty. `max_running` no longer
+carries the machine: the request does, and that one is measured, in `internal/capacity`.
+
+### 5.1 How the machine is bounded
+
+A count cannot protect a machine, because sandboxes are not the same size. On 30 August 2026 nine
+jobs went onto a runtime with room for fewer, and the runtime exited with the control plane, the
+database and eight running jobs inside it. Ten sandboxes measured on that machine held between 4.3
+and 764.5 megabytes, and `max_running` said they were the same.
+
+So the crew does what a scheduler does.
+
+**A sandbox declares a request.** Memory and processor, per workspace, in the units the room view
+prints: `quay limits <workspace> --request-memory 1536 --request-processor 100`. A workspace that
+declares nothing takes the crew's own measured request. The container carries the processor half of
+it as a share, so the runtime divides its processors in the proportions the crew reserved.
+
+**The crew reads what its runtime has, and holds back what it is using itself.** The capacity is the
+runtime's own memory and processor count, read from the daemon and never from the host: the host had
+36 gibibytes free while the runtime had 7.65 and was full. The reserve is measured rather than
+declared, because the crew's control plane, database and event log are containers inside the same
+runtime the work fills. Everything the runtime holds, less what the sandboxes hold, is the crew's
+own, and `QC_CREW_RESERVE_MEMORY` and `QC_CREW_RESERVE_PROCESSOR` are a floor under it for the
+minutes after a restart when those containers are cold. This is the one place the design differs
+from kubernetes, where the kubelet sits outside the pods it manages.
+
+**Admission is arithmetic.** What is already placed, plus this one, against capacity less the
+reserve. A job that does not fit stays pending, for as long as it takes, and carries a reason naming
+the resource that ran out. It is never admitted and then killed. `quay job list` shows it as `held`
+rather than `pending`, because a full machine and a stalled crew must not read the same.
+
+**The room is taken in the same movement as the decision.** A dispatch is detached, so a container
+appears seconds after the job that asked for it, and the reading of the machine is ten seconds wide.
+Nine jobs asking one reading whether the machine is empty are all told yes, which is the shape of the
+incident. So the ledger in `internal/capacity` records what has been promised as well as what has
+been built, and the next job counts it. Kubernetes calls this assuming the pod onto the node.
+
+**A crew that cannot read its runtime admits the work and says so.** A crew whose sessions do not run
+on a container runtime has no arithmetic to do, and stopping dead there would be worse than the crew
+that counted.
+
+**What this does not do.** Nothing holds a sandbox to what it asked for, which is issue 477, and
+nothing stops anything once a machine is in trouble anyway, which is issue 478.
 
 ## 6. The system workspace
 
