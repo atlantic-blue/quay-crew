@@ -191,6 +191,13 @@ func TestEveryRuleOfADeclarationIsRefusedWithASentence(t *testing.T) {
 			says: []string{"climbs out"},
 		},
 		{
+			name: "a brief that asks the job to wait",
+			request: &quaycrewv1.CreateJobRequest{
+				Project: project, Title: "read the bill",
+				Brief: "push it, watch the checks and merge on green"},
+			says: []string{"watch the checks", "cannot wait", "quay flow import"},
+		},
+		{
 			name: "a budget below zero",
 			request: &quaycrewv1.CreateJobRequest{
 				Project: project, Title: "read the bill", Brief: "open it", BudgetTokens: -1},

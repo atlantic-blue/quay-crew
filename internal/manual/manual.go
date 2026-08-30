@@ -63,7 +63,9 @@ commands:
     [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job.
     [--expect-file <path>]                --repository says where the work goes, and a job that
     [--expect-contains "..."]             names one is not done until its answer names a pull
-    [--repository <owner>/<name>]         request against it
+    [--repository <owner>/<name>]         request against it. A brief that asks the job to wait
+                                          for the checks, or to merge on the result, is refused:
+                                          nothing wakes a job, so that shape is a flow
   job list [<address>|crew]               the jobs there are, newest first. With no address it
     [--phase <phase>] [--label k=v]       reads where you are standing and says so, and crew reads
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,

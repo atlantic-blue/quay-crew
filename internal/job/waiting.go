@@ -43,7 +43,7 @@ var waitsForAPipeline = regexp.MustCompile(
 // mergesOnAResult is a brief that asks the job to merge a pull request, or to merge on what a
 // pipeline said. Merging is the gate, and a gate a job walks through on its own is not a gate.
 var mergesOnAResult = regexp.MustCompile(
-	`(?i)\bmerge[sd]?\b[^.!?]{0,` + fmt.Sprint(mergeWindow) + `}?` +
+	`(?i)\bmerg(e|es|ed|ing)\b[^.!?]{0,` + fmt.Sprint(mergeWindow) + `}?` +
 		`\b(green|pull request|pull requests|pr|checks|continuous integration|ci)\b`)
 
 // negations are the words that turn one of the phrases above into an instruction not to do it. "Do
@@ -97,8 +97,9 @@ func negated(said string, at int) bool {
 // because a refusal a caller cannot act on sends them looking.
 func RefusedWait(asked string) error {
 	return fmt.Errorf("job's brief says %q, and a job cannot wait: it runs once and answers, so nothing "+
-		"wakes it when the checks land. That shape is a flow, and it is three nodes: a dispatch that "+
-		"pushes and opens the pull request, a wait, then a choice on the check result. Write it as a "+
-		"graph and import it with `quay flow import`, or let this job end at the pull request and leave "+
-		"the merge to somebody else", asked)
+		"wakes it when the checks land, and a merge that turns on them is a merge nobody is there to "+
+		"make. That shape is a flow, and it is three nodes: a dispatch that pushes and opens the pull "+
+		"request, a wait, then a choice on the check result. Write it as a graph and import it with "+
+		"`quay flow import`, or let this job end at the pull request and leave the merge to somebody "+
+		"else", asked)
 }
