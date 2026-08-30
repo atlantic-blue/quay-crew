@@ -762,7 +762,8 @@ slice that runs a job in a role is where they start to bite. The lease length is
 controller when it claims that workspace's job.
 
 **What this does not do.** It does not scope `job.read` to the caller's own tree yet: the verb is
-checked, the tree is not. And `job.answer` is granted and refused but nothing asks a question yet.
+checked, the tree is not. `job.answer` is granted and refused, and no call is mapped to it: a
+question is put to a person, and only the operator answers one.
 
 **What it did not do until 29 August 2026, and now does.** It did not put a session's container on a
 network that could reach the control plane, so every call a session made died resolving the name and
@@ -781,12 +782,22 @@ Four, and no more, because a verb nobody uses is a boundary that means nothing.
 
 - `job.create`, declare a job. The parent comes from the credential.
 - `job.read`, read a job and its answer. Scoped to the tree the credential's own job is in.
-- `job.answer`, answer a question a job asked. An operator only, in the first version.
+- `job.answer`, answer a question a job asked. An operator only, in the first version, and that is
+  what shipped: the verb is grantable and `AnswerJob` is mapped to no verb at all, so a role that
+  holds it answers nothing. A run that could answer its own question is a gate that decorates.
 - `job.stop`, stop a job in the tree.
 
 Asking is not a fifth verb. A session puts a question about the job it is itself running, and the
 credential is already bound to that job identifier, so no grant is involved. `AskJob` refuses any
 identifier but the caller's own, which is why it needs none.
+
+**What shipped on 30 August 2026.** `AskJob` and `AnswerJob`, the `asking` phase written by
+something other than a flow, the `job.asked` and `job.told` records, and a `told` column carrying
+what a person decided until the session is handed it. The job stops at the question and no controller
+holds it, because there is nothing to come back for; the answer puts it back to pending, and the
+controller starts it the way it starts anything else, sending the answer and the question rather than
+the brief. The cost is that the session keeps its container while it waits, since the job is not over
+and a session its job still wants is never put away.
 
 Deliberately absent: no verb creates a workspace, a project, a secret, a skill, a hook or a role.
 Those are already refused to the driver in `DeniedToDriver`, and the reason there is the reason
