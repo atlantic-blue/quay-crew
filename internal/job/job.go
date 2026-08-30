@@ -244,9 +244,6 @@ func (d Declaration) Tidied() Declaration {
 
 // Validate refuses a declaration that could not run, with a sentence saying what to do instead.
 //
-// The brief is read as well as the fields. A brief that asks the job to wait for a pipeline is
-// refused here rather than run, because the runtime has no wait and the session invents one.
-//
 // Everything here is decidable from the declaration alone. Whether the workspace, the project, the
 // role and the job it waits for exist is the control plane's question, because only the store can
 // answer it.
@@ -281,9 +278,6 @@ func (d Declaration) Validate() error {
 	}
 	if err := usableRepository(tidy.Repository); err != nil {
 		return err
-	}
-	if asked := OnlyAFlowCan(tidy.Brief); asked != "" {
-		return RefusedWait(asked)
 	}
 	if err := tidy.validateRequires(); err != nil {
 		return err

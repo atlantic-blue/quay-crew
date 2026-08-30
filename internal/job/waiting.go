@@ -103,3 +103,15 @@ func RefusedWait(asked string) error {
 		"`quay flow import`, or let this job end at the pull request and leave the merge to somebody "+
 		"else", asked)
 }
+
+// Declared is the rule applied to what a caller declared, and it is where the rule belongs.
+//
+// A caller writes one brief and the crew runs it once. A flow's step is a different thing: the graph
+// around it holds the wait, so its third node says "merge the pull request" and means it. Holding a
+// step to this rule would refuse the very graph the refusal tells a caller to write.
+func Declared(brief string) error {
+	if asked := OnlyAFlowCan(brief); asked != "" {
+		return RefusedWait(asked)
+	}
+	return nil
+}

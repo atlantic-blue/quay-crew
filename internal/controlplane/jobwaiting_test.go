@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"google.golang.org/grpc/codes"
@@ -106,5 +107,27 @@ func TestOrdinaryBriefsAreStillDeclared(t *testing.T) {
 		if created.GetJob().GetBrief() != brief {
 			t.Errorf("the job's brief reads back as %q", created.GetJob().GetBrief())
 		}
+	}
+}
+
+// A step of a flow is not a job somebody wrote, so it is not held to this rule.
+//
+// The graph around a step holds the wait. Its last node says "merge the pull request" and means it,
+// and refusing that would refuse the very graph the refusal tells a caller to write. The engine
+// declares a step through PrepareJob, which is the call this drives.
+func TestAFlowStepThatMergesThePullRequestIsPrepared(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+	carrier := declareJob(t, s, project, "flow ship version 1")
+
+	step, _, err := s.PrepareJob(context.Background(), carrier.GetId(), job.Declaration{
+		Project: project, Title: "ship step merge",
+		Brief: "Merge the pull request. Every check passed.",
+	})
+	if err != nil {
+		t.Fatalf("a flow's merge step was refused: %v", err)
+	}
+	if step.Parent != carrier.GetId() {
+		t.Fatalf("the step hangs under %q, want the carrier", step.Parent)
 	}
 }
