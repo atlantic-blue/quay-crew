@@ -1009,7 +1009,7 @@ message GetInfoResponse {
   string secrets = 6;
   // sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
   // Sessions run whatever that image holds, so an image older than the tool means the system moved on
-  // and the containers did not: the `quay` inside one is from that build, or is not there at all.
+  // and the containers did not: the `krewe` inside one is from that build, or is not there at all.
   // Empty means the image says nothing about which build it came from, which is every image made
   // before this was stamped, and nothing is claimed about it either way.
   string sandbox_build = 7;
@@ -1212,7 +1212,7 @@ message Job {
   // phase is where the job is: pending, waiting, running, asking, done, failed or stopped. The last
   // three are terminal.
   string phase = 18;
-  // session is the conversation the job runs in, empty until one exists. It is what quay attach
+  // session is the conversation the job runs in, empty until one exists. It is what krewe attach
   // takes.
   string session = 19;
   int32 attempts = 20;

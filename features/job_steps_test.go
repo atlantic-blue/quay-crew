@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -455,7 +455,7 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 					return fmt.Errorf("the declaration says the %s skill is left out saying %q, want it to name %q",
 						name, one.GetLeftOut(), secret)
 				}
-				if !strings.Contains(one.GetLeftOut(), "quay secret set") {
+				if !strings.Contains(one.GetLeftOut(), "krewe secret set") {
 					return fmt.Errorf("the declaration says %q, want it to say how to set the secret",
 						one.GetLeftOut())
 				}

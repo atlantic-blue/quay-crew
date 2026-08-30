@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/cucumber/godog"
 )
 

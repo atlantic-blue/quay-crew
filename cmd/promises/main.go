@@ -21,7 +21,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/atlantic-blue/quay-crew/internal/promise"
+	"github.com/atlantic-blue/krewe/internal/promise"
 )
 
 func main() {

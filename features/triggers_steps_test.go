@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/cucumber/godog"
 )
 

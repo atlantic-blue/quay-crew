@@ -3,5 +3,5 @@ version: 1
 summary: Read, comment on and transition Jira issues through its REST API; write only when asked.
 binaries: [curl]
 secrets:
-  JIRA_EMAIL: the email of the Atlassian account the token belongs to, set with `quay secret set <workspace> JIRA_EMAIL`
-  JIRA_API_TOKEN: an API token from id.atlassian.com, set with `quay secret set <workspace> JIRA_API_TOKEN`
+  JIRA_EMAIL: the email of the Atlassian account the token belongs to, set with `krewe secret set <workspace> JIRA_EMAIL`
+  JIRA_API_TOKEN: an API token from id.atlassian.com, set with `krewe secret set <workspace> JIRA_API_TOKEN`

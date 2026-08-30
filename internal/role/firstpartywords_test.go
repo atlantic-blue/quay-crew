@@ -11,7 +11,7 @@ import (
 // notOurs is a name a role this build ships, and the writing about one, must not carry: the name
 // itself, the prefix it put on the front of its own agents, and the prefix its own commands took.
 //
-// The roles are quay's own. A brief carrying another product's name sends a session looking for a
+// The roles are krewe's own. A brief carrying another product's name sends a session looking for a
 // file, a command or an agent that is not here, and a reader of an open repository takes the name as
 // a dependency this build has.
 var notOurs = regexp.MustCompile(`(?i)greenlight|\bgl-|/gl:`)
@@ -46,7 +46,7 @@ type naming struct {
 }
 
 // namesAnotherProduct reads every file under root, or every file with the extension given, and
-// reports each line naming a product that is not quay. It returns the count of files it opened as
+// reports each line naming a product that is not krewe. It returns the count of files it opened as
 // well, because no findings over no files reads exactly like a clean sweep.
 func namesAnotherProduct(root, only string) ([]naming, int, error) {
 	var found []naming
@@ -77,7 +77,7 @@ func namesAnotherProduct(root, only string) ([]naming, int, error) {
 }
 
 // The guard. No role this build ships, and no document or scenario written about one, carries the
-// name of a product that is not quay.
+// name of a product that is not krewe.
 func TestNothingWeShipNamesAnotherProduct(t *testing.T) {
 	for _, root := range swept {
 		found, opened, err := namesAnotherProduct(root.dir, root.only)
@@ -85,7 +85,7 @@ func TestNothingWeShipNamesAnotherProduct(t *testing.T) {
 			t.Fatalf("reading %s: %v", root.dir, err)
 		}
 		for _, one := range found {
-			t.Errorf("%s:%d names a product that is not quay: %s", one.file, one.line, one.text)
+			t.Errorf("%s:%d names a product that is not krewe: %s", one.file, one.line, one.text)
 		}
 		// The count is reported so a sweep that opened four files cannot read as one that opened
 		// them all.

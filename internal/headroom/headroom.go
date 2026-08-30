@@ -1,9 +1,9 @@
 // Package headroom says how much room the machine has left for another session.
 //
 // The system knew nothing about the machine it ran on. On 27 August 2026 the host ran out of memory
-// and the kernel killed eighteen sandboxes, three monitors and a build in one event. Nothing in quay
+// and the kernel killed eighteen sandboxes, three monitors and a build in one event. Nothing in krewe
 // reported it before, during or after: the console kept drawing a healthy system, and every number
-// that mattered had to be read from outside quay with `docker stats`. See issue 405.
+// that mattered had to be read from outside krewe with `docker stats`. See issue 405.
 //
 // So this reads the daemon the control plane already talks to and reports four things: what every
 // container holds, the limit that binds, what each sandbox holds, and the memory pressure on the

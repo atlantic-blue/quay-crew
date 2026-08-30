@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived
@@ -161,7 +161,7 @@ const killedStatus = 137
 // limit was killed at exit 137 with both streams empty.
 const killed = "run exited: exit status 137, which is a kill rather than a failure, and nothing " +
 	"killed this way gets to say so. Two things do it. The kernel takes a process for memory, which " +
-	"quay room reports from inside the sandbox: it says what memory is there and what has already " +
+	"krewe room reports from inside the sandbox: it says what memory is there and what has already " +
 	"been killed in it. Or the container went away underneath the task, which an upgrade or a stop " +
 	"does."
 

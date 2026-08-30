@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // These drive the engine against the real in memory store rather than a double of it, because what
@@ -114,7 +114,7 @@ func started(t *testing.T, engine *flow.Engine, it *system, graph, workspace, pr
 }
 
 // stepOf is the job a run's current step went out as. It is found by the labels every step
-// carries, which is the road a person takes too: quay job list --label flow.run=<run>.
+// carries, which is the road a person takes too: krewe job list --label flow.run=<run>.
 func stepOf(t *testing.T, it *system, run flow.Run) *job.Job {
 	t.Helper()
 	listed, err := it.store.ListJobs(context.Background(), job.Filter{

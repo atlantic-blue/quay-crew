@@ -9,11 +9,11 @@ import (
 	"slices"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -445,7 +445,7 @@ func reloadSkills(ctx context.Context) error {
 // importedManifest is a skill on its way into the store, the way a client sends one after reading a
 // directory. It carries a secret so the refusals cover the imported half too.
 func importedFiles(name string, version int, brief string) []*quaycrewv1.SkillFile {
-	manifest := fmt.Sprintf("name: %s\nversion: %d\nsummary: Open pull requests and issues, and push branches.\nbinaries: [git]\nsecrets:\n  GH_TOKEN: a token with repo scope, set with quay secret set\n",
+	manifest := fmt.Sprintf("name: %s\nversion: %d\nsummary: Open pull requests and issues, and push branches.\nbinaries: [git]\nsecrets:\n  GH_TOKEN: a token with repo scope, set with krewe secret set\n",
 		name, version)
 	if name == "notes" {
 		// A second skill with nothing to authenticate, so a scenario about two of them does not need two

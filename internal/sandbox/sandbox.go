@@ -8,7 +8,7 @@ import (
 	"io"
 	"path"
 
-	"github.com/atlantic-blue/quay-crew/internal/capacity"
+	"github.com/atlantic-blue/krewe/internal/capacity"
 )
 
 // Spec describes a command to run inside a Sandbox.
@@ -156,7 +156,7 @@ const (
 	UserID = 1001
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
 	// opening a session twice lands in the one already running.
-	AttachedSessionName = "quay"
+	AttachedSessionName = "krewe"
 	// RuntimeBinary is what the model runtime is called inside a sandbox, which is what says a session
 	// is holding a conversation rather than sitting empty. A property of the image: the Dockerfile
 	// installs it and every task and every attached conversation runs it by this name.

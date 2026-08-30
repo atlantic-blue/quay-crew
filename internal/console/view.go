@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/headroom"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -125,7 +125,7 @@ var everywhereKeys = [][2]string{
 	{"ctrl-d ctrl-u", "Half a page down, half up"},
 	{"enter", "Drill in"},
 	{"esc", "Back, or clear the filter"},
-	{":", "Switch view, or run any quay command"},
+	{":", "Switch view, or run any krewe command"},
 	{"/", "Filter these rows"},
 	{"n N", "Next and previous match of what was filtered for"},
 	{"r", "Refresh now"},
@@ -269,7 +269,7 @@ func roomWord(state string) string {
 
 // sandboxImagePhrase names the build every session is running, and says in red when the system has
 // moved on from it. Sessions run whatever that image holds, so an image left behind is a system whose
-// conversations are on the build from before, with the quay inside them older than the system or not
+// conversations are on the build from before, with the krewe inside them older than the system or not
 // there at all. An image that does not say which build it is is left out rather than guessed at.
 func sandboxImagePhrase(info Info) string {
 	if info.SandboxBuild == "" {
@@ -798,7 +798,7 @@ func (m Model) offered() string {
 		if instead, gone := moved(m.input); gone {
 			return faint.Render("   " + instead)
 		}
-		return faint.Render("   enter runs this as a quay command")
+		return faint.Render("   enter runs this as a krewe command")
 	}
 	return faint.Render("   " + strings.Join(names, "  "))
 }

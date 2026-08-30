@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/browser"
+	"github.com/atlantic-blue/krewe/internal/browser"
 	"github.com/cucumber/godog"
 )
 

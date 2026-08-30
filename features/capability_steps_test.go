@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/role"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/role"
 	"github.com/cucumber/godog"
 )
 
@@ -181,7 +181,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the system refuses it and names the limit and the command that raises it$`, func(ctx context.Context) error {
-		for _, want := range []string{"no deeper than", "quay limits"} {
+		for _, want := range []string{"no deeper than", "krewe limits"} {
 			if err := theRefusalSays(want)(ctx); err != nil {
 				return err
 			}

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/hook"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // A hook is only real if the runtime can run it. Everything else can be right while the command in

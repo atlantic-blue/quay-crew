@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
 )
 
 // What a declaration says about the credentials the workspace does not have, over the real database
@@ -52,7 +52,7 @@ func TestDeclaringJobNamesTheSkillsTheWorkspaceCannotSupply(t *testing.T) {
 		if !named {
 			t.Fatalf("the declaration names %v, want it to name the %s skill", keysOf(left), name)
 		}
-		for _, want := range []string{"GH_TOKEN", "quay secret set"} {
+		for _, want := range []string{"GH_TOKEN", "krewe secret set"} {
 			if !strings.Contains(why, want) {
 				t.Errorf("the declaration says the %s skill is left out saying %q, want it to say %q",
 					name, why, want)

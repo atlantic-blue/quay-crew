@@ -4,7 +4,7 @@
 # named gitconfig on the workspace and it lands at the path below, so a session gets the operator's
 # own identity, aliases and settings from any shell, in any repository:
 #
-#     quay secret mount <workspace> gitconfig ~/.gitconfig
+#     krewe secret mount <workspace> gitconfig ~/.gitconfig
 #
 # An include rather than the configuration itself, because the configuration is the operator's and
 # the image is shared. A missing include is not an error in git, so a workspace that mounts nothing

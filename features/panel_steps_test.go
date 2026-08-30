@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/panel"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/panel"
 	"github.com/cucumber/godog"
 )
 
@@ -58,13 +58,13 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		newest, found := newestOpenable(listed.GetSessions())
 		if !found {
 			p.err = fmt.Errorf("there is no conversation to put beside the console yet: " +
-				"start one with `quay task \"hello\"`, then open the panel again")
+				"start one with `krewe task \"hello\"`, then open the panel again")
 			return nil
 		}
 		p.commands, p.err = panel.Layout{
-			Header: []string{"quay", "header"}, HeaderRows: 10,
-			Left:  []string{"quay", "console"},
-			Right: []string{"quay", "attach", newest},
+			Header: []string{"krewe", "header"}, HeaderRows: 10,
+			Left:  []string{"krewe", "console"},
+			Right: []string{"krewe", "attach", newest},
 		}.Commands(panel.Terminal{})
 		return nil
 	})
@@ -162,7 +162,7 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 		if p.err == nil {
 			return fmt.Errorf("nothing was refused")
 		}
-		if !strings.Contains(p.err.Error(), "quay task") {
+		if !strings.Contains(p.err.Error(), "krewe task") {
 			return fmt.Errorf("the refusal is %q, and never says what to type", p.err)
 		}
 		return nil

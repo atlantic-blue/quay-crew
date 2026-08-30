@@ -78,7 +78,7 @@ Feature: A flow runs a graph across sessions
     And no session the run started is still live
     And no job of the run is still open
 
-  # A step's answer used to land in the run's state as result.reply, where quay flow show truncated
+  # A step's answer used to land in the run's state as result.reply, where krewe flow show truncated
   # it. It is a field on a job now, so a caller reads it as data.
   Scenario: Every step's answer is a field a caller can read
     When the operator starts the flow "fix-red" in the project
@@ -405,7 +405,7 @@ Feature: A flow runs a graph across sessions
     And reading the run back says it stopped over "all green"
 
   # The other half of quay-crew#461. A stopped run recorded the finding under `result.expected` and
-  # nothing anywhere else, so `quay flow show` printed one sentence twice and never said what the
+  # nothing anywhere else, so `krewe flow show` printed one sentence twice and never said what the
   # graph had asked for. `result.failed` read false on the same screen as the line saying the run
   # stopped, which is two fields contradicting each other in front of the reader.
   Scenario: A run that stopped says what the graph wanted apart from what the system found
@@ -424,7 +424,7 @@ Feature: A flow runs a graph across sessions
     And reading the run back says it wanted "package.json" and found "is not in the session"
 
   # A step's session is made when its job starts, so there is nothing to set a mode on beforehand and
-  # `quay mode` has nothing to point at. Every automation therefore ran in the mode a session is born
+  # `krewe mode` has nothing to point at. Every automation therefore ran in the mode a session is born
   # in, and a graph whose first step is "clone this" could not take it: cloning needs the network, and
   # a dispatched task has nobody to ask for permission.
   Scenario: A graph says what its runs may do, and the turns run in it

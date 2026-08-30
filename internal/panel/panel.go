@@ -12,7 +12,7 @@ import (
 
 // SessionName is the tmux session the panel lives in. One name, so opening the panel twice comes back
 // to the one already open rather than stacking a second layout on top of it.
-const SessionName = "quay-panel"
+const SessionName = "krewe-panel"
 
 // WindowName names the window inside it, so panes can be addressed without counting.
 const WindowName = "panel"
@@ -117,7 +117,7 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 
 // VersionOption is where the panel records the build that made it. A tmux user option, so it travels
 // with the session and needs nothing of ours to remember it.
-const VersionOption = "@quay-version"
+const VersionOption = "@krewe-version"
 
 // Built asks tmux which build made the panel that is already open.
 func Built(session string) []string {

@@ -30,12 +30,12 @@ Feature: One word for declared intent, and the word it replaced refuses
   Scenario: The word declares a job and says how to read it back
     When the caller declares a job through the tool, titled "read the electricity bill"
     Then standard output says it is declared
-    And standard output says to read it back with "quay job show"
+    And standard output says to read it back with "krewe job show"
     And the command succeeds
 
   Scenario Outline: The word that went refuses, names what to type, and fails
     When the caller types "<gone>" against the project with "remember the number"
-    Then standard error says "quay job"
+    Then standard error says "krewe job"
     And standard error does not carry the message
     And standard output is empty
     And the command fails
@@ -54,7 +54,7 @@ Feature: One word for declared intent, and the word it replaced refuses
   Scenario: The whole command refuses on the word, not on its flags
     When the caller declares a job through the tool with the word that went
     Then standard error says "there is no work command"
-    And standard error says "quay job <create|list|show|stop>"
+    And standard error says "krewe job <create|list|show|stop>"
     And the command fails
     And no job was written
 

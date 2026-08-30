@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/hook"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // The shipped analyser, run inside the real sandbox image, the way the runtime runs it.
@@ -112,7 +112,7 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 //
 // The analyser drops every CLAUDE_ variable before running its child, so the child does not inherit
 // what the running session set for itself. On a machine with a logged in install that costs nothing,
-// because the credential is a file. A quay sandbox has no credentials file: the workspace's
+// because the credential is a file. A krewe sandbox has no credentials file: the workspace's
 // subscription arrives as CLAUDE_CODE_OAUTH_TOKEN, and dropping it left the child unable to
 // authenticate.
 //

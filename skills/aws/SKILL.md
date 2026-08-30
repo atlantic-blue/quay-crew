@@ -29,7 +29,7 @@ mutation directly, say that and offer to write the change.
 ## When it fails
 
 An authentication failure means the workspace needs the pair set with
-`quay secret set <workspace> AWS_ACCESS_KEY_ID <value>` and
-`quay secret set <workspace> AWS_SECRET_ACCESS_KEY <value>`; say so rather than working around it.
+`krewe secret set <workspace> AWS_ACCESS_KEY_ID <value>` and
+`krewe secret set <workspace> AWS_SECRET_ACCESS_KEY <value>`; say so rather than working around it.
 An AccessDenied on a read is an answer too: report which action was denied for which role rather
 than trying other credentials.

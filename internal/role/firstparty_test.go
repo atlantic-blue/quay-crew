@@ -53,16 +53,16 @@ func TestEveryShippedRoleImports(t *testing.T) {
 	}
 }
 
-// The line every brief owes a reader. Each one describes a boundary quay does not hold a session to,
+// The line every brief owes a reader. Each one describes a boundary krewe does not hold a session to,
 // and a role whose file does not say so implies an isolation that is not there.
-func TestEveryShippedRoleSaysWhatQuayDoesNotEnforce(t *testing.T) {
+func TestEveryShippedRoleSaysWhatKreweDoesNotEnforce(t *testing.T) {
 	roles, err := All(shipped)
 	if err != nil {
 		t.Fatalf("loading the roles this build ships: %v", err)
 	}
 	for _, one := range roles {
-		if !strings.HasPrefix(one.Brief, "## What quay does not enforce") {
-			t.Errorf("%s does not open by saying what quay does not enforce, so its brief reads as a boundary the system keeps",
+		if !strings.HasPrefix(one.Brief, "## What krewe does not enforce") {
+			t.Errorf("%s does not open by saying what krewe does not enforce, so its brief reads as a boundary the system keeps",
 				one.Name)
 		}
 	}
@@ -223,7 +223,7 @@ func TestTheOrchestratorStatesWhatItWillCreateBeforeItBuilds(t *testing.T) {
 		if one.Name != "orchestrator" {
 			continue
 		}
-		for _, want := range []string{"quay job ask", "costs while nobody is using it"} {
+		for _, want := range []string{"krewe job ask", "costs while nobody is using it"} {
 			if !strings.Contains(one.Brief, want) {
 				t.Errorf("the orchestrator's brief does not say %q, so a choice that bills stays invisible "+
 					"until it is built", want)

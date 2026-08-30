@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
 )
 
 // Reading a level's context back out of the system, against the real database.
@@ -17,7 +17,7 @@ import (
 // store in memory. What only this tier reaches is the crossing the command exists for: the operator
 // writes prose into a column as one process runs, and reads it back as another. During the
 // acceptance run of 29 August the only way to recover a workspace's context was a query against this
-// table, which is the whole reason `quay context show` was written, so an answer that is not what the
+// table, which is the whole reason `krewe context show` was written, so an answer that is not what the
 // column holds is worse than no command.
 //
 // Byte for byte is the assertion, at every level and on a body larger than any page of prose. A
@@ -83,7 +83,7 @@ func TestEveryLevelComesBackByteForByteThroughTheListing(t *testing.T) {
 }
 
 // What comes out goes back in unchanged. This is the pair the issue asked for, run against the real
-// column: `quay context show system > file` and `quay context set system < file`.
+// column: `krewe context show system > file` and `krewe context set system < file`.
 func TestWhatIsReadBackIsWrittenBackUnchanged(t *testing.T) {
 	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
@@ -140,7 +140,7 @@ func TestALevelIsAddedToRatherThanOverwritten(t *testing.T) {
 
 // A project's context is held in the store, and the row describing it was dropped whenever the system
 // could not name the directories on disk. A control plane told no data directory then reported every
-// project as saying nothing, and `quay context clear` read the same rows, so it announced a level as
+// project as saying nothing, and `krewe context clear` read the same rows, so it announced a level as
 // already empty while it held a body. This system has no data directory, which is the condition.
 func TestAProjectReadsBackOnASystemWithNoDataDirectory(t *testing.T) {
 	s, _ := aSystemOnPostgres(t)

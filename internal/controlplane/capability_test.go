@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -117,7 +117,7 @@ func TestJobDeeperThanTheWorkspaceAllowsIsRefusedNamingTheLimit(t *testing.T) {
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("job below the limit answered %v, want PermissionDenied", status.Code(err))
 	}
-	for _, want := range []string{"depth 2", "no deeper than 1", "quay limits"} {
+	for _, want := range []string{"depth 2", "no deeper than 1", "krewe limits"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal says %q, want it to say %q", err, want)
 		}

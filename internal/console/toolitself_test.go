@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/krewe/internal/console"
 )
 
 // The runner the console actually ships with, driven against a real program rather than a double.
 //
 // A double proves the bar reacts to output; only running something proves the console can start a
 // process, wait for it, and read what it said. The program is a stub on PATH rather than the real
-// tool, because what is under test is the running, not what quay prints.
+// tool, because what is under test is the running, not what krewe prints.
 func TestTheToolItselfRunsAndCapturesOutput(t *testing.T) {
 	dir := t.TempDir()
-	stub := filepath.Join(dir, "quay")
+	stub := filepath.Join(dir, "krewe")
 	// It answers on standard output and on the error stream, because a refusal comes back on the
 	// second one and folding them together is the whole point of using CombinedOutput.
 	script := "#!/bin/sh\necho \"said: $*\"\necho \"a refusal\" >&2\nexit 3\n"
@@ -29,7 +29,7 @@ func TestTheToolItselfRunsAndCapturesOutput(t *testing.T) {
 
 	// os.Executable answers with the test binary, so this drives the PATH fallback deliberately by
 	// asking for a name rather than a path.
-	output, err := console.RunNamed(context.Background(), "quay",
+	output, err := console.RunNamed(context.Background(), "krewe",
 		[]string{"workspace", "list"})
 	if err == nil {
 		t.Fatal("a command that exited 3 came back with no error")
@@ -45,7 +45,7 @@ func TestTheToolItselfRunsAndCapturesOutput(t *testing.T) {
 // A command that will never answer must give the console back rather than freezing it.
 func TestTheToolItselfGivesUpOnACommandThatNeverAnswers(t *testing.T) {
 	dir := t.TempDir()
-	stub := filepath.Join(dir, "quay")
+	stub := filepath.Join(dir, "krewe")
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nsleep 30\n"), 0o700); err != nil {
 		t.Fatalf("write the stub: %v", err)
 	}

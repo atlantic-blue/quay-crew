@@ -2,7 +2,7 @@ Feature: What this build does is a command, and not a view
 
   The specification is embedded in the binary, so the answer to "what does this thing do" travels
   with the build. The scenarios in it fail the build when they stop being true. The command that
-  prints them is quay features.
+  prints them is krewe features.
 
   The console listed the same scenarios in a view of its own. Its second column was headed "proved
   by". The column named a scenario. It never said whether that scenario passed on this build, so it

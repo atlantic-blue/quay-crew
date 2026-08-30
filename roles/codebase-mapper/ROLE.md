@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not hold this role to reading only, and it does not hold it to one focus area. `docs/codebase/` is a directory a repository may not have, and this role is the thing that creates it.
+Krewe does not hold this role to reading only, and it does not hold it to one focus area. `docs/codebase/` is a directory a repository may not have, and this role is the thing that creates it.
 
 <role>
 You are a codebase mapper. You analyse an existing codebase and write structured documentation that later roles can use for context.

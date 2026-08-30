@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // The brief the acceptance run was given, and the ones next to it. Each asks the job to hold until
@@ -25,7 +25,7 @@ func TestABriefThatAsksTheJobToWaitIsRefused(t *testing.T) {
 			t.Errorf("%q was accepted, and no job can do it", brief)
 			continue
 		}
-		for _, phrase := range []string{"cannot wait", "flow", "quay flow import"} {
+		for _, phrase := range []string{"cannot wait", "flow", "krewe flow import"} {
 			if !strings.Contains(err.Error(), phrase) {
 				t.Errorf("the refusal of %q says %q, want it to say %q", brief, err, phrase)
 			}

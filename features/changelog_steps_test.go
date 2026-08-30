@@ -51,8 +51,8 @@ func changelogFrom(ctx context.Context) *changelogWorld {
 func (c *changelogWorld) git(args ...string) (string, error) {
 	command := exec.Command("git", append([]string{
 		"-C", c.repo,
-		"-c", "user.name=quay",
-		"-c", "user.email=quay@example.invalid",
+		"-c", "user.name=krewe",
+		"-c", "user.email=krewe@example.invalid",
 		"-c", "commit.gpgsign=false",
 	}, args...)...)
 	out, err := command.CombinedOutput()

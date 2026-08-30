@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/headroom"
 )
 
 const mib = int64(1 << 20)

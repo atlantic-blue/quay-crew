@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/store/storetest"
+	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/krewe/internal/store/storetest"
 )
 
 // TestMemoryConformance holds the in memory store to the same contract as the Postgres one.

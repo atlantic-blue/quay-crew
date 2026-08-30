@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/origin"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/origin"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // The role half of the contract, held against both implementations.

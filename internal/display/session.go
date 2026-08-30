@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/session"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/session"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -91,7 +91,7 @@ func Share(used, size int64) int64 {
 //   - Awake, not thinking or busy. The system reads a runtime process, which is up both while it
 //     answers and while it waits at a prompt, so thinking claims more than was measured. Busy is
 //     what running already means to an operator, and this is not a task.
-//   - Attached, because it is what the operator typed to get there: `quay attach`.
+//   - Attached, because it is what the operator typed to get there: `krewe attach`.
 //   - Unknown, because the system asked and was not told. It is not idle, and it must never read as
 //     idle: a listing that guesses empty here is the defect this set of words was written for.
 //   - Idle keeps its word and finally earns it: nothing is running and nobody is in there.

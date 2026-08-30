@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
 	"github.com/cucumber/godog"
 )
 
@@ -161,7 +161,7 @@ func list(ctx context.Context, presence bool) error {
 	return nil
 }
 
-// The command line surface, run as its own process. A scenario over the API cannot say whether `quay
+// The command line surface, run as its own process. A scenario over the API cannot say whether `krewe
 // sessions` asks the sandboxes what is in them, and asking is opt in, so this drives the binary.
 func initializePresenceToolSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the caller lists the sessions$`, func(ctx context.Context) error {

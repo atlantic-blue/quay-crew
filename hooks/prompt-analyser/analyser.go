@@ -588,9 +588,9 @@ func Trouble(timedOut, err error, said string, config Config) string {
 const NotLoggedIn = "the model call is not logged in, so this hook cannot analyse anything. " +
 	"The system carries the workspace's subscription token into a sandbox under two names, because " +
 	"Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from every process a session starts and a hook is " +
-	"one of those. Neither name arrived here. Set the token with: quay secret set <workspace> " +
+	"one of those. Neither name arrived here. Set the token with: krewe secret set <workspace> " +
 	"CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>, or turn the hook off with: " +
-	"quay hook detach system prompt-analyser"
+	"krewe hook detach system prompt-analyser"
 
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(text, "\n")

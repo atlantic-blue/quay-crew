@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // TestClaudeCodeRunnerRealTask runs a real Claude task inside the sandbox image, authenticated by the

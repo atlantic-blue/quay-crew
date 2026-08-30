@@ -67,7 +67,7 @@ Feature: The operator can find the files the model reads
 
   # A memory file with none of the system's marks was written by somebody who had never seen what the
   # store holds, so it is not an edit of it. Read as one it replaced the store's body outright, which
-  # is how a driver taught what quay is lost the manual again moments later.
+  # is how a driver taught what krewe is lost the manual again moments later.
   Scenario: A memory file the system never wrote does not replace what the store holds
     Given a session started by dispatching "hello"
     When the operator sets the session's context to "the meter is under the stairs"
@@ -86,7 +86,7 @@ Feature: The operator can find the files the model reads
     Then it names 1 workspace directory and 2 project directories
 
   # A session sitting beside the console knows nothing about the system it is next to. The manual is
-  # quay describing itself, and loading it as a project's context is how a session is told.
+  # krewe describing itself, and loading it as a project's context is how a session is told.
   Scenario: The manual can be loaded as a project's context
     When the operator loads the manual as the project's context
     And the operator asks where context lives
@@ -167,7 +167,7 @@ Feature: The operator can find the files the model reads
     Then standard output carries "100,179 characters"
     And standard output carries "over the 20,000 character mark"
     And standard output carries "Every session in every workspace reads it"
-    And standard output carries "quay context set <workspace>"
+    And standard output carries "krewe context set <workspace>"
     And the command succeeds
 
   Scenario: The listing says how big every level is, and warns about the one that is large

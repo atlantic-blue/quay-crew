@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/krewe/internal/display"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
@@ -1271,11 +1271,11 @@ func TestTheCommandBarOffersWhatItCanOpen(t *testing.T) {
 		t.Fatalf("typing a still offers projects:\n%s", view)
 	}
 
-	// Words matching no view are not nothing any more: enter runs them as a quay command, so the
+	// Words matching no view are not nothing any more: enter runs them as a krewe command, so the
 	// bar says that rather than "nothing called that", which would be a lie about the very next
 	// keystroke.
 	model = typeAll(t, model, "zzz")
-	if view := model.View(); !strings.Contains(view, "runs this as a quay command") {
+	if view := model.View(); !strings.Contains(view, "runs this as a krewe command") {
 		t.Fatalf("a prefix matching no view does not say what enter will do with it:\n%s", view)
 	}
 }
@@ -1424,7 +1424,7 @@ func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 
 // The features view listed every scenario in this build under a column headed "proved by", which
 // named a scenario without saying whether it passed here, so the column claimed evidence nobody had
-// checked. The list is `quay features` and nothing else, so none of the words that opened the view
+// checked. The list is `krewe features` and nothing else, so none of the words that opened the view
 // opens anything.
 func TestNothingOpensTheFeaturesView(t *testing.T) {
 	client := &fakeClient{}
@@ -2645,13 +2645,13 @@ func TestPressingPWithNoSystemSaysSo(t *testing.T) {
 func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
 	t.Setenv("TMUX_PANE", "")
 	model := newTestModel(t, Sessions(&fakeClient{})).
-		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil })
+		Beside(func(string) ([]string, error) { return []string{"krewe", "attach", "s1"}, nil })
 
 	model, cmd := update(t, model, runes("p"))
 	if cmd != nil {
 		t.Fatal("p tried to split a screen with no tmux to split it")
 	}
-	if model.err == nil || !strings.Contains(model.err.Error(), "quay panel") {
+	if model.err == nil || !strings.Contains(model.err.Error(), "krewe panel") {
 		t.Fatalf("p said %v, want it to name what to run", model.err)
 	}
 }
@@ -2664,7 +2664,7 @@ func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{})).
 		Beside(func(selected string) ([]string, error) {
 			asked = append(asked, selected)
-			return []string{"quay", "attach", selected}, nil
+			return []string{"krewe", "attach", selected}, nil
 		})
 	model, _ = update(t, model, rowsFor(model, row("s1", "s1", "acme"), row("s2", "s2", "acme")))
 	model, _ = update(t, model, runes("j"))
@@ -2677,7 +2677,7 @@ func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	}
 }
 
-// TestPressingPClosesTheConversationBesideIt, which may be one the console never opened: `quay` opens
+// TestPressingPClosesTheConversationBesideIt, which may be one the console never opened: `krewe` opens
 // the panel with a conversation already there, so a console that only knew about the ones it opened
 // would answer the first p by opening a second.
 //
@@ -2743,7 +2743,7 @@ func TestBigPStartsAFreshConversationAndPEndsNothing(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	ended := 0
 	model := newTestModel(t, Sessions(&fakeClient{})).
-		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil }).
+		Beside(func(string) ([]string, error) { return []string{"krewe", "attach", "s1"}, nil }).
 		Freshen(func(string) error { ended++; return nil })
 
 	if _, cmd := update(t, model, runes("P")); cmd == nil {
@@ -2762,7 +2762,7 @@ func TestBigPStartsAFreshConversationAndPEndsNothing(t *testing.T) {
 func TestAFreshConversationWithNoWayToEndOneSaysSo(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	model := newTestModel(t, Sessions(&fakeClient{})).
-		Beside(func(string) ([]string, error) { return []string{"quay", "attach", "s1"}, nil })
+		Beside(func(string) ([]string, error) { return []string{"krewe", "attach", "s1"}, nil })
 
 	model, cmd := update(t, model, runes("P"))
 	if cmd != nil {
@@ -2782,7 +2782,7 @@ func TestTheFreshConversationKeyIsInTheHelp(t *testing.T) {
 	}
 }
 
-// TestNReplacesTheConversationBesideItRatherThanAddingOne. `quay` opens the conversation itself, so
+// TestNReplacesTheConversationBesideItRatherThanAddingOne. `krewe` opens the conversation itself, so
 // the console never held that pane's identifier: acting on what it remembered opened a fourth pane
 // beside the third and left the old conversation running in it.
 //
@@ -2803,7 +2803,7 @@ func TestNReplacesTheConversationBesideItRatherThanAddingOne(t *testing.T) {
 
 // TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild. `make upgrade` rebuilt the tool and the
 // stack and left the sandbox image alone, so every conversation carried on running the build from
-// before: the quay inside a sandbox was older than the system, or was not in the image at all. Nothing
+// before: the krewe inside a sandbox was older than the system, or was not in the image at all. Nothing
 // on screen said so, which is the half that made it cost an evening.
 func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
 	registry, err := NewDefaultRegistry(&fakeClient{})

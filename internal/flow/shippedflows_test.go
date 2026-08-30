@@ -40,7 +40,7 @@ func TestEveryShippedFlowGraphParses(t *testing.T) {
 			continue
 		}
 		parsed++
-		// A graph is named by its file, so `quay flow import flows/x.yaml` imports x.
+		// A graph is named by its file, so `krewe flow import flows/x.yaml` imports x.
 		if want := strings.TrimSuffix(entry.Name(), ".yaml"); graph.Name != want {
 			t.Errorf("%s calls itself %q, and a reader looks for the graph by its file name", at, graph.Name)
 		}

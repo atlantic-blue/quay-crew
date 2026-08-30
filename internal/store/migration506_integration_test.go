@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

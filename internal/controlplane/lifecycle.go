@@ -3,8 +3,8 @@ package controlplane
 import (
 	"context"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -62,7 +62,7 @@ func (s *Server) ReclaimSession(ctx context.Context, req *quaycrewv1.ReclaimSess
 // SessionAttached says whether an operator has this session's conversation open.
 //
 // The provider asks the container, which is the signal that needs no new state and nothing to keep
-// fresh: `quay attach` opens the conversation as a tmux session inside the sandbox, and tmux knows
+// fresh: `krewe attach` opens the conversation as a tmux session inside the sandbox, and tmux knows
 // whether a client is on it.
 //
 // Asked by name rather than through a handle this process holds, and never by creating one. The

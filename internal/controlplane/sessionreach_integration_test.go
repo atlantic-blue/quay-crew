@@ -13,15 +13,15 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc"
 )
 
@@ -51,7 +51,7 @@ func TestASessionIsRefusedAVerbItsRoleDoesNotCarry(t *testing.T) {
 	system := aSystemWhoseSessionsCanReachIt(ctx, t)
 
 	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
-	said := system.run(ctx, t, declared, "quay job stop "+declared+" \"I have had enough\" 2>&1")
+	said := system.run(ctx, t, declared, "krewe job stop "+declared+" \"I have had enough\" 2>&1")
 
 	// The role carries job.create and job.read and not job.stop, so the system names the verb and
 	// says where a verb comes from. A session that was refused has to know what to ask for.
@@ -78,7 +78,7 @@ func TestASessionDeclaresASubJobAndTheSystemRunsItInASessionOfItsOwn(t *testing.
 	system := aSystemWhoseSessionsCanReachIt(ctx, t)
 
 	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
-	parentSession := system.run(ctx, t, declared, `quay job create `+
+	parentSession := system.run(ctx, t, declared, `krewe job create `+
 		`--title "write the migration" --brief "add the column" --role `+implementerRole+` 2>&1`)
 
 	children := system.children(ctx, t, declared)
@@ -137,7 +137,7 @@ func TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob(t *testing.T) {
 
 	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
 	said := system.run(ctx, t, declared, "sleep 75\n"+
-		`quay job create --title "write the migration" --brief "add the column" --role `+
+		`krewe job create --title "write the migration" --brief "add the column" --role `+
 		implementerRole+" 2>&1")
 
 	children := system.children(ctx, t, declared)
@@ -234,7 +234,7 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 	t.Helper()
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_TEST_SANDBOX_IMAGE to the sandbox image, which is the one carrying quay")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the sandbox image, which is the one carrying krewe")
 	}
 
 	systemNetwork := aNetwork(t, "system")
@@ -474,7 +474,7 @@ func (r *shellRunner) Run(ctx context.Context, box sandbox.Sandbox, req model.Re
 	}
 	said, readErr := io.ReadAll(proc.Stdout())
 	// The exit status is deliberately not an error. A refusal is what these tests are about, and
-	// `quay` exits non zero when the system refuses it, so a runner that failed the task would throw
+	// `krewe` exits non zero when the system refuses it, so a runner that failed the task would throw
 	// away the sentence being asserted on.
 	_ = proc.Wait()
 	if readErr != nil {

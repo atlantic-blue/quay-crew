@@ -52,7 +52,7 @@ Feature: A flow run starts because something happened
   Scenario: A trigger naming a flow nobody imported says so on its row
     When something happens and raises a trigger of "never-imported" carrying "url" as "https://ci.test/9"
     And the system ticks
-    Then the trigger reads back as failed, saying "quay flow import"
+    Then the trigger reads back as failed, saying "krewe flow import"
     And no run of "never-imported" has started
 
   Scenario: A trigger for a graph that does not begin at a trigger node is refused on its row

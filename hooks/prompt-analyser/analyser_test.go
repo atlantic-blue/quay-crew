@@ -784,7 +784,7 @@ func TestNotBeingLoggedInSaysSoAndSaysWhatToDo(t *testing.T) {
 	if !strings.Contains(trouble, "not logged in") {
 		t.Errorf("it does not say what is wrong: %q", trouble)
 	}
-	if !strings.Contains(trouble, "quay hook detach system prompt-analyser") {
+	if !strings.Contains(trouble, "krewe hook detach system prompt-analyser") {
 		t.Errorf("it does not say what to do next: %q", trouble)
 	}
 	// The reason it is confusing is worth saying: the token is there, it just does not come down.
@@ -850,7 +850,7 @@ func TestTheTerminalIsToldTheCauseRatherThanThatSomethingWentWrong(t *testing.T)
 	if !strings.Contains(out.String(), "not logged in") {
 		t.Errorf("the terminal was not told the cause: %s", out.String())
 	}
-	if !strings.Contains(out.String(), "quay hook detach") {
+	if !strings.Contains(out.String(), "krewe hook detach") {
 		t.Errorf("the terminal was not told what to do: %s", out.String())
 	}
 	// It still fails open. The message must get through whatever the hook could not do.

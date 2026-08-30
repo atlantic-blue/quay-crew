@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -57,7 +57,7 @@ func (s *Server) StartFlow(ctx context.Context, req *quaycrewv1.StartFlowRequest
 	if _, _, err := s.store.LatestFlowGraph(ctx, req.GetGraph()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"no flow named %s has been imported; write the graph and import it with quay flow import <file>", req.GetGraph())
+				"no flow named %s has been imported; write the graph and import it with krewe flow import <file>", req.GetGraph())
 		}
 		return nil, storeError(err, "flow")
 	}

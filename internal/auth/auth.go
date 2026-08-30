@@ -255,7 +255,7 @@ func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
 	presented := presentedToken(ctx)
 	if presented == "" {
 		return 0, Grant{}, status.Error(codes.Unauthenticated,
-			"this call carries no system token, so the system cannot tell who is calling: quay reads "+
+			"this call carries no system token, so the system cannot tell who is calling: krewe reads "+
 				TokenEnv+", or system.token in the system's data directory")
 	}
 	if p.Token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(p.Token)) == 1 {

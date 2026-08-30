@@ -12,10 +12,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// CommandRunner runs one quay command and hands back everything it printed.
+// CommandRunner runs one krewe command and hands back everything it printed.
 //
 // The console runs the tool rather than importing it: every command lives in package main under
-// cmd/quay and cannot be imported, and the console already builds commands for attaching and for
+// cmd/krewe and cannot be imported, and the console already builds commands for attaching and for
 // the panel, so this is the shape that was already here. It also means a command added later works
 // in the bar without being plumbed through anything.
 //
@@ -45,7 +45,11 @@ var alreadyHere = map[string]string{
 
 // toolName is what the tool is called, which is also the word an operator types out of habit at the
 // front of a command they are already inside.
-const toolName = "quay"
+const toolName = "krewe"
+
+// oldToolName is what the tool was called before that. It is still in fingers, and the bar is one of
+// the two places it gets typed.
+const oldToolName = "quay"
 
 // commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
 // system, short enough that a command which will never answer gives the console back.
@@ -56,7 +60,7 @@ const commandTimeout = 30 * time.Second
 // enough that a child holding the pipe open does not hold the console with it.
 const waitDelay = 200 * time.Millisecond
 
-// WithCommandRunner wires the bar to whatever runs a quay command. A console with none refuses to
+// WithCommandRunner wires the bar to whatever runs a krewe command. A console with none refuses to
 // run anything and says so, which is better than a key that appears to do nothing.
 func (m Model) WithCommandRunner(run CommandRunner) Model {
 	m.runCommand = run
@@ -97,7 +101,7 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 
 	args := strings.Fields(typed)
 	// Typing the tool's own name is what anybody does out of habit, and passing it to itself gives
-	// `unknown command "quay"`, which reads as the bar being broken rather than as a typo. The name
+	// `unknown command "krewe"`, which reads as the bar being broken rather than as a typo. The name
 	// on its own is asking for the thing already on screen, so that is answered rather than run.
 	if args[0] == toolName {
 		if len(args) == 1 {
@@ -105,6 +109,20 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 			return m, nil
 		}
 		args = args[1:]
+	}
+	// The name the tool used to have, typed at the front for the same reason. It is not the tool's
+	// name any more, so stripping it silently would run a command the operator does not know they
+	// asked for, and passing it through gives `unknown command "quay"`, which reads as the bar being
+	// broken. The word moved, and this is where the bar says so.
+	if args[0] == oldToolName {
+		if len(args) == 1 {
+			m.err = fmt.Errorf("the tool is called %s now, and %s: type a command, or press escape",
+				toolName, alreadyHere[toolName])
+			return m, nil
+		}
+		m.err = fmt.Errorf("the tool is called %s now, not %s: type %s", toolName, oldToolName,
+			strings.Join(args[1:], " "))
+		return m, nil
 	}
 	if needTerminal[args[0]] {
 		command, err := m.handoverFor(args)
@@ -119,7 +137,7 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 		})
 	}
 	if m.runCommand == nil {
-		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the system with quay", typed)
+		m.err = fmt.Errorf("this console cannot run commands, so %q has nowhere to go; open the system with krewe", typed)
 		return m, nil
 	}
 
@@ -215,14 +233,14 @@ func (m Model) handoverFor(args []string) (*exec.Cmd, error) {
 	}
 	self, err := os.Executable()
 	if err != nil {
-		self = "quay"
+		self = "krewe"
 	}
 	return exec.Command(self, args...), nil
 }
 
-// TheToolItself runs a quay command by running this same binary again.
+// TheToolItself runs a krewe command by running this same binary again.
 //
-// The tool rather than a copy of its logic: every command lives in package main under cmd/quay and
+// The tool rather than a copy of its logic: every command lives in package main under cmd/krewe and
 // cannot be imported, and running the real one means a command added tomorrow works in the bar with
 // nothing plumbed through. It costs one short lived process per command typed, which is nothing
 // against a person's typing speed.
@@ -234,7 +252,7 @@ func TheToolItself() CommandRunner {
 		self, err := os.Executable()
 		if err != nil {
 			// The name is resolved from PATH, which is the copy the shell ran to get here anyway.
-			self = "quay"
+			self = "krewe"
 		}
 		return RunNamed(ctx, self, args)
 	}

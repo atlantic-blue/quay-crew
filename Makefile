@@ -22,7 +22,7 @@ export QC_SESSION_NETWORK
 
 COMPOSE := docker compose -p $(COMPOSE_PROJECT) --env-file $(ENV_FILE) -f deploy/docker-compose.yml
 
-# BINDIR is where `make install` puts the quay binary. Left unset, it installs over whatever quay
+# BINDIR is where `make install` puts the krewe binary. Left unset, it installs over whatever krewe
 # your shell already runs, and falls back to Go's bin directory when there is none, so installing
 # always leaves you running the build you just made rather than an older copy earlier on your PATH.
 BINDIR ?=
@@ -60,7 +60,7 @@ print-%:
 #
 # The data directory is made here too, and made first, because docker creates a missing bind mount
 # source itself and creates it as root. That would leave the system's own directory owned by root, and
-# the next `quay use` unable to write the address you are working in into it.
+# the next `krewe use` unable to write the address you are working in into it.
 config:
 	@mkdir -p "$(QUAY_HOME)/data"
 	@if [ ! -f "$(ENV_FILE)" ]; then \
@@ -87,7 +87,7 @@ start: up
 # Postgres, and the sandbox containers are not compose's to replace.
 #
 # A system that is not up has nothing to lose, so this passes in silence and the first run is still one
-# command with no question in it. Typing the system's name back is the guard `quay workspace delete`
+# command with no question in it. Typing the system's name back is the guard `krewe workspace delete`
 # uses, and for the same reason: this Makefile takes no flags a person would think to look for.
 # YES=1 goes over it without being asked, which is what a script gives.
 up-check: config
@@ -105,10 +105,10 @@ up-check: config
 		echo "YES was given, so the system is being brought up over what is running."; \
 		exit 0; \
 	fi; \
-	printf "type quay to bring it up anyway: "; \
+	printf "type krewe to bring it up anyway: "; \
 	read typed || typed=""; \
-	if [ "$$typed" != "quay" ]; then \
-		echo "that is not quay, so the system is still running and nothing was replaced."; \
+	if [ "$$typed" != "krewe" ]; then \
+		echo "that is not krewe, so the system is still running and nothing was replaced."; \
 		exit 1; \
 	fi
 
@@ -222,12 +222,12 @@ down: config
 # A system that is not up has nothing to drain and does not stop the upgrade: the tool says what it
 # could not reach and the sweep below still clears the containers.
 drain:
-	@if ! command -v quay >/dev/null 2>&1; then \
-		echo "note: quay is not on your PATH, so the sessions cannot be put down cleanly."; \
+	@if ! command -v krewe >/dev/null 2>&1; then \
+		echo "note: krewe is not on your PATH, so the sessions cannot be put down cleanly."; \
 		echo "      Whatever takes their containers will end any task still working."; \
 		exit 0; \
 	fi; \
-	quay drain $(if $(FORCE),anyway,) || { \
+	krewe drain $(if $(FORCE),anyway,) || { \
 		echo; \
 		echo "refusing: a session is still working. Wait for it, or upgrade over it with:"; \
 		echo "    make upgrade FORCE=1"; \
@@ -275,30 +275,39 @@ install:
 	@$(MAKE) --no-print-directory up-check
 	@$(MAKE) --no-print-directory up
 	@echo ""
-	@echo "the system is up, and quay is on your path."
+	@echo "the system is up, and krewe is on your path."
 	@echo ""
 	@echo "This cannot mint your model credential. Get one with claude setup-token."
 	@echo "Then run these four commands:"
 	@echo ""
-	@echo "  quay workspace create <name>"
-	@echo "  quay project create <name>"
-	@echo "  quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>"
-	@echo "  quay task \"say pong\""
+	@echo "  krewe workspace create <name>"
+	@echo "  krewe project create <name>"
+	@echo "  krewe secret set CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>"
+	@echo "  krewe task \"say pong\""
 
-## tool: build the quay command line tool and install it over the copy your shell runs
+## tool: build the krewe command line tool and install it over the copy your shell runs
+#
+# The name the tool used to have is built and installed beside it. It is not a second copy of the
+# tool: it refuses everything and says to type krewe. Leaving nothing behind would answer the old
+# name with "command not found", which reads as a broken install rather than as a rename.
+#
+# An existing quay is where the directory is taken from when there is no krewe yet, so the first
+# build after the rename installs the refusal over the binary the shell already runs. Installed
+# anywhere else, the old tool stays on the path and keeps driving a system that moved.
 tool:
 	@dir="$$(eval echo "$(BINDIR)")"; \
 	if [ -z "$$dir" ]; then \
-		existing="$$(command -v quay 2>/dev/null || true)"; \
+		existing="$$(command -v krewe 2>/dev/null || command -v quay 2>/dev/null || true)"; \
 		if [ -n "$$existing" ]; then dir="$$(dirname "$$existing")"; else dir="$(GOBIN)"; fi; \
 	fi; \
 	mkdir -p "$$dir"; \
-	go build -ldflags "-X main.version=$(VERSION)" -o "$$dir/quay" ./cmd/quay || exit 1; \
-	echo "installed quay to $$dir/quay, built from $(VERSION)"; \
-	found="$$(command -v quay 2>/dev/null || true)"; \
+	go build -ldflags "-X main.version=$(VERSION)" -o "$$dir/krewe" ./cmd/krewe || exit 1; \
+	go build -o "$$dir/quay" ./cmd/quay || exit 1; \
+	echo "installed krewe to $$dir/krewe, built from $(VERSION)"; \
+	found="$$(command -v krewe 2>/dev/null || true)"; \
 	if [ -z "$$found" ]; then \
-		echo "note: $$dir is not on your PATH, so run $$dir/quay directly or add it"; \
-	elif [ ! "$$found" -ef "$$dir/quay" ]; then \
+		echo "note: $$dir is not on your PATH, so run $$dir/krewe directly or add it"; \
+	elif [ ! "$$found" -ef "$$dir/krewe" ]; then \
 		echo "warning: your shell still runs $$found, which is a different binary."; \
 		echo "         install over that one with: make tool BINDIR=$$(dirname "$$found")"; \
 	fi

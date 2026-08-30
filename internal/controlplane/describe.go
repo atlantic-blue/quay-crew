@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/model"
 )
 
 // A session says what it is about, written by the system rather than by the operator.
@@ -127,7 +127,7 @@ func oneLine(text string, limit int) string {
 //
 // It takes the session's id rather than the session, and reads everything it needs again, because it
 // runs behind a task that has already been answered: anything handed to it would be a value somebody
-// else is still reading. That is the same mistake that made `quay flow start` fail one run in six.
+// else is still reading. That is the same mistake that made `krewe flow start` fail one run in six.
 //
 // Every failure is a log line and nothing else. A description is a convenience, and a task that
 // worked must not be reported as failed because the system could not think of a name for it.

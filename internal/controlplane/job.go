@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -119,7 +119,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	}
 	if declaration.Project == "" {
 		return nil, nil, status.Error(codes.InvalidArgument,
-			"job needs a project to run in: say where with an address, for example quay job create me/house-bills")
+			"job needs a project to run in: say where with an address, for example krewe job create me/house-bills")
 	}
 	project, err := s.store.GetProject(ctx, declaration.Project)
 	if err != nil {
@@ -193,7 +193,7 @@ func (s *Server) checkAfter(ctx context.Context, declared *job.Job) error {
 		if _, err := s.store.GetJob(ctx, id); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return status.Errorf(codes.InvalidArgument,
-					"this job waits for %s, which the system does not hold: read the identifier off quay job list, "+
+					"this job waits for %s, which the system does not hold: read the identifier off krewe job list, "+
 						"or declare that job first", id)
 			}
 			return storeError(err, "job")
@@ -220,13 +220,13 @@ func (s *Server) checkAfter(ctx context.Context, declared *job.Job) error {
 // GetJob reads one job back, whole, its answer included.
 func (s *Server) GetJob(ctx context.Context, req *quaycrewv1.GetJobRequest) (*quaycrewv1.GetJobResponse, error) {
 	if req.GetId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "which job: give the identifier quay job list prints")
+		return nil, status.Error(codes.InvalidArgument, "which job: give the identifier krewe job list prints")
 	}
 	found, err := s.store.GetJob(ctx, req.GetId())
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the system holds no job %s: quay job list says what there is", req.GetId())
+				"the system holds no job %s: krewe job list says what there is", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}
@@ -260,7 +260,7 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 // gives: how it ended is the useful part, and a second stop erases it.
 func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*quaycrewv1.StopJobResponse, error) {
 	if req.GetId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "which job: give the identifier quay job list prints")
+		return nil, status.Error(codes.InvalidArgument, "which job: give the identifier krewe job list prints")
 	}
 	reason := strings.TrimSpace(req.GetReason())
 	if reason == "" {
@@ -270,7 +270,7 @@ func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the system holds no job %s: quay job list says what there is", req.GetId())
+				"the system holds no job %s: krewe job list says what there is", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}
@@ -446,7 +446,7 @@ func (s *Server) underTheCaller(ctx context.Context, under string, declared *job
 	if declared.Depth > limits.MaxDepth {
 		return status.Errorf(codes.PermissionDenied,
 			"this workspace allows job no deeper than %d, and this would be at depth %d. "+
-				"Raise it with quay limits <workspace> --max-depth %d, which an operator does deliberately: "+
+				"Raise it with krewe limits <workspace> --max-depth %d, which an operator does deliberately: "+
 				"a session that could raise its own ceiling has none",
 			limits.MaxDepth, declared.Depth, declared.Depth)
 	}

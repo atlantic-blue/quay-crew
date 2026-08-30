@@ -39,6 +39,6 @@ conversation, and say what you changed afterwards, with the issue's address.
 ## When it fails
 
 A 401 means the workspace needs the key: say it is set with
-`quay secret set <workspace> LINEAR_API_KEY <value>` rather than working around it. GraphQL errors
+`krewe secret set <workspace> LINEAR_API_KEY <value>` rather than working around it. GraphQL errors
 come back in the response body with the request still returning 200, so read the errors field, not
 only the status.

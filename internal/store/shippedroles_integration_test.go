@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // The briefs the system hands a session, read back out of the real database.
@@ -89,7 +89,7 @@ func TestTheBriefsTheSystemHoldsNameNoOtherProduct(t *testing.T) {
 		checked++
 		for at, line := range strings.Split(one.Brief, "\n") {
 			if notOurs.MatchString(line) {
-				t.Errorf("the brief the system would hand a %s session names a product that is not quay, at line %d: %s",
+				t.Errorf("the brief the system would hand a %s session names a product that is not krewe, at line %d: %s",
 					one.Name, at+1, strings.TrimSpace(line))
 			}
 		}

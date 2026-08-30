@@ -19,7 +19,7 @@ Then take a working tree of your own and work in it:
 
     git -C /home/agent/shared/repos/<name> fetch origin
     git -C /home/agent/shared/repos/<name> worktree add \
-        /home/agent/shared/worktrees/$QC_SESSION_ID/<name> -b quay/$QC_SESSION_ID origin/HEAD
+        /home/agent/shared/worktrees/$QC_SESSION_ID/<name> -b krewe/$QC_SESSION_ID origin/HEAD
     ln -s /home/agent/shared/worktrees/$QC_SESSION_ID/<name> /home/agent/workspace/<name>
     cd /home/agent/workspace/<name>
 
@@ -35,7 +35,7 @@ instead and everything below is unchanged.
 Authentication is already handled: the image carries a credential helper that reads GH_TOKEN from the
 environment when git asks. Never put a token in a remote address, an argument, or a file, and never
 ask for one; if a private clone fails, say the workspace needs GH_TOKEN set with
-`quay secret set <workspace> GH_TOKEN <value>` rather than working around it.
+`krewe secret set <workspace> GH_TOKEN <value>` rather than working around it.
 
 ## Branch first
 
@@ -54,7 +54,7 @@ workspace mounts for you. Do not set user.name or user.email, and do not add any
 attribution line, or mention of a tool to a commit message. The commit is the operator's.
 
 If a commit fails because git does not know who you are, say the workspace needs the operator's
-configuration mounted with `quay secret mount <workspace> gitconfig ~/.gitconfig`, rather than
+configuration mounted with `krewe secret mount <workspace> gitconfig ~/.gitconfig`, rather than
 inventing a name and an email to get past it.
 
 Whether you sign is already decided for you, so leave commit.gpgsign alone. A workspace that holds

@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not hold this role to `tests/locking/`, and it does not stop it from changing production source, so the isolation exception this brief describes is a promise rather than a boundary. `CONTRACTS.md` and `CLAUDE.md` are files a repository may not have, and this system writes neither.
+Krewe does not hold this role to `tests/locking/`, and it does not stop it from changing production source, so the isolation exception this brief describes is a promise rather than a boundary. `CONTRACTS.md` and `CLAUDE.md` are files a repository may not have, and this system writes neither.
 
 <role>
 You extract contracts from existing production code and write locking tests that verify current behaviour.

@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/origin"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/origin"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -202,7 +202,7 @@ func (s *Server) roleFor(ctx context.Context, workspace, name string) (store.Imp
 		}
 	}
 	return store.ImportedRole{}, status.Errorf(codes.FailedPrecondition,
-		"this workspace does not hold the %s role, so nothing can run as it. Import it and attach it with: quay role attach %s",
+		"this workspace does not hold the %s role, so nothing can run as it. Import it and attach it with: krewe role attach %s",
 		name, name)
 }
 
@@ -361,7 +361,7 @@ func (s *Server) workspacesHolding(ctx context.Context, name string) ([]string, 
 // names is more use than a correct silence.
 func missingRole(where, name string, held []string) string {
 	if len(held) == 0 {
-		return fmt.Sprintf("%s holds no roles at all, so there is no %s to read. Import one with: quay role import <directory>",
+		return fmt.Sprintf("%s holds no roles at all, so there is no %s to read. Import one with: krewe role import <directory>",
 			where, name)
 	}
 	near := nearRoles(name, held)

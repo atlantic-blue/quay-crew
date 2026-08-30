@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/hook"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 
@@ -87,7 +87,7 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 	})
 
 	// The line an attached operator reads, said by the same file that binds the hooks.
-	sc.Step(`^the settings tell the runtime to draw its status line by running quay$`,
+	sc.Step(`^the settings tell the runtime to draw its status line by running krewe$`,
 		func(ctx context.Context) error {
 			body, err := renderedSettings(ctx)
 			if err != nil {
@@ -106,7 +106,7 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 				return fmt.Errorf("the system asks for a status line of type %q, and the runtime only runs a command",
 					document.StatusLine.Type)
 			}
-			if words := strings.Fields(document.StatusLine.Command); len(words) < 2 || words[0] != "quay" {
+			if words := strings.Fields(document.StatusLine.Command); len(words) < 2 || words[0] != "krewe" {
 				return fmt.Errorf("the status line runs %q, which is not this tool", document.StatusLine.Command)
 			}
 			return nil

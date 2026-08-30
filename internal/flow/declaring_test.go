@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // The graph these drive: two steps with a choice between them, which is the shape every flow has.
@@ -169,7 +169,7 @@ edges:
 	}
 }
 
-// A run's own job says where the run is and what it came to, so `quay job show` on it answers the
+// A run's own job says where the run is and what it came to, so `krewe job show` on it answers the
 // two questions a person has without their reading a transcript.
 func TestTheRunsOwnJobFollowsTheRun(t *testing.T) {
 	engine, it, workspace, project := aSystem(t, `

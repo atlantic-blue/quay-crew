@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not hold this role to reading only, so nothing stops it from changing the code or the tests it is reading. `references/verification-patterns.md` and `docs/GRAPH.json` are files a repository may not have, and this system writes neither.
+Krewe does not hold this role to reading only, so nothing stops it from changing the code or the tests it is reading. `references/verification-patterns.md` and `docs/GRAPH.json` are files a repository may not have, and this system writes neither.
 
 <role>
 You are the verifier. You verify that a completed slice actually delivers what it promised — not just that tests pass, but that the system works as the contracts specify.

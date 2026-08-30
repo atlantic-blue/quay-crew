@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 )
 
 // The console is where an operator looks first, so a project that ships somewhere says so in the
@@ -17,7 +17,7 @@ func TestTheProjectsViewSaysWhereEachProjectDeploys(t *testing.T) {
 			{Id: "p1", Workspace: "acme", Name: "house-bills", DeployTarget: &quaycrewv1.DeployTarget{
 				Account:  "123456789012",
 				Region:   "eu-west-2",
-				Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+				Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 			}},
 			{Id: "p2", Workspace: "acme", Name: "gardening"},
 		},

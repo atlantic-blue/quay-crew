@@ -6,8 +6,8 @@ Feature: One word sends a task, and the three it replaced refuse
   thing, so the first question a new operator has, "I want this done, what do I type", had three
   answers and no shape between them.
 
-  So there is one word. `quay task` waits here for the answer, `quay task --dispatch` lets go, and
-  `quay task list` reads back what a session was sent and what came of it.
+  So there is one word. `krewe task` waits here for the answer, `krewe task --dispatch` lets go, and
+  `krewe task list` reads back what a session was sent and what came of it.
 
   The three words that went are the other half of the change, and it is the half that gets skipped.
   They are in fingers, in scripts and in notes, so each one refuses, exits non zero, and names what
@@ -32,7 +32,7 @@ Feature: One word sends a task, and the three it replaced refuse
   Scenario: The flag lets go, and names how to read the answer back
     When the caller types "task --dispatch" against the project with "read the repository"
     Then standard output says the system has it
-    And standard output says to read it back with "quay task list"
+    And standard output says to read it back with "krewe task list"
     And the command succeeds
 
   Scenario: The list verb reads back what a session was sent
@@ -51,15 +51,15 @@ Feature: One word sends a task, and the three it replaced refuse
 
     Examples:
       | gone     | names                  |
-      | ask      | quay task              |
-      | dispatch | quay task --dispatch   |
-      | tasks    | quay task list         |
+      | ask      | krewe task              |
+      | dispatch | krewe task --dispatch   |
+      | tasks    | krewe task list         |
 
-  # The trap a rename makes on its own. `quay tasks <session>` becomes `quay task <session>`, which is
+  # The trap a rename makes on its own. `krewe tasks <session>` becomes `krewe task <session>`, which is
   # a good command that sends the session's own identifier to the model as a message.
   Scenario: A session named on its own is refused rather than sent as a message
     Given a session that was sent "when is the electricity bill due"
     When the caller names that session with nothing to say
-    Then standard error says "quay task list"
+    Then standard error says "krewe task list"
     And the command fails
     And that session was sent nothing more

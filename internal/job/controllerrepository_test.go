@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // A job that names a repository ends in a pull request against it, and the system reads the address off

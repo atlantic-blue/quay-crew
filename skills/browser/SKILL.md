@@ -9,8 +9,8 @@ picture. Not the markup you served, not the test that asked the interface a ques
 
 ## Draw it
 
-    quay render http://localhost:3000
-    quay render localhost:3000 home.png 390x844 dark 2s
+    krewe render http://localhost:3000
+    krewe render localhost:3000 home.png 390x844 dark 2s
 
 The url comes first. Everything after it is recognised by its shape rather than its position, so any
 order is the same command: a file name, a size as `390x844`, `light` or `dark`, and a wait as `2s`.

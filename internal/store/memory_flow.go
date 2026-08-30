@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // ImportFlowGraph stores a graph at a version. A version that exists is refused rather than

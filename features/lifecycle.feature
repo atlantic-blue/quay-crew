@@ -87,7 +87,7 @@ Feature: A session gives its container back and keeps its history
     Then the session is reported as reclaimed
     And the session is not archived
 
-  # Issue 395. There was no way to stop one session: quay drain puts the whole system down, and killing
+  # Issue 395. There was no way to stop one session: krewe drain puts the whole system down, and killing
   # the dispatch client is not an interface. The same kill ended one task at once and left another
   # working for sixteen more minutes, merging two pull requests after the operator believed it had
   # stopped.

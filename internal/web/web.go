@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
 )
 
@@ -56,7 +56,7 @@ func Serve(ctx context.Context, reader Reader, addr string, out io.Writer) error
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	fmt.Fprintf(out, "quay web is on http://%s\n", listener.Addr())
+	fmt.Fprintf(out, "krewe web is on http://%s\n", listener.Addr())
 
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
@@ -87,7 +87,7 @@ func loopbackOnly(addr string) error {
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		return nil
 	}
-	return fmt.Errorf("quay web serves this machine only, and %q is not on it: use %s. "+
+	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s. "+
 		"Reaching the system from another device is a separate decision, and a chat channel is the "+
 		"road planned for it", addr, DefaultAddress)
 }

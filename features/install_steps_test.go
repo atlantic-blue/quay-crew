@@ -215,11 +215,11 @@ func initializeInstallSteps(sc *godog.ScenarioContext) {
 
 	// The binary is run, not looked for. A file of the right name that cannot execute is exactly the
 	// failure that a check for the file would report as a pass.
-	sc.Step(`^quay is on the path and says which build it is$`, func(ctx context.Context) error {
-		installed := filepath.Join(installFrom(ctx).bin, "quay")
+	sc.Step(`^krewe is on the path and says which build it is$`, func(ctx context.Context) error {
+		installed := filepath.Join(installFrom(ctx).bin, "krewe")
 		reported, err := exec.Command(installed, "version").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("the quay that was installed does not run: %w\n%s", err, reported)
+			return fmt.Errorf("the krewe that was installed does not run: %w\n%s", err, reported)
 		}
 		if !strings.Contains(string(reported), "tool") {
 			return fmt.Errorf("it does not say which build it is:\n%s", reported)

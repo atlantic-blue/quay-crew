@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -692,7 +692,7 @@ func runCarrier(ctx context.Context, w *world) (*job.Job, error) {
 }
 
 // runSteps is every job the run declared for a step, oldest first. Found by the labels each
-// one carries, which is the road a person takes too: quay job list --label flow.run=<run>.
+// one carries, which is the road a person takes too: krewe job list --label flow.run=<run>.
 func runSteps(ctx context.Context, w *world) ([]*job.Job, error) {
 	listed, err := w.store.ListJobs(ctx, job.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
 	if err != nil {

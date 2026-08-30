@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
 	"gopkg.in/yaml.v3"
 )
 
@@ -82,7 +82,7 @@ type Graph struct {
 	// It belongs to the graph rather than to the operator starting the run, for the same reason the
 	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
 	// does. There is nowhere else to put it either, because the run's session does not exist until
-	// the run starts, so `quay mode` has nothing to point at.
+	// the run starts, so `krewe mode` has nothing to point at.
 	Mode   string
 	Limits Limits
 	Nodes  map[string]Node

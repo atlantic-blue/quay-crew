@@ -3,7 +3,7 @@
 The gh tool is in the image and reads GH_TOKEN from the environment on its own. Never run
 `gh auth login`, never put a token in a command, a file, or a message, and never ask for one; if gh
 reports it cannot authenticate, say the workspace needs GH_TOKEN set with
-`quay secret set <workspace> GH_TOKEN <value>` rather than working around it.
+`krewe secret set <workspace> GH_TOKEN <value>` rather than working around it.
 
 ## Opening a pull request
 

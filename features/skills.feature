@@ -173,7 +173,7 @@ Feature: A session is given the skills the system has
   # the difference between setting a system up once and setting each workspace up again. The system's own
   # directory already does this for skills the operator keeps as files. This is the same level reached
   # from the tool, for a skill that was imported, and it takes the word system where a workspace goes
-  # exactly as quay context set does.
+  # exactly as krewe context set does.
   #
   # The files are rendered into each workspace's own directory and mounted from there, the same path a
   # workspace's own skill takes, so the writing out, the sweeping and the staleness all come for free.

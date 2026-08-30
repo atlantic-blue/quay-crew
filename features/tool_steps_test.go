@@ -137,13 +137,20 @@ func runTool(ctx context.Context, args ...string) error {
 // The home directory is a temporary one: the tool keeps where the operator is standing on the
 // machine it runs on, and a scenario must not read or write the operator's own.
 func runToolSaying(ctx context.Context, in string, args ...string) error {
+	binary, err := kreweBinary()
+	if err != nil {
+		return err
+	}
+	return runBinarySaying(ctx, binary, in, args...)
+}
+
+// runBinarySaying is the same run, for a scenario that names which binary it wants. The name the tool
+// used to have is a second binary beside it, and what it does is only observable from outside the
+// process: which stream it wrote on, and what it exited with.
+func runBinarySaying(ctx context.Context, binary, in string, args ...string) error {
 	t := toolFrom(ctx)
 	if t.address == "" {
 		return fmt.Errorf("the system has no address the tool can dial")
-	}
-	binary, err := quayBinary()
-	if err != nil {
-		return err
 	}
 	home, err := os.MkdirTemp("", "quaycrew-tool-")
 	if err != nil {

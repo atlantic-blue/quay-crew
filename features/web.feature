@@ -1,6 +1,6 @@
 Feature: The operator reads the system in a browser
 
-  A terminal pane is a poor place to read a long reply with code in it. `quay web` serves the system to
+  A terminal pane is a poor place to read a long reply with code in it. `krewe web` serves the system to
   a browser on the operator's own machine, and it only reads: the interface it holds names no call
   that can change anything, so a page cannot dispatch a task or delete a workspace.
 

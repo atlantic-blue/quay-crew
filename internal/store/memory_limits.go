@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // WorkspaceLimits reads what a workspace lets its sessions declare. A workspace nobody has set

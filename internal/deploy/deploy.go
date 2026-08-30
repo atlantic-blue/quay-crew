@@ -73,7 +73,7 @@ func ParseTarget(account, region, identity string) (Target, error) {
 	}{
 		{"account", target.Account, "123456789012"},
 		{"region", target.Region, "eu-west-2"},
-		{"identity", target.Identity, "arn:aws:iam::123456789012:role/quay-deploy"},
+		{"identity", target.Identity, "arn:aws:iam::123456789012:role/krewe-deploy"},
 	} {
 		if missing.value == "" {
 			return Target{}, fmt.Errorf(
@@ -95,7 +95,7 @@ func ParseTarget(account, region, identity string) (Target, error) {
 	if named == nil {
 		return Target{}, fmt.Errorf(
 			"the identity %q is not a role a pipeline can assume: give an address like "+
-				"\"arn:aws:iam::123456789012:role/quay-deploy\"", target.Identity)
+				"\"arn:aws:iam::123456789012:role/krewe-deploy\"", target.Identity)
 	}
 	// The check the record exists for. Pasting the role from the other account is invisible until a
 	// pipeline runs, and by then a tree of jobs has written infrastructure for somewhere it cannot

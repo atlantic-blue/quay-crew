@@ -21,7 +21,7 @@ func TestARunningRuntimeIsFoundHoweverItWasStarted(t *testing.T) {
 		// zero byte, and nothing between /proc and here turns them into spaces.
 		"as the kernel writes it, with zero bytes between the arguments": "sleep\x00infinity\x00\n" +
 			"claude\x00--resume\x000d4f2a\x00--permission-mode\x00acceptEdits\x00\n",
-		"under the conversation's terminal": "tmux new-session -A -s quay open-conversation 0d4f2a plan\n" +
+		"under the conversation's terminal": "tmux new-session -A -s krewe open-conversation 0d4f2a plan\n" +
 			"/bin/sh /usr/local/bin/open-conversation 0d4f2a plan\n" +
 			"claude --resume 0d4f2a --permission-mode plan\n",
 	} {

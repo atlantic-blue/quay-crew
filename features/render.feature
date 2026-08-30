@@ -5,7 +5,7 @@ Feature: A session can see what it built
   the operator is the first person to look at it. On juliantellez.com that cost a spacing defect on
   every section of the home page, found by the first screenshot anybody took.
 
-  So the sandbox image carries a browser, and `quay render` draws a url into a picture the session
+  So the sandbox image carries a browser, and `krewe render` draws a url into a picture the session
   then reads. The command talks to nothing, because the page a session wants to see is one it is
   serving inside its own sandbox.
 

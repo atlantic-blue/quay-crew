@@ -18,12 +18,12 @@ Feature: A first run is one command
   double, so what is proved is what make does and in what order, not what a real daemon does with
   the compose file. The containers job in continuous integration boots the stack for real.
 
-  Scenario: One command leaves a running system and a quay that runs
+  Scenario: One command leaves a running system and a krewe that runs
     Given a machine with no system on it
     When the operator runs "make install"
     Then the system has a configuration file
     And the system has a data directory
-    And quay is on the path and says which build it is
+    And krewe is on the path and says which build it is
     And the stack was brought up once
 
   Scenario: A first run says what it cannot do
@@ -31,10 +31,10 @@ Feature: A first run is one command
     When the operator runs "make install"
     Then it says it cannot mint the model credential
     And it prints these commands:
-      | quay workspace create <name>            |
-      | quay project create <name>              |
-      | quay secret set CLAUDE_CODE_OAUTH_TOKEN |
-      | quay task "say pong"                    |
+      | krewe workspace create <name>            |
+      | krewe project create <name>              |
+      | krewe secret set CLAUDE_CODE_OAUTH_TOKEN |
+      | krewe task "say pong"                    |
 
   Scenario: Running it again keeps the configuration the operator edited
     Given a machine with no system on it
@@ -58,7 +58,7 @@ Feature: A first run is one command
 
   Scenario: Typing the system's name back replaces it
     Given a machine with a system already running
-    When the operator runs "make install" and types "quay"
+    When the operator runs "make install" and types "krewe"
     Then it succeeds
     And the stack was brought up once
 
@@ -79,7 +79,7 @@ Feature: A first run is one command
     When the operator runs "make rebuild"
     Then it succeeds
     And the stack was never brought up
-    And quay is on the path and says which build it is
+    And krewe is on the path and says which build it is
 
   Scenario: Asking for the configuration alone starts nothing
     Given a machine with no system on it

@@ -20,25 +20,25 @@ import (
 	"sync"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/capacity"
-	"github.com/atlantic-blue/quay-crew/internal/deploy"
-	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/headroom"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/manual"
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/name"
-	"github.com/atlantic-blue/quay-crew/internal/repository"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/krewe/internal/deploy"
+	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/manual"
+	"github.com/atlantic-blue/krewe/internal/messaging"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/name"
+	"github.com/atlantic-blue/krewe/internal/repository"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/krewe/internal/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -118,7 +118,7 @@ type Config struct {
 	// Without it git refuses to commit rather than guessing.
 	GitAuthor Identity
 	// Reachable is the address a session should dial to reach this control plane, put into every
-	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the system without being told where it is.
+	// sandbox as QC_GRPC_ADDR so `krewe` inside one drives the system without being told where it is.
 	//
 	// Empty means a session cannot reach the system at all, which is the default: a session that can
 	// drive the system can also stop other sessions, so it is turned on rather than assumed.
@@ -608,7 +608,7 @@ func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 // syncContextExcept is syncContext with one level exempt from the read back, because somebody has
 // just set it.
 //
-// `quay context set` is the operator saying what a level is now. Reading the file back for that level
+// `krewe context set` is the operator saying what a level is now. Reading the file back for that level
 // first would hand them back the very body they were replacing, so at that one level the store wins
 // and everything else is still read back and kept.
 func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Session, settled contextLevel) {
@@ -690,7 +690,7 @@ func join(kept, added string) string {
 }
 
 // renderContext writes what the store holds into the files the model reads, and reads nothing back:
-// `quay context set` is the operator saying what the context is now, so the store wins.
+// `krewe context set` is the operator saying what the context is now, so the store wins.
 //
 // A conversation already running does not see it. The tool reads its memory at the start, so a change
 // lands on the next task or the next open.
@@ -1054,7 +1054,7 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 			where = systemScope
 		}
 		return nil, status.Errorf(codes.InvalidArgument,
-			"a signing key is mounted, not set: quay secret mount %s %s <path to the file holding it>",
+			"a signing key is mounted, not set: krewe secret mount %s %s <path to the file holding it>",
 			where, secret.Name)
 	}
 	if system {
@@ -1348,7 +1348,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	opened *quaycrewv1.TaskEvent) (string, error) {
 	// Registered before anything runs, so a stop that arrives a moment after the dispatch has
 	// something to cancel. The task runs under this context from here down, which is what makes
-	// `quay stop` end the model rather than only mark a row.
+	// `krewe stop` end the model rather than only mark a row.
 	ctx, held := s.beginRunning(ctx, session.GetId())
 	defer s.endRunning(session.GetId(), held)
 	// Both of these happen before any job does, and that is the point of them. An operator has to be
@@ -1917,7 +1917,7 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	if id := session.GetId(); id != "" {
 		env[sandbox.SessionIDEnv] = id
 	}
-	// Where to reach the system, so `quay` run inside the driver works with nothing to configure. The
+	// Where to reach the system, so `krewe` run inside the driver works with nothing to configure. The
 	// driver holds the system's own interface, which is why it is told here and why it is told the
 	// driver's token: an ordinary session has no business driving the system. A session running a job
 	// is told the same address below, with a credential that buys it four verbs rather than
@@ -2007,7 +2007,7 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	return env
 }
 
-// grpcAddrEnv is what the quay command line reads to find a control plane. A session gets it so the
+// grpcAddrEnv is what the krewe command line reads to find a control plane. A session gets it so the
 // tool inside a sandbox needs no arguments.
 const grpcAddrEnv = "QC_GRPC_ADDR"
 
@@ -2367,7 +2367,7 @@ func namesOf(sessions []*quaycrewv1.Session) string {
 }
 
 // OpenDriver returns the project's driver, the session that drives the system, creating it the first
-// time somebody opens it. It is what `quay` opens beside the console.
+// time somebody opens it. It is what `krewe` opens beside the console.
 func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverRequest) (*quaycrewv1.OpenDriverResponse, error) {
 	if req.GetProject() == "" {
 		return nil, status.Error(codes.InvalidArgument, "a driver belongs to a project, so name one")
@@ -2380,7 +2380,7 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 	return &quaycrewv1.OpenDriverResponse{Session: session}, nil
 }
 
-// teachDriver writes what quay is into the driver's own context, so it opens knowing what it is for
+// teachDriver writes what krewe is into the driver's own context, so it opens knowing what it is for
 // rather than having to be told every time. It is the system describing itself: the command list the
 // tool prints, and the behaviour specification the binary carries.
 //
@@ -2391,7 +2391,7 @@ func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
 		return
 	}
 	if err := s.store.SetContext(ctx, store.ContextSession, session.GetId(), manual.Text()); err != nil {
-		// A driver that has not been told what quay is still opens, and can be told by hand. Refusing
+		// A driver that has not been told what krewe is still opens, and can be told by hand. Refusing
 		// to open the system over it would be worse than opening one that has to ask.
 		return
 	}

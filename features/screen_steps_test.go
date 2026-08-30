@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/panel"
+	"github.com/atlantic-blue/krewe/internal/panel"
 	"github.com/cucumber/godog"
 )
 
@@ -57,7 +57,7 @@ func initializeScreenSteps(sc *godog.ScenarioContext) {
 			}
 			return godog.ErrSkip
 		}
-		s.socket = fmt.Sprintf("quay-screen-%d", os.Getpid())
+		s.socket = fmt.Sprintf("krewe-screen-%d", os.Getpid())
 		if _, err := s.tmux("new-session", "-d", "-s", "screen", "-n", "panel",
 			"-x", "120", "-y", "20", "sleep 300"); err != nil {
 			return err
@@ -72,9 +72,9 @@ func initializeScreenSteps(sc *godog.ScenarioContext) {
 
 	// The real command, in a real pane, pointed at an address with no system on it. A double that
 	// printed something and waited would pass this while the tool exited, which is the defect.
-	sc.Step(`^quay attach is put beside the console and cannot reach the system$`, func(ctx context.Context) error {
+	sc.Step(`^krewe attach is put beside the console and cannot reach the system$`, func(ctx context.Context) error {
 		s := screenFrom(ctx)
-		built, err := quayBinary()
+		built, err := kreweBinary()
 		if err != nil {
 			return err
 		}
@@ -167,22 +167,22 @@ func (s *screenWorld) beside(argv string) error {
 // about a session is on the other side of that connection, so attach cannot get past it.
 const nowhere = "127.0.0.1:59"
 
-// quayBinary builds the tool once and answers with the path to it, because a pane runs a command and
+// kreweBinary builds the tool once and answers with the path to it, because a pane runs a command and
 // what is being checked is what that command does to the screen.
-func quayBinary() (string, error) {
+func kreweBinary() (string, error) {
 	builtOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "quay-binary")
+		dir, err := os.MkdirTemp("", "krewe-binary")
 		if err != nil {
 			builtErr = err
 			return
 		}
-		built = filepath.Join(dir, "quay")
+		built = filepath.Join(dir, "krewe")
 		// Stamped the way the install target stamps it, so a scenario can say the tool and the system
 		// are different builds and have the tool actually report one.
 		out, err := exec.Command("go", "build", "-ldflags", "-X main.version="+toolBuild,
-			"-o", built, "../cmd/quay").CombinedOutput()
+			"-o", built, "../cmd/krewe").CombinedOutput()
 		if err != nil {
-			builtErr = fmt.Errorf("building quay: %w: %s", err, out)
+			builtErr = fmt.Errorf("building krewe: %w: %s", err, out)
 		}
 	})
 	return built, builtErr

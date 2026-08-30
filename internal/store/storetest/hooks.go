@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/hook"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // The hook half of the contract, held against both implementations.

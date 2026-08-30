@@ -107,7 +107,7 @@ Feature: A step of a flow runs as a role, in its own session
     Then the flow run is done
     And every session the run started is archived
 
-  # The roles this build ships are quay's own, and the brief is the whole instruction of the session
+  # The roles this build ships are krewe's own, and the brief is the whole instruction of the session
   # running as one. A brief still naming the product it was written for would send that session
   # looking for a file, a command or an agent that is not here. The unit tier sweeps every file in
   # roles/; this carries one of them through the system to the memory file the session actually reads.
@@ -126,7 +126,7 @@ Feature: A step of a flow runs as a role, in its own session
       """
     When the operator starts the flow "write-contracts" in the project
     Then the role's memory file carries "You are the architect."
-    And the role's memory file names no product but quay
+    And the role's memory file names no product but krewe
 
   # The other direction of the same boundary, and the one that decides whether a role can push.
   # Nothing is cloned for a session, so a repository reaches one through the git skill, and a role

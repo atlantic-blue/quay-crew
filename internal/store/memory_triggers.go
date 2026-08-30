@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // The pending trigger queue, held to the same contract the Postgres one is.

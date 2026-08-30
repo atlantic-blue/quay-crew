@@ -1,10 +1,10 @@
-// Package manual is quay describing itself, in a form meant to be read by whatever is running in a
+// Package manual is krewe describing itself, in a form meant to be read by whatever is running in a
 // session rather than by somebody scanning a terminal.
 //
 // It exists because a session sitting in the panel beside the console knows nothing about the system it
 // is next to, so it is told with this.
 //
-// Most of it is assembled rather than written: the commands are the same usage text `quay` shows with
+// Most of it is assembled rather than written: the commands are the same usage text `krewe` shows with
 // no arguments, and what the system can do comes from the behaviour specification embedded in the
 // binary. Neither can drift from the tool, because a scenario that is wrong fails the build and a
 // command that is renamed changes the usage in the same commit. Only the model's own words are prose,
@@ -15,28 +15,28 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/features"
+	"github.com/atlantic-blue/krewe/features"
 )
 
-// Commands is the command list, which is also what `quay` prints with no arguments. It lives here so
+// Commands is the command list, which is also what `krewe` prints with no arguments. It lives here so
 // the tool and the document a session is told with cannot describe two different tools.
-const Commands = `usage: quay [command]
+const Commands = `usage: krewe [command]
 
-with no command, quay opens the console: a full screen view of every resource the system has.
+with no command, krewe opens the console: a full screen view of every resource the system has.
 press : to switch resource, / to filter, enter to drill in, s to shell into a session, q to quit.
 
 you work in one place at a time, and say where with an address: workspace/project/session.
 
-  quay use me/house-bills
-  quay task "when is the electricity bill due"
-  quay task --dispatch "read the repository and write the migration"
+  krewe use me/house-bills
+  krewe task "when is the electricity bill due"
+  krewe task --dispatch "read the repository and write the migration"
 
 commands:
   help                                    print this, which -h and --help do too
   version                                 which build the tool, the system and the sandbox image are,
                                           and where two of them differ
   features                                what this system can do, and what proves it
-  manual                                  what quay is and how to drive it, to pipe into a context
+  manual                                  what krewe is and how to drive it, to pipe into a context
   use [<address>]                         show where you are, or move there
   workspace create <name>                 create a workspace and move into it
   workspace list                          list workspaces
@@ -142,8 +142,8 @@ commands:
                                           level is. A level past 20,000 characters also says who
                                           reads it and what to move down a level
   context show [<address>]                what a level says, printed as it is stored. This and set
-                                          are a pair: quay context show system > file, edit the file,
-                                          then quay context set system < file, which is how a level is
+                                          are a pair: krewe context show system > file, edit the file,
+                                          then krewe context set system < file, which is how a level is
                                           added to rather than overwritten
   context set [<address>] < file          write what a level says, from standard input. Say system
                                           where the address goes and it applies to everything the
@@ -236,7 +236,7 @@ const preamble = `# Quay System
 
 You are running inside a Quay System session. Quay System is a self hosted hub for agent sessions: the
 operator commands a system of them from any channel, and each one runs in its own sandbox container.
-The ` + "`quay`" + ` command drives it. If it is on your path, you can use it.
+The ` + "`krewe`" + ` command drives it. If it is on your path, you can use it.
 
 ## The words, and what they mean
 
@@ -251,7 +251,7 @@ The ` + "`quay`" + ` command drives it. If it is on your path, you can use it.
   sandbox     the isolated container a session runs in. A session runs IN a sandbox.
 
 They nest: workspace, then project, then session. An address is written the way a path is,
-` + "`me/house-bills`" + `, and each level is a name or an identifier. ` + "`quay use me/house-bills`" + ` moves you
+` + "`me/house-bills`" + `, and each level is a name or an identifier. ` + "`krewe use me/house-bills`" + ` moves you
 there; an address typed on a command applies to that command only.
 
 ## Context, which is how you are told things
@@ -262,10 +262,10 @@ Context is files, not prompt text. Each level owns a directory, and a session's 
   project     /home/agent/workspace        its CLAUDE.md, and the project's files
 
 So the way to teach a project something is to write it into that project's context, with
-` + "`quay context set <address> < file`" + `, or to drop files into the directory ` + "`quay context`" + ` names. The
+` + "`krewe context set <address> < file`" + `, or to drop files into the directory ` + "`krewe context`" + ` names. The
 model reads CLAUDE.md and the working directory natively. There is no second mechanism.
 
-A level is read back with ` + "`quay context show <address>`" + `, which prints what it says and
+A level is read back with ` + "`krewe context show <address>`" + `, which prints what it says and
 nothing else. Setting overwrites, so adding a paragraph means reading the level out first, appending
 to the file, and setting it back.
 
@@ -273,6 +273,6 @@ to the file, and setting it back.
 
 The operator may ask you to do things to the system itself: make a workspace, add a project, set a
 subscription token, load a folder as a project's context, start a session. Everything below is what
-the tool can actually do. Prefer running ` + "`quay`" + ` to guessing, and if a command refuses, read what it
+the tool can actually do. Prefer running ` + "`krewe`" + ` to guessing, and if a command refuses, read what it
 says: refusals here name what would have worked.
 `

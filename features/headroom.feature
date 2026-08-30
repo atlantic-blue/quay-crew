@@ -1,8 +1,8 @@
 Feature: The system says how much room the machine has left
 
   On 27 August 2026 the host ran out of memory. The kernel killed 18 sandboxes, three monitors and a
-  build in one event. Nothing in quay reported it before, during or after, and the console kept
-  drawing a healthy system. Every number that mattered had to be read from outside quay with
+  build in one event. Nothing in krewe reported it before, during or after, and the console kept
+  drawing a healthy system. Every number that mattered had to be read from outside krewe with
   `docker stats`.
 
   So the system reads the daemon it already talks to, on its own timer, and reports four things: what

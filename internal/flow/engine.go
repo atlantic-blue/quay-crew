@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // StatusWorking is a run whose step is out with a job.
@@ -476,7 +476,7 @@ func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier stri
 // of it where the run reached something worth a record.
 //
 // The phase follows the run: held back while it is working, waiting or moving, asking while it is
-// asking, and ended when the run has ended. So `quay job show` on a run's own job says where the
+// asking, and ended when the run has ended. So `krewe job show` on a run's own job says where the
 // run is, and the answer of the whole run is a field rather than a transcript.
 func (e *Engine) carrier(ctx context.Context, id string, run Run, records []*job.Event) (*Carrier, []*job.Event) {
 	if id == "" {
@@ -572,7 +572,7 @@ func unmetOf(step *job.Job) string {
 }
 
 // The labels every job a run declares carries, so a reader finds the whole run in the job
-// tree without being told an identifier: `quay job list --label flow.run=<run>`.
+// tree without being told an identifier: `krewe job list --label flow.run=<run>`.
 const (
 	labelRun     = "flow.run"
 	labelGraph   = "flow.graph"

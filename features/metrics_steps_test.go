@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/telemetry"
 	"github.com/cucumber/godog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

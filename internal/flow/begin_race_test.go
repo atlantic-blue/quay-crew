@@ -8,7 +8,7 @@ import (
 // goroutine advances another. A struct copy is not enough: State and Attempts are maps, so the copy
 // shares them, and the caller's run is written to while it is being read.
 //
-// What it looked like from outside was `quay flow start` failing with "grpc: error while marshaling:
+// What it looked like from outside was `krewe flow start` failing with "grpc: error while marshaling:
 // size mismatch, calculated=110, measured=169". The response was being marshaled while the goroutine
 // wrote to a map inside it, so the message grew between the two passes protobuf makes over it. It
 // failed about one run in six, and the same shape can corrupt any read of a run in flight.

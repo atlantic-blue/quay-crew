@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/skill"
 )
 
 // files is a whole skill on its way to the system, the way a client sends one after reading a directory.

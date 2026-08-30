@@ -10,7 +10,7 @@ import (
 	"errors"
 	"sync"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 )
 
 // Errors returned by adapters.

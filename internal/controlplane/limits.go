@@ -3,8 +3,8 @@ package controlplane
 import (
 	"context"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/job"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -17,7 +17,7 @@ func (s *Server) GetWorkspaceLimits(ctx context.Context, req *quaycrewv1.GetWork
 	*quaycrewv1.GetWorkspaceLimitsResponse, error) {
 	if req.GetWorkspace() == "" {
 		return nil, status.Error(codes.InvalidArgument,
-			"which workspace: quay limits <workspace>, because a ceiling belongs to one workspace")
+			"which workspace: krewe limits <workspace>, because a ceiling belongs to one workspace")
 	}
 	if _, err := s.store.GetWorkspace(ctx, req.GetWorkspace()); err != nil {
 		return nil, storeError(err, "workspace")
@@ -38,7 +38,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 	asked := req.GetLimits()
 	if asked.GetWorkspace() == "" {
 		return nil, status.Error(codes.InvalidArgument,
-			"which workspace: quay limits <workspace> --max-depth <n>")
+			"which workspace: krewe limits <workspace> --max-depth <n>")
 	}
 	if _, err := s.store.GetWorkspace(ctx, asked.GetWorkspace()); err != nil {
 		return nil, storeError(err, "workspace")

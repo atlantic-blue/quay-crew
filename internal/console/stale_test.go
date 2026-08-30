@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 )
 
 // TestTheStatusCellCarriesTheStaleMark pins the operator's cue: a session whose live sandbox was

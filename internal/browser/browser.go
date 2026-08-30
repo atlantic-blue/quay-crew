@@ -65,8 +65,8 @@ var (
 func From(args []string) (Drawing, error) {
 	drawing := Drawing{Width: DefaultWidth, Height: DefaultHeight, Scheme: DefaultScheme, Wait: DefaultWait}
 	if len(args) == 0 {
-		return Drawing{}, fmt.Errorf("usage: quay render <url> [<file>] [<width>x<height>] [light|dark] [<wait>]\n\n" +
-			"for example: quay render http://localhost:3000 home.png 390x844 dark 2s")
+		return Drawing{}, fmt.Errorf("usage: krewe render <url> [<file>] [<width>x<height>] [light|dark] [<wait>]\n\n" +
+			"for example: krewe render http://localhost:3000 home.png 390x844 dark 2s")
 	}
 	drawing.URL = address(args[0])
 
@@ -82,7 +82,7 @@ func From(args []string) (Drawing, error) {
 		case isDuration(arg):
 			drawing.Wait, _ = time.ParseDuration(arg)
 		case named:
-			return Drawing{}, fmt.Errorf("quay render draws one url into one file, and %q is a second "+
+			return Drawing{}, fmt.Errorf("krewe render draws one url into one file, and %q is a second "+
 				"file. A size reads as 1280x900, a colour scheme as light or dark, and a wait as 2s", arg)
 		default:
 			drawing.File, named = arg, true

@@ -15,7 +15,7 @@ const makefile = "../Makefile"
 //
 // `make upgrade` fast forwarded the checkout, reinstalled the tool and rebuilt the stack, and never
 // touched the sandbox image. So the tool and the control plane moved forward while every session
-// carried on in a container from the build before, with a `quay` inside it that was older than the
+// carried on in a container from the build before, with a `krewe` inside it that was older than the
 // system or was not in the image at all. Nothing said so.
 //
 // The list lives in one place, rebuild, so an operator has one command to type and this has one
@@ -59,7 +59,7 @@ func TestTheSandboxImageRecordsWhichBuildItCameFrom(t *testing.T) {
 	// The label alone would leave the tool inside reporting a build it is not. Both come from the
 	// same argument, so they cannot disagree.
 	if !strings.Contains(dockerfile, "-X main.version=$QC_VERSION") {
-		t.Errorf("the quay in the sandbox is built without a version, so it reports one it is not:\n%s", dockerfile)
+		t.Errorf("the krewe in the sandbox is built without a version, so it reports one it is not:\n%s", dockerfile)
 	}
 }
 
@@ -158,15 +158,15 @@ func TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers(t *testing.T) {
 func TestDrainingRefusesTheUpgradeAndSaysHowToGoOverIt(t *testing.T) {
 	recipe := target(t, "drain")
 
-	if !strings.Contains(recipe, "quay drain") {
+	if !strings.Contains(recipe, "krewe drain") {
 		t.Fatalf("the drain target does not ask the system to put anything down:\n%s", recipe)
 	}
 	if !strings.Contains(recipe, "FORCE") {
 		t.Errorf("a refused drain does not say how to upgrade over a task in flight:\n%s", recipe)
 	}
-	// A machine with no quay on its path cannot drain, and stopping the upgrade over that would leave
+	// A machine with no krewe on its path cannot drain, and stopping the upgrade over that would leave
 	// it with no way to upgrade at all.
-	if !strings.Contains(recipe, "command -v quay") {
-		t.Errorf("the drain target assumes quay is on the path, so an upgrade without it fails:\n%s", recipe)
+	if !strings.Contains(recipe, "command -v krewe") {
+		t.Errorf("the drain target assumes krewe is on the path, so an upgrade without it fails:\n%s", recipe)
 	}
 }

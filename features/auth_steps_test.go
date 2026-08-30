@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -78,7 +78,7 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the caller is refused, told a token is missing and where quay reads one from$`,
+	sc.Step(`^the caller is refused, told a token is missing and where krewe reads one from$`,
 		func(ctx context.Context) error {
 			if err := refusal(authFrom(ctx).err); err != nil {
 				return err

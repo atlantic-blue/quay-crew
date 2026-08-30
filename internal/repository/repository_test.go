@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/repository"
+	"github.com/atlantic-blue/krewe/internal/repository"
 )
 
 // The address somebody typed and the address somebody pasted are one address.

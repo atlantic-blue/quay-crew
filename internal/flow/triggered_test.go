@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // A run that begins because something happened. The trigger's payload is the run's opening state,
@@ -95,7 +95,7 @@ func TestATriggeredRunIsCarriedByAJob(t *testing.T) {
 	if carrying.Phase != job.PhaseWaiting {
 		t.Errorf("the run's own job is %q, want it held back so no controller sends it as a task", carrying.Phase)
 	}
-	// The label is how a person finds why a run nobody started exists: quay job list
+	// The label is how a person finds why a run nobody started exists: krewe job list
 	// --label flow.trigger=<trigger>.
 	if carrying.Labels["flow.trigger"] != raised.ID {
 		t.Errorf("the run's own job is labelled %v, want it to name the trigger that caused it", carrying.Labels)
@@ -166,7 +166,7 @@ func TestATriggerForAFlowNobodyImportedFailsOnItsRow(t *testing.T) {
 	if failed.Status != flow.TriggerFailed {
 		t.Fatalf("the trigger reads %q, want it failed rather than left as though nobody had got to it", failed.Status)
 	}
-	if !strings.Contains(failed.Reason, "never-imported") || !strings.Contains(failed.Reason, "quay flow import") {
+	if !strings.Contains(failed.Reason, "never-imported") || !strings.Contains(failed.Reason, "krewe flow import") {
 		t.Fatalf("the row says %q, want it to name the flow and what to do about it", failed.Reason)
 	}
 	if runs := runsOf(t, it, "never-imported"); len(runs) != 0 {

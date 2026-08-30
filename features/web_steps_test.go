@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/web"
+	"github.com/atlantic-blue/krewe/internal/web"
 	"github.com/cucumber/godog"
 )
 

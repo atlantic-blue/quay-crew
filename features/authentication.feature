@@ -10,7 +10,7 @@ Feature: The system refuses a caller it cannot recognise
 
   Scenario: a caller presenting nothing is refused and told what is missing
     When a caller presents no token
-    Then the caller is refused, told a token is missing and where quay reads one from
+    Then the caller is refused, told a token is missing and where krewe reads one from
 
   Scenario: a caller presenting a token that is not the system's is refused
     When a caller presents a token that is not the system's

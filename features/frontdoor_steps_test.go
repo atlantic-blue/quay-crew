@@ -68,18 +68,18 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^every command it says to run is one the system has$`, func(ctx context.Context) error {
-		commands, err := quayCommands()
+		commands, err := kreweCommands()
 		if err != nil {
 			return err
 		}
-		named := namedAfter("quay", codeIn(frontDoorFrom(ctx).body))
+		named := namedAfter("krewe", codeIn(frontDoorFrom(ctx).body))
 		if len(named) == 0 {
 			return fmt.Errorf("the front door names no command at all, so this proved nothing")
 		}
 		var missing []string
 		for _, one := range named {
 			if !commands[one] {
-				missing = append(missing, "quay "+one)
+				missing = append(missing, "krewe "+one)
 			}
 		}
 		if len(missing) > 0 {

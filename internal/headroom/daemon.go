@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/room"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/room"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // A Source takes one sample of the machine. It is an interface so the control plane can be built
@@ -84,7 +84,7 @@ func (d Daemon) Sample(ctx context.Context) (Sample, error) {
 }
 
 // machine reads the memory pressure on the machine the daemon runs on, through the same accounting
-// `quay room` reads inside a sandbox. Where that accounting is not there, every figure is unknown
+// `krewe room` reads inside a sandbox. Where that accounting is not there, every figure is unknown
 // and nothing is guessed.
 func (d Daemon) machine() (Machine, error) {
 	root := d.Root
@@ -305,7 +305,7 @@ func parsePercent(text string) Share {
 	return MeasuredShare(value)
 }
 
-// Describe is what `quay room` prints when it answers from the system rather than from a sandbox.
+// Describe is what `krewe room` prints when it answers from the system rather than from a sandbox.
 func Describe(sample Sample) string {
 	var out strings.Builder
 	if !sample.Taken() {

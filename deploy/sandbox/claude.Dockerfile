@@ -4,7 +4,7 @@
 # The image carries no credentials. The subscription token is injected at task time as
 # CLAUDE_CODE_OAUTH_TOKEN (minted by `claude setup-token`, stored as a per project secret), so the
 # same image is safe to build, share, and run anywhere.
-# quay itself, so a session can drive the system from inside its sandbox. Built here rather than mounted
+# krewe itself, so a session can drive the system from inside its sandbox. Built here rather than mounted
 # from the host, because the host's binary is built for the host: a darwin build does not run in a
 # linux container, and the cloud has no host to mount from at all.
 FROM golang:1.25 AS tool
@@ -16,12 +16,17 @@ COPY . .
 # Which build this image was made from. The tool inside a sandbox reports it, and the image carries
 # it as a label so the system can say when its sandboxes are running something older than itself.
 ARG QC_VERSION=unknown
-RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$QC_VERSION" -o /out/quay ./cmd/quay
+RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$QC_VERSION" -o /out/krewe ./cmd/krewe
+
+# The name the tool used to have, which refuses and says to type krewe. A session carries whatever it
+# was told yesterday, and a role brief or a note written before the rename still says quay, so the
+# refusal has to be in the sandbox as well as on the operator's machine.
+RUN CGO_ENABLED=0 go build -o /out/quay ./cmd/quay
 
 FROM node:22-slim
 
 # Read by the control plane through `docker image inspect`, which is how a stale image is noticed at
-# all: sessions run whatever this image holds, and an image from an older build holds an older quay,
+# all: sessions run whatever this image holds, and an image from an older build holds an older krewe,
 # or none.
 ARG QC_VERSION=unknown
 LABEL com.quaycrew.build=$QC_VERSION
@@ -87,8 +92,8 @@ RUN arch="$(uname -m)" \
 
 # Go, so a session can build and test the repository it is sitting inside: quay-crew is Go only,
 # and `make fmt`, `make lint` and `go test` all need the toolchain. Copied from the stage that
-# already built quay rather than downloaded again, so the sandbox never carries a Go that
-# disagrees with the one quay itself was built with.
+# already built krewe rather than downloaded again, so the sandbox never carries a Go that
+# disagrees with the one krewe itself was built with.
 COPY --from=tool /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 
@@ -129,6 +134,7 @@ RUN npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
 
 # Reaching the control plane is a separate decision, made once in configuration: without a network
 # that can reach it and an address to dial, this is a command that says it cannot connect.
+COPY --from=tool /out/krewe /usr/local/bin/krewe
 COPY --from=tool /out/quay /usr/local/bin/quay
 
 # A session clones in conversation, so git has to find its credential itself. The helper reads

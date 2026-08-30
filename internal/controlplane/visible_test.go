@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/model"
 )
 
 // A task was recorded only when it ended, so for the minutes or the hours it ran there was nothing to
@@ -35,7 +35,7 @@ func waitFor(t *testing.T, started <-chan struct{}, what string) {
 	}
 }
 
-// The defect itself. The caller waits, which is what `quay task` does, so nothing about this
+// The defect itself. The caller waits, which is what `krewe task` does, so nothing about this
 // task is detached and nothing about it was visible either.
 func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 	runner := &model.FakeRunner{

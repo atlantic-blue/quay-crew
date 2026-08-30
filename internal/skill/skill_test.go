@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/skill"
 )
 
 // write puts a skill on disk the way an operator would, and returns the directory holding it.
