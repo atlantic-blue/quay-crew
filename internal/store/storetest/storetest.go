@@ -14,6 +14,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -976,6 +977,156 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if again.GetId() != driver.GetId() {
 			t.Fatalf("opening the driver twice gave %s then %s", driver.GetId(), again.GetId())
+		}
+	})
+
+	// The record the operator used to be. A project that has not said carries nothing, and a project
+	// that has said carries it on every read, so "where does this go" is answered by the row rather
+	// than by asking somebody.
+	t.Run("a project says where it deploys, and survives being reopened", func(t *testing.T) {
+		open := newDataset(t)
+		ctx := context.Background()
+
+		before := open(t)
+		project := newProject(t, before, "me", "house bills")
+		if target := project.GetDeployTarget(); target != nil {
+			t.Fatalf("a fresh project already deploys to %v", target)
+		}
+
+		want := deploy.Target{
+			Account:  "123456789012",
+			Region:   "eu-west-2",
+			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		}
+		if err := before.SetDeployTarget(ctx, project.GetId(), want); err != nil {
+			t.Fatalf("SetDeployTarget: %v", err)
+		}
+		before.Close()
+
+		after := open(t)
+		fetched, err := after.GetProject(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		assertTarget(t, "the project it was set on", fetched.GetDeployTarget(), want)
+
+		// A listing carries it too. A row a person reads is the whole point, and a listing that has to
+		// fetch each project to say where it ships is a listing nobody puts it in.
+		listed, err := after.ListProjects(ctx, project.GetWorkspace())
+		if err != nil {
+			t.Fatalf("ListProjects: %v", err)
+		}
+		if len(listed) != 1 {
+			t.Fatalf("the workspace has %d projects, want 1", len(listed))
+		}
+		assertTarget(t, "the listed project", listed[0].GetDeployTarget(), want)
+	})
+
+	t.Run("a project that stops shipping somewhere says nothing again", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "me", "house bills")
+
+		if err := s.SetDeployTarget(ctx, project.GetId(), deploy.Target{
+			Account:  "123456789012",
+			Region:   "eu-west-2",
+			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		}); err != nil {
+			t.Fatalf("SetDeployTarget: %v", err)
+		}
+		if err := s.SetDeployTarget(ctx, project.GetId(), deploy.Target{}); err != nil {
+			t.Fatalf("clearing the target: %v", err)
+		}
+
+		fetched, err := s.GetProject(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		if target := fetched.GetDeployTarget(); target != nil {
+			t.Fatalf("a cleared project still deploys to %v", target)
+		}
+	})
+
+	t.Run("saying where a project that does not exist deploys is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		err := s.SetDeployTarget(context.Background(), "ghost", deploy.Target{
+			Account:  "123456789012",
+			Region:   "eu-west-2",
+			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		})
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetDeployTarget on a missing project returned %v, want ErrNotFound", err)
+		}
+	})
+
+	// Where a project's work lands, and what kind of repository that is. Both stores or neither: a
+	// crew on memory that remembers the repository and a crew on Postgres that forgets it is a crew
+	// whose jobs push nowhere on the one that matters.
+	t.Run("a project's repository survives the round trip", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "me", "transcript")
+
+		if project.GetRepository() != "" {
+			t.Fatalf("a fresh project already works in %q", project.GetRepository())
+		}
+		recorded, err := s.SetProjectRepository(ctx, project.GetId(), "atlantic-blue/transcript", "public")
+		if err != nil {
+			t.Fatalf("SetProjectRepository: %v", err)
+		}
+		if recorded.GetRepository() != "atlantic-blue/transcript" || recorded.GetVisibility() != "public" {
+			t.Fatalf("recorded %q %q, want atlantic-blue/transcript public",
+				recorded.GetRepository(), recorded.GetVisibility())
+		}
+
+		fetched, err := s.GetProject(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		if fetched.GetRepository() != "atlantic-blue/transcript" || fetched.GetVisibility() != "public" {
+			t.Fatalf("read back %q %q, want atlantic-blue/transcript public",
+				fetched.GetRepository(), fetched.GetVisibility())
+		}
+
+		listed, err := s.ListProjects(ctx, project.GetWorkspace())
+		if err != nil {
+			t.Fatalf("ListProjects: %v", err)
+		}
+		if len(listed) != 1 || listed[0].GetRepository() != "atlantic-blue/transcript" {
+			t.Fatalf("the listing says %+v, want it to name the repository", listed)
+		}
+		// A listing is what the operator reads to answer "which project is that", so the kind has to
+		// be in it too rather than only on the row a second call fetches.
+		if listed[0].GetVisibility() != "public" {
+			t.Fatalf("the listing says the repository is %q, want public", listed[0].GetVisibility())
+		}
+	})
+
+	// A project that moved repository is corrected with the same command, so the second write has to
+	// replace the first rather than sit beside it.
+	t.Run("a project's repository is replaced by writing it again", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "me", "transcript")
+
+		if _, err := s.SetProjectRepository(ctx, project.GetId(), "atlantic-blue/transcript", "public"); err != nil {
+			t.Fatalf("SetProjectRepository: %v", err)
+		}
+		moved, err := s.SetProjectRepository(ctx, project.GetId(), "atlantic-blue/videos", "private")
+		if err != nil {
+			t.Fatalf("SetProjectRepository again: %v", err)
+		}
+		if moved.GetRepository() != "atlantic-blue/videos" || moved.GetVisibility() != "private" {
+			t.Fatalf("after moving it works in %q %q, want atlantic-blue/videos private",
+				moved.GetRepository(), moved.GetVisibility())
+		}
+	})
+
+	t.Run("the repository of a project that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		_, err := s.SetProjectRepository(context.Background(), "ghost", "atlantic-blue/transcript", "public")
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetProjectRepository on a missing project returned %v, want ErrNotFound", err)
 		}
 	})
 
@@ -2149,3 +2300,19 @@ func ids(sessions []*quaycrewv1.Session) []string {
 // gap between them. Ten milliseconds is far above what either store's clock resolves and is paid four
 // times in the whole suite.
 const orderingGap = 10 * time.Millisecond
+
+// assertTarget says a project ships where it was told to, naming the read that disagreed.
+func assertTarget(t *testing.T, where string, got *quaycrewv1.DeployTarget, want deploy.Target) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("%s says it deploys nowhere, want %v", where, want)
+	}
+	read := deploy.Target{
+		Account:  got.GetAccount(),
+		Region:   got.GetRegion(),
+		Identity: got.GetIdentity(),
+	}
+	if read != want {
+		t.Fatalf("%s deploys to %+v, want %+v", where, read, want)
+	}
+}

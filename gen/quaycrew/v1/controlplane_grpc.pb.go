@@ -27,6 +27,8 @@ const (
 	ControlPlaneService_GetProject_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetProject"
 	ControlPlaneService_ListProjects_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListProjects"
 	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
+	ControlPlaneService_SetDeployTarget_FullMethodName          = "/quaycrew.v1.ControlPlaneService/SetDeployTarget"
+	ControlPlaneService_SetProjectRepository_FullMethodName     = "/quaycrew.v1.ControlPlaneService/SetProjectRepository"
 	ControlPlaneService_ImportFlow_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ImportFlow"
 	ControlPlaneService_StartFlow_FullMethodName                = "/quaycrew.v1.ControlPlaneService/StartFlow"
 	ControlPlaneService_GetFlowRun_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetFlowRun"
@@ -97,6 +99,8 @@ type ControlPlaneServiceClient interface {
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
+	SetDeployTarget(ctx context.Context, in *SetDeployTargetRequest, opts ...grpc.CallOption) (*SetDeployTargetResponse, error)
+	SetProjectRepository(ctx context.Context, in *SetProjectRepositoryRequest, opts ...grpc.CallOption) (*SetProjectRepositoryResponse, error)
 	ImportFlow(ctx context.Context, in *ImportFlowRequest, opts ...grpc.CallOption) (*ImportFlowResponse, error)
 	StartFlow(ctx context.Context, in *StartFlowRequest, opts ...grpc.CallOption) (*StartFlowResponse, error)
 	GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error)
@@ -254,6 +258,26 @@ func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *Delet
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteProjectResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SetDeployTarget(ctx context.Context, in *SetDeployTargetRequest, opts ...grpc.CallOption) (*SetDeployTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetDeployTargetResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetDeployTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SetProjectRepository(ctx context.Context, in *SetProjectRepositoryRequest, opts ...grpc.CallOption) (*SetProjectRepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProjectRepositoryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetProjectRepository_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -814,6 +838,8 @@ type ControlPlaneServiceServer interface {
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
+	SetDeployTarget(context.Context, *SetDeployTargetRequest) (*SetDeployTargetResponse, error)
+	SetProjectRepository(context.Context, *SetProjectRepositoryRequest) (*SetProjectRepositoryResponse, error)
 	ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error)
 	StartFlow(context.Context, *StartFlowRequest) (*StartFlowResponse, error)
 	GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error)
@@ -920,6 +946,12 @@ func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetDeployTarget(context.Context, *SetDeployTargetRequest) (*SetDeployTargetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetDeployTarget not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetProjectRepository(context.Context, *SetProjectRepositoryRequest) (*SetProjectRepositoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectRepository not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportFlow not implemented")
@@ -1244,6 +1276,42 @@ func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SetDeployTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetDeployTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetDeployTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetDeployTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetDeployTarget(ctx, req.(*SetDeployTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SetProjectRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProjectRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetProjectRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetProjectRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetProjectRepository(ctx, req.(*SetProjectRepositoryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2258,6 +2326,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteProject",
 			Handler:    _ControlPlaneService_DeleteProject_Handler,
+		},
+		{
+			MethodName: "SetDeployTarget",
+			Handler:    _ControlPlaneService_SetDeployTarget_Handler,
+		},
+		{
+			MethodName: "SetProjectRepository",
+			Handler:    _ControlPlaneService_SetProjectRepository_Handler,
 		},
 		{
 			MethodName: "ImportFlow",

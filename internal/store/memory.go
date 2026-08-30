@@ -10,6 +10,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
@@ -213,6 +214,19 @@ func (m *Memory) ListProjects(_ context.Context, workspace string) ([]*quaycrewv
 	return out, nil
 }
 
+// SetProjectRepository records where a project's work lands, and what kind of repository it is.
+func (m *Memory) SetProjectRepository(_ context.Context, project, repository, visibility string) (*quaycrewv1.Project, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, err := m.getProjectLocked(project)
+	if err != nil {
+		return nil, err
+	}
+	held.Repository, held.Visibility = repository, visibility
+	m.projects[project] = held
+	return clone(held), nil
+}
+
 // DeleteProject soft deletes a project.
 func (m *Memory) DeleteProject(_ context.Context, id string) error {
 	m.mu.Lock()
@@ -221,6 +235,25 @@ func (m *Memory) DeleteProject(_ context.Context, id string) error {
 		return err
 	}
 	m.deletedPrj[id] = true
+	return nil
+}
+
+// SetDeployTarget records where a project ships, and a zero target clears it.
+func (m *Memory) SetDeployTarget(_ context.Context, project string, target deploy.Target) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return err
+	}
+	if target.IsZero() {
+		m.projects[project].DeployTarget = nil
+		return nil
+	}
+	m.projects[project].DeployTarget = &quaycrewv1.DeployTarget{
+		Account:  target.Account,
+		Region:   target.Region,
+		Identity: target.Identity,
+	}
 	return nil
 }
 

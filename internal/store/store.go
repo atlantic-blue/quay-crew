@@ -19,6 +19,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/job"
@@ -157,6 +158,14 @@ type Store interface {
 	// ListProjects lists every project, or one workspace's when workspace is set.
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
+	// SetDeployTarget records where a project ships, and a zero target clears it. The store keeps
+	// what it is given: whether a target is whole, and whether its identity belongs to its account,
+	// is the control plane's question.
+	SetDeployTarget(ctx context.Context, project string, target deploy.Target) error
+	// SetProjectRepository records where a project's work lands, and what kind of repository that is.
+	// Writing it again replaces what is held, so a project that moved repository is corrected rather
+	// than growing a second answer.
+	SetProjectRepository(ctx context.Context, project, repository, visibility string) (*quaycrewv1.Project, error)
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own session id always
 	// lands in the same session.
