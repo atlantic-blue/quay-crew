@@ -34,6 +34,36 @@ read, or run with `make features`.
   Issue 455 asked for five views and this is one of them, kept to one so the change can be read;
   the rest are issue 474.
 
+- **A job's credential lasts as long as its job, and the crew takes it back when the job ends.** It
+  lasted sixty seconds. The acceptance run's root job ran for twenty nine minutes, held a valid
+  credential for the first one, and declared none of its three children: from three minutes in, every
+  call it made came back `the token this call carries is not this crew's`. The session read that as a
+  bad credential, did the whole job in one sandbox, and said so. Nothing that needs a tree of jobs
+  could be exercised at all (`quay-crew#449`).
+
+  The cause was two lifetimes tied to one constant. `jobTokenLife = job.DefaultLease` made the
+  credential in a sandbox as long as the controller's hold on the job, and those are not the same
+  thing: a hold is renewed on every tick, and a credential is handed over once at dispatch and never
+  refreshed, because refreshing it would mean re entering a running container.
+
+  A credential is now minted for the job's own deadline where the job names one, and for twelve hours
+  where it does not. Expiry is the backstop rather than the control: the crew revokes the credentials
+  minted for a job the moment that job reaches a phase nothing moves it out of, whether the controller
+  wrote the end or an operator stopped it, so a session stops being able to call because its job is
+  over. Twelve hours is what is left for a job whose end this process never saw, and a grant is held
+  in the process, so a restart takes every one of them with it anyway.
+
+  **Each refusal now names its own cause.** An expired credential says it ran out and says when, one
+  the crew took back names the job that ended and the phase it ended in, and a token nobody minted is
+  still told it is not this crew's. A credential that stopped working is kept for an hour rather than
+  dropped at once, because a credential the crew cannot find is refused as a forgery, and that is the
+  refusal this whole change exists to stop.
+
+  **`quay limits --lease` says what it is not.** The setting is the crew's hold on a job, it is
+  renewed on every tick, and it does not reach the credential a session runs under. An operator who
+  read the two as one number set the lease to fifteen minutes to cover their work and got no change at
+  all. The line `quay limits` prints now says so next to the number, and the manual says it too.
+
 - **A job's session is named at dispatch, with the title the job was declared with.** Four jobs were
   running and every one of their sessions had a blank name cell, so the operator could see four
   conversations burning tokens and not which was which. Every one of those jobs had been declared with
@@ -57,6 +87,46 @@ read, or run with `make features`.
 
   Description keeps its job of renaming a conversation that wandered. It stops being the only source of
   a name.
+
+- **The console's keys agree with vim.** The console is shaped like k9s and k9s is shaped like vim, and
+  two thirds of the keys already agreed. The missing third sat on the keys a vim user presses hardest,
+  so half the keyboard rewarded the reflex and half of it punished it. The result was a keyboard too
+  complicated to remember, which is the state it was reported in.
+
+  `l` and `h` opened the history. They are vim's horizontal motion keys, and an action on a motion key
+  is the one thing that teaches an operator to distrust every other key on the screen. The history is
+  on `t` now, which is the view it opens and the word the command bar takes.
+
+  `g` refreshed, so `gg` and `G` could not exist and the views used `home` and `end`, which nobody
+  reaches for. Refreshing is the key pressed constantly, so it keeps the short obvious letter and
+  keeps it alone: `r`. That frees `g`, and the first and last row are where they are everywhere else.
+
+  `n` made something and `N` started a fresh conversation. In vim they are the next and previous
+  match, pressed constantly straight after `/`, and this console had a live filter with no way to jump
+  between what it matched. So they jump now. Making something moved to `o`, which is the key vim opens
+  a new line with. A fresh conversation moved to `P`, beside `p`, which shows and hides that same
+  conversation. The cheapest key went to the most frequent action rather than to the newest one.
+
+  `D` was an alias for the mode picker. In vim `D` deletes to the end of the line, and a destructive
+  shaped key on an action that takes nothing away teaches the operator that the shapes mean nothing.
+  It is gone.
+
+  **What vim has that the console now has too.** `gg` and `G` for the first and last row, `ctrl+d` and
+  `ctrl+u` for half a page, `n` and `N` for the next and previous match of what the filter last
+  matched, and a count in front of any move, so `5j` is five rows and `12G` is the twelfth. What is
+  typed and not yet acted on is drawn in the breadcrumb, because a console holding half a sequence and
+  showing nothing looks exactly like one that dropped the key.
+
+  **Every key that moved says what to press now.** `l`, `h`, `D`, `g`, `n` and `N` each name the key
+  that took the job over, rather than doing nothing: a key that quietly stopped working is the
+  regression this repository has already had once, and each one has a test for the way off it beside
+  the test for the way on. The filter also stopped throwing away what was typed into it, which is what
+  gives the two match keys something to jump through once the filter is cleared.
+
+  What did not move: `j` and `k`, `ctrl+f` and `ctrl+b`, `/`, `:`, `q`, `esc`, and `u` for restore in
+  the archived view. That last one is the binding the rest of this was written to match. Restore is
+  undo, and it is on undo's key.
+
 
 - **The three roles the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
   They were written outside this repository, so nobody could read them, review them or change them.

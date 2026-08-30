@@ -105,6 +105,32 @@ Feature: A session may declare jobs, within limits
     And a job titled "clear the backlog" running as a role that may create jobs
     Then the credential names that job, carries only the verbs the role declared, and runs out
 
+  # A credential is handed to a sandbox once at dispatch and nothing refreshes it, so its life has to
+  # cover the job rather than the crew's hold on the job. It covered the hold, which is sixty seconds,
+  # and a root job that ran for twenty nine minutes declared none of its three children.
+  Scenario: A session declares a child long after the first minute of its job
+    Given the workspace allows jobs down to depth 2
+    And a job titled "clear the backlog" running as a role that may create jobs
+    And that job has been running for 29 minutes
+    When that session declares a job
+    Then the new job hangs under the job that declared it, one level deeper
+
+  # What a session is told matters as much as when. Told the token is not this crew's, a session
+  # concludes it holds a bad credential and stops, and this one had simply run out.
+  Scenario: A session whose credential has run out is told that, and when it ran out
+    Given the workspace allows jobs down to depth 2
+    And a job titled "clear the backlog" running as a role that may create jobs
+    And that job has been running for 30 days
+    When that session declares a job
+    Then the crew refuses it, says the credential ran out, and says when
+
+  Scenario: A session whose job has ended is told the job ended
+    Given the workspace allows jobs down to depth 2
+    And a job titled "clear the backlog" running as a role that may create jobs
+    And the operator stops that job
+    When that session declares a job
+    Then the crew refuses it and names the job that ended and the phase it ended in
+
   Scenario: The driver may no longer touch a hook
     Then the driver is refused importing, listing, attaching and detaching a hook
 
