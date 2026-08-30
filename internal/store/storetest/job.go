@@ -33,6 +33,7 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			ExpectFile: "notes/bill.md", ExpectContains: "due",
 			After: []string{}, Deadline: &deadline, BudgetTokens: 5000,
 			Labels: map[string]string{"owner": "house"}, Repository: "atlantic-blue/quay-crew",
+			Product: "paste a link and get the text back",
 			Version: 1, Phase: job.PhasePending,
 		}
 		if err := s.CreateJob(ctx, declared, &job.Event{
@@ -69,6 +70,11 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if found.Repository != "atlantic-blue/quay-crew" {
 			t.Fatalf("the repository reads back as %q", found.Repository)
+		}
+		// The one sentence the job serves. A tree is measured against it, so a store that loses it
+		// leaves every job under this one building against a design and nothing else.
+		if found.Product != "paste a link and get the text back" {
+			t.Fatalf("the sentence reads back as %q", found.Product)
 		}
 		// Nothing has answered yet, so nothing says where the work went.
 		if found.PullRequest != "" {
