@@ -59,7 +59,6 @@ type notGiven struct {
 // session, and a session with one skill instead of two is better than a session that will not
 // start.
 func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) capability {
-	var caps capability
 	// A session running as a role holds the skills its role declares it receives, which is usually
 	// none of them. The boundary is what a role is: a session that was never given a capability
 	// cannot reach for it, and a session merely asked not to can.
@@ -68,14 +67,30 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) 
 	// skills off the host, and that directory is shared by every session in the workspace, so one
 	// role session would take the skills away from all of them.
 	if !s.receives(ctx, session, role.MaterialSkills) {
-		return caps
+		return capability{}
 	}
-	attached, err := s.store.WorkspaceSkills(ctx, session.GetWorkspace())
+	return s.withoutUnusable(ctx, session.GetWorkspace(), s.heldIn(ctx, session.GetWorkspace()))
+}
+
+// leftOutIn is every skill the workspace holds that its sessions are not given, and why.
+//
+// It is the same reading capabilityOf makes, asked of a workspace rather than of a session, so a
+// caller declaring a job is told what a session in that workspace will be born without. Answering it
+// any other way is how a listing comes to say one thing while the sandbox does another.
+func (s *Server) leftOutIn(ctx context.Context, workspace string) []notGiven {
+	return s.withoutUnusable(ctx, workspace, s.heldIn(ctx, workspace)).leftOut
+}
+
+// heldIn is every skill a workspace's sessions could hold, before the workspace's own secrets are
+// held against it: the crew's and the workspace's, with where each mounts.
+func (s *Server) heldIn(ctx context.Context, workspace string) capability {
+	var caps capability
+	attached, err := s.store.WorkspaceSkills(ctx, workspace)
 	if err == nil {
 		attached = s.withCrewSkills(ctx, attached)
 		caps.attached = attached
 		caps.attachedKnown = true
-		workspaceHost, hostKnown := s.storage.WorkspaceSkillsHost(session.GetWorkspace())
+		workspaceHost, hostKnown := s.storage.WorkspaceSkillsHost(workspace)
 		for _, one := range attached {
 			caps.held = append(caps.held, skill.Held{
 				Skill: one.Skill,
@@ -111,7 +126,7 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) 
 		}
 	}
 	sort.Slice(caps.held, func(i, j int) bool { return caps.held[i].Name < caps.held[j].Name })
-	return s.withoutUnusable(ctx, session, caps)
+	return caps
 }
 
 // withCrewSkills adds what the crew holds to what this workspace holds, the workspace winning a name
@@ -150,11 +165,11 @@ func (s *Server) withCrewSkills(ctx context.Context, attached []store.Imported) 
 // Refusing the whole task was the earlier answer to that, and it makes one unusable skill enough to
 // stop every conversation in the workspace. That trade only held while a skill was attached one
 // workspace at a time, deliberately, by the person who had just set its secret.
-func (s *Server) withoutUnusable(ctx context.Context, session *quaycrewv1.Session, caps capability) capability {
+func (s *Server) withoutUnusable(ctx context.Context, workspace string, caps capability) capability {
 	usable := caps.held[:0:0]
 	out := map[string]bool{}
 	for _, one := range caps.held {
-		missing := s.secretMissing(ctx, session.GetWorkspace(), one)
+		missing := s.secretMissing(ctx, workspace, one)
 		if missing == "" {
 			usable = append(usable, one)
 			continue
