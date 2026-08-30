@@ -195,6 +195,12 @@ landed is adopted rather than asked for a second time.
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
 copy going outward rather than a source it could be rebuilt from.
 
+**`job_steps`** is what each job's session said it finished, one row per step, in the order it
+finished them. A job that failed is continued from them rather than declared a second time:
+`krewe job resume` puts the row back to pending with its session, and the next task carries the list
+rather than the brief. The unique index on the job and the summary is what makes recording the same
+step twice leave one row, because a session that is continued says again what it said before.
+
 **`pending_triggers`** is the queue a flow run starts from when something happens: one row per
 trigger, carrying the flow to run, the project to run it in, what the trigger carried as a payload,
 the job that caused it where one did, and the claim a poller takes on it. `status` is
@@ -250,6 +256,7 @@ erDiagram
     contexts   }o..o| projects : "renders into (scope and owner, no key)"
     projects   ||--o{ jobs : "holds declared intent"
     jobs       ||--o{ job_events : "records what happened"
+    jobs       ||--o{ job_steps : "records what its session finished"
     projects   ||--o{ pending_triggers : "holds what happened, waiting to start a run"
     jobs      |o--o{ pending_triggers : "caused"
 ```
