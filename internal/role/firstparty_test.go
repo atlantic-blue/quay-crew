@@ -206,3 +206,30 @@ func TestTheOrchestratorSaysTheMergeIsRefusedByAHook(t *testing.T) {
 	}
 	t.Fatal("this build ships no orchestrator, so this test proves nothing")
 }
+
+// The orchestrator says what it will create before it creates it.
+//
+// A cost rule in prose is advice, and a model can read it, agree with it and still choose a store
+// that bills a minimum capacity continuously, which is what happened on 29 August 2026. Advice is
+// all this line is too, and the difference is that the crew now has somewhere for the session to
+// stop: it can name the resources and their cost at rest, ask, and wait. A brief that does not name
+// the command is a brief that leaves guessing as the only move it knows about.
+func TestTheOrchestratorStatesWhatItWillCreateBeforeItBuilds(t *testing.T) {
+	roles, err := All(shipped)
+	if err != nil {
+		t.Fatalf("loading the roles this build ships: %v", err)
+	}
+	for _, one := range roles {
+		if one.Name != "orchestrator" {
+			continue
+		}
+		for _, want := range []string{"quay job ask", "costs while nobody is using it"} {
+			if !strings.Contains(one.Brief, want) {
+				t.Errorf("the orchestrator's brief does not say %q, so a choice that bills stays invisible "+
+					"until it is built", want)
+			}
+		}
+		return
+	}
+	t.Fatal("this build ships no orchestrator, so this test proves nothing")
+}

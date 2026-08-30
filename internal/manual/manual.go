@@ -78,6 +78,13 @@ commands:
   job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
+  job ask "<question>"                    put a question to a person about the job you are running,
+                                          when a decision no measurement settles is in your way.
+                                          The job stops there and nothing moves it until somebody
+                                          answers, so end your task and say you are waiting. The
+                                          answer arrives as your next task
+  job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
+                                          again with the answer, in the session that asked
   target [<address>]                      where a project ships: the account, the region inside it,
     [--account <id>]                      and the role a pipeline assumes to get there. With no
     [--region <name>]                     values it reads what the project declared, and with them

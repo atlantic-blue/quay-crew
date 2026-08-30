@@ -182,8 +182,8 @@ caller declared (the title, the brief, the role and the version it was pinned to
 requires of that role, the mode, what the answer must carry, what it waits for, a deadline, a budget
 and its labels), what the crew assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
-answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
-process, so it outlives the caller. `quay job list` and `quay job show` read it.
+answer, the reason, the question, what a person told it and what it spent). The intent is a row
+rather than a list held in a process, so it outlives the caller. `quay job list` and `quay job show` read it.
 
 It also carries the lease: `lease_owner` and `lease_until`, which say which controller is holding
 the job and until when. Those two are the only fields on the row a reader should ignore. They are how a

@@ -322,6 +322,7 @@ type JobEvent struct {
 	//	job.answered   the answer landed and the claim held
 	//	job.failed     the model did not finish, or the sandbox could not be made
 	//	job.asked      it put a question to a person
+	//	job.told       a person answered that question
 	//	job.stopped    a person stopped it, or a limit did, or its claim did not hold
 	//
 	// Internal, which nothing outside should depend on:

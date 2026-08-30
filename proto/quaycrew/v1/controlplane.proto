@@ -1222,6 +1222,10 @@ message Job {
   // reason says why a stopped or failed job ended. question is what an asking job waits to be told.
   string reason = 22;
   string question = 23;
+  // told is the last thing a person told this job, and it is what the crew sends the session when
+  // the job starts again. It stays on the row after it has been handed over, because what somebody
+  // decided is part of the record of the job rather than a message in flight.
+  string told = 35;
   // pull_request is the address the answer named, read off the answer rather than reported by the
   // model. It is what a reader opens to see the work, without opening a sandbox.
   string pull_request = 34;
@@ -1319,6 +1323,39 @@ message StopJobRequest {
   string reason = 2;
 }
 message StopJobResponse {
+  Job job = 1;
+}
+
+// AskJobRequest puts a question to a person about the job the caller is running.
+//
+// Asking is not a verb a role grants. A session asks about the job it is itself running, and the
+// credential it presented is already bound to that job, so there is no grant to hold: id is here to
+// be checked against the credential rather than to choose a job, and a caller naming another job is
+// refused.
+message AskJobRequest {
+  // question is what the person is being asked. It is the whole of what they see, so it says what is
+  // being decided and what each answer costs.
+  string question = 1;
+  // id names the job asking, and only the caller's own is accepted. Empty is the caller's own job,
+  // which is the only one it may ask about.
+  string id = 2;
+}
+message AskJobResponse {
+  Job job = 1;
+}
+
+// AnswerJobRequest tells an asking job what a person decided.
+//
+// The operator's call. A session cannot answer a question a person was asked, which is the whole
+// point of asking one: a run that takes silence, or takes its own word, for an answer is a gate that
+// decorates rather than holds.
+message AnswerJobRequest {
+  string id = 1;
+  // answer is what the person decided. It reaches the session as its next task, so it is read by a
+  // model rather than only recorded.
+  string answer = 2;
+}
+message AnswerJobResponse {
   Job job = 1;
 }
 
@@ -1461,6 +1498,10 @@ service ControlPlaneService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
+  // AskJob is a session putting a question to a person about the job it is running, and
+  // AnswerJob is the person answering. Nothing else moves the job in between.
+  rpc AskJob(AskJobRequest) returns (AskJobResponse);
+  rpc AnswerJob(AnswerJobRequest) returns (AnswerJobResponse);
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.
   rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);
