@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -46,7 +48,6 @@ func TestTheChildKeepsTheCredentialItNeedsToAuthenticate(t *testing.T) {
 		t.Errorf("the child inherited a variable the session set for itself: %v", child)
 	}
 }
-
 
 // The failure the second name exists for. Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the
 // environment of every process it starts, by that name and no other, so inside a sandbox the hook
@@ -103,4 +104,52 @@ func count(env []string, name string) int {
 		}
 	}
 	return found
+}
+
+// The whole path, against a process that really starts: the hook builds the environment, execs the
+// model, and the model sees a credential.
+//
+// A stub named claude on the path stands in for the real one and writes down the token it was given,
+// so this needs no subscription. The environment is the one a hook actually runs in: the second name
+// set, the first one absent, because the session removed it.
+func TestTheModelCallStartsWithACredentialWhenOnlyTheSecondNameIsSet(t *testing.T) {
+	home := t.TempDir()
+	seen := filepath.Join(home, "seen")
+	stubClaude(t, home, seen)
+
+	t.Setenv(OAuthToken, "")
+	if err := os.Unsetenv(OAuthToken); err != nil {
+		t.Fatalf("unset %s: %v", OAuthToken, err)
+	}
+	t.Setenv(ModelToken, "sk-ant-oat-second-name")
+
+	answer, trouble := AskModel(Default(home), home)("system", "user")
+
+	if trouble != "" {
+		t.Fatalf("the model call failed: %s", trouble)
+	}
+	if !strings.Contains(answer, "goal: something") {
+		t.Errorf("the model answered %q", answer)
+	}
+	got, err := os.ReadFile(seen)
+	if err != nil {
+		t.Fatalf("the model was never started: %v", err)
+	}
+	if string(got) != "sk-ant-oat-second-name" {
+		t.Errorf("the model was started holding %q, so it cannot authenticate and every message goes "+
+			"unanalysed", got)
+	}
+}
+
+// stubClaude puts an executable named claude on the path that records the credential it was handed
+// and answers with something the hook will print.
+func stubClaude(t *testing.T, dir, record string) {
+	t.Helper()
+	script := "#!/bin/sh\nprintf '%s' \"${" + OAuthToken + ":-NO-TOKEN}\" > " + record +
+		"\ncat > /dev/null\necho \"goal: something\"\n"
+	at := filepath.Join(dir, "claude")
+	if err := os.WriteFile(at, []byte(script), 0o755); err != nil {
+		t.Fatalf("writing the stub: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }

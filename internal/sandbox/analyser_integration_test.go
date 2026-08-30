@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-crew/internal/hook"
+	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
@@ -178,5 +179,81 @@ cat /tmp/stub/seen`
 	}
 	if !strings.Contains(string(out), sentinel) {
 		t.Fatalf("the child was never given the token: %s", out)
+	}
+}
+
+// The child model call runs on the second name when the first one is not there, which is every
+// sandbox.
+//
+// Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the environment of every process it starts, by
+// that name and no other, and a hook is one of those processes. The test above hands the container
+// the first name, which is what `docker exec` does and what made the hook look healthy: run by hand
+// it worked, and run by a session it never once did. This one hands the container only the second
+// name, the way the crew now writes it, and proves the child is given a credential anyway.
+//
+// A stub on the path stands in for the model, so this needs no subscription.
+func TestTheAnalysersChildRunsOnTheTokenTheSessionCannotStrip(t *testing.T) {
+	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	root := t.TempDir()
+	shipped, err := hook.Load("../../hooks")
+	if err != nil {
+		t.Fatalf("loading the shipped hooks: %v", err)
+	}
+	if err := sandbox.WriteHooks(root, shipped); err != nil {
+		t.Fatalf("WriteHooks: %v", err)
+	}
+
+	const sentinel = "sk-ant-oat-second-name-sentinel"
+	box, err := sandbox.DockerProvider{Image: image}.Create(ctx, sandbox.Config{
+		ID: "itest-analyser-3",
+		// Only the second name, and the first one emptied, which is the environment a hook actually
+		// runs in: the session holds the token and what it starts does not.
+		Env:    []string{model.ModelTokenEnv + "=" + sentinel},
+		Mounts: []sandbox.Mount{{Source: root, Target: sandbox.HooksPath, ReadOnly: true}},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = box.Close(context.Background()) })
+
+	stub := `mkdir -p /tmp/stub && cat > /tmp/stub/claude <<'SH'
+#!/bin/sh
+printf '%s' "${CLAUDE_CODE_OAUTH_TOKEN:-NO-TOKEN}" > /tmp/stub/seen
+cat > /dev/null
+echo "goal: something"
+SH
+chmod +x /tmp/stub/claude
+echo '{"prompt":"fix the flaky test","cwd":"/home/agent/workspace"}' | PATH=/tmp/stub:$PATH ` +
+		sandbox.HooksPath + `/prompt-analyser/bin/hook
+echo "---seen---"
+cat /tmp/stub/seen`
+
+	proc, err := box.Exec(ctx, sandbox.Spec{Argv: []string{"sh", "-c", stub}})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out, err := io.ReadAll(proc.Stdout())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("the analyser did not run: %v\nstderr: %s\nstdout: %s", err, proc.Stderr(), out)
+	}
+	if strings.Contains(string(out), "NO-TOKEN") {
+		t.Fatalf("the child ran with no credential, so every message goes unanalysed: %s", out)
+	}
+	if !strings.Contains(string(out), sentinel) {
+		t.Fatalf("the second name never reached the child as the name the command line reads: %s", out)
+	}
+	// The analysis has to actually come back, because a hook that authenticates and then prints
+	// nothing is the same silence from the session's side.
+	if !strings.Contains(string(out), "goal: something") {
+		t.Fatalf("the hook authenticated and handed the session nothing: %s", out)
 	}
 }
