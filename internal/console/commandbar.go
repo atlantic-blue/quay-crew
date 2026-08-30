@@ -47,6 +47,10 @@ var alreadyHere = map[string]string{
 // front of a command they are already inside.
 const toolName = "krewe"
 
+// oldToolName is what the tool was called before that. It is still in fingers, and the bar is one of
+// the two places it gets typed.
+const oldToolName = "quay"
+
 // commandTimeout is how long the bar waits for a command. Long enough for anything that reads the
 // system, short enough that a command which will never answer gives the console back.
 const commandTimeout = 30 * time.Second
@@ -105,6 +109,20 @@ func (m Model) runTyped() (Model, tea.Cmd) {
 			return m, nil
 		}
 		args = args[1:]
+	}
+	// The name the tool used to have, typed at the front for the same reason. It is not the tool's
+	// name any more, so stripping it silently would run a command the operator does not know they
+	// asked for, and passing it through gives `unknown command "quay"`, which reads as the bar being
+	// broken. The word moved, and this is where the bar says so.
+	if args[0] == oldToolName {
+		if len(args) == 1 {
+			m.err = fmt.Errorf("the tool is called %s now, and %s: type a command, or press escape",
+				toolName, alreadyHere[toolName])
+			return m, nil
+		}
+		m.err = fmt.Errorf("the tool is called %s now, not %s: type %s", toolName, oldToolName,
+			strings.Join(args[1:], " "))
+		return m, nil
 	}
 	if needTerminal[args[0]] {
 		command, err := m.handoverFor(args)

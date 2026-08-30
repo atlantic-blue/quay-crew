@@ -332,3 +332,36 @@ func TestTheBarDoesNotOfferToRunAWordItWillRefuse(t *testing.T) {
 		t.Fatalf("the bar does not say what to type instead:\n%s", view)
 	}
 }
+
+// The name the tool used to have, typed into the bar out of habit. The prefix is not dropped: the
+// word is gone, and the bar says so rather than running a command the operator did not ask for or
+// answering `unknown command "quay"`, which reads as the bar being broken.
+func TestTheOldToolNameIsRefusedInTheBar(t *testing.T) {
+	ran := &ranCommand{output: "made it"}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "quay workspace create acme")
+
+	if ran.args != nil {
+		t.Fatalf("the console ran %v, and quay is not the tool's name any more", ran.args)
+	}
+	if model.err == nil {
+		t.Fatal("the bar said nothing about the old name")
+	}
+	for _, want := range []string{"krewe", "workspace create acme"} {
+		if !strings.Contains(model.err.Error(), want) {
+			t.Errorf("the bar said %q, want it to say %q", model.err, want)
+		}
+	}
+}
+
+// And on its own, which is what an operator types most: it used to open the system.
+func TestTheOldToolNameOnItsOwnSaysTheWordMoved(t *testing.T) {
+	ran := &ranCommand{}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "quay")
+
+	if ran.args != nil {
+		t.Fatalf("the console ran %v", ran.args)
+	}
+	if model.err == nil || !strings.Contains(model.err.Error(), "krewe") {
+		t.Fatalf("typing the old name on its own said %v, want it to name krewe", model.err)
+	}
+}
