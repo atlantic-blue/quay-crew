@@ -34,6 +34,15 @@ func (r *repository) git(args ...string) string {
 		"-c", "user.name=quay",
 		"-c", "user.email=quay@example.invalid",
 		"-c", "commit.gpgsign=false",
+		// git keeps house after a commit, and it detaches that work, so it outlives the command
+		// that started it and writes packs into .git/objects while the temporary directory is being
+		// removed. An unscheduled run repacks once the objects/17 shard holds two objects, which a
+		// repository this small reaches by luck. The first pair turns the housekeeping off, and the
+		// second says that whatever a later git decides to do is done before the command returns.
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
+		"-c", "maintenance.autoDetach=false",
+		"-c", "gc.autoDetach=false",
 	}, args...)...)
 	out, err := command.CombinedOutput()
 	if err != nil {

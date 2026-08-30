@@ -49,6 +49,12 @@ func (p *promisesWorld) git(args ...string) (string, error) {
 		"-c", "user.name=quay",
 		"-c", "user.email=quay@example.invalid",
 		"-c", "commit.gpgsign=false",
+		// No housekeeping, and nothing detached, so no git work outlives the command that started
+		// it and reaches the scenario's directory afterwards.
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
+		"-c", "maintenance.autoDetach=false",
+		"-c", "gc.autoDetach=false",
 	}, args...)...)
 	out, err := command.CombinedOutput()
 	return string(out), err
