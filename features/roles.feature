@@ -55,6 +55,31 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator imports a different "test-writer" role at the same version
     Then the crew refuses the role saying "already imported and is a different role"
 
+  # The brief is the role. It is the several hundred words that decide how a session behaves, and a
+  # role that cannot be read back is a run nobody can audit: the operator has no way to diff what the
+  # crew holds against the file it came from, or to tell which version produced what they just read.
+  Scenario: A role is read back whole, brief and all
+    Given the operator imported the "test-writer" role
+    When the operator reads the "test-writer" role back
+    Then the role comes back with its brief
+    And the role comes back saying what it receives
+
+  # The version a workspace pinned, not the newest the crew holds, because reading the wrong one is
+  # the failure this ends: an operator diffing a brief against a run that was never given it.
+  Scenario: A workspace reads back the version it pinned
+    Given the operator imported the "test-writer" role
+    And the operator attached the "test-writer" role to the workspace
+    When the operator imports version 2 of the "test-writer" role
+    And the operator reads the workspace's "test-writer" role back
+    Then the role comes back at version 1
+
+  # A refusal that only says no leaves the operator guessing between a typo, a role they never
+  # imported and a workspace that never attached one.
+  Scenario: Reading back a role nobody holds names the roles that are there
+    Given the operator imported the "test-writer" role
+    When the operator reads the "test-writter" role back
+    Then the crew refuses the role saying "test-writer"
+
   Scenario: A workspace with no roles attached says so
     When the operator lists the workspace's roles
     Then the workspace holds no roles

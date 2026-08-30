@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 )
 
@@ -18,19 +19,21 @@ import (
 // pipe, and every rule about what a role is lives on the other side.
 func runRole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay role <import|list|attach|detach>")
+		return fmt.Errorf("usage: quay role <import|list|show|attach|detach>")
 	}
 	switch args[0] {
 	case "import":
 		return runRoleImport(ctx, client, args[1:], out)
 	case "list":
 		return runRoleList(ctx, client, args[1:], out)
+	case "show":
+		return runRoleShow(ctx, client, args[1:], out)
 	case "attach":
 		return runRoleAttach(ctx, client, args[1:], out)
 	case "detach":
 		return runRoleDetach(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("usage: quay role <import|list|attach|detach>")
+		return fmt.Errorf("usage: quay role <import|list|show|attach|detach>")
 	}
 }
 
@@ -90,8 +93,9 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	if err != nil {
 		return err
 	}
+	read := heldBy("roles", where, "quay role list on its own reads what the crew holds")
 	if len(resp.GetRoles()) == 0 {
-		fmt.Fprintf(out, "%s holds no roles\n", where)
+		read.nothing(out)
 		return nil
 	}
 	for _, held := range resp.GetRoles() {
@@ -104,7 +108,68 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 			fmt.Fprintf(out, "%-16s      held by the crew, so every workspace has it\n", "")
 		}
 	}
+	read.counted(out, len(resp.GetRoles()))
 	return nil
+}
+
+// runRoleShow reads one role back whole, which is the only way to audit what a session running as it
+// was told.
+//
+// The brief is the role. Everything above it in this output is a line a listing already prints, and
+// the reason they are repeated here is that an operator reading a brief wants to know which brief:
+// the version, the model and the boundary are what a role is, and reading a brief without them is
+// reading a document with no idea which crew is running it.
+func runRoleShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	name, typed, err := roleAndAddress(args, "show")
+	if err != nil {
+		return err
+	}
+	request := &quaycrewv1.GetRoleRequest{Name: name}
+	if typed != "" {
+		located, err := locate(ctx, client, typed)
+		if err != nil {
+			return err
+		}
+		request.Workspace = located.WorkspaceID
+	}
+	resp, err := client.GetRole(ctx, request)
+	if err != nil {
+		return err
+	}
+	writeRole(out, resp)
+	return nil
+}
+
+// writeRole prints a role, the brief last and whole.
+//
+// Last because it is what the reader came for and it runs to pages, so anything printed after it is
+// printed where nobody is looking. Whole because the point of the command is a byte for byte read:
+// truncating a brief here would make this command agree with a role it does not hold.
+func writeRole(out io.Writer, resp *quaycrewv1.GetRoleResponse) {
+	shown := resp.GetRole()
+	fmt.Fprintf(out, "%s v%d  %s\n", shown.GetName(), shown.GetVersion(), shown.GetSummary())
+	fmt.Fprintf(out, "runs on %s\n", shown.GetModel())
+	fmt.Fprintf(out, "receives %s\n", strings.Join(shown.GetReceives(), ", "))
+	// Always, including when it is empty. A role that may call nothing is the default rather than an
+	// oversight, and a line that appears only when something is granted reads as a missing line.
+	if may := resp.GetMay(); len(may) > 0 {
+		fmt.Fprintf(out, "may call %s\n", strings.Join(may, ", "))
+	} else {
+		fmt.Fprintln(out, "may call nothing")
+	}
+	if shown.GetCrew() {
+		fmt.Fprintln(out, "held by the crew, so every workspace has it")
+	}
+	if holders := resp.GetHeldBy(); len(holders) > 0 {
+		fmt.Fprintf(out, "attached by %s\n", strings.Join(holders, ", "))
+	}
+	if !shown.GetCrew() && len(resp.GetHeldBy()) == 0 {
+		fmt.Fprintln(out, "nothing holds it, so no session runs as it yet")
+	}
+	if stamp := shown.GetImportedAt(); stamp.IsValid() {
+		fmt.Fprintf(out, "imported %s ago\n", display.Age(stamp))
+	}
+	fmt.Fprintf(out, "\n%s\n", resp.GetBrief())
 }
 
 func runRoleAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {

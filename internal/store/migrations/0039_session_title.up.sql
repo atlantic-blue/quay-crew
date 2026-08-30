@@ -1,0 +1,11 @@
+-- What a session was dispatched as, which is the third of the three names a listing can show.
+--
+-- label is what the operator typed about this conversation, description is what the crew observed it
+-- to be, and neither exists until somebody or something has been round: a label needs an operator who
+-- has seen the session, and a description is written behind a task that has already been answered. A
+-- job is one long task, so its session had no name at all while it did the work.
+--
+-- title is the name that is known before the work starts. It is written when the session is made and
+-- never afterwards, so a dispatch that has to be made again cannot put a job's name back over a label
+-- the operator set in the meantime.
+alter table sessions add column if not exists title text not null default '';

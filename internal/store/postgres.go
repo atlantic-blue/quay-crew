@@ -249,11 +249,11 @@ func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session str
 	// racing for one handle would both find nothing and both call it a creation, and the session
 	// would be announced twice.
 	tag, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, handle, status, permission_mode, role)
-		values ($1, $2, $3, $4, 'idle', $5, $6)
+		insert into sessions (id, workspace, project, handle, status, permission_mode, role, title)
+		values ($1, $2, $3, $4, 'idle', $5, $6, $7)
 		on conflict (project, handle) do nothing`,
 		NewID(), owner.GetWorkspace(), project, session, model.PermissionModeBornIn(born.Mode),
-		born.Role)
+		born.Role, born.Title)
 	if err != nil {
 		return nil, false, fmt.Errorf("create session: %w", err)
 	}
@@ -297,7 +297,7 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 // session that scans in three places and fails in the fourth.
 const sessionColumns = `id, workspace, project, handle, status, model_session_id, created_at, ` +
 	`updated_at, archived_at, reclaimed_at, permission_mode, driver, label, description, ` +
-	`described_at_task, role`
+	`described_at_task, role, title`
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set,
 // last moved first: see sortByLastMoved for the order and why it is that one.
@@ -584,12 +584,12 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		archivedAt, reclaimedAt                                *time.Time
 		permissionMode                                         string
 		driver                                                 bool
-		label, description, roleName                           string
+		label, description, roleName, title                    string
 		describedAtTask                                        int32
 	)
 	if err := rows.Scan(&id, &workspace, &project, &handle, &status, &modelSessionID,
 		&createdAt, &updatedAt, &archivedAt, &reclaimedAt, &permissionMode, &driver, &label,
-		&description, &describedAtTask, &roleName); err != nil {
+		&description, &describedAtTask, &roleName, &title); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	session := &quaycrewv1.Session{
@@ -607,6 +607,7 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		Description:     description,
 		DescribedAtTask: describedAtTask,
 		Role:            roleName,
+		Title:           title,
 	}
 	if archivedAt != nil {
 		session.ArchivedAt = timestamppb.New(*archivedAt)
