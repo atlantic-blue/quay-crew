@@ -121,7 +121,10 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "scope", Width: 10, Colour: colourOfName},
 			{Title: "name", Width: 18, Colour: colourOfName},
-			{Title: "characters", Width: 22, Colour: colourOfSize},
+			// Wide enough for a level of millions of characters and the words beside it. The console cuts
+			// a cell that does not fit, and the cell that would be cut is the largest level, which is
+			// the one row in this view worth reading.
+			{Title: "characters", Width: 24, Colour: colourOfSize},
 			{Title: "what it says", Width: 0, Colour: dim},
 		},
 		SortBy: 1,
