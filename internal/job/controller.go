@@ -63,6 +63,16 @@ var ErrNotPending = errors.New("job: that job is no longer pending")
 // what it read.
 var ErrNotRunning = errors.New("job: that job is no longer running")
 
+// Requeue is a job put back to pending, and why it is waiting again.
+type Requeue struct {
+	// Owner is the controller giving the job up. The write applies only where that controller still
+	// holds the lease, so a controller that lost the row cannot put another controller's job back.
+	Owner string
+	// Reason is what a reader is told while the job waits. A pending job with nothing said about it
+	// reads as one nobody has reached yet, and this one has been reached and turned away.
+	Reason string
+}
+
 // Landing is what came of a job, written onto the row in one movement.
 type Landing struct {
 	Phase       string
@@ -98,6 +108,13 @@ type Store interface {
 	// ReleaseJob puts job back to pending. It applies only to running job with no session under a
 	// lease that has run out, which is the one state that says for certain no task was ever sent.
 	ReleaseJob(ctx context.Context, id string, events []*Event) (*Job, error)
+	// RequeueJob puts a running job back to pending because the crew could not start it. It applies
+	// only where this controller still holds the lease, in the same statement, so a controller that
+	// lost the row cannot put another controller's job back under it.
+	//
+	// It is not ReleaseJob. That one is for a row nobody holds and no task was ever sent for, found
+	// by a later controller; this one is the holder itself giving up an attempt it made.
+	RequeueJob(ctx context.Context, id string, back Requeue, events []*Event) (*Job, error)
 	// RenewLease moves this controller's hold on further. Only the holder renews: a controller that
 	// lost the row must not take it back by renewing.
 	RenewLease(ctx context.Context, id string, lease Lease) error
@@ -211,6 +228,13 @@ type Controller struct {
 	owner string
 	// lease is how long a hold lasts before another controller may take the job.
 	lease time.Duration
+	// gaveUp is the job this tick has just put back to pending for want of a sandbox.
+	//
+	// It is a hint held for the length of one tick, and the row is still the truth: a controller that
+	// lost this would start the job a tick early rather than get anything wrong. What it buys is the
+	// one movement per job per tick this loop is built on, so a job turned away is left pending for
+	// something to read rather than given up and started again inside one pass.
+	gaveUp map[string]bool
 }
 
 // NewController builds one. A nil spend reader means what job cost is not written; a nil prover
@@ -222,6 +246,7 @@ func NewController(store Store, plane ControlPlane, spend Spend, prover Prover, 
 	return &Controller{
 		store: store, plane: plane, spend: spend, prover: prover, logger: logger,
 		every: DefaultTickEvery, batch: DefaultBatch, lease: DefaultLease,
+		gaveUp: map[string]bool{},
 		// A name of its own, minted rather than asked for, because two controllers sharing one could
 		// each take the other's job by renewing a lease they never held.
 		owner: "controller-" + newEventID()[:8],
@@ -331,6 +356,7 @@ func (c *Controller) Run(ctx context.Context) {
 // Tick reads the world once and closes what gaps it can. Exported so a test drives one tick rather
 // than waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (c *Controller) Tick(ctx context.Context) {
+	clear(c.gaveUp)
 	// Recovery first, so job a dead controller left behind is in this controller's hands before it
 	// reads what it holds, and one tick both takes the job over and writes what came of it.
 	c.recoverAbandoned(ctx)
@@ -353,6 +379,11 @@ func (c *Controller) startDeclared(ctx context.Context) {
 		return
 	}
 	for _, one := range runnable {
+		// Turned away a moment ago, in this same pass. Starting it again here would ask the machine
+		// that had no room whether it has room yet, without anything having had a chance to change.
+		if c.gaveUp[one.ID] {
+			continue
+		}
 		c.start(ctx, one)
 	}
 }
@@ -604,6 +635,13 @@ func (c *Controller) adopt(ctx context.Context, one *Job) {
 		c.renew(ctx, one)
 		return
 	}
+	// The crew never started this one, so there is nothing to write down about how it went. The
+	// machine was busy, which is a moment and not a verdict, so the job goes back to pending and a
+	// later tick tries it again. Failing it here is how declared work was lost with nothing raised.
+	if last.GetStatus() == StatusFailed && NeverStarted(last.GetFailure()) {
+		c.requeue(ctx, one, waitingForRoom(last.GetFailure()))
+		return
+	}
 
 	landing := Landing{
 		Phase: PhaseDone, Answer: last.GetReply(),
@@ -625,6 +663,34 @@ func (c *Controller) adopt(ctx context.Context, one *Job) {
 		}
 	}
 	c.land(ctx, one, landing, kind)
+}
+
+// requeue puts a job the crew could not start back to pending, with the record of it.
+//
+// There is no ceiling on how often this happens, and that is deliberate. A machine that is busy now
+// has room later, and how many tries are enough is a number nobody has measured: the job stays
+// declared until it runs, until its deadline passes, or until a person stops it. Each attempt costs
+// one start, and the crew starts one sandbox at a time, so a job that keeps being turned away asks
+// again about as often as a start takes rather than on every tick.
+func (c *Controller) requeue(ctx context.Context, one *Job, reason string) {
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	record := c.event(ctx, one, EventReleased, reason)
+	back := Requeue{Owner: c.owner, Reason: reason}
+	if _, err := c.store.RequeueJob(ctx, one.ID, back, []*Event{record}); err != nil {
+		if !errors.Is(err, ErrHeld) {
+			c.logger.WarnContext(ctx, "could not put a job the crew could not start back",
+				"job", one.ID, "error", err)
+		}
+		return
+	}
+	c.gaveUp[one.ID] = true
+	c.exported(ctx, record)
+}
+
+// waitingForRoom is what a job waiting for a machine with room says on the listing, carrying what
+// the crew said underneath it.
+func waitingForRoom(failure string) string {
+	return oneLine("the crew could not give this job a sandbox, so it waits for room: " + failure)
 }
 
 // renew moves this controller's hold on, which is what says it is still alive. A hold that stops
@@ -759,6 +825,17 @@ const (
 	// not read it as one: the job is stopped with their reason rather than failed with a crash.
 	StatusTaskStopped = "stopped"
 )
+
+// NoSandbox is what the crew writes on a task it could not give a container.
+//
+// It is a constant rather than the same sentence written in two places, because two ends depend on
+// it: the control plane writes it onto the task, and the controller reads it to tell a job that
+// never started from a job that ran and did not work. The two must not drift.
+const NoSandbox = "the session's sandbox could not be created"
+
+// NeverStarted says whether a task failed for want of a sandbox rather than for anything the job
+// asked for. A job the crew could not start is not a job that was wrong.
+func NeverStarted(failure string) bool { return strings.Contains(failure, NoSandbox) }
 
 // oneLine keeps a reason readable on a listing: a record is read on one line beside others.
 func oneLine(text string) string {

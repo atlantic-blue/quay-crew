@@ -318,6 +318,31 @@ func (m *Memory) ReleaseJob(_ context.Context, id string, events []*job.Event) (
 	return &kept, nil
 }
 
+// RequeueJob puts a running job back to pending because the crew could not start it. Only where
+// this controller still holds the lease, so a controller that lost the row cannot put another
+// controller's job back under it.
+func (m *Memory) RequeueJob(_ context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning || found.LeaseOwner != back.Owner {
+		return nil, job.ErrHeld
+	}
+	found.Phase, found.Reason = job.PhasePending, back.Reason
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	// The start goes with the attempt that did not happen, so the moment on the row is the moment the
+	// attempt that runs it actually began. What it has already cost stays: attempts counts the tries.
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvents(events); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // RenewLease moves the holder's hold on. Only the holder renews, so a controller that lost a row
 // cannot take it back by renewing.
 func (m *Memory) RenewLease(_ context.Context, id string, lease job.Lease) error {

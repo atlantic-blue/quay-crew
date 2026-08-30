@@ -200,6 +200,62 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The crew took the request and gave up on it, which is what the operator's own machine did for
+	// two minutes while eight containers were starting.
+	sc.Step(`^the crew gives up on the sandbox$`, func(ctx context.Context) error {
+		return worldFrom(ctx).settled(ctx)
+	})
+
+	// The hold on every creation is let go, which is the machine that was busy having room again.
+	sc.Step(`^the machine has room again$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.provider.Hold == nil {
+			return fmt.Errorf("nothing was holding the sandbox back, so there was no room to give")
+		}
+		close(w.provider.Hold)
+		return nil
+	})
+
+	sc.Step(`^the job is pending, and the reason says it waits for room$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetPhase() != job.PhasePending {
+			return fmt.Errorf("the job is %q saying %q, want pending", one.GetPhase(), one.GetReason())
+		}
+		if !strings.Contains(one.GetReason(), "waits for room") {
+			return fmt.Errorf("the job says %q, and an operator reading it cannot tell it is waiting",
+				one.GetReason())
+		}
+		if one.GetFinishedAt() != nil {
+			return fmt.Errorf("a job that never started carries the moment it finished")
+		}
+		return nil
+	})
+
+	sc.Step(`^the records for that job say the job was given up, and never that it failed$`,
+		func(ctx context.Context) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			events, err := worldFrom(ctx).store.ListJobEvents(ctx, one.GetId())
+			if err != nil {
+				return err
+			}
+			kinds := eventKinds(events)
+			for _, kind := range kinds {
+				if kind == job.EventFailed {
+					return fmt.Errorf("the records read %v, and one of them says the job failed", kinds)
+				}
+			}
+			if kinds[len(kinds)-1] != job.EventReleased {
+				return fmt.Errorf("the records read %v, want the last to say the job was given up", kinds)
+			}
+			return nil
+		})
+
 	sc.Step(`^the job is stopped, and the reason names what was claimed$`, func(ctx context.Context) error {
 		one, err := readJob(ctx, 0)
 		if err != nil {
