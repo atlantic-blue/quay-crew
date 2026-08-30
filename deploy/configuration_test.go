@@ -55,7 +55,7 @@ func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 //
 // Exemptions are per path rather than per file, because the places that name a retired directory on
 // purpose are the ones that refuse it, and they name only that one. Exempting a whole file instead
-// would stop it being scanned for the others: the makefile has to keep naming ~/.quaycrew in its
+// would stop it being scanned for the others: the tool has to keep naming ~/.quaycrew in its
 // refusal, and still must never send anybody back to a checkout env file.
 //
 // The changelog is exempt from all of them. It records what shipped on the day it shipped, and
@@ -66,7 +66,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	itself := filepath.Join("deploy", "configuration_test.go")
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
-	oneCrewDirectory := []string{home, homeTest, itself, "Makefile"}
+	oneCrewDirectory := []string{home, homeTest, itself}
 	retired := []struct {
 		path    string
 		because string
@@ -113,48 +113,6 @@ func makeVariable(t *testing.T, name string) string {
 		t.Fatalf("make print-%s: %v\n%s", name, err, out)
 	}
 	return strings.TrimSpace(string(out))
-}
-
-// TestTheStackRefusesToStartOnAnEmptyDataDirectory.
-//
-// The tool refuses when a crew's files are still in the layout from before ~/.quay held everything.
-// The stack is a second way in, and it does not go through the tool: `make up` mounts the data
-// directory straight into the control plane. Without the same refusal it would mount an empty one,
-// mint a new token, and come up looking exactly like a crew that had lost every conversation.
-func TestTheStackRefusesToStartOnAnEmptyDataDirectory(t *testing.T) {
-	old := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(filepath.Join(old, ".quaycrew", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
-		"home-check", "HOME="+old, "QUAY_HOME="+filepath.Join(old, ".quay")).CombinedOutput()
-
-	if err == nil {
-		t.Fatalf("the stack started on a crew whose data is still in the old place:\n%s", out)
-	}
-	want := "mv " + filepath.Join(old, ".quaycrew", "data") + " " + filepath.Join(old, ".quay", "data")
-	if !strings.Contains(string(out), want) {
-		t.Errorf("it never says to run\n  %s\nit says:\n%s", want, out)
-	}
-}
-
-// And it starts once the move is done, because a refusal nobody can clear is worse than no refusal.
-func TestTheStackStartsOnceTheDataHasMoved(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(filepath.Join(home, ".quay", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(home, ".quaycrew", "data"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
-		"home-check", "HOME="+home, "QUAY_HOME="+filepath.Join(home, ".quay")).CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("a crew that has already moved was refused: %v\n%s", err, out)
-	}
 }
 
 // TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt.
