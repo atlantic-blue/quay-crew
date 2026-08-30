@@ -11,6 +11,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,7 +60,37 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
-	return &quaycrewv1.CreateJobResponse{Job: asJob(kept)}, nil
+	return &quaycrewv1.CreateJobResponse{Job: asJob(kept), LeftOut: s.jobLeftOut(ctx, declared)}, nil
+}
+
+// jobLeftOut is every skill the session running this job will be born without, because the workspace
+// has not set a secret that skill needs.
+//
+// The crew already knows this at the moment of the write, and until now it said so in one listing
+// nobody is required to read. A workspace with no credential accepts a whole tree of jobs, every
+// session in it dies on its first clone, and the budget is spent before anything says why.
+//
+// It is an answer rather than a refusal, because the crew cannot know which skill a brief will reach
+// for: a job that reads an electricity bill is not wrong to run in a workspace with no forge token,
+// and refusing it would make one unset secret enough to stop every job in the workspace. That is the
+// same trade withoutUnusable already made for the session itself.
+//
+// A role that does not receive skills is given none of them by design, so there is nothing missing to
+// report. A job that names no role is a session that receives everything, which is what receives says.
+func (s *Server) jobLeftOut(ctx context.Context, declared *job.Job) []*quaycrewv1.Skill {
+	if declared.Role != "" {
+		held, err := s.roleFor(ctx, declared.Workspace, declared.Role)
+		if err != nil || !held.Gets(role.MaterialSkills) {
+			return nil
+		}
+	}
+	var out []*quaycrewv1.Skill
+	for _, one := range s.leftOutIn(ctx, declared.Workspace) {
+		carried := skillAsProto(one.Skill)
+		carried.LeftOut = one.Why
+		out = append(out, carried)
+	}
+	return out
 }
 
 // PrepareJob holds a declaration to every rule and answers with the row to write and the record of

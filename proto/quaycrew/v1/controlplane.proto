@@ -1222,6 +1222,14 @@ message CreateJobRequest {
 }
 message CreateJobResponse {
   Job job = 1;
+  // left_out is every skill the workspace holds that the session running this job will not be given,
+  // because the workspace has not set a secret that skill needs. Each carries, in its own left_out
+  // field, the same sentence the skill listing prints.
+  //
+  // It is an answer rather than a refusal. The crew cannot know which skill a brief will reach for, so
+  // refusing here would stop a job that never touches a repository over a token it never wanted. What
+  // it can do is say, while the caller is looking, that the session starts without that capability.
+  repeated Skill left_out = 2;
 }
 
 message GetJobRequest {
