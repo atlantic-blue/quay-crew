@@ -139,3 +139,55 @@ func TestTheWideningAdviceIsTypeable(t *testing.T) {
 		t.Errorf("the advice it gave does not widen anything:\n%s", said)
 	}
 }
+
+// The sentence itself, without a crew behind it. Three rules: one job rather than 1 jobs, a listing
+// that read everything says so rather than naming an address it did not narrow to, and a listing
+// with nowhere wider to look offers nothing.
+func TestWhatAListingSaysAboutWhereItLooked(t *testing.T) {
+	for _, said := range []struct {
+		name string
+		read scope
+		rows int
+		want string
+	}{
+		{"one row, narrowed", narrowedTo("jobs", "me/house-bills", "quay job list crew reads every project"), 1,
+			"\n1 job in me/house-bills. quay job list crew reads every project\n"},
+		{"two rows, narrowed", narrowedTo("jobs", "me/house-bills", "quay job list crew reads every project"), 2,
+			"\n2 jobs in me/house-bills. quay job list crew reads every project\n"},
+		{"the whole crew", crewWide("sessions"), 3, "\n3 sessions in this crew\n"},
+		{"nowhere wider to look", heldBy("roles", crewLevel, "quay role list on its own reads what the crew holds"), 2,
+			"\n2 roles in the crew\n"},
+	} {
+		t.Run(said.name, func(t *testing.T) {
+			var out strings.Builder
+			said.read.counted(&out, said.rows)
+			if out.String() != said.want {
+				t.Errorf("the listing says %q, want %q", out.String(), said.want)
+			}
+		})
+	}
+}
+
+// The empty listing, which is the half the operator cannot read at all: "no jobs" from one project
+// and "no jobs" from a crew holding nine of them are the same three words.
+func TestWhatAnEmptyListingSays(t *testing.T) {
+	for _, said := range []struct {
+		name string
+		read scope
+		want string
+	}{
+		{"narrowed", narrowedTo("jobs", "atlantic-blue/transcript", "quay job list crew reads every project"),
+			"no jobs in atlantic-blue/transcript\nquay job list crew reads every project\n"},
+		{"the whole crew", crewWide("secrets"), "no secrets in this crew\n"},
+		{"nowhere wider to look", heldBy("skills", crewLevel, "quay skill list on its own reads what the crew holds"),
+			"no skills in the crew\n"},
+	} {
+		t.Run(said.name, func(t *testing.T) {
+			var out strings.Builder
+			said.read.nothing(&out)
+			if out.String() != said.want {
+				t.Errorf("the empty listing says %q, want %q", out.String(), said.want)
+			}
+		})
+	}
+}
