@@ -61,8 +61,13 @@ type Lease struct {
 var ErrNotPending = errors.New("job: that job is no longer pending")
 
 // ErrNotRunning is the same answer for a landing: the row moved on before this controller wrote
-// what it read.
+// what it read. It is also what a session asking a question about a job that has already ended is
+// told: a job nothing is running has nobody to answer to.
 var ErrNotRunning = errors.New("job: that job is no longer running")
+
+// ErrNotAsking is what a store says when an answer arrived for a job that is not waiting for one.
+// A question already answered, or one nobody asked, and in both cases the answer is not applied.
+var ErrNotAsking = errors.New("job: that job is not waiting to be told anything")
 
 // Requeue is a job put back to pending, and why it is waiting again.
 type Requeue struct {

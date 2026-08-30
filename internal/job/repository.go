@@ -87,7 +87,14 @@ func EndsInAPullRequest(repository string) string {
 
 // Asked is the text the crew sends a session for this job: the brief, and where the job names a
 // repository, the line above.
+//
+// A job that has been told something starts again from what it was told rather than from its brief.
+// The session asked a question, waited in its container, and is being started again to be given the
+// answer: sending it the brief a second time would ask it to do the whole job over.
 func Asked(one *Job) string {
+	if one.Told != "" {
+		return CarryOn(one)
+	}
 	if one.Repository == "" {
 		return one.Brief
 	}
