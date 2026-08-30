@@ -1,0 +1,149 @@
+# The review of one open pull request, asked for by quay-crew#513.
+#
+# Nothing reviewed a pull request. Every review of the acceptance run was done by the operator by
+# hand, so this graph does the three passes a person does, in the order a person needs them: a
+# security finding blocks the merge whatever else is true, a feature that does not work end to end
+# comes next, and what is missing comes last.
+#
+# It runs in dangerous mode because every step reads a repository and talks to the forge, and a run
+# works with nobody there to approve a command. It posts nothing on its own: the ask node stops the
+# run and shows the operator the whole draft, and a run told anything but yes ends and posts nothing.
+#
+# Each step is a job of its own, so each step is a new session with an empty working directory. A
+# step therefore hands its work on in two ways, and both are deliberate. The reply carries the
+# address of the pull request on its first line, because the reply is the one thing the next step is
+# given. The files go to the workspace volume at /home/agent/shared, because that is the only
+# directory two sessions share. The copy in the working directory is what the crew checks against
+# `expect`, and that check reads the session that did the work.
+#
+# There is no trigger node yet, quay-crew#433, so the graph picks its own subject on a schedule.
+# Every fifteen minutes is the shortest the engine accepts, flow.MinimumEvery in
+# internal/flow/graph.go. A run that finds nothing to review costs one step and ends.
+name: pull-request-review
+version: 1
+mode: dangerous
+on:
+  every: 15m
+nodes:
+  pick:
+    type: dispatch
+    prompt: >-
+      Read the open pull requests of the repository this project records. Pick the oldest one whose
+      head commit carries no review yet. A head commit that already carries a review is done, and
+      reviewing it again says the same thing to the same person twice. Leave a draft pull request
+      alone. Write to subject.md in your working directory: the address of the pull request you
+      picked, its number, its head commit, its title, its author, and the files it touches. Where
+      there is nothing to review, write that sentence to subject.md instead, and say which pull
+      requests you read and why each one was not eligible. Copy subject.md to
+      /home/agent/shared/reviews/<owner>/<repository>/<number>/subject.md, because the next step is
+      a new session and reads nothing from this one. Then reply with the full address of the pull
+      request and nothing else, or with exactly the word none and nothing else where there is
+      nothing to review.
+    expect:
+      file: subject.md
+  found:
+    type: choice
+    on:
+      result.reply: "none"
+  security:
+    type: dispatch
+    prompt: >-
+      Review this pull request for security: {{result.reply}}. Clone the repository into
+      /home/agent/shared/repos if it is not there yet, and read the code around the change, not only
+      the diff. The diff is the claim and the repository is the evidence. Look for a secret in the
+      diff or in the files it touches, for injection, for a missing authorisation check, for input
+      that reaches a query or a command without validation, for a new call that needs a policy it
+      does not have, and for a permission that widened. Give every finding the file, the line, and
+      what an attacker gets. Report nothing about style, naming, comments, formatting or test
+      tidiness. Where you find nothing, say so in one line. Write the findings to security.md in
+      your working directory and copy that file to the reviews directory in
+      /home/agent/shared/reviews that the step before you wrote subject.md into. Reply with the
+      address of the pull request on its own first line, then your findings, because the next step
+      is a new session and your reply is what it is given.
+    expect:
+      file: security.md
+  features:
+    type: dispatch
+    prompt: >-
+      The security pass answered this, and its first line is the address of the pull request under
+      review: {{result.reply}}. Now read the same pull request for what it does to the product and
+      what it breaks. Answer one question above all: does this work end to end today. Sweep the four
+      things a diff hides. Is every new dependency registered where the code that needs it is built.
+      Does every new call to a cloud service have the permission it needs, in every environment. Is
+      the new thing deployed anywhere, or is it correct code that delivers nothing yet. Was every
+      call site covered, including the delete path and the privacy path. Read the files the pull
+      request did not touch, because that is where these live. Report nothing a linter or a review
+      bot already reports. Where you find nothing, say so in one line. Write the findings to
+      features.md in your working directory and copy that file to the same reviews directory under
+      /home/agent/shared/reviews. Reply with the address of the pull request on its own first line,
+      then your findings.
+    expect:
+      file: features.md
+  completeness:
+    type: dispatch
+    prompt: >-
+      The features pass answered this, and its first line is the address of the pull request under
+      review: {{result.reply}}. Read the security findings and the feature findings back from the
+      reviews directory under /home/agent/shared/reviews. Now say what is missing. Are there tests
+      at the three tiers, a unit test, an integration test and a scenario in features/. Is there a
+      changelog entry. Where the change removes or replaces an interface, is there a test that the
+      old way now fails loudly and names what to type instead. Does any test stop at the call the
+      code makes, rather than carrying on to what the person sees next. Report nothing about style
+      or tidiness. Where you find nothing, say so in one line. Write the findings to
+      completeness.md in your working directory and copy that file to the same reviews directory.
+      Reply with the address of the pull request on its own first line, then your findings.
+    expect:
+      file: completeness.md
+  draft:
+    type: dispatch
+    prompt: >-
+      The completeness pass answered this, and its first line is the address of the pull request
+      under review: {{result.reply}}. Read security.md, features.md and completeness.md back from
+      the reviews directory under /home/agent/shared/reviews and write the review. It has two
+      halves. The first is a summary of about one hundred words, numbered, one line per finding,
+      most blocking first, saying the consequence and nothing else. The second is one line comment
+      per finding, each with the file and the line it anchors to. Read the line before you anchor to
+      it, and anchor to the line that names the thing you are discussing rather than to the top of
+      the file. Frame a gap as a question, because the author may hold context you do not: ask "is
+      this deployed?" rather than saying it is not. Drop every finding that does not change what a
+      user or an operator gets. Never grade the author or their work. Write no dashes as
+      punctuation, no acronyms, no tables and no block quotes. Write review.md in your working
+      directory holding exactly what would be posted, copy it to the same reviews directory, and
+      reply with the whole draft, because the operator reads your reply and decides.
+    expect:
+      file: review.md
+  permit:
+    type: ask
+    text: >-
+      {{result.reply}}
+
+
+      This is the review as it would be posted. Answer yes to post it. Any other answer ends the run
+      and posts nothing.
+  agreed:
+    type: choice
+    on:
+      answer: "yes"
+  post:
+    type: dispatch
+    prompt: >-
+      The operator read the draft and answered {{answer}}. Post this review to the pull request it
+      names, exactly as it is drafted here, and add nothing of your own: {{result.reply}}. Post the
+      summary as one comment. Post each finding as a line comment on the line it names. Never open
+      a review that requests changes or approves, because that verdict is the operator's. Never
+      merge anything. Write to posted.md in your working directory the address of the comment and
+      the address of every line comment you posted, then reply with those addresses.
+    expect:
+      file: posted.md
+edges:
+  - [pick, found]
+  - [found, done, "true"]
+  - [found, security, "false"]
+  - [security, features]
+  - [features, completeness]
+  - [completeness, draft]
+  - [draft, permit]
+  - [permit, agreed]
+  - [agreed, post, "true"]
+  - [agreed, done, "false"]
+  - [post, done]
