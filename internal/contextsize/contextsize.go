@@ -17,11 +17,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Mark is the number of characters at which a level stops being a page somebody reads and becomes
 // somewhere a rule can hide. Twenty thousand is about seven pages of prose, and about five thousand
-// tokens at four characters a token, which is the estimate every tokeniser agrees on for English.
+// tokens at four characters a token, which is a rule of thumb and not a measurement: every model
+// counts them its own way.
 //
 // It is a mark and not a limit. Nothing is refused for being over it: a crew that wants a long level
 // keeps one, and the point is that it chose to.
@@ -38,8 +40,12 @@ type Reading struct {
 }
 
 // Read measures one level.
+//
+// Characters and not bytes. The number this exists to report is the one `select length(body) from
+// contexts` gives, and Postgres counts characters, so counting bytes would make the crew and its own
+// database disagree by one for every accented letter in the level.
 func Read(scope, name, body string) Reading {
-	return Reading{Scope: scope, Name: name, Characters: len(body)}
+	return Reading{Scope: scope, Name: name, Characters: utf8.RuneCountInString(body)}
 }
 
 // Over says whether this level is past the mark.

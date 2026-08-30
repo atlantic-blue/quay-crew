@@ -1067,7 +1067,7 @@ func pickContext(dirs []*quaycrewv1.ContextDir, scope, owner string) string {
 // clearing can say what it removed.
 func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (int, error) {
 	body, err := contextBody(ctx, client, scope, owner)
-	return len(body), err
+	return contextsize.Read(scope, "", body).Characters, err
 }
 
 // contextTarget works out which level an address means. The word "crew" is the level above every

@@ -136,3 +136,24 @@ func TestACountReadsTheWayAPersonSaysOne(t *testing.T) {
 		}
 	}
 }
+
+// The number the issue reported came from `select length(body) from contexts`, and Postgres counts
+// characters. Counting bytes instead makes the crew report a level as larger than the database says
+// it is, and the gap grows with every accented letter in it. Context is prose, so it has them.
+func TestASizeCountsCharactersAndNotBytes(t *testing.T) {
+	// Twelve characters, and more than twelve bytes: two of them are outside the ASCII range.
+	prose := "café déjà vu"
+	if got := contextsize.Read("workspace", "acme", prose).Characters; got != 12 {
+		t.Errorf("%q reads as %d characters, want 12 (it is %d bytes)", prose, got, len(prose))
+	}
+	if got := contextsize.Characters(contextsize.Read("crew", "", prose).Characters); got != "12 characters" {
+		t.Errorf("the count reads %q", got)
+	}
+	// And the mark is measured the same way, or a level of accented prose is called large while the
+	// database says it is under.
+	accented := strings.Repeat("é", contextsize.Mark)
+	if contextsize.Read("crew", "", accented).Over() {
+		t.Errorf("%d accented characters is called over the %d mark, and it is exactly on it",
+			contextsize.Mark, contextsize.Mark)
+	}
+}
