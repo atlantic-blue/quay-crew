@@ -11,6 +11,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -175,14 +176,19 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(rest) == 1 {
 		typed = rest[0]
 	}
-	located, err := locate(ctx, client, typed)
-	if err != nil {
-		return err
-	}
-
+	// The word that reads every project. Without it a listing narrows to where the operator stands
+	// and says nothing about having done so, which is how nine jobs one address away go unseen.
+	where := crewWide("jobs")
 	request := &quaycrewv1.ListJobsRequest{
-		Workspace: located.WorkspaceID, Project: located.ProjectID,
 		Parent: values.first(flagParent), RootsOnly: values.has(flagRoots), Phase: values.first(flagPhase),
+	}
+	if !readsTheCrew(typed) {
+		located, err := locate(ctx, client, typed)
+		if err != nil {
+			return err
+		}
+		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
+		where = narrowedTo("jobs", located.Path.String(), "quay job list crew reads every project")
 	}
 	labels, err := readLabels(values[flagLabel])
 	if err != nil {
@@ -201,14 +207,44 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return err
 	}
 	if len(resp.GetJobs()) == 0 {
-		fmt.Fprintf(out, "no jobs here yet; declare one with quay job create %s \"...\" %s \"...\"\n", flagTitle, flagBrief)
+		where.nothing(out)
+		fmt.Fprintf(out, "declare one with quay job create %s \"...\" %s \"...\"\n", flagTitle, flagBrief)
 		return nil
 	}
+	// A listing that read every project says which project each row is in, or the rows are a heap
+	// of identifiers with no address on any of them.
+	addresses := map[string]string{}
+	if where.where == "" {
+		addresses = jobAddresses(ctx, client)
+	}
 	for _, one := range resp.GetJobs() {
+		if where.where == "" {
+			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], one.GetDepth(), one.GetPhase(), truncateLine(one.GetTitle()))
+			continue
+		}
 		fmt.Fprintf(out, "%-10s %-2d %-8s %s\n",
 			display.ShortID(one.GetId()), one.GetDepth(), one.GetPhase(), truncateLine(one.GetTitle()))
 	}
+	where.counted(out, len(resp.GetJobs()))
 	return nil
+}
+
+// jobAddresses maps a project identifier to the address a person reads, so a crew wide listing can
+// say where each row is. A name it cannot find falls back to the short identifier rather than
+// leaving the column blank.
+func jobAddresses(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		return map[string]string{}
+	}
+	workspaces := workspaceNames(ctx, client)
+	addresses := make(map[string]string, len(resp.GetProjects()))
+	for _, one := range resp.GetProjects() {
+		addresses[one.GetId()] = display.Name(workspaces[one.GetWorkspace()], one.GetWorkspace()) +
+			workspace.Separator + one.GetName()
+	}
+	return addresses
 }
 
 // runJobShow reads one job back: what it is, where it got to, and what came of it.
