@@ -157,7 +157,7 @@ func Continued(one *Job) string {
 		"Your working directory, your branch and anything you pushed are where you left them. Before you " +
 			"touch any of it, fetch the branch this work is based on and say in your answer what moved " +
 			"under it while you were stopped, because it may have moved. Then carry on from the first step " +
-			"that is not on the list above, and record each step as you finish it.",
+			"that is not on the list above, and record each one as you finish it with krewe job step \"...\".",
 	}
 	if one.Repository != "" {
 		// Said again, because this task is the one that ends the job and a model reads what it is handed.
