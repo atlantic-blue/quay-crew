@@ -29,7 +29,10 @@ type toolKey struct{}
 
 // toolWorld is what came back out of the last run of the tool.
 type toolWorld struct {
-	address  string
+	address string
+	// stdin is what the next run is handed on its standard input. Context is read from there rather
+	// than from an argument, so a scenario about writing one has to be able to pipe.
+	stdin    string
 	stdout   string
 	stderr   string
 	exitCode int
@@ -132,6 +135,9 @@ func runTool(ctx context.Context, args ...string) error {
 	defer func() { _ = os.RemoveAll(home) }()
 
 	command := exec.CommandContext(ctx, binary, args...)
+	if t.stdin != "" {
+		command.Stdin = strings.NewReader(t.stdin)
+	}
 	command.Env = append(os.Environ(),
 		"QC_GRPC_ADDR="+t.address,
 		"QC_TOKEN="+worldFrom(ctx).token,
