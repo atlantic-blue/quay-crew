@@ -51,15 +51,18 @@ func TestTheConsoleListsTheJobsTheCrewActuallyHolds(t *testing.T) {
 	}
 
 	started := declare(t, ctx, client, project.GetProject().GetId(), "read the electricity bill")
-	pending := declare(t, ctx, client, project.GetProject().GetId(), "read the water bill")
-	declare(t, ctx, client, elsewhere.GetProject().GetId(), "cut the hedge")
 
-	// One of them is picked up, so the listing carries both a job that has reached a session and one
-	// that has not. Every other job stays pending, which is the state most of a real listing is in.
+	// The tick sits between the two declarations because one tick starts every job it finds
+	// runnable, up to a batch of twenty, rather than one of them. So a job declared before it is a
+	// job with a session, and a job declared after it is a job nothing has started, which is the
+	// second row this listing has to carry.
 	server.TickJob(ctx)
 	waiting, doneWaiting := context.WithTimeout(ctx, 60*time.Second)
 	server.WaitForTasks(waiting)
 	doneWaiting()
+
+	pending := declare(t, ctx, client, project.GetProject().GetId(), "read the water bill")
+	declare(t, ctx, client, elsewhere.GetProject().GetId(), "cut the hedge")
 
 	registry, err := console.NewDefaultRegistry(client)
 	if err != nil {
