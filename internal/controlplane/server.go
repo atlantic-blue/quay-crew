@@ -1506,21 +1506,25 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 	dirs = append(dirs, s.contextDir(ctx, store.ContextCrew, "", "crew", sandbox.Context{}))
 	seenWorkspace := map[string]bool{}
 	for _, project := range projects {
-		found := s.storage.Contexts(sandbox.Config{
+		// The directories, where the crew can describe them. A crew that was told no data directory
+		// can describe none, and what a level says is held in the store rather than on a disk, so the
+		// row still carries the body and simply names no directory. Dropping the row instead took
+		// every project's context out of the one call that reads a level back.
+		workspaceDir, projectDir := sandbox.Context{}, sandbox.Context{}
+		if found := s.storage.Contexts(sandbox.Config{
 			ID: "listing", Workspace: project.GetWorkspace(), Project: project.GetId(),
-		})
-		if len(found) != 2 {
-			continue
+		}); len(found) == 2 {
+			workspaceDir, projectDir = found[0], found[1]
 		}
 		// One row per workspace however many projects it holds: the workspace's context is one thing,
 		// and listing it twice would read as two.
 		if !seenWorkspace[project.GetWorkspace()] {
 			seenWorkspace[project.GetWorkspace()] = true
 			dirs = append(dirs, s.contextDir(ctx, store.ContextWorkspace,
-				project.GetWorkspace(), names[project.GetWorkspace()], found[0]))
+				project.GetWorkspace(), names[project.GetWorkspace()], workspaceDir))
 		}
 		dirs = append(dirs, s.contextDir(ctx, store.ContextProject,
-			project.GetId(), project.GetName(), found[1]))
+			project.GetId(), project.GetName(), projectDir))
 	}
 	// A workspace with no projects contributed no row at all, because the rows were built by walking
 	// projects. Its context is stored and rendered either way, so writing an org's context into a

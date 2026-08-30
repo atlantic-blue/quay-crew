@@ -735,6 +735,9 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(args) > 0 && args[0] == "edit" {
 		return runContextEdit(ctx, client, args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "show" {
+		return runContextShow(ctx, client, args[1:], out)
+	}
 	if len(args) > 0 && args[0] == "set" {
 		return runContextSet(ctx, client, args[1:], out)
 	}
@@ -742,8 +745,9 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return runContextClear(ctx, client, args[1:], out)
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context [<address>] | quay context set [<address>] < file " +
-			"| quay context edit [<address>] | quay context clear [<address>]")
+		return fmt.Errorf("usage: quay context [<address>] | quay context show [<address>] " +
+			"| quay context set [<address>] < file | quay context edit [<address>] " +
+			"| quay context clear [<address>]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -798,6 +802,46 @@ func firstLine(body string) string {
 		line = line[:57] + "..."
 	}
 	return line
+}
+
+// runContextShow prints what one level says, and nothing else, so that
+//
+//	quay context show crew > file
+//	quay context set crew < file
+//
+// are a pair. Until this existed a level could only be overwritten: adding a paragraph meant already
+// holding the whole text, and the only way to recover what the crew held was to read the contexts
+// table in the database. It also means a level can be diffed, piped, and kept in a repository and
+// compared against what the crew actually holds.
+//
+// The body goes out byte for byte, with nothing added, because the round trip has to be a no op.
+// A heading, a trailing newline or a count would each become part of the level the moment somebody
+// piped this into `quay context set`.
+func runContextShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context show [<address>|crew]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	scope, owner, name, err := contextTarget(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	body, err := contextBody(ctx, client, scope, owner)
+	if err != nil {
+		return err
+	}
+	// A level that says nothing is refused rather than printed as silence. Standard output stays
+	// empty either way, so a redirection writes an empty file whatever happens, and the exit status
+	// is the only thing that tells a caller which of the two it got.
+	if body == "" {
+		return fmt.Errorf("%s %s says nothing yet, so there is nothing to read back"+
+			"\n\nwrite it: cat notes.md | quay context set %s", scope, name, typed)
+	}
+	fmt.Fprint(out, body)
+	return nil
 }
 
 // runContextSet writes a level's context from standard input, which is how a file becomes context:
@@ -877,19 +921,37 @@ func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceC
 	return nil
 }
 
+// contextBody is what a level says today, read back out of the crew.
+//
+// The listing carries every level's body, so there is nothing else to ask, and one call answers all
+// three questions anything here has: what a level says, how long it is, and whether it says anything
+// at all. Going through the listing rather than a call of its own is also what keeps the console and
+// the command line reading the same answer.
+func contextBody(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (string, error) {
+	resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
+	if err != nil {
+		return "", err
+	}
+	return pickContext(resp.GetDirs(), scope, owner), nil
+}
+
+// pickContext is one level out of a listing of every level. A level the listing does not carry says
+// nothing, which is the same answer as a level that is there and empty: neither has anything to read
+// back and neither has anything to protect.
+func pickContext(dirs []*quaycrewv1.ContextDir, scope, owner string) string {
+	for _, dir := range dirs {
+		if dir.GetScope() == scope && dir.GetOwner() == owner {
+			return dir.GetBody()
+		}
+	}
+	return ""
+}
+
 // contextLength is how much a level says today, so a refusal can name what it is protecting and
 // clearing can say what it removed.
 func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (int, error) {
-	resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
-	if err != nil {
-		return 0, err
-	}
-	for _, dir := range resp.GetDirs() {
-		if dir.GetScope() == scope && dir.GetOwner() == owner {
-			return len(dir.GetBody()), nil
-		}
-	}
-	return 0, nil
+	body, err := contextBody(ctx, client, scope, owner)
+	return len(body), err
 }
 
 // contextTarget works out which level an address means. The word "crew" is the level above every
