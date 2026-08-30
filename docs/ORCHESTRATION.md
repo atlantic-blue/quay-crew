@@ -269,6 +269,27 @@ controller checks it, and a job that does not meet its claim stops rather than r
 reason is in `docs/ARCHITECTURE.md`: a model asked to read a file that is not there answers
 plausibly instead of stopping.
 
+**`repository`, text, optional, default empty.** The repository this job works in, written
+`owner/name`. Both spellings of the address are accepted and stored as one, so a person pasting from
+a browser and a person typing from memory declare the same thing. Anything that is not an owner and a
+name is refused at the write, because a repository the crew cannot then look for in an answer is an
+expectation that was never going to hold.
+
+Naming one says how the job ends. The crew adds a line to what the session is asked, saying to push
+the branch, open the pull request, name its address in the answer, and not to merge it. The job is
+not done until an answer names a pull request against that repository, and the address the crew read
+lands on the row as `pull_request`, which is what `quay job show` prints beside the answer.
+
+**A session that answered without one is asked again, once.** It is the only expectation the crew
+asks again about rather than stopping on, and the difference is what is missing. An answer that does
+not carry what it claimed is work that was not done, so asking again is asking a model to do it
+twice. A pull request is work that was done and not published: the branch is in the session, the
+session is still open, and opening it is one command. A second answer that still names none stops the
+job, with a reason saying it was asked twice.
+
+**No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
+runs the pipeline, so nothing here lets a session merge and the line the crew adds says so.
+
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
 identifiers that close it. This is the ordering primitive, and it is the whole of it: there is no
@@ -370,6 +391,10 @@ purpose. The list, so a test can be written against it:
 - A job naming a mode that is not a mode is refused, and the refusal lists the modes.
 - A job whose `expect_file` starts with a slash is refused.
 - A job whose `expect_file` holds a `..` part is refused.
+- A job whose `repository` is not an owner and a name is refused, and the refusal says how to write
+  one.
+- A job that names a repository and answers without a pull request against it is asked again, and
+  stopped if the second answer names none either.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the

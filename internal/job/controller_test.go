@@ -476,6 +476,7 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Answer, one.Reason = landed.Phase, landed.Answer, landed.Reason
+	one.PullRequest = landed.PullRequest
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now
