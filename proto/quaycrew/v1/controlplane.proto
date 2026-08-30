@@ -1199,6 +1199,10 @@ message Job {
   // ends: the session pushes its branch and opens a pull request, and the job is not done until its
   // answer names that pull request. Empty claims nothing and is checked as nothing.
   string repository = 33;
+  // product is one sentence in a person's words: what somebody does with what this job builds, and
+  // what they get back. It is stated on the root and every child carries it, so a design document is
+  // evidence for that sentence rather than a replacement for it.
+  string product = 36;
 
   // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1271,6 +1275,10 @@ message CreateJobRequest {
   // repository is where this job's work goes, written owner/name. A job that names one ends in a
   // pull request against it.
   string repository = 15;
+  // product is one sentence saying what a person does with what this job builds and what they get
+  // back. A job declared under another inherits its parent's, and stating a second one where the
+  // parent already carries one is refused rather than ignored.
+  string product = 16;
   // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.

@@ -31,7 +31,7 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		Title:   req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
 		ExpectFile: req.GetExpectFile(), ExpectContains: req.GetExpectContains(),
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
-		Requires: req.GetRequires(), Repository: req.GetRepository(),
+		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
 		ID: req.GetId(), Parent: req.GetParent(),
 	}
 	if req.GetDeadline() != nil {
@@ -132,7 +132,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		Title: tidy.Title, Brief: tidy.Brief, Mode: tidy.NamedMode(),
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
-		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
+		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository, Product: tidy.Product,
 		Version: 1, Phase: job.PhasePending,
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
@@ -147,10 +147,16 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	if err := s.underTheCaller(ctx, under, declared); err != nil {
 		return nil, nil, err
 	}
-	// And the trace follows the same parent, because one trace covers a whole tree. It is read after
-	// the parent is known rather than before: a child that minted its own would leave the tree in as
-	// many traces as it has nodes.
-	s.traceJob(ctx, declared, s.parentOf(ctx, declared))
+	// The parent, read once and used twice: the trace follows it, and so does the one sentence the
+	// job serves. Both are read after underTheCaller has set it, because the parent is the
+	// credential's to say and never the request's.
+	parent := s.parentOf(ctx, declared)
+	// One trace covers a whole tree, and a child that minted its own would leave the tree in as many
+	// traces as it has nodes.
+	s.traceJob(ctx, declared, parent)
+	if err := carryTheSentence(declared, parent); err != nil {
+		return nil, nil, err
+	}
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, nil, err
 	}
@@ -158,6 +164,28 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		return nil, nil, err
 	}
 	return declared, s.jobEvent(ctx, declared, job.EventDeclared, declared.Title), nil
+}
+
+// carryTheSentence gives a child the one sentence its parent serves, and refuses a child that states
+// a different one.
+//
+// The sentence belongs to the job at the top. Every job under it carries the same one, so a session
+// three levels down is given what a person does with what is being built, without anybody typing it
+// again. That is the half that makes the sentence worth having: the failure it answers happened
+// inside jobs that never saw it.
+//
+// A root, and a child under a parent that carries none, keep whatever they declared. A tree that
+// started without a sentence can still gain one.
+func carryTheSentence(declared *job.Job, parent *job.Job) error {
+	if parent == nil {
+		return nil
+	}
+	carried, err := job.Inherited(parent.Product, declared.Product)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	declared.Product = carried
+	return nil
 }
 
 // pinRole attaches the role at the version the workspace holds now, and refuses job the role could
@@ -314,7 +342,8 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Mode: from.Mode, ExpectFile: from.ExpectFile, ExpectContains: from.ExpectContains,
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
 		Requires: from.Requires, Repository: from.Repository, PullRequest: from.PullRequest,
-		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
+		Product: from.Product,
+		Parent:  from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question,
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),

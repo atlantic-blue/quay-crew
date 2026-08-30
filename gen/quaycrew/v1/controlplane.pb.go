@@ -7905,6 +7905,10 @@ type Job struct {
 	// ends: the session pushes its branch and opens a pull request, and the job is not done until its
 	// answer names that pull request. Empty claims nothing and is checked as nothing.
 	Repository string `protobuf:"bytes,33,opt,name=repository,proto3" json:"repository,omitempty"`
+	// product is one sentence in a person's words: what somebody does with what this job builds, and
+	// what they get back. It is stated on the root and every child carries it, so a design document is
+	// evidence for that sentence rather than a replacement for it.
+	Product string `protobuf:"bytes,36,opt,name=product,proto3" json:"product,omitempty"`
 	// What the system assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -8096,6 +8100,13 @@ func (x *Job) GetRepository() string {
 	return ""
 }
 
+func (x *Job) GetProduct() string {
+	if x != nil {
+		return x.Product
+	}
+	return ""
+}
+
 func (x *Job) GetParent() string {
 	if x != nil {
 		return x.Parent
@@ -8251,6 +8262,10 @@ type CreateJobRequest struct {
 	// repository is where this job's work goes, written owner/name. A job that names one ends in a
 	// pull request against it.
 	Repository string `protobuf:"bytes,15,opt,name=repository,proto3" json:"repository,omitempty"`
+	// product is one sentence saying what a person does with what this job builds and what they get
+	// back. A job declared under another inherits its parent's, and stating a second one where the
+	// parent already carries one is refused rather than ignored.
+	Product string `protobuf:"bytes,16,opt,name=product,proto3" json:"product,omitempty"`
 	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -8377,6 +8392,13 @@ func (x *CreateJobRequest) GetRequires() []string {
 func (x *CreateJobRequest) GetRepository() string {
 	if x != nil {
 		return x.Repository
+	}
+	return ""
+}
+
+func (x *CreateJobRequest) GetProduct() string {
+	if x != nil {
+		return x.Product
 	}
 	return ""
 }
@@ -9904,7 +9926,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xc2\t\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xdc\t\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -9925,7 +9947,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\brequires\x18  \x03(\tR\brequires\x12\x1e\n" +
 	"\n" +
 	"repository\x18! \x01(\tR\n" +
-	"repository\x12\x16\n" +
+	"repository\x12\x18\n" +
+	"\aproduct\x18$ \x01(\tR\aproduct\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -9951,7 +9974,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"finishedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9f\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb9\x04\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -9969,7 +9992,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\brequires\x18\x0e \x03(\tR\brequires\x12\x1e\n" +
 	"\n" +
 	"repository\x18\x0f \x01(\tR\n" +
-	"repository\x12\x0e\n" +
+	"repository\x12\x18\n" +
+	"\aproduct\x18\x10 \x01(\tR\aproduct\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +

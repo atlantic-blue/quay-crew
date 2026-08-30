@@ -68,9 +68,13 @@ commands:
     [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job.
     [--expect-file <path>]                --repository says where the work goes, and a job that
     [--expect-contains "..."]             names one is not done until its answer names a pull
-    [--repository <owner>/<name>]         request against it. A brief that asks the job to wait
-                                          for the checks, or to merge on the result, is refused:
-                                          nothing wakes a job, so that shape is a flow
+    [--repository <owner>/<name>]         request against it. --product is one sentence in a
+    [--product "..."]                     person's words: what somebody does with what gets built
+                                          and what they get back. Every job under this one carries
+                                          it, and it is what the design is read against. A brief
+                                          that asks the job to wait for the checks, or to merge on
+                                          the result, is refused: nothing wakes a job, so that
+                                          shape is a flow
   job list [<address>|system]             the jobs there are, newest first. With no address it
     [--phase <phase>] [--label k=v]       reads where you are standing and says so, and system reads
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,

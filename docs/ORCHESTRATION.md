@@ -314,6 +314,32 @@ has to point at a pull request or at the result of one, and a phrase the brief n
 gets past it is a brief the system still cannot run, and that is the trade: a refusal that fires on
 ordinary work is the rule everybody learns to word around.
 
+**`product`, text, optional, default empty.** One sentence in a person's words: what somebody does
+with what this job builds, and what they get back. Not the architecture, and not the address shape.
+It is held to the title's ceiling, because a paragraph here is a design document arriving by the back
+door.
+
+**Every job under it carries the same one.** A job declared under another inherits its parent's
+sentence, so a session three levels down is given it without anybody typing it again. A job that
+states a different sentence is refused, naming the parent's, because a tree with two products has
+none, and a field dropped in silence leaves the caller believing the product moved. Under a job that
+carries none, the new job's own sentence stands, so a tree that started without one can still gain
+one.
+
+The session is given the sentence above its brief, and told that the sentence wins over any design
+the brief names. The reason: a tree of jobs built `docs/ACCEPTANCE-PROJECT.md` section 3 faithfully,
+every check was green, and the operator opened it two days later and could not use it. The document
+said the address reads `/videos?id=<video id>`, so the video identifier became the key, and a reader
+holding a link had to dig it out by hand. Nobody had written "paste a link and get the text back", so
+there was nothing to measure the address shape against.
+
+**A job at the top that states none is not refused.** The system cannot write the sentence, and a
+tree that runs an errand needs none, so the tool says one is missing and how to write it, the way it
+already says which skills a session starts without. What is still missing is the gate: nothing reads
+the sentence back against what was delivered. That is the second half of
+[#520](https://github.com/atlantic-blue/quay-crew/issues/520), a run that stops at the first thing a
+person can open and asks whether it is what they wanted.
+
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
 identifiers that close it. This is the ordering primitive, and it is the whole of it: there is no

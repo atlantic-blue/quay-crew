@@ -300,3 +300,82 @@ func TestJobOutlivesTheProcessThatDeclaredIt(t *testing.T) {
 		t.Fatalf("the job is %q, want pending", found.GetJob().GetPhase())
 	}
 }
+
+// The one sentence a job serves reaches every job under it, and the database is what carries it
+// there. A controller reads a child hours later, in another process, and hands its session whatever
+// the row says: a sentence held only by the caller that declared the tree is a sentence no session
+// ever sees.
+func TestTheSentenceReachesEveryJobInTheTreeInTheDatabase(t *testing.T) {
+	s, kept := aSystemOnPostgres(t)
+	ctx := context.Background()
+	_, project := aProjectOnPostgres(t, s)
+	sentence := "paste a link and get the text back"
+
+	root, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "build the transcript page",
+		Brief: "read the design and build what it describes", Product: sentence,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if got := root.GetJob().GetProduct(); got != sentence {
+		t.Fatalf("the job at the top serves %q, want %q", got, sentence)
+	}
+
+	// Two levels down, declared the way the system declares a job under one it is already running.
+	child := declaredUnder(t, s, kept, project, root.GetJob().GetId(), "decide what the address carries")
+	grandchild := declaredUnder(t, s, kept, project, child, "write the page")
+
+	for _, id := range []string{child, grandchild} {
+		found, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if got := found.GetJob().GetProduct(); got != sentence {
+			t.Fatalf("job %s serves %q, want %q", id, got, sentence)
+		}
+	}
+
+	// And what a controller would hand the session, read off the row rather than off the call that
+	// declared it.
+	read, err := kept.GetJob(ctx, grandchild)
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if asked := job.Asked(read); !strings.Contains(asked, sentence) {
+		t.Fatalf("the session two levels down is asked %q, and it never sees the sentence", asked)
+	}
+
+	// A second product is refused rather than written, because a tree with two has none.
+	_, _, err = s.PrepareJob(ctx, root.GetJob().GetId(), job.Declaration{
+		Project: project, Title: "search the archive", Brief: "index every video by its identifier",
+		Product: "search the archive by video id",
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("a child stating a second product was answered with %v", err)
+	}
+	listed, err := kept.ListJobs(ctx, job.Filter{Project: project})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	if len(listed) != 3 {
+		t.Fatalf("the project holds %d jobs, want the three that were accepted", len(listed))
+	}
+}
+
+// declaredUnder writes one job under another, the way the system does it for a session running that
+// job: the control plane holds the declaration to every rule, and the store writes the row.
+func declaredUnder(t *testing.T, s *controlplane.Server, kept store.Store, project, under, brief string) string {
+	t.Helper()
+	ctx := context.Background()
+	declared, event, err := s.PrepareJob(ctx, under, job.Declaration{
+		Project: project, Title: brief, Brief: brief,
+	})
+	if err != nil {
+		t.Fatalf("PrepareJob under %s: %v", under, err)
+	}
+	if err := kept.CreateJob(ctx, declared, event); err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	return declared.ID
+}

@@ -57,6 +57,7 @@ const (
 	flagLabel          = "--label"
 	flagRequires       = "--requires"
 	flagRepository     = "--repository"
+	flagProduct        = "--product"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -97,6 +98,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		After:          values[flagAfter],
 		Requires:       values[flagRequires],
 		Repository:     values.first(flagRepository),
+		Product:        values.first(flagProduct),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -126,8 +128,27 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	fmt.Fprintf(out, "declared %s%s\n", display.ShortID(declared.GetId()), inAddress(at))
 	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with krewe job show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
+	sayNoSentence(out, declared)
 	sayWhatIsLeftOut(out, resp.GetLeftOut())
 	return nil
+}
+
+// sayNoSentence tells an operator declaring the job at the top of a tree that nothing says what a
+// person does with what it builds.
+//
+// It says rather than refuses, the way the missing skills above do. The system cannot write the
+// sentence, and a tree of jobs that runs an errand needs none, so refusing here would stop work over
+// a line the caller may have had no use for.
+//
+// Only for a root, and only from the tool. A job a session declares carries its parent's, so a
+// session is never asked for a sentence somebody already wrote.
+func sayNoSentence(out io.Writer, declared *quaycrewv1.Job) {
+	if declared.GetProduct() != "" || declared.GetParent() != "" {
+		return
+	}
+	fmt.Fprintf(out, "nothing on this job says what a person does with what it builds and what they get back, "+
+		"so nothing under it can tell the product from the design. Say it in one sentence with "+
+		"%s \"...\", in the words that person would use.\n", flagProduct)
 }
 
 // sayWhatIsLeftOut names the skills the session running this job starts without, and how to fix each.
@@ -319,6 +340,12 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, ", %d tokens", one.GetSpentTokens())
 	}
 	fmt.Fprintln(out)
+	// What a person does with what this builds, and what they get back. It is above everything the job
+	// says about itself, because it is what the rest of the job is read against: the design is
+	// evidence for this sentence rather than a replacement for it.
+	if one.GetProduct() != "" {
+		fmt.Fprintf(out, "for a person: %s\n", one.GetProduct())
+	}
 	// Why it stopped, before anything else, because a job that halted and a job that went quiet read
 	// the same without it.
 	if one.GetReason() != "" {
@@ -550,6 +577,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
+		flagProduct,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.

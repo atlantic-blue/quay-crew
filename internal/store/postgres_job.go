@@ -15,7 +15,7 @@ import (
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, spent_tokens, observed_version,
-	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request,
+	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -57,9 +57,9 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
-			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request)
+			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -67,7 +67,7 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
-		declared.Repository, declared.PullRequest); err != nil {
+		declared.Repository, declared.PullRequest, declared.Product); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
@@ -275,7 +275,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.Told, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
-		&found.Repository, &found.PullRequest,
+		&found.Repository, &found.PullRequest, &found.Product,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
