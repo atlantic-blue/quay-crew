@@ -406,7 +406,11 @@ type Store interface {
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.
-	RecordJobStep(ctx context.Context, id, summary string, event *job.Event) (*job.Job, error)
+	//
+	// pullRequest is the address this step named against the job's repository, and empty where it named
+	// none. It is written only onto a row that carries none, so what a job produced survives the attempt
+	// that produced it: a job that failed after opening its pull request said so nowhere else.
+	RecordJobStep(ctx context.Context, id, summary, pullRequest string, event *job.Event) (*job.Job, error)
 	// ResumeJob puts a job that failed back to pending, keeping its session, so a controller starts it
 	// again in the conversation it has been in all along. RefuseJob is the other answer to a failure:
 	// it ends the job as stopped, and a stopped job is never continued. Both apply only to a job that

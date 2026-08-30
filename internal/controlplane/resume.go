@@ -61,7 +61,11 @@ func (s *Server) RecordJobStep(ctx context.Context, req *quaycrewv1.RecordJobSte
 	}
 
 	stepped := s.jobEvent(ctx, found, job.EventStepped, summary)
-	recorded, err := s.store.RecordJobStep(ctx, found.ID, summary, stepped)
+	// What the step names against this job's repository, read off the step rather than reported: the
+	// same reading an answer gets. A job that failed after opening its pull request said so nowhere
+	// else, so the address would die with the attempt.
+	recorded, err := s.store.RecordJobStep(ctx, found.ID, summary,
+		job.PullRequestIn(found.Repository, summary), stepped)
 	if err != nil {
 		if errors.Is(err, job.ErrNotRunning) {
 			return nil, status.Errorf(codes.FailedPrecondition,

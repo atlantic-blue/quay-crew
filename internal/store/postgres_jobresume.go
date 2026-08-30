@@ -16,7 +16,7 @@ import (
 // so a step cannot be recorded against a job nobody is doing, and the same words already on the
 // record leave one row rather than two: the record is the set of what is finished, and a session
 // that is continued says again what it said before.
-func (p *Postgres) RecordJobStep(ctx context.Context, id, summary string, event *job.Event) (*job.Job, error) {
+func (p *Postgres) RecordJobStep(ctx context.Context, id, summary, pullRequest string, event *job.Event) (*job.Job, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("record job step: %w", err)
@@ -43,6 +43,15 @@ func (p *Postgres) RecordJobStep(ctx context.Context, id, summary string, event 
 			return nil, job.ErrNotRunning
 		}
 		return found, nil
+	}
+	// What the job produced, onto the row, in the same transaction. Only where the row carries none,
+	// so the first address a job names is the one it keeps.
+	if pullRequest != "" {
+		if _, err := tx.Exec(ctx, `
+			update jobs set pull_request = $2, updated_at = now()
+			where id = $1 and pull_request = ''`, id, pullRequest); err != nil {
+			return nil, fmt.Errorf("record job step: %w", err)
+		}
 	}
 	if err := appendJobEvent(ctx, tx, event); err != nil {
 		return nil, err

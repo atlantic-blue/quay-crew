@@ -18,6 +18,45 @@ import (
 // carries, so these read the task record rather than stopping at the phase.
 
 func initializeResumingSteps(sc *godog.ScenarioContext) {
+	// A job whose task is under way, working in a repository, which is the shape every job on the
+	// acceptance run had: a worktree, a branch, and a pull request at the end of it.
+	//
+	// It runs as a role holding every verb the system grants, so a refusal in these scenarios is the
+	// system's boundary rather than a narrow grant.
+	sc.Step(`^a job titled "([^"]*)" in the repository "([^"]*)" whose session is still working$`,
+		func(ctx context.Context, title, repository string) error {
+			w := worldFrom(ctx)
+			if err := aRoleHoldingEveryVerb(ctx); err != nil {
+				return err
+			}
+			w.release = w.runner.hold()
+			if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
+				Title: title, Brief: "make the listing sort by the clock it shows",
+				Role: everyVerbRole, Repository: repository,
+			}); err != nil {
+				return err
+			}
+			if w.lastErr != nil {
+				return w.lastErr
+			}
+			w.server.TickJob(ctx)
+			return w.runner.waitForTask()
+		})
+
+	sc.Step(`^the failed job names the pull request "([^"]*)"$`, func(ctx context.Context, want string) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetPhase() != job.PhaseFailed {
+			return fmt.Errorf("the job is %q, want failed", one.GetPhase())
+		}
+		if one.GetPullRequest() != want {
+			return fmt.Errorf("the failed job names the pull request %q, want %q", one.GetPullRequest(), want)
+		}
+		return nil
+	})
+
 	sc.Step(`^the session running that job records "([^"]*)"$`, func(ctx context.Context, said string) error {
 		w := worldFrom(ctx)
 		one, err := readJob(ctx, 0)

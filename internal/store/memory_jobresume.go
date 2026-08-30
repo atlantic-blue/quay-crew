@@ -19,7 +19,7 @@ import (
 // Only from running, so a step cannot be recorded against a job nobody is doing. The same words
 // twice leave one step: the record is the set of what is finished, and a session that is continued
 // says again what it said before.
-func (m *Memory) RecordJobStep(_ context.Context, id, summary string, event *job.Event) (*job.Job, error) {
+func (m *Memory) RecordJobStep(_ context.Context, id, summary, pullRequest string, event *job.Event) (*job.Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	found, held := m.jobs[id]
@@ -39,6 +39,12 @@ func (m *Memory) RecordJobStep(_ context.Context, id, summary string, event *job
 	m.jobSteps[id] = append(m.jobSteps[id], job.Step{
 		Job: id, Seq: len(m.jobSteps[id]) + 1, Summary: summary, FinishedAt: time.Now().UTC(),
 	})
+	// What the job produced, onto the row, where the row carries none. The first address wins: a
+	// session that names two has done more than one job, and the record then points at the first
+	// rather than at whichever it mentioned last.
+	if pullRequest != "" && found.PullRequest == "" {
+		found.PullRequest = pullRequest
+	}
 	if err := m.appendJobEvent(event); err != nil {
 		return nil, err
 	}

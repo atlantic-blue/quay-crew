@@ -28,7 +28,7 @@ func runJobResumeConformance(t *testing.T, newDataset func(t *testing.T) Opener)
 		id := aRunningJob(t, s)
 
 		for _, said := range []string{"read the issue", "cut the worktree", "read the issue"} {
-			if _, err := s.RecordJobStep(ctx, id, said, steppedEvent(t, s, id, said)); err != nil {
+			if _, err := s.RecordJobStep(ctx, id, said, "", steppedEvent(t, s, id, said)); err != nil {
 				t.Fatalf("RecordJobStep(%q): %v", said, err)
 			}
 		}
@@ -61,7 +61,7 @@ func runJobResumeConformance(t *testing.T, newDataset func(t *testing.T) Opener)
 		workspace, project := aProject(t, s)
 		id := declaredJob(t, s, workspace, project, "read the electricity bill")
 
-		_, err := s.RecordJobStep(ctx, id, "read the issue", steppedEvent(t, s, id, "read the issue"))
+		_, err := s.RecordJobStep(ctx, id, "read the issue", "", steppedEvent(t, s, id, "read the issue"))
 		if !errors.Is(err, job.ErrNotRunning) {
 			t.Fatalf("RecordJobStep on a pending job answered %v, want ErrNotRunning", err)
 		}
@@ -201,13 +201,56 @@ func runJobResumeConformance(t *testing.T, newDataset func(t *testing.T) Opener)
 			t.Fatalf("the records read %v, want one saying a step was finished", kinds)
 		}
 	})
+	// What the job produced has to outlive the attempt that produced it. A job that failed after
+	// opening its pull request names it nowhere else: the answer never landed, so the address the
+	// answer would have carried was never read.
+	t.Run("a step that names a pull request puts it on the job", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		id := aRunningJobIn(t, s, "atlantic-blue/quay-crew")
+		const address = "https://github.com/atlantic-blue/quay-crew/pull/531"
+
+		if _, err := s.RecordJobStep(ctx, id, "opened "+address, address,
+			steppedEvent(t, s, id, "opened "+address)); err != nil {
+			t.Fatalf("RecordJobStep: %v", err)
+		}
+		found, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if found.PullRequest != address {
+			t.Fatalf("the job names the pull request %q, want %q", found.PullRequest, address)
+		}
+
+		// The first address wins. A session that named two has done more than one job, and the record
+		// then points at the first rather than at whichever it mentioned last.
+		second := "https://github.com/atlantic-blue/quay-crew/pull/532"
+		if _, err := s.RecordJobStep(ctx, id, "opened "+second, second,
+			steppedEvent(t, s, id, "opened "+second)); err != nil {
+			t.Fatalf("RecordJobStep: %v", err)
+		}
+		if found, err = s.GetJob(ctx, id); err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if found.PullRequest != address {
+			t.Fatalf("the job names the pull request %q, want the first one it produced", found.PullRequest)
+		}
+	})
 }
 
 // aRunningJob declares one job and puts it in the phase a session works in.
 func aRunningJob(t *testing.T, s store.Store) string {
 	t.Helper()
+	return aRunningJobIn(t, s, "")
+}
+
+// aRunningJobIn is the same, for a job that works in a repository.
+func aRunningJobIn(t *testing.T, s store.Store, repository string) string {
+	t.Helper()
 	workspace, project := aProject(t, s)
-	id := declaredJob(t, s, workspace, project, "sort the listing")
+	id := jobShaped(t, s, workspace, project, "sort the listing", func(one *job.Job) {
+		one.Repository = repository
+	})
 	if _, err := s.StartJob(context.Background(), id, aLease("controller-1"),
 		[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
 		t.Fatalf("StartJob: %v", err)
@@ -224,7 +267,7 @@ func aFailedJob(t *testing.T, s store.Store, failure string) string {
 	t.Helper()
 	ctx := context.Background()
 	id := aRunningJob(t, s)
-	if _, err := s.RecordJobStep(ctx, id, "read the issue", steppedEvent(t, s, id, "read the issue")); err != nil {
+	if _, err := s.RecordJobStep(ctx, id, "read the issue", "", steppedEvent(t, s, id, "read the issue")); err != nil {
 		t.Fatalf("RecordJobStep: %v", err)
 	}
 	found, err := s.GetJob(ctx, id)

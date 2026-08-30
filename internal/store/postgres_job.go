@@ -535,7 +535,11 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5, pull_request = $7,
+		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
+			-- What a landing read off the answer, unless it read none and the row already carries one. A
+			-- step that named the pull request wrote it before the answer landed, and a job that failed
+			-- carries no answer at all, so an unconditional write here would erase the address.
+			pull_request = case when $7 <> '' then $7 else pull_request end,
 			observed_version = version, lease_owner = '', lease_until = null,
 			finished_at = now(), updated_at = now()
 		where id = $1 and phase = $6`,

@@ -21,13 +21,20 @@ Feature: A job that failed is continued rather than repeated
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And a job titled "sort the listing" whose session is still working
+    And a job titled "sort the listing" in the repository "atlantic-blue/quay-crew" whose session is still working
 
   Scenario: What a session finished outlives the attempt that failed
     Given the session running that job records "read the issue"
     And the session running that job records "cut the worktree from origin/main"
     When the task the controller sent fails
     Then the job is failed, and it still says the two steps it finished
+
+  # A job that failed after opening its pull request names it nowhere else: no answer landed, so the
+  # address the answer would have carried was never read. The step carries it instead.
+  Scenario: A job that failed keeps the pull request it opened
+    Given the session running that job records "opened https://github.com/atlantic-blue/quay-crew/pull/531"
+    When the task the controller sent fails
+    Then the failed job names the pull request "https://github.com/atlantic-blue/quay-crew/pull/531"
 
   # The record is the set of what is finished. A session that is continued says again what it said
   # before, and the earlier steps must not be pushed down a list by it.

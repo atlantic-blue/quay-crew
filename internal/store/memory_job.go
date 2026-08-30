@@ -470,7 +470,11 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Answer, found.Reason = landed.Phase, landed.Answer, landed.Reason
-	found.PullRequest = landed.PullRequest
+	// Unless the landing read none and the row already carries one: a step that named the pull request
+	// wrote it before any answer landed, and a job that failed carries no answer to read.
+	if landed.PullRequest != "" {
+		found.PullRequest = landed.PullRequest
+	}
 	found.SpentTokens, found.ObservedVersion = landed.SpentTokens, found.Version
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil
