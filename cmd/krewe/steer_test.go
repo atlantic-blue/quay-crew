@@ -134,3 +134,36 @@ func failRun(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...
 	}
 	return err
 }
+
+// A sentence typed without quotes arrives as one argument per word. Joining it up quietly would
+// record a steer nobody could see had gone wrong, so it is refused with the line to type.
+func TestASentenceWithoutQuotesIsRefusedWithTheLineToType(t *testing.T) {
+	client := aSystemToJobIn(t)
+	declaredHere(t, client, "build the transcripts page")
+
+	err := failRun(t, client, "steer", "the", "workspace", "has", "no", "secrets")
+
+	if !strings.Contains(err.Error(), `krewe steer "the workspace has no secrets"`) {
+		t.Fatalf("the refusal does not show the line to type: %v", err)
+	}
+}
+
+// An identifier on its own is a job somebody meant to steer and then said nothing about. Recording
+// it would put the identifier in the report where the sentence belongs.
+func TestAnIdentifierWithNothingSaidIsRefused(t *testing.T) {
+	client := aSystemToJobIn(t)
+	id := declaredHere(t, client, "build the transcripts page")
+
+	err := failRun(t, client, "steer", id[:8])
+
+	if !strings.Contains(err.Error(), "rather than something you said") {
+		t.Fatalf("the refusal does not say what is missing: %v", err)
+	}
+	report := mustRun(t, client, "steers", id)
+	if strings.Contains(report, id[:8]+"\n") {
+		t.Fatalf("the identifier was recorded as a steer: %q", report)
+	}
+	if !strings.Contains(report, "0 steers") {
+		t.Fatalf("the job counts something after a refused steer: %q", report)
+	}
+}

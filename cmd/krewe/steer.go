@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
@@ -30,13 +31,22 @@ func runSteer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	if len(args) == 0 {
 		return fmt.Errorf("usage: krewe steer [<job>] \"...\"\n\n%s", job.WhatASteerIs)
 	}
+	// A sentence typed without quotes arrives as one argument per word, which is the mistake this
+	// command invites: it is typed fast, mid sentence, with a hand already on the next thing. It is
+	// refused rather than joined up, and the refusal is the same line with the quotes in it, because a
+	// steer that was quietly assembled out of five arguments is a steer nobody can see went wrong.
+	if len(args) > 2 {
+		return fmt.Errorf("a steer is one sentence in quotes, and this is %d arguments. Type:\n\n"+
+			"  krewe steer %q", len(args), strings.Join(args, " "))
+	}
 	named, text := "", args[0]
 	if len(args) > 1 {
 		named, text = args[0], args[1]
 	}
-	if len(args) > 2 {
-		return fmt.Errorf("usage: krewe steer [<job>] \"...\"\n\nsay it in one argument, in quotes, "+
-			"so the whole sentence lands as one steer: krewe steer %q", args[1])
+	// An identifier on its own is a job somebody meant to steer and then said nothing about. Recording
+	// it would put the identifier in the report where the sentence belongs.
+	if named == "" && looksLikeAnIdentifier(text) {
+		return fmt.Errorf("%q is an identifier rather than something you said: krewe steer %s \"...\"", text, text)
 	}
 
 	landed, err := theJobBeingSteered(ctx, client, named)
@@ -53,6 +63,20 @@ func runSteer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		display.ShortID(root.GetId()), truncateLine(root.GetTitle()))
 	fmt.Fprintf(out, "read them back with krewe steers %s\n", display.ShortID(root.GetId()))
 	return nil
+}
+
+// looksLikeAnIdentifier says whether a word is one of the system's identifiers rather than a
+// sentence. They are hexadecimal, and a listing prints the first eight characters of one.
+func looksLikeAnIdentifier(word string) bool {
+	if len(word) < 8 || len(word) > 24 {
+		return false
+	}
+	for _, letter := range word {
+		if !strings.ContainsRune("0123456789abcdef", letter) {
+			return false
+		}
+	}
+	return true
 }
 
 // theJobBeingSteered is the job a steer lands on: the one named, or the one job in flight where the
