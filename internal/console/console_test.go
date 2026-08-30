@@ -44,6 +44,11 @@ type fakeClient struct {
 	contexts         []*quaycrewv1.ContextDir
 	secrets          []*quaycrewv1.SecretRef
 	listErr          error
+	// health is what the crew last found when it probed the parts of itself a dispatch writes to.
+	// Nil is a crew that has probed nothing yet, and healthErr a crew that will not answer the call
+	// at all, which is what a control plane built before that call does.
+	health    []*quaycrewv1.HealthComponent
+	healthErr error
 }
 
 // GetInfo describes the crew the stats view reads. The double answers with something for every field,
@@ -53,6 +58,15 @@ func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grp
 		Model: "claude-code", Sandbox: "docker", Store: "postgres",
 		Secrets: "postgres", Events: "kafka", State: "host",
 	}, nil
+}
+
+// GetHealth is the crew's last probe of itself. The double answers with whatever the test put in it,
+// because every case worth writing here is a different reading.
+func (f *fakeClient) GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error) {
+	if f.healthErr != nil {
+		return nil, f.healthErr
+	}
+	return &quaycrewv1.GetHealthResponse{Components: f.health}, nil
 }
 
 func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
