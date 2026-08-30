@@ -1,0 +1,15 @@
+-- A job carries the one sentence it serves: what a person does with what is built, and what they get
+-- back, in that person's words.
+--
+-- It is a column rather than a line in the brief because a brief is a thing one session reads once.
+-- The sentence is stated on the job at the top and every job under it carries the same one, so the
+-- whole tree can be measured against it and a listing can say what a tree is for.
+--
+-- The failure it answers: a design document said the address reads /videos?id=<video id>, every job
+-- downstream took that as the product, every check was green, and the operator opened it two days
+-- later and could not use it. Nobody had written "paste a link and get the text back", so there was
+-- nothing to measure the address shape against.
+--
+-- Empty string rather than null, the way every other text column on this table already is: a reader
+-- that has to tell null from empty is a reader with two cases where there is one.
+alter table jobs add column if not exists product text not null default '';

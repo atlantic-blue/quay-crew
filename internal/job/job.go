@@ -57,6 +57,9 @@ const (
 	// LabelLimit is how long a label key or value may be, which is the ceiling Kubernetes puts on a
 	// label value.
 	LabelLimit = 63
+	// ProductLimit is how long the one sentence may be. It is the title's ceiling, because both are one
+	// line a person reads, and a paragraph here is a design document arriving by the back door.
+	ProductLimit = TitleLimit
 )
 
 // Job is one piece of declared intent and the status a controller keeps on it.
@@ -86,6 +89,16 @@ type Job struct {
 	// ends: the session pushes and opens a pull request, and the job is not done until its answer names
 	// that pull request. Empty claims nothing and is checked as nothing.
 	Repository string
+
+	// Product is the one sentence this job serves, in a person's words: what somebody does with what is
+	// built, and what they get back. It is stated on the root and every child carries it.
+	//
+	// It exists because a design document is not the product. A run built one faithfully, every check
+	// was green, and the operator opened it two days later and could not use it: the document said the
+	// address reads /videos?id=<video id>, and nobody had written the sentence a person would say,
+	// which is that you paste a link and get the text back. Nothing measured the one against the other
+	// because only one of them existed.
+	Product string
 
 	// What the system assigned, and the caller may not.
 	Parent string
@@ -231,6 +244,7 @@ type Declaration struct {
 	Labels         map[string]string
 	Requires       []string
 	Repository     string
+	Product        string
 	ID             string
 	Parent         string
 }
@@ -242,6 +256,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Role = strings.TrimSpace(d.Role)
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
+	d.Product = TidySentence(d.Product)
 	d.Requires = TidyRequires(d.Requires)
 	d.Repository = TidyRepository(d.Repository)
 	return d
@@ -271,6 +286,10 @@ func (d Declaration) Validate() error {
 	case len(tidy.Brief) > BriefLimit:
 		return fmt.Errorf("the brief is %d bytes and the ceiling is %d, because a brief nobody reads to the end "+
 			"is a brief nobody follows: split it into more than one job", len(tidy.Brief), BriefLimit)
+	case len(tidy.Product) > ProductLimit:
+		return fmt.Errorf("the sentence is %d bytes and the ceiling is %d, because it is one sentence a person "+
+			"would say: write what somebody does and what they get back, and put the rest in the brief",
+			len(tidy.Product), ProductLimit)
 	case tidy.BudgetTokens < 0:
 		return fmt.Errorf("the budget is %d tokens and a budget cannot be below zero: leave it at zero to draw "+
 			"from the parent, or give a number of tokens", tidy.BudgetTokens)
@@ -561,4 +580,14 @@ func RefusedMaterial(named, material string) string {
 	return fmt.Sprintf("this job requires %s and the %s role does not receive it, so the session would be "+
 		"asked to do the work without it. Add %s to what the %s role receives and import it again, or "+
 		"declare the job without %s.", material, named, material, named, material)
+}
+
+// TidySentence is the one sentence as it is stored: the space around it comes off, and any run of
+// space inside it becomes one space.
+//
+// A person pastes this out of a document, so it arrives wrapped over two lines often enough to
+// matter. It is one line everywhere it is read, in a listing, on `krewe job show`, and in front of a
+// session, and a line break in the middle of it breaks all three.
+func TidySentence(sentence string) string {
+	return strings.Join(strings.Fields(sentence), " ")
 }

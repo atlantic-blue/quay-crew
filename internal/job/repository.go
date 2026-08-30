@@ -85,8 +85,12 @@ func EndsInAPullRequest(repository string) string {
 		"the merge is somebody else's.", repository)
 }
 
-// Asked is the text the system sends a session for this job: the brief, and where the job names a
-// repository, the line above.
+// Asked is the text the system sends a session for this job: the sentence the job serves where it
+// carries one, the brief, and where the job names a repository, the line above.
+//
+// The sentence goes first because it is the frame the brief is read inside. A session given the brief
+// alone builds what the brief says, which is exactly how a faithful run delivers something nobody can
+// use.
 //
 // A job that has been told something starts again from what it was told rather than from its brief.
 // The session asked a question, waited in its container, and is being started again to be given the
@@ -95,10 +99,15 @@ func Asked(one *Job) string {
 	if one.Told != "" {
 		return CarryOn(one)
 	}
-	if one.Repository == "" {
-		return one.Brief
+	said := []string{}
+	if one.Product != "" {
+		said = append(said, ServesAPerson(one.Product))
 	}
-	return one.Brief + "\n\n" + EndsInAPullRequest(one.Repository)
+	said = append(said, one.Brief)
+	if one.Repository != "" {
+		said = append(said, EndsInAPullRequest(one.Repository))
+	}
+	return strings.Join(said, "\n\n")
 }
 
 // AskedForThePullRequest is what the system sends a session that answered without one. It is the
