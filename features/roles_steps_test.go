@@ -192,6 +192,50 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
+	// Reading a role back whole. The brief is the role, so a crew that cannot hand it back is a crew
+	// nobody can audit: there is no way to diff what it holds against the file it came from.
+	sc.Step(`^the operator reads the "([^"]*)" role back$`, func(ctx context.Context, name string) error {
+		return readRole(ctx, "", name)
+	})
+
+	sc.Step(`^the operator reads the workspace's "([^"]*)" role back$`, func(ctx context.Context, name string) error {
+		return readRole(ctx, worldFrom(ctx).workspaceID, name)
+	})
+
+	sc.Step(`^the role comes back with its brief$`, func(ctx context.Context) error {
+		read := worldFrom(ctx).lastRole
+		if read == nil {
+			return fmt.Errorf("no role came back at all")
+		}
+		// Held to the text the import carried rather than to "not empty", because an empty brief
+		// passes every check that only asks whether something is there.
+		if read.GetBrief() != roleBrief {
+			return fmt.Errorf("the brief came back as %q, and it went in as %q", read.GetBrief(), roleBrief)
+		}
+		return nil
+	})
+
+	sc.Step(`^the role comes back saying what it receives$`, func(ctx context.Context) error {
+		read := worldFrom(ctx).lastRole
+		if read == nil {
+			return fmt.Errorf("no role came back at all")
+		}
+		if got := strings.Join(read.GetRole().GetReceives(), ", "); got != "context, job" {
+			return fmt.Errorf("it came back receiving %q, and it declared %q", got, "context, job")
+		}
+		return nil
+	})
+
+	sc.Step(`^the role comes back at version (\d+)$`, func(ctx context.Context, version int) error {
+		read := worldFrom(ctx).lastRole
+		if read == nil {
+			return fmt.Errorf("no role came back at all")
+		}
+		if got := int(read.GetRole().GetVersion()); got != version {
+			return fmt.Errorf("version %d came back, want %d", got, version)
+		}
+		return nil
+	})
 	sc.Step(`^the crew refuses the role saying "([^"]*)"$`, func(ctx context.Context, said string) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
@@ -232,7 +276,7 @@ func roleFiles(name string, version int, said roleManifest) []*quaycrewv1.RoleFi
 	}
 	brief := said.brief
 	if brief == "" {
-		brief = "Write the tests. Do not write the code."
+		brief = roleBrief
 	}
 	return []*quaycrewv1.RoleFile{
 		{Path: role.ManifestFile, Body: []byte(manifest.String())},
@@ -463,5 +507,18 @@ func importAndAttachShipped(ctx context.Context, name string) error {
 	}); err != nil {
 		return err
 	}
+	return nil
+}
+
+// roleBrief is the instruction every role a scenario imports carries, so a step reading one back
+// compares against the text that went in rather than against "something came back".
+const roleBrief = "Write the tests. Do not write the code."
+
+// readRole asks the crew for one role whole, at the crew's level or at a workspace's.
+func readRole(ctx context.Context, workspace, name string) error {
+	w := worldFrom(ctx)
+	read, err := w.client.GetRole(ctx, &quaycrewv1.GetRoleRequest{Workspace: workspace, Name: name})
+	w.lastErr = err
+	w.lastRole = read
 	return nil
 }

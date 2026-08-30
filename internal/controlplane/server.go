@@ -1157,8 +1157,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if handle == "" {
 		handle = store.NewID()
 	}
+	// The title is tidied the way a label is, and for the same reasons: it goes into a listing row, so
+	// a newline in it draws a row two rows tall and a long one pushes the columns that say what the
+	// session is doing off the screen.
 	session, created, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle,
-		store.Birth{Mode: s.birthMode, Role: req.GetRole()})
+		store.Birth{Mode: s.birthMode, Role: req.GetRole(), Title: tidyLabel(req.GetTitle())})
 	if err != nil {
 		return nil, storeError(err, "project")
 	}

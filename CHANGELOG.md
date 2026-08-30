@@ -8,6 +8,30 @@ read, or run with `make features`.
 
 ## 29 August 2026
 
+- **A job's session is named at dispatch, with the title the job was declared with.** Four jobs were
+  running and every one of their sessions had a blank name cell, so the operator could see four
+  conversations burning tokens and not which was which. Every one of those jobs had been declared with
+  a title. The controller built the dispatch and sent the project, the handle, the brief, the mode, the
+  detach flag, the role and the job id, and no title, and `DispatchRequest` had no field for one, so it
+  could not have travelled anyway. The crew was handed a name at declaration and dropped it.
+
+  The only other thing that names a session is the description, which is written behind a task that has
+  already been answered. A job is one long task, so the name arrived when the job was over, which is
+  when nobody needs it, and it spent a model call inventing a name the operator had already typed.
+
+  `DispatchRequest` now carries a title, and the session keeps it in a column of its own. It is written
+  when the session is made and never afterwards, so a dispatch made again after a controller died lands
+  in the same conversation without renaming it.
+
+  **The name column now reads three names, in the order of how much a reader should trust them:** the
+  label the operator set, then the title, then the description. The label stays first because it is the
+  last word of the person who has seen the session, and the only one of the three they can change. The
+  title is next because a person typed it too, at declaration. A job title never overwrites a label the
+  operator set later, and it never touches the label column at all.
+
+  Description keeps its job of renaming a conversation that wandered. It stops being the only source of
+  a name.
+
 - **The console's keys agree with vim.** The console is shaped like k9s and k9s is shaped like vim, and
   two thirds of the keys already agreed. The missing third sat on the keys a vim user presses hardest,
   so half the keyboard rewarded the reflex and half of it punished it. The result was a keyboard too
@@ -86,6 +110,28 @@ read, or run with `make features`.
   `skills` is handed the git skill and its container mounts it, where only the negative case was written
   down before. The integration tier proves the same crossing over Postgres, because the role is a row
   and the mount is built from what came back out of it.
+
+- **A role reads back out of the crew.** `quay role show [<workspace>] <name>` prints the summary,
+  the version, the model, what the role receives, what it may call, who holds it, and the brief in
+  full. A bare name reads what the current address can see; a workspace level address reads the
+  version that workspace pinned.
+
+  The brief is the role. It is the several hundred words that decide how a session behaves, and once
+  a role was imported there was no way to read it back: an operator could not diff what the crew
+  holds against the file it came from, and could not tell whether the crew was running the version
+  they edited an hour ago. The acceptance run turned on one clause of the orchestrator brief, and
+  the only way to find that clause was to open a file on the host disk the crew knows nothing about.
+
+  The brief travels on `GetRole` and nowhere else. A listing was asked what the crew holds, not for
+  a copy of every instruction, so `quay role list` still carries none of it.
+
+  A name nothing holds is refused with the names that are there: the near spellings when there are
+  any, and everything held when there are not, because a short list of real names is more use than a
+  correct silence.
+
+  Reading a role back is what surfaced the dropped `may` column that the entry below fixes. The
+  integration tier here holds every shipped role's brief, model, boundary and verb list against the
+  file it was imported from, so the next column to go missing fails a test rather than a run.
 
 - **What a role may call survives the store.** The `roles` table carried `receives` and not `may`, so
   a role imported declaring `may: job.create` came back out of Postgres granting nothing. The

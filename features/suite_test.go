@@ -326,6 +326,7 @@ type world struct {
 	lastSecrets        *quaycrewv1.ListSecretsResponse
 	lastSkills         *quaycrewv1.ListSkillsResponse
 	lastRoles          *quaycrewv1.ListRolesResponse
+	lastRole           *quaycrewv1.GetRoleResponse
 }
 
 type worldKey struct{}
