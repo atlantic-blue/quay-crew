@@ -45,7 +45,7 @@ func runSteer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	}
 	// An identifier on its own is a job somebody meant to steer and then said nothing about. Recording
 	// it would put the identifier in the report where the sentence belongs.
-	if named == "" && looksLikeAnIdentifier(text) {
+	if named == "" && display.LooksLikeIdentifier(text) {
 		return fmt.Errorf("%q is an identifier rather than something you said: krewe steer %s \"...\"", text, text)
 	}
 
@@ -63,20 +63,6 @@ func runSteer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		display.ShortID(root.GetId()), truncateLine(root.GetTitle()))
 	fmt.Fprintf(out, "read them back with krewe steers %s\n", display.ShortID(root.GetId()))
 	return nil
-}
-
-// looksLikeAnIdentifier says whether a word is one of the system's identifiers rather than a
-// sentence. They are hexadecimal, and a listing prints the first eight characters of one.
-func looksLikeAnIdentifier(word string) bool {
-	if len(word) < 8 || len(word) > 24 {
-		return false
-	}
-	for _, letter := range word {
-		if !strings.ContainsRune("0123456789abcdef", letter) {
-			return false
-		}
-	}
-	return true
 }
 
 // theJobBeingSteered is the job a steer lands on: the one named, or the one job in flight where the
@@ -177,7 +163,10 @@ func runSteersHere(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	for i := len(jobs) - 1; i >= 0; i-- {
 		one := jobs[i]
 		count := int(one.GetSteers())
-		fmt.Fprintf(out, "%-10s %-8s %-24s %s, %s\n", display.ShortID(one.GetId()), one.GetPhase(),
+		// The title is held to its column rather than left whole. It is the one field here of no fixed
+		// length, and a long one pushes the count and the comparison, which are what this listing is read
+		// for, off to the right of every other line.
+		fmt.Fprintf(out, "%-10s %-8s %-24.24s %s, %s\n", display.ShortID(one.GetId()), one.GetPhase(),
 			truncateLine(one.GetTitle()), job.Steers(count), job.Compared(count, before))
 		before = count
 	}
