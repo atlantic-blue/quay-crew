@@ -287,6 +287,8 @@ type world struct {
 	// told when it tried something.
 	flowRunID string
 	driverErr error
+	// scratch is every directory a scenario wrote on disk, removed when the scenario ends.
+	scratch []string
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
@@ -356,6 +358,8 @@ type world struct {
 	lastSkills         *quaycrewv1.ListSkillsResponse
 	lastRoles          *quaycrewv1.ListRolesResponse
 	lastRole           *quaycrewv1.GetRoleResponse
+	// mergeGate is what the shipped merge gate answered the last time a scenario fired it.
+	mergeGate gateAnswer
 }
 
 type worldKey struct{}
@@ -651,6 +655,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
+	initializeStatsSteps(sc)
+	initializeWhatTheCrewDoesSteps(sc)
 	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
@@ -660,6 +666,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeInstallSteps(sc)
 	initializeFrontDoorSteps(sc)
 	initializeProjectSteps(sc)
+	initializeProjectRepositorySteps(sc)
+	initializeDeployTargetSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
 	initializeEventsSteps(sc)
@@ -677,15 +685,18 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
 	initializeJobWaitingSteps(sc)
+	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
+	initializeAskingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
+	initializeContextSizeSteps(sc)
 	initializeSandboxEnvSteps(sc)
 	initializeAuthSteps(sc)
 	initializeWorkspaceSteps(sc)
@@ -703,13 +714,16 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
 	initializeWaitsSteps(sc)
+	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)
+	initializeRoomViewSteps(sc)
 	initializeAdmissionSteps(sc)
 	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
+	initializeMergeGateSteps(sc)
 	initializeRoleSteps(sc)
 	initializeShippedRoleSteps(sc)
 	initializeShippedRoleVerbSteps(sc)
@@ -729,6 +743,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializePresenceToolSteps(sc)
 	initializePresenceToolReadingSteps(sc)
 	initializeChangelogSteps(sc)
+	initializeRoleOriginSteps(sc)
 	initializePromisesSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
@@ -740,6 +755,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			// up here rather than in stop.
 			if w.storage.Dir != "" {
 				_ = os.RemoveAll(w.storage.Dir)
+			}
+			for _, dir := range w.scratch {
+				_ = os.RemoveAll(dir)
 			}
 		}
 		return ctx, nil

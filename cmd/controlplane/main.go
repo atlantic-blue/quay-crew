@@ -228,6 +228,11 @@ func main() {
 	// every second.
 	go server.RunHeadroom(ctx)
 
+	// And the parts the crew has to write to before a dispatch starts, so a view of them reads a probe
+	// rather than a guess. The health check keeps this fresh wherever one runs; the timer is for a crew
+	// nobody checks, which had no reading at all.
+	go server.RunHealth(ctx)
+
 	// What strayed while the crew was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)

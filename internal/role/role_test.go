@@ -3,6 +3,7 @@ package role
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -309,8 +310,8 @@ func TestARoleReadsBackWholeFromItsDirectory(t *testing.T) {
 // A role says what a session running as it may do, as well as what it may see. Both boundaries live
 // in one file, so a reader holds one answer rather than two.
 
-// mayDo is the valid role with a may list on it.
-func mayDo(verbs ...string) []File {
+// withVerbs is the valid role with a verbs list on it.
+func withVerbs(verbs ...string) []File {
 	lines := []string{
 		"name: test-writer",
 		"version: 1",
@@ -320,7 +321,7 @@ func mayDo(verbs ...string) []File {
 		"  - job",
 	}
 	if len(verbs) > 0 {
-		lines = append(lines, "may:")
+		lines = append(lines, "verbs:")
 		for _, verb := range verbs {
 			lines = append(lines, "  - "+verb)
 		}
@@ -329,7 +330,7 @@ func mayDo(verbs ...string) []File {
 }
 
 func TestARoleDeclaresTheVerbsItMayCall(t *testing.T) {
-	loaded, err := FromFiles(mayDo(VerbJobCreate, VerbJobRead))
+	loaded, err := FromFiles(withVerbs(VerbJobCreate, VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
@@ -354,7 +355,7 @@ func TestARoleThatDeclaresNoVerbsMayCallNothing(t *testing.T) {
 		t.Fatalf("FromFiles: %v", err)
 	}
 
-	for _, verb := range Verbs {
+	for _, verb := range Grantable {
 		if loaded.May(verb) {
 			t.Errorf("a role that declared nothing may %s", verb)
 		}
@@ -364,7 +365,7 @@ func TestARoleThatDeclaresNoVerbsMayCallNothing(t *testing.T) {
 // A word the crew does not know is a boundary that quietly means nothing, so it is refused while
 // somebody is looking at the file.
 func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
-	_, err := FromFiles(mayDo(VerbJobCreate, "workspace.create"))
+	_, err := FromFiles(withVerbs(VerbJobCreate, "workspace.create"))
 
 	if err == nil {
 		t.Fatal("a verb the crew does not know was accepted")
@@ -372,7 +373,7 @@ func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
 	if !strings.Contains(err.Error(), "workspace.create") {
 		t.Errorf("the refusal says %q, want it to name the verb", err)
 	}
-	for _, verb := range Verbs {
+	for _, verb := range Grantable {
 		if !strings.Contains(err.Error(), verb) {
 			t.Errorf("the refusal says %q, want it to offer %q", err, verb)
 		}
@@ -381,7 +382,7 @@ func TestAVerbTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
 
 // Four verbs and no more: a verb nobody uses is a boundary that means nothing.
 func TestTheVerbsAreTheFourJobVerbs(t *testing.T) {
-	if got := strings.Join(Verbs, ","); got != "job.create,job.read,job.answer,job.stop" {
+	if got := strings.Join(Grantable, ","); got != "job.create,job.read,job.answer,job.stop" {
 		t.Fatalf("the verbs are %q, want the four job verbs and no more", got)
 	}
 }
@@ -389,11 +390,11 @@ func TestTheVerbsAreTheFourJobVerbs(t *testing.T) {
 // The same version carrying different verbs is a different role, or a workspace pinned to a version
 // would find its boundary changed underneath it.
 func TestTheVerbsArePartOfWhatAVersionIs(t *testing.T) {
-	narrow, err := FromFiles(mayDo(VerbJobRead))
+	narrow, err := FromFiles(withVerbs(VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
-	wide, err := FromFiles(mayDo(VerbJobRead, VerbJobCreate))
+	wide, err := FromFiles(withVerbs(VerbJobRead, VerbJobCreate))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
@@ -406,12 +407,12 @@ func TestTheVerbsArePartOfWhatAVersionIs(t *testing.T) {
 // The verbs come back sorted and without repeats, so a listing and a fingerprint do not depend on
 // the order somebody happened to type them in.
 func TestTheVerbsAreTidiedTheWayTheMaterialIs(t *testing.T) {
-	loaded, err := FromFiles(mayDo(VerbJobRead, VerbJobCreate, VerbJobRead))
+	loaded, err := FromFiles(withVerbs(VerbJobRead, VerbJobCreate, VerbJobRead))
 	if err != nil {
 		t.Fatalf("FromFiles: %v", err)
 	}
 
-	if got := strings.Join(loaded.May_, ","); got != VerbJobCreate+","+VerbJobRead {
+	if got := strings.Join(loaded.Verbs, ","); got != VerbJobCreate+","+VerbJobRead {
 		t.Fatalf("the verbs read back as %q, want them sorted and once each", got)
 	}
 }
@@ -518,7 +519,7 @@ func TestEveryRetiredWordIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
 		// A material is a plain word and a verb is dotted, which is what lets one table serve both.
 		manifest := "name: backlog-clearer\nversion: 1\nsummary: clears the backlog\nmodel: opus\n"
 		if strings.Contains(was, ".") {
-			manifest += "receives:\n  - job\nmay:\n  - " + was + "\n"
+			manifest += "receives:\n  - job\nverbs:\n  - " + was + "\n"
 		} else {
 			manifest += "receives:\n  - " + was + "\n"
 		}
@@ -565,4 +566,65 @@ func TestNoRetiredWordIsStillAWordTheCrewTakes(t *testing.T) {
 			t.Errorf("%q is retired in favour of %q, which the crew does not take either", was, becomes)
 		}
 	}
+}
+
+// The key a manifest used to carry is refused by name, with the key to write instead.
+//
+// A rename of a key is quieter than a rename of a word. yaml's own answer to a key the crew does not
+// know names the struct it was decoding into, which is not a sentence about the manifest, and a key
+// merely ignored would leave every role that carries it granting nothing while reading exactly like
+// one that holds.
+func TestEveryRetiredKeyIsRefusedByNameAndSaysWhatToWrite(t *testing.T) {
+	if len(RetiredKey) == 0 {
+		t.Fatal("the retired key table is empty, so this test proves nothing")
+	}
+
+	for was, becomes := range RetiredKey {
+		body := manifestOf(
+			"name: test-writer",
+			"version: 1",
+			"summary: writes the tests for a job, from the job alone",
+			"model: opus",
+			"receives:",
+			"  - job",
+			was+":",
+			"  - "+VerbJobCreate,
+		)
+
+		_, err := FromFiles(replace(good(), ManifestFile, body))
+		if err == nil {
+			t.Errorf("a manifest saying %q was imported, so the key means nothing and reads exactly "+
+				"like one that holds", was)
+			continue
+		}
+		for _, want := range []string{was, becomes, "is called"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("a manifest saying %q is refused with %q, want it to say %q", was, err, want)
+			}
+		}
+	}
+}
+
+// Nothing the crew retired is a key it still takes, and every replacement is one it does, so a
+// rename cannot leave the manifest answering to both spellings or to neither.
+func TestNoRetiredKeyIsStillAKeyTheManifestTakes(t *testing.T) {
+	for was, becomes := range RetiredKey {
+		if manifestTakes(was) {
+			t.Errorf("%q is retired and is still a key the manifest takes", was)
+		}
+		if !manifestTakes(becomes) {
+			t.Errorf("%q is retired in favour of %q, which the manifest does not take either", was, becomes)
+		}
+	}
+}
+
+// manifestTakes says whether a manifest has a key by this name. It reads the struct rather than a
+// list of its own, so the two cannot disagree about what the crew accepts.
+func manifestTakes(key string) bool {
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(manifest{})) {
+		if field.Tag.Get("yaml") == key {
+			return true
+		}
+	}
+	return false
 }

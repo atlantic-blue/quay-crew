@@ -275,6 +275,11 @@ a browser and a person typing from memory declare the same thing. Anything that 
 name is refused at the write, because a repository the crew cannot then look for in an answer is an
 expectation that was never going to hold.
 
+**Empty takes the project's.** A project records the repository its work lands in, so a job declared
+there and naming none works in that one and is held to it like any other. A job that names its own
+keeps it: the project's is the default, not a ceiling. Before this the address was passed to every job
+by hand, and a job that was not given one produced work nobody could read.
+
 Naming one says how the job ends. The crew adds a line to what the session is asked, saying to push
 the branch, open the pull request, name its address in the answer, and not to merge it. The job is
 not done until an answer names a pull request against that repository, and the address the crew read
@@ -293,10 +298,15 @@ runs the pipeline, so nothing here lets a session merge and the line the crew ad
 **A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
 "push, watch the checks and merge on green" asks for something the runtime does not have, and the
 session is left with two bad moves: hold a container open through a five minute pipeline and pay for
-it, or answer and stop. It takes a third and reports that it will wait. So the brief is read at the
-write, and a brief that asks the job to wait for a forge pipeline, or to merge on the result of one,
-is refused with the graph named: a dispatch that pushes and opens the pull request, a wait, then a
-choice on the check result. The flow engine has the wait node; a job never will.
+it, or answer and stop. It takes a third and reports that it will wait. So the brief is read where a
+caller declares a job, and a brief that asks the job to wait for a forge pipeline, or to merge on the
+result of one, is refused with the graph named: a dispatch that pushes and opens the pull request, a
+wait, then a choice on the check result. The flow engine has the wait node; a job never will.
+
+**A step of a flow is not held to it.** The graph around a step already holds the wait, so the node
+after it merges the pull request and means it. Holding a step to the rule would refuse the very graph
+the refusal tells a caller to write. So the check sits on `CreateJob`, which is where somebody wrote
+a brief, rather than on the declaration the flow engine builds for each of its nodes.
 
 The rule reads English, so it is held narrow. A waiting word has to point at a pipeline and a merge
 has to point at a pull request or at the result of one, and a phrase the brief negates is left alone.
@@ -409,10 +419,12 @@ purpose. The list, so a test can be written against it:
   one.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
+- A job that names no repository, in a project that records one, works in the project's.
 - A job whose brief asks it to wait for a pipeline, or to merge on the result of one, is refused,
   and the refusal quotes the brief and names the flow.
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
+- A step of a flow is not held to that rule, because the graph around it holds the wait.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
@@ -691,7 +703,7 @@ is the same reason `docs/ARCHITECTURE.md` gives for a wait being a column rather
 
 ### What of this shipped on 27 August 2026
 
-The `may` list, the credential, the parent from that credential, the `workspace_limits` row and
+The `verbs` list, the credential, the parent from that credential, the `workspace_limits` row and
 `quay limits`. The four hook calls joined the deny list at the same time.
 
 ```mermaid
@@ -701,7 +713,7 @@ sequenceDiagram
     participant SES as "a session running a job"
     OP->>CP: "quay limits acme --max-depth 2"
     OP->>CP: "quay job create, role backlog-clearer"
-    CP->>CP: "mint a credential for that job, holding the role's may list"
+    CP->>CP: "mint a credential for that job, holding the role's verbs"
     CP->>SES: "the task, with the credential in its environment"
     SES->>CP: "CreateJob, presenting that credential"
     CP->>CP: "parent and depth read from the credential"
@@ -756,7 +768,8 @@ slice that runs a job in a role is where they start to bite. The lease length is
 controller when it claims that workspace's job.
 
 **What this does not do.** It does not scope `job.read` to the caller's own tree yet: the verb is
-checked, the tree is not. And `job.answer` is granted and refused but nothing asks a question yet.
+checked, the tree is not. `job.answer` is granted and refused, and no call is mapped to it: a
+question is put to a person, and only the operator answers one.
 
 **What it did not do until 29 August 2026, and now does.** It did not put a session's container on a
 network that could reach the control plane, so every call a session made died resolving the name and
@@ -775,12 +788,22 @@ Four, and no more, because a verb nobody uses is a boundary that means nothing.
 
 - `job.create`, declare a job. The parent comes from the credential.
 - `job.read`, read a job and its answer. Scoped to the tree the credential's own job is in.
-- `job.answer`, answer a question a job asked. An operator only, in the first version.
+- `job.answer`, answer a question a job asked. An operator only, in the first version, and that is
+  what shipped: the verb is grantable and `AnswerJob` is mapped to no verb at all, so a role that
+  holds it answers nothing. A run that could answer its own question is a gate that decorates.
 - `job.stop`, stop a job in the tree.
 
 Asking is not a fifth verb. A session puts a question about the job it is itself running, and the
 credential is already bound to that job identifier, so no grant is involved. `AskJob` refuses any
 identifier but the caller's own, which is why it needs none.
+
+**What shipped on 30 August 2026.** `AskJob` and `AnswerJob`, the `asking` phase written by
+something other than a flow, the `job.asked` and `job.told` records, and a `told` column carrying
+what a person decided until the session is handed it. The job stops at the question and no controller
+holds it, because there is nothing to come back for; the answer puts it back to pending, and the
+controller starts it the way it starts anything else, sending the answer and the question rather than
+the brief. The cost is that the session keeps its container while it waits, since the job is not over
+and a session its job still wants is never put away.
 
 Deliberately absent: no verb creates a workspace, a project, a secret, a skill, a hook or a role.
 Those are already refused to the driver in `DeniedToDriver`, and the reason there is the reason
@@ -811,7 +834,7 @@ it expires.
 ### Where capability belongs: on the role and on the workspace, and they mean different things
 
 **The role carries the grant.** A role declares which verbs a session running as it may use, in a
-new `may` list beside `receives`. Validated as an allow list at import, refused by name for a word
+new `verbs` list beside `receives`. Validated as an allow list at import, refused by name for a word
 the crew does not know, exactly as `role.Material` is validated today.
 
 The reason is the reason `docs/ARCHITECTURE.md` already gives for putting `mode` on the graph rather
@@ -1401,7 +1424,7 @@ quay job create me/quay-crew \
 
 The controller claims it, starts a session called after the job, and hands that session a
 credential granting `job.create`, `job.read` and `job.stop`, because that is what the
-`backlog-clearer` role declares in its `may` list.
+`backlog-clearer` role declares in its `verbs` list.
 
 The session lists the pull requests with `gh`, which is the github skill already in the image. It
 then makes nine calls, and the ordering is the important part:
@@ -2224,7 +2247,7 @@ declared at `proto/quaycrew/v1/controlplane.proto:896`. Adding them to the deny 
 change. It belongs with the capability slice.
 
 **What this section adds.** The driver keeps every verb above. It gains the four job verbs from
-section 5, the same way any other session does, through a role with a `may` list. The driver then
+section 5, the same way any other session does, through a role with a `verbs` list. The driver then
 stops being a special case in the code. It becomes an ordinary session with a wide role.
 
 ### What the left half should show once jobs exist
@@ -2680,7 +2703,7 @@ that reads the task row. `job.claimed` and `job.released`.
 the slice that makes the difference between a loop and a script. Section 13 depends on it for the
 other death, where the control plane goes and the job is retried rather than recovered.
 
-**5. Capability: the credential, the verbs and the workspace limits.** The `may` list on a role, the
+**5. Capability: the credential, the verbs and the workspace limits.** The `verbs` list on a role, the
 per job token carried on the task rather than at sandbox birth, `parent` from the credential, the
 `workspace_limits` row with `max_depth` defaulting to zero, `max_running`, `budget_tokens` and the
 lease length. `quay limits` to read and set them. The four hook calls join the deny list here, for

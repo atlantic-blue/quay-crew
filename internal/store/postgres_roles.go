@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -19,7 +20,11 @@ func (p *Postgres) ImportRole(ctx context.Context, imported ImportedRole) error 
 	case err == nil && held == imported.Fingerprint():
 		// The same role, imported twice. Importing is how a role arrives from a repository, and
 		// doing it again after a pull that changed nothing should not be an error.
-		return nil
+		//
+		// Where it was read stays current, because that is the answer that moves: committing a role
+		// somebody kept in a folder and importing it again is how the warning is cleared, and a row
+		// that kept the first answer would leave the operator fixing it and watching nothing change.
+		return p.roleReadAt(ctx, imported)
 	case err == nil:
 		return fmt.Errorf("%w: %s version %d", ErrRoleChanged, imported.Name, imported.Version)
 	case !errors.Is(err, pgx.ErrNoRows):
@@ -27,11 +32,13 @@ func (p *Postgres) ImportRole(ctx context.Context, imported ImportedRole) error 
 	}
 
 	if _, err := p.pool.Exec(ctx, `
-		insert into roles (name, version, summary, model, receives, "may", brief, fingerprint)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		insert into roles (name, version, summary, model, receives, verbs, brief, fingerprint,
+		                   origin_repository, origin_commit, origin_path, origin_dirty, origin_unpushed)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		imported.Name, imported.Version, imported.Summary, imported.Model,
-		textArray(imported.Receives), textArray(imported.May_), imported.Brief,
-		imported.Fingerprint()); err != nil {
+		textArray(imported.Receives), textArray(imported.Verbs), imported.Brief,
+		imported.Fingerprint(), imported.Origin.Repository, imported.Origin.Commit,
+		imported.Origin.Path, imported.Origin.Dirty, imported.Origin.Unpushed); err != nil {
 		return fmt.Errorf("import role %s: %w", imported.Name, err)
 	}
 	return nil
@@ -45,7 +52,7 @@ func (p *Postgres) GetRole(ctx context.Context, name string, version int) (Impor
 // ListRoles returns the newest revision of every role.
 func (p *Postgres) ListRoles(ctx context.Context) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select `+roleColumns("r")+`
 		from roles r
 		join (select name, max(version) as version from roles group by name) newest
 		  on newest.name = r.name and newest.version = r.version
@@ -87,7 +94,7 @@ func (p *Postgres) DetachRole(ctx context.Context, workspace, name string) error
 // WorkspaceRoles returns what a workspace holds, at the versions it pinned.
 func (p *Postgres) WorkspaceRoles(ctx context.Context, workspace string) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select `+roleColumns("r")+`
 		from workspace_roles w
 		join roles r on r.name = w.name and r.version = w.version
 		where w.workspace = $1
@@ -125,7 +132,7 @@ func (p *Postgres) DetachCrewRole(ctx context.Context, name string) error {
 // CrewRoles returns what the crew holds, at the versions it pinned.
 func (p *Postgres) CrewRoles(ctx context.Context) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select `+roleColumns("r")+`
 		from crew_roles c
 		join roles r on r.name = c.name and r.version = c.version
 		order by r.name`)
@@ -134,10 +141,8 @@ func (p *Postgres) CrewRoles(ctx context.Context) ([]ImportedRole, error) {
 // roleRow reads one role.
 func (p *Postgres) roleRow(ctx context.Context, where string, args ...any) (ImportedRole, error) {
 	var held ImportedRole
-	err := p.pool.QueryRow(ctx, `
-		select name, version, summary, model, receives, "may", brief, imported_at from roles `+where, args...).
-		Scan(&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.May_,
-			&held.Brief, &held.ImportedAt)
+	err := p.pool.QueryRow(ctx,
+		`select `+roleColumns("")+` from roles `+where, args...).Scan(intoRole(&held)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ImportedRole{}, ErrNotFound
 	}
@@ -158,8 +163,7 @@ func (p *Postgres) roleRows(ctx context.Context, query string, args ...any) ([]I
 	var out []ImportedRole
 	for rows.Next() {
 		var held ImportedRole
-		if err := rows.Scan(&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives,
-			&held.May_, &held.Brief, &held.ImportedAt); err != nil {
+		if err := rows.Scan(intoRole(&held)...); err != nil {
 			return nil, fmt.Errorf("list roles: %w", err)
 		}
 		out = append(out, held)
@@ -168,4 +172,47 @@ func (p *Postgres) roleRows(ctx context.Context, query string, args ...any) ([]I
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
 	return out, nil
+}
+
+// roleColumns is every column a role is read out of, written once.
+//
+// Four queries read a role, and a column added to three of them is a field that survives one listing
+// and not the next: what a role may call went missing in exactly that shape and only Postgres knew.
+// alias is what the roles table is called in the query, empty where it is not aliased.
+func roleColumns(alias string) string {
+	if alias != "" {
+		alias += "."
+	}
+	columns := []string{"name", "version", "summary", "model", "receives", "verbs", "brief",
+		"imported_at", "origin_repository", "origin_commit", "origin_path", "origin_dirty",
+		"origin_unpushed"}
+	for at, column := range columns {
+		columns[at] = alias + column
+	}
+	return strings.Join(columns, ", ")
+}
+
+// intoRole is where each of those columns lands, in the same order. The two belong together, so
+// they are next to each other rather than in the four places a role is read.
+func intoRole(held *ImportedRole) []any {
+	return []any{&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.Verbs,
+		&held.Brief, &held.ImportedAt, &held.Origin.Repository, &held.Origin.Commit,
+		&held.Origin.Path, &held.Origin.Dirty, &held.Origin.Unpushed}
+}
+
+// roleReadAt records where a role the crew already holds was read this time.
+//
+// The role itself is untouched: the fingerprint matched, so these are the same bytes, and only the
+// question of who else can read them has an answer that moves.
+func (p *Postgres) roleReadAt(ctx context.Context, imported ImportedRole) error {
+	if _, err := p.pool.Exec(ctx, `
+		update roles
+		   set origin_repository = $3, origin_commit = $4, origin_path = $5,
+		       origin_dirty = $6, origin_unpushed = $7
+		 where name = $1 and version = $2`,
+		imported.Name, imported.Version, imported.Origin.Repository, imported.Origin.Commit,
+		imported.Origin.Path, imported.Origin.Dirty, imported.Origin.Unpushed); err != nil {
+		return fmt.Errorf("record where role %s was read: %w", imported.Name, err)
+	}
+	return nil
 }

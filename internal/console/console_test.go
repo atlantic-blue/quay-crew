@@ -44,6 +44,11 @@ type fakeClient struct {
 	contexts         []*quaycrewv1.ContextDir
 	secrets          []*quaycrewv1.SecretRef
 	listErr          error
+	// health is what the crew last found when it probed the parts of itself a dispatch writes to.
+	// Nil is a crew that has probed nothing yet, and healthErr a crew that will not answer the call
+	// at all, which is what a control plane built before that call does.
+	health    []*quaycrewv1.HealthComponent
+	healthErr error
 }
 
 // GetInfo describes the crew the stats view reads. The double answers with something for every field,
@@ -53,6 +58,15 @@ func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grp
 		Model: "claude-code", Sandbox: "docker", Store: "postgres",
 		Secrets: "postgres", Events: "kafka", State: "host",
 	}, nil
+}
+
+// GetHealth is the crew's last probe of itself. The double answers with whatever the test put in it,
+// because every case worth writing here is a different reading.
+func (f *fakeClient) GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error) {
+	if f.healthErr != nil {
+		return nil, f.healthErr
+	}
+	return &quaycrewv1.GetHealthResponse{Components: f.health}, nil
 }
 
 func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
@@ -1125,11 +1139,11 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("the context view lists %d rows, want the workspace and the project", len(rows))
 	}
-	if got := rows[0].Cells[2]; got != "not written yet" {
+	if got := rows[0].Cells[2]; got != "nothing written yet" {
 		t.Fatalf("an unwritten memory file reads as %q, want it said out loud", got)
 	}
-	if got := rows[1].Cells[2]; got != "written" {
-		t.Fatalf("a written memory file reads as %q", got)
+	if got := rows[1].Cells[2]; got != "24" {
+		t.Fatalf("a written memory file reads as %q, want how big it is", got)
 	}
 	// The row carries the level, because that is what an action on it acts on.
 	if rows[1].ID != "project/p1" {
@@ -1154,7 +1168,7 @@ func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
 	if edit.Label != "Edit" {
 		t.Fatalf("enter runs %q, want Edit", edit.Label)
 	}
-	row := Row{Cells: []string{"project", "bills", "written", "pay the water bill"}, Parent: "p1",
+	row := Row{Cells: []string{"project", "bills", "18", "pay the water bill"}, Parent: "p1",
 		Detail: "pay the water bill first"}
 	command, err := edit.Shell(row)
 	if err != nil {
@@ -1408,30 +1422,25 @@ func TestSessionListingSurfacesTheControlPlaneError(t *testing.T) {
 	}
 }
 
-// TestTheFeaturesViewAsksTheControlPlaneNothing is the point of that view: it is what an operator
-// opens before they have a stack, and a capability belongs to the build rather than to a running one.
-func TestTheFeaturesViewAsksTheControlPlaneNothing(t *testing.T) {
-	rows, err := Features().List(context.Background(), "")
+// The features view listed every scenario in this build under a column headed "proved by", which
+// named a scenario without saying whether it passed here, so the column claimed evidence nobody had
+// checked. The list is `quay features` and nothing else, so none of the words that opened the view
+// opens anything.
+func TestNothingOpensTheFeaturesView(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
 	if err != nil {
-		t.Fatalf("listing features: %v", err)
+		t.Fatalf("NewDefaultRegistry: %v", err)
 	}
-	if len(rows) < 10 {
-		t.Fatalf("the features view lists %d rows, want every scenario in the build", len(rows))
-	}
-
-	var titled int
-	for _, row := range rows {
-		if row.Cells[0] != "" {
-			titled++
-		}
-		if row.Cells[1] == "" {
-			t.Fatalf("a row names no scenario: %+v", row)
+	for _, token := range []string{"features", "f", "feature", "capabilities"} {
+		if resource, found := registry.Resolve(token); found {
+			t.Fatalf("Resolve(%q) opens %q, and that view is gone", token, resource.Name)
 		}
 	}
-	// One title per feature, then its scenarios beneath it, rather than the title repeated down the
-	// column.
-	if titled < 5 || titled >= len(rows) {
-		t.Fatalf("%d of %d rows carry a feature title, want one per feature", titled, len(rows))
+	for _, name := range registry.Names() {
+		if name == "features" {
+			t.Fatal("the switcher still lists a features view")
+		}
 	}
 }
 
@@ -3116,5 +3125,33 @@ func TestTheTotalGivesWayBeforeTheWordmark(t *testing.T) {
 	if lostWordmark != 0 && lostWordmark >= lostTotal {
 		t.Fatalf("the wordmark went at %d columns and the total at %d: the total should go first",
 			lostWordmark, lostTotal)
+	}
+}
+
+// TestTheContextViewSaysHowBigEachLevelIs: the crew level reached 100,179 characters and nothing
+// anywhere reported it, so it had to be read out of the contexts table. The console and the command
+// line are two clients of one call, so they say it the same way or they drift.
+func TestTheContextViewSaysHowBigEachLevelIs(t *testing.T) {
+	client := &fakeClient{contexts: []*quaycrewv1.ContextDir{
+		{Scope: "crew", Name: "crew", Written: true, Body: strings.Repeat("a", 100_179)},
+		{Scope: "workspace", Name: "demo", Owner: "w1", Written: true, Body: strings.Repeat("a", 1_886)},
+		{Scope: "project", Name: "default", Owner: "p1"},
+	}}
+
+	rows, err := Contexts(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing contexts: %v", err)
+	}
+	for i, want := range []string{"100,179 over the mark", "1,886", "nothing written yet"} {
+		if got := rows[i].Cells[2]; got != want {
+			t.Errorf("the %s row's size cell says %q, want %q", rows[i].Cells[0], got, want)
+		}
+	}
+	// A level over the mark is the one thing in this view worth looking at twice, so it is not drawn
+	// in the same colour as every other row.
+	over := colourOfSize(rows[0].Cells[2])
+	if over == colourOfSize(rows[1].Cells[2]) || over == colourOfSize(rows[2].Cells[2]) {
+		t.Errorf("a level over the mark is drawn the same colour as one that is not, so scanning the "+
+			"column finds nothing: %q", over)
 	}
 }

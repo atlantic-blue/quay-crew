@@ -9,6 +9,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/quay-crew/internal/origin"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
@@ -40,7 +41,18 @@ func (s *Server) ImportRole(ctx context.Context, req *quaycrewv1.ImportRoleReque
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := s.store.ImportRole(ctx, store.ImportedRole{Role: loaded}); err != nil {
+	// Where the client read it from. Only the client can say: the repository is on the operator's
+	// machine and this process runs in a container that cannot see it. Nothing is refused over it,
+	// because a role written in a scratch directory while somebody finds the shape of it is
+	// ordinary, and what was missing was not a gate, it was anybody being able to see.
+	from := origin.Origin{
+		Repository: req.GetOrigin().GetRepository(),
+		Commit:     req.GetOrigin().GetCommit(),
+		Path:       req.GetOrigin().GetPath(),
+		Dirty:      req.GetOrigin().GetDirty(),
+		Unpushed:   req.GetOrigin().GetUnpushed(),
+	}
+	if err := s.store.ImportRole(ctx, store.ImportedRole{Role: loaded, Origin: from}); err != nil {
 		if errors.Is(err, store.ErrRoleChanged) {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"%s version %d is already imported and is a different role. Raise the version in %s: a workspace pins the version it holds, so changing one underneath it would change how a session already running as it was told to work.",
@@ -154,6 +166,15 @@ func asRole(one store.ImportedRole) *quaycrewv1.Role {
 	}
 	if !one.ImportedAt.IsZero() {
 		out.ImportedAt = timestamppb.New(one.ImportedAt)
+	}
+	// Where it came from travels with every listing rather than only with the whole role, because a
+	// role nobody can go and read is exactly what a listing is for saying.
+	out.Origin = &quaycrewv1.RoleOrigin{
+		Repository: one.Origin.Repository,
+		Commit:     one.Origin.Commit,
+		Path:       one.Origin.Path,
+		Dirty:      one.Origin.Dirty,
+		Unpushed:   one.Origin.Unpushed,
 	}
 	return out
 }
@@ -273,7 +294,7 @@ func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*
 		return nil, err
 	}
 	return &quaycrewv1.GetRoleResponse{
-		Role: carried, Brief: found.Brief, May: found.May_, HeldBy: holders,
+		Role: carried, Brief: found.Brief, Verbs: found.Verbs, HeldBy: holders,
 	}, nil
 }
 

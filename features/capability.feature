@@ -90,7 +90,7 @@ Feature: A session may declare jobs, within limits
     When the operator dispatches "hello" to the project
     Then the task carries no address and no token
 
-  # The load bearing test is the refusal, not the call. A role's may list is the whole boundary, so a
+  # The load bearing test is the refusal, not the call. A role's verbs list is the whole boundary, so a
   # verb it does not carry has to come back as a refusal a session can act on.
   Scenario: A session whose role may not stop a job is refused, and told where the verb comes from
     Given the workspace allows jobs down to depth 2

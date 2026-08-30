@@ -44,6 +44,11 @@ commands:
                                           name to confirm, or pipe the name in to script it
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
+  project repository [<address>]          say where this project's work lands, and what kind of
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
+                                          declared here works in it and ends in a pull request
+                                          against it. Public unless you say otherwise, because a
+                                          pipeline's minutes are free on a public repository
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project
@@ -73,6 +78,22 @@ commands:
   job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
+  job ask "<question>"                    put a question to a person about the job you are running,
+                                          when a decision no measurement settles is in your way.
+                                          The job stops there and nothing moves it until somebody
+                                          answers, so end your task and say you are waiting. The
+                                          answer arrives as your next task
+  job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
+                                          again with the answer, in the session that asked
+  target [<address>]                      where a project ships: the account, the region inside it,
+    [--account <id>]                      and the role a pipeline assumes to get there. With no
+    [--region <name>]                     values it reads what the project declared, and with them
+    [--identity <arn>] [--clear]          it declares it. The identity has to belong to the account,
+                                          because pasting the role from the other account is
+                                          invisible until a pipeline runs. Nothing here deploys
+                                          anything: infrastructure ships through the repository's
+                                          own pipeline, and this says which account that pipeline is
+                                          aimed at. --clear takes it back off
   limits [<workspace>]                    what a workspace lets its sessions declare, and how long
     [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
     [--max-running <n>]                   jobs may go, how many run at once, what a tree may spend,
@@ -117,7 +138,13 @@ commands:
   mode <session> [<mode>]                  what a session's tasks may do without asking: plan, edits
                                           or dangerous. A task nobody waits for has nobody to approve
                                           anything, so this is how it is given room to work
-  context [<address>]                     where the files the model reads live
+  context [<address>]                     where the files the model reads live, and how big each
+                                          level is. A level past 20,000 characters also says who
+                                          reads it and what to move down a level
+  context show [<address>]                what a level says, printed as it is stored. This and set
+                                          are a pair: quay context show crew > file, edit the file,
+                                          then quay context set crew < file, which is how a level is
+                                          added to rather than overwritten
   context set [<address>] < file          write what a level says, from standard input. Say crew
                                           where the address goes and it applies to everything the
                                           crew does, which skill attach takes too
@@ -237,6 +264,10 @@ Context is files, not prompt text. Each level owns a directory, and a session's 
 So the way to teach a project something is to write it into that project's context, with
 ` + "`quay context set <address> < file`" + `, or to drop files into the directory ` + "`quay context`" + ` names. The
 model reads CLAUDE.md and the working directory natively. There is no second mechanism.
+
+A level is read back with ` + "`quay context show <address>`" + `, which prints what it says and
+nothing else. Setting overwrites, so adding a paragraph means reading the level out first, appending
+to the file, and setting it back.
 
 ## What this is for
 

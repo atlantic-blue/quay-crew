@@ -23,6 +23,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/capacity"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/headroom"
@@ -31,6 +32,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
+	"github.com/atlantic-blue/quay-crew/internal/repository"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -237,6 +239,12 @@ type Server struct {
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	headroom *headroom.Sampler
+
+	// lastHealth is what the last probe of the parts a dispatch has to write to found. It is kept
+	// rather than taken on demand for the reason the headroom sample is: the part that is down is the
+	// part that takes longest to say so, and a view must not wait on it.
+	healthMu   sync.RWMutex
+	lastHealth HealthReading
 
 	// startWait is the budget from a session row to a sandbox ready for its first task, and
 	// exportWait what one export to the event log is given. Both are fields rather than constants so
@@ -1156,6 +1164,32 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 	return &quaycrewv1.ListProjectsResponse{Projects: projects}, nil
 }
 
+// SetProjectRepository records where a project's work lands, and what kind of repository it is.
+//
+// The address is held to its shape here, while the person who typed it is looking, for the same
+// reason a job's is: an address nothing can be pushed to is worth finding out about now rather than
+// an hour into the work. The kind is held to two words, and saying nothing means public, because
+// free pipeline minutes are the cheaper of the two and a project that cannot be public is the one
+// that has to say so.
+func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetProjectRepositoryRequest) (*quaycrewv1.SetProjectRepositoryResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	address := repository.Tidy(req.GetRepository())
+	if err := repository.Usable(address); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "this project works in %s", err.Error())
+	}
+	kind, err := repository.Kind(req.GetVisibility())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	recorded, err := s.store.SetProjectRepository(ctx, req.GetProject(), address, kind)
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetProjectRepositoryResponse{Project: recorded}, nil
+}
+
 // DeleteProject removes a project, stopping what it hides first.
 func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjectRequest) (*quaycrewv1.DeleteProjectResponse, error) {
 	gone := s.stopSessions(ctx, store.SessionFilter{Project: req.GetId()})
@@ -1166,6 +1200,35 @@ func (s *Server) DeleteProject(ctx context.Context, req *quaycrewv1.DeleteProjec
 		s.emit(ctx, session, KindSessionDeleted, "")
 	}
 	return &quaycrewv1.DeleteProjectResponse{}, nil
+}
+
+// SetDeployTarget records where a project ships: the account, the region inside it, and the identity
+// a pipeline assumes to get there.
+//
+// The target is read whole before anything is written, so a refused one leaves the project saying
+// what it said before. A project answering "where does this go" with something nobody agreed to is
+// worse than one answering nothing.
+//
+// It is not on the driver's deny list. The record grants no reach: the credentials that deploy come
+// from secrets, which a driver may not touch, and a session that could set this could already delete
+// the project whole.
+func (s *Server) SetDeployTarget(ctx context.Context, req *quaycrewv1.SetDeployTargetRequest) (*quaycrewv1.SetDeployTargetResponse, error) {
+	if _, err := s.store.GetProject(ctx, req.GetProject()); err != nil {
+		return nil, storeError(err, "project")
+	}
+	target, err := deploy.ParseTarget(
+		req.GetTarget().GetAccount(), req.GetTarget().GetRegion(), req.GetTarget().GetIdentity())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.store.SetDeployTarget(ctx, req.GetProject(), target); err != nil {
+		return nil, storeError(err, "project")
+	}
+	written, err := s.store.GetProject(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetDeployTargetResponse{Project: written}, nil
 }
 
 // Dispatch starts or continues a session, running one task through the model runner.
@@ -1470,21 +1533,25 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 	dirs = append(dirs, s.contextDir(ctx, store.ContextCrew, "", "crew", sandbox.Context{}))
 	seenWorkspace := map[string]bool{}
 	for _, project := range projects {
-		found := s.storage.Contexts(sandbox.Config{
+		// The directories, where the crew can describe them. A crew that was told no data directory
+		// can describe none, and what a level says is held in the store rather than on a disk, so the
+		// row still carries the body and simply names no directory. Dropping the row instead took
+		// every project's context out of the one call that reads a level back.
+		workspaceDir, projectDir := sandbox.Context{}, sandbox.Context{}
+		if found := s.storage.Contexts(sandbox.Config{
 			ID: "listing", Workspace: project.GetWorkspace(), Project: project.GetId(),
-		})
-		if len(found) != 2 {
-			continue
+		}); len(found) == 2 {
+			workspaceDir, projectDir = found[0], found[1]
 		}
 		// One row per workspace however many projects it holds: the workspace's context is one thing,
 		// and listing it twice would read as two.
 		if !seenWorkspace[project.GetWorkspace()] {
 			seenWorkspace[project.GetWorkspace()] = true
 			dirs = append(dirs, s.contextDir(ctx, store.ContextWorkspace,
-				project.GetWorkspace(), names[project.GetWorkspace()], found[0]))
+				project.GetWorkspace(), names[project.GetWorkspace()], workspaceDir))
 		}
 		dirs = append(dirs, s.contextDir(ctx, store.ContextProject,
-			project.GetId(), project.GetName(), found[1]))
+			project.GetId(), project.GetName(), projectDir))
 	}
 	// A workspace with no projects contributed no row at all, because the rows were built by walking
 	// projects. Its context is stored and rendered either way, so writing an org's context into a

@@ -102,6 +102,61 @@ func (m *Memory) StopJob(_ context.Context, id, reason string, event *job.Event)
 	return &kept, nil
 }
 
+// AskJob puts a running job's question on the record and stops it there.
+//
+// Only from running, so a job that never started and a job that ended cannot ask. The hold goes with
+// it: no controller is holding an asking job, because there is nothing to come back for until a
+// person answers.
+//
+// What it was last told is cleared, so the question on the row and the answer beside it are always
+// about the same decision. The previous answer is in the record, which is where the whole history of
+// the job is.
+func (m *Memory) AskJob(_ context.Context, id, question string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	found.Phase, found.Question, found.Told = job.PhaseAsking, question, ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// AnswerJob writes what a person decided and puts the job back to pending, so a controller starts it
+// again and hands the answer to the session that asked.
+//
+// Only from asking, in the same movement, so two people answering at once leave one answer and one
+// task rather than two of each.
+func (m *Memory) AnswerJob(_ context.Context, id, answer string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseAsking {
+		return nil, job.ErrNotAsking
+	}
+	found.Phase, found.Told = job.PhasePending, answer
+	// The start goes with the attempt that is over, so the moment on the row is the moment the
+	// attempt carrying the answer began. The attempt that asked is on the record.
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // ListJobEvents returns one job's own history, oldest first.
 func (m *Memory) ListJobEvents(_ context.Context, id string) ([]*job.Event, error) {
 	m.mu.RLock()

@@ -102,6 +102,11 @@ type Job struct {
 	Answer   string
 	Reason   string
 	Question string
+	// Told is the last thing a person told this job, and it is what the crew sends the session when
+	// the job starts again. It stays on the row after it has been handed over: what somebody decided
+	// is part of the record of the job, and a field that empties itself leaves a reader unable to say
+	// whether an answer was ever given.
+	Told string
 	// PullRequest is the address the answer named, read off the answer rather than reported by the
 	// model. It is what a reader opens to see the work without opening a sandbox, which is the whole
 	// point of the field: a listing that says a job is done and nothing about where the work went is
@@ -171,11 +176,11 @@ const (
 	EventAnswered = "job.answered"
 	EventFailed   = "job.failed"
 	EventStopped  = "job.stopped"
-	// EventAsked is written when a job puts a question to a person. Nothing writes it yet:
-	// asking is the slice that gives a session a credential to ask with. It is named here because the
-	// kinds are a contract another service may switch on, and a consumer written against a list that
-	// grows later has to be changed twice.
+	// EventAsked is written when a job puts a question to a person, and EventTold when that person
+	// answers it. Between the two nothing moves the job, which is what makes the question a gate
+	// rather than a note.
 	EventAsked = "job.asked"
+	EventTold  = "job.told"
 )
 
 // Contract says whether a kind is one another service may depend on.
@@ -244,9 +249,6 @@ func (d Declaration) Tidied() Declaration {
 
 // Validate refuses a declaration that could not run, with a sentence saying what to do instead.
 //
-// The brief is read as well as the fields. A brief that asks the job to wait for a pipeline is
-// refused here rather than run, because the runtime has no wait and the session invents one.
-//
 // Everything here is decidable from the declaration alone. Whether the workspace, the project, the
 // role and the job it waits for exist is the control plane's question, because only the store can
 // answer it.
@@ -281,9 +283,6 @@ func (d Declaration) Validate() error {
 	}
 	if err := usableRepository(tidy.Repository); err != nil {
 		return err
-	}
-	if asked := OnlyAFlowCan(tidy.Brief); asked != "" {
-		return RefusedWait(asked)
 	}
 	if err := tidy.validateRequires(); err != nil {
 		return err

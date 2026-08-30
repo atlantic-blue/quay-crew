@@ -8,6 +8,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/origin"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 )
 
@@ -55,7 +56,19 @@ func runRoleImport(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 	for _, file := range read {
 		files = append(files, &quaycrewv1.RoleFile{Path: file.Path, Body: file.Body})
 	}
-	resp, err := client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files})
+	// Where the files came from, read here because only here can: the repository is on this machine
+	// and the control plane runs in a container that cannot see it.
+	from := origin.Of(args[0])
+	resp, err := client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{
+		Files: files,
+		Origin: &quaycrewv1.RoleOrigin{
+			Repository: from.Repository,
+			Commit:     from.Commit,
+			Path:       from.Path,
+			Dirty:      from.Dirty,
+			Unpushed:   from.Unpushed,
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -64,6 +77,7 @@ func runRoleImport(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		imported.GetName(), imported.GetVersion(), imported.GetSummary())
 	fmt.Fprintf(out, "it runs on %s and receives %s\n",
 		imported.GetModel(), strings.Join(imported.GetReceives(), ", "))
+	writeOrigin(out, "", imported)
 	fmt.Fprintf(out, "attach it with: quay role attach %s\n", imported.GetName())
 	return nil
 }
@@ -104,6 +118,7 @@ func runRoleList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		// What it receives is the boundary, which is the part worth reading twice, so it is a line
 		// of its own rather than a word at the end of another one.
 		fmt.Fprintf(out, "%-16s      receives %s\n", "", strings.Join(held.GetReceives(), ", "))
+		writeOrigin(out, fmt.Sprintf("%-16s      ", ""), held)
 		if held.GetCrew() {
 			fmt.Fprintf(out, "%-16s      held by the crew, so every workspace has it\n", "")
 		}
@@ -150,12 +165,14 @@ func writeRole(out io.Writer, resp *quaycrewv1.GetRoleResponse) {
 	fmt.Fprintf(out, "%s v%d  %s\n", shown.GetName(), shown.GetVersion(), shown.GetSummary())
 	fmt.Fprintf(out, "runs on %s\n", shown.GetModel())
 	fmt.Fprintf(out, "receives %s\n", strings.Join(shown.GetReceives(), ", "))
-	// Always, including when it is empty. A role that may call nothing is the default rather than an
-	// oversight, and a line that appears only when something is granted reads as a missing line.
-	if may := resp.GetMay(); len(may) > 0 {
-		fmt.Fprintf(out, "may call %s\n", strings.Join(may, ", "))
+	// The manifest's own word, under the manifest's other one, so an operator reading this back can
+	// find the line it came from. Always, including when it is empty: a role that may call nothing is
+	// the default rather than an oversight, and a line that appears only when something is granted
+	// reads as a missing line.
+	if verbs := resp.GetVerbs(); len(verbs) > 0 {
+		fmt.Fprintf(out, "verbs %s\n", strings.Join(verbs, ", "))
 	} else {
-		fmt.Fprintln(out, "may call nothing")
+		fmt.Fprintln(out, "verbs none, so it may call nothing")
 	}
 	if shown.GetCrew() {
 		fmt.Fprintln(out, "held by the crew, so every workspace has it")
@@ -169,6 +186,7 @@ func writeRole(out io.Writer, resp *quaycrewv1.GetRoleResponse) {
 	if stamp := shown.GetImportedAt(); stamp.IsValid() {
 		fmt.Fprintf(out, "imported %s ago\n", display.Age(stamp))
 	}
+	writeOrigin(out, "", shown)
 	fmt.Fprintf(out, "\n%s\n", resp.GetBrief())
 }
 
@@ -241,5 +259,25 @@ func roleAndAddress(args []string, verb string) (name, typed string, err error) 
 		return args[1], args[0], nil
 	default:
 		return "", "", fmt.Errorf("usage: quay role %s [<workspace>] <name>", verb)
+	}
+}
+
+// writeOrigin says where a role's files came from, and says it loudly when nobody but whoever
+// imported it could read them.
+//
+// Always a line, never a line that appears only when something is wrong. A role in a repository and
+// a role in a folder on one laptop printed identically for as long as roles existed, which is how
+// the three roles that drove a three hour acceptance run were never reviewed by anybody: nothing in
+// front of the operator ever said they were not in the code.
+func writeOrigin(out io.Writer, indent string, shown *quaycrewv1.Role) {
+	from := origin.Origin{
+		Repository: shown.GetOrigin().GetRepository(),
+		Commit:     shown.GetOrigin().GetCommit(),
+		Path:       shown.GetOrigin().GetPath(),
+		Dirty:      shown.GetOrigin().GetDirty(),
+		Unpushed:   shown.GetOrigin().GetUnpushed(),
+	}
+	for _, said := range from.Says() {
+		fmt.Fprintf(out, "%s%s\n", indent, said)
 	}
 }

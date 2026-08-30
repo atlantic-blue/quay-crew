@@ -5,5 +5,5 @@ model: sonnet
 receives:
   - job
   - skills
-may:
+verbs:
   - job.read

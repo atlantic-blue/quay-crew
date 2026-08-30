@@ -51,6 +51,14 @@ const (
 	modeChoose
 )
 
+// summary is a view's line above the columns: the text, and the state it is drawn in. The state is
+// the whole line's rather than one word's, so it is applied after the line has been cut and padded, the
+// way a cell's colour is: slicing a styled string cuts through the escape codes in it.
+type summary struct {
+	line  string
+	state State
+}
+
 // pending is a destructive action waiting on an answer, and the row it would act on. The row is held
 // rather than looked up again, so a refresh that reorders the list underneath cannot task a yes into
 // a yes to something else.
@@ -137,6 +145,9 @@ type (
 		resource string
 		parent   string
 		rows     []Row
+		// summary is the line above the columns, from the same load as the rows. It travels with them
+		// so a view never draws a total from one moment over a listing from another.
+		summary summary
 	}
 	// errMsg is a listing that failed. The next listing to arrive clears it.
 	errMsg struct{ err error }
@@ -212,8 +223,12 @@ type Model struct {
 	// same return, and the refresh blanked it before it was ever drawn: the key looked like it did
 	// nothing at all. A held error is cleared by the next key, which is the operator saying they
 	// have read it.
-	held     bool
-	stack    []crumbEntry
+	held  bool
+	stack []crumbEntry
+	// summary is the active view's line above the columns, empty in a view that has none. It is
+	// dropped along with the rows when a view is left, so one machine's totals are never drawn over
+	// another view's listing while the next one loads.
+	summary  summary
 	quitting bool
 	info     Info
 	source   InfoSource
@@ -455,7 +470,7 @@ func (m Model) applyRows(msg rowsMsg) Model {
 	if msg.resource != m.active.Name || msg.parent != m.parent {
 		return m
 	}
-	m.rows = msg.rows
+	m.rows, m.summary = msg.rows, msg.summary
 	if !m.held {
 		m.err = nil
 	}
@@ -558,6 +573,11 @@ func (m Model) bodyHeight() int {
 	if m.err != nil {
 		body--
 	}
+	// The line above the columns takes a row from the listing. A row it does not pay for is a panel
+	// one line taller than the window, which pushes the footer off the bottom of the screen.
+	if m.summaryLine() != "" {
+		body--
+	}
 	if body < 1 {
 		return 1
 	}
@@ -588,7 +608,12 @@ func listCmd(resource Resource, parent string) tea.Cmd {
 		if err != nil {
 			return errMsg{err: fmt.Errorf("list %s: %w", resource.Name, err)}
 		}
-		return rowsMsg{resource: resource.Name, parent: parent, rows: rows}
+		loaded := rowsMsg{resource: resource.Name, parent: parent, rows: rows}
+		if resource.Summary != nil {
+			line, state := resource.Summary(ctx, parent)
+			loaded.summary = summary{line: line, state: state}
+		}
+		return loaded
 	}
 }
 

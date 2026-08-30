@@ -320,3 +320,99 @@ func holdSandbox(ctx context.Context, held int64, working bool) error {
 	})
 	return nil
 }
+
+// initializeRoomViewSteps registers the steps for the room view's own line, above its rows. The
+// fault they close: the view was one line per sandbox, and an operator could read eighteen rows of
+// megabytes and still not know how close the machine was. See issue 457.
+func initializeRoomViewSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator opens the room view$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), "room")
+	})
+
+	sc.Step(`^the view says "([^"]*)" of "([^"]*)" is held, with "([^"]*)" left$`,
+		func(ctx context.Context, held, limit, left string) error {
+			line, err := roomLine(ctx)
+			if err != nil {
+				return err
+			}
+			for _, want := range []string{held, limit, left} {
+				if !strings.Contains(line, want) {
+					return fmt.Errorf("the line above the sandboxes does not carry %q:\n%s", want, line)
+				}
+			}
+			return nil
+		})
+
+	// Megabytes divided by the size of a sandbox is exactly the arithmetic this line exists to save.
+	sc.Step(`^the view says what is left in sandboxes$`, func(ctx context.Context) error {
+		line, err := roomLine(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(line, "more sandboxes") {
+			return fmt.Errorf("the line does not say how many more sandboxes fit in what is left:\n%s", line)
+		}
+		return nil
+	})
+
+	// Above them, because it answers the question the operator asks before they read any of the rows:
+	// whether a session has to be stopped at all.
+	sc.Step(`^that line is above the sandboxes$`, func(ctx context.Context) error {
+		view := consoleFrom(ctx).model.View()
+		at, sandboxes := -1, -1
+		for index, line := range strings.Split(view, "\n") {
+			if at < 0 && strings.Contains(line, roomLineMark) {
+				at = index
+			}
+			if sandboxes < 0 && strings.Contains(line, "1201 MiB") {
+				sandboxes = index
+			}
+		}
+		if sandboxes < 0 {
+			return fmt.Errorf("the sandbox holding 1201 MiB is not listed:\n%s", view)
+		}
+		if at > sandboxes {
+			return fmt.Errorf("the line about the machine is drawn under the sandboxes:\n%s", view)
+		}
+		return nil
+	})
+
+	sc.Step(`^the view says the machine is "([^"]*)"$`, func(ctx context.Context, word string) error {
+		line, err := roomLine(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(line, word) {
+			return fmt.Errorf("the line does not say the machine is %q:\n%s", word, line)
+		}
+		return nil
+	})
+
+	sc.Step(`^the view says another sandbox will not fit$`, func(ctx context.Context) error {
+		line, err := roomLine(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(line, "not enough for another sandbox") {
+			return fmt.Errorf("the line does not say another sandbox will not fit:\n%s", line)
+		}
+		return nil
+	})
+}
+
+// roomLineMark is what the room view's own line says and no other line does. The header carries the
+// same figures, so a case looking for a number alone would pass on the header while the view said
+// nothing.
+const roomLineMark = "containers hold"
+
+// roomLine is the line the room view draws above its rows, read off the drawn screen rather than
+// from the console's state, because what is drawn is what the operator has.
+func roomLine(ctx context.Context) (string, error) {
+	view := consoleFrom(ctx).model.View()
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, roomLineMark) {
+			return line, nil
+		}
+	}
+	return "", fmt.Errorf("the room view says nothing about the machine it is listing:\n%s", view)
+}

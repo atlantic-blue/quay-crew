@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/features"
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/contextsize"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
@@ -62,6 +62,7 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "name", Width: 24, Colour: colourOfName},
 			{Title: "workspace", Width: 18, Colour: colourOfName},
+			{Title: "deploys to", Width: 26, Colour: dim},
 			{Title: "age", Width: 0, Colour: dim},
 		},
 		DrillTo: "sessions",
@@ -91,6 +92,7 @@ func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
 			display.ShortID(project.GetId()),
 			project.GetName(),
 			display.Name(workspaceName, project.GetWorkspace()),
+			deploysTo(project.GetDeployTarget()),
 			display.Age(project.GetCreatedAt()),
 		},
 		State: StateReady,
@@ -119,7 +121,10 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "scope", Width: 10, Colour: colourOfName},
 			{Title: "name", Width: 18, Colour: colourOfName},
-			{Title: "written", Width: 16, Colour: colourOfWritten},
+			// Wide enough for a level of millions of characters and the words beside it. The console cuts
+			// a cell that does not fit, and the cell that would be cut is the largest level, which is
+			// the one row in this view worth reading.
+			{Title: "characters", Width: 24, Colour: colourOfSize},
 			{Title: "what it says", Width: 0, Colour: dim},
 		},
 		SortBy: 1,
@@ -218,10 +223,13 @@ func draftFor(row Row) string {
 }
 
 func contextRow(dir *quaycrewv1.ContextDir) Row {
-	written, state := "not written yet", StateUnknown
+	state := StateUnknown
 	if dir.GetWritten() {
-		written, state = "written", StateReady
+		state = StateReady
 	}
+	// How big the level is rather than whether it exists. The crew level reached 100,179 characters
+	// while this column said "written", which answers a question nobody was asking.
+	size := contextsize.Read(dir.GetScope(), dir.GetName(), dir.GetBody())
 	return Row{
 		// A level is what an action on this row acts on, so the scope and the owner are what it
 		// carries, and the whole of what it says goes in Detail for an editor to open.
@@ -229,7 +237,7 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 		Parent: dir.GetOwner(),
 		Label:  dir.GetName(),
 		Detail: dir.GetBody(),
-		Cells:  []string{dir.GetScope(), dir.GetName(), written, firstLine(dir.GetBody())},
+		Cells:  []string{dir.GetScope(), dir.GetName(), size.Cell(), firstLine(dir.GetBody())},
 		State:  state,
 	}
 }
@@ -274,40 +282,6 @@ func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					},
 					State: StateReady,
 				})
-			}
-			return rows, nil
-		},
-	}
-}
-
-// Features lists what this build of the crew can do, from the specification embedded in it. It is the
-// one view that asks the control plane nothing: a capability belongs to the build, not to a running
-// stack, and this is the view an operator opens before they know what to open.
-func Features() Resource {
-	return Resource{
-		Name:    "features",
-		Aliases: []string{"f", "feature", "capabilities"},
-		// A feature's title sits on the first of its scenarios and the rest of the group leaves it
-		// blank, so bold on that cell is what separates one group from the next.
-		Columns: []Column{
-			{Title: "feature", Width: 44, Colour: heading},
-			{Title: "proved by", Width: 0, Colour: dim},
-		},
-		List: func(context.Context, string) ([]Row, error) {
-			rows := make([]Row, 0, 32)
-			for _, feature := range features.All() {
-				for index, scenario := range feature.Scenarios {
-					title := ""
-					if index == 0 {
-						title = feature.Title
-					}
-					rows = append(rows, Row{
-						ID:    feature.Title + ": " + scenario,
-						Label: feature.Title,
-						Cells: []string{title, scenario},
-						State: StateReady,
-					})
-				}
 			}
 			return rows, nil
 		},
@@ -789,19 +763,25 @@ func stateFromStatus(status string) State {
 }
 
 // Stats is what the crew is running underneath: which model backend, which sandbox and store engines,
-// where secrets and state are kept, whether anything is reading the event log.
+// where secrets and state are kept, whether anything is reading the event log. Every row says what
+// the crew last found when it probed that part, or says that nothing probes it.
 //
 // A view rather than more header. Six lines of this in the header makes it ten lines tall, and a
 // header that tall in a pane of its own scrolls, which loses its own top line. The header keeps what
 // anybody needs at a glance; the rest is a question, and a question gets a view.
+//
+// The state column is here because this screen was up for the sixteen hours a dead event log went
+// unnoticed, and it drew that row in the same colour as the five working ones. Every row was ready:
+// the view had no way to say anything else. See issue 458.
 func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "stats",
 		Aliases: []string{"stat", "engines", "status"},
-		// A key and its value, the way the status block writes one: cyan on the left, plain on the
-		// right.
+		// A key, what the crew last found about it, and its value: cyan on the left, the state in the
+		// colour of the state, plain on the right.
 		Columns: []Column{
 			{Title: "what", Width: 22, Colour: place},
+			{Title: "state", Width: 15, Colour: colourOfHealth},
 			{Title: "running", Width: 0},
 		},
 		SortBy: -1,
@@ -810,15 +790,20 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
+			probed := lastProbed(ctx, client)
 			// In the order they matter when something is wrong: what runs a task, where it runs,
 			// what survives a restart, then what is watching.
-			stats := []struct{ what, running string }{
-				{"Model", described.GetModel()},
-				{"Sandbox engine", described.GetSandbox()},
-				{"Store engine", described.GetStore()},
-				{"Secrets", secretsPhrase(described.GetSecrets())},
-				{"Events engine", eventsPhrase(described.GetEvents())},
-				{"State", statePhrase(described.GetState())},
+			//
+			// A row with no component beside it is a part the crew runs no probe against, and it
+			// says not checked. Four of the six are that today. It is deliberately not green: this
+			// view claiming health it never measured is the whole finding.
+			stats := []struct{ what, component, running string }{
+				{"Model", "", described.GetModel()},
+				{"Sandbox engine", "", described.GetSandbox()},
+				{"Store engine", display.HealthStore, described.GetStore()},
+				{"Secrets", "", secretsPhrase(described.GetSecrets())},
+				{"Events engine", display.HealthEvents, eventsPhrase(described.GetEvents())},
+				{"State", "", statePhrase(described.GetState())},
 			}
 			rows := make([]Row, 0, len(stats))
 			for _, stat := range stats {
@@ -826,11 +811,15 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				if running == "" {
 					running = "not saying"
 				}
+				state := probed[stat.component]
+				if state == "" {
+					state = display.HealthNotChecked
+				}
 				rows = append(rows, Row{
 					ID:    stat.what,
 					Label: stat.what,
-					Cells: []string{stat.what, running},
-					State: StateReady,
+					Cells: []string{stat.what, state, running},
+					State: stateFromHealth(state),
 				})
 			}
 			return rows, nil
@@ -862,6 +851,9 @@ func Room(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// The control plane sorts these largest first, and a sort here would fight it: the column
 		// holds "1201 MiB" and "unknown", which do not order as text.
 		SortBy: -1,
+		// What the rows never said: the total, the limit that binds, and what is left. The listing
+		// answered which session to stop and never whether one had to be stopped at all. See issue 457.
+		Summary: roomSummaryFrom(client),
 		List: func(ctx context.Context, _ string) ([]Row, error) {
 			answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
 			if err != nil {
@@ -936,4 +928,51 @@ func Keys(registry *Registry) Resource {
 			return rows, nil
 		},
 	}
+}
+
+// lastProbed is what the crew last found about each part of itself, keyed by the part's name.
+//
+// A crew that will not answer is not a failed listing. The stats view's job is to say what the crew
+// is running, and an older crew that has no such call still has that to say; every row then reads
+// not checked, which is exactly what it is. Refusing to draw the view because the health call is
+// missing would take away the six lines an operator opened it for.
+func lastProbed(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
+	states := map[string]string{}
+	answer, err := client.GetHealth(ctx, &quaycrewv1.GetHealthRequest{})
+	if err != nil {
+		return states
+	}
+	for _, component := range answer.GetComponents() {
+		states[component.GetName()] = component.GetState()
+	}
+	return states
+}
+
+// stateFromHealth colours a row by what the last probe of it found. Down is the one that takes the
+// whole line, because a component that is down is the reason somebody opened this view.
+//
+// Not checked and not configured are unknown on purpose: no colour, no claim. A crew that has never
+// probed and a part nothing probes are both the absence of a reading, and dressing either as ready
+// is the failure the state column was added to stop.
+func stateFromHealth(state string) State {
+	switch state {
+	case display.HealthServing:
+		return StateReady
+	case display.HealthDown:
+		return StateFailed
+	default:
+		return StateUnknown
+	}
+}
+
+// deploysTo is where a project ships, for the column of that name, and an empty cell for a project
+// that has not said.
+//
+// The account and the region only. The identity repeats the account and is wider than the whole
+// view, and a listing exists to say which projects have been told rather than to carry the address.
+func deploysTo(target *quaycrewv1.DeployTarget) string {
+	if target == nil {
+		return ""
+	}
+	return target.GetAccount() + "/" + target.GetRegion()
 }

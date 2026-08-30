@@ -13,10 +13,18 @@ const SeedHooksDir = "/hooks"
 
 // SeedHooksToCrew is which of the shipped hooks a fresh crew is put under, rather than merely offered.
 //
-// The analyser only adds context and can never wrongly refuse, so it is the one hook that is safe to
-// hand every crew without asking. Anything that refuses is a decision, and a hook that refuses
-// wrongly blocks the work, which is worse than no hook.
-var SeedHooksToCrew = []string{"prompt-analyser"}
+// The analyser only adds context and can never wrongly refuse, so it costs a crew nothing to hold.
+//
+// The merge gate does refuse, and it is here anyway. It holds the one boundary the whole shape of
+// this crew rests on: every role pushes and opens a pull request, and no role merges, because a push
+// applies nothing and a merge runs the pipeline that spends money. A gate an operator has to remember
+// to attach is a gate that is off in every crew nobody set up, which is the crews the boundary
+// matters most in. It refuses one thing, that thing is never a session's to do, and
+// `quay hook detach crew merge-gate` is how somebody decides otherwise.
+//
+// So the rule is not that a seeded hook never refuses. It is that a seeded hook refuses something no
+// session in this crew is ever meant to do, exactly, and says what to do instead.
+var SeedHooksToCrew = []string{"merge-gate", "prompt-analyser"}
 
 // SeedHooks offers the hooks this build ships, and puts a crew that holds none under them.
 //

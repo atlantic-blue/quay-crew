@@ -80,6 +80,22 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator reads the "test-writter" role back
     Then the crew refuses the role saying "test-writer"
 
+  # What a role may call is declared under verbs, which is the word kubernetes uses for the same
+  # question, so an operator arrives already knowing it.
+  Scenario: A role declares the verbs it may call, and they come back with it
+    Given the operator imported a role that may create and read jobs
+    When the operator reads the "test-writer" role back
+    Then the role comes back saying it may call "job.create, job.read"
+
+  # The way off the old spelling, tested alongside the way on to the new one. A role file is in
+  # somebody's repository and in their fingers, so a key the crew renamed is refused by name rather
+  # than ignored: ignored, the role grants nothing and reads exactly like one that holds.
+  Scenario: A role file still saying may is refused, and told what to write instead
+    When the operator imports a role saying "may" where it should say "verbs"
+    Then the crew refuses the role saying "may"
+    And the crew refuses the role saying "verbs"
+    And the crew holds no roles
+
   Scenario: A workspace with no roles attached says so
     When the operator lists the workspace's roles
     Then the workspace holds no roles
@@ -145,6 +161,51 @@ Feature: A role is imported, pinned to a version, and attached at a level
   Scenario: Attaching a role the crew has not imported is refused
     When the operator attaches the "architect" role to the workspace
     Then the crew refuses the role saying "not found"
+
+  # Where a role came from. A role is imported from a directory, and a directory is anywhere: the
+  # acceptance run was driven by three roles that sat in a folder on one machine, so no pull request
+  # touched them, nobody reviewed them and nothing versioned them, while every listing the crew
+  # printed showed them looking exactly like the roles that ship in this repository.
+  #
+  # Nothing is refused over it. A role written in a scratch directory while somebody is finding the
+  # shape of it is ordinary, and what was missing was not a gate, it was anybody being able to see.
+  Scenario: A role imported from a repository says which one, and at what commit
+    When the operator imports a role from a repository
+    Then the listing says where the role came from
+    And the listing does not say nobody else can read it
+
+  Scenario: A role imported from a folder on one machine says nobody else can read it
+    When the operator imports a role from a folder that is not in a repository
+    Then the listing says the role is not in a repository
+    And the listing says nobody else can read it
+
+  # A role committed and never pushed is on one machine however carefully it was committed, which is
+  # the same failure wearing a repository's name.
+  Scenario: A role whose commit never left the machine says so
+    When the operator imports a role from a repository nothing was pushed to
+    Then the listing says the commit is on no remote branch
+    And the listing says nobody else can read it
+
+  # The commit is the evidence of what the crew holds. For an edited directory it is evidence of
+  # something else.
+  Scenario: A role edited after its commit says the files are uncommitted
+    When the operator imports a role edited after its commit
+    Then the listing says the files are uncommitted
+    And the listing says nobody else can read it
+
+  # The way out, so the warning has to clear. A crew that kept the first answer would leave the
+  # operator committing the role, importing it again and watching nothing change.
+  Scenario: Committing a loose role and importing it again clears the warning
+    Given the operator imported a role from a folder that is not in a repository
+    When the operator imports that role again from a repository
+    Then the listing says where the role came from
+    And the listing does not say nobody else can read it
+
+  # A role the crew took in before it recorded any of this. Calling it loose would be an accusation
+  # the crew cannot support.
+  Scenario: A role imported before the crew recorded any of this says only that
+    When the operator imports the "test-writer" role
+    Then the listing says where the role came from was not recorded
 
   # The roles this build ships, in roles/ at the root of the repository. They are read from that
   # directory rather than from a list in the test, so a role added later is held to the same rules

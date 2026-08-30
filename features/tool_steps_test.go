@@ -29,7 +29,10 @@ type toolKey struct{}
 
 // toolWorld is what came back out of the last run of the tool.
 type toolWorld struct {
-	address  string
+	address string
+	// stdin is what one step prepares for a later step to pipe in. Context is read from standard
+	// input rather than from an argument, so the body has to survive between the two.
+	stdin    string
 	stdout   string
 	stderr   string
 	exitCode int
@@ -65,6 +68,16 @@ func initializeToolSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^standard output is empty$`, func(ctx context.Context) error {
 		if got := toolFrom(ctx).stdout; got != "" {
 			return fmt.Errorf("standard output carries %q, and a caller reading it would take that for the answer", got)
+		}
+		return nil
+	})
+
+	// Exactly, rather than carries, because what a redirection captures is the whole of standard
+	// output. A heading or a trailing newline added for the look of it becomes part of the level the
+	// moment somebody pipes this back into the command that writes one.
+	sc.Step(`^standard output is exactly "([^"]*)"$`, func(ctx context.Context, want string) error {
+		if got := toolFrom(ctx).stdout; got != want {
+			return fmt.Errorf("standard output is %q, want exactly %q", got, want)
 		}
 		return nil
 	})
@@ -112,11 +125,18 @@ func listenForTool(ctx context.Context) error {
 	return nil
 }
 
-// runTool runs the tool the way a caller runs it, with its streams kept apart.
+// runTool runs the tool the way a caller runs it, with its streams kept apart and nothing on
+// standard input.
+func runTool(ctx context.Context, args ...string) error {
+	return runToolSaying(ctx, "", args...)
+}
+
+// runToolSaying runs the tool with something piped into it, which is how a file becomes a context,
+// a secret or anything else this tool reads rather than takes as an argument.
 //
 // The home directory is a temporary one: the tool keeps where the operator is standing on the
 // machine it runs on, and a scenario must not read or write the operator's own.
-func runTool(ctx context.Context, args ...string) error {
+func runToolSaying(ctx context.Context, in string, args ...string) error {
 	t := toolFrom(ctx)
 	if t.address == "" {
 		return fmt.Errorf("the crew has no address the tool can dial")
@@ -139,6 +159,7 @@ func runTool(ctx context.Context, args ...string) error {
 		"HOME="+home,
 	)
 	var out, said bytes.Buffer
+	command.Stdin = strings.NewReader(in)
 	command.Stdout, command.Stderr = &out, &said
 	runErr := command.Run()
 	t.ran, t.stdout, t.stderr = true, out.String(), said.String()

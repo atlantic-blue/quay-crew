@@ -19,9 +19,11 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/deploy"
 	"github.com/atlantic-blue/quay-crew/internal/flow"
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/quay-crew/internal/origin"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/session"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
@@ -95,10 +97,15 @@ type Imported struct {
 // as it is told to work. The way forward is to raise the version in the manifest.
 var ErrRoleChanged = errors.New("store: that version of the role is already imported and differs")
 
-// ImportedRole is a role the crew holds: the role as its author wrote it, and when it came in.
+// ImportedRole is a role the crew holds: the role as its author wrote it, when it came in, and where
+// it came from.
 type ImportedRole struct {
 	role.Role
 	ImportedAt time.Time
+	// Origin is where the files were read from, as the machine that imported them saw it. It is not
+	// part of the fingerprint: the same bytes imported from two checkouts are one role, read in two
+	// places, and a fingerprint that disagreed would refuse the second import as a different role.
+	Origin origin.Origin
 }
 
 // ErrHookChanged is returned when a version of a hook is imported again carrying a different hook.
@@ -157,6 +164,14 @@ type Store interface {
 	// ListProjects lists every project, or one workspace's when workspace is set.
 	ListProjects(ctx context.Context, workspace string) ([]*quaycrewv1.Project, error)
 	DeleteProject(ctx context.Context, id string) error
+	// SetDeployTarget records where a project ships, and a zero target clears it. The store keeps
+	// what it is given: whether a target is whole, and whether its identity belongs to its account,
+	// is the control plane's question.
+	SetDeployTarget(ctx context.Context, project string, target deploy.Target) error
+	// SetProjectRepository records where a project's work lands, and what kind of repository that is.
+	// Writing it again replaces what is held, so a project that moved repository is corrected rather
+	// than growing a second answer.
+	SetProjectRepository(ctx context.Context, project, repository, visibility string) (*quaycrewv1.Project, error)
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own session id always
 	// lands in the same session.
@@ -382,6 +397,12 @@ type Store interface {
 	// beside it. Job that already ended is refused rather than overwritten: how it ended is the
 	// useful part.
 	StopJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
+	// AskJob puts a running job's question on the record and stops it there. AnswerJob is the other
+	// half: it writes what a person decided and puts the job back to pending, so the controller
+	// starts it again and hands the answer to the session that asked. Each applies only from the one
+	// phase it moves out of, in the same statement, so a question cannot be answered twice.
+	AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
+	AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
 	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
 	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps

@@ -81,7 +81,13 @@ hold conversation handles.
 
 **`projects`** sits between a workspace and its sessions: `id`, `workspace`, `name`, timestamps,
 `deleted_at`. Same soft deletion for the same reason. A task runs inside a project, and the
-project is where the files the model reads live.
+project is where the files the model reads live. It also carries `deploy_account`, `deploy_region`
+and `deploy_identity`, which say where this body of work ships. All three default to the empty
+string and all three empty is a project that has not said; the control plane refuses half a target,
+so a row holding two of the three cannot be written through it. It carries `repository` and
+`visibility` beside them, which say where the work lands rather than where it ships: an owner and a
+name, and `public` or `private`. Both default to the empty string, and a job declared in a project
+that has said works in that repository.
 
 **`sessions`** is the interesting one. Each row is a session: one conversation, running in its own
 sandbox. The console calls them sessions too, and `sessions` still opens that view.
@@ -176,8 +182,8 @@ caller declared (the title, the brief, the role and the version it was pinned to
 requires of that role, the mode, what the answer must carry, what it waits for, a deadline, a budget
 and its labels), what the crew assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
-answer, the reason, the question and what it spent). The intent is a row rather than a list held in a
-process, so it outlives the caller. `quay job list` and `quay job show` read it.
+answer, the reason, the question, what a person told it and what it spent). The intent is a row
+rather than a list held in a process, so it outlives the caller. `quay job list` and `quay job show` read it.
 
 It also carries the lease: `lease_owner` and `lease_until`, which say which controller is holding
 the job and until when. Those two are the only fields on the row a reader should ignore. They are how a

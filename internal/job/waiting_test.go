@@ -20,9 +20,7 @@ func TestABriefThatAsksTheJobToWaitIsRefused(t *testing.T) {
 		"raise the pull request, wait for CI, merge on green",
 		"push the branch and open the pull request, merging it once the checks are green",
 	} {
-		d := declared()
-		d.Brief = brief
-		err := d.Validate()
+		err := job.Declared(brief)
 		if err == nil {
 			t.Errorf("%q was accepted, and no job can do it", brief)
 			continue
@@ -38,10 +36,7 @@ func TestABriefThatAsksTheJobToWaitIsRefused(t *testing.T) {
 // The refusal quotes the words that were typed, because a person shown their own sentence sees what
 // to change.
 func TestTheRefusalQuotesTheBrief(t *testing.T) {
-	d := declared()
-	d.Brief = "fix the defect, push, watch the checks and merge on green"
-
-	err := d.Validate()
+	err := job.Declared("fix the defect, push, watch the checks and merge on green")
 	if err == nil {
 		t.Fatal("the brief was accepted")
 	}
@@ -63,9 +58,7 @@ func TestABriefThatDoesOrdinaryWorkIsAccepted(t *testing.T) {
 		"watch out for a session that answers without a pull request",
 		"write the merge strategy down in docs/ORCHESTRATION.md",
 	} {
-		d := declared()
-		d.Brief = brief
-		if err := d.Validate(); err != nil {
+		if err := job.Declared(brief); err != nil {
 			t.Errorf("%q was refused: %v", brief, err)
 		}
 	}
@@ -84,9 +77,7 @@ func TestABriefThatSaysNotToIsAccepted(t *testing.T) {
 		"open the pull request; somebody else merges the pull request",
 		"push the branch and open the pull request; the merge is somebody else's",
 	} {
-		d := declared()
-		d.Brief = brief
-		if err := d.Validate(); err != nil {
+		if err := job.Declared(brief); err != nil {
 			t.Errorf("%q was refused: %v", brief, err)
 		}
 	}

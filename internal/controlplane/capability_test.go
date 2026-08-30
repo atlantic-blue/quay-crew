@@ -260,7 +260,7 @@ func TestJobThatRunsAsNoRoleCarriesACredentialThatMayCallNothing(t *testing.T) {
 		t.Fatal("no credential was minted")
 	}
 	grant, _ := s.Grants().Grant(token)
-	for _, verb := range role.Verbs {
+	for _, verb := range role.Grantable {
 		if grant.May(verb) {
 			t.Errorf("job that runs as no role may %s", verb)
 		}
@@ -293,7 +293,7 @@ func importRoleThatMay(t *testing.T, s *controlplane.Server, name string, verbs 
 	t.Helper()
 	manifest := "name: " + name + "\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n"
 	if len(verbs) > 0 {
-		manifest += "may:\n"
+		manifest += "verbs:\n"
 		for _, verb := range verbs {
 			manifest += "  - " + verb + "\n"
 		}

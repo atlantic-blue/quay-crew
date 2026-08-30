@@ -8,10 +8,10 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// A job cannot wait, so a brief that asks it to is refused where it is written.
+// A job cannot wait, so a brief that asks it to is refused where a caller declares it.
 //
-// The three scenarios are one behaviour. The rule reads English, so what it leaves alone matters as
-// much as what it stops: a refusal that fires on ordinary work is the rule everybody words around.
+// The scenarios are one behaviour. The rule reads English, so what it leaves alone matters as much
+// as what it stops: a refusal that fires on ordinary work is the rule everybody words around.
 
 func initializeJobWaitingSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the caller declares a job briefed to "([^"]*)"$`, func(ctx context.Context, brief string) error {
@@ -36,5 +36,26 @@ func initializeJobWaitingSteps(sc *godog.ScenarioContext) {
 		}
 		_, err := lastJob(ctx)
 		return err
+	})
+}
+
+// initializeFlowStepSteps says what a run's steps were asked.
+//
+// The rule is on what a caller declared and not on a step, so the one thing to prove about a flow is
+// that the node after its wait really did merge.
+func initializeFlowStepSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^one of the run's steps was asked "([^"]*)"$`, func(ctx context.Context, want string) error {
+		tasks, err := flowRunTasks(ctx, worldFrom(ctx))
+		if err != nil {
+			return err
+		}
+		asked := make([]string, 0, len(tasks))
+		for _, task := range tasks {
+			if task.GetPrompt() == want {
+				return nil
+			}
+			asked = append(asked, task.GetPrompt())
+		}
+		return fmt.Errorf("the run's steps were asked %q, and none was asked %q", asked, want)
 	})
 }

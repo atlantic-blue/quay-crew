@@ -49,7 +49,7 @@ quay job create me/quay-crew --role backlog-clearer \
 
 The role is on the record, never on the call that runs the task. A caller that could name its own
 role could name one granting more than the job was declared with, and the credential the crew mints
-for that task carries what the role's `may` list declares.
+for that task carries what the role's `verbs` list declares.
 
 `--requires` is the other side of `receives`: it says what this job cannot be done without.
 Where the role does not receive it, the job is refused, and no container is ever built for it.
@@ -64,7 +64,7 @@ flowchart LR
     JOB["a job<br/>role backlog-clearer<br/>requires context"] --> CHECK{"does the role receive<br/>everything the job requires?"}
     CHECK -->|"no"| STOPPED["phase stopped.<br/>The refusal names the role,<br/>the material, and both ways out"]
     CHECK -->|"yes"| SESSION["a session running as the role,<br/>in its own container"]
-    SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its may list"]
+    SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its verbs"]
 ```
 
 The check happens twice, and the second one is the one that matters. At the write, so the refusal
@@ -128,8 +128,10 @@ Three, because those are what the crew puts in front of a session today. A word 
 assembles yet would be a boundary that means nothing, and a boundary that means nothing looks exactly
 like one that holds.
 
-`may` is the other boundary, and it is the one added on 27 August 2026. `receives` says what a
-session running as this role is given, and `may` says what it is allowed to call:
+`verbs` is the other boundary, and it is the one added on 27 August 2026. `receives` says what a
+session running as this role is given, and `verbs` says what it is allowed to call. The word is
+kubernetes's: a rule there is api groups, resources and verbs, and the question is asked as `kubectl
+auth can-i create jobs`. An operator arrives already knowing it.
 
 ```yaml
 name: backlog-clearer
@@ -138,7 +140,7 @@ summary: clears the open pull request backlog
 model: opus
 receives:
   - job
-may:
+verbs:
   - job.create
   - job.read
 ```
@@ -152,7 +154,7 @@ is a boundary that means nothing:
 - `job.answer` answers a question a job asked.
 - `job.stop` stops a job.
 
-A role that declares no `may` list may call nothing, which is what every role written before this
+A role that declares no `verbs` list may call nothing, which is what every role written before this
 became. Default deny, so a boundary is something an author wrote rather than something they forgot.
 
 Nothing here creates a workspace, a project, a secret, a skill, a hook or a role. A session that
@@ -167,7 +169,7 @@ of `docs/ORCHESTRATION.md` for why capability is split across the two.
 
 ```mermaid
 flowchart LR
-    ROLE["the role: may job.create"] --> AND{"both, or neither"}
+    ROLE["the role: verbs job.create"] --> AND{"both, or neither"}
     LIMITS["the workspace: max depth 2"] --> AND
     AND -->|"declared at depth 1"| YES["the job is written"]
     AND -->|"declared at depth 2"| NO["refused, naming the workspace limit"]
@@ -186,7 +188,7 @@ brief nobody follows.
 ## Reading one back
 
 `quay role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
-summary, the model, what it receives, what it may call, and who holds it. A bare name reads what the
+summary, the model, what it receives, the verbs it may call, and who holds it. A bare name reads what the
 current address can see, and a workspace level address reads the version that workspace pinned.
 
 The brief is the role, so a role that could not be read back was a run nobody could audit. There was
@@ -198,6 +200,48 @@ to open a file on the host disk the crew knows nothing about.
 A name nothing holds is refused with the names that are there: the near spellings when there are any,
 and everything held when there are not. A short list of real names is more use than a correct
 silence.
+
+## Where a role came from
+
+A role is imported from a directory, and a directory is anywhere. That makes the first import easy
+and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
+on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
+listing the crew printed showed them looking exactly like the fifteen that ship in
+[`roles/`](../roles).
+
+So `quay role import` records where it read the files, and the crew says it back in every place a
+role is printed:
+
+```
+test-writer      v1   writes the tests for a job, from the job alone
+                      runs on opus
+                      receives context, job
+                      from github.com/atlantic-blue/quay-crew roles/test-writer at 4f2a1b9c
+```
+
+Five facts, because an operator acts on them separately: the repository to open, the commit to open
+it at, the directory inside it, whether the files were edited after that commit, and whether the
+commit is on a remote branch. A role that fails any of them gets a second line saying nobody else can
+read it and what to do about that.
+
+The client reads it, because only the client can. The repository is on the operator's machine and the
+control plane runs in a container that cannot see it, which is the same reason the files travel
+rather than a path.
+
+Nothing is refused over any of it. A role written in a scratch directory while somebody finds the
+shape of it is ordinary, and what was missing was not a gate, it was anybody being able to see. A
+role imported before the crew recorded any of this says only that, because calling it loose would be
+an accusation the crew cannot support.
+
+Importing the same role again records where it was read this time. That is the way out: commit the
+role, push it, import it again, and the warning clears. A crew that kept the first answer would leave
+the operator fixing it and watching nothing change. It is safe because where a role came from is not
+part of what a role is: it is not in the fingerprint, so the same bytes read out of two checkouts are
+one role, read in two places, rather than a version already imported being refused as a different one.
+
+What this does not do is put the role in the repository for anybody. A project cannot yet declare a
+roles directory the crew imports from, because nothing in the crew knows what repository a project
+has. That is [quay-crew#443](https://github.com/atlantic-blue/quay-crew/issues/443).
 
 ## The two levels
 
@@ -288,7 +332,7 @@ The design phase, in order, and the model each one runs on:
 The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
 team is worth the larger model and writing one file to a specification is not.
 
-Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `may`
+Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `verbs`
 list, `job.create` and `job.read`, because its brief declares a security review and reads what came
 back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
 grant mean something.
@@ -321,6 +365,14 @@ skills, so it held no git tool, and the only thing that changed was that nobody 
 had built until the job ended. So each of the three briefs ends a slice the same way. Commit it, push
 the branch, open a pull request describing what changed and why in two to five sentences, say the
 address in the answer, and move to the next phase.
+
+**The merge is refused rather than asked for.** `may` grants the verbs a session calls on the crew,
+and merging is not one of them: it is a github action a session takes with a credential a skill gave
+it, so the control plane never sees it and cannot refuse it. The place it can be refused is the
+sandbox, at the moment the command runs, and that is a hook. `merge-gate` ships in `hooks/` and a
+fresh crew is put under it, so a session that runs `gh pr merge` is refused and told to open a pull
+request instead. An operator who takes the hook off has decided otherwise, deliberately, which is the
+difference between a boundary and a sentence.
 
 **A test and the code it tests come from different sessions.** The orchestrator's brief says that a
 deliverable carrying logic is at least three children: `test-writer` from the contract, `implementer`
@@ -403,6 +455,8 @@ them.
   written.
 - A job in a role is a root job only. A job under a parent and a job that waits for something are each
   their own slice, whether or not they name a role.
+- Where a role came from is recorded and printed, and nothing acts on it: no import is refused, no
+  run is stopped, and a project cannot declare a roles directory the crew imports from.
 
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),

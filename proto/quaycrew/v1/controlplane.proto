@@ -26,6 +26,37 @@ message Project {
   string workspace = 2;
   string name = 3;
   google.protobuf.Timestamp created_at = 4;
+  // deploy_target is where this body of work ships. Unset on a project that has not said, which is
+  // every project until somebody does.
+  DeployTarget deploy_target = 5;
+  // repository is where this project's work lands, written owner/name. A job declared here that
+  // names no repository of its own works in this one, so where the work goes is a row rather than an
+  // argument somebody has to remember to pass.
+  string repository = 6;
+  // visibility is what kind of repository that is: "public" or "private". It is a cost fact. A
+  // pipeline's minutes are free on a public repository and metered on a private one, and that
+  // decision was being taken in a person's head, once per project.
+  //
+  // It is what the operator declared, not what the forge says. The crew does not go and look.
+  string visibility = 7;
+}
+
+// DeployTarget is where a project ships: the cloud account, the region inside it, and the identity a
+// pipeline assumes to get there.
+//
+// It is one message rather than three fields on the project because a target is whole or it is
+// absent. Half of one reads as an answer to "where does this go" and is not one, and the cost of
+// believing it is a tree of jobs that writes correct infrastructure for an account it can never
+// reach.
+message DeployTarget {
+  // account is the cloud account, twelve digits.
+  string account = 1;
+  // region is where inside it, for example "eu-west-2".
+  string region = 2;
+  // identity is the role a pipeline assumes to deploy, and it belongs to the account above. The
+  // control plane refuses a target whose identity names a different one, because pasting the role
+  // from the other account is invisible until a pipeline runs.
+  string identity = 3;
 }
 
 // A session is one conversation inside a project: the operator's word for what the control plane
@@ -207,6 +238,15 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
 }
+// SetDeployTargetRequest declares where a project ships. An unset target clears what was declared,
+// so a wrong account is undone through the same door it was written through.
+message SetDeployTargetRequest {
+  string project = 1;
+  DeployTarget target = 2;
+}
+message SetDeployTargetResponse {
+  Project project = 1;
+}
 // A flow run: one instance of a graph, pinned to the version it started with, moving one node at a
 // time. It is carried by a job, and every step it takes is a job under that one,
 // so a run sits inside the job tree rather than beside it.
@@ -318,6 +358,19 @@ message DeleteProjectRequest {
   string id = 1;
 }
 message DeleteProjectResponse {}
+
+// SetProjectRepositoryRequest records where a project's work lands. Sending it again replaces what
+// is held, so a project that moved repository is corrected with the same command.
+message SetProjectRepositoryRequest {
+  string project = 1;
+  string repository = 2;
+  // visibility is "public" or "private". Empty is public, because free pipeline minutes are the
+  // cheaper of the two and a project that cannot be public is the one that has to say so.
+  string visibility = 3;
+}
+message SetProjectRepositoryResponse {
+  Project project = 1;
+}
 
 message AttachChannelRequest {
   string workspace = 1;
@@ -792,6 +845,31 @@ message Role {
   google.protobuf.Timestamp imported_at = 6;
   // crew says the crew holds this role, so every workspace has it without attaching anything.
   bool crew = 7;
+  // origin is where the files came from, recorded at import. A role nobody can go and read is the
+  // failure this exists for: an acceptance run was driven by three roles in a folder on one machine,
+  // so no pull request touched them and nobody reviewed them.
+  RoleOrigin origin = 8;
+}
+
+// RoleOrigin is where a role's files came from, as the machine that imported them saw it.
+//
+// It is not part of what a role is, so it is not in the fingerprint that decides whether two imports
+// of one version are the same role. The same bytes imported from two checkouts are one role, read in
+// two places.
+message RoleOrigin {
+  // repository is where the repository is, written host/owner/name. Empty when the directory is not
+  // in one, or is in one with no remote.
+  string repository = 1;
+  // commit is the commit the checkout was at, in full.
+  string commit = 2;
+  // path is the directory inside the repository, or the path on the importing machine when there is
+  // no repository.
+  string path = 3;
+  // dirty says the directory's own files are not what the commit holds, so the commit names
+  // something else.
+  bool dirty = 4;
+  // unpushed says the commit is on no remote branch, so it is on one machine.
+  bool unpushed = 5;
 }
 
 // RoleFile is one file of a role's directory, on its way into the crew.
@@ -805,6 +883,9 @@ message RoleFile {
 // control plane runs in a container where a path on the operator's machine means nothing.
 message ImportRoleRequest {
   repeated RoleFile files = 1;
+  // origin is where the client read the files from. The client reads it because only the client can:
+  // the repository is on the operator's machine and the control plane runs in a container.
+  RoleOrigin origin = 2;
 }
 message ImportRoleResponse {
   Role role = 1;
@@ -853,9 +934,9 @@ message GetRoleResponse {
   // brief is the whole instruction a session running as this role is given. It travels here and
   // nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
   string brief = 2;
-  // may is what a session running as this role may call, sorted. Empty is a role that may call
-  // nothing, which is the default.
-  repeated string may = 3;
+  // verbs is what a session running as this role may call, sorted, in the word kubernetes uses for
+  // the same question. Empty is a role that may call nothing, which is the default.
+  repeated string verbs = 3;
   // held_by names every workspace that attached this role for itself, sorted. A role the crew holds
   // says so on the role and reaches every workspace without being named here.
   repeated string held_by = 4;
@@ -1000,6 +1081,41 @@ message HeadroomSandbox {
   string status = 6;
 }
 
+// GetHealthRequest asks what the crew last found when it probed the parts of itself it has to write
+// to before a dispatch can start.
+message GetHealthRequest {}
+// GetHealthResponse is that probe's last reading, one entry per part.
+//
+// It answers from the last probe and never probes on the call, for the reason GetHeadroomResponse
+// does: a broker that is down costs the whole export budget on every write, so a view that probed
+// when it drew would stall for as long as the thing it is reporting on is broken.
+//
+// It is a different message from GetInfoResponse on purpose. That one is configuration, fetched once
+// and never a verdict; this one is a verdict and goes stale, which is why it carries the time it was
+// taken.
+message GetHealthResponse {
+  // components is what was probed, in the order a dispatch needs them. A part the crew does not
+  // probe is not in here at all, and a caller reading it must say so rather than filling the gap
+  // with a colour: the whole point of this call is that a part nothing checked must not read the
+  // same as a part that answered.
+  repeated HealthComponent components = 1;
+  // checked_at is when the probe ran. Unset means the crew has never probed, which is a crew that
+  // started a moment ago.
+  google.protobuf.Timestamp checked_at = 2;
+}
+// HealthComponent is one part of the crew and what the last probe of it found.
+message HealthComponent {
+  // name is the part, for example "store" or "events".
+  string name = 1;
+  // state is one word: "serving" when the probe landed, "down" when it did not, and "not configured"
+  // for a part this crew has none of, which is an event log nothing is connected to. Down has to be
+  // readable without reading the detail beside it.
+  string state = 2;
+  // detail is why it is down, for example "the event log did not take a record: ...". Empty when
+  // there is nothing wrong to say.
+  string detail = 3;
+}
+
 // GetUsageRequest asks what the crew has cost so far.
 message GetUsageRequest {}
 // GetUsageResponse is every conversation the crew holds, added up.
@@ -1106,6 +1222,10 @@ message Job {
   // reason says why a stopped or failed job ended. question is what an asking job waits to be told.
   string reason = 22;
   string question = 23;
+  // told is the last thing a person told this job, and it is what the crew sends the session when
+  // the job starts again. It stays on the row after it has been handed over, because what somebody
+  // decided is part of the record of the job rather than a message in flight.
+  string told = 35;
   // pull_request is the address the answer named, read off the answer rather than reported by the
   // model. It is what a reader opens to see the work, without opening a sandbox.
   string pull_request = 34;
@@ -1159,6 +1279,14 @@ message CreateJobRequest {
 }
 message CreateJobResponse {
   Job job = 1;
+  // left_out is every skill the workspace holds that the session running this job will not be given,
+  // because the workspace has not set a secret that skill needs. Each carries, in its own left_out
+  // field, the same sentence the skill listing prints.
+  //
+  // It is an answer rather than a refusal. The crew cannot know which skill a brief will reach for, so
+  // refusing here would stop a job that never touches a repository over a token it never wanted. What
+  // it can do is say, while the caller is looking, that the session starts without that capability.
+  repeated Skill left_out = 2;
 }
 
 message GetJobRequest {
@@ -1195,6 +1323,39 @@ message StopJobRequest {
   string reason = 2;
 }
 message StopJobResponse {
+  Job job = 1;
+}
+
+// AskJobRequest puts a question to a person about the job the caller is running.
+//
+// Asking is not a verb a role grants. A session asks about the job it is itself running, and the
+// credential it presented is already bound to that job, so there is no grant to hold: id is here to
+// be checked against the credential rather than to choose a job, and a caller naming another job is
+// refused.
+message AskJobRequest {
+  // question is what the person is being asked. It is the whole of what they see, so it says what is
+  // being decided and what each answer costs.
+  string question = 1;
+  // id names the job asking, and only the caller's own is accepted. Empty is the caller's own job,
+  // which is the only one it may ask about.
+  string id = 2;
+}
+message AskJobResponse {
+  Job job = 1;
+}
+
+// AnswerJobRequest tells an asking job what a person decided.
+//
+// The operator's call. A session cannot answer a question a person was asked, which is the whole
+// point of asking one: a run that takes silence, or takes its own word, for an answer is a gate that
+// decorates rather than holds.
+message AnswerJobRequest {
+  string id = 1;
+  // answer is what the person decided. It reaches the session as its next task, so it is read by a
+  // model rather than only recorded.
+  string answer = 2;
+}
+message AnswerJobResponse {
   Job job = 1;
 }
 
@@ -1274,6 +1435,8 @@ service ControlPlaneService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  rpc SetDeployTarget(SetDeployTargetRequest) returns (SetDeployTargetResponse);
+  rpc SetProjectRepository(SetProjectRepositoryRequest) returns (SetProjectRepositoryResponse);
 
   rpc ImportFlow(ImportFlowRequest) returns (ImportFlowResponse);
   rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
@@ -1335,6 +1498,10 @@ service ControlPlaneService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
+  // AskJob is a session putting a question to a person about the job it is running, and
+  // AnswerJob is the person answering. Nothing else moves the job in between.
+  rpc AskJob(AskJobRequest) returns (AskJobResponse);
+  rpc AnswerJob(AnswerJobRequest) returns (AnswerJobResponse);
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.
   rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);
@@ -1348,4 +1515,8 @@ service ControlPlaneService {
   // GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
   // and never from the daemon, so the header may ask it every second.
   rpc GetHeadroom(GetHeadroomRequest) returns (GetHeadroomResponse);
+  // GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+  // It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
+  // the reason GetHeadroom answers from the last sample.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/auth"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,6 +38,12 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		at := req.GetDeadline().AsTime()
 		declaration.Deadline = &at
 	}
+	// The brief is held to what a job can do, here rather than in PrepareJob, because a flow declares
+	// its steps through that call too and a step is not a job somebody wrote. The graph around a step
+	// holds the wait, so its last node merges the pull request and means it.
+	if err := job.Declared(declaration.Brief); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	declared, declaredEvent, err := s.PrepareJob(ctx, "", declaration)
 	if err != nil {
 		return nil, err
@@ -53,7 +60,37 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
-	return &quaycrewv1.CreateJobResponse{Job: asJob(kept)}, nil
+	return &quaycrewv1.CreateJobResponse{Job: asJob(kept), LeftOut: s.jobLeftOut(ctx, declared)}, nil
+}
+
+// jobLeftOut is every skill the session running this job will be born without, because the workspace
+// has not set a secret that skill needs.
+//
+// The crew already knows this at the moment of the write, and until now it said so in one listing
+// nobody is required to read. A workspace with no credential accepts a whole tree of jobs, every
+// session in it dies on its first clone, and the budget is spent before anything says why.
+//
+// It is an answer rather than a refusal, because the crew cannot know which skill a brief will reach
+// for: a job that reads an electricity bill is not wrong to run in a workspace with no forge token,
+// and refusing it would make one unset secret enough to stop every job in the workspace. That is the
+// same trade withoutUnusable already made for the session itself.
+//
+// A role that does not receive skills is given none of them by design, so there is nothing missing to
+// report. A job that names no role is a session that receives everything, which is what receives says.
+func (s *Server) jobLeftOut(ctx context.Context, declared *job.Job) []*quaycrewv1.Skill {
+	if declared.Role != "" {
+		held, err := s.roleFor(ctx, declared.Workspace, declared.Role)
+		if err != nil || !held.Gets(role.MaterialSkills) {
+			return nil
+		}
+	}
+	var out []*quaycrewv1.Skill
+	for _, one := range s.leftOutIn(ctx, declared.Workspace) {
+		carried := skillAsProto(one.Skill)
+		carried.LeftOut = one.Why
+		out = append(out, carried)
+	}
+	return out
 }
 
 // PrepareJob holds a declaration to every rule and answers with the row to write and the record of
@@ -97,6 +134,15 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
 		Version: 1, Phase: job.PhasePending,
+	}
+	// Where the work lands, when the declaration did not say. It is the project's, because a project
+	// is a body of work and the repository is where that body of work goes: the acceptance run had a
+	// repository the crew held no record of, so every job had to be told the address again and a
+	// session told to push had nowhere to push to.
+	//
+	// A job that named its own keeps it. The project's is the default, not a ceiling.
+	if declared.Repository == "" {
+		declared.Repository = project.GetRepository()
 	}
 	if err := s.underTheCaller(ctx, under, declared); err != nil {
 		return nil, nil, err
