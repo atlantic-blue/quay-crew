@@ -7,9 +7,12 @@
 // nobody reviewed them and nothing versioned them. The clause that decided the whole outcome was
 // never read by anybody but the session it was handed to.
 //
-// So an import records where the files came from, and the crew says it back. Nothing here refuses an
-// import: a role written in a scratch directory while somebody is finding the shape of it is
-// ordinary, and what was missing was not a gate, it was anybody being able to see.
+// So an import records where the files came from, and the crew says it back. A role does today;
+// a skill and a hook have the same hole and are not this change.
+//
+// Nothing here refuses an import. A role written in a scratch directory while somebody is finding
+// the shape of it is ordinary, and what was missing was not a gate, it was anybody being able to
+// see.
 package origin
 
 import (
@@ -57,7 +60,7 @@ func Of(dir string) Origin {
 	read.Commit, _ = git(dir, "rev-parse", "HEAD")
 	read.Repository = Address(remote(dir))
 	// Against this directory rather than the whole checkout. A change three packages away is not
-	// this role's business, and a warning that fires on every import from a working checkout is a
+	// this directory's business, and a warning that fires on every import from a working checkout is a
 	// warning nobody reads.
 	changed, _ := git(dir, "status", "--porcelain", "--", absolute)
 	read.Dirty = strings.TrimSpace(changed) != ""
