@@ -150,7 +150,7 @@ func TestMountingAFileThatIsNotThereIsRefused(t *testing.T) {
 	if !strings.Contains(err.Error(), missing) {
 		t.Fatalf("the refusal does not name the path: %s", err)
 	}
-	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets set") {
+	if listed := mustRun(t, client, "secret", "list"); !strings.Contains(listed, "no secrets in this crew") {
 		t.Fatalf("something was stored anyway: %q", listed)
 	}
 }

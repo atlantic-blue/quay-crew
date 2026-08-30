@@ -183,9 +183,11 @@ func TestTheListingIsNewestFirstAndNarrowsByPhase(t *testing.T) {
 	declaredHere(t, client, "pay the electricity bill")
 
 	listed := mustRun(t, client, "job", "list")
-	lines := strings.Split(strings.TrimSpace(listed), "\n")
+	// The rows, which are everything above the line that says where the listing looked.
+	rows, _, _ := strings.Cut(strings.TrimSpace(listed), "\n\n")
+	lines := strings.Split(rows, "\n")
 	if len(lines) != 2 {
-		t.Fatalf("the listing has %d lines, want 2: %q", len(lines), listed)
+		t.Fatalf("the listing has %d rows, want 2: %q", len(lines), listed)
 	}
 	if !strings.Contains(lines[0], "pay the electricity bill") {
 		t.Fatalf("the listing opens with %q, want the newest first", lines[0])
