@@ -238,12 +238,11 @@ func writeRow(out *strings.Builder, widths []int, cells []string) {
 	out.WriteString("\n")
 }
 
-// SessionName is what to call a session where one word has to stand for it: the name the operator
-// gave it, then the one the crew wrote for itself, then the identifier a listing prints.
+// SessionName is what to call a session where one word has to stand for it: the name it is called,
+// then the identifier a listing prints.
 //
-// The operator's name wins because a name somebody picked beats a name a machine wrote. The
-// identifier is last, and it is the id rather than the handle: the id is the value the session column
-// carries, so a breadcrumb falling back to it falls back to something the operator can type.
+// The identifier is last, and it is the id rather than the handle: the id is the value the session
+// column carries, so a breadcrumb falling back to it falls back to something the operator can type.
 func SessionName(session *quaycrewv1.Session) string {
 	if named := SessionLabel(session); named != "" {
 		return named
@@ -253,12 +252,28 @@ func SessionName(session *quaycrewv1.Session) string {
 
 // SessionLabel is what a session is called, and nothing else. Empty until somebody names it.
 //
+// Three names, in the order of how much a reader should trust them: the label the operator typed
+// about this conversation, the title it was dispatched with, then the line the crew wrote about it.
+//
+// The label is first because it is the last word of the person who has seen the session, and it is
+// the only one of the three they can change. The title comes next because a person typed it too, at
+// declaration, about the job this session was made for. The description is last because a model
+// wrote it.
+//
+// The title is what fills the cell while the work is happening. A label needs an operator who has
+// already looked, and a description is written behind a task that has landed, so a job, which is one
+// long task, ran to the end with a blank name cell: four running jobs and no way to tell which was
+// which.
+//
 // The name cell used to fall back to the handle, which put a raw identifier under the heading "name"
 // and took it off the screen again the moment the session was labelled. Two identifiers were on the
 // screen and neither was in a column that said so.
 func SessionLabel(session *quaycrewv1.Session) string {
 	if label := strings.TrimSpace(session.GetLabel()); label != "" {
 		return label
+	}
+	if title := strings.TrimSpace(session.GetTitle()); title != "" {
+		return title
 	}
 	return strings.TrimSpace(session.GetDescription())
 }

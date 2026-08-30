@@ -13,6 +13,7 @@ A role is imported, pinned to a version, and attached at a level:
 ```
 quay role import <directory>
 quay role list [<workspace>]
+quay role show [<workspace>] <name>
 quay role attach [<workspace>|crew] <name>
 quay role detach [<workspace>|crew] <name>
 ```
@@ -181,6 +182,22 @@ held to a sentence, and the measurement behind that is in [`SKILLS.md`](SKILLS.m
 51,727 bytes of context per session. A role's brief reaches one session, once, and that session
 exists to do this one job. The ceiling is still here because a brief nobody reads to the end is a
 brief nobody follows.
+
+## Reading one back
+
+`quay role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
+summary, the model, what it receives, what it may call, and who holds it. A bare name reads what the
+current address can see, and a workspace level address reads the version that workspace pinned.
+
+The brief is the role, so a role that could not be read back was a run nobody could audit. There was
+no way to diff what the crew holds against the file it came from, and no way to tell whether the crew
+was running the version somebody edited an hour ago. The acceptance run turned on exactly this: one
+clause of the orchestrator brief decided the whole outcome, and the only way to find that clause was
+to open a file on the host disk the crew knows nothing about.
+
+A name nothing holds is refused with the names that are there: the near spellings when there are any,
+and everything held when there are not. A short list of real names is more use than a correct
+silence.
 
 ## The two levels
 

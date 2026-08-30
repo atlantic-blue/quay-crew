@@ -8,6 +8,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
+	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/job"
 	"github.com/cucumber/godog"
 )
@@ -241,6 +242,33 @@ func initializeJobControllerSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	// The name cell of a listing, not the column behind it. What was broken is what an operator reads
+	// while four jobs are running, so the assertion is on the words the row draws.
+	sc.Step(`^the session doing that job is listed as "([^"]*)"$`,
+		func(ctx context.Context, want string) error {
+			session, err := sessionDoingTheJob(ctx)
+			if err != nil {
+				return err
+			}
+			if named := display.SessionLabel(session); named != want {
+				return fmt.Errorf("the name cell of the session doing the job says %q, want %q", named, want)
+			}
+			return nil
+		})
+
+	// The other half of that scenario: with nothing having described this conversation, the name in
+	// the cell above can only have come from the declaration.
+	sc.Step(`^nothing has described that conversation$`, func(ctx context.Context) error {
+		session, err := sessionDoingTheJob(ctx)
+		if err != nil {
+			return err
+		}
+		if said := session.GetDescription(); said != "" {
+			return fmt.Errorf("the crew described the conversation as %q while its task was still running", said)
+		}
+		return nil
+	})
 }
 
 // readJob reads one of the scenario's jobs back off the crew, so an assertion is about
@@ -403,28 +431,14 @@ func initializeJobRoleSteps(sc *godog.ScenarioContext) {
 	// crew actually built, and a row saying the name proves nothing about it.
 	sc.Step(`^the session doing that job runs as the "([^"]*)" role$`,
 		func(ctx context.Context, named string) error {
-			one, err := readJob(ctx, 0)
+			session, err := sessionDoingTheJob(ctx)
 			if err != nil {
 				return err
 			}
-			if one.GetSession() == "" {
-				return fmt.Errorf("the job says no session, so nothing ran as anybody")
+			if session.GetRole() != named {
+				return fmt.Errorf("the session doing the work runs as %q, want %q", session.GetRole(), named)
 			}
-			w := worldFrom(ctx)
-			listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
-			if err != nil {
-				return err
-			}
-			for _, session := range listed.GetSessions() {
-				if session.GetId() != one.GetSession() {
-					continue
-				}
-				if session.GetRole() != named {
-					return fmt.Errorf("the session doing the work runs as %q, want %q", session.GetRole(), named)
-				}
-				return nil
-			}
-			return fmt.Errorf("the crew holds no session %s", one.GetSession())
+			return nil
 		})
 
 	sc.Step(`^the job is stopped, saying the "([^"]*)" role does not receive "([^"]*)"$`,
@@ -469,4 +483,27 @@ func initializeJobRoleSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// sessionDoingTheJob is the session the first job's task went to, read off the crew rather than off
+// the row: a row naming a session says nothing about what the crew actually built.
+func sessionDoingTheJob(ctx context.Context) (*quaycrewv1.Session, error) {
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	if one.GetSession() == "" {
+		return nil, fmt.Errorf("the job says no session, so there is no conversation to read")
+	}
+	w := worldFrom(ctx)
+	listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
+	if err != nil {
+		return nil, err
+	}
+	for _, session := range listed.GetSessions() {
+		if session.GetId() == one.GetSession() {
+			return session, nil
+		}
+	}
+	return nil, fmt.Errorf("the crew holds no session %s", one.GetSession())
 }
