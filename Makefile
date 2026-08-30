@@ -45,7 +45,7 @@ SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
 SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks changelog help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config home-check env-check up-check hooks changelog promises help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -357,6 +357,14 @@ features: hooks
 # release is one change a person read rather than a file a command rewrote.
 changelog:
 	@go run ./cmd/changelog
+
+## promises: refuse a change that touches behaviour and carries no changelog entry and no scenario
+#
+# The question continuous integration asks on a pull request, asked here before pushing. It reads what
+# this branch changed against origin/main. There is no pull request body on a machine, so a change
+# that legitimately has neither says so in the body and passes there rather than here.
+promises:
+	@go run ./cmd/promises -base origin/$(UPGRADE_BRANCH)
 
 ## lint: run buf and golangci-lint (generated code is not linted)
 lint:

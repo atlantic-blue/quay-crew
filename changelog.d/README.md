@@ -39,3 +39,14 @@ in it. An assembled release that says nothing looks exactly like one that assemb
 
 `CHANGELOG.md` keeps everything that landed before this convention. Nothing was moved into here: a
 record of what shipped on a day is worth less once it has been rewritten.
+
+## The check
+
+`make promises` refuses a change that touches behaviour and carries no fragment and no scenario, and
+continuous integration asks the same question on every pull request. A change may legitimately carry
+neither, so the way out is a line in the pull request body rather than silence:
+
+    No changelog entry: this renames a field nobody outside the package reads
+    No scenario: the behaviour is unchanged, this moves it between packages
+
+One word after the colon is refused. Whether the sentence is a good one is the reviewer's to judge.

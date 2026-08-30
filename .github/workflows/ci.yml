@@ -478,6 +478,47 @@ jobs:
           # Sandboxes outlive the control plane today; see issue #35.
           docker rm -f $(docker ps -aq --filter 'name=quaycrew-') 2>/dev/null || true
 
+
+  # A change that touches behaviour carries a changelog entry and a scenario, or says in the pull
+  # request body why it has neither. Everything above proves the code runs; nothing above knows this
+  # repository promises a reader an entry in CHANGELOG.md and a scenario in features/ for every
+  # behaviour, so that promise held for exactly as long as whoever opened the pull request remembered
+  # it. One change shipped 200 lines of new behaviour with neither and all four jobs were green.
+  #
+  # Only on a pull request, because there is no body to read anywhere else and no way to say why a
+  # change has none.
+  promises:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # The whole history, so the ref the change was cut from is here to be diffed against. A shallow
+      # checkout holds the pull request's own commits and not the base, and the check would refuse
+      # every change for a range it cannot read.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      # actions/checkout fetches the ref being built, not the one it is merging into, so the base is
+      # asked for by name here.
+      - name: Fetch the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+
+      # The body goes through the environment and into a file rather than into the command line. A
+      # body is somebody's prose, and a run step that interpolates it directly runs whatever it says.
+      - name: A change carries a scenario and a changelog entry
+        env:
+          BASE: ${{ github.base_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pull-request-body.md"
+          go run ./cmd/promises -base "origin/$BASE" -body "$RUNNER_TEMP/pull-request-body.md"
+
   secrets:
     runs-on: ubuntu-latest
     steps:
