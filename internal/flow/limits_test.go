@@ -10,6 +10,7 @@ import (
 const loopGraph = `
 name: loop
 version: 1
+mode: edits
 limits:
   transitions: 5
 nodes:
@@ -39,6 +40,7 @@ func TestAGraphWithNoDeclaredCapGetsTheDefault(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: plain
 version: 1
+mode: edits
 nodes:
   say: { type: dispatch, prompt: "hello" }
 edges:
@@ -64,6 +66,7 @@ func TestACapOfZeroOrLessIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: nope
 version: 1
+mode: edits
 limits:
   transitions: 0
 nodes:
@@ -144,6 +147,7 @@ func TestARunStopsBeforeTheDispatchThatWouldCrossItsCeiling(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: costly
 version: 1
+mode: edits
 limits:
   tokens: 1000
 nodes:
@@ -189,6 +193,7 @@ func TestNoDeclaredCeilingMeansNoTokenCeiling(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: plain
 version: 1
+mode: edits
 nodes:
   say: { type: dispatch, prompt: "hello" }
 edges:

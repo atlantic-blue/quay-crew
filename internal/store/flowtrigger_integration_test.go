@@ -28,6 +28,7 @@ import (
 const reactingFlow = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   arrived: { type: trigger }
   fix:     { type: dispatch, prompt: "the build at {{url}} is red. Fix it." }

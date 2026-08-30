@@ -8,7 +8,10 @@ subscription, with nothing sent to a service they do not run.
 The name is the picture of the system: a crew you command at the quay where every channel docks.
 
 It is early. [`CHANGELOG.md`](CHANGELOG.md) is the list of what has landed, and
-[`features/`](features/) says what the crew does today, as scenarios you can run.
+[`features/`](features/) says what the crew does today, as scenarios you can run. A change that
+has landed and is waiting for a release is a file of its own in
+[`changelog.d/`](changelog.d/README.md), which is how two changes written at once stay out of each
+other's way.
 
 ## The words
 

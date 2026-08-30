@@ -24,6 +24,7 @@ its own rather than in the run's:
 ```yaml
 name: write-tests
 version: 1
+mode: edits
 nodes:
   plan:  { type: dispatch, prompt: "say what needs testing" }
   tests: { type: dispatch, role: test-writer, prompt: "write the tests" }

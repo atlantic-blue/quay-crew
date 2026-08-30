@@ -10,6 +10,7 @@ import (
 const teamGraph = `
 name: write-tests
 version: 1
+mode: edits
 nodes:
   plan:  { type: dispatch, prompt: "say what needs testing" }
   tests: { type: dispatch, role: test-writer, prompt: "write the tests for {{plan}}" }
@@ -37,6 +38,7 @@ func TestOnlyAStepThatDoesJobMayNameARole(t *testing.T) {
 	_, err := Parse([]byte(`
 name: confused
 version: 1
+mode: edits
 nodes:
   first:  { type: dispatch, prompt: "do it" }
   branch: { type: choice, role: test-writer, on: { result.failed: "false" } }
@@ -57,6 +59,7 @@ func TestARoleNameThatCouldNeverMatchARoleIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: shouting
 version: 1
+mode: edits
 nodes:
   tests: { type: dispatch, role: "Test Writer", prompt: "write them" }
 edges:

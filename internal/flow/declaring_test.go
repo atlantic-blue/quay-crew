@@ -15,6 +15,7 @@ import (
 const twoStepGraph = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   fix:  { type: dispatch, prompt: "fix the build" }
   ok:   { type: choice, on: { result.failed: "false" } }
@@ -131,6 +132,7 @@ func TestAnAskingRunHoldsNoContainer(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: careful
 version: 1
+mode: edits
 nodes:
   fix:    { type: dispatch, prompt: "fix the build" }
   permit: { type: ask, text: "fixed it. push?" }
@@ -173,6 +175,7 @@ func TestTheRunsOwnJobFollowsTheRun(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: careful
 version: 1
+mode: edits
 nodes:
   fix:    { type: dispatch, prompt: "fix the build" }
   permit: { type: ask, text: "fixed it. push?" }
@@ -291,6 +294,7 @@ func TestAStepStoppedOverItsClaimStopsTheRun(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: site-check
 version: 1
+mode: edits
 nodes:
   read: { type: dispatch, prompt: "read package.json", expect: { file: package.json } }
   tell: { type: dispatch, prompt: "summarise it" }
@@ -401,6 +405,7 @@ func TestAStepNamingARoleDeclaresJobInThatRole(t *testing.T) {
 	engine, it, workspace, project := aCrew(t, `
 name: write-tests
 version: 1
+mode: edits
 nodes:
   plan:  { type: dispatch, prompt: "say what needs testing" }
   tests: { type: dispatch, role: test-writer, prompt: "write the tests" }

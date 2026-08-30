@@ -11,6 +11,7 @@ import (
 const waitingGraph = `
 name: patient
 version: 1
+mode: edits
 nodes:
   ask:   { type: dispatch, prompt: "start the build" }
   pause: { type: wait, for: 10m }
@@ -35,6 +36,7 @@ func TestAWaitWithNoDurationIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: forever
 version: 1
+mode: edits
 nodes:
   ask:   { type: dispatch, prompt: "go" }
   pause: { type: wait }
@@ -54,6 +56,7 @@ func TestAWaitWithAnUnreadableDurationIsRefused(t *testing.T) {
 	_, err := Parse([]byte(`
 name: nonsense
 version: 1
+mode: edits
 nodes:
   ask:   { type: dispatch, prompt: "go" }
   pause: { type: wait, for: "soon" }
@@ -139,6 +142,7 @@ func TestAWaitingRunStillCountsTowardsItsCap(t *testing.T) {
 	graph, err := Parse([]byte(`
 name: patient-loop
 version: 1
+mode: edits
 limits:
   transitions: 4
 nodes:

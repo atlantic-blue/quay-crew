@@ -313,7 +313,7 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	}
 	graph, err := Parse([]byte(definition))
 	if err != nil {
-		return Run{}, "", Graph{}, fmt.Errorf("flow: graph %s version %d no longer parses, which should have been refused at import: %w", graphName, version, err)
+		return Run{}, "", Graph{}, fmt.Errorf("flow: graph %s version %d does not parse, so no run of it can start; fix the file and import the next version: %w", graphName, version, err)
 	}
 	// A trigger starts a graph whose author said it reacts, and nothing else. Refused rather than
 	// run, because a graph that begins with a dispatch begins when a person or a schedule says so,

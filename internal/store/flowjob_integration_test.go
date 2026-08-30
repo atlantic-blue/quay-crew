@@ -30,6 +30,7 @@ import (
 const twoStepFlow = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   fix:  { type: dispatch, prompt: "fix the build" }
   ok:   { type: choice, on: { result.failed: "false" } }
@@ -262,5 +263,90 @@ func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
 	}
 	if carrier.GetJob().GetDepth() != 1 {
 		t.Fatalf("the run is at depth %d, want one below the job that started it", carrier.GetJob().GetDepth())
+	}
+}
+
+// modeRecordingRunner keeps the permission mode of every task beside the prompt that carried it, so
+// a test can say which step ran in which mode rather than that some task somewhere did.
+type modeRecordingRunner struct {
+	mu    sync.Mutex
+	modes map[string]string
+}
+
+func (m *modeRecordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.modes == nil {
+		m.modes = map[string]string{}
+	}
+	m.modes[req.Text] = req.PermissionMode
+	return model.Response{Reply: "done", ModelSessionID: "conversation-" + req.Text}, nil
+}
+
+func (m *modeRecordingRunner) modeOf(prompt string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.modes[prompt]
+}
+
+// quay-crew#461, over the whole road rather than the reducer alone.
+//
+// The unit tier proves the graph carries the mode it declares. That is not the question: the mode has
+// to survive the graph becoming a job row in Postgres, a controller claiming that row, and a dispatch
+// building the session, and every one of those is a place it could be dropped without a test noticing.
+// A run whose steps arrive in the wrong mode stops to ask a person who is not there, which is the
+// failure the whole change exists to stop, and it is invisible until something reads the mode the
+// model was actually handed.
+//
+// Both steps, because a mode read once and forgotten would pass on the first and fail on the second.
+func TestEveryStepOfARunIsDispatchedInTheModeItsGraphDeclaresInPostgres(t *testing.T) {
+	runner := &modeRecordingRunner{}
+	s, _ := aCrewWithAController(t, runner)
+	_, project := aProjectOnPostgres(t, s)
+
+	run := startedFlow(t, s, project, `
+name: fix-red
+version: 1
+mode: dangerous
+nodes:
+  fix:  { type: dispatch, prompt: "fix the build" }
+  ok:   { type: choice, on: { result.failed: "false" } }
+  push: { type: dispatch, prompt: "push the fix" }
+edges:
+  - [fix, ok]
+  - [ok, push, "true"]
+  - [ok, done, "false"]
+  - [push, done]
+`)
+	driveFlow(t, s, run.GetId(), flow.StatusDone)
+
+	for _, prompt := range []string{"fix the build", "push the fix"} {
+		if got := runner.modeOf(prompt); got != model.PermissionBypass {
+			t.Errorf("the step %q ran in permission mode %q, want %q: a step in a narrower mode stops to ask a person the run does not have",
+				prompt, got, model.PermissionBypass)
+		}
+	}
+}
+
+// The other mode, or a crew that handed every task bypassPermissions whatever the graph said would
+// pass the test above and be the more dangerous of the two faults.
+func TestARunInANarrowerModeGetsThatModeInPostgres(t *testing.T) {
+	runner := &modeRecordingRunner{}
+	s, _ := aCrewWithAController(t, runner)
+	_, project := aProjectOnPostgres(t, s)
+
+	run := startedFlow(t, s, project, `
+name: reading-only
+version: 1
+mode: plan
+nodes:
+  look: { type: dispatch, prompt: "read the repository and say what it does" }
+edges:
+  - [look, done]
+`)
+	driveFlow(t, s, run.GetId(), flow.StatusDone)
+
+	if got := runner.modeOf("read the repository and say what it does"); got != model.PermissionPlan {
+		t.Errorf("the step ran in permission mode %q, want %q", got, model.PermissionPlan)
 	}
 }

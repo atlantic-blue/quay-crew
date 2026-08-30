@@ -24,6 +24,7 @@ import (
 const namedGraph = `
 name: fix-red
 version: 1
+mode: edits
 nodes:
   fix:  { type: dispatch, prompt: "fix the build" }
   ok:   { type: choice, on: { result.failed: "false" } }
@@ -57,6 +58,7 @@ func initializeFlowSurfaceSteps(sc *godog.ScenarioContext) {
 		return importGraph(ctx, `
 name: broken
 version: 1
+mode: edits
 nodes:
   a: { type: dispatch, prompt: "a" }
 edges:
@@ -72,6 +74,7 @@ edges:
 		return importGraph(ctx, fmt.Sprintf(`
 name: loop
 version: 1
+mode: edits
 limits:
   transitions: %d
 nodes:
@@ -90,6 +93,7 @@ edges:
 		return importGraph(ctx, `
 name: never
 version: 1
+mode: edits
 limits:
   transitions: 0
 nodes:

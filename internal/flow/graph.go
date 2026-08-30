@@ -76,8 +76,8 @@ type Graph struct {
 	// Every is how often the crew starts a run of this graph on its own. Zero means never: the
 	// graph runs when a person asks for it, which is every graph until one says otherwise.
 	Every time.Duration
-	// Mode is what the run's turns may do, as the model spells it. Empty leaves the run in the mode
-	// every session is born in.
+	// Mode is what the run's turns may do, as the model spells it. Every graph declares one, and a
+	// graph that does not is refused at import.
 	//
 	// It belongs to the graph rather than to the operator starting the run, for the same reason the
 	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
@@ -94,10 +94,9 @@ type Graph struct {
 
 // Expect is what a dispatch node declares will show its task did the job.
 //
-// The crew checks it. That is the whole point of it: a task that could not do the work is not a
-// failed task, so `result.failed` says only that the model did not error, and a model asked to read
-// a file that is not there answers plausibly instead of stopping. Whichever of these is declared is
-// checked; declaring neither is refused at import.
+// The crew checks it. That is the whole point of it: a model asked to read a file that is not there
+// answers plausibly instead of stopping, so the reply is not evidence. Whichever of these is declared
+// is checked; declaring neither is refused at import.
 type Expect struct {
 	// File is a path that must exist in the run's session after the task, relative to its working
 	// directory. It is the strong one: nothing the model says can satisfy it.
@@ -105,6 +104,23 @@ type Expect struct {
 	// Contains is a string the reply must carry. It is weaker, because it is still the model's own
 	// prose, and it is here because some job has no file to point at.
 	Contains string
+}
+
+// Declared is the claim in words, for a reader of a run that stopped over it.
+//
+// It is here because a run stopping used to record only what was found, and what was found reads as
+// an opinion until the claim it answers is beside it: "pr-state.md is not in the session that did the
+// work" leaves a reader unable to say whether the graph wanted that file or wanted something else
+// entirely. The two are separate lines on the run for the same reason.
+func (e Expect) Declared() string {
+	var said []string
+	if e.File != "" {
+		said = append(said, fmt.Sprintf("the file %s", e.File))
+	}
+	if e.Contains != "" {
+		said = append(said, fmt.Sprintf("a reply carrying %q", e.Contains))
+	}
+	return strings.Join(said, " and ")
 }
 
 // Node is one step.
@@ -206,14 +222,22 @@ func Parse(source []byte) (Graph, error) {
 
 	// Refused here rather than at the first dispatch, which is the moment a run has already been
 	// made, has a session of its own, and is about to spend money to find out the word was wrong.
-	mode := ""
-	if declared := strings.TrimSpace(file.Mode); declared != "" {
-		named, known := model.PermissionModeNamed(declared)
-		if !known {
-			return Graph{}, fmt.Errorf("flow: graph %s runs in mode %q, which is not a mode; use %s",
-				file.Name, declared, strings.Join(model.PermissionModesOffered(), ", "))
-		}
-		mode = named
+	//
+	// A graph that says nothing is refused for the same reason it is refused at all. A run works with
+	// nobody there, so a step that stops to ask for approval waits on a person who will never answer:
+	// it does not fail, it sits, and the bill is what the model spent finding that out. The mode a
+	// session is born in is the crew's choice about the sessions a person types into, and it is not an
+	// answer to what an automation may do unwatched, so declaring one is the author's to do.
+	offered := model.PermissionModesOffered()
+	declared := strings.TrimSpace(file.Mode)
+	if declared == "" {
+		return Graph{}, fmt.Errorf("flow: graph %s does not say what its runs may do, and a run works with nobody there to approve a step; add a line `mode: %s` beside the name, where the modes are %s",
+			file.Name, offered[len(offered)-1], strings.Join(offered, ", "))
+	}
+	mode, known := model.PermissionModeNamed(declared)
+	if !known {
+		return Graph{}, fmt.Errorf("flow: graph %s runs in mode %q, which is not a mode; use %s",
+			file.Name, declared, strings.Join(offered, ", "))
 	}
 
 	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Mode: mode, Limits: limits, Nodes: map[string]Node{}}
