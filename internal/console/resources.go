@@ -10,6 +10,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/contextsize"
 	"github.com/atlantic-blue/quay-crew/internal/display"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
@@ -120,7 +121,7 @@ func Contexts(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "scope", Width: 10, Colour: colourOfName},
 			{Title: "name", Width: 18, Colour: colourOfName},
-			{Title: "written", Width: 16, Colour: colourOfWritten},
+			{Title: "characters", Width: 22, Colour: colourOfSize},
 			{Title: "what it says", Width: 0, Colour: dim},
 		},
 		SortBy: 1,
@@ -219,10 +220,13 @@ func draftFor(row Row) string {
 }
 
 func contextRow(dir *quaycrewv1.ContextDir) Row {
-	written, state := "not written yet", StateUnknown
+	state := StateUnknown
 	if dir.GetWritten() {
-		written, state = "written", StateReady
+		state = StateReady
 	}
+	// How big the level is rather than whether it exists. The crew level reached 100,179 characters
+	// while this column said "written", which answers a question nobody was asking.
+	size := contextsize.Read(dir.GetScope(), dir.GetName(), dir.GetBody())
 	return Row{
 		// A level is what an action on this row acts on, so the scope and the owner are what it
 		// carries, and the whole of what it says goes in Detail for an editor to open.
@@ -230,7 +234,7 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 		Parent: dir.GetOwner(),
 		Label:  dir.GetName(),
 		Detail: dir.GetBody(),
-		Cells:  []string{dir.GetScope(), dir.GetName(), written, firstLine(dir.GetBody())},
+		Cells:  []string{dir.GetScope(), dir.GetName(), size.Cell(), firstLine(dir.GetBody())},
 		State:  state,
 	}
 }

@@ -1139,11 +1139,11 @@ func TestTheContextViewSaysWhereToEditAndWhetherAnythingIsThere(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("the context view lists %d rows, want the workspace and the project", len(rows))
 	}
-	if got := rows[0].Cells[2]; got != "not written yet" {
+	if got := rows[0].Cells[2]; got != "nothing written yet" {
 		t.Fatalf("an unwritten memory file reads as %q, want it said out loud", got)
 	}
-	if got := rows[1].Cells[2]; got != "written" {
-		t.Fatalf("a written memory file reads as %q", got)
+	if got := rows[1].Cells[2]; got != "24" {
+		t.Fatalf("a written memory file reads as %q, want how big it is", got)
 	}
 	// The row carries the level, because that is what an action on it acts on.
 	if rows[1].ID != "project/p1" {
@@ -1168,7 +1168,7 @@ func TestEditingContextOpensTheOperatorsEditor(t *testing.T) {
 	if edit.Label != "Edit" {
 		t.Fatalf("enter runs %q, want Edit", edit.Label)
 	}
-	row := Row{Cells: []string{"project", "bills", "written", "pay the water bill"}, Parent: "p1",
+	row := Row{Cells: []string{"project", "bills", "18", "pay the water bill"}, Parent: "p1",
 		Detail: "pay the water bill first"}
 	command, err := edit.Shell(row)
 	if err != nil {
@@ -3125,5 +3125,33 @@ func TestTheTotalGivesWayBeforeTheWordmark(t *testing.T) {
 	if lostWordmark != 0 && lostWordmark >= lostTotal {
 		t.Fatalf("the wordmark went at %d columns and the total at %d: the total should go first",
 			lostWordmark, lostTotal)
+	}
+}
+
+// TestTheContextViewSaysHowBigEachLevelIs: the crew level reached 100,179 characters and nothing
+// anywhere reported it, so it had to be read out of the contexts table. The console and the command
+// line are two clients of one call, so they say it the same way or they drift.
+func TestTheContextViewSaysHowBigEachLevelIs(t *testing.T) {
+	client := &fakeClient{contexts: []*quaycrewv1.ContextDir{
+		{Scope: "crew", Name: "crew", Written: true, Body: strings.Repeat("a", 100_179)},
+		{Scope: "workspace", Name: "demo", Owner: "w1", Written: true, Body: strings.Repeat("a", 1_886)},
+		{Scope: "project", Name: "default", Owner: "p1"},
+	}}
+
+	rows, err := Contexts(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing contexts: %v", err)
+	}
+	for i, want := range []string{"100,179 over the mark", "1,886", "nothing written yet"} {
+		if got := rows[i].Cells[2]; got != want {
+			t.Errorf("the %s row's size cell says %q, want %q", rows[i].Cells[0], got, want)
+		}
+	}
+	// A level over the mark is the one thing in this view worth looking at twice, so it is not drawn
+	// in the same colour as every other row.
+	over := colourOfSize(rows[0].Cells[2])
+	if over == colourOfSize(rows[1].Cells[2]) || over == colourOfSize(rows[2].Cells[2]) {
+		t.Errorf("a level over the mark is drawn the same colour as one that is not, so scanning the "+
+			"column finds nothing: %q", over)
 	}
 }
