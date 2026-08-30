@@ -15,7 +15,7 @@ import (
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, spent_tokens, observed_version,
-	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
+	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -275,7 +275,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.Told, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
-		&found.Repository, &found.PullRequest, &found.Product,
+		&found.Repository, &found.PullRequest, &found.Product, &found.Steers,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}

@@ -34,8 +34,20 @@ See section 13.
 
 ### How a finding is recorded
 
-One issue per finding, in `atlantic-blue/quay-crew`, with the label `acceptance`. The operator opens
-it during the run and not afterwards, because the detail is gone by the morning.
+Mark it as it happens, with one command:
+
+```
+krewe steer "the workspace has no secrets"
+```
+
+It lands on the job in flight, and the count is kept on the job at the top of the tree, so the score
+is the system's rather than a number somebody keeps by hand. `krewe steers <job>` reads them back in
+order with the time and the job each one landed on, and `krewe steers` compares one job with the one
+before it. The definition of a steer prints under every report, because a count whose definition
+drifts compares with nothing.
+
+Then one issue per finding, in `atlantic-blue/quay-crew`, with the label `acceptance`. The operator
+opens it during the run and not afterwards, because the detail is gone by the morning.
 
 Each issue carries six things:
 
@@ -49,8 +61,9 @@ Each issue carries six things:
 The last one is the useful field. A finding is not "the system is bad". A finding names the row, the
 event or the view that was missing.
 
-The score of the run is the count of these issues. A run with no findings passes rule one. A run with
-fifteen findings tells the system what to build next, in order.
+The score of the run is the count of these steers, and `krewe steers` is where it is read. A run with
+no findings passes rule one. A run with fifteen findings tells the system what to build next, in
+order.
 
 ## 2. When it runs
 
