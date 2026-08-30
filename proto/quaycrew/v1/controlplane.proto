@@ -1234,6 +1234,14 @@ message Job {
   // model. It is what a reader opens to see the work, without opening a sandbox.
   string pull_request = 34;
   int64 spent_tokens = 24;
+  // steps are what the session doing this job said it finished, in the order it finished them. A job
+  // that failed is continued from them rather than started again. A listing leaves them out, the way
+  // it leaves out the answer.
+  repeated JobStep steps = 37;
+  // resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
+  // It is what the job failed with, moved off the reason by the resume, so a job going again does not
+  // sit pending reading as one the machine is holding back.
+  string resuming = 38;
   // observed_version is the version of the declaration the status describes. A controller that has
   // not caught up leaves this behind the version above.
   int32 observed_version = 25;
@@ -1252,6 +1260,21 @@ message Job {
   google.protobuf.Timestamp updated_at = 27;
   google.protobuf.Timestamp started_at = 28;
   google.protobuf.Timestamp finished_at = 29;
+}
+
+// JobStep is one thing the session doing a job said it finished.
+//
+// It is what the session reported rather than anything the system watched, the way an answer is. What
+// it buys is the only record that survives a failed attempt: nothing can see inside a container, and
+// a session that dies takes everything it did not write down with it.
+message JobStep {
+  // seq is where this step sits in the order they were finished, counting from one.
+  int32 seq = 1;
+  // summary is what was finished, in a few words. One line, because every step goes in front of the
+  // session that continues the job.
+  string summary = 2;
+  // finished_at is when the session recorded it.
+  google.protobuf.Timestamp finished_at = 3;
 }
 
 // CreateJobRequest declares a job. Every rule is checked here, while the caller is
@@ -1364,6 +1387,50 @@ message AnswerJobRequest {
   string answer = 2;
 }
 message AnswerJobResponse {
+  Job job = 1;
+}
+
+// RecordJobStepRequest writes down one thing the caller finished on the job it is running.
+//
+// Recording is not a verb a role grants, for the reason asking is not: the session records what it
+// finished on the job it is itself running, and the credential it presented is already bound to that
+// job. A role that could withhold it would leave a job that can only ever start again from nothing.
+message RecordJobStepRequest {
+  // summary is what was finished, in a few words. The same words twice leave one step, because the
+  // record is the set of what is finished rather than a log of what was said.
+  string summary = 1;
+  // id names the job the step belongs to, and only the caller's own is accepted. Empty is the
+  // caller's own job, which is the only one it may record against.
+  string id = 2;
+}
+message RecordJobStepResponse {
+  Job job = 1;
+}
+
+// ResumeJobRequest continues a job that failed, from the first step it did not finish.
+//
+// The operator's call. It puts the job back to pending with its session, so a controller starts it
+// the way it starts anything else and the task lands in the conversation the job has been in all
+// along. Only a job that failed is continued: a job that was stopped was ended on purpose.
+message ResumeJobRequest {
+  string id = 1;
+}
+message ResumeJobResponse {
+  Job job = 1;
+}
+
+// RefuseJobRequest is the other answer to a job that failed: this one was wrong, so end it rather
+// than continue it.
+//
+// It exists so a resume cannot be the only road out of a failure. A job that failed because the work
+// was wrong is refused, which stops it, and a stopped job is never continued.
+message RefuseJobRequest {
+  string id = 1;
+  // reason is why the work was wrong. It goes on the row with the failure it refuses, because a
+  // reader holding one of the two goes looking for the other.
+  string reason = 2;
+}
+message RefuseJobResponse {
   Job job = 1;
 }
 
@@ -1510,6 +1577,12 @@ service ControlPlaneService {
   // AnswerJob is the person answering. Nothing else moves the job in between.
   rpc AskJob(AskJobRequest) returns (AskJobResponse);
   rpc AnswerJob(AnswerJobRequest) returns (AnswerJobResponse);
+  // RecordJobStep is the session saying what it finished, as it finishes it. ResumeJob continues a
+  // job that failed from the first step it did not finish, and RefuseJob is the other answer to a
+  // failure: end it, so nobody continues it.
+  rpc RecordJobStep(RecordJobStepRequest) returns (RecordJobStepResponse);
+  rpc ResumeJob(ResumeJobRequest) returns (ResumeJobResponse);
+  rpc RefuseJob(RefuseJobRequest) returns (RefuseJobResponse);
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.
   rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);

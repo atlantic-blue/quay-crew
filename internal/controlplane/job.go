@@ -345,7 +345,8 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Product: from.Product,
 		Parent:  from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
-		Answer: from.Answer, Reason: from.Reason, Question: from.Question,
+		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Steps:       asJobSteps(from.Steps),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
@@ -360,6 +361,20 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		on.FinishedAt = timestamppb.New(*from.FinishedAt)
 	}
 	return on
+}
+
+// asJobSteps puts what a job's session said it finished on the wire.
+func asJobSteps(from []job.Step) []*quaycrewv1.JobStep {
+	if len(from) == 0 {
+		return nil
+	}
+	steps := make([]*quaycrewv1.JobStep, 0, len(from))
+	for _, one := range from {
+		steps = append(steps, &quaycrewv1.JobStep{
+			Seq: int32(one.Seq), Summary: one.Summary, FinishedAt: timestamppb.New(one.FinishedAt),
+		})
+	}
+	return steps
 }
 
 // RunJobController makes reality match the job the system holds, until ctx is done. It blocks, so

@@ -83,6 +83,10 @@ type Memory struct {
 	// them, keyed by the event identifier so writing one twice leaves one.
 	jobs      map[string]*job.Job
 	jobEvents map[string]*job.Event
+	// jobSteps is what each job's session said it finished, in the order it finished it. Beside the
+	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
+	// carries what a listing there carries.
+	jobSteps map[string][]job.Step
 	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
 	// defaults, which grant nothing.
 	limits map[string]job.Limits

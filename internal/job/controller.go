@@ -69,6 +69,11 @@ var ErrNotRunning = errors.New("job: that job is no longer running")
 // A question already answered, or one nobody asked, and in both cases the answer is not applied.
 var ErrNotAsking = errors.New("job: that job is not waiting to be told anything")
 
+// ErrNotFailed is what a store says when a job is continued or refused and it did not fail. Both
+// verbs are answers to a failure, so both refuse the same rows, and a job already going again is one
+// of them: resuming twice must leave one attempt rather than two tasks against one conversation.
+var ErrNotFailed = errors.New("job: that job did not fail, so there is nothing to continue")
+
 // Requeue is a job put back to pending, and why it is waiting again.
 type Requeue struct {
 	// Owner is the controller giving the job up. The write applies only where that controller still

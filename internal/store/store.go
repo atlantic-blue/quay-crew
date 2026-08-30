@@ -403,6 +403,16 @@ type Store interface {
 	// phase it moves out of, in the same statement, so a question cannot be answered twice.
 	AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
 	AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
+	// RecordJobStep writes down one thing the session doing a running job finished. The same words
+	// twice leave one step, because the record is the set of what is finished rather than a log of
+	// what was said, and a session continuing a job says again what it said before.
+	RecordJobStep(ctx context.Context, id, summary string, event *job.Event) (*job.Job, error)
+	// ResumeJob puts a job that failed back to pending, keeping its session, so a controller starts it
+	// again in the conversation it has been in all along. RefuseJob is the other answer to a failure:
+	// it ends the job as stopped, and a stopped job is never continued. Both apply only to a job that
+	// failed, in the same statement, so two resumes leave one attempt.
+	ResumeJob(ctx context.Context, id string, event *job.Event) (*job.Job, error)
+	RefuseJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
 	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
 	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps

@@ -202,6 +202,15 @@ const (
 	// rather than a note.
 	EventAsked = "job.asked"
 	EventTold  = "job.told"
+	// EventStepped is written when the session doing a job says it finished one step. It is not a
+	// movement: the job is running before it and running after it, and what it adds is the record a
+	// second attempt carries on from.
+	EventStepped = "job.stepped"
+	// EventResumed is written when a person continues a job that failed, and EventRefused when they
+	// end one instead. They are the two answers to a failure, and which of the two was given is the
+	// part of the record somebody reads a week later.
+	EventResumed = "job.resumed"
+	EventRefused = "job.refused"
 )
 
 // Contract says whether a kind is one another service may depend on.

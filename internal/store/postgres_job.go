@@ -14,7 +14,7 @@ import (
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
-	phase, session, attempts, answer, reason, question, told, spent_tokens, observed_version,
+	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
 	created_at, updated_at, started_at, finished_at`
 
@@ -57,9 +57,10 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
-			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product)
+			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
+			resuming)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -67,13 +68,17 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
-		declared.Repository, declared.PullRequest, declared.Product); err != nil {
+		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
 }
 
-// GetJob reads one job back, whole, answer included.
+// GetJob reads one job back, whole: its answer and the steps its session finished.
+//
+// The steps are read here and not in a listing, for the reason the answer is: a listing of a hundred
+// lists is a listing nobody can read. This is also the read every movement of a job ends in, so the
+// controller building a task from a job it has just claimed gets what that job already finished.
 func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 	row := p.pool.QueryRow(ctx, `select `+jobColumns+` from jobs where id = $1`, id)
 	found, err := scanJob(row)
@@ -82,6 +87,9 @@ func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get job: %w", err)
+	}
+	if found.Steps, err = p.jobSteps(ctx, id); err != nil {
+		return nil, err
 	}
 	return found, nil
 }
@@ -191,8 +199,8 @@ func (p *Postgres) StopJob(ctx context.Context, id, reason string, event *job.Ev
 // about the same decision.
 func (p *Postgres) AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error) {
 	return p.moveJob(ctx, id, "ask job", job.ErrNotRunning, []*job.Event{event}, `
-		update jobs set phase = $2, question = $3, told = '', lease_owner = '', lease_until = null,
-			updated_at = now()
+		update jobs set phase = $2, question = $3, told = '', resuming = '', lease_owner = '',
+			lease_until = null, updated_at = now()
 		where id = $1 and phase = $4`,
 		job.PhaseAsking, question, job.PhaseRunning)
 }
@@ -273,7 +281,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
-		&found.Question, &found.Told, &found.SpentTokens, &found.ObservedVersion,
+		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
