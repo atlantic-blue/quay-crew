@@ -428,6 +428,10 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
 		Project: claimed.Project, Handle: handle, Text: claimed.Brief,
 		PermissionMode: claimed.Mode, Detach: true,
+		// The name this job was declared with, so a listing says which conversation is doing which job
+		// while they are all still running. It reaches the session only when the session is made, so a
+		// dispatch made again after a controller died cannot put it over a label the operator has set.
+		Title: claimed.Title,
 		// The role comes off the row and never from a caller. A caller that could name its own role
 		// could name one granting more than the job was declared with, and the credential the crew
 		// mints for this task carries what that role declared it may call.

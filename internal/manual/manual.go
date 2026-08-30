@@ -159,6 +159,9 @@ commands:
                                           this build ships twelve in roles/ at the root of the
                                           repository, and a fresh crew is seeded with none of them
   role list [<workspace>]                 what roles the crew holds, or what one workspace holds
+  role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who
+                                          holds it, and the brief in full. The brief is the role, so
+                                          this is how you audit what a session was told
   role attach [<workspace>] <name>        give a workspace a role. Say crew where the workspace
                                           goes and every workspace holds it
   role detach [<workspace>] <name>        take a role away from a workspace, or from the crew
