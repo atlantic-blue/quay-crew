@@ -6,6 +6,12 @@ it. The image holds no credentials. The subscription token is injected at task t
 `CLAUDE_CODE_OAUTH_TOKEN` environment variable, stored per workspace as a secret, so the same image is
 safe to build and run anywhere.
 
+The same value is injected a second time, as `QUAY_MODEL_TOKEN`. Claude Code removes
+`CLAUDE_CODE_OAUTH_TOKEN` from the environment of every process it starts, by that name and no other,
+so a hook fired on a message inherits no credential and cannot ask a model anything. The second name
+survives, the way `QC_TOKEN` and `GH_TOKEN` already do, and the prompt analyser reads it. It is one
+value under two names: nothing extra is stored, and nothing is written to disk.
+
 For why the control plane starts these containers on the host daemon, see the Sandboxes section of
 `docs/ARCHITECTURE.md`.
 

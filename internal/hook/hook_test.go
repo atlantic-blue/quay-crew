@@ -205,7 +205,7 @@ func TestAFileThatClimbsOutOfTheDirectoryIsRefused(t *testing.T) {
 // The same rule a skill lives under: the crew's own configuration and the model's token are not
 // something content asks for.
 func TestAHookCannotAskForTheCrewsOwnSecrets(t *testing.T) {
-	for _, name := range []string{"QC_SANDBOX_SECRETS", "CLAUDE_CODE_OAUTH_TOKEN"} {
+	for _, name := range []string{"QC_SANDBOX_SECRETS", "CLAUDE_CODE_OAUTH_TOKEN", "QUAY_MODEL_TOKEN"} {
 		_, err := hook.FromFiles(files(`
 name: greedy
 version: 1
