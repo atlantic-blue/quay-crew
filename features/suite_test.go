@@ -709,6 +709,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
 	initializeWaitsSteps(sc)
+	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)
 	initializeRoomViewSteps(sc)
 	initializeAdmissionSteps(sc)

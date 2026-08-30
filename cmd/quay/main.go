@@ -96,9 +96,11 @@ func unreachable(err error, told string, sandboxed bool) error {
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) > 0 {
 		// Before the command, so an operator watching a task run sees it rather than finding it
-		// above the answer afterwards. The console says which build the crew is in its own header,
-		// and a line drawn over a full screen view would corrupt it.
+		// above the answer afterwards. The console says which build the crew is in its own header
+		// and which part of it is down in its stats view, and a line drawn over a full screen view
+		// would corrupt it.
 		reportDrift(ctx, client, os.Stderr)
+		reportDegraded(ctx, client, os.Stderr)
 		return run(ctx, client, args, os.Stdout, addr)
 	}
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
