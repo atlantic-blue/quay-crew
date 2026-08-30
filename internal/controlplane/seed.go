@@ -10,10 +10,18 @@ import (
 
 // SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.
 //
-// These two are how work is done in any repository, they are what the system's own documentation
+// The first two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
-// The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
-var SeedToSystem = []string{"git", "github"}
+// Everything else is imported so `krewe skill list` can show it, and attaching one is a decision.
+//
+// The third is here for a different reason: it is a rule rather than a capability. A job wrote six
+// resources, opened a pull request, and every check went green, because validating a configuration
+// never talks to the account. The identity that would apply it held read only access and could not
+// have created any of them. A rule that only arrives when somebody attaches it is a rule that is
+// missing in every system nobody set up, which is exactly where this failure happens. It names no
+// secret, so no workspace loses it for want of a credential, and the one binary it needs is already
+// in the image for the cloud skills.
+var SeedToSystem = []string{"git", "github", "deploy-identity"}
 
 // Seed puts the skills this build ships with into a system that has none.
 //

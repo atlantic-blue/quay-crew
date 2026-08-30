@@ -708,6 +708,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDriverContextSteps(sc)
 	initializeUsageSteps(sc)
 	initializeSkillSteps(sc)
+	initializeDeployIdentitySteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
 	initializeSystemSecretSteps(sc)

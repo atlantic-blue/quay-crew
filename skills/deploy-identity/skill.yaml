@@ -1,0 +1,4 @@
+name: deploy-identity
+version: 1
+summary: Before you open infrastructure for review, name the identity that will apply it and prove it is allowed every action the plan needs.
+binaries: [aws]
