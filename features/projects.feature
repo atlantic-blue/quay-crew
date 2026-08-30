@@ -50,3 +50,61 @@ Feature: Projects hold a body of work inside a workspace
     Given a project named "house-bills"
     When the operator refers to the project as "ghost"
     Then the project reference is refused as not found
+
+  # A project is a body of work, and the repository is where that body of work goes. The crew held no
+  # record of it, so a session told to push had a token that worked and nowhere to push to, and the
+  # operator was the only index of which repository belonged to which project.
+  Scenario: A project says where its work lands
+    Given a project named "transcript"
+    When the operator says the project's work lands in "atlantic-blue/transcript"
+    Then the project works in "atlantic-blue/transcript"
+
+  # The address somebody has in front of them is the one in their browser.
+  Scenario: The address of the repository is kept as an owner and a name
+    Given a project named "transcript"
+    When the operator says the project's work lands in "https://github.com/atlantic-blue/transcript.git"
+    Then the project works in "atlantic-blue/transcript"
+
+  Scenario: A repository that is not an owner and a name is refused
+    Given a project named "transcript"
+    When the operator says the project's work lands in "transcript"
+    Then the control plane refuses it as invalid, saying how to write a repository
+
+  # Public unless somebody says otherwise, and the reason is the bill: a pipeline's minutes are free
+  # on a public repository and metered on a private one. That rule was in a person's head, and it was
+  # said out loud once per project.
+  Scenario: A repository nobody called anything is public
+    Given a project named "transcript"
+    When the operator says the project's work lands in "atlantic-blue/transcript"
+    Then the repository is public, and the crew says its pipeline minutes are free
+
+  Scenario: A repository the operator calls private is private
+    Given a project named "transcript"
+    When the operator says the project's private work lands in "atlantic-blue/transcript"
+    Then the repository is private, and the crew says its pipeline minutes are metered
+
+  # A forge has other kinds, and recording "internal" as public would be the crew writing down a cost
+  # fact nobody told it.
+  Scenario: A kind of repository the crew does not know is refused
+    Given a project named "transcript"
+    When the operator says the project's work lands in "atlantic-blue/transcript", of kind "internal"
+    Then the control plane refuses it as invalid, naming the two kinds
+
+  # The point of the record. Nobody passes the address again, and the session doing the job is told
+  # where the work goes.
+  Scenario: A job declared in the project works in the project's repository
+    Given a project named "transcript"
+    And the project's work lands in "atlantic-blue/transcript"
+    When the caller declares a job
+    Then the job works in "atlantic-blue/transcript"
+
+  Scenario: A job that names its own repository keeps it
+    Given a project named "transcript"
+    And the project's work lands in "atlantic-blue/transcript"
+    When the caller declares a job in the repository "atlantic-blue/quay-crew"
+    Then the job works in "atlantic-blue/quay-crew"
+
+  Scenario: A job in a project that works nowhere is asked to push nowhere
+    Given a project named "transcript"
+    When the caller declares a job
+    Then the job works in nothing, and the session doing it is asked for no pull request
