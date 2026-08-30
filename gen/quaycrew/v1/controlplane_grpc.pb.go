@@ -78,6 +78,7 @@ const (
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
 	ControlPlaneService_GetHeadroom_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetHeadroom"
+	ControlPlaneService_GetHealth_FullMethodName                = "/quaycrew.v1.ControlPlaneService/GetHealth"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -159,6 +160,10 @@ type ControlPlaneServiceClient interface {
 	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error)
+	// GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
+	// the reason GetHeadroom answers from the last sample.
+	GetHealth(ctx context.Context, in *GetHealthRequest, opts ...grpc.CallOption) (*GetHealthResponse, error)
 }
 
 type controlPlaneServiceClient struct {
@@ -759,6 +764,16 @@ func (c *controlPlaneServiceClient) GetHeadroom(ctx context.Context, in *GetHead
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetHealth(ctx context.Context, in *GetHealthRequest, opts ...grpc.CallOption) (*GetHealthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHealthResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetHealth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlPlaneServiceServer is the server API for ControlPlaneService service.
 // All implementations must embed UnimplementedControlPlaneServiceServer
 // for forward compatibility.
@@ -838,6 +853,10 @@ type ControlPlaneServiceServer interface {
 	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error)
+	// GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
+	// the reason GetHeadroom answers from the last sample.
+	GetHealth(context.Context, *GetHealthRequest) (*GetHealthResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
 
@@ -1024,6 +1043,9 @@ func (UnimplementedControlPlaneServiceServer) GetUsage(context.Context, *GetUsag
 }
 func (UnimplementedControlPlaneServiceServer) GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetHeadroom not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetHealth(context.Context, *GetHealthRequest) (*GetHealthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHealth not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) mustEmbedUnimplementedControlPlaneServiceServer() {}
 func (UnimplementedControlPlaneServiceServer) testEmbeddedByValue()                             {}
@@ -2108,6 +2130,24 @@ func _ControlPlaneService_GetHeadroom_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetHealth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetHealth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetHealth(ctx, req.(*GetHealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlPlaneService_ServiceDesc is the grpc.ServiceDesc for ControlPlaneService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2350,6 +2390,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHeadroom",
 			Handler:    _ControlPlaneService_GetHeadroom_Handler,
+		},
+		{
+			MethodName: "GetHealth",
+			Handler:    _ControlPlaneService_GetHealth_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

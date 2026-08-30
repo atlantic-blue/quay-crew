@@ -162,20 +162,7 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// openModelOnJobs stands the real console up and walks it to the jobs view the way an operator does:
-// colon, the name, enter. Typed rather than opened there, because the command bar is how anybody
-// reaches a view that is not the one the console opens on.
+// openModelOnJobs stands the real console up and walks it to the jobs view.
 func (c *consoleWorld) openModelOnJobs(w *world) error {
-	if err := c.openModel(w); err != nil {
-		return err
-	}
-	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}); err != nil {
-		return err
-	}
-	for _, letter := range "jobs" {
-		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}}); err != nil {
-			return err
-		}
-	}
-	return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+	return c.openModelOn(w, "jobs")
 }
