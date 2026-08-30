@@ -12,6 +12,10 @@ Feature: A crew says whether it can start work
   times in a row while an operator worked through the console all day and saw nothing, so the crew
   keeps what each write found, and every row of the console's stats view says it.
 
+  The operator was not in the console for most of it. They were typing commands, so every command
+  that talks to the crew says on standard error when the crew is reporting itself not serving, and
+  names the part that is down and why.
+
   Background:
     Given a running control plane
 
