@@ -293,10 +293,15 @@ runs the pipeline, so nothing here lets a session merge and the line the crew ad
 **A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
 "push, watch the checks and merge on green" asks for something the runtime does not have, and the
 session is left with two bad moves: hold a container open through a five minute pipeline and pay for
-it, or answer and stop. It takes a third and reports that it will wait. So the brief is read at the
-write, and a brief that asks the job to wait for a forge pipeline, or to merge on the result of one,
-is refused with the graph named: a dispatch that pushes and opens the pull request, a wait, then a
-choice on the check result. The flow engine has the wait node; a job never will.
+it, or answer and stop. It takes a third and reports that it will wait. So the brief is read where a
+caller declares a job, and a brief that asks the job to wait for a forge pipeline, or to merge on the
+result of one, is refused with the graph named: a dispatch that pushes and opens the pull request, a
+wait, then a choice on the check result. The flow engine has the wait node; a job never will.
+
+**A step of a flow is not held to it.** The graph around a step already holds the wait, so the node
+after it merges the pull request and means it. Holding a step to the rule would refuse the very graph
+the refusal tells a caller to write. So the check sits on `CreateJob`, which is where somebody wrote
+a brief, rather than on the declaration the flow engine builds for each of its nodes.
 
 The rule reads English, so it is held narrow. A waiting word has to point at a pipeline and a merge
 has to point at a pull request or at the result of one, and a phrase the brief negates is left alone.
@@ -413,6 +418,7 @@ purpose. The list, so a test can be written against it:
   and the refusal quotes the brief and names the flow.
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
+- A step of a flow is not held to that rule, because the graph around it holds the wait.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
@@ -691,7 +697,7 @@ is the same reason `docs/ARCHITECTURE.md` gives for a wait being a column rather
 
 ### What of this shipped on 27 August 2026
 
-The `may` list, the credential, the parent from that credential, the `workspace_limits` row and
+The `verbs` list, the credential, the parent from that credential, the `workspace_limits` row and
 `quay limits`. The four hook calls joined the deny list at the same time.
 
 ```mermaid
@@ -701,7 +707,7 @@ sequenceDiagram
     participant SES as "a session running a job"
     OP->>CP: "quay limits acme --max-depth 2"
     OP->>CP: "quay job create, role backlog-clearer"
-    CP->>CP: "mint a credential for that job, holding the role's may list"
+    CP->>CP: "mint a credential for that job, holding the role's verbs"
     CP->>SES: "the task, with the credential in its environment"
     SES->>CP: "CreateJob, presenting that credential"
     CP->>CP: "parent and depth read from the credential"
@@ -811,7 +817,7 @@ it expires.
 ### Where capability belongs: on the role and on the workspace, and they mean different things
 
 **The role carries the grant.** A role declares which verbs a session running as it may use, in a
-new `may` list beside `receives`. Validated as an allow list at import, refused by name for a word
+new `verbs` list beside `receives`. Validated as an allow list at import, refused by name for a word
 the crew does not know, exactly as `role.Material` is validated today.
 
 The reason is the reason `docs/ARCHITECTURE.md` already gives for putting `mode` on the graph rather
@@ -1401,7 +1407,7 @@ quay job create me/quay-crew \
 
 The controller claims it, starts a session called after the job, and hands that session a
 credential granting `job.create`, `job.read` and `job.stop`, because that is what the
-`backlog-clearer` role declares in its `may` list.
+`backlog-clearer` role declares in its `verbs` list.
 
 The session lists the pull requests with `gh`, which is the github skill already in the image. It
 then makes nine calls, and the ordering is the important part:
@@ -2224,7 +2230,7 @@ declared at `proto/quaycrew/v1/controlplane.proto:896`. Adding them to the deny 
 change. It belongs with the capability slice.
 
 **What this section adds.** The driver keeps every verb above. It gains the four job verbs from
-section 5, the same way any other session does, through a role with a `may` list. The driver then
+section 5, the same way any other session does, through a role with a `verbs` list. The driver then
 stops being a special case in the code. It becomes an ordinary session with a wide role.
 
 ### What the left half should show once jobs exist
@@ -2680,7 +2686,7 @@ that reads the task row. `job.claimed` and `job.released`.
 the slice that makes the difference between a loop and a script. Section 13 depends on it for the
 other death, where the control plane goes and the job is retried rather than recovered.
 
-**5. Capability: the credential, the verbs and the workspace limits.** The `may` list on a role, the
+**5. Capability: the credential, the verbs and the workspace limits.** The `verbs` list on a role, the
 per job token carried on the task rather than at sandbox birth, `parent` from the credential, the
 `workspace_limits` row with `max_depth` defaulting to zero, `max_running`, `budget_tokens` and the
 lease length. `quay limits` to read and set them. The four hook calls join the deny list here, for

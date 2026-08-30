@@ -85,7 +85,7 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 	}
 	if !grant.May(verb) {
 		return status.Errorf(codes.PermissionDenied,
-			"this job runs as a role that may not %s; a role declares what it may do in its may list, "+
+			"this job runs as a role that may not %s; a role declares what it may do in its verbs list, "+
 				"and an operator widens it by importing the role again and attaching it",
 			verb)
 	}

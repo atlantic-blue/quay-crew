@@ -37,6 +37,12 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		at := req.GetDeadline().AsTime()
 		declaration.Deadline = &at
 	}
+	// The brief is held to what a job can do, here rather than in PrepareJob, because a flow declares
+	// its steps through that call too and a step is not a job somebody wrote. The graph around a step
+	// holds the wait, so its last node merges the pull request and means it.
+	if err := job.Declared(declaration.Brief); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	declared, declaredEvent, err := s.PrepareJob(ctx, "", declaration)
 	if err != nil {
 		return nil, err

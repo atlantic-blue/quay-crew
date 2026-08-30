@@ -6,11 +6,15 @@ wrong: hold a container open through a five minute pipeline and pay for it, or a
 took a third and invented the wait, and the pull request sat green with nobody left who intended to
 merge it.
 
-So the brief is read at the write, alongside the fields. A brief that asks the job to wait for a
-forge pipeline, or to merge on the result of one, is refused while the person who typed it is
-looking. The refusal quotes their own words back and names the shape that can do it: a flow, three
-nodes, a dispatch that pushes and opens the pull request, a wait, then a choice on the check result.
-The flow engine has the wait node, and a job never will.
+So the brief is read where a caller declares a job. A brief that asks the job to wait for a forge
+pipeline, or to merge on the result of one, is refused while the person who typed it is looking. The
+refusal quotes their own words back and names the shape that can do it: a flow, three nodes, a
+dispatch that pushes and opens the pull request, a wait, then a choice on the check result. The flow
+engine has the wait node, and a job never will.
+
+A step of a flow is not held to it. The graph around a step already holds the wait, so the node after
+it merges the pull request and means it, and refusing that would refuse the very graph the refusal
+tells a caller to write.
 
 The rule reads English, so it is held narrow, and what it leaves alone matters as much as what it
 stops. A waiting word has to point at a pipeline, a merge has to point at a pull request or at the

@@ -294,7 +294,7 @@ func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*
 		return nil, err
 	}
 	return &quaycrewv1.GetRoleResponse{
-		Role: carried, Brief: found.Brief, May: found.May_, HeldBy: holders,
+		Role: carried, Brief: found.Brief, Verbs: found.Verbs, HeldBy: holders,
 	}, nil
 }
 

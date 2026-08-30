@@ -281,3 +281,54 @@ func TestQuayOnItsOwnSaysYouAreAlreadyHere(t *testing.T) {
 		t.Fatalf("typing the tool's own name said %v, want it to say you are already here", model.err)
 	}
 }
+
+// The whole word still gets the list, because the bar runs a command and the list is one. Nothing an
+// operator used to read in the view is out of reach: it arrives in the output panel instead.
+func TestTheFeaturesWordRunsTheCommand(t *testing.T) {
+	ran := &ranCommand{output: "One word sends a task, and the three it replaced refuse\n"}
+	model := typeInto(t, openBar(t, barModel(t, ran)), "features")
+
+	if len(ran.args) != 1 || ran.args[0] != "features" {
+		t.Fatalf("the console ran %v, want the features command", ran.args)
+	}
+	if view := model.View(); !strings.Contains(view, "One word sends a task") {
+		t.Fatalf("the console does not show what the command said:\n%s", view)
+	}
+}
+
+// The short spellings the view answered to have no command behind them, so they say what to type
+// rather than reaching the tool and coming back as an unknown command.
+func TestAWordTheFeaturesViewAnsweredToSaysWhatToTypeNow(t *testing.T) {
+	for _, typed := range []string{"f", "feature", "capabilities"} {
+		ran := &ranCommand{output: "should not run"}
+		model := typeInto(t, openBar(t, barModel(t, ran)), typed)
+
+		if ran.args != nil {
+			t.Errorf("%q ran %v, and the tool has no such command", typed, ran.args)
+		}
+		if model.err == nil {
+			t.Errorf("%q was accepted silently", typed)
+			continue
+		}
+		if !strings.Contains(model.err.Error(), "type features") {
+			t.Errorf("%q says %q, want it to name what to type", typed, model.err)
+		}
+		if view := model.View(); !strings.Contains(view, "type features") {
+			t.Errorf("what to type instead of %q never reaches the screen:\n%s", typed, view)
+		}
+	}
+}
+
+// What the bar says under the words it is holding has to match what enter will do with them. A word
+// that is about to be refused must not be advertised as a command that is about to run.
+func TestTheBarDoesNotOfferToRunAWordItWillRefuse(t *testing.T) {
+	model := typeAll(t, openBar(t, barModel(t, &ranCommand{})), "f")
+
+	view := model.View()
+	if strings.Contains(view, "runs this as a quay command") {
+		t.Fatalf("the bar offers to run a word it will refuse:\n%s", view)
+	}
+	if !strings.Contains(view, "type features") {
+		t.Fatalf("the bar does not say what to type instead:\n%s", view)
+	}
+}

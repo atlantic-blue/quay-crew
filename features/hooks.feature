@@ -104,12 +104,15 @@ Feature: A hook is a constraint the crew holds
     And the settings file binds nothing to any event
     And the task loaded the hooks settings
 
-  # The crew ships the analyser because it only adds context and can never wrongly refuse. Anything
-  # that refuses is a decision somebody makes, and a hook that refuses wrongly blocks the job.
+  # A seeded hook used to mean a hook that cannot refuse, because a hook that refuses wrongly blocks
+  # the work. The merge gate refuses, and it is seeded anyway: it refuses one thing, no session in
+  # this crew is ever meant to do that thing, and a gate somebody has to remember to attach is off in
+  # every crew nobody set up.
   Scenario: A fresh crew is already under the hooks this build ships
     Given a crew seeded with the hooks this build ships
     Then the crew holds the "prompt-analyser" hook
-    And the workspace runs under 1 hook
+    And the crew holds the "merge-gate" hook
+    And the workspace runs under 2 hooks
 
   # An operator who takes a hook off has said something. Putting it back on the next restart is the
   # crew overruling the person operating it.
@@ -117,7 +120,7 @@ Feature: A hook is a constraint the crew holds
     Given a crew seeded with the hooks this build ships
     When the operator takes the hook "prompt-analyser" off the crew
     And the control plane restarts
-    Then the workspace runs under 0 hooks
+    Then the workspace runs under no "prompt-analyser" hook
 
   # A fix to a shipped hook has to be able to reach a crew that is already using it. Seeding once
   # reached only a crew with no hooks at all, which is no crew that has ever been used, and the

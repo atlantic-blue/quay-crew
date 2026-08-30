@@ -789,6 +789,11 @@ func (m Model) offered() string {
 		if strings.TrimSpace(m.input) == "" {
 			return ""
 		}
+		// A word that used to open a view says what to type now, for the same reason: enter is
+		// about to refuse it rather than run it.
+		if instead, gone := moved(m.input); gone {
+			return faint.Render("   " + instead)
+		}
 		return faint.Render("   enter runs this as a quay command")
 	}
 	return faint.Render("   " + strings.Join(names, "  "))

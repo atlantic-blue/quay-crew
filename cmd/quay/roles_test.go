@@ -168,7 +168,7 @@ model: opus
 receives:
   - job
   - context
-may:
+verbs:
   - job.create
   - job.read
 `
@@ -192,7 +192,7 @@ func TestARoleIsReadBackWholeWithItsBrief(t *testing.T) {
 	printed := mustRun(t, client, "role", "show", "test-writer")
 	for _, want := range []string{
 		"test-writer v3", "writes the tests for a job, from the job alone",
-		"runs on opus", "receives context, job", "may call job.create, job.read",
+		"runs on opus", "receives context, job", "verbs job.create, job.read",
 	} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("showing the role does not say %q: %q", want, printed)
@@ -211,7 +211,7 @@ func TestARoleThatMayCallNothingSaysSo(t *testing.T) {
 	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
 
 	printed := mustRun(t, client, "role", "show", "test-writer")
-	if !strings.Contains(printed, "may call nothing") {
+	if !strings.Contains(printed, "verbs none, so it may call nothing") {
 		t.Errorf("it does not say the role may call nothing: %q", printed)
 	}
 }
@@ -307,7 +307,7 @@ func TestARoleWithNoBriefStillPrintsWhatItIs(t *testing.T) {
 		},
 	})
 	printed := out.String()
-	for _, want := range []string{"test-writer v1", "runs on opus", "receives context, job", "may call nothing"} {
+	for _, want := range []string{"test-writer v1", "runs on opus", "receives context, job", "verbs none, so it may call nothing"} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("a role with no brief does not say %q: %q", want, printed)
 		}

@@ -80,6 +80,22 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When the operator reads the "test-writter" role back
     Then the crew refuses the role saying "test-writer"
 
+  # What a role may call is declared under verbs, which is the word kubernetes uses for the same
+  # question, so an operator arrives already knowing it.
+  Scenario: A role declares the verbs it may call, and they come back with it
+    Given the operator imported a role that may create and read jobs
+    When the operator reads the "test-writer" role back
+    Then the role comes back saying it may call "job.create, job.read"
+
+  # The way off the old spelling, tested alongside the way on to the new one. A role file is in
+  # somebody's repository and in their fingers, so a key the crew renamed is refused by name rather
+  # than ignored: ignored, the role grants nothing and reads exactly like one that holds.
+  Scenario: A role file still saying may is refused, and told what to write instead
+    When the operator imports a role saying "may" where it should say "verbs"
+    Then the crew refuses the role saying "may"
+    And the crew refuses the role saying "verbs"
+    And the crew holds no roles
+
   Scenario: A workspace with no roles attached says so
     When the operator lists the workspace's roles
     Then the workspace holds no roles

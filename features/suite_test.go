@@ -358,6 +358,8 @@ type world struct {
 	lastSkills         *quaycrewv1.ListSkillsResponse
 	lastRoles          *quaycrewv1.ListRolesResponse
 	lastRole           *quaycrewv1.GetRoleResponse
+	// mergeGate is what the shipped merge gate answered the last time a scenario fired it.
+	mergeGate gateAnswer
 }
 
 type worldKey struct{}
@@ -653,6 +655,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
+	initializeWhatTheCrewDoesSteps(sc)
 	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
@@ -679,6 +682,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
 	initializeJobWaitingSteps(sc)
+	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
@@ -712,6 +716,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
+	initializeMergeGateSteps(sc)
 	initializeRoleSteps(sc)
 	initializeShippedRoleSteps(sc)
 	initializeShippedRoleVerbSteps(sc)

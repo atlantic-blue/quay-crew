@@ -32,11 +32,11 @@ func (p *Postgres) ImportRole(ctx context.Context, imported ImportedRole) error 
 	}
 
 	if _, err := p.pool.Exec(ctx, `
-		insert into roles (name, version, summary, model, receives, "may", brief, fingerprint,
+		insert into roles (name, version, summary, model, receives, verbs, brief, fingerprint,
 		                   origin_repository, origin_commit, origin_path, origin_dirty, origin_unpushed)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		imported.Name, imported.Version, imported.Summary, imported.Model,
-		textArray(imported.Receives), textArray(imported.May_), imported.Brief,
+		textArray(imported.Receives), textArray(imported.Verbs), imported.Brief,
 		imported.Fingerprint(), imported.Origin.Repository, imported.Origin.Commit,
 		imported.Origin.Path, imported.Origin.Dirty, imported.Origin.Unpushed); err != nil {
 		return fmt.Errorf("import role %s: %w", imported.Name, err)
@@ -183,7 +183,7 @@ func roleColumns(alias string) string {
 	if alias != "" {
 		alias += "."
 	}
-	columns := []string{"name", "version", "summary", "model", "receives", `"may"`, "brief",
+	columns := []string{"name", "version", "summary", "model", "receives", "verbs", "brief",
 		"imported_at", "origin_repository", "origin_commit", "origin_path", "origin_dirty",
 		"origin_unpushed"}
 	for at, column := range columns {
@@ -195,7 +195,7 @@ func roleColumns(alias string) string {
 // intoRole is where each of those columns lands, in the same order. The two belong together, so
 // they are next to each other rather than in the four places a role is read.
 func intoRole(held *ImportedRole) []any {
-	return []any{&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.May_,
+	return []any{&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.Verbs,
 		&held.Brief, &held.ImportedAt, &held.Origin.Repository, &held.Origin.Commit,
 		&held.Origin.Path, &held.Origin.Dirty, &held.Origin.Unpushed}
 }

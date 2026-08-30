@@ -71,12 +71,12 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		for _, verb := range []string{role.VerbJobCreate, role.VerbJobRead, role.VerbJobStop} {
 			if !got.May(verb) {
-				t.Errorf("it came back unable to %s, and it was imported declaring it: %+v", verb, got.May_)
+				t.Errorf("it came back unable to %s, and it was imported declaring it: %+v", verb, got.Verbs)
 			}
 		}
 		// The other direction, so a store answering "every verb" passes nothing.
 		if got.May(role.VerbJobAnswer) {
-			t.Errorf("it came back able to %s, which it never declared: %+v", role.VerbJobAnswer, got.May_)
+			t.Errorf("it came back able to %s, which it never declared: %+v", role.VerbJobAnswer, got.Verbs)
 		}
 
 		// Every read a credential could be minted from, because a job's role is looked up through
@@ -111,7 +111,7 @@ func runRoleConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			}
 			if !from[0].May(role.VerbJobCreate) {
 				t.Errorf("%s gives back a role that may %v, and it declared %s",
-					what, from[0].May_, role.VerbJobCreate)
+					what, from[0].Verbs, role.VerbJobCreate)
 			}
 		}
 	})
@@ -482,7 +482,7 @@ func aRole(name string, version int) store.ImportedRole {
 // something. aRole grants nothing, and a store that dropped the column would agree with it forever.
 func aRoleThatMay(name string, version int, verbs ...string) store.ImportedRole {
 	one := aRole(name, version)
-	one.May_ = verbs
+	one.Verbs = verbs
 	return one
 }
 

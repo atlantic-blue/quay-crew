@@ -72,9 +72,9 @@ func TestEveryShippedBriefComesBackByteForByteThroughGetRole(t *testing.T) {
 			t.Errorf("%s came back receiving %v and its file says %v",
 				one.Name, got.GetRole().GetReceives(), one.Receives)
 		}
-		if strings.Join(got.GetMay(), ",") != strings.Join(one.May_, ",") {
+		if strings.Join(got.GetVerbs(), ",") != strings.Join(one.Verbs, ",") {
 			t.Errorf("%s came back allowed to call %v and its file says %v",
-				one.Name, got.GetMay(), one.May_)
+				one.Name, got.GetVerbs(), one.Verbs)
 		}
 		read++
 	}

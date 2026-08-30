@@ -75,7 +75,7 @@ func TestAJobIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
 	if !strings.Contains(err.Error(), role.VerbJobCreate) {
 		t.Fatalf("the refusal says %q, want it to name the verb", err)
 	}
-	if !strings.Contains(err.Error(), "may list") {
+	if !strings.Contains(err.Error(), "verbs list") {
 		t.Fatalf("the refusal says %q, want it to say where the grant is written", err)
 	}
 }
@@ -85,7 +85,7 @@ func TestAJobIsRefusedTheVerbsItsRoleDidNotDeclare(t *testing.T) {
 func TestAJobIsRefusedEveryCallThatIsNotAJobVerb(t *testing.T) {
 	// A grant holding every verb there is, so what is refused here is refused by kind rather than by
 	// the grant being narrow.
-	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
+	grant := auth.Grant{Job: "job-1", Verbs: role.Grantable}
 
 	for _, method := range []string{
 		quaycrewv1.ControlPlaneService_Dispatch_FullMethodName,
@@ -112,7 +112,7 @@ func TestAJobIsRefusedEveryCallThatIsNotAJobVerb(t *testing.T) {
 
 // A session that could raise its own ceiling has none, so the limits are the operator's alone.
 func TestAJobMayNotRaiseItsOwnCeiling(t *testing.T) {
-	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
+	grant := auth.Grant{Job: "job-1", Verbs: role.Grantable}
 
 	err := controlplane.DeniedToJob(
 		quaycrewv1.ControlPlaneService_SetWorkspaceLimits_FullMethodName, nil, grant)
@@ -125,7 +125,7 @@ func TestAJobMayNotRaiseItsOwnCeiling(t *testing.T) {
 // The job a task runs for decides which credential the crew mints, so a session naming one would be
 // minting itself that job's grant.
 func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
-	grant := auth.Grant{Job: "job-1", Verbs: role.Verbs}
+	grant := auth.Grant{Job: "job-1", Verbs: role.Grantable}
 
 	err := controlplane.DeniedToJob(quaycrewv1.ControlPlaneService_CreateJob_FullMethodName,
 		&quaycrewv1.DispatchRequest{Job: "job-2"}, grant)
@@ -138,7 +138,7 @@ func TestAJobMayNotNameTheJobATaskRunsFor(t *testing.T) {
 	}
 }
 
-// A grant holding nothing calls nothing, which is what a role that declared no may list becomes.
+// A grant holding nothing calls nothing, which is what a role that declared no verbs list becomes.
 func TestAGrantThatHoldsNothingCallsNothing(t *testing.T) {
 	grant := auth.Grant{Job: "job-1"}
 
