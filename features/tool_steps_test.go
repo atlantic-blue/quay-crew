@@ -29,7 +29,10 @@ type toolKey struct{}
 
 // toolWorld is what came back out of the last run of the tool.
 type toolWorld struct {
-	address  string
+	address string
+	// home is where the tool keeps the place the operator is standing. It lasts the whole scenario,
+	// so `quay use` and the command after it are the same operator rather than two of them.
+	home     string
 	stdout   string
 	stderr   string
 	exitCode int
@@ -44,6 +47,13 @@ func toolFrom(ctx context.Context) *toolWorld {
 func initializeToolSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, toolKey{}, &toolWorld{}), nil
+	})
+
+	sc.After(func(ctx context.Context, _ *godog.Scenario, err error) (context.Context, error) {
+		if home := toolFrom(ctx).home; home != "" {
+			_ = os.RemoveAll(home)
+		}
+		return ctx, nil
 	})
 
 	sc.Step(`^the crew listens on an address the tool can dial$`, listenForTool)
@@ -125,18 +135,20 @@ func runTool(ctx context.Context, args ...string) error {
 	if err != nil {
 		return err
 	}
-	home, err := os.MkdirTemp("", "quaycrew-tool-")
-	if err != nil {
-		return err
+	if t.home == "" {
+		home, err := os.MkdirTemp("", "quaycrew-tool-")
+		if err != nil {
+			return err
+		}
+		t.home = home
 	}
-	defer func() { _ = os.RemoveAll(home) }()
 
 	command := exec.CommandContext(ctx, binary, args...)
 	command.Env = append(os.Environ(),
 		"QC_GRPC_ADDR="+t.address,
 		"QC_TOKEN="+worldFrom(ctx).token,
-		"QUAY_HOME="+home,
-		"HOME="+home,
+		"QUAY_HOME="+t.home,
+		"HOME="+t.home,
 	)
 	var out, said bytes.Buffer
 	command.Stdout, command.Stderr = &out, &said
