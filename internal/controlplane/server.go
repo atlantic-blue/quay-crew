@@ -238,6 +238,12 @@ type Server struct {
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	headroom *headroom.Sampler
 
+	// lastHealth is what the last probe of the parts a dispatch has to write to found. It is kept
+	// rather than taken on demand for the reason the headroom sample is: the part that is down is the
+	// part that takes longest to say so, and a view must not wait on it.
+	healthMu   sync.RWMutex
+	lastHealth HealthReading
+
 	// startWait is the budget from a session row to a sandbox ready for its first task, and
 	// exportWait what one export to the event log is given. Both are fields rather than constants so
 	// a test can drive a crew whose waits run out while somebody is watching.
