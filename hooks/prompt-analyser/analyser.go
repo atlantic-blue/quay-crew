@@ -571,7 +571,7 @@ func Trouble(timedOut, err error, said string, config Config) string {
 
 	case said != "":
 		// Whatever it said, rather than a guess. One line, because this goes to a terminal.
-		return "the model call failed: " + firstLine(said)
+		return "the model call failed: " + Redacted(firstLine(said))
 
 	default:
 		return "the model call failed with " + err.Error() + " and said nothing"
@@ -598,4 +598,18 @@ func firstLine(text string) string {
 		line = line[:200]
 	}
 	return strings.TrimSpace(line)
+}
+
+// tokenShape is a subscription token as the tool that mints it prints one. Long enough that it
+// cannot match an ordinary word.
+var tokenShape = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{8,}`)
+
+// Redacted takes any credential out of something the child said before it is repeated.
+//
+// The reason a run failed goes to the terminal and, since the record started saying why, into the
+// last run file as well. That is the child's own words, and the child is a model call: repeating them
+// is right, and putting a credential on disk while doing it is not. Nothing is known to print one.
+// This is what makes that a fact rather than a hope.
+func Redacted(text string) string {
+	return tokenShape.ReplaceAllString(text, "[redacted]")
 }

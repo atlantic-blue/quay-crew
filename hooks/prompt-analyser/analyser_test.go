@@ -926,3 +926,23 @@ func driveTrouble(t *testing.T, config Config, payload, trouble string) driven {
 	run.lastRun = fs.written[config.LastRunFile]
 	return run
 }
+
+// The reason a run failed is the child's own words, and since the record started saying why, those
+// words go on disk as well as to the terminal. Nothing is known to print a credential. This is what
+// makes that a fact rather than a hope.
+func TestACredentialInWhatTheChildSaidIsNeverRepeated(t *testing.T) {
+	const token = "sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA"
+
+	trouble := Trouble(nil, errors.New("exit status 1"),
+		"could not use "+token+" against the endpoint", Default("/home/agent"))
+
+	if strings.Contains(trouble, token) {
+		t.Fatalf("the reason repeats a credential, and it is written to a file: %q", trouble)
+	}
+	if !strings.Contains(trouble, "[redacted]") {
+		t.Errorf("the reason says nothing about what was taken out: %q", trouble)
+	}
+	if !strings.Contains(trouble, "against the endpoint") {
+		t.Errorf("the reason lost the words that say what went wrong: %q", trouble)
+	}
+}
