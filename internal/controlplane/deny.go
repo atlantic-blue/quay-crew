@@ -77,6 +77,13 @@ func refusedToDriver(fullMethod string) error {
 // The refusal names the verb, because a session that was refused has to know what to ask its
 // operator for.
 func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
+	// Asking is not a verb, so no role has to grant it and none can withhold it. A session puts a
+	// question about the job it is itself running, and the credential is already bound to that job,
+	// so there is nothing here to check that the call does not check for itself. The alternative to
+	// asking is guessing, and no role should be able to leave a session with only that.
+	if fullMethod == quaycrewv1.ControlPlaneService_AskJob_FullMethodName {
+		return nil
+	}
 	verb, known := jobVerbs[fullMethod]
 	if !known {
 		return status.Errorf(codes.PermissionDenied,
@@ -101,6 +108,11 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 
 // jobVerbs is which verb each call needs. A call that is not here is not a job call, and a
 // job may not make it.
+//
+// AnswerJob is deliberately absent. The verb `job.answer` exists and a role can be written that
+// holds it, and no call is mapped to it, so what a session may do with that verb today is nothing.
+// A question is put to a person, and a run that could answer its own question is a gate that
+// decorates rather than holds.
 var jobVerbs = map[string]string{
 	quaycrewv1.ControlPlaneService_CreateJob_FullMethodName: role.VerbJobCreate,
 	quaycrewv1.ControlPlaneService_GetJob_FullMethodName:    role.VerbJobRead,

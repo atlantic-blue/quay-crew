@@ -22,7 +22,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay job <create|list|show|stop>")
+		return fmt.Errorf("usage: quay job <create|list|show|stop|ask|answer>")
 	}
 	switch args[0] {
 	case "create":
@@ -33,8 +33,12 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobShow(ctx, client, args[1:], out)
 	case "stop":
 		return runJobStop(ctx, client, args[1:], out)
+	case "ask":
+		return runJobAsk(ctx, client, args[1:], out)
+	case "answer":
+		return runJobAnswer(ctx, client, args[1:], out)
 	default:
-		return fmt.Errorf("there is no job %s command: quay job <create|list|show|stop>", args[0])
+		return fmt.Errorf("there is no job %s command: quay job <create|list|show|stop|ask|answer>", args[0])
 	}
 }
 
@@ -320,8 +324,18 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetReason() != "" {
 		fmt.Fprintf(out, "%s\n", one.GetReason())
 	}
-	if one.GetQuestion() != "" {
-		fmt.Fprintf(out, "asking: %s\n", one.GetQuestion())
+	// What it asked, and what it was told. Both stay on the row after the answer, because an answer
+	// on its own says nothing and a question on its own leaves a reader looking for the decision.
+	if question := one.GetQuestion(); question != "" {
+		if one.GetPhase() == job.PhaseAsking {
+			fmt.Fprintf(out, "asking: %s\n", question)
+			fmt.Fprintf(out, "answer it with quay job answer %s \"...\"\n", display.ShortID(one.GetId()))
+		} else {
+			fmt.Fprintf(out, "asked: %s\n", question)
+		}
+	}
+	if one.GetTold() != "" {
+		fmt.Fprintf(out, "told: %s\n", one.GetTold())
 	}
 	for _, waits := range one.GetAfter() {
 		fmt.Fprintf(out, "waits for %s\n", display.ShortID(waits))
@@ -377,6 +391,49 @@ func runJobStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	stopped := resp.GetJob()
 	fmt.Fprintf(out, "stopped %s\n", display.ShortID(stopped.GetId()))
 	fmt.Fprintf(out, "%s\n", stopped.GetReason())
+	return nil
+}
+
+// runJobAsk puts a question to a person about the job this session is running.
+//
+// It names no job. The crew reads which job is asking from the credential this session holds, the
+// same way it reads the parent of anything the session declares: a caller that could name any job
+// could stop any job.
+func runJobAsk(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: quay job ask \"<question>\"")
+	}
+	resp, err := client.AskJob(ctx, &quaycrewv1.AskJobRequest{Question: args[0]})
+	if err != nil {
+		return err
+	}
+	asking := resp.GetJob()
+	fmt.Fprintf(out, "asked %s\n", display.ShortID(asking.GetId()))
+	fmt.Fprintf(out, "%s\n", asking.GetQuestion())
+	// Said out loud, because the session reading this is about to end its task and a model that
+	// thinks it is waiting inside the call would sit there instead.
+	fmt.Fprintln(out, "\nnothing moves this job until a person answers, so end your task now and say "+
+		"in your answer that you are waiting. The answer arrives as your next task.")
+	return nil
+}
+
+// runJobAnswer tells an asking job what was decided.
+func runJobAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: quay job answer <job> \"<answer>\"")
+	}
+	one, err := findJob(ctx, client, args[0])
+	if err != nil {
+		return err
+	}
+	resp, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: one.GetId(), Answer: args[1]})
+	if err != nil {
+		return err
+	}
+	answered := resp.GetJob()
+	fmt.Fprintf(out, "answered %s\n", display.ShortID(answered.GetId()))
+	fmt.Fprintf(out, "%s\n", answered.GetTold())
+	fmt.Fprintln(out, "\nit starts again with that answer, in the session that asked.")
 	return nil
 }
 

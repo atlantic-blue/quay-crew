@@ -73,6 +73,13 @@ commands:
   job show <job>                          one job whole: what it is, where it got to,
                                           why it stopped, and what came back
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
+  job ask "<question>"                    put a question to a person about the job you are running,
+                                          when a decision no measurement settles is in your way.
+                                          The job stops there and nothing moves it until somebody
+                                          answers, so end your task and say you are waiting. The
+                                          answer arrives as your next task
+  job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
+                                          again with the answer, in the session that asked
   limits [<workspace>]                    what a workspace lets its sessions declare, and how long
     [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
     [--max-running <n>]                   jobs may go, how many run at once, what a tree may spend,
