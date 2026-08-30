@@ -1,18 +1,17 @@
 Feature: What this build does is a command, and not a view
 
-  A crew answers "what does this thing do" out of the specification embedded in it, so the answer
-  travels in the binary and is made of the same scenarios that fail the build when they stop being
-  true. The command is quay features.
+  The specification is embedded in the binary, so the answer to "what does this thing do" travels
+  with the build. The scenarios in it fail the build when they stop being true. The command that
+  prints them is quay features.
 
-  The console listed the same scenarios in a view of its own, under a column headed "proved by".
-  That column named a scenario without saying whether the scenario passed on this build, so it
-  claimed evidence that nobody had checked. A reader who took it at face value believed something
-  was checked that nobody checked. The view also asked the control plane nothing, so it said the
-  same thing whichever crew was on screen.
+  The console listed the same scenarios in a view of its own. Its second column was headed "proved
+  by". The column named a scenario. It never said whether that scenario passed on this build, so it
+  claimed evidence that nobody had checked. The view also asked the control plane nothing. It said
+  the same thing whichever crew was on screen.
 
   So there is one list, and it is the command. The console's command bar runs commands, so the word
-  still works there and the list arrives in the output panel. The short spellings that opened the
-  view have no command behind them, and each one says what to type instead: a word that becomes an
+  still works there. The list arrives in the output panel. The short spellings that opened the view
+  have no command behind them, so each one says what to type instead. A word that becomes an
   unknown command reads as the console being broken.
 
   Background:
