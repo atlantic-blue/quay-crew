@@ -3,7 +3,7 @@ package messaging_test
 import (
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
+	"github.com/atlantic-blue/krewe/internal/messaging"
 )
 
 func TestTopic(t *testing.T) {

@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // The session lifecycle over a real database and a real control plane.
@@ -40,7 +40,7 @@ func aSystemWithAProviderOnPostgres(t *testing.T, runner model.Runner, provider 
 }
 
 // reclaimingAfter gives the workspace a reclaim time, and optionally an archive time, through the
-// same call an operator's `quay limits` makes.
+// same call an operator's `krewe limits` makes.
 func reclaimingAfter(t *testing.T, s *controlplane.Server, workspace string, reclaim, archive int32) {
 	t.Helper()
 	if _, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{

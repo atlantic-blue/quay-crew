@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/skill"
 	"github.com/jackc/pgx/v5"
 )
 

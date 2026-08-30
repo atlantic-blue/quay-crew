@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // DefaultPollEvery is how often the system looks for waits that have come due.

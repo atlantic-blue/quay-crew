@@ -2,7 +2,7 @@ Feature: One word for the level above every workspace, and the word it replaced 
 
   The level above every workspace is the system. It holds the secrets, the skills, the hooks, the
   roles and the context that every workspace reads without attaching anything, and it is said where
-  a workspace goes: quay secret set system, quay skill attach system, quay context set system.
+  a workspace goes: krewe secret set system, krewe skill attach system, krewe context set system.
 
   It was called crew, which was also the word for the whole product, so an address read as a
   sentence about the product rather than as a place. One word for one thing, and the word for the
@@ -80,6 +80,6 @@ Feature: One word for the level above every workspace, and the word it replaced 
   # old word teaches every session to type something that is refused.
   Scenario: The manual says the word, and never the word that went
     When the caller asks for the manual
-    Then standard output says "quay context set system"
+    Then standard output says "krewe context set system"
     And standard output never says "crew"
     And the command succeeds

@@ -4,19 +4,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/deploy"
+	"github.com/atlantic-blue/krewe/internal/deploy"
 )
 
 func TestATargetIsReadWhole(t *testing.T) {
 	target, err := deploy.ParseTarget(
-		"  123456789012 ", " eu-west-2\n", "arn:aws:iam::123456789012:role/quay-deploy ")
+		"  123456789012 ", " eu-west-2\n", "arn:aws:iam::123456789012:role/krewe-deploy ")
 	if err != nil {
 		t.Fatalf("ParseTarget: %v", err)
 	}
 	want := deploy.Target{
 		Account:  "123456789012",
 		Region:   "eu-west-2",
-		Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 	}
 	if target != want {
 		t.Fatalf("read %+v, want %+v", target, want)
@@ -83,7 +83,7 @@ func TestAnAccountIsTwelveDigits(t *testing.T) {
 // produces a tree of jobs writing correct infrastructure for somewhere it can never reach, and it is
 // invisible until a pipeline runs.
 func TestAnIdentityFromAnotherAccountIsRefused(t *testing.T) {
-	_, err := deploy.ParseTarget("123456789012", "eu-west-2", "arn:aws:iam::999999999999:role/quay-deploy")
+	_, err := deploy.ParseTarget("123456789012", "eu-west-2", "arn:aws:iam::999999999999:role/krewe-deploy")
 	if err == nil {
 		t.Fatal("an identity in another account was accepted")
 	}
@@ -96,7 +96,7 @@ func TestAnIdentityFromAnotherAccountIsRefused(t *testing.T) {
 
 func TestAnIdentityIsARoleSomethingCanAssume(t *testing.T) {
 	for reason, identity := range map[string]string{
-		"a bare name":     "quay-deploy",
+		"a bare name":     "krewe-deploy",
 		"a user":          "arn:aws:iam::123456789012:user/julian",
 		"another service": "arn:aws:s3:::a-bucket",
 		"no role name":    "arn:aws:iam::123456789012:role/",
@@ -106,10 +106,10 @@ func TestAnIdentityIsARoleSomethingCanAssume(t *testing.T) {
 		}
 	}
 	for _, identity := range []string{
-		"arn:aws:iam::123456789012:role/quay-deploy",
-		"arn:aws:iam::123456789012:role/service-role/quay-deploy",
-		"arn:aws-cn:iam::123456789012:role/quay-deploy",
-		"arn:aws-us-gov:iam::123456789012:role/quay-deploy",
+		"arn:aws:iam::123456789012:role/krewe-deploy",
+		"arn:aws:iam::123456789012:role/service-role/krewe-deploy",
+		"arn:aws-cn:iam::123456789012:role/krewe-deploy",
+		"arn:aws-us-gov:iam::123456789012:role/krewe-deploy",
 	} {
 		if _, err := deploy.ParseTarget("123456789012", "eu-west-2", identity); err != nil {
 			t.Errorf("the identity %q was refused: %v", identity, err)
@@ -123,7 +123,7 @@ func TestHalfATargetIsRefused(t *testing.T) {
 	whole := deploy.Target{
 		Account:  "123456789012",
 		Region:   "eu-west-2",
-		Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 	}
 	for missing, given := range map[string]deploy.Target{
 		"account":  {Region: whole.Region, Identity: whole.Identity},

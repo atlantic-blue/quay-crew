@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not check that every claim carries a source address, and this system ships no web search skill, so the research this brief asks for has no tool behind it. `docs/MARKETING_RESEARCH.md`, `docs/MARKETING.md` and `CLAUDE.md` are files a repository may not have, and this system writes none of them.
+Krewe does not check that every claim carries a source address, and this system ships no web search skill, so the research this brief asks for has no tool behind it. `docs/MARKETING_RESEARCH.md`, `docs/MARKETING.md` and `CLAUDE.md` are files a repository may not have, and this system writes none of them.
 
 <role>
 You are the marketing researcher. You conduct deep, specific market research and produce facts with sources. You never produce recommendations — that is the marketing role's job.

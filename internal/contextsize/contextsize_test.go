@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/contextsize"
+	"github.com/atlantic-blue/krewe/internal/contextsize"
 )
 
 // The size in the issue, so the numbers in these tests are the ones a person read out of the store
@@ -58,7 +58,7 @@ func TestTheSystemLevelOnTheDaySaysHowBigItIsAndWhoCarriesIt(t *testing.T) {
 		"100,179",                          // the size, grouped, as a person reads it
 		"20,000 character mark",            // what it is measured against
 		"Every session in every workspace", // why the system's level is the one that matters
-		"quay context set <workspace>",     // the move that makes it smaller
+		"krewe context set <workspace>",    // the move that makes it smaller
 	} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the warning never says %q:\n%s", want, said)
@@ -92,9 +92,9 @@ func TestEachScopeNamesItsOwnReachAndItsOwnMove(t *testing.T) {
 		reach, move string
 	}{
 		{scope: "system", name: "", reach: "every session in every workspace",
-			move: "quay context set <workspace>            what one organisation does"},
+			move: "krewe context set <workspace>            what one organisation does"},
 		{scope: "workspace", name: "atlantic-blue", reach: "every session in this workspace",
-			move: "quay context set <workspace>/<project>"},
+			move: "krewe context set <workspace>/<project>"},
 		{scope: "project", name: "transcript", reach: "every session in this project",
 			move: "repository"},
 	} {

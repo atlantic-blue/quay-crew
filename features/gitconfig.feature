@@ -7,7 +7,7 @@ Feature: An operator's git configuration reaches a session
   So the image reads the operator's own configuration. It ships a git configuration holding one
   include, pointing at where a mounted secret named gitconfig lands, and the operator mounts theirs:
 
-      quay secret mount me gitconfig ~/.gitconfig
+      krewe secret mount me gitconfig ~/.gitconfig
 
   Identity, aliases and settings then reach every git process in the sandbox, from any shell. A
   workspace that mounts nothing is unchanged, because git ignores an include that is not there.

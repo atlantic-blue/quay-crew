@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/headroom"
 )
 
 // countingSource records how often anything read the machine, which is what rule one of issue 405

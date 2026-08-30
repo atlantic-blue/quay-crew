@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/skill"
 )
 
 // TestDockerProvider creates a real per session container, execs a command inside it, reads the

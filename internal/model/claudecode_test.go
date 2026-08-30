@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 func TestEnvListIsSortedKeyValues(t *testing.T) {
@@ -457,7 +457,7 @@ func TestATaskKilledForMemorySaysSoRatherThanShowingAnExitStatus(t *testing.T) {
 	if err == nil {
 		t.Fatal("a killed task reported success")
 	}
-	for _, want := range []string{"a kill rather than a failure", "quay room", "container went away"} {
+	for _, want := range []string{"a kill rather than a failure", "krewe room", "container went away"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("a task killed for memory says %q, want it to say %q", err, want)
 		}

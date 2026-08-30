@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/skill"
 )
 
 // The shape the git brief describes, run against real git rather than read.
@@ -25,7 +25,7 @@ func TestOneCloneCarriesAWorkingTreePerSession(t *testing.T) {
 	trees := map[string]string{}
 	for _, session := range []string{"a1b2c3d4e5f6", "0f1e2d3c4b5a"} {
 		tree := filepath.Join(root, "worktrees", session, "example")
-		git(t, clone, "worktree", "add", tree, "-b", "quay/"+session, "origin/HEAD")
+		git(t, clone, "worktree", "add", tree, "-b", "krewe/"+session, "origin/HEAD")
 		trees[session] = tree
 		if _, err := os.Stat(filepath.Join(tree, "README.md")); err != nil {
 			t.Fatalf("the working tree for %s does not hold the repository's files: %v", session, err)
@@ -61,9 +61,9 @@ func TestTwoSessionsAtOnePathCollide(t *testing.T) {
 	git(t, root, "clone", origin, clone)
 
 	shared := filepath.Join(root, "worktrees", "example")
-	git(t, clone, "worktree", "add", shared, "-b", "quay/first", "origin/HEAD")
+	git(t, clone, "worktree", "add", shared, "-b", "krewe/first", "origin/HEAD")
 
-	out, err := exec.Command("git", "-C", clone, "worktree", "add", shared, "-b", "quay/second", "origin/HEAD").CombinedOutput()
+	out, err := exec.Command("git", "-C", clone, "worktree", "add", shared, "-b", "krewe/second", "origin/HEAD").CombinedOutput()
 	if err == nil {
 		t.Fatalf("a second session took a tree at the same path and git allowed it:\n%s", out)
 	}

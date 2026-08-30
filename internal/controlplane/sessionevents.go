@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/messaging"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

@@ -164,7 +164,7 @@ func TestBigNNoLongerStartsAConversation(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	started := 0
 	model := newTestModel(t, Sessions(&fakeClient{})).
-		Beside(func(string) ([]string, error) { started++; return []string{"quay", "attach", "s1"}, nil }).
+		Beside(func(string) ([]string, error) { started++; return []string{"krewe", "attach", "s1"}, nil }).
 		Freshen(func(string) error { return nil })
 
 	next, cmd := update(t, model, runes("N"))

@@ -11,7 +11,7 @@ Feature: A sandbox keeps a session's state outside itself
   These scenarios use a sandbox double, so they state where state belongs and not that a real daemon
   honours it. The real thing is proved twice against Docker: TestDockerProviderKeepsStateAcrossContainers
   writes a file, destroys the container and reads it back, and continuous integration does the same
-  through the composed stack and the quay command line tool.
+  through the composed stack and the krewe command line tool.
 
   Background:
     Given a running control plane

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // A repository a caller typed and a repository a caller pasted are the same repository.
@@ -32,7 +32,7 @@ func TestARepositoryIsStoredAsOwnerAndName(t *testing.T) {
 // because the alternative is a job that runs for an hour and stops on an address that was never
 // going to match anything.
 func TestARepositoryThatIsNotAnOwnerAndANameIsRefused(t *testing.T) {
-	for _, typed := range []string{"quay-crew", "atlantic-blue/", "/quay-crew", "a/b/c", "atlantic blue/quay"} {
+	for _, typed := range []string{"quay-crew", "atlantic-blue/", "/quay-crew", "a/b/c", "atlantic blue/krewe"} {
 		d := declared()
 		d.Repository = typed
 		err := d.Validate()

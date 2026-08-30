@@ -16,18 +16,18 @@ import (
 	"syscall"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/headroom"
-	"github.com/atlantic-blue/quay-crew/internal/logging"
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
-	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/logging"
+	"github.com/atlantic-blue/krewe/internal/messaging"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/krewe/internal/telemetry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -107,7 +107,7 @@ func main() {
 		DriverMounts:   splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
 		// How much memory one session may take. Unset gives it no limit, so it advertises the whole
 		// machine to node, Go, jest and webpack, and the kernel kills it against what is actually
-		// free. A session reads whichever of the two it got with quay room.
+		// free. A session reads whichever of the two it got with krewe room.
 		Memory: strings.TrimSpace(os.Getenv("QC_SANDBOX_MEMORY")),
 	})
 	if err != nil {

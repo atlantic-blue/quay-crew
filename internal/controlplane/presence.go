@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 )
 
 // presenceSweep is the whole listing's budget for asking the sandboxes what is in them.

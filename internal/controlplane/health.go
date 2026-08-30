@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/messaging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"

@@ -61,8 +61,8 @@ func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 // The changelog is exempt from all of them. It records what shipped on the day it shipped, and
 // rewriting it would make it a worse record.
 func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
-	home := filepath.Join("cmd", "quay", "home.go")
-	homeTest := filepath.Join("cmd", "quay", "home_test.go")
+	home := filepath.Join("cmd", "krewe", "home.go")
+	homeTest := filepath.Join("cmd", "krewe", "home_test.go")
 	itself := filepath.Join("deploy", "configuration_test.go")
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
@@ -119,7 +119,7 @@ func makeVariable(t *testing.T, name string) string {
 //
 // Docker creates a missing bind mount source itself, as root. The system's directory now holds the
 // files the tool writes as well as the data the stack mounts, so a stack that came up first would
-// leave it owned by root and the next `quay use` would fail with permission denied on a path it had
+// leave it owned by root and the next `krewe use` would fail with permission denied on a path it had
 // just been told to write. That is what happened: the tests were green and the composed stack was not.
 func TestTheSystemsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "system")

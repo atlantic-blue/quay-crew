@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/capacity"
+	"github.com/atlantic-blue/krewe/internal/capacity"
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
@@ -181,7 +181,7 @@ func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
 
 // Attached asks the container whether the operator's conversation has anybody watching it.
 //
-// `quay attach` runs `docker exec --interactive --tty <container> tmux new-session -A -s quay ...`,
+// `krewe attach` runs `docker exec --interactive --tty <container> tmux new-session -A -s krewe ...`,
 // so the conversation an operator types into is a tmux session called AttachedSessionName inside the
 // container, and tmux itself already knows whether a client is on it. This is the same question asked
 // from outside, through one more exec against the same tmux server.
@@ -231,7 +231,7 @@ const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; ec
 
 // RuntimeRunning asks the container's own process table whether a model runtime is up in it.
 //
-// This is the state the system could not see. `quay attach` opens the conversation in tmux inside the
+// This is the state the system could not see. `krewe attach` opens the conversation in tmux inside the
 // sandbox, and detaching leaves the runtime answering with nobody watching it, so the tmux question
 // says nobody is there and the row says no task is open, and both are true while a conversation is
 // mid answer.

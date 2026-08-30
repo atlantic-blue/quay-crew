@@ -12,7 +12,7 @@ const SettingsFile = "settings.json"
 
 // StatusLineCommand is what the runtime runs to draw the line under the conversation. It is the tool
 // the image already carries, so this needs nothing installed and nothing configured.
-const StatusLineCommand = "quay statusline"
+const StatusLineCommand = "krewe statusline"
 
 // settings is the runtime's settings document: the hooks a session runs under, and the line the
 // runtime keeps under the conversation.

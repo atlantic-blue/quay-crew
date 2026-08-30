@@ -157,7 +157,7 @@ edges:
 }
 
 // The second half of quay-crew#461. A run that stopped over an unmet claim recorded the finding under
-// `result.expected` and nothing under any other key, so `quay flow show` printed the same sentence
+// `result.expected` and nothing under any other key, so `krewe flow show` printed the same sentence
 // twice and never said what the graph had asked for. A reader could not tell whether the graph wanted
 // pr-state.md or wanted something else and got pr-state.md wrong.
 func TestAStoppedRunSaysWhatItWantedApartFromWhatItFound(t *testing.T) {

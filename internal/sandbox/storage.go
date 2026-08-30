@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/skill"
 )
 
 // Storage keeps a sandbox's state on the host, so removing a container does not destroy the

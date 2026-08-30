@@ -106,10 +106,10 @@ func TestAFirstRunSaysWhatItCannotDo(t *testing.T) {
 	recipe := target(t, "install")
 	for _, said := range []string{
 		"claude setup-token",
-		"quay workspace create <name>",
-		"quay project create <name>",
-		"quay secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`quay task \"say pong\"`,
+		"krewe workspace create <name>",
+		"krewe project create <name>",
+		"krewe secret set CLAUDE_CODE_OAUTH_TOKEN",
+		`krewe task \"say pong\"`,
 	} {
 		if !strings.Contains(recipe, said) {
 			t.Errorf("a first run never says %q, so the operator is left with a system and no next step:\n%s",
@@ -200,12 +200,12 @@ func (system *aFirstRun) brought(t *testing.T) int {
 	return strings.Count(string(body), "up --build -d")
 }
 
-// TestOneCommandLeavesARunningSystemAndAQuayOnThePath.
+// TestOneCommandLeavesARunningSystemAndAKreweOnThePath.
 //
 // The whole point, and it asserts on what the operator is left holding rather than on the calls make
 // made: a configuration file, a binary that runs and says which build it is, one stack brought up,
 // and the next steps in full.
-func TestOneCommandLeavesARunningSystemAndAQuayOnThePath(t *testing.T) {
+func TestOneCommandLeavesARunningSystemAndAKreweOnThePath(t *testing.T) {
 	system := ran(t, nil, 0, "", "install")
 	if system.failed {
 		t.Fatalf("a first run failed:\n%s", system.said)
@@ -223,21 +223,32 @@ func TestOneCommandLeavesARunningSystemAndAQuayOnThePath(t *testing.T) {
 
 	// The binary is run, not stat'd. A file of the right name that cannot execute is the failure this
 	// would otherwise report as a pass.
-	installed := filepath.Join(system.bin, "quay")
+	installed := filepath.Join(system.bin, "krewe")
 	reported, err := exec.Command(installed, "version").CombinedOutput()
 	if err != nil {
-		t.Fatalf("the quay a first run installed does not run: %v\n%s", err, reported)
+		t.Fatalf("the krewe a first run installed does not run: %v\n%s", err, reported)
 	}
 	if !strings.Contains(string(reported), "tool") {
-		t.Errorf("the installed quay does not say which build it is:\n%s", reported)
+		t.Errorf("the installed krewe does not say which build it is:\n%s", reported)
+	}
+
+	// And the name the tool used to have, beside it. Run rather than stat'd for the same reason, and
+	// because what makes it worth installing is what it says: a rename that leaves nothing behind
+	// answers the old name with "command not found", which reads as a broken install.
+	refused, err := exec.Command(filepath.Join(system.bin, "quay"), "sessions").CombinedOutput()
+	if err == nil {
+		t.Errorf("the quay a first run installed exited 0, so a script carries on as though it worked:\n%s", refused)
+	}
+	if !strings.Contains(string(refused), "krewe") {
+		t.Errorf("the quay a first run installed says %q, and never names krewe", refused)
 	}
 
 	for _, next := range []string{
 		"claude setup-token",
-		"quay workspace create <name>",
-		"quay project create <name>",
-		"quay secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`quay task "say pong"`,
+		"krewe workspace create <name>",
+		"krewe project create <name>",
+		"krewe secret set CLAUDE_CODE_OAUTH_TOKEN",
+		`krewe task "say pong"`,
 	} {
 		if !strings.Contains(system.said, next) {
 			t.Errorf("a first run never printed %q:\n%s", next, system.said)
@@ -316,7 +327,7 @@ func TestARunningSystemIsReplacedWhenTheOperatorSaysSo(t *testing.T) {
 		typed string
 		args  []string
 	}{
-		{named: "typing the system's name back", typed: "quay\n", args: []string{"install"}},
+		{named: "typing the system's name back", typed: "krewe\n", args: []string{"install"}},
 		{named: "YES=1", typed: "", args: []string{"install", "YES=1"}},
 	} {
 		t.Run(way.named, func(t *testing.T) {
@@ -362,7 +373,7 @@ func TestBuildingLeavesARunningSystemAlone(t *testing.T) {
 		t.Errorf("make rebuild brought the stack up %d times, and it is the way to build without "+
 			"restarting anything:\n%s", got, system.said)
 	}
-	if _, err := os.Stat(filepath.Join(system.bin, "quay")); err != nil {
+	if _, err := os.Stat(filepath.Join(system.bin, "krewe")); err != nil {
 		t.Errorf("make rebuild did not build the tool: %v", err)
 	}
 }
@@ -385,7 +396,7 @@ func TestAPieceOnItsOwnStartsNothing(t *testing.T) {
 // TestAFailedBuildDoesNotReportASystem.
 //
 // The tool's recipe is one shell command joined with semicolons, and a shell command list exits with
-// the status of its last command. So a failed `go build` printed "installed quay to ..." and exited
+// the status of its last command. So a failed `go build` printed "installed krewe to ..." and exited
 // 0, and a first run built on top of that would replace the running services and print "the system is
 // up" over a tool that was never built. Issue 419 is the same shape one layer up.
 func TestAFailedBuildDoesNotReportASystem(t *testing.T) {
@@ -393,7 +404,7 @@ func TestAFailedBuildDoesNotReportASystem(t *testing.T) {
 	if !system.failed {
 		t.Errorf("a build that could not be installed exited 0:\n%s", system.said)
 	}
-	if strings.Contains(system.said, "installed quay to") {
+	if strings.Contains(system.said, "installed krewe to") {
 		t.Errorf("a build that could not be installed said it was installed:\n%s", system.said)
 	}
 }

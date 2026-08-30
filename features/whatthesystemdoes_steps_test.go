@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/features"
-	"github.com/atlantic-blue/quay-crew/internal/console"
+	"github.com/atlantic-blue/krewe/features"
+	"github.com/atlantic-blue/krewe/internal/console"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
@@ -111,7 +111,7 @@ func firstFeature() (features.Feature, error) {
 func theRealTool(ctx context.Context) console.CommandRunner {
 	address, token := toolFrom(ctx).address, worldFrom(ctx).token
 	return func(ctx context.Context, args []string) (string, error) {
-		binary, err := quayBinary()
+		binary, err := kreweBinary()
 		if err != nil {
 			return "", err
 		}

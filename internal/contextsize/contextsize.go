@@ -121,11 +121,11 @@ func (r Reading) advice() string {
 	switch r.Scope {
 	case "system":
 		return "Move what is not true of every workspace down a level:\n" +
-			"  quay context set <workspace>            what one organisation does\n" +
-			"  quay context set <workspace>/<project>  what one piece of work does"
+			"  krewe context set <workspace>            what one organisation does\n" +
+			"  krewe context set <workspace>/<project>  what one piece of work does"
 	case "workspace":
 		return "Move what is not true of every project in it down a level:\n" +
-			"  quay context set <workspace>/<project>  what one piece of work does"
+			"  krewe context set <workspace>/<project>  what one piece of work does"
 	default:
 		return "Put what belongs to the code in the repository, which every session in it reads\n" +
 			"anyway. Keep this level for what the repository cannot say."

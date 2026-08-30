@@ -6,7 +6,7 @@ package model
 import (
 	"context"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // Request is one task to run against the model.

@@ -28,7 +28,7 @@ func TestTheChildIsGuardedAgainstAnalysingItsOwnPrompt(t *testing.T) {
 	}
 }
 
-// In a quay sandbox there is no credentials file: the subscription arrives as this variable, and
+// In a krewe sandbox there is no credentials file: the subscription arrives as this variable, and
 // dropping it left the child with nothing to authenticate with. The hook still exited 0 and the only
 // sign anywhere was the word "no answer" in a file in /tmp.
 func TestTheChildKeepsTheCredentialItNeedsToAuthenticate(t *testing.T) {

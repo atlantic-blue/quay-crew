@@ -18,18 +18,18 @@ func lines(commands [][]string) string {
 // TestThePanelIsTwoHalvesSideBySide: the whole point of it. Half the screen each, split left and
 // right, the console in one and the conversation in the other.
 func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
-	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
 	got := lines(commands)
 
 	for _, want := range []string{
-		"tmux new-session -d -s quay-panel -n panel quay header",
-		"tmux split-window -v -t quay-panel:panel.0 quay console",
-		"tmux split-window -h -l 50% -t quay-panel:panel.1 quay attach s1",
-		"tmux resize-pane -t quay-panel:panel.0 -y 10",
-		"tmux attach-session -t quay-panel",
+		"tmux new-session -d -s krewe-panel -n panel krewe header",
+		"tmux split-window -v -t krewe-panel:panel.0 krewe console",
+		"tmux split-window -h -l 50% -t krewe-panel:panel.1 krewe attach s1",
+		"tmux resize-pane -t krewe-panel:panel.0 -y 10",
+		"tmux attach-session -t krewe-panel",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("the panel does not run %q:\n%s", want, got)
@@ -40,7 +40,7 @@ func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
 // TestThePanelSplitsSideBySideRatherThanStacked: -h is the difference. Without it tmux stacks the
 // panes and the console loses half its rows instead of half its width.
 func TestThePanelSplitsSideBySideRatherThanStacked(t *testing.T) {
-	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestThePanelSplitsSideBySideRatherThanStacked(t *testing.T) {
 // TestTheConsoleHasTheKeyboard: the operator opened the panel to use the console, so the cursor lands
 // there rather than in the conversation, which is one pane away.
 func TestTheConsoleHasTheKeyboard(t *testing.T) {
-	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{})
+	commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestTheConsoleHasTheKeyboard(t *testing.T) {
 // TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain: the layout is built once. Splitting on every
 // open is how a two pane panel becomes eleven panes by lunchtime.
 func TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain(t *testing.T) {
-	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.Commands(Terminal{AlreadyOpen: true})
+	commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{AlreadyOpen: true})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain(t *testing.T) {
 // TestTheSessionNameIsTheSameEveryTime, because that is what makes opening it twice come back to the
 // one already open rather than starting a second.
 func TestTheSessionNameIsTheSameEveryTime(t *testing.T) {
-	layout := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}
+	layout := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}
 	asked := line(layout.HasSession())
 
 	commands, err := layout.Commands(Terminal{})
@@ -128,8 +128,8 @@ func TestAHalfEmptyPanelIsRefused(t *testing.T) {
 		name   string
 		layout Layout
 	}{
-		{"no console", Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Right: []string{"quay", "attach", "s1"}}},
-		{"no conversation", Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}}},
+		{"no console", Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Right: []string{"krewe", "attach", "s1"}}},
+		{"no conversation", Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}}},
 		{"none of it", Layout{}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -147,7 +147,7 @@ func TestAHalfEmptyPanelIsRefused(t *testing.T) {
 // The terminal said `sessions should be nested with care, unset $TMUX to force`, and the two panes
 // were sitting there the whole time.
 func TestThePanelOpensFromInsideTmux(t *testing.T) {
-	layout := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}
+	layout := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}
 
 	commands, err := layout.Commands(Terminal{InsideTmux: true})
 	if err != nil {
@@ -169,7 +169,7 @@ func TestThePanelOpensFromInsideTmux(t *testing.T) {
 
 // TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux: same refusal, on the path that only reattaches.
 func TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux(t *testing.T) {
-	commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.
+	commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.
 		Commands(Terminal{AlreadyOpen: true, InsideTmux: true})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -189,7 +189,7 @@ func TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux(t *testing.T) {
 // attaching rather than being swept up in the fix for the nested one.
 func TestThePanelStillAttachesFromAPlainTerminal(t *testing.T) {
 	for _, open := range []bool{false, true} {
-		commands, err := Layout{Header: []string{"quay", "header"}, HeaderRows: 10, Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"}}.
+		commands, err := Layout{Header: []string{"krewe", "header"}, HeaderRows: 10, Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.
 			Commands(Terminal{AlreadyOpen: open})
 		if err != nil {
 			t.Fatalf("Commands: %v", err)
@@ -210,8 +210,8 @@ func TestThePanelStillAttachesFromAPlainTerminal(t *testing.T) {
 // the header asked for the rows it gets.
 func TestThePanelIsBuiltAtTheTerminalsSize(t *testing.T) {
 	commands, err := Layout{
-		Header: []string{"quay", "header"}, HeaderRows: 10,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header: []string{"krewe", "header"}, HeaderRows: 10,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 		Width: 180, Height: 46,
 	}.Commands(Terminal{})
 	if err != nil {
@@ -226,8 +226,8 @@ func TestThePanelIsBuiltAtTheTerminalsSize(t *testing.T) {
 // tmux has a default for exactly this.
 func TestAPanelWithNoSizeStillOpens(t *testing.T) {
 	commands, err := Layout{
-		Header: []string{"quay", "header"}, HeaderRows: 10,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header: []string{"krewe", "header"}, HeaderRows: 10,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -242,8 +242,8 @@ func TestAPanelWithNoSizeStillOpens(t *testing.T) {
 // width row left to put a header in.
 func TestTheHeaderSpansBothHalves(t *testing.T) {
 	commands, err := Layout{
-		Header: []string{"quay", "header"}, HeaderRows: 10,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header: []string{"krewe", "header"}, HeaderRows: 10,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -260,10 +260,10 @@ func TestTheHeaderSpansBothHalves(t *testing.T) {
 	if !strings.Contains(splits[0], " -v ") {
 		t.Fatalf("the first cut is not full width, so the header cannot span both halves:\n%s", splits[0])
 	}
-	if !strings.Contains(splits[1], "-t quay-panel:panel.1") {
+	if !strings.Contains(splits[1], "-t krewe-panel:panel.1") {
 		t.Fatalf("the side by side cut is not inside the lower half:\n%s", splits[1])
 	}
-	if !strings.Contains(lines(commands), "resize-pane -t quay-panel:panel.0 -y 10") {
+	if !strings.Contains(lines(commands), "resize-pane -t krewe-panel:panel.0 -y 10") {
 		t.Fatalf("the header is not given exactly its rows:\n%s", lines(commands))
 	}
 	// And it keeps them: tmux scales panes when a client of a different size attaches.
@@ -283,8 +283,8 @@ func TestTheHeaderSpansBothHalves(t *testing.T) {
 func TestAPanelBuiltByAnOlderToolIsMadeAgain(t *testing.T) {
 	layout := Layout{
 		Version: "038fdd6",
-		Header:  []string{"quay", "header"}, HeaderRows: 1,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header:  []string{"krewe", "header"}, HeaderRows: 1,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}
 	commands, err := layout.Commands(Terminal{AlreadyOpen: true, Stale: true})
 	if err != nil {
@@ -292,7 +292,7 @@ func TestAPanelBuiltByAnOlderToolIsMadeAgain(t *testing.T) {
 	}
 	got := lines(commands)
 
-	if !strings.HasPrefix(got, "tmux kill-session -t quay-panel") {
+	if !strings.HasPrefix(got, "tmux kill-session -t krewe-panel") {
 		t.Fatalf("the old panel is not taken down first, so new-session reattaches to it:\n%s", got)
 	}
 	if !strings.Contains(got, "new-session") || strings.Count(got, "split-window") != 2 {
@@ -305,8 +305,8 @@ func TestAPanelBuiltByAnOlderToolIsMadeAgain(t *testing.T) {
 func TestAPanelBuiltByThisToolIsJustReattachedTo(t *testing.T) {
 	commands, err := Layout{
 		Version: "038fdd6",
-		Header:  []string{"quay", "header"}, HeaderRows: 1,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header:  []string{"krewe", "header"}, HeaderRows: 1,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{AlreadyOpen: true})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -324,8 +324,8 @@ func TestAPanelBuiltByThisToolIsJustReattachedTo(t *testing.T) {
 func TestThePanelRecordsWhatBuiltIt(t *testing.T) {
 	commands, err := Layout{
 		Version: "038fdd6",
-		Header:  []string{"quay", "header"}, HeaderRows: 1,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header:  []string{"krewe", "header"}, HeaderRows: 1,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -344,8 +344,8 @@ func TestThePanelRecordsWhatBuiltIt(t *testing.T) {
 // presses apart instead of one.
 func TestCyclingPanesSkipsTheHeader(t *testing.T) {
 	commands, err := Layout{
-		Header: []string{"quay", "header"}, HeaderRows: 1,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header: []string{"krewe", "header"}, HeaderRows: 1,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)
@@ -377,8 +377,8 @@ func TestCyclingPanesSkipsTheHeader(t *testing.T) {
 // find out.
 func TestTheActivePaneIsVisiblyTheActiveOne(t *testing.T) {
 	commands, err := Layout{
-		Header: []string{"quay", "header"}, HeaderRows: 1,
-		Left: []string{"quay", "console"}, Right: []string{"quay", "attach", "s1"},
+		Header: []string{"krewe", "header"}, HeaderRows: 1,
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
 	}.Commands(Terminal{})
 	if err != nil {
 		t.Fatalf("Commands: %v", err)

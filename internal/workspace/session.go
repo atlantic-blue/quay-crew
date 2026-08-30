@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
 )
 
 // Reading what the operator typed into a session, in one place.
@@ -57,7 +57,7 @@ func Session(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 // identifier is what the session column of a listing prints, so it is hexadecimal and at least as
 // long as that column is wide.
 //
-// Anything else is the message, which keeps `quay task hello there` a message rather than a
+// Anything else is the message, which keeps `krewe task hello there` a message rather than a
 // mystifying lookup of "hello". A word that reads as an identifier and names no session is refused by
 // Session, and never joined to the message: it used to become the first word of the text and start a
 // new session, so the task went somewhere nobody asked for and nothing said so.
@@ -128,7 +128,7 @@ func sessionWithIdentifier(typed string, sessions []*quaycrewv1.Session) (*quayc
 		return nil, &NotFoundError{
 			What: "session", Name: typed,
 			Have: identifiersOf(sessions),
-			Make: `start one with quay task "..."`,
+			Make: `start one with krewe task "..."`,
 		}
 	case 1:
 		return matches[0], nil

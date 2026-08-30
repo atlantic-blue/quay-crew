@@ -56,9 +56,9 @@ func openBar(t *testing.T, model Model) Model {
 	return next
 }
 
-// The whole point: typing a quay command runs it and shows what it said, so reading the system does
+// The whole point: typing a krewe command runs it and shows what it said, so reading the system does
 // not mean leaving the console for a shell.
-func TestTheBarRunsAQuayCommandAndShowsItsOutput(t *testing.T) {
+func TestTheBarRunsAKreweCommandAndShowsItsOutput(t *testing.T) {
 	ran := &ranCommand{output: "acme\nother\n"}
 	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
 
@@ -166,12 +166,12 @@ func TestWithNoRunnerTheBarSaysSo(t *testing.T) {
 func TestTheBarSaysWhatEnterWillDo(t *testing.T) {
 	ran := &ranCommand{output: "acme"}
 	model := typeAll(t, openBar(t, barModel(t, ran)), "workspace list")
-	if view := model.View(); !strings.Contains(view, "runs this as a quay command") {
+	if view := model.View(); !strings.Contains(view, "runs this as a krewe command") {
 		t.Fatalf("the bar does not say it will run this:\n%s", view)
 	}
 
 	viewName := typeAll(t, openBar(t, barModel(t, ran)), "workspaces")
-	if view := viewName.View(); strings.Contains(view, "runs this as a quay command") {
+	if view := viewName.View(); strings.Contains(view, "runs this as a krewe command") {
 		t.Fatalf("the bar offers to run a view name as a command:\n%s", view)
 	}
 }
@@ -254,13 +254,13 @@ func TestALongOutputLineIsCutToFit(t *testing.T) {
 }
 
 // Typing the tool's own name is what anybody does out of habit, and running it as an argument to
-// itself gives `unknown command "quay"`, which reads as the bar being broken. The prefix is what
+// itself gives `unknown command "krewe"`, which reads as the bar being broken. The prefix is what
 // was meant, so it is dropped.
-func TestATypedQuayPrefixIsDropped(t *testing.T) {
+func TestATypedKrewePrefixIsDropped(t *testing.T) {
 	ran := &ranCommand{output: "made it"}
-	typeInto(t, openBar(t, barModel(t, ran)), "quay workspace create acme")
+	typeInto(t, openBar(t, barModel(t, ran)), "krewe workspace create acme")
 
-	if len(ran.args) == 0 || ran.args[0] == "quay" {
+	if len(ran.args) == 0 || ran.args[0] == "krewe" {
 		t.Fatalf("the console ran %v, want the prefix dropped", ran.args)
 	}
 	if strings.Join(ran.args, " ") != "workspace create acme" {
@@ -270,9 +270,9 @@ func TestATypedQuayPrefixIsDropped(t *testing.T) {
 
 // The name on its own is not a command with the prefix taken off, it is asking for the thing you
 // are already looking at.
-func TestQuayOnItsOwnSaysYouAreAlreadyHere(t *testing.T) {
+func TestKreweOnItsOwnSaysYouAreAlreadyHere(t *testing.T) {
 	ran := &ranCommand{}
-	model := typeInto(t, openBar(t, barModel(t, ran)), "quay")
+	model := typeInto(t, openBar(t, barModel(t, ran)), "krewe")
 
 	if ran.args != nil {
 		t.Fatalf("the console ran %v", ran.args)
@@ -325,7 +325,7 @@ func TestTheBarDoesNotOfferToRunAWordItWillRefuse(t *testing.T) {
 	model := typeAll(t, openBar(t, barModel(t, &ranCommand{})), "f")
 
 	view := model.View()
-	if strings.Contains(view, "runs this as a quay command") {
+	if strings.Contains(view, "runs this as a krewe command") {
 		t.Fatalf("the bar offers to run a word it will refuse:\n%s", view)
 	}
 	if !strings.Contains(view, "type features") {

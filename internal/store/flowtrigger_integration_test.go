@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // A run that starts because something happened, over a real database.
@@ -173,7 +173,7 @@ func TestATriggerThatStartsNothingSaysWhyOnItsRowInPostgres(t *testing.T) {
 	}
 
 	failed := waitForTrigger(t, kept, raised.ID, flow.TriggerFailed, s)
-	if !strings.Contains(failed.Reason, "never-imported") || !strings.Contains(failed.Reason, "quay flow import") {
+	if !strings.Contains(failed.Reason, "never-imported") || !strings.Contains(failed.Reason, "krewe flow import") {
 		t.Fatalf("the row says %q, want it to name the flow and what to do about it", failed.Reason)
 	}
 	if runs, err := kept.ListFlowRuns(ctx, project); err != nil || len(runs) != 0 {

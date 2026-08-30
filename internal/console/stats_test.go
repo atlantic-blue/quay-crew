@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
 )
 
 // probed is a reading of one part, the way the system answers one.

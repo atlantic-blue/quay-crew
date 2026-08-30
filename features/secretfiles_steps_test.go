@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
 )
 
@@ -56,7 +56,7 @@ func initializeSecretFileSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the system accepted it, and the key would be in every container's environment")
 		}
 		// The command, not just the objection. A refusal the operator cannot act on is a dead end.
-		if !strings.Contains(w.lastErr.Error(), "quay secret mount") {
+		if !strings.Contains(w.lastErr.Error(), "krewe secret mount") {
 			return fmt.Errorf("the system refused it saying %q, which does not say what to type", w.lastErr)
 		}
 		return nil

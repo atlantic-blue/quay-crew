@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/auth"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -73,7 +73,7 @@ func (s *Server) AskJob(ctx context.Context, req *quaycrewv1.AskJobRequest) (*qu
 func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest) (*quaycrewv1.AnswerJobResponse, error) {
 	if req.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument,
-			"which job: give the identifier quay job list prints beside the one that is asking")
+			"which job: give the identifier krewe job list prints beside the one that is asking")
 	}
 	answer, err := job.TidyTelling(req.GetAnswer())
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the system holds no job %s: quay job list --phase asking says which are waiting", req.GetId())
+				"the system holds no job %s: krewe job list --phase asking says which are waiting", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}
@@ -94,7 +94,7 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 		if errors.Is(err, job.ErrNotAsking) {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"job %s is %s and asked nothing, so there is nothing this answers: "+
-					"quay job list --phase asking says which are waiting", found.ID, found.Phase)
+					"krewe job list --phase asking says which are waiting", found.ID, found.Phase)
 		}
 		return nil, storeError(err, "answer")
 	}

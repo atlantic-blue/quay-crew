@@ -496,8 +496,8 @@ const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\btrace_id\x18\t \x01(\tR\atraceId\x12;\n" +
 	"\voccurred_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAtB\xaa\x01\n" +
-	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
+	"occurredAtB\xa6\x01\n" +
+	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z9github.com/atlantic-blue/krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
 	file_quaycrew_v1_events_proto_rawDescOnce sync.Once

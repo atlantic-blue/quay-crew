@@ -3,4 +3,4 @@ version: 1
 summary: How work is done in a repository here; one clone in the workspace's volume, a working tree of your own, commit as the operator.
 binaries: [git]
 secrets:
-  GH_TOKEN: a token that can read the repositories this workspace works in, set with `quay secret set <workspace> GH_TOKEN`
+  GH_TOKEN: a token that can read the repositories this workspace works in, set with `krewe secret set <workspace> GH_TOKEN`

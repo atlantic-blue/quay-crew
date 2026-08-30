@@ -3,7 +3,7 @@ Feature: A session knows how much memory it has
   A session could not run a repository's own gates. The linter, the build and the install were each
   killed part way through, and the session reported a partial check. Rule 9 says run the whole of a
   repository's gates and rule 44 says prove the check ran. A session could do neither, because
-  nothing in its sandbox would tell it how much room it had. `quay room` does.
+  nothing in its sandbox would tell it how much room it had. `krewe room` does.
 
   The cause is a number that is not true. A sandbox with no memory limit of its own reports the whole
   machine in /proc/meminfo, so node sizes its heap from it, Go sizes its collector from it, and jest
@@ -15,7 +15,7 @@ Feature: A session knows how much memory it has
   kernel log is not readable from inside a container. The session sees exit 137 and reads it as a
   hang.
 
-  So `quay room` reads the machine's own accounting and says what is true: what this sandbox
+  So `krewe room` reads the machine's own accounting and says what is true: what this sandbox
   advertises, what is free, what has already been killed in it, and what to do about a gate that does
   not fit. The advice lives in the tool rather than in each session's memory, so the answer is the
   same every time instead of being invented once per session.

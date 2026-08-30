@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 

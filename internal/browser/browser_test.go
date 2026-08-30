@@ -115,9 +115,9 @@ func TestTheAddressASessionActuallyTypes(t *testing.T) {
 func TestDrawingNothingSaysHowToCallIt(t *testing.T) {
 	_, err := From(nil)
 	if err == nil {
-		t.Fatal("quay render drew nothing and said nothing")
+		t.Fatal("krewe render drew nothing and said nothing")
 	}
-	if !strings.Contains(err.Error(), "usage: quay render <url>") {
+	if !strings.Contains(err.Error(), "usage: krewe render <url>") {
 		t.Errorf("the refusal does not say how to call it: %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestDrawingNothingSaysHowToCallIt(t *testing.T) {
 func TestASecondFileIsRefused(t *testing.T) {
 	_, err := From([]string{"http://localhost:3000", "home.png", "about.png"})
 	if err == nil {
-		t.Fatal("quay render took two files without complaint")
+		t.Fatal("krewe render took two files without complaint")
 	}
 	if !strings.Contains(err.Error(), "second file") {
 		t.Errorf("the refusal does not say what is wrong: %v", err)
@@ -160,7 +160,7 @@ func TestAPictureThatIsNotThereIsNotReported(t *testing.T) {
 	err := Render(drawsNothing{}, drawing, io.Discard)
 
 	if err == nil {
-		t.Fatal("quay render reported a picture that was never written")
+		t.Fatal("krewe render reported a picture that was never written")
 	}
 	if !strings.Contains(err.Error(), "wrote nothing") {
 		t.Errorf("the failure does not say what happened: %v", err)
@@ -175,7 +175,7 @@ func TestAFileThatIsNotAPictureIsNotReported(t *testing.T) {
 	err := Render(writes("this is not a picture"), drawing, io.Discard)
 
 	if err == nil {
-		t.Fatal("quay render reported a text file as a picture")
+		t.Fatal("krewe render reported a text file as a picture")
 	}
 	if !strings.Contains(err.Error(), "not a picture") {
 		t.Errorf("the failure does not say what is wrong: %v", err)

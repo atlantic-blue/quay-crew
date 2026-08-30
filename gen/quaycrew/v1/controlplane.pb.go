@@ -6989,7 +6989,7 @@ type GetInfoResponse struct {
 	Secrets string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
 	// sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
 	// Sessions run whatever that image holds, so an image older than the tool means the system moved on
-	// and the containers did not: the `quay` inside one is from that build, or is not there at all.
+	// and the containers did not: the `krewe` inside one is from that build, or is not there at all.
 	// Empty means the image says nothing about which build it came from, which is every image made
 	// before this was stamped, and nothing is claimed about it either way.
 	SandboxBuild string `protobuf:"bytes,7,opt,name=sandbox_build,json=sandboxBuild,proto3" json:"sandbox_build,omitempty"`
@@ -7916,7 +7916,7 @@ type Job struct {
 	// phase is where the job is: pending, waiting, running, asking, done, failed or stopped. The last
 	// three are terminal.
 	Phase string `protobuf:"bytes,18,opt,name=phase,proto3" json:"phase,omitempty"`
-	// session is the conversation the job runs in, empty until one exists. It is what quay attach
+	// session is the conversation the job runs in, empty until one exists. It is what krewe attach
 	// takes.
 	Session  string `protobuf:"bytes,19,opt,name=session,proto3" json:"session,omitempty"`
 	Attempts int32  `protobuf:"varint,20,opt,name=attempts,proto3" json:"attempts,omitempty"`
@@ -10120,8 +10120,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\aGetInfo\x12\x1b.quaycrew.v1.GetInfoRequest\x1a\x1c.quaycrew.v1.GetInfoResponse\x12G\n" +
 	"\bGetUsage\x12\x1c.quaycrew.v1.GetUsageRequest\x1a\x1d.quaycrew.v1.GetUsageResponse\x12P\n" +
 	"\vGetHeadroom\x12\x1f.quaycrew.v1.GetHeadroomRequest\x1a .quaycrew.v1.GetHeadroomResponse\x12J\n" +
-	"\tGetHealth\x12\x1d.quaycrew.v1.GetHealthRequest\x1a\x1e.quaycrew.v1.GetHealthResponseB\xb0\x01\n" +
-	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z=github.com/atlantic-blue/quay-crew/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
+	"\tGetHealth\x12\x1d.quaycrew.v1.GetHealthRequest\x1a\x1e.quaycrew.v1.GetHealthResponseB\xac\x01\n" +
+	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z9github.com/atlantic-blue/krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
 	file_quaycrew_v1_controlplane_proto_rawDescOnce sync.Once

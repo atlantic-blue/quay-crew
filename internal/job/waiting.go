@@ -100,7 +100,7 @@ func RefusedWait(asked string) error {
 		"wakes it when the checks land, and a merge that turns on them is a merge nobody is there to "+
 		"make. That shape is a flow, and it is three nodes: a dispatch that pushes and opens the pull "+
 		"request, a wait, then a choice on the check result. Write it as a graph and import it with "+
-		"`quay flow import`, or let this job end at the pull request and leave the merge to somebody "+
+		"`krewe flow import`, or let this job end at the pull request and leave the merge to somebody "+
 		"else", asked)
 }
 

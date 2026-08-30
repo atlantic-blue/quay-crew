@@ -3,4 +3,4 @@ version: 1
 summary: Open pull requests and issues with gh, and push branches; never merge without being asked.
 binaries: [git, gh]
 secrets:
-  GH_TOKEN: a token with repo scope, set with `quay secret set <workspace> GH_TOKEN`
+  GH_TOKEN: a token with repo scope, set with `krewe secret set <workspace> GH_TOKEN`

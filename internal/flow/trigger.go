@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // A trigger is something that happened, written down as a row so that a run starts from it.
@@ -121,7 +121,7 @@ func (e *Engine) Triggered(ctx context.Context, trigger Trigger) (Run, error) {
 	// became of a trigger is only ever read off its own row, so a trigger naming a flow nobody
 	// imported says what to do about it rather than "not found".
 	if _, _, err := e.store.LatestFlowGraph(ctx, trigger.GraphName); err != nil {
-		return Run{}, fmt.Errorf("the flow %s could not be read, so nothing was started: %v. Import the graph with quay flow import <file>",
+		return Run{}, fmt.Errorf("the flow %s could not be read, so nothing was started: %v. Import the graph with krewe flow import <file>",
 			trigger.GraphName, err)
 	}
 	run, carrier, graph, err := e.create(ctx, starting{

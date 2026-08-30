@@ -422,7 +422,7 @@ Feature: Sessions run in isolated sandboxes
     Given the sandbox is killed for memory part way through the task
     When the operator dispatches "hello" to the project
     Then the refusal says "a kill rather than a failure"
-    And the refusal says "quay room"
+    And the refusal says "krewe room"
     And the refusal says "container went away"
 
   # The console shows the system and a conversation shows one session, and using both meant losing sight
@@ -455,7 +455,7 @@ Feature: Sessions run in isolated sandboxes
   # is what the multiplexer does with a pane whose command has ended.
   Scenario: A conversation that cannot be opened says why and stays on the screen
     Given a terminal with the console in it
-    When quay attach is put beside the console and cannot reach the system
+    When krewe attach is put beside the console and cannot reach the system
     Then the reason is on the screen
     And pressing enter gives the operator the console back
 
@@ -511,12 +511,12 @@ Feature: Sessions run in isolated sandboxes
     And the driver is sent "make me a project"
     Then the task ran in permission mode "acceptEdits"
 
-  # The driver opens knowing what quay is, rather than having to be told every time. It is the system
+  # The driver opens knowing what krewe is, rather than having to be told every time. It is the system
   # describing itself: the command list the tool prints, and the behaviour specification the binary
   # carries, neither of which can drift from what the tool actually does.
-  Scenario: The driver opens knowing what quay is
+  Scenario: The driver opens knowing what krewe is
     When the operator opens the driver
-    Then the driver has been told what quay is
+    Then the driver has been told what krewe is
     And what it was told names the words a system is made of
 
   # Being told is not the same as being able to read it. The manual is written into the store, and the
@@ -527,7 +527,7 @@ Feature: Sessions run in isolated sandboxes
     Given a driver made before the system described itself
     And its memory file already says "the boiler code is 1985"
     When the operator opens the driver
-    Then the driver's memory file says what quay is
+    Then the driver's memory file says what krewe is
     And the driver's memory file still says "the boiler code is 1985"
 
   # An operator who edits it has a reason to, and overwriting on every open would make it the one

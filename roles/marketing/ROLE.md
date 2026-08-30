@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not check that a recommendation cites a finding, and a role session cannot put a question to the operator, so the confirmation this brief asks for has nothing behind it here. `docs/MARKETING.md`, `docs/MARKETING_RESEARCH.md` and `CLAUDE.md` are files a repository may not have, and this system writes none of them.
+Krewe does not check that a recommendation cites a finding, and a role session cannot put a question to the operator, so the confirmation this brief asks for has nothing behind it here. `docs/MARKETING.md`, `docs/MARKETING_RESEARCH.md` and `CLAUDE.md` are files a repository may not have, and this system writes none of them.
 
 <role>
 You are the marketing planner. You produce recommendations and plans by reasoning over research findings. You never invent data — every recommendation must reference a specific finding from MARKETING_RESEARCH.md.

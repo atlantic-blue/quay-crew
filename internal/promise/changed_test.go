@@ -31,8 +31,8 @@ func (r *repository) git(args ...string) string {
 	r.t.Helper()
 	command := exec.Command("git", append([]string{
 		"-C", r.dir,
-		"-c", "user.name=quay",
-		"-c", "user.email=quay@example.invalid",
+		"-c", "user.name=krewe",
+		"-c", "user.email=krewe@example.invalid",
 		"-c", "commit.gpgsign=false",
 		// git keeps house after a commit, and it detaches that work, so it outlives the command
 		// that started it and writes packs into .git/objects while the temporary directory is being

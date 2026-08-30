@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/secrets"
 )
 
 func TestMemoryRoundTrip(t *testing.T) {

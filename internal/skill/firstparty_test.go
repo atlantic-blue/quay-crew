@@ -310,7 +310,7 @@ func TestTheShippedBrowserSkillLoads(t *testing.T) {
 
 	// The three things the brief exists to say. Drawing the picture is the easy part; looking at it
 	// and labelling it are the parts that get skipped.
-	for _, said := range []string{"quay render", "read the file", "reproduce"} {
+	for _, said := range []string{"krewe render", "read the file", "reproduce"} {
 		if !strings.Contains(strings.ToLower(found.Brief), said) {
 			t.Errorf("the brief never says %q, and a picture nobody looks at is worth nothing", said)
 		}

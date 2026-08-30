@@ -64,7 +64,7 @@ const theFewestWordsThatSayWhatItIs = 40
 const theLongestFrontDoorWorthReading = 120
 
 // codeIn returns everything the front door marks as something to type: every inline code span, and
-// every line inside a fenced block. Prose is left out on purpose, because "quay is on your path" is
+// every line inside a fenced block. Prose is left out on purpose, because "krewe is on your path" is
 // not a claim that `is` is a command.
 func codeIn(text string) []string {
 	var typed []string
@@ -76,7 +76,7 @@ func codeIn(text string) []string {
 			continue
 		}
 		if fenced {
-			// A trailing shell comment is prose, so "make tool # over whatever quay your shell runs"
+			// A trailing shell comment is prose, so "make tool # over whatever krewe your shell runs"
 			// would otherwise claim a command called `your`. Everything from an unquoted hash on is
 			// the author talking to the reader rather than something to type.
 			typed = append(typed, strings.TrimSpace(withoutComment(line)))
@@ -116,12 +116,12 @@ func namedAfter(tool string, typed []string) []string {
 	return named
 }
 
-// quayCommands is every command the real tool lists, read from the build in this checkout rather
+// kreweCommands is every command the real tool lists, read from the build in this checkout rather
 // than from a copy of the list. A test that held the front door to a remembered list would go stale
 // in exactly the way the front door did.
-func quayCommands() (map[string]bool, error) {
-	built := filepath.Join(os.TempDir(), "quay-frontdoor-test")
-	build := exec.Command("go", "build", "-o", built, "../cmd/quay")
+func kreweCommands() (map[string]bool, error) {
+	built := filepath.Join(os.TempDir(), "krewe-frontdoor-test")
+	build := exec.Command("go", "build", "-o", built, "../cmd/krewe")
 	if out, err := build.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("building the tool: %w\n%s", err, out)
 	}
@@ -129,7 +129,7 @@ func quayCommands() (map[string]bool, error) {
 
 	out, err := exec.Command(built, "help").CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("quay help: %w\n%s", err, out)
+		return nil, fmt.Errorf("krewe help: %w\n%s", err, out)
 	}
 
 	// The command column starts each entry at a fixed indent, and a continuation line is indented
@@ -149,7 +149,7 @@ func quayCommands() (map[string]bool, error) {
 		}
 	}
 	if len(commands) == 0 {
-		return nil, fmt.Errorf("quay help listed no commands at all, so this would pass on anything:\n%s", out)
+		return nil, fmt.Errorf("krewe help listed no commands at all, so this would pass on anything:\n%s", out)
 	}
 	return commands, nil
 }
@@ -227,20 +227,20 @@ func TestTheFrontDoorIsShortEnoughToRead(t *testing.T) {
 // This is the one that catches the front door going stale, from either end: a command named before
 // it is built, and a command renamed underneath a README nobody reread.
 func TestEveryCommandTheFrontDoorNamesExists(t *testing.T) {
-	commands, err := quayCommands()
+	commands, err := kreweCommands()
 	if err != nil {
 		t.Fatalf("asking the tool what it can do: %v", err)
 	}
 
-	named := namedAfter("quay", codeIn(frontDoor(t)))
+	named := namedAfter("krewe", codeIn(frontDoor(t)))
 	if len(named) == 0 {
-		t.Fatal("the front door names no quay command at all, so this proved nothing")
+		t.Fatal("the front door names no krewe command at all, so this proved nothing")
 	}
 	t.Logf("the front door names %d commands: %s", len(named), strings.Join(named, " "))
 
 	for _, one := range named {
 		if !commands[one] {
-			t.Errorf("the front door tells a reader to run `quay %s`, and the tool has no such command", one)
+			t.Errorf("the front door tells a reader to run `krewe %s`, and the tool has no such command", one)
 		}
 	}
 }

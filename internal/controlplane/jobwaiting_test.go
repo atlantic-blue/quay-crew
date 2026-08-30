@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,7 +33,7 @@ func TestABriefThatAsksTheJobToWaitIsRefusedNamingTheFlow(t *testing.T) {
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("the refusal is %v, want InvalidArgument", status.Code(err))
 	}
-	for _, want := range []string{"watch the checks", "cannot wait", "quay flow import"} {
+	for _, want := range []string{"watch the checks", "cannot wait", "krewe flow import"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal says %q, want it to say %q", err, want)
 		}

@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/workspace"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
@@ -448,7 +448,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 // nameCell is where the name sits in a session row, which is the cell the handle used to occupy.
 const nameCell = 3
 
-// typeAtDispatch runs `quay task` over two typed words the way the command does: split them, read
+// typeAtDispatch runs `krewe task` over two typed words the way the command does: split them, read
 // the first as a session if that is what it is, and dispatch the rest.
 func typeAtDispatch(ctx context.Context, first, second string) error {
 	w, held := worldFrom(ctx), identifiersFrom(ctx)

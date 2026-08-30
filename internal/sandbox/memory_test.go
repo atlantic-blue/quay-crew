@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 func TestComposeLeavesOutLevelsWithNothingToSay(t *testing.T) {

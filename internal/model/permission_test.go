@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/krewe/internal/model"
 )
 
 // The words for a mode were written out three times: in the command line tool, in the console's

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 
@@ -309,7 +309,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		// A refusal that only says no leaves the operator staring at a session they cannot open, and one
 		// written in the system's own vocabulary leaves them asking what it means. It says what to do
 		// instead, in words that appear on their screen.
-		for _, want := range []string{"no conversation left", "quay task"} {
+		for _, want := range []string{"no conversation left", "krewe task"} {
 			if !strings.Contains(a.err.Error(), want) {
 				return fmt.Errorf("the refusal is %q, want it to say %q", a.err.Error(), want)
 			}

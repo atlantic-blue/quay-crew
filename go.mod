@@ -1,4 +1,4 @@
-module github.com/atlantic-blue/quay-crew
+module github.com/atlantic-blue/krewe
 
 go 1.25.0
 

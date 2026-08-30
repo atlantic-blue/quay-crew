@@ -67,13 +67,13 @@ tool, the hooks and the sandbox image, and starts the system.
 It cannot mint your model credential. So it ends by printing these four commands, which you type:
 
 ```sh
-quay workspace create me
-quay project create house-bills
-quay secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
-quay task "say pong"
+krewe workspace create me
+krewe project create house-bills
+krewe secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
+krewe task "say pong"
 ```
 
-Then run `quay` with no arguments to open the console. `make help` lists every other target.
+Then run `krewe` with no arguments to open the console. `make help` lists every other target.
 
 ## Where to read next
 

@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -38,7 +38,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 // `unknown command "f"`, which reads as the console being broken rather than as a word that moved.
 //
 // The features view is what put a table here. The whole word is not in it, because the bar runs a
-// command and `quay features` prints the same list: only the short spellings have nowhere to land.
+// command and `krewe features` prints the same list: only the short spellings have nowhere to land.
 var movedViews = map[string]string{
 	"f":            featuresAreACommand,
 	"feature":      featuresAreACommand,

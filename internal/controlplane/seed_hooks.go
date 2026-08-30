@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/atlantic-blue/quay-crew/internal/hook"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // SeedHooksDir is where the shipped hooks are in the image, and what QC_SEED_HOOKS_DIR defaults to.
@@ -20,7 +20,7 @@ const SeedHooksDir = "/hooks"
 // applies nothing and a merge runs the pipeline that spends money. A gate an operator has to remember
 // to attach is a gate that is off in every system nobody set up, which is the systems the boundary
 // matters most in. It refuses one thing, that thing is never a session's to do, and
-// `quay hook detach system merge-gate` is how somebody decides otherwise.
+// `krewe hook detach system merge-gate` is how somebody decides otherwise.
 //
 // So the rule is not that a seeded hook never refuses. It is that a seeded hook refuses something no
 // session in this system is ever meant to do, exactly, and says what to do instead.
@@ -37,7 +37,7 @@ var SeedHooksToSystem = []string{"merge-gate", "prompt-analyser"}
 // Attaching runs only into a system that held nothing. An operator who takes a hook off has said
 // something, and starting the control plane again must not undo it. Nor does an upgrade quietly move
 // a system onto a newer version of a constraint it is already under: a hook is pinned so it cannot
-// change under a running session, and `quay hook attach` is how somebody decides to take the new one.
+// change under a running session, and `krewe hook attach` is how somebody decides to take the new one.
 //
 // A failure to seed is logged and not fatal, and it is logged rather than swallowed because a system
 // running without the constraint it believes it has is the thing this whole subsystem exists to stop.

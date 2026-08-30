@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/origin"
+	"github.com/atlantic-blue/krewe/internal/origin"
 )
 
 // Where a directory came from, read from real repositories rather than from a double.

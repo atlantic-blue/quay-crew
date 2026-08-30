@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/capacity"
-	"github.com/atlantic-blue/quay-crew/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/krewe/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -133,7 +133,7 @@ type Store interface {
 	RenewLease(ctx context.Context, id string, lease Lease) error
 	// RecordJobSession writes the session the system made for a job. It is not a movement,
 	// so it carries no record of its own: a reader learns which conversation did the job from the
-	// row, and the row is where quay attach reads it.
+	// row, and the row is where krewe attach reads it.
 	RecordJobSession(ctx context.Context, id, session string) error
 	// LandJob writes what came of the job and lets go of the lease. It applies only to a job that
 	// is still running.
@@ -164,7 +164,7 @@ type ControlPlane interface {
 // Attachment says whether an operator has a session's conversation open.
 //
 // It exists because the controller must never close a container somebody is typing into, and the
-// system could not tell before this: `quay attach` hands the operator a command to run against the
+// system could not tell before this: `krewe attach` hands the operator a command to run against the
 // container and then records nothing about it. The implementation asks the container itself.
 //
 // An implementation that cannot answer returns an error, and the controller reads that as attached.
@@ -856,7 +856,7 @@ func waitingForRoom(failure string) string {
 // is the work and this ask. A controller that took the row over after another died reads the same
 // number and does not ask a third time, which is the property every other decision in this loop has.
 //
-// No record of its own is written. The second task is the record, in the session `quay job show`
+// No record of its own is written. The second task is the record, in the session `krewe job show`
 // already names, and a record needs a store write that this does not otherwise need.
 //
 // This is the one expectation the system asks again about rather than stopping on, and the difference

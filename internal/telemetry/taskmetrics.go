@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -58,7 +58,7 @@ type TaskMetrics struct {
 // run; with no provider installed the instruments are the no operation ones and recording costs
 // nothing, which is what the tests and a system with telemetry off both want.
 func NewTaskMetrics() (*TaskMetrics, error) {
-	meter := otel.Meter("github.com/atlantic-blue/quay-crew")
+	meter := otel.Meter("github.com/atlantic-blue/krewe")
 
 	tasks, err := meter.Int64Counter(TasksMetric,
 		metric.WithDescription("tasks run, by workspace, project, model and status"))

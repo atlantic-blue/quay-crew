@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -16,7 +16,7 @@ func aTarget() *quaycrewv1.DeployTarget {
 	return &quaycrewv1.DeployTarget{
 		Account:  "123456789012",
 		Region:   "eu-west-2",
-		Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+		Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 	}
 }
 
@@ -62,15 +62,15 @@ func TestATargetIsRefusedBeforeItIsWritten(t *testing.T) {
 	for name, target := range map[string]*quaycrewv1.DeployTarget{
 		"an account that is not one": {
 			Account: "atlantic-blue", Region: "eu-west-2",
-			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+			Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 		},
 		"a region that is not one": {
 			Account: "123456789012", Region: "england",
-			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+			Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 		},
 		"an identity from another account": {
 			Account: "123456789012", Region: "eu-west-2",
-			Identity: "arn:aws:iam::999999999999:role/quay-deploy",
+			Identity: "arn:aws:iam::999999999999:role/krewe-deploy",
 		},
 		"half a target": {Account: "123456789012", Region: "eu-west-2"},
 	} {
@@ -140,7 +140,7 @@ func TestTheRefusalNamesBothAccounts(t *testing.T) {
 		Project: projectID,
 		Target: &quaycrewv1.DeployTarget{
 			Account: "123456789012", Region: "eu-west-2",
-			Identity: "arn:aws:iam::999999999999:role/quay-deploy",
+			Identity: "arn:aws:iam::999999999999:role/krewe-deploy",
 		},
 	})
 	if err == nil {

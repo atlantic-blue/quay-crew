@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/panel"
+	"github.com/atlantic-blue/krewe/internal/panel"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // The conversation beside the console, and the key that shows and hides it.
 //
-// `quay panel` builds this in one go. This is the same thing around a console already running, so the
+// `krewe panel` builds this in one go. This is the same thing around a console already running, so the
 // operator does not have to decide before opening it whether they wanted a conversation next to it.
 
 // toggleConversation shows the conversation beside the console, or hides the one already there.
@@ -26,12 +26,12 @@ func (m Model) toggleConversation() (Model, tea.Cmd) {
 	if here == "" {
 		// tmux is what splits the screen. Outside it there is nothing to split, and saying so beats a
 		// key that looks broken.
-		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `quay panel`, " +
+		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `krewe panel`, " +
 			"or start tmux and press p again")
 		return m, nil
 	}
 
-	// Asked of tmux rather than remembered, because `quay` opens the conversation itself and the
+	// Asked of tmux rather than remembered, because `krewe` opens the conversation itself and the
 	// console did not put it there. A console that only knew about the ones it opened would answer
 	// the first p by opening a second.
 	if beside, found := m.besideMe(here); found {
@@ -83,7 +83,7 @@ func openConversationCmd(here string, right []string) tea.Cmd {
 		// reason was printed into a pane that no longer exists. Say that, rather than reporting an
 		// open conversation nobody can find.
 		return conversationMsg{err: fmt.Errorf("the conversation closed as soon as it opened, so the " +
-			"reason went with it. Run quay attach on this session in a terminal to read it")}
+			"reason went with it. Run krewe attach on this session in a terminal to read it")}
 	}
 }
 
@@ -191,7 +191,7 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 	}
 	here := os.Getenv("TMUX_PANE")
 	if here == "" {
-		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `quay` from tmux")
+		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `krewe` from tmux")
 		return m, nil
 	}
 
@@ -204,7 +204,7 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	// The pane beside the console, asked of tmux rather than remembered: `quay` opens the conversation
+	// The pane beside the console, asked of tmux rather than remembered: `krewe` opens the conversation
 	// itself, so the console did not put it there and does not know its identifier. Remembering was
 	// how this opened a fourth pane instead of replacing the third.
 	beside, _ := m.besideMe(here)

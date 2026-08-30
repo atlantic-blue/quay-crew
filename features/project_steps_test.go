@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/workspace"
 	"github.com/cucumber/godog"
 )
 

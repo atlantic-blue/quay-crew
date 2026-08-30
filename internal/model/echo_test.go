@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 func TestEchoRunnerExecsInsideTheSandbox(t *testing.T) {

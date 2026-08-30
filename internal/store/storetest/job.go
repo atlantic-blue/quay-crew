@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // runJobConformance holds both stores to the job contract.

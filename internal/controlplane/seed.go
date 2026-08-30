@@ -4,15 +4,15 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.
 //
 // These two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
-// The rest are imported so `quay skill list` can show them, and attaching one is a decision.
+// The rest are imported so `krewe skill list` can show them, and attaching one is a decision.
 var SeedToSystem = []string{"git", "github"}
 
 // Seed puts the skills this build ships with into a system that has none.

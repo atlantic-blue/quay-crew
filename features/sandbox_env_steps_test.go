@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
-// The system's own address, handed to a session so `quay` inside a sandbox needs no arguments. It is an
+// The system's own address, handed to a session so `krewe` inside a sandbox needs no arguments. It is an
 // address rather than a credential, and reaching it also needs a network that can, which is the same
 // decision made once in configuration.
 func initializeReachableSteps(sc *godog.ScenarioContext) {
@@ -315,7 +315,7 @@ func initializeDriverSteps(sc *godog.ScenarioContext) {
 
 // What the driver has been told, which is the system describing itself.
 func initializeDriverContextSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the driver has been told what quay is$`, func(ctx context.Context) error {
+	sc.Step(`^the driver has been told what krewe is$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.drivers) == 0 {
 			return fmt.Errorf("no driver was opened")
@@ -324,7 +324,7 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return fmt.Errorf("read what the driver was told: %w", err)
 		}
-		if !strings.Contains(told, "quay context set") {
+		if !strings.Contains(told, "krewe context set") {
 			return fmt.Errorf("the driver was not told how anything gets told anything:\n%s", told)
 		}
 		return nil
@@ -360,13 +360,13 @@ func initializeDriverContextSteps(sc *godog.ScenarioContext) {
 		return sandbox.WriteMemory(driverWorkingDir(ctx), body)
 	})
 
-	sc.Step(`^the driver's memory file says what quay is$`, func(ctx context.Context) error {
+	sc.Step(`^the driver's memory file says what krewe is$`, func(ctx context.Context) error {
 		body, found := sandbox.ReadMemory(driverWorkingDir(ctx))
 		if !found {
 			return fmt.Errorf("the driver has no memory file at all")
 		}
-		if !strings.Contains(body, "quay context set") {
-			return fmt.Errorf("the driver's memory file does not say what quay is:\n%s", body)
+		if !strings.Contains(body, "krewe context set") {
+			return fmt.Errorf("the driver's memory file does not say what krewe is:\n%s", body)
 		}
 		return nil
 	})

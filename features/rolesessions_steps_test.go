@@ -8,16 +8,16 @@ import (
 	"regexp"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
 // notOurs is a name a brief this build ships must not carry: the name itself, the prefix it put on
-// the front of its own agents, and the prefix its own commands took. The roles are quay's own, and a
+// the front of its own agents, and the prefix its own commands took. The roles are krewe's own, and a
 // session told to run a command that is not here goes looking for it.
 var notOurs = regexp.MustCompile(`(?i)greenlight|\bgl-|/gl:`)
 
@@ -137,7 +137,7 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 	// The brief a session is finally told to work by. It is read out of the memory file rather than
 	// out of roles/, because what a session reads has been through the store and the renderer, and a
 	// brief that arrived empty would satisfy any check that only asks what is absent.
-	sc.Step(`^the role's memory file names no product but quay$`, func(ctx context.Context) error {
+	sc.Step(`^the role's memory file names no product but krewe$`, func(ctx context.Context) error {
 		body, err := roleMemory(ctx)
 		if err != nil {
 			return err
@@ -148,7 +148,7 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 		}
 		for at, line := range strings.Split(body, "\n") {
 			if notOurs.MatchString(line) {
-				return fmt.Errorf("line %d of the role's memory file names a product that is not quay: %s",
+				return fmt.Errorf("line %d of the role's memory file names a product that is not krewe: %s",
 					at+1, strings.TrimSpace(line))
 			}
 		}

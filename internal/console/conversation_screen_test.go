@@ -23,7 +23,7 @@ func TestTheConsoleSaysAConversationClosedRatherThanClaimingItOpened(t *testing.
 		t.Fatalf("the console reported pane %q, want the reason it never opened", msg.pane)
 	}
 	said := msg.err.Error()
-	for _, want := range []string{"closed as soon as it opened", "quay attach"} {
+	for _, want := range []string{"closed as soon as it opened", "krewe attach"} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("the console says %q, want it to say %q", said, want)
 		}

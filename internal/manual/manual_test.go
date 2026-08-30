@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/features"
+	"github.com/atlantic-blue/krewe/features"
 )
 
 // TestTheManualNamesTheWords. A session told nothing about the system guesses at the model, and the
@@ -30,7 +30,7 @@ func TestTheManualCarriesTheRealCommandList(t *testing.T) {
 		t.Fatalf("the manual does not carry the command list the tool prints:\n%s", got)
 	}
 	// A command renamed changes one string, so the tool and the document cannot drift.
-	if !strings.Contains(got, "quay context set") {
+	if !strings.Contains(got, "krewe context set") {
 		t.Fatalf("the manual never says how to set a context:\n%s", got)
 	}
 }
@@ -61,7 +61,7 @@ func TestTheManualIsGeneratedFromTheSpecification(t *testing.T) {
 func TestTheManualSaysHowToBeTold(t *testing.T) {
 	got := Text()
 	for _, want := range []string{
-		"quay context set",
+		"krewe context set",
 		"/home/agent/workspace",
 		"/home/agent/.claude",
 		"Context is files",

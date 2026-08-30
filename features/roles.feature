@@ -130,7 +130,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
 
   # A role given to the system is held by every workspace, including the ones made after it, which is
   # the difference between setting a system up once and setting each workspace up again. It takes the
-  # word system where a workspace goes, exactly as quay skill attach does.
+  # word system where a workspace goes, exactly as krewe skill attach does.
   Scenario: A role the system holds reaches a workspace that attached nothing
     Given the operator imported the "test-writer" role
     When the operator attaches the "test-writer" role to the system

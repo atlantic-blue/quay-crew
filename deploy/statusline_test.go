@@ -23,10 +23,10 @@ func TestTheImageWritesNoSettingsWhereTheSystemMountsOverIt(t *testing.T) {
 	}
 }
 
-// The runtime is told to run quay for its status line, so the image has to carry quay.
+// The runtime is told to run krewe for its status line, so the image has to carry krewe.
 func TestTheSandboxImageCarriesTheToolThatDrawsTheStatusLine(t *testing.T) {
-	if !strings.Contains(theSandboxImage(t), "COPY --from=tool /out/quay /usr/local/bin/quay") {
-		t.Error("the image carries no quay, so the command the system's settings name is not there to run")
+	if !strings.Contains(theSandboxImage(t), "COPY --from=tool /out/krewe /usr/local/bin/krewe") {
+		t.Error("the image carries no krewe, so the command the system's settings name is not there to run")
 	}
 }
 

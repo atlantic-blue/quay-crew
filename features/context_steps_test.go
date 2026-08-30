@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/manual"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/manual"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -94,7 +94,7 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		if len(projects) != 1 {
 			return fmt.Errorf("%d project directories, want 1", len(projects))
 		}
-		if !strings.Contains(projects[0].GetBody(), "quay context set") {
+		if !strings.Contains(projects[0].GetBody(), "krewe context set") {
 			return fmt.Errorf("the context never says how anything gets told anything")
 		}
 		return nil

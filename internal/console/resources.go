@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/contextsize"
-	"github.com/atlantic-blue/quay-crew/internal/display"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/name"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/contextsize"
+	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/name"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 )
 
 // Workspaces lists the workspaces the control plane knows about, and drills into their sessions.
@@ -219,7 +219,7 @@ func firstLine(body string) string {
 // draftFor is where a level's context is edited: one scratch file per level, kept between edits so a
 // crash or a quit without saving does not lose what was being written.
 func draftFor(row Row) string {
-	return filepath.Join(os.TempDir(), "quay-context-"+row.Cells[0]+"-"+row.Parent+".md")
+	return filepath.Join(os.TempDir(), "krewe-context-"+row.Cells[0]+"-"+row.Parent+".md")
 }
 
 func contextRow(dir *quaycrewv1.ContextDir) Row {
@@ -244,7 +244,7 @@ func contextRow(dir *quaycrewv1.ContextDir) Row {
 
 // Secrets lists what each workspace has set, and never what any of it says. There is no action on a
 // row: setting one means typing a value, and a value typed into a full screen console is a value in a
-// terminal's scrollback. `quay secret set` is where that belongs.
+// terminal's scrollback. `krewe secret set` is where that belongs.
 func Secrets(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "secrets",
@@ -555,7 +555,7 @@ func shellPrompt(row Row) string {
 const permissionColumn = 5
 
 // offeredModes are the modes the picker offers, narrowest first, in the words the listing prints. The
-// order is the model's, so the console cannot offer a set that `quay mode` does not take.
+// order is the model's, so the console cannot offer a set that `krewe mode` does not take.
 func offeredModes() []string {
 	return model.PermissionModesOffered()
 }

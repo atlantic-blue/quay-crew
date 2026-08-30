@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-This brief says the role never sees implementation code. Quay does not enforce that. What a role receives is one of three words, job, context and skills, and none of the three is about files, so this session can read the source and the boundary holds only if the model keeps it. `CLAUDE.md` is a file a repository may not have, and this system does not write it.
+This brief says the role never sees implementation code. Krewe does not enforce that. What a role receives is one of three words, job, context and skills, and none of the three is about files, so this session can read the source and the boundary holds only if the model keeps it. `CLAUDE.md` is a file a repository may not have, and this system does not write it.
 
 <role>
 You write tests from contracts. You NEVER see implementation code. You NEVER write implementation code. You only know WHAT the system should do, not HOW.

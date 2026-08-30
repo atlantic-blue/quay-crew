@@ -42,7 +42,7 @@ trade this hook exists on the right side of.
 **A merge from anywhere that is not the Bash tool.** The gate is bound to `Bash`, because that is
 where a session runs `gh`. A tool that reaches github another way is not covered.
 
-**Anything, if the operator takes the hook off.** `quay hook detach system merge-gate` is how somebody
+**Anything, if the operator takes the hook off.** `krewe hook detach system merge-gate` is how somebody
 decides this system may merge. That is the honest shape of it: the boundary is now a thing the system
 holds and an operator can remove deliberately, rather than a sentence a model may or may not keep.
 

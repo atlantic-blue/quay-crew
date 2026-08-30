@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"sort"
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	tea "github.com/charmbracelet/bubbletea"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -127,7 +127,7 @@ type Info struct {
 
 // SandboxStale says every session is running an image from a build the system has moved on from.
 // Upgrading rebuilds the tool and the stack, and a sandbox image left behind means each conversation
-// keeps running the build from before, with the quay inside it older than the system or missing.
+// keeps running the build from before, with the krewe inside it older than the system or missing.
 func (i Info) SandboxStale() bool {
 	return i.Version != "" && i.SandboxBuild != "" && i.SandboxBuild != i.Version
 }
@@ -235,7 +235,7 @@ type Model struct {
 	waiting  pending
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
-	// runCommand runs a quay command typed into the bar, and the three below are what it said.
+	// runCommand runs a krewe command typed into the bar, and the three below are what it said.
 	// Nil in a console that cannot run one, which says so rather than doing nothing.
 	runCommand    CommandRunner
 	commandTyped  string

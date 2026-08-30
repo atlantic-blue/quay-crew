@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/deploy"
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/deploy"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -996,7 +996,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		want := deploy.Target{
 			Account:  "123456789012",
 			Region:   "eu-west-2",
-			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+			Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 		}
 		if err := before.SetDeployTarget(ctx, project.GetId(), want); err != nil {
 			t.Fatalf("SetDeployTarget: %v", err)
@@ -1030,7 +1030,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err := s.SetDeployTarget(ctx, project.GetId(), deploy.Target{
 			Account:  "123456789012",
 			Region:   "eu-west-2",
-			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+			Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 		}); err != nil {
 			t.Fatalf("SetDeployTarget: %v", err)
 		}
@@ -1052,7 +1052,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		err := s.SetDeployTarget(context.Background(), "ghost", deploy.Target{
 			Account:  "123456789012",
 			Region:   "eu-west-2",
-			Identity: "arn:aws:iam::123456789012:role/quay-deploy",
+			Identity: "arn:aws:iam::123456789012:role/krewe-deploy",
 		})
 		if !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("SetDeployTarget on a missing project returned %v, want ErrNotFound", err)

@@ -7,7 +7,7 @@ Feature: An attached operator sees how much of the model's context window is use
   fills a little more of the window to answer.
 
   So the session says it itself. The model runtime keeps a line under the prompt and redraws it every
-  time the conversation moves, and the sandbox image points that line at quay. The line is always
+  time the conversation moves, and the sandbox image points that line at krewe. The line is always
   there, it costs nothing, and from thirty per cent it stops being information and starts being a
   warning: what an operator does about a full window, finishing the task, compacting, or opening a
   fresh session, is much cheaper decided at thirty than at ninety.
@@ -60,7 +60,7 @@ Feature: An attached operator sees how much of the model's context window is use
   Scenario: Every session is given a status line, whether or not it runs under hooks
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries the hooks directory
-    And the settings tell the runtime to draw its status line by running quay
+    And the settings tell the runtime to draw its status line by running krewe
 
   Scenario: The listing says how full a session's context window is
     Given the operator dispatches "hello" to the project

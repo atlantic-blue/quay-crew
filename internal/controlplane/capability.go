@@ -7,12 +7,12 @@ import (
 	"slices"
 	"sort"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/name"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/skill"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/name"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -210,7 +210,7 @@ func (s *Server) secretMissing(ctx context.Context, workspace string, one skill.
 		value, err := s.secrets.Get(ctx, workspace, name)
 		if err != nil || value == "" {
 			return fmt.Sprintf("needs the secret %s, which this workspace has not set: %s. "+
-				"Set it with quay secret set %s %s",
+				"Set it with krewe secret set %s %s",
 				name, one.Secrets[name], workspace, name)
 		}
 	}

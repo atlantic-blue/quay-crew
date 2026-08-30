@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/messaging"
+	"github.com/atlantic-blue/krewe/internal/messaging"
 	"github.com/testcontainers/testcontainers-go/modules/redpanda"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"

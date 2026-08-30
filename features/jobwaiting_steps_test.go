@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/cucumber/godog"
 )
 
@@ -22,7 +22,7 @@ func initializeJobWaitingSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the system refuses it and says a job cannot wait, and names the flow$`,
 		func(ctx context.Context) error {
-			for _, phrase := range []string{"cannot wait", "flow", "quay flow import"} {
+			for _, phrase := range []string{"cannot wait", "flow", "krewe flow import"} {
 				if err := theRefusalSays(phrase)(ctx); err != nil {
 					return err
 				}

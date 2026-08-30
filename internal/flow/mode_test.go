@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/quay-crew/internal/model"
+	"github.com/atlantic-blue/krewe/internal/model"
 )
 
 // A graph that has to clone something before it can read it, which is the shape that found this: a

@@ -8,7 +8,7 @@ import (
 
 // TestTheSandboxImageShipsGo holds the image to what a session working on this repository needs:
 // quay-crew is Go only, so `make fmt`, `make lint` and `go test` all need the toolchain inside the
-// sandbox, not just in the stage that builds quay.
+// sandbox, not just in the stage that builds krewe.
 func TestTheSandboxImageShipsGo(t *testing.T) {
 	dockerfile, err := os.ReadFile("sandbox/claude.Dockerfile")
 	if err != nil {

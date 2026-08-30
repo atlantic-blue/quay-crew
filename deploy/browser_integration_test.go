@@ -52,7 +52,7 @@ cat > /tmp/page.html <<'HTML'
   <div style="height:1200px;font:48px sans-serif;color:#101010">a session can see what it built</div>
 </body></html>
 HTML
-quay render file:///tmp/page.html /tmp/shot.png 400x300 1>&2
+krewe render file:///tmp/page.html /tmp/shot.png 400x300 1>&2
 cat /tmp/shot.png`)
 
 	picture, err := png.Decode(bytes.NewReader(drawn))

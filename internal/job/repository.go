@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/atlantic-blue/quay-crew/internal/repository"
+	"github.com/atlantic-blue/krewe/internal/repository"
 )
 
 // A job that names a repository ends in a pull request against it.

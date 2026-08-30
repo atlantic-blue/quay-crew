@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/quay-crew/internal/flow"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/store"
 )
 
 // runTriggerConformance holds both stores to what a pending trigger is.

@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/controlplane"
-	"github.com/atlantic-blue/quay-crew/internal/job"
-	"github.com/atlantic-blue/quay-crew/internal/model"
-	"github.com/atlantic-blue/quay-crew/internal/role"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
-	"github.com/atlantic-blue/quay-crew/internal/secrets"
-	"github.com/atlantic-blue/quay-crew/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -195,7 +195,7 @@ func TestEveryRuleOfADeclarationIsRefusedWithASentence(t *testing.T) {
 			request: &quaycrewv1.CreateJobRequest{
 				Project: project, Title: "read the bill",
 				Brief: "push it, watch the checks and merge on green"},
-			says: []string{"watch the checks", "cannot wait", "quay flow import"},
+			says: []string{"watch the checks", "cannot wait", "krewe flow import"},
 		},
 		{
 			name: "a budget below zero",
@@ -243,7 +243,7 @@ func TestJobNamingARoleTheWorkspaceDoesNotHoldIsRefused(t *testing.T) {
 	if !strings.Contains(err.Error(), "backlog-clearer") {
 		t.Fatalf("the refusal says %q, want it to name the role", err)
 	}
-	if !strings.Contains(err.Error(), "quay role attach") {
+	if !strings.Contains(err.Error(), "krewe role attach") {
 		t.Fatalf("the refusal says %q, want it to say how to give the workspace the role", err)
 	}
 }
@@ -341,7 +341,7 @@ func TestJobNobodyHoldsIsRefusedByName(t *testing.T) {
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("the refusal is %v, want NotFound", status.Code(err))
 	}
-	if !strings.Contains(err.Error(), "quay job list") {
+	if !strings.Contains(err.Error(), "krewe job list") {
 		t.Fatalf("the refusal says %q, want it to say where to look", err)
 	}
 }

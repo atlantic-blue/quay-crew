@@ -42,7 +42,7 @@ conversation, and say what you changed afterwards, with the issue's address.
 
 ## When it fails
 
-A 401 means the workspace needs the pair set with `quay secret set <workspace> JIRA_EMAIL <value>`
-and `quay secret set <workspace> JIRA_API_TOKEN <value>`; say so rather than working around it. A
+A 401 means the workspace needs the pair set with `krewe secret set <workspace> JIRA_EMAIL <value>`
+and `krewe secret set <workspace> JIRA_API_TOKEN <value>`; say so rather than working around it. A
 404 on a key you were given usually means the wrong instance address: check the workspace context
 before concluding the issue does not exist.

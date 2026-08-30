@@ -26,44 +26,44 @@ Feature: A project says where it deploys
     Then the project deploys nowhere
 
   Scenario: A project declares where it ships, and every read of it says so
-    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the project deploys to account "123456789012" in "eu-west-2"
     And the listing of projects says the project deploys to account "123456789012"
 
   # The check the whole record exists for.
   Scenario: A role from another account is refused
-    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::999999999999:role/quay-deploy"
+    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::999999999999:role/krewe-deploy"
     Then the control plane refuses it as invalid
     And the refusal names both accounts
     And the project deploys nowhere
 
   Scenario: A target missing one of its three is refused
-    When the project is declared to deploy to account "123456789012" in "" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When the project is declared to deploy to account "123456789012" in "" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the control plane refuses it as invalid
     And the project deploys nowhere
 
   Scenario: An account that is not an account is refused
-    When the project is declared to deploy to account "atlantic-blue" in "eu-west-2" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When the project is declared to deploy to account "atlantic-blue" in "eu-west-2" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the control plane refuses it as invalid
     And the project deploys nowhere
 
   Scenario: A region that is not a region is refused
-    When the project is declared to deploy to account "123456789012" in "england" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When the project is declared to deploy to account "123456789012" in "england" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the control plane refuses it as invalid
     And the project deploys nowhere
 
   # A wrong account recorded is worse than none recorded, so the door that wrote it opens the other
   # way.
   Scenario: A project can stop shipping anywhere
-    Given the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/quay-deploy"
+    Given the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/krewe-deploy"
     When the project is declared to deploy nowhere
     Then the project deploys nowhere
 
   Scenario: One project's target is not another's
     Given a second project named "gardening"
-    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When the project is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the second project deploys nowhere
 
   Scenario: Saying where a project that does not exist deploys is refused
-    When a project that does not exist is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/quay-deploy"
+    When a project that does not exist is declared to deploy to account "123456789012" in "eu-west-2" as "arn:aws:iam::123456789012:role/krewe-deploy"
     Then the control plane refuses it as not found

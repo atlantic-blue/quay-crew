@@ -273,7 +273,7 @@ Feature: The operator sees the system from the console
 
   # The header is the wordmark, which build this is, and how to reach everything else. It carried the
   # system's description and this view's keys until there was no room left for the wordmark, which is
-  # what the operator noticed: "the quay logo dissapears because there is too much text, lets leave
+  # what the operator noticed: "the krewe logo dissapears because there is too much text, lets leave
   # only: the logo + version, and help".
   #
   # These drive the console's own reducer against the real control plane, so what is asserted is what

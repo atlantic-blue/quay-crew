@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-crew/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 
@@ -47,7 +47,7 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 		})
 
 	// Listing the sessions is one step, defined beside the presence scenarios, because there is one
-	// listing and it asks each sandbox what is in it the way `quay sessions` does. It leaves the rows
+	// listing and it asks each sandbox what is in it the way `krewe sessions` does. It leaves the rows
 	// here too, so a scenario about what a conversation cost reads the listing an operator reads.
 
 	sc.Step(`^the session reports (\d+) tokens in and (\d+) out$`, func(ctx context.Context, in, out int) error {

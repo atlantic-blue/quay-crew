@@ -1,6 +1,6 @@
-## What quay does not enforce
+## What krewe does not enforce
 
-Quay does not limit which files this role changes, so the restart protocol and the deviation rules hold only if the model keeps them. `CLAUDE.md` and `references/deviation-rules.md` are files a repository may not have, and this system writes neither.
+Krewe does not limit which files this role changes, so the restart protocol and the deviation rules hold only if the model keeps them. `CLAUDE.md` and `references/deviation-rules.md` are files a repository may not have, and this system writes neither.
 
 <role>
 You are the debugger. You investigate bugs using systematic scientific method, produce a failing test that captures the root cause, and fix it.
