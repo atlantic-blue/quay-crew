@@ -49,7 +49,7 @@ quay job create me/quay-crew --role backlog-clearer \
 
 The role is on the record, never on the call that runs the task. A caller that could name its own
 role could name one granting more than the job was declared with, and the credential the crew mints
-for that task carries what the role's `may` list declares.
+for that task carries what the role's `verbs` list declares.
 
 `--requires` is the other side of `receives`: it says what this job cannot be done without.
 Where the role does not receive it, the job is refused, and no container is ever built for it.
@@ -64,7 +64,7 @@ flowchart LR
     JOB["a job<br/>role backlog-clearer<br/>requires context"] --> CHECK{"does the role receive<br/>everything the job requires?"}
     CHECK -->|"no"| STOPPED["phase stopped.<br/>The refusal names the role,<br/>the material, and both ways out"]
     CHECK -->|"yes"| SESSION["a session running as the role,<br/>in its own container"]
-    SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its may list"]
+    SESSION --> GIVEN["the brief, and what the role receives.<br/>The credential carries its verbs"]
 ```
 
 The check happens twice, and the second one is the one that matters. At the write, so the refusal
@@ -128,8 +128,10 @@ Three, because those are what the crew puts in front of a session today. A word 
 assembles yet would be a boundary that means nothing, and a boundary that means nothing looks exactly
 like one that holds.
 
-`may` is the other boundary, and it is the one added on 27 August 2026. `receives` says what a
-session running as this role is given, and `may` says what it is allowed to call:
+`verbs` is the other boundary, and it is the one added on 27 August 2026. `receives` says what a
+session running as this role is given, and `verbs` says what it is allowed to call. The word is
+kubernetes's: a rule there is api groups, resources and verbs, and the question is asked as `kubectl
+auth can-i create jobs`. An operator arrives already knowing it.
 
 ```yaml
 name: backlog-clearer
@@ -138,7 +140,7 @@ summary: clears the open pull request backlog
 model: opus
 receives:
   - job
-may:
+verbs:
   - job.create
   - job.read
 ```
@@ -152,7 +154,7 @@ is a boundary that means nothing:
 - `job.answer` answers a question a job asked.
 - `job.stop` stops a job.
 
-A role that declares no `may` list may call nothing, which is what every role written before this
+A role that declares no `verbs` list may call nothing, which is what every role written before this
 became. Default deny, so a boundary is something an author wrote rather than something they forgot.
 
 Nothing here creates a workspace, a project, a secret, a skill, a hook or a role. A session that
@@ -167,7 +169,7 @@ of `docs/ORCHESTRATION.md` for why capability is split across the two.
 
 ```mermaid
 flowchart LR
-    ROLE["the role: may job.create"] --> AND{"both, or neither"}
+    ROLE["the role: verbs job.create"] --> AND{"both, or neither"}
     LIMITS["the workspace: max depth 2"] --> AND
     AND -->|"declared at depth 1"| YES["the job is written"]
     AND -->|"declared at depth 2"| NO["refused, naming the workspace limit"]
@@ -186,7 +188,7 @@ brief nobody follows.
 ## Reading one back
 
 `quay role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
-summary, the model, what it receives, what it may call, and who holds it. A bare name reads what the
+summary, the model, what it receives, the verbs it may call, and who holds it. A bare name reads what the
 current address can see, and a workspace level address reads the version that workspace pinned.
 
 The brief is the role, so a role that could not be read back was a run nobody could audit. There was
@@ -288,7 +290,7 @@ The design phase, in order, and the model each one runs on:
 The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
 team is worth the larger model and writing one file to a specification is not.
 
-Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `may`
+Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `verbs`
 list, `job.create` and `job.read`, because its brief declares a security review and reads what came
 back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
 grant mean something.
