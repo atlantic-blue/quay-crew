@@ -162,6 +162,10 @@ type Store interface {
 	// what it is given: whether a target is whole, and whether its identity belongs to its account,
 	// is the control plane's question.
 	SetDeployTarget(ctx context.Context, project string, target deploy.Target) error
+	// SetProjectRepository records where a project's work lands, and what kind of repository that is.
+	// Writing it again replaces what is held, so a project that moved repository is corrected rather
+	// than growing a second answer.
+	SetProjectRepository(ctx context.Context, project, repository, visibility string) (*quaycrewv1.Project, error)
 
 	// FindOrCreateSession creates on first use, so a channel that knows only its own session id always
 	// lands in the same session.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/atlantic-blue/quay-crew/internal/repository"
 )
 
 // A job that names a repository ends in a pull request against it.
@@ -16,34 +18,13 @@ import (
 // The check is read off the answer, the way `expect_contains` is, and for the same reason: the model
 // reporting on its own job is the thing this exists to stop.
 
-// RepositoryLimit is how long a repository address may be. It is two path segments and a host, so it
-// is nowhere near a title, and a value longer than this is a paste of something else.
-const RepositoryLimit = 200
-
-// repositoryShape is what a repository address has to look like: two segments, owner and name.
-//
-// The characters are the ones a forge allows in either segment. A segment that starts or ends with a
-// separator is refused, which is what keeps a stray slash or a trailing dot out of the pattern that
-// then goes looking for the address in an answer.
-var repositoryShape = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+// RepositoryLimit is how long a repository address may be, which a project's repository is held to
+// as well: the rule is one rule, kept in internal/repository, and named here for whoever reads a job.
+const RepositoryLimit = repository.Limit
 
 // TidyRepository is the address as it is stored: owner/name, with the spellings that arrive from a
 // browser's address bar taken back down to it.
-//
-// Both spellings are accepted because both are what somebody has in front of them. A person copying
-// from a browser has the whole address, a person typing from memory has owner/name, and refusing
-// either would be a refusal whose fix is obvious and therefore a refusal not worth having.
-func TidyRepository(address string) string {
-	tidy := strings.TrimSpace(address)
-	tidy = strings.TrimSuffix(tidy, "/")
-	if scheme := strings.Index(tidy, "://"); scheme >= 0 {
-		tidy = tidy[scheme+len("://"):]
-		if host := strings.Index(tidy, "/"); host >= 0 {
-			tidy = tidy[host+1:]
-		}
-	}
-	return strings.TrimSuffix(tidy, ".git")
-}
+func TidyRepository(address string) string { return repository.Tidy(address) }
 
 // usableRepository refuses an address the crew could not then look for in an answer.
 //
@@ -53,11 +34,11 @@ func usableRepository(address string) error {
 	if address == "" {
 		return nil
 	}
-	if len(address) > RepositoryLimit {
+	if repository.TooLong(address) {
 		return fmt.Errorf("the repository is %d bytes and the ceiling is %d: a repository is an owner and a "+
 			"name, so write it as atlantic-blue/quay-crew", len(address), RepositoryLimit)
 	}
-	if !repositoryShape.MatchString(address) {
+	if !repository.Shaped(address) {
 		return fmt.Errorf("job works in the repository %q, which is not an owner and a name: write it as "+
 			"atlantic-blue/quay-crew, or paste the address of the repository", address)
 	}

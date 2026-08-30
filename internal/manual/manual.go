@@ -44,6 +44,11 @@ commands:
                                           name to confirm, or pipe the name in to script it
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
+  project repository [<address>]          say where this project's work lands, and what kind of
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
+                                          declared here works in it and ends in a pull request
+                                          against it. Public unless you say otherwise, because a
+                                          pipeline's minutes are free on a public repository
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the crew can run
   flow start [<address>] <graph>          begin a run of it in a project

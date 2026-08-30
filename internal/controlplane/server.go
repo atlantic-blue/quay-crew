@@ -32,6 +32,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/messaging"
 	"github.com/atlantic-blue/quay-crew/internal/model"
 	"github.com/atlantic-blue/quay-crew/internal/name"
+	"github.com/atlantic-blue/quay-crew/internal/repository"
 	"github.com/atlantic-blue/quay-crew/internal/role"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/secrets"
@@ -1161,6 +1162,32 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 		return nil, storeError(err, "list projects")
 	}
 	return &quaycrewv1.ListProjectsResponse{Projects: projects}, nil
+}
+
+// SetProjectRepository records where a project's work lands, and what kind of repository it is.
+//
+// The address is held to its shape here, while the person who typed it is looking, for the same
+// reason a job's is: an address nothing can be pushed to is worth finding out about now rather than
+// an hour into the work. The kind is held to two words, and saying nothing means public, because
+// free pipeline minutes are the cheaper of the two and a project that cannot be public is the one
+// that has to say so.
+func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetProjectRepositoryRequest) (*quaycrewv1.SetProjectRepositoryResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	address := repository.Tidy(req.GetRepository())
+	if err := repository.Usable(address); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "this project works in %s", err.Error())
+	}
+	kind, err := repository.Kind(req.GetVisibility())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	recorded, err := s.store.SetProjectRepository(ctx, req.GetProject(), address, kind)
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetProjectRepositoryResponse{Project: recorded}, nil
 }
 
 // DeleteProject removes a project, stopping what it hides first.
