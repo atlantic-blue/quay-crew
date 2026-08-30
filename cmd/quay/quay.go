@@ -712,7 +712,7 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 //
 //	quay project repository                                              what this project works in
 //	quay project repository atlantic-blue/transcript                     record it here
-//	quay project repository me/transcript atlantic-blue/transcript        record it there
+//	quay project repository me/transcript atlantic-blue/transcript       record it there
 //	quay project repository atlantic-blue/transcript private             and say what kind
 func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	said := args
