@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
 )
 
 // saying pipes text into the next invocation, the way a shell redirection does, and puts standard
@@ -106,9 +108,142 @@ func TestTheUsageNamesEveryContextCommand(t *testing.T) {
 	client := testClient(t)
 
 	printed := mustRun(t, client, "help")
-	for _, want := range []string{"context set", "context edit", "context clear"} {
+	for _, want := range []string{"context show", "context set", "context edit", "context clear"} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("the usage does not name %q", want)
+		}
+	}
+}
+
+// A level could be written and never read back, so it could only be overwritten. Adding a paragraph
+// meant already holding the whole text, and recovering what the crew held meant reading the contexts
+// table in the database.
+func TestShowPrintsWhatALevelSaysAndNothingElse(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "juliantellez")
+	body := "# atlantic-blue\n\nNever touch production data.\n"
+
+	saying(t, body)
+	mustRun(t, client, "context", "set", "juliantellez")
+
+	if got := mustRun(t, client, "context", "show", "juliantellez"); got != body {
+		t.Fatalf("show printed %q, and the level says %q", got, body)
+	}
+}
+
+// The pair is the point: what comes out goes back in unchanged. A heading, a count or a newline
+// added for the look of it becomes part of the level on the next set.
+func TestShowAndSetAreAPairThatRoundTrips(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "juliantellez")
+	// No trailing newline, so an added one would show. Trailing spaces and a blank line, because a
+	// body is prose somebody wrote and a tidy up would eat them.
+	body := "Never touch production data.  \n\nDeploy through the pipeline, never from a shell."
+
+	saying(t, body)
+	mustRun(t, client, "context", "set", "juliantellez")
+
+	first := mustRun(t, client, "context", "show", "juliantellez")
+	saying(t, first)
+	mustRun(t, client, "context", "set", "juliantellez")
+	second := mustRun(t, client, "context", "show", "juliantellez")
+
+	if first != body {
+		t.Fatalf("show printed %q, and the level says %q", first, body)
+	}
+	if second != first {
+		t.Fatalf("the round trip changed the level: %q became %q", first, second)
+	}
+}
+
+// Reading back the level a paragraph is being added to, appending to it, and writing it back. This
+// is the whole thing the command exists for, so it is here as one test rather than implied by three.
+func TestALevelCanBeAddedToRatherThanOverwritten(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "juliantellez")
+	saying(t, "Never touch production data.\n")
+	mustRun(t, client, "context", "set", "juliantellez")
+
+	held := mustRun(t, client, "context", "show", "juliantellez")
+	saying(t, held+"\nDeploy through the pipeline.\n")
+	mustRun(t, client, "context", "set", "juliantellez")
+
+	got := mustRun(t, client, "context", "show", "juliantellez")
+	for _, want := range []string{"Never touch production data.", "Deploy through the pipeline."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the level no longer says %q: %q", want, got)
+		}
+	}
+}
+
+// The crew's level is the one `quay context edit` refuses by name, and it is the one an operator
+// most wants to read: every session in the crew is told it.
+func TestShowReadsTheCrewLevelByName(t *testing.T) {
+	client := testClient(t)
+	saying(t, "no acronyms\n")
+	mustRun(t, client, "context", "set", "crew")
+
+	if got := mustRun(t, client, "context", "show", "crew"); got != "no acronyms\n" {
+		t.Fatalf("the crew level printed %q", got)
+	}
+}
+
+// The project level, reached by its address, because that is the level most jobs are told at.
+func TestShowReadsAProjectByItsAddress(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "juliantellez")
+	mustRun(t, client, "project", "create", "house-bills")
+	saying(t, "pay the water bill first\n")
+	mustRun(t, client, "context", "set", "juliantellez/house-bills")
+
+	got := mustRun(t, client, "context", "show", "juliantellez/house-bills")
+	if got != "pay the water bill first\n" {
+		t.Fatalf("the project level printed %q", got)
+	}
+	// A sibling level is not answered by the one that was asked for.
+	if err := refused(t, client, "context", "show", "juliantellez"); err == nil {
+		t.Error("the workspace level answered with the project's body")
+	}
+}
+
+// Silence is what a broken read looks like too. A level that says nothing exits non zero and names
+// how to write it, so `quay context show x > file` cannot leave an empty file and a clean status.
+func TestShowRefusesALevelThatSaysNothing(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "juliantellez")
+
+	err := refused(t, client, "context", "show", "juliantellez")
+	for _, want := range []string{"juliantellez", "says nothing yet", "quay context set"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not mention %q: %s", want, err)
+		}
+	}
+}
+
+// A level standing among every other level in the listing, which is where a body is read from.
+func TestPickContextFindsOneLevelAmongMany(t *testing.T) {
+	dirs := []*quaycrewv1.ContextDir{
+		{Scope: "crew", Owner: "", Body: "no acronyms"},
+		{Scope: "workspace", Owner: "w1", Body: "the org context"},
+		{Scope: "workspace", Owner: "w2", Body: "another org"},
+		{Scope: "project", Owner: "p1", Body: "pay the water bill first"},
+	}
+	for _, one := range []struct {
+		scope, owner, want string
+	}{
+		{"crew", "", "no acronyms"},
+		{"workspace", "w1", "the org context"},
+		{"workspace", "w2", "another org"},
+		{"project", "p1", "pay the water bill first"},
+		// An owner belonging to another scope is not a match: identifiers are unique, and reading
+		// one scope's body under another's name would be worse than reading nothing.
+		{"project", "w1", ""},
+		// A level the listing does not carry says nothing, which is what a level that is there and
+		// empty says too. Neither has anything to read back.
+		{"workspace", "w3", ""},
+	} {
+		if got := pickContext(dirs, one.scope, one.owner); got != one.want {
+			t.Errorf("%s %q read %q, want %q", one.scope, one.owner, got, one.want)
 		}
 	}
 }

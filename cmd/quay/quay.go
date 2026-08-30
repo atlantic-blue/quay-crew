@@ -21,6 +21,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/console"
 	"github.com/atlantic-blue/quay-crew/internal/contextsize"
 	"github.com/atlantic-blue/quay-crew/internal/display"
+	"github.com/atlantic-blue/quay-crew/internal/repository"
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/workspace"
 )
@@ -79,7 +80,8 @@ var removedFlags = map[string]string{
 	"--thread": "an address names the session: quay task <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: quay use <workspace>/<project>",
 	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
-		"with quay skill attach <workspace> git and ask the session to clone what it works on",
+		"with quay skill attach <workspace> git and ask the session to clone what it works on. To say " +
+		"which repository a project's work lands in: quay project repository <owner>/<name>",
 	// Not flags this tool ever took, but the ones everybody's fingers type first. Refusing them with
 	// "say where with an address instead" was advice that could not be acted on, since neither is
 	// asking where anything is.
@@ -126,7 +128,8 @@ var removedCommands = map[string]string{
 		"nothing about it said how long it takes. Use quay task list <session>",
 	"repository": "a repository is cloned in conversation now, following the git skill. Import it " +
 		"once with quay skill import skills/git, attach it with quay skill attach <workspace> git, " +
-		"and ask the session to clone what it works on",
+		"and ask the session to clone what it works on. To say which repository a project's work " +
+		"lands in: quay project repository <owner>/<name>",
 	"panel": "`quay` on its own opens the crew, and p shows or hides the conversation beside it",
 	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
 		"thing: run to completion, watched by a controller, with a disposable container underneath" +
@@ -627,11 +630,13 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 
 func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: quay project <create|list|delete>")
+		return fmt.Errorf("usage: quay project <create|list|repository|delete>")
 	}
 	switch args[0] {
 	case "delete":
 		return runProjectDelete(ctx, client, args[1:], out)
+	case "repository":
+		return runProjectRepository(ctx, client, args[1:], out)
 	case "create":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: quay project create [<workspace>/]<name>")
@@ -649,15 +654,22 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			return err
 		}
 		fmt.Fprintf(out, "created project %s (%s)\n", resp.GetProject().GetId(), resp.GetProject().GetName())
+		// Where the work lands is asked for here, at the moment the project is made, because that is
+		// the moment it is decided. A project that looks finished and has nowhere to push is what
+		// leaves a session holding work nobody can read.
+		writeRepository(out, "", resp.GetProject())
 		return move(workspace.Path{Workspace: located.Path.Workspace, Project: resp.GetProject().GetName()}, out)
 
 	case "remote":
 		// The way off the command that used to be here. Refused by name rather than treated as an
-		// unknown word, because it is still in somebody's fingers and in their notes.
+		// unknown word, because it is still in somebody's fingers and in their notes. It names both
+		// halves of what replaced it: fetching a repository is a conversation, and which repository
+		// this project is, is a record.
 		return fmt.Errorf(
 			"there is no project remote command: a repository is cloned in conversation now, " +
 				"following the git skill. Attach it with quay skill attach <workspace> git and ask " +
-				"the session to clone what it works on")
+				"the session to clone what it works on. To say which repository this project's work " +
+				"lands in: quay project repository <owner>/<name>")
 
 	case "list":
 		scope := ""
@@ -683,13 +695,93 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			fmt.Fprintf(out, "%s  %s/%s%s\n",
 				display.ShortID(p.GetId()), display.Name(names[p.GetWorkspace()], p.GetWorkspace()), p.GetName(),
 				deploysTo(p.GetDeployTarget()))
+			writeRepository(out, "          ", p)
 		}
 		where.counted(out, len(resp.GetProjects()))
 		return nil
 
 	default:
-		return fmt.Errorf("usage: quay project <create|list|delete>")
+		return fmt.Errorf("usage: quay project <create|list|repository|delete>")
 	}
+}
+
+// runProjectRepository says where a project's work lands, and records it when told.
+//
+// The address of a project and the address of a repository are both two words with a separator
+// between them, so they are told apart by position, which is how quay project create already reads:
+// the last one is the thing being named and anything in front of it says where.
+//
+//	quay project repository                                              what this project works in
+//	quay project repository atlantic-blue/transcript                     record it here
+//	quay project repository me/transcript atlantic-blue/transcript       record it there
+//	quay project repository atlantic-blue/transcript private             and say what kind
+func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	said := args
+	kind := ""
+	// The kind comes off the end first. It is one of two words and neither is an address, so nothing
+	// else in the command can be mistaken for it, and taking it off leaves the addresses to count.
+	if len(said) > 0 {
+		if word := strings.ToLower(said[len(said)-1]); word == repository.Public || word == repository.Private {
+			said, kind = said[:len(said)-1], word
+		}
+	}
+	if len(said) > 2 || (len(said) == 0 && kind != "") {
+		return fmt.Errorf("usage: quay project repository [<address>] <owner>/<name> [public|private]")
+	}
+	// A last word that is neither an address nor a kind the crew knows. A forge has other kinds, and
+	// "internal" read as the repository leaves the crew resolving atlantic-blue as a workspace and
+	// answering that it has no such thing, which sends the operator to fix the wrong half.
+	if len(said) == 2 && !strings.Contains(said[1], workspace.Separator) {
+		return fmt.Errorf("a repository is an owner and a name, and a kind is %s or %s, and %q is neither"+
+			"\n\nusage: quay project repository [<address>] <owner>/<name> [public|private]",
+			repository.Public, repository.Private, said[1])
+	}
+
+	typed := ""
+	if len(said) == 2 {
+		typed = said[0]
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if !located.HasProject() {
+		return fmt.Errorf("%s is a workspace, and a repository belongs to a project: "+
+			"quay project repository <workspace>/<project> <owner>/<name>", located.Path)
+	}
+
+	if len(said) == 0 {
+		read, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: located.ProjectID})
+		if err != nil {
+			return err
+		}
+		writeRepository(out, "", read.GetProject())
+		return nil
+	}
+
+	resp, err := client.SetProjectRepository(ctx, &quaycrewv1.SetProjectRepositoryRequest{
+		Project: located.ProjectID, Repository: said[len(said)-1], Visibility: kind,
+	})
+	if err != nil {
+		return err
+	}
+	writeRepository(out, "", resp.GetProject())
+	return nil
+}
+
+// writeRepository says where a project's work lands, in one line, wherever a project is printed.
+//
+// A project with none says so rather than saying nothing. The gap is the finding: the acceptance run
+// had a workspace, a project, three roles and a token that worked, and the one fact nothing held was
+// where the work goes, so it read as a crew that was ready.
+func writeRepository(out io.Writer, indent string, project *quaycrewv1.Project) {
+	if project.GetRepository() == "" {
+		fmt.Fprintf(out, "%sno repository, so a job declared here is not asked to push anywhere. "+
+			"Say where with: quay project repository <owner>/<name>\n", indent)
+		return
+	}
+	fmt.Fprintf(out, "%sworks in %s, %s\n",
+		indent, project.GetRepository(), repository.Costs(project.GetVisibility()))
 }
 
 // splitLast divides an address into everything above the last level and the last level itself, which
@@ -736,6 +828,9 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if len(args) > 0 && args[0] == "edit" {
 		return runContextEdit(ctx, client, args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "show" {
+		return runContextShow(ctx, client, args[1:], out)
+	}
 	if len(args) > 0 && args[0] == "set" {
 		return runContextSet(ctx, client, args[1:], out)
 	}
@@ -743,8 +838,9 @@ func runContext(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return runContextClear(ctx, client, args[1:], out)
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: quay context [<address>] | quay context set [<address>] < file " +
-			"| quay context edit [<address>] | quay context clear [<address>]")
+		return fmt.Errorf("usage: quay context [<address>] | quay context show [<address>] " +
+			"| quay context set [<address>] < file | quay context edit [<address>] " +
+			"| quay context clear [<address>]")
 	}
 	typed := ""
 	if len(args) == 1 {
@@ -812,6 +908,46 @@ func firstLine(body string) string {
 		line = line[:57] + "..."
 	}
 	return line
+}
+
+// runContextShow prints what one level says, and nothing else, so that
+//
+//	quay context show crew > file
+//	quay context set crew < file
+//
+// are a pair. Until this existed a level could only be overwritten: adding a paragraph meant already
+// holding the whole text, and the only way to recover what the crew held was to read the contexts
+// table in the database. It also means a level can be diffed, piped, and kept in a repository and
+// compared against what the crew actually holds.
+//
+// The body goes out byte for byte, with nothing added, because the round trip has to be a no op.
+// A heading, a trailing newline or a count would each become part of the level the moment somebody
+// piped this into `quay context set`.
+func runContextShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: quay context show [<address>|crew]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	scope, owner, name, err := contextTarget(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	body, err := contextBody(ctx, client, scope, owner)
+	if err != nil {
+		return err
+	}
+	// A level that says nothing is refused rather than printed as silence. Standard output stays
+	// empty either way, so a redirection writes an empty file whatever happens, and the exit status
+	// is the only thing that tells a caller which of the two it got.
+	if body == "" {
+		return fmt.Errorf("%s %s says nothing yet, so there is nothing to read back"+
+			"\n\nwrite it: cat notes.md | quay context set %s", scope, name, typed)
+	}
+	fmt.Fprint(out, body)
+	return nil
 }
 
 // runContextSet writes a level's context from standard input, which is how a file becomes context:
@@ -901,19 +1037,37 @@ func runContextClear(ctx context.Context, client quaycrewv1.ControlPlaneServiceC
 	return nil
 }
 
+// contextBody is what a level says today, read back out of the crew.
+//
+// The listing carries every level's body, so there is nothing else to ask, and one call answers all
+// three questions anything here has: what a level says, how long it is, and whether it says anything
+// at all. Going through the listing rather than a call of its own is also what keeps the console and
+// the command line reading the same answer.
+func contextBody(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (string, error) {
+	resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
+	if err != nil {
+		return "", err
+	}
+	return pickContext(resp.GetDirs(), scope, owner), nil
+}
+
+// pickContext is one level out of a listing of every level. A level the listing does not carry says
+// nothing, which is the same answer as a level that is there and empty: neither has anything to read
+// back and neither has anything to protect.
+func pickContext(dirs []*quaycrewv1.ContextDir, scope, owner string) string {
+	for _, dir := range dirs {
+		if dir.GetScope() == scope && dir.GetOwner() == owner {
+			return dir.GetBody()
+		}
+	}
+	return ""
+}
+
 // contextLength is how much a level says today, so a refusal can name what it is protecting and
 // clearing can say what it removed.
 func contextLength(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, scope, owner string) (int, error) {
-	resp, err := client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{})
-	if err != nil {
-		return 0, err
-	}
-	for _, dir := range resp.GetDirs() {
-		if dir.GetScope() == scope && dir.GetOwner() == owner {
-			return len(dir.GetBody()), nil
-		}
-	}
-	return 0, nil
+	body, err := contextBody(ctx, client, scope, owner)
+	return len(body), err
 }
 
 // contextTarget works out which level an address means. The word "crew" is the level above every
