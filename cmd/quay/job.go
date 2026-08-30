@@ -405,7 +405,14 @@ func (g given) first(name string) string {
 
 func (g given) has(name string) bool { return len(g[name]) > 0 }
 
-// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
+// valuelessFlags are the flags that are a word on their own. Each says which of two things a
+// command does rather than carrying a value, so the word after one belongs to the command.
+var valuelessFlags = map[string]bool{
+	flagRoots: true,
+	flagClear: true,
+}
+
+// readFlags separates the values from the words.// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
 // parsing is here rather than in a package: `--name value` and `--name=value`, and a flag with no
 // value is refused by name rather than swallowing the word after it.
 func readFlags(args []string) (given, []string, error) {
@@ -421,9 +428,9 @@ func readFlags(args []string) (given, []string, error) {
 			values[name] = append(values[name], value)
 			continue
 		}
-		// The one flag that carries no value. Everything else takes the word after it, and a flag
-		// at the end of the line with nothing after it is a value the caller thinks they gave.
-		if name == flagRoots {
+		// The flags that carry no value. Everything else takes the word after it, and a flag at the
+		// end of the line with nothing after it is a value the caller thinks they gave.
+		if valuelessFlags[name] {
 			values[name] = append(values[name], "")
 			continue
 		}
