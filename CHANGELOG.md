@@ -62,6 +62,46 @@ read, or run with `make features`.
   Description keeps its job of renaming a conversation that wandered. It stops being the only source of
   a name.
 
+- **The console's keys agree with vim.** The console is shaped like k9s and k9s is shaped like vim, and
+  two thirds of the keys already agreed. The missing third sat on the keys a vim user presses hardest,
+  so half the keyboard rewarded the reflex and half of it punished it. The result was a keyboard too
+  complicated to remember, which is the state it was reported in.
+
+  `l` and `h` opened the history. They are vim's horizontal motion keys, and an action on a motion key
+  is the one thing that teaches an operator to distrust every other key on the screen. The history is
+  on `t` now, which is the view it opens and the word the command bar takes.
+
+  `g` refreshed, so `gg` and `G` could not exist and the views used `home` and `end`, which nobody
+  reaches for. Refreshing is the key pressed constantly, so it keeps the short obvious letter and
+  keeps it alone: `r`. That frees `g`, and the first and last row are where they are everywhere else.
+
+  `n` made something and `N` started a fresh conversation. In vim they are the next and previous
+  match, pressed constantly straight after `/`, and this console had a live filter with no way to jump
+  between what it matched. So they jump now. Making something moved to `o`, which is the key vim opens
+  a new line with. A fresh conversation moved to `P`, beside `p`, which shows and hides that same
+  conversation. The cheapest key went to the most frequent action rather than to the newest one.
+
+  `D` was an alias for the mode picker. In vim `D` deletes to the end of the line, and a destructive
+  shaped key on an action that takes nothing away teaches the operator that the shapes mean nothing.
+  It is gone.
+
+  **What vim has that the console now has too.** `gg` and `G` for the first and last row, `ctrl+d` and
+  `ctrl+u` for half a page, `n` and `N` for the next and previous match of what the filter last
+  matched, and a count in front of any move, so `5j` is five rows and `12G` is the twelfth. What is
+  typed and not yet acted on is drawn in the breadcrumb, because a console holding half a sequence and
+  showing nothing looks exactly like one that dropped the key.
+
+  **Every key that moved says what to press now.** `l`, `h`, `D`, `g`, `n` and `N` each name the key
+  that took the job over, rather than doing nothing: a key that quietly stopped working is the
+  regression this repository has already had once, and each one has a test for the way off it beside
+  the test for the way on. The filter also stopped throwing away what was typed into it, which is what
+  gives the two match keys something to jump through once the filter is cleared.
+
+  What did not move: `j` and `k`, `ctrl+f` and `ctrl+b`, `/`, `:`, `q`, `esc`, and `u` for restore in
+  the archived view. That last one is the binding the rest of this was written to match. Restore is
+  undo, and it is on undo's key.
+
+
 - **The three roles the acceptance run used ship in `roles/`, and the two flow graphs in `flows/`.**
   They were written outside this repository, so nobody could read them, review them or change them.
   `orchestrator`, `infrastructure-writer` and `releaser` are now fifteen roles rather than twelve, held

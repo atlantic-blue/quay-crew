@@ -161,16 +161,23 @@ func TestLeavingThePickerChangesNothing(t *testing.T) {
 	}
 }
 
-// The way off the old key. D flipped between two modes for as long as the console has had one, so it
-// is in somebody's fingers. It opens the picker now rather than doing nothing, and rather than
-// quietly arming a session the way it used to.
-func TestTheOldDangerousKeyOpensThePickerRatherThanArming(t *testing.T) {
+// The way off the old key. D opened the picker, and before that it flipped between two modes, so it
+// is in somebody's fingers. In vim D deletes to the end of the line, and a destructive shaped key on
+// an action that takes nothing away teaches the operator that the shapes mean nothing, so it is gone
+// and says where the picker went.
+func TestTheOldDangerousKeySaysWhereTheModePickerWent(t *testing.T) {
 	client := &fakeClient{}
 
 	model, _ := update(t, sessionIn(t, client, "edits"), runes("D"))
 
-	if model.mode != modeChoose {
-		t.Fatalf("D left the console in %v, want the picker", model.mode)
+	if model.mode != modeBrowse {
+		t.Fatalf("D left the console in %v, want it browsing", model.mode)
+	}
+	if model.err == nil {
+		t.Fatal("D did nothing and said nothing, which is the key that quietly stopped working")
+	}
+	if !strings.Contains(model.err.Error(), "m") || !strings.Contains(model.err.Error(), "mode") {
+		t.Fatalf("D says %q, want it to name the mode picker and the key it is on", model.err)
 	}
 	if len(client.modesSet) != 0 {
 		t.Fatalf("D armed the session on its own: modes set = %v", client.modesSet)

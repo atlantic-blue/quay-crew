@@ -390,11 +390,11 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the next key still works$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}); err != nil {
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}); err != nil {
 			return err
 		}
 		if !strings.Contains(c.model.View(), "tasks") {
-			return fmt.Errorf("l after opening a conversation did not reach the history:\n%s", c.model.View())
+			return fmt.Errorf("t after opening a conversation did not reach the history:\n%s", c.model.View())
 		}
 		return nil
 	})
