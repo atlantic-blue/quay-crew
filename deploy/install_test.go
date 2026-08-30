@@ -20,7 +20,7 @@ import (
 // before the builds because compose is told the path to a file that has to exist. The builds before
 // the stack because the image a session runs in is one of them. up-check before up because a crew
 // that is already working gets a say before compose replaces the services under it.
-var theOrderOfAFirstRun = []string{"home-check", "config", "rebuild", "up-check", "up"}
+var theOrderOfAFirstRun = []string{"config", "rebuild", "up-check", "up"}
 
 // TestAFirstRunIsOneCommand, in the order a first run needs.
 //
