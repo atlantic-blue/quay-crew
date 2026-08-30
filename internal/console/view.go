@@ -40,7 +40,11 @@ func (m Model) View() string {
 		return strings.Join(append(lines, m.footer()), "\n")
 	}
 
-	lines = append(lines, m.panelTop(len(visible)), m.framed(m.columnHeader()))
+	lines = append(lines, m.panelTop(len(visible)))
+	if line := m.summaryLine(); line != "" {
+		lines = append(lines, m.framed(styleFor(m.summary.state).Render(m.fit(line))))
+	}
+	lines = append(lines, m.framed(m.columnHeader()))
 	for _, line := range m.bodyLines(visible) {
 		lines = append(lines, m.framed(line))
 	}
@@ -981,4 +985,15 @@ func (m Model) crewBlock() []string {
 		lines = append(lines, "    "+described)
 	}
 	return append(lines, "")
+}
+
+// summaryLine is the line drawn above the columns, or empty where the view has none.
+//
+// Nothing is drawn over the help or over a command's output: both take the panel from the rows, and
+// a total about a listing that is not on screen is a line about nothing.
+func (m Model) summaryLine() string {
+	if m.mode == modeHelp || m.mode == modeOutput {
+		return ""
+	}
+	return m.summary.line
 }

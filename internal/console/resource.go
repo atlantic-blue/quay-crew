@@ -70,6 +70,13 @@ func (r Row) Name() string {
 // identifier drilled down from, for example a workspace id when listing that workspace's sessions.
 type Lister func(ctx context.Context, parent string) ([]Row, error)
 
+// Summariser is one line about the whole listing, for a view whose rows do not answer the question
+// on their own. It returns the line and the state it is drawn in, and an empty line draws nothing.
+//
+// It is a different question from the one a Lister answers: a lister says which ones are there, and
+// this says what they add up to and whether that is too many.
+type Summariser func(ctx context.Context, parent string) (string, State)
+
 // Action is a key bound operation on the selected row. Exactly one of Run and Shell is set; Shell
 // runs with the console suspended.
 //
@@ -165,6 +172,9 @@ type Resource struct {
 	Aliases []string
 	Columns []Column
 	List    Lister
+	// Summary is the line drawn above the columns, and nil in a view with nothing to add up. The room
+	// view is the one so far: eighteen rows of megabytes never said what the machine had left.
+	Summary Summariser
 	Actions []Action
 	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
 	// does nothing here.

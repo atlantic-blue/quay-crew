@@ -827,6 +827,9 @@ func Room(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// The control plane sorts these largest first, and a sort here would fight it: the column
 		// holds "1201 MiB" and "unknown", which do not order as text.
 		SortBy: -1,
+		// What the rows never said: the total, the limit that binds, and what is left. The listing
+		// answered which session to stop and never whether one had to be stopped at all. See issue 457.
+		Summary: roomSummaryFrom(client),
 		List: func(ctx context.Context, _ string) ([]Row, error) {
 			answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
 			if err != nil {
