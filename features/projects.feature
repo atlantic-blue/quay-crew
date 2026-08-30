@@ -97,6 +97,7 @@ Feature: Projects hold a body of work inside a workspace
     And the project's work lands in "atlantic-blue/transcript"
     When the caller declares a job
     Then the job works in "atlantic-blue/transcript"
+    And the session doing it is asked to open a pull request against "atlantic-blue/transcript"
 
   Scenario: A job that names its own repository keeps it
     Given a project named "transcript"

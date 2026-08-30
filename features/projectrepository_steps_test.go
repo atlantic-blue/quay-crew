@@ -88,6 +88,23 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// What the session doing the job is actually sent, which is the half a record cannot buy on its
+	// own: the line the crew puts in front of a brief is what tells a session where to push.
+	sc.Step(`^the session doing it is asked to open a pull request against "([^"]*)"$`,
+		func(ctx context.Context, want string) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			asked := job.Asked(&job.Job{Brief: one.GetBrief(), Repository: one.GetRepository()})
+			for _, phrase := range []string{want, "pull request", "Do not merge"} {
+				if !strings.Contains(asked, phrase) {
+					return fmt.Errorf("the session doing it is asked %q, want it to say %q", asked, phrase)
+				}
+			}
+			return nil
+		})
+
 	// A job that claims nothing, so the session doing it is asked for nothing. It is the state every
 	// job was in before a project could say where its work goes.
 	sc.Step(`^the job works in nothing, and the session doing it is asked for no pull request$`,
