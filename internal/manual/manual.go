@@ -60,9 +60,10 @@ commands:
     [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it as
     [--requires <material>]               the role it names. --requires says what the job cannot be
     [--after <job>] [--label k=v]         done without, one of job, context or skills, and a role
-    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job
-    [--expect-file <path>]
-    [--expect-contains "..."]
+    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job.
+    [--expect-file <path>]                --repository says where the work goes, and a job that
+    [--expect-contains "..."]             names one is not done until its answer names a pull
+    [--repository <owner>/<name>]         request against it
   job list [<address>|crew]               the jobs there are, newest first. With no address it
     [--phase <phase>] [--label k=v]       reads where you are standing and says so, and crew reads
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
@@ -78,8 +79,10 @@ commands:
     [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
     [--archive <duration>]                zero, so no session declares a job until you raise it. The
                                           reclaim and archive times start unset, and unset means the
-                                          crew does nothing. A session may read none of this and set
-                                          none of it
+                                          crew does nothing. The lease is the crew's hold on a job
+                                          and not the credential a session runs under: a credential
+                                          lasts as long as its job, and this setting does not reach
+                                          it. A session may read none of this and set none of it
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point

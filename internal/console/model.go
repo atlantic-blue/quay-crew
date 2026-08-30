@@ -194,7 +194,19 @@ type Model struct {
 	typing pending
 	input  string
 	filter string
-	err    error
+	// search is what the filter was last typed with, kept after the filter itself is cleared, so the
+	// keys for the next and previous match have something to jump through. Escape out of the filter
+	// puts every row back on screen, and that is exactly when jumping between the matches is worth
+	// anything.
+	search string
+	// counted is the count typed in front of a move, as it is being typed, so "5j" moves five rows.
+	// Empty is no count, which every move reads as once.
+	counted string
+	// pendingHalf is the first key of a two key sequence, and the only one is the g of gg. It is
+	// drawn in the breadcrumb while it waits, because a console holding a keypress and showing
+	// nothing looks like a console that dropped it.
+	pendingHalf string
+	err         error
 	// held says the error came from something the operator did, so the next listing must leave it
 	// alone. Enter on a session that cannot open used to set the error and ask for a refresh in the
 	// same return, and the refresh blanked it before it was ever drawn: the key looked like it did
@@ -249,6 +261,15 @@ type Terminal func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd
 // Reported is what the console is telling the operator right now, and nil when it is telling them
 // nothing. A scenario reads it to say whether a key that could not do its job said so.
 func (m Model) Reported() error { return m.err }
+
+// Selected is the row under the cursor, and whether there is one. A scenario reads it to say where a
+// move landed: the cursor is drawn as a highlight, and a highlight is a colour, which is nothing at
+// all on a screen rendered with no terminal attached.
+func (m Model) Selected() (Row, bool) { return m.selectedRowValue() }
+
+// Listed is the rows on screen, after the filter and in the order they are drawn, which is what a
+// scenario counts and what it reads a position out of.
+func (m Model) Listed() []Row { return m.visibleRows() }
 
 // WithoutHeader leaves the header to the pane above.
 func (m Model) WithoutHeader() Model {

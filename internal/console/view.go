@@ -115,15 +115,19 @@ func (m Model) headerLines() []string {
 // looking at drifts first.
 var everywhereKeys = [][2]string{
 	{"↑↓ jk", "Move"},
-	{"pgup pgdn", "Page"},
+	{"5j", "Any move, five times"},
+	{"gg G", "First row, last row"},
+	{"ctrl-f ctrl-b", "Page down, page up"},
+	{"ctrl-d ctrl-u", "Half a page down, half up"},
 	{"enter", "Drill in"},
 	{"esc", "Back, or clear the filter"},
 	{":", "Switch view, or run any quay command"},
 	{"/", "Filter these rows"},
-	{"r g", "Refresh now"},
-	{"n", "Make one thing"},
+	{"n N", "Next and previous match of what was filtered for"},
+	{"r", "Refresh now"},
+	{"o", "Make one thing"},
 	{"p", "Show or hide the conversation beside this"},
-	{"N", "Start a fresh conversation beside this"},
+	{"P", "Start a fresh conversation beside this"},
 	// The one key here that is not the console's own. An open conversation runs inside tmux in its
 	// sandbox, so this leaves it running and comes back; without it the only way out of a session is
 	// ending it, which is what everybody does until somebody tells them otherwise.
@@ -845,6 +849,12 @@ func (m Model) breadcrumb() string {
 	line += chip.Render("<" + m.active.Name + ">")
 	if len(m.stack) > 0 {
 		line += faint.Render("   esc to go back")
+	}
+	// What has been typed and not yet acted on: a count, or the first g of gg. The console holds
+	// those keys waiting for the rest of the sequence, and holding a keypress while showing nothing
+	// looks exactly like dropping it.
+	if typed := m.counted + m.pendingHalf; typed != "" {
+		line += prompt.Render("   " + typed)
 	}
 	return line
 }

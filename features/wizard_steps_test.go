@@ -165,10 +165,10 @@ func (c *consoleWorld) openWizard(client quaycrewv1.ControlPlaneServiceClient) e
 		return err
 	}
 	c.model = opened.WithClient(client)
-	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}); err != nil {
+	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")}); err != nil {
 		return err
 	}
-	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
 }
 
 // answerWizard types each row of the table and presses enter, which is what answering a question is.

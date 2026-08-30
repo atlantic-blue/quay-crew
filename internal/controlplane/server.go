@@ -314,6 +314,9 @@ func NewServer(cfg Config) *Server {
 		Redacting(server).Exporting(server).Reading(server).
 		// The machine, asked before a job is started rather than after it has been killed.
 		Placing(server).
+		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
+		// a credential in a working crew; its expiry is the backstop behind it.
+		Revoking(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)

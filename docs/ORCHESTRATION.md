@@ -269,6 +269,27 @@ controller checks it, and a job that does not meet its claim stops rather than r
 reason is in `docs/ARCHITECTURE.md`: a model asked to read a file that is not there answers
 plausibly instead of stopping.
 
+**`repository`, text, optional, default empty.** The repository this job works in, written
+`owner/name`. Both spellings of the address are accepted and stored as one, so a person pasting from
+a browser and a person typing from memory declare the same thing. Anything that is not an owner and a
+name is refused at the write, because a repository the crew cannot then look for in an answer is an
+expectation that was never going to hold.
+
+Naming one says how the job ends. The crew adds a line to what the session is asked, saying to push
+the branch, open the pull request, name its address in the answer, and not to merge it. The job is
+not done until an answer names a pull request against that repository, and the address the crew read
+lands on the row as `pull_request`, which is what `quay job show` prints beside the answer.
+
+**A session that answered without one is asked again, once.** It is the only expectation the crew
+asks again about rather than stopping on, and the difference is what is missing. An answer that does
+not carry what it claimed is work that was not done, so asking again is asking a model to do it
+twice. A pull request is work that was done and not published: the branch is in the session, the
+session is still open, and opening it is one command. A second answer that still names none stops the
+job, with a reason saying it was asked twice.
+
+**No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
+runs the pipeline, so nothing here lets a session merge and the line the crew adds says so.
+
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
 identifiers that close it. This is the ordering primitive, and it is the whole of it: there is no
@@ -370,6 +391,10 @@ purpose. The list, so a test can be written against it:
 - A job naming a mode that is not a mode is refused, and the refusal lists the modes.
 - A job whose `expect_file` starts with a slash is refused.
 - A job whose `expect_file` holds a `..` part is refused.
+- A job whose `repository` is not an owner and a name is refused, and the refusal says how to write
+  one.
+- A job that names a repository and answers without a pull request against it is asked again, and
+  stopped if the second answer names none either.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
@@ -669,12 +694,30 @@ sequenceDiagram
 ```
 
 **What the credential is.** A token minted for one job, carrying the verbs that job's
-role declared and an expiry no later than the job's deadline. It reaches the session in the
+role declared and lasting as long as that job may run: the job's own deadline where it names one, and
+twelve hours where it does not. It reaches the session in the
 environment of one task and never at sandbox birth: a sandbox keeps the configuration it was made
 with, so a credential written at birth would label every later task with the first task's grant, and
 one minted afterwards would never reach the container at all. The crew holds the minted credentials
 in the control plane process, so a restart forgets them, which costs nothing because a restart also
 ends every task they belonged to.
+
+**What ends it.** The job ending. The crew takes the credential back the moment the job reaches a
+phase nothing moves it out of, so a session stops being able to call because its job is over rather
+than because a clock ran out, and the expiry above is the backstop for a job whose end the crew never
+saw. The credential's life is deliberately not the controller's hold on the job, which is a different
+lifetime: a hold is renewed on every tick, and a credential is handed to a sandbox once at dispatch
+and never refreshed, because refreshing it would mean re entering a running container. The two were
+one constant, which made a credential last sixty seconds, and a root job that ran twenty nine minutes
+declared none of its three children (`quay-crew#449`). The `--lease` setting on a workspace is the
+hold and only the hold, and it does not reach the credential.
+
+**What a session is told when it is refused.** Three different sentences, because the three causes
+need three different things done about them: a credential that ran out says so and says when, one the
+crew took back names the job that ended and the phase it ended in, and a token nobody minted is told
+it is not this crew's. They were two. An expired credential got the refusal a forgery gets, and a
+session told the token is not this crew's reads that as holding a bad credential and stops calling,
+which is what ended the run in `quay-crew#449`.
 
 **What it holds.** Four verbs and nothing else, and the deny policy points the opposite way from the
 driver's: the driver is refused a named list and holds everything else, while a job holds a
@@ -731,8 +774,8 @@ approved and then run as it.
 Not through the `driver` flag. The flag makes the boundary locality, which is the thing to change.
 
 A session that is running a job gets a credential minted for that job: a token
-bound to the job identifier, the verbs its role declares, and an expiry no later than the job's
-deadline. It reaches the sandbox the way the driver's token reaches the driver, through the
+bound to the job identifier, the verbs its role declares, and a life as long as the job's own, which
+the crew ends when the job ends. It reaches the sandbox the way the driver's token reaches the driver, through the
 environment at task time. The control plane recognises it, reads the job identifier from it, and
 that identifier is the `parent` of anything the session declares.
 

@@ -79,6 +79,23 @@ Feature: A job is a record the crew keeps
     When the caller declares a job requiring "context"
     Then the job requires "context"
 
+  # A job that names a repository says how it ends: the session pushes and opens a pull request, and
+  # the job is not done until the answer names it. It is on the job rather than in a brief, because a
+  # brief that forgets to ask for a push produces work nobody can see.
+  Scenario: A job names the repository its work goes to
+    When the caller declares a job in the repository "atlantic-blue/quay-crew"
+    Then the job works in "atlantic-blue/quay-crew"
+
+  # The address a person has in front of them is the one in their browser, so both spellings are
+  # taken and both are kept as one.
+  Scenario: The address of a repository is kept as an owner and a name
+    When the caller declares a job in the repository "https://github.com/atlantic-blue/quay-crew"
+    Then the job works in "atlantic-blue/quay-crew"
+
+  Scenario: A repository that is not an owner and a name is refused
+    When the caller declares a job in the repository "quay-crew"
+    Then the crew refuses it and says how to write a repository
+
   Scenario: Job naming a mode that is not a mode is refused
     When the caller declares a job in the mode "yolo"
     Then the crew refuses it and lists the modes

@@ -121,7 +121,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "max running    %s\n", unsetOr(int64(asked.GetMaxRunning())))
 	fmt.Fprintf(out, "request        %s%s\n", requestOf(asked), crewsOwn(asked))
 	fmt.Fprintf(out, "budget tokens  %s\n", unsetOr(asked.GetBudgetTokens()))
-	fmt.Fprintf(out, "lease          %s\n", leaseOr(asked.GetLeaseSeconds()))
+	fmt.Fprintf(out, "lease          %s%s\n", leaseOr(asked.GetLeaseSeconds()), leaseMeans)
 	fmt.Fprintf(out, "reclaim        %s%s\n", lengthOr(asked.GetReclaimSeconds()),
 		timeMeans(asked.GetReclaimSeconds(), "no session here gives its container back"))
 	fmt.Fprintf(out, "archive        %s%s\n", lengthOr(asked.GetArchiveSeconds()),
@@ -184,6 +184,14 @@ func unsetOr(value int64) string {
 	}
 	return strconv.FormatInt(value, 10)
 }
+
+// leaseMeans says what the lease is not, next to the number an operator sets.
+//
+// It reads as the length of a job and it is not one: it is the crew's hold on a job, renewed on
+// every tick for as long as the job runs. The credential a session runs under is a different
+// lifetime and this setting does not reach it. An operator who read the two as one number set the
+// lease to fifteen minutes to cover their work and got no change to the credential at all.
+const leaseMeans = "  (the crew's hold on a job, not the life of a session's credential)"
 
 func leaseOr(seconds int32) string {
 	if seconds == 0 {
