@@ -96,6 +96,24 @@ Feature: A job is a record the crew keeps
     When the caller declares a job in the repository "quay-crew"
     Then the crew refuses it and says how to write a repository
 
+  # A job cannot wait. It runs once and answers, and nothing wakes it when the checks land, so a
+  # brief that says "merge on green" asks for something the runtime does not have and the session
+  # invents an answer. The shape that can do it is a flow, and the refusal says so.
+  Scenario: A brief that asks the job to wait for the checks is refused
+    When the caller declares a job briefed to "fix the defect, push, watch the checks and merge on green"
+    Then the crew refuses it and says a job cannot wait, and names the flow
+
+  # The rule reads English, so it is held narrow. A brief merging a branch is ordinary work.
+  Scenario: A brief that merges a branch is ordinary work
+    When the caller declares a job briefed to "merge origin/main into the branch, then run the gates"
+    Then the job is declared
+
+  # The line the crew itself puts in front of a session says not to merge. A brief that says it back
+  # must not be the thing that gets refused.
+  Scenario: A brief that says not to merge is not a brief that merges
+    When the caller declares a job briefed to "push the branch, then do not merge the pull request"
+    Then the job is declared
+
   Scenario: Job naming a mode that is not a mode is refused
     When the caller declares a job in the mode "yolo"
     Then the crew refuses it and lists the modes

@@ -18,6 +18,7 @@ func TestABriefThatAsksTheJobToWaitIsRefused(t *testing.T) {
 		"open the pull request and merge it when the checks pass",
 		"squash and merge the pull request once it is reviewed",
 		"raise the pull request, wait for CI, merge on green",
+		"push the branch and open the pull request, merging it once the checks are green",
 	} {
 		d := declared()
 		d.Brief = brief
@@ -57,12 +58,31 @@ func TestABriefThatDoesOrdinaryWorkIsAccepted(t *testing.T) {
 		"open the bill and say when it is due",
 		"merge origin/main into the branch, then run the gates",
 		"resolve the merge conflict in the store and push",
-		"open the pull request and do not merge it",
-		"push the branch and open the pull request; the merge is somebody else's",
 		"run the test suite and wait for it to finish before reporting",
 		"check the spelling of every heading in the README",
 		"watch out for a session that answers without a pull request",
 		"write the merge strategy down in docs/ORCHESTRATION.md",
+	} {
+		d := declared()
+		d.Brief = brief
+		if err := d.Validate(); err != nil {
+			t.Errorf("%q was refused: %v", brief, err)
+		}
+	}
+}
+
+// A brief telling the job not to do the thing is not a brief telling it to. The crew's own line says
+// not to merge, so this is the phrasing an operator repeats back, and refusing it would refuse the
+// rule's own advice.
+func TestABriefThatSaysNotToIsAccepted(t *testing.T) {
+	for _, brief := range []string{
+		"open the pull request and do not merge it",
+		"push the branch, then do not merge the pull request",
+		"never merge the pull request yourself",
+		"do not wait for the checks, answer with the address",
+		"push it and open the pull request, without merging the pull request",
+		"open the pull request; somebody else merges the pull request",
+		"push the branch and open the pull request; the merge is somebody else's",
 	} {
 		d := declared()
 		d.Brief = brief
@@ -81,7 +101,8 @@ func TestOnlyAFlowCanNamesThePhrase(t *testing.T) {
 		"open the bill and say when it is due":       "",
 		"open the pull request and do not merge it":  "",
 		"merge origin/main into the branch and push": "",
-		"wait\n  for the checks":                     "wait for the checks",
+		// A brief wraps, and a wrapped sentence is one sentence.
+		"wait\n  for the checks": "wait for the checks",
 	} {
 		if got := job.OnlyAFlowCan(brief); got != want {
 			t.Errorf("%q asks for %q, want %q", brief, got, want)

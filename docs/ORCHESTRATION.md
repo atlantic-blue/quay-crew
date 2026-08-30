@@ -290,6 +290,20 @@ job, with a reason saying it was asked twice.
 **No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
 runs the pipeline, so nothing here lets a session merge and the line the crew adds says so.
 
+**A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
+"push, watch the checks and merge on green" asks for something the runtime does not have, and the
+session is left with two bad moves: hold a container open through a five minute pipeline and pay for
+it, or answer and stop. It takes a third and reports that it will wait. So the brief is read at the
+write, and a brief that asks the job to wait for a forge pipeline, or to merge on the result of one,
+is refused with the graph named: a dispatch that pushes and opens the pull request, a wait, then a
+choice on the check result. The flow engine has the wait node; a job never will.
+
+The rule reads English, so it is held narrow. A waiting word has to point at a pipeline and a merge
+has to point at a pull request or at the result of one, and a phrase the brief negates is left alone.
+`merge origin/main into the branch` and `do not merge the pull request` both stay legal. A brief that
+gets past it is a brief the crew still cannot run, and that is the trade: a refusal that fires on
+ordinary work is the rule everybody learns to word around.
+
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
 identifiers that close it. This is the ordering primitive, and it is the whole of it: there is no
@@ -395,6 +409,10 @@ purpose. The list, so a test can be written against it:
   one.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
+- A job whose brief asks it to wait for a pipeline, or to merge on the result of one, is refused,
+  and the refusal quotes the brief and names the flow.
+- A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
+  is not an instruction to merge it.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
