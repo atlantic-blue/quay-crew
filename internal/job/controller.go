@@ -732,6 +732,10 @@ func (c *Controller) requeue(ctx context.Context, one *Job, reason string, turne
 	}
 	turnedAway[one.ID] = true
 	c.exported(ctx, record)
+	// Said out loud, because this is how the work was lost quietly the first time: the job went to one
+	// word in a listing that has to be read on purpose, and nothing anywhere raised it.
+	c.logger.InfoContext(ctx, "a job is waiting for a machine with room",
+		"job", one.ID, "session", one.Session, "attempts", one.Attempts, "reason", reason)
 }
 
 // waitingForRoom is what a job waiting for a machine with room says on the listing, carrying what
