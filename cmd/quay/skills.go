@@ -110,8 +110,9 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	if err != nil {
 		return err
 	}
+	read := heldBy("skills", where, "quay skill list on its own reads what the crew holds")
 	if len(resp.GetSkills()) == 0 {
-		fmt.Fprintf(out, "%s holds no skills\n", where)
+		read.nothing(out)
 		return nil
 	}
 	for _, held := range resp.GetSkills() {
@@ -131,6 +132,7 @@ func runSkillList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 			fmt.Fprintf(out, "%-16s      %s: %s\n", "", secret.GetName(), secret.GetPurpose())
 		}
 	}
+	read.counted(out, len(resp.GetSkills()))
 	return nil
 }
 

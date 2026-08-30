@@ -75,6 +75,7 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 
 	req := &quaycrewv1.ListHooksRequest{}
+	where := crewLevel
 	if typed != "" {
 		located, err := locate(ctx, client, typed)
 		if err != nil {
@@ -85,22 +86,25 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 		} else {
 			req.Workspace = located.WorkspaceID
 		}
+		where = located.Path.String()
 	}
+	read := heldBy("hooks", where, "quay hook list on its own reads what the crew holds")
 	resp, err := client.ListHooks(ctx, req)
 	if err != nil {
 		return err
 	}
 	if len(resp.GetHooks()) == 0 {
-		fmt.Fprintln(out, "this crew enforces nothing: every rule it carries is advice the model may take or leave")
+		read.nothing(out)
+		fmt.Fprintln(out, "nothing is enforced there: every rule the crew carries is advice the model may take or leave")
 		fmt.Fprintln(out, "import one with: quay hook import <directory>")
 		return nil
 	}
 	for _, one := range resp.GetHooks() {
-		where := ""
+		owner := ""
 		if one.GetCrew() {
-			where = "  (the crew's)"
+			owner = "  (the crew's)"
 		}
-		fmt.Fprintf(out, "%-20s v%-3d %s%s\n", one.GetName(), one.GetVersion(), one.GetSummary(), where)
+		fmt.Fprintf(out, "%-20s v%-3d %s%s\n", one.GetName(), one.GetVersion(), one.GetSummary(), owner)
 		fmt.Fprintf(out, "%-20s      fires on %s\n", "", firesOn(one))
 		if len(one.GetBinaries()) > 0 {
 			fmt.Fprintf(out, "%-20s      needs: %s\n", "", strings.Join(one.GetBinaries(), " "))
@@ -112,6 +116,7 @@ func runHookList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 			fmt.Fprintf(out, "%-20s      not given: %s\n", "", one.GetLeftOut())
 		}
 	}
+	read.counted(out, len(resp.GetHooks()))
 	return nil
 }
 

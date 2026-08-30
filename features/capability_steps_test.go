@@ -339,12 +339,70 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 					return fmt.Errorf("the credential may %s, and the role never declared it", verb)
 				}
 			}
-			if grant.ExpiresAt.IsZero() || grant.ExpiresAt.After(time.Now().Add(2*time.Hour)) {
-				return fmt.Errorf("the credential runs to %v, want an end close enough to matter", grant.ExpiresAt)
+			// It ends, and it ends far enough out to cover the job. The two bounds are the whole of the
+			// lifetime: an end nobody set is a credential that works forever, and an end set by the
+			// crew's hold on the job is sixty seconds, which is less than a job takes.
+			if grant.ExpiresAt.IsZero() {
+				return fmt.Errorf("the credential never runs out, so one read out of a container works forever")
+			}
+			if lasts := time.Until(grant.ExpiresAt); lasts <= job.DefaultLease {
+				return fmt.Errorf("the credential lasts %s, which is the crew's hold on the job: a session "+
+					"could not declare anything after that, and a job takes minutes", lasts.Round(time.Second))
+			}
+			if grant.ExpiresAt.After(time.Now().Add(24 * time.Hour)) {
+				return fmt.Errorf("the credential runs to %v, and one that leaks out of a container should "+
+					"not last into the week", grant.ExpiresAt)
 			}
 			return nil
 		})
 
+	// The clock the crew reads a credential's life against, moved rather than waited out. Nothing
+	// else in the crew reads it, so a scenario half an hour into a job is otherwise the same crew.
+	sc.Step(`^that job has been running for (\d+) (minutes|days)$`,
+		func(ctx context.Context, count int, unit string) error {
+			every := time.Minute
+			if unit == "days" {
+				every = 24 * time.Hour
+			}
+			worldFrom(ctx).clockAhead.Store(int64(time.Duration(count) * every))
+			return nil
+		})
+
+	sc.Step(`^the operator stops that job$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, err := w.client.StopJob(ctx, &quaycrewv1.StopJobRequest{
+			Id: capabilityFrom(ctx).running, Reason: "I have had enough",
+		})
+		return err
+	})
+
+	sc.Step(`^the crew refuses it, says the credential ran out, and says when$`,
+		func(ctx context.Context) error {
+			grant, recognised := worldFrom(ctx).server.Grants().Grant(capabilityFrom(ctx).token)
+			if !recognised {
+				return fmt.Errorf("the crew has forgotten the credential, so it cannot say what became of it")
+			}
+			for _, want := range []string{"ran out at", grant.ExpiresAt.UTC().Format(time.RFC3339)} {
+				if err := theRefusalSays(want)(ctx); err != nil {
+					return err
+				}
+			}
+			if strings.Contains(worldFrom(ctx).lastErr.Error(), "not this crew's") {
+				return fmt.Errorf("the refusal says %q, and it was this crew's: it had run out",
+					worldFrom(ctx).lastErr)
+			}
+			return nil
+		})
+
+	sc.Step(`^the crew refuses it and names the job that ended and the phase it ended in$`,
+		func(ctx context.Context) error {
+			for _, want := range []string{capabilityFrom(ctx).running, job.PhaseStopped} {
+				if err := theRefusalSays(want)(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 	sc.Step(`^the driver is refused importing, listing, attaching and detaching a hook$`,
 		func(context.Context) error {
 			for _, method := range []string{
