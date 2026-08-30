@@ -70,7 +70,7 @@ func TestTwoSessionsAtOnePathCollide(t *testing.T) {
 }
 
 // The brief is the only thing that tells a session where any of this goes, so it has to name the
-// directories the crew mounts and the variable it sets. A layout changed here and not there is a
+// directories the system mounts and the variable it sets. A layout changed here and not there is a
 // session cloning into a directory nobody shares.
 func TestTheGitBriefNamesTheSharedLayout(t *testing.T) {
 	skills, err := skill.Load("../../skills")

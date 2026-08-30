@@ -8,14 +8,14 @@ Feature: A listing says what is inside a session's sandbox
   It matters because the listing is what an operator reads before they act. A restart, a drain and a
   reclaim all start from that word, and any of the three takes a running conversation away mid answer.
 
-  So the crew asks the sandbox rather than reading a field. The container's own process table says
+  So the system asks the sandbox rather than reading a field. The container's own process table says
   whether a model runtime is up, and its own tmux says whether a client is on the conversation, and
   neither needs anything kept fresh. Four states come out of it and the listing names each one:
 
     idle      nothing is running in there and nobody is in it. The only real idle.
     awake     a model runtime is up with nobody watching it.
     attached  somebody has the conversation open.
-    unknown   the crew asked the sandbox and was not told. Never idle.
+    unknown   the system asked the sandbox and was not told. Never idle.
 
   What this does not do: the drain and the reclaim are unchanged. The reclaim already asks whether
   somebody is attached and leaves those containers alone; the drain reads the row's own status, so it
@@ -50,14 +50,14 @@ Feature: A listing says what is inside a session's sandbox
     When the operator lists the sessions
     Then the listing says the session is "attached"
 
-  # The other half. Without this nothing is ever reclaimed and the crew holds every container it made.
+  # The other half. Without this nothing is ever reclaimed and the system holds every container it made.
   Scenario: An empty sandbox is the only real idle
     Given a session started by dispatching "hello"
     When the operator lists the sessions
     Then the listing says the session is "idle"
 
   # The sad path that matters most: a false idle is what invites somebody to take the container.
-  Scenario: A crew that cannot reach its sandboxes says so rather than saying idle
+  Scenario: A system that cannot reach its sandboxes says so rather than saying idle
     Given a session started by dispatching "hello"
     And the daemon will not say what is inside a sandbox
     When the operator lists the sessions
@@ -73,7 +73,7 @@ Feature: A listing says what is inside a session's sandbox
     When the operator lists the sessions
     Then the listing says the session is "running"
 
-  # A session with no container has nothing to ask, and the crew must not report that as the daemon
+  # A session with no container has nothing to ask, and the system must not report that as the daemon
   # failing: unknown would send an operator looking for a broken daemon.
   Scenario: A session whose container was taken back reads reclaimed
     Given the workspace reclaims a session after 1 second
@@ -102,7 +102,7 @@ Feature: A listing says what is inside a session's sandbox
   # The command line is the other surface an operator reads, and it has to ask for what is inside a
   # sandbox for itself. A listing that did not ask reads the row's own word, which is the defect.
   Scenario: The command line listing says a session is awake
-    Given the crew listens on an address the tool can dial
+    Given the system listens on an address the tool can dial
     And a session started by dispatching "hello"
     And that session's sandbox is running a model runtime
     When the caller lists the sessions

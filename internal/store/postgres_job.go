@@ -403,7 +403,7 @@ func (p *Postgres) StartJob(ctx context.Context, id string, lease job.Lease, eve
 
 // HoldJob says on a pending job why it is not being started, without moving it.
 //
-// The phase stays pending on purpose. The job is still the next thing this crew will run, and what
+// The phase stays pending on purpose. The job is still the next thing this system will run, and what
 // an operator needs is the difference between waiting its turn and waiting for a machine, which is
 // a sentence rather than a phase. It applies only to a pending job, so a hold can never overwrite
 // how a job ended.
@@ -439,7 +439,7 @@ func (p *Postgres) ReleaseJob(ctx context.Context, id string, events []*job.Even
 		job.PhasePending, job.PhaseRunning)
 }
 
-// RequeueJob puts a running job back to pending because the crew could not start it.
+// RequeueJob puts a running job back to pending because the system could not start it.
 //
 // The condition on the lease owner is in the same statement as the write, so a controller that lost
 // the row cannot put another controller's job back under it.

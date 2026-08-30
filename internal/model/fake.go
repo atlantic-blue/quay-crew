@@ -56,7 +56,7 @@ func (f *FakeRunner) Run(ctx context.Context, _ sandbox.Sandbox, req Request) (R
 	if f.Err != nil {
 		return Response{}, f.Err
 	}
-	// The name the crew gave this conversation comes back, as a runtime that honours the flag reports
+	// The name the system gave this conversation comes back, as a runtime that honours the flag reports
 	// it. SessionID is what a test uses to stand for a runtime that names the conversation itself.
 	sessionID := f.SessionID
 	if sessionID == "" {

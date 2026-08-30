@@ -1,4 +1,4 @@
-// Package features holds the executable specification of Quay Crew.
+// Package features holds the executable specification of Quay System.
 //
 // The feature files next to this one state what the product does, in language a reader who is not
 // holding the code can follow. The steps below drive the control plane over its real gRPC interface,
@@ -167,7 +167,7 @@ var _ model.Runner = (*recordingRunner)(nil)
 // The cancellation matters as much as the answer. The real runner runs the model as a process under
 // this context, so cancelling it ends the task, which is exactly what stopping one session does. A
 // double that blocked on regardless would be looser than the thing it stands in for, and a scenario
-// about stopping a task would hang against it while the real crew stopped the task at once.
+// about stopping a task would hang against it while the real system stopped the task at once.
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
 	takes, gate, started, onTask := r.takes, r.gate, r.started, r.onTask
@@ -177,7 +177,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	r.requests = append(r.requests, req)
 	asked := len(r.requests)
 	r.mu.Unlock()
-	// Outside the lock: what the model does may ask the crew something.
+	// Outside the lock: what the model does may ask the system something.
 	if onTask != nil {
 		onTask()
 	}
@@ -208,7 +208,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 		Reply: r.answerFor(asked, req.Text),
 		// The conversation it was given comes back, which is what a runtime that honours the name does.
 		// A double that answered with a name of its own would be looser than the thing it stands in for:
-		// the crew would read every task as the runtime ignoring the name it was handed.
+		// the system would read every task as the runtime ignoring the name it was handed.
 		ModelSessionID: conversationOf(req, fmt.Sprintf("conversation-%d", asked)),
 		Usage:          r.usage,
 		CostUSD:        r.cost,
@@ -253,14 +253,14 @@ type task struct {
 // into each other.
 type world struct {
 	grpcServer *grpc.Server
-	// listener is kept so a scenario can dial the same crew as a different caller, presenting
+	// listener is kept so a scenario can dial the same system as a different caller, presenting
 	// something other than what the world's own client presents.
 	listener *bufconn.Listener
-	// token is the crew's token, which every caller has to present to be served.
+	// token is the system's token, which every caller has to present to be served.
 	token string
-	// clockAhead is how far ahead of the real clock this crew reads a credential's life. It is how a
+	// clockAhead is how far ahead of the real clock this system reads a credential's life. It is how a
 	// scenario about what a session still holds half an hour into its job runs in a millisecond.
-	// Nothing else in the crew reads it, so the only thing it moves is the passage of time.
+	// Nothing else in the system reads it, so the only thing it moves is the passage of time.
 	clockAhead atomic.Int64
 	// driverToken is the driver's own token: recognised, and refused the calls that grant capability.
 	driverToken string
@@ -275,7 +275,7 @@ type world struct {
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
 	realRunner model.Runner
-	// reachable is the address a session is told to dial for the crew, empty when it cannot reach it.
+	// reachable is the address a session is told to dial for the system, empty when it cannot reach it.
 	reachable string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor controlplane.Identity
@@ -308,13 +308,13 @@ type world struct {
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
 	// attachment does and does not reach.
 	otherWorkspaceID string
-	// seedHooks says this scenario is a crew that seeds the shipped hooks, so a restart seeds again
+	// seedHooks says this scenario is a system that seeds the shipped hooks, so a restart seeds again
 	// the way the real main does.
 	seedHooks bool
 	// skillsDir is where the scenario's skills are written, and skills is what was read from it.
 	skillsDir string
 	skills    []skill.Skill
-	// drivers are the sessions returned by opening the crew, so a scenario can say it was the same one.
+	// drivers are the sessions returned by opening the system, so a scenario can say it was the same one.
 	drivers []*quaycrewv1.Session
 	secrets secrets.Store
 	store   store.Store
@@ -322,20 +322,20 @@ type world struct {
 	// it. Setting it to nil is how a scenario says the stack has no broker configured.
 	events *messaging.Memory
 	// eventsRefuse makes the log refuse every record it is given, for the scenarios about what the
-	// crew says when an export fails.
+	// system says when an export fails.
 	eventsRefuse bool
 	// eventsStall makes the log take a record and never answer, which is the broker that held a
-	// whole crew's dispatches inside the call. Refusing and never answering are different faults and
+	// whole system's dispatches inside the call. Refusing and never answering are different faults and
 	// only one of them was survivable.
 	eventsStall bool
-	// storeStalls makes every health probe wait without answering, for the scenarios about a crew
+	// storeStalls makes every health probe wait without answering, for the scenarios about a system
 	// that reads well and cannot write.
 	storeStalls bool
-	// machine is what the crew reads of the machine it runs on. Nil is a crew with no daemon to ask,
-	// which reports unknown. A scenario sets it and then asks the crew to read it once, because a
+	// machine is what the system reads of the machine it runs on. Nil is a system with no daemon to ask,
+	// which reports unknown. A scenario sets it and then asks the system to read it once, because a
 	// scenario that waited for the sampler's own timer would be a scenario with a clock in it.
 	machine headroom.Source
-	// startWait and exportWait are the crew's budgets. A scenario about a budget running out sets
+	// startWait and exportWait are the system's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
 	startWait  time.Duration
 	exportWait time.Duration
@@ -384,7 +384,7 @@ func (w *world) start() error {
 	w.store = store.NewMemory()
 	w.events = messaging.NewMemory()
 	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
-	// Every scenario runs against a crew that guards itself, the way a real one does, so the whole
+	// Every scenario runs against a system that guards itself, the way a real one does, so the whole
 	// suite proves the authenticated path and not a special unguarded one.
 	w.token = "the-token-this-scenario-was-minted"
 	w.driverToken = "the-driver-token-this-scenario-was-minted"
@@ -434,7 +434,7 @@ func (w *world) serve() error {
 	// The server first, because the interceptors ask it to recognise the credentials it has minted
 	// for jobs.
 	w.server = controlplane.NewServer(controlplane.Config{
-		Store: w.crewStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
+		Store: w.systemStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
@@ -442,29 +442,29 @@ func (w *world) serve() error {
 		Headroom: w.machine, HeadroomEvery: time.Hour,
 	})
 	// The same options the real main builds the server with, so a scenario about tracing is about
-	// what the crew does and not about what the harness added.
+	// what the system does and not about what the harness added.
 	w.grpcServer = grpc.NewServer(append(
 		telemetry.ServerOptions(),
 		auth.ServerOptions(auth.Policy{
 			Token: w.token, DriverToken: w.driverToken, Denied: controlplane.DeniedToDriver,
-			// The scenarios run against a crew that guards itself the way a real one does, job
+			// The scenarios run against a system that guards itself the way a real one does, job
 			// credentials included.
 			Grants: w.server.Grants(), DeniedToJob: controlplane.DeniedToJob,
 			Now: func() time.Time { return time.Now().Add(time.Duration(w.clockAhead.Load())) },
 		})...,
 	)...)
-	// The way the real main starts: what strayed while the crew is down is reaped on the way up, and
+	// The way the real main starts: what strayed while the system is down is reaped on the way up, and
 	// a session the store still calls running is settled, because its task died with the last process.
 	w.server.ReapStrays(context.Background())
 	w.server.SettleTasks(context.Background())
 	// The way the real main starts, for a scenario about what survives a restart: the shipped hooks
-	// are offered again, and a crew that already holds some is left exactly as it is.
+	// are offered again, and a system that already holds some is left exactly as it is.
 	if w.seedHooks {
 		w.server.SeedHooks(context.Background(), "../hooks",
 			slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}
 	quaycrewv1.RegisterControlPlaneServiceServer(w.grpcServer, w.server)
-	// The same registration the real main makes, so a scenario asks the crew the question a container
+	// The same registration the real main makes, so a scenario asks the system the question a container
 	// health check asks it.
 	grpc_health_v1.RegisterHealthServer(w.grpcServer, controlplane.NewHealth(w.server))
 	go func() { _ = w.grpcServer.Serve(listener) }()
@@ -484,9 +484,9 @@ func (w *world) serve() error {
 	return nil
 }
 
-// crewStore is the store the control plane is built over, wrapped when a scenario is about a crew
+// systemStore is the store the control plane is built over, wrapped when a scenario is about a system
 // whose writes do not land.
-func (w *world) crewStore() store.Store {
+func (w *world) systemStore() store.Store {
 	if w.storeStalls {
 		return stallingStore{Store: w.store}
 	}
@@ -517,10 +517,10 @@ func (w *world) lastTask() (task, error) {
 	return w.tasks[len(w.tasks)-1], nil
 }
 
-// orderedSessions is the workspace's listing as the crew hands it over, with the two things an
+// orderedSessions is the workspace's listing as the system hands it over, with the two things an
 // ordering case needs guarded: at least two sessions to put in an order, and stamps that are actually
 // apart. Two sessions sharing a moment are ordered by their identifiers, which would leave an
-// ordering case passing on whichever identifier the crew minted first.
+// ordering case passing on whichever identifier the system minted first.
 func (w *world) orderedSessions(ctx context.Context, archived bool) ([]*quaycrewv1.Session, error) {
 	resp, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
 		Workspace: w.workspaceID, Archived: archived,
@@ -539,7 +539,7 @@ func (w *world) orderedSessions(ctx context.Context, archived bool) ([]*quaycrew
 	return listed, nil
 }
 
-// conversationOfFirstTask is the conversation the session's first task ran in. The crew names a
+// conversationOfFirstTask is the conversation the session's first task ran in. The system names a
 // conversation before the task starts and the name is a fresh identifier each time, so a scenario
 // reads it back from the task rather than expecting a name it could write down.
 func (w *world) conversationOfFirstTask() (string, error) {
@@ -548,7 +548,7 @@ func (w *world) conversationOfFirstTask() (string, error) {
 		return "", fmt.Errorf("no task has reached the model runner, so no conversation was named")
 	}
 	if first.ModelSessionID == "" {
-		return "", fmt.Errorf("the first task ran in no conversation the crew could name")
+		return "", fmt.Errorf("the first task ran in no conversation the system could name")
 	}
 	return first.ModelSessionID, nil
 }
@@ -656,7 +656,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// The console keeps its steps in console_steps_test.go, next to its own feature file.
 	initializeConsoleSteps(sc)
 	initializeStatsSteps(sc)
-	initializeWhatTheCrewDoesSteps(sc)
+	initializeWhatTheSystemDoesSteps(sc)
 	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
@@ -708,7 +708,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSkillSteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
-	initializeCrewSecretSteps(sc)
+	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
@@ -1002,7 +1002,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		_, w.lastErr = w.client.DeleteProject(ctx, &quaycrewv1.DeleteProjectRequest{Id: w.projectID})
 		return w.lastErr
 	})
-	sc.Step(`^every sandbox the crew made is closed$`, func(ctx context.Context) error {
+	sc.Step(`^every sandbox the system made is closed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.provider.Boxes) == 0 {
 			return fmt.Errorf("no sandbox was ever created, so this scenario is not testing the close")
@@ -1091,7 +1091,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		first, _ := w.runner.task(0)
 		second, _ := w.runner.task(1)
 		if first.ModelSessionID == "" {
-			return fmt.Errorf("the first task ran in no conversation the crew could name")
+			return fmt.Errorf("the first task ran in no conversation the system could name")
 		}
 		if first.ConversationStarted {
 			return fmt.Errorf("the first task resumed a conversation nothing had written yet, "+
@@ -1240,7 +1240,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			if key == sandbox.SessionIDEnv && value != "" {
 				continue
 			}
-			// What the crew is already tracing, carried so anything in the container joins that trace
+			// What the system is already tracing, carried so anything in the container joins that trace
 			// rather than starting a second one. It names no credential and no address.
 			if key == telemetry.TraceparentEnv {
 				continue

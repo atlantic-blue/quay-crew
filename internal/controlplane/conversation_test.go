@@ -144,9 +144,9 @@ func conversationOpenedBy(argv []string) string {
 	return ""
 }
 
-// aCrewRunningTheModelAdapter is the control plane running tasks through the real Claude Code adapter
+// aSystemRunningTheModelAdapter is the control plane running tasks through the real Claude Code adapter
 // into a container the test holds open.
-func aCrewRunningTheModelAdapter(box *heldSandbox) *controlplane.Server {
+func aSystemRunningTheModelAdapter(box *heldSandbox) *controlplane.Server {
 	return controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: model.NewClaudeCodeRunner(), Provider: &heldProvider{box: box},
 		Secrets: secrets.NewMemory(),
@@ -156,15 +156,15 @@ func aCrewRunningTheModelAdapter(box *heldSandbox) *controlplane.Server {
 // The defect, in the shape it was found in: a session's first task is running, and the operator
 // attaches to watch it.
 //
-// Everything here is asserted while the task is in flight, because that is the whole of it. The crew
+// Everything here is asserted while the task is in flight, because that is the whole of it. The system
 // used to pass no name on a first task, read the name the runtime chose out of the output stream, and
 // record it once the task had landed. So for the life of that task the session held nothing, attaching
 // found an empty field, named a second conversation and opened that one instead. A test that looks
-// once the task has landed finds a crew that already knew the name, and reports this as fixed while
+// once the task has landed finds a system that already knew the name, and reports this as fixed while
 // it is still there.
 func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.T) {
 	box := newHeldSandbox()
-	s := aCrewRunningTheModelAdapter(box)
+	s := aSystemRunningTheModelAdapter(box)
 	ctx := context.Background()
 	_, project := newProject(t, s)
 
@@ -225,7 +225,7 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.
 func TestASecondTaskResumesTheConversationTheFirstOneStarted(t *testing.T) {
 	box := newHeldSandbox()
 	box.release()
-	s := aCrewRunningTheModelAdapter(box)
+	s := aSystemRunningTheModelAdapter(box)
 	ctx := context.Background()
 	_, project := newProject(t, s)
 
@@ -298,7 +298,7 @@ func TestAttachingToASessionThatHasNeverRunATaskNamesItsConversation(t *testing.
 func TestAStoppedSessionOpensTheConversationItAlreadyHolds(t *testing.T) {
 	box := newHeldSandbox()
 	box.release()
-	s := aCrewRunningTheModelAdapter(box)
+	s := aSystemRunningTheModelAdapter(box)
 	ctx := context.Background()
 	_, project := newProject(t, s)
 
@@ -320,8 +320,8 @@ func TestAStoppedSessionOpensTheConversationItAlreadyHolds(t *testing.T) {
 	}
 }
 
-// A session carried over from a crew that named conversations after the task, caught mid task. Its
-// conversation has a name and the crew cannot know it until the task lands, so attaching says so
+// A session carried over from a system that named conversations after the task, caught mid task. Its
+// conversation has a name and the system cannot know it until the task lands, so attaching says so
 // rather than naming a second one and opening an empty conversation beside the job.
 func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testing.T) {
 	kept := store.NewMemory()
@@ -337,7 +337,7 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testi
 	if err != nil {
 		t.Fatalf("FindOrCreateSession: %v", err)
 	}
-	// Running, with no conversation on it: what the old crew left behind while a first task was in
+	// Running, with no conversation on it: what the old system left behind while a first task was in
 	// flight, and the one state where naming a conversation here is the defect rather than the fix.
 	if err := kept.RecordTask(ctx, session.GetId(), "", controlplane.StatusRunning); err != nil {
 		t.Fatalf("RecordTask: %v", err)
@@ -363,14 +363,14 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testi
 	}
 }
 
-// A runtime that ignores the name it was given keeps the crew's own name, because that is the name
-// every later task and every attach will carry. What the crew must not do is quietly adopt the other
+// A runtime that ignores the name it was given keeps the system's own name, because that is the name
+// every later task and every attach will carry. What the system must not do is quietly adopt the other
 // one and leave the two disagreeing about which conversation this session is.
-func TestARuntimeThatIgnoresTheNameLeavesTheCrewHoldingItsOwn(t *testing.T) {
+func TestARuntimeThatIgnoresTheNameLeavesTheSystemHoldingItsOwn(t *testing.T) {
 	box := newHeldSandbox()
 	box.ignores = "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9"
 	box.release()
-	s := aCrewRunningTheModelAdapter(box)
+	s := aSystemRunningTheModelAdapter(box)
 	ctx := context.Background()
 	_, project := newProject(t, s)
 
@@ -380,7 +380,7 @@ func TestARuntimeThatIgnoresTheNameLeavesTheCrewHoldingItsOwn(t *testing.T) {
 	}
 	held := conversationHeldBy(t, s, sent.GetId())
 	if held == box.ignores {
-		t.Fatal("the crew adopted the name the runtime chose, so its own name now points at nothing")
+		t.Fatal("the system adopted the name the runtime chose, so its own name now points at nothing")
 	}
 	if got := conversationOn(box.commands()[0]); got != held {
 		t.Fatalf("the task asked for conversation %q and the session holds %q", got, held)
@@ -432,7 +432,7 @@ func waitForIdle(t *testing.T, s *controlplane.Server, session string) {
 
 // A conversation the operator opened by hand, before any task ran in it. The transcript on the host
 // is what says it has been opened, so the first task resumes it rather than starting it again, and
-// this is the case a crew's own memory cannot answer: the transcript was written by somebody typing
+// this is the case a system's own memory cannot answer: the transcript was written by somebody typing
 // in a container, and this control plane never saw it happen.
 func TestATaskResumesAConversationTheOperatorOpenedByHand(t *testing.T) {
 	dir := t.TempDir()
@@ -452,7 +452,7 @@ func TestATaskResumesAConversationTheOperatorOpenedByHand(t *testing.T) {
 	}
 	named := conversationHeldBy(t, s, session)
 
-	// What the operator typing in that container leaves behind: a transcript under the name the crew
+	// What the operator typing in that container leaves behind: a transcript under the name the system
 	// gave, in the workspace's conversation store.
 	transcript := filepath.Join(dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
 	if err := os.MkdirAll(transcript, 0o777); err != nil {

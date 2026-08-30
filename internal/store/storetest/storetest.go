@@ -139,10 +139,10 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	})
 
 	// Both implementations, because the memory store writes the mode into a struct and postgres writes
-	// it into a column with a default of its own. A fake that took the crew's choice while the real one
+	// it into a column with a default of its own. A fake that took the system's choice while the real one
 	// quietly kept the column default would keep the suite green and run every real task in the wrong
 	// mode.
-	t.Run("a session is born in the mode the crew configured", func(t *testing.T) {
+	t.Run("a session is born in the mode the system configured", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
@@ -152,10 +152,10 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 		if born.GetPermissionMode() != model.PermissionPlan {
-			t.Fatalf("a session born in a crew configured for plan may do %q", born.GetPermissionMode())
+			t.Fatalf("a session born in a system configured for plan may do %q", born.GetPermissionMode())
 		}
 
-		// What a session may do is its own once it exists. A crew whose configuration changed must not
+		// What a session may do is its own once it exists. A system whose configuration changed must not
 		// widen a conversation that is already running.
 		again, _, err := s.FindOrCreateSession(ctx, project.GetId(), "session-planning", store.Birth{Mode: model.PermissionBypass})
 		if err != nil {
@@ -216,7 +216,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a crew that configured nothing gets the mode every session used to have", func(t *testing.T) {
+	t.Run("a system that configured nothing gets the mode every session used to have", func(t *testing.T) {
 		s := newDataset(t)(t)
 		project := newProject(t, s, "acme", "house bills")
 
@@ -225,7 +225,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("FindOrCreateSession: %v", err)
 		}
 		if born.GetPermissionMode() != model.PermissionAcceptEdits {
-			t.Fatalf("a session in a crew that configured nothing may do %q, want %q",
+			t.Fatalf("a session in a system that configured nothing may do %q, want %q",
 				born.GetPermissionMode(), model.PermissionAcceptEdits)
 		}
 	})
@@ -277,7 +277,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("a session keeps what the crew observed it to be, and when", func(t *testing.T) {
+	t.Run("a session keeps what the system observed it to be, and when", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
@@ -295,7 +295,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("GetSession: %v", err)
 		}
 		if described.GetDescription() != "the electricity bill" {
-			t.Fatalf("the crew describes it as %q", described.GetDescription())
+			t.Fatalf("the system describes it as %q", described.GetDescription())
 		}
 		// The task count travels with the text. Kept apart they drift, and a description that says it
 		// is current when it is not is worse than one that admits it is old.
@@ -336,7 +336,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil || count != 3 {
 			t.Fatalf("the session has %d tasks (%v), want 3", count, err)
 		}
-		// Counted per session, not per crew: a busy neighbour must not make this one look described.
+		// Counted per session, not per system: a busy neighbour must not make this one look described.
 		count, err = s.CountTasks(ctx, other.GetId())
 		if err != nil || count != 0 {
 			t.Fatalf("the other session has %d tasks (%v), want 0", count, err)
@@ -952,7 +952,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	})
 
 	// Two stores, one rule. The driver was made in each of them separately, and only one of the two
-	// said which mode it starts in, so a crew on Postgres and a crew on memory disagreed about
+	// said which mode it starts in, so a system on Postgres and a system on memory disagreed about
 	// whether the session driving them could act at all.
 	t.Run("the driver is created able to act, and is the same one every time", func(t *testing.T) {
 		s := newDataset(t)(t)
@@ -964,7 +964,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("FindOrCreateDriver: %v", err)
 		}
 		if !driver.GetDriver() {
-			t.Fatal("the session made to drive the crew is not marked as the driver")
+			t.Fatal("the session made to drive the system is not marked as the driver")
 		}
 		if got := driver.GetPermissionMode(); got != model.PermissionBypass {
 			t.Fatalf("the driver is created in %q, want %q: one that asks before every step describes "+
@@ -1060,7 +1060,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	})
 
 	// Where a project's work lands, and what kind of repository that is. Both stores or neither: a
-	// crew on memory that remembers the repository and a crew on Postgres that forgets it is a crew
+	// system on memory that remembers the repository and a system on Postgres that forgets it is a system
 	// whose jobs push nowhere on the one that matters.
 	t.Run("a project's repository survives the round trip", func(t *testing.T) {
 		s := newDataset(t)(t)
@@ -2014,7 +2014,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		// Detaching does not unimport: another workspace may hold it, and changing your mind should not
 		// cost a re-import.
 		if _, err := s.GetSkill(ctx, "github", 2); err != nil {
-			t.Errorf("detaching removed the skill from the crew: %v", err)
+			t.Errorf("detaching removed the skill from the system: %v", err)
 		}
 	})
 
@@ -2030,7 +2030,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 
 		if _, err := s.AttachSkill(ctx, workspace.GetId(), "terraform"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a skill the crew has not imported returned %v, want ErrNotFound", err)
+			t.Errorf("attaching a skill the system has not imported returned %v, want ErrNotFound", err)
 		}
 		if _, err := s.AttachSkill(ctx, "ghost", "github"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("attaching to a workspace that does not exist returned %v, want ErrNotFound", err)
@@ -2043,62 +2043,62 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("the crew holds a skill for every workspace, pinned to a version", func(t *testing.T) {
+	t.Run("the system holds a skill for every workspace, pinned to a version", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 0 {
-			t.Fatalf("a fresh crew holds %d skills (%v), want none", len(held), err)
+		if held, err := s.SystemSkills(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("a fresh system holds %d skills (%v), want none", len(held), err)
 		}
 		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
 			t.Fatalf("ImportSkill: %v", err)
 		}
-		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
-			t.Fatalf("AttachCrewSkill: %v", err)
+		if _, err := s.AttachSystemSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachSystemSkill: %v", err)
 		}
 
-		held, err := s.CrewSkills(ctx)
+		held, err := s.SystemSkills(ctx)
 		if err != nil {
-			t.Fatalf("CrewSkills: %v", err)
+			t.Fatalf("SystemSkills: %v", err)
 		}
 		if len(held) != 1 || held[0].Name != "github" {
-			t.Fatalf("the crew holds %+v, want the github skill", held)
+			t.Fatalf("the system holds %+v, want the github skill", held)
 		}
-		// The files come back, because a crew skill is mounted into a sandbox exactly like a
+		// The files come back, because a system skill is mounted into a sandbox exactly like a
 		// workspace's, and a listing without them could mount nothing.
 		if len(held[0].Files) == 0 {
-			t.Error("the crew's skills came back without their files, so nothing could be mounted")
+			t.Error("the system's skills came back without their files, so nothing could be mounted")
 		}
 		if len(held[0].Secrets) == 0 {
-			t.Error("the crew's skills came back without the secrets they name")
+			t.Error("the system's skills came back without the secrets they name")
 		}
 
-		// Pinned, and attaching again is how the crew moves, the same as a workspace.
+		// Pinned, and attaching again is how the system moves, the same as a workspace.
 		if err := s.ImportSkill(ctx, aSkill("github", 2)); err != nil {
 			t.Fatalf("ImportSkill v2: %v", err)
 		}
-		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 1 {
-			t.Fatalf("the crew moved to %+v on its own (%v), want it pinned at version 1", held, err)
+		if held, err := s.SystemSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 1 {
+			t.Fatalf("the system moved to %+v on its own (%v), want it pinned at version 1", held, err)
 		}
-		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
-			t.Fatalf("AttachCrewSkill again: %v", err)
+		if _, err := s.AttachSystemSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachSystemSkill again: %v", err)
 		}
-		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 2 {
-			t.Fatalf("re-attaching left the crew at %+v (%v), want version 2", held, err)
+		if held, err := s.SystemSkills(ctx); err != nil || len(held) != 1 || held[0].Version != 2 {
+			t.Fatalf("re-attaching left the system at %+v (%v), want version 2", held, err)
 		}
 
-		if err := s.DetachCrewSkill(ctx, "github"); err != nil {
-			t.Fatalf("DetachCrewSkill: %v", err)
+		if err := s.DetachSystemSkill(ctx, "github"); err != nil {
+			t.Fatalf("DetachSystemSkill: %v", err)
 		}
-		if held, err := s.CrewSkills(ctx); err != nil || len(held) != 0 {
-			t.Fatalf("the crew still holds %d skills (%v) after detaching", len(held), err)
+		if held, err := s.SystemSkills(ctx); err != nil || len(held) != 0 {
+			t.Fatalf("the system still holds %d skills (%v) after detaching", len(held), err)
 		}
 		if _, err := s.GetSkill(ctx, "github", 2); err != nil {
-			t.Errorf("detaching from the crew removed the skill from the catalogue: %v", err)
+			t.Errorf("detaching from the system removed the skill from the catalogue: %v", err)
 		}
 	})
 
-	t.Run("the crew's holding and a workspace's are separate statements", func(t *testing.T) {
+	t.Run("the system's holding and a workspace's are separate statements", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, err := s.CreateWorkspace(ctx, "acme")
@@ -2108,31 +2108,31 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err := s.ImportSkill(ctx, aSkill("github", 1)); err != nil {
 			t.Fatalf("ImportSkill: %v", err)
 		}
-		if _, err := s.AttachCrewSkill(ctx, "github"); err != nil {
-			t.Fatalf("AttachCrewSkill: %v", err)
+		if _, err := s.AttachSystemSkill(ctx, "github"); err != nil {
+			t.Fatalf("AttachSystemSkill: %v", err)
 		}
 		if _, err := s.AttachSkill(ctx, workspace.GetId(), "github"); err != nil {
 			t.Fatalf("AttachSkill: %v", err)
 		}
 
-		// Taking it off the crew leaves the workspace's own attachment alone: the narrower statement
+		// Taking it off the system leaves the workspace's own attachment alone: the narrower statement
 		// is not undone by the wider one.
-		if err := s.DetachCrewSkill(ctx, "github"); err != nil {
-			t.Fatalf("DetachCrewSkill: %v", err)
+		if err := s.DetachSystemSkill(ctx, "github"); err != nil {
+			t.Fatalf("DetachSystemSkill: %v", err)
 		}
 		if held, err := s.WorkspaceSkills(ctx, workspace.GetId()); err != nil || len(held) != 1 {
-			t.Fatalf("the workspace holds %d skills (%v) after the crew let go, want 1", len(held), err)
+			t.Fatalf("the workspace holds %d skills (%v) after the system let go, want 1", len(held), err)
 		}
 	})
 
-	t.Run("attaching to the crew what does not exist is not found", func(t *testing.T) {
+	t.Run("attaching to the system what does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		if _, err := s.AttachCrewSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("attaching a skill the crew has not imported returned %v, want ErrNotFound", err)
+		if _, err := s.AttachSystemSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("attaching a skill the system has not imported returned %v, want ErrNotFound", err)
 		}
-		if err := s.DetachCrewSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("detaching a skill the crew does not hold returned %v, want ErrNotFound", err)
+		if err := s.DetachSystemSkill(ctx, "terraform"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("detaching a skill the system does not hold returned %v, want ErrNotFound", err)
 		}
 	})
 
@@ -2198,13 +2198,13 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Errorf("an event came back without what it carried: %+v", kept[0])
 		}
 
-		// No session named asks for the whole crew's, which is what a view of what is going on reads.
+		// No session named asks for the whole system's, which is what a view of what is going on reads.
 		all, err := s.ListSessionEvents(ctx, "", 0)
 		if err != nil {
-			t.Fatalf("ListSessionEvents for the crew: %v", err)
+			t.Fatalf("ListSessionEvents for the system: %v", err)
 		}
 		if len(all) != 3 {
-			t.Fatalf("the crew holds %d events, want 3", len(all))
+			t.Fatalf("the system holds %d events, want 3", len(all))
 		}
 
 		// A session nobody has is empty rather than an error: nothing has happened to it yet.

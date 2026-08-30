@@ -43,7 +43,7 @@ func initializeJobRepositorySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew refuses it and says how to write a repository$`,
+	sc.Step(`^the system refuses it and says how to write a repository$`,
 		theRefusalSays("atlantic-blue/quay-crew"))
 
 	sc.Step(`^the model will answer "([^"]*)"$`, func(ctx context.Context, answer string) error {
@@ -56,7 +56,7 @@ func initializeJobRepositorySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The crew says how the job ends, rather than leaving it to whoever wrote the brief. It says not
+	// The system says how the job ends, rather than leaving it to whoever wrote the brief. It says not
 	// to merge in the same breath, because the merge is the gate: a push applies nothing, and a merge
 	// runs the pipeline.
 	sc.Step(`^the session was asked to open a pull request against "([^"]*)", and not to merge$`,
@@ -122,7 +122,7 @@ func initializeJobRepositorySteps(sc *godog.ScenarioContext) {
 //
 // Waited for rather than read once. A dispatch that lets go answers before the model is called, so
 // reading straight after the tick asks whether a goroutine has been scheduled yet, which is a
-// question about the machine rather than about the crew.
+// question about the machine rather than about the system.
 func taskAsking(ctx context.Context, which int) (string, error) {
 	runner := worldFrom(ctx).runner
 	deadline := time.Now().Add(5 * time.Second)

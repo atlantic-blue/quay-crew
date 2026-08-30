@@ -89,7 +89,7 @@ type crumbEntry struct {
 	into     string
 }
 
-// Info is what the crew on the other end of the connection is running. The console shows it so the
+// Info is what the system on the other end of the connection is running. The console shows it so the
 // operator can see which one they are about to act on, the way a cluster name does. It is fetched
 // once: it is configuration, and configuration does not change under a running process.
 type Info struct {
@@ -110,24 +110,24 @@ type Info struct {
 	// is running. Everything else in here is then blank, and the console has to say why rather than
 	// quietly showing less.
 	Behind bool
-	// Spent is what every conversation in the crew has cost so far. Zero is a crew nobody has used.
+	// Spent is what every conversation in the system has cost so far. Zero is a system nobody has used.
 	Spent sandbox.Usage
 	// SandboxBuild is the build the sandbox image was made from. Empty means the image does not say,
-	// and nothing is then shown: a crew that cannot see which build its image came from should say
+	// and nothing is then shown: a system that cannot see which build its image came from should say
 	// nothing rather than accuse a good image of being old.
 	SandboxBuild string
 	// Room is what the machine has left: one figure and one word. Empty means nobody asked, and the
 	// header then says nothing rather than saying there is room it never measured. The header that
-	// drew a healthy crew through eighteen kills is why this is here at all. See issue 405.
+	// drew a healthy system through eighteen kills is why this is here at all. See issue 405.
 	Room string
 	// RoomState is that word on its own, so the header can colour it: full has to be readable
 	// without reading the figure beside it.
 	RoomState string
 }
 
-// SandboxStale says every session is running an image from a build the crew has moved on from.
+// SandboxStale says every session is running an image from a build the system has moved on from.
 // Upgrading rebuilds the tool and the stack, and a sandbox image left behind means each conversation
-// keeps running the build from before, with the quay inside it older than the crew or missing.
+// keeps running the build from before, with the quay inside it older than the system or missing.
 func (i Info) SandboxStale() bool {
 	return i.Version != "" && i.SandboxBuild != "" && i.SandboxBuild != i.Version
 }
@@ -164,7 +164,7 @@ type (
 		made wizardChoice
 	}
 
-	// firstRunMsg answers whether the crew has any workspaces at all, which is what decides
+	// firstRunMsg answers whether the system has any workspaces at all, which is what decides
 	// whether opening the console offers the guided setup.
 	firstRunMsg struct{ empty bool }
 	// infoMsg carries what the control plane says it is running.
@@ -307,7 +307,7 @@ func (m Model) Freshen(end func(selected string) error) Model {
 	return m
 }
 
-// WithInfo puts what is already known about the crew on the screen straight away, rather than an
+// WithInfo puts what is already known about the system on the screen straight away, rather than an
 // empty status block that fills in a moment later when the control plane answers.
 func (m Model) WithInfo(info Info) Model {
 	m.info = info
@@ -321,14 +321,14 @@ func (m Model) Beside(open func(selected string) ([]string, error)) Model {
 	return m
 }
 
-// WithClient gives the console the crew to ask when it makes something. Listing goes through each
+// WithClient gives the console the system to ask when it makes something. Listing goes through each
 // resource's own lister, so this is only for the wizard, which makes things no single view owns.
 func (m Model) WithClient(client quaycrewv1.ControlPlaneServiceClient) Model {
 	m.client = client
 	return m
 }
 
-// New opens the console on the named resource. source describes the crew it is connected to, and may
+// New opens the console on the named resource. source describes the system it is connected to, and may
 // be nil, in which case the status block says nothing rather than guessing.
 func New(registry *Registry, start string, source InfoSource) (Model, error) {
 	if registry == nil {
@@ -353,7 +353,7 @@ func (m Model) publishCmd() tea.Cmd {
 	}
 	publish, view := m.publish, m.active.Name
 	return func() tea.Msg {
-		// A header that cannot be told where we are is not a reason to stop showing the crew.
+		// A header that cannot be told where we are is not a reason to stop showing the system.
 		_ = publish(view)
 		return nil
 	}
@@ -368,14 +368,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tickMsg:
 		// The description is refreshed with the rows now, not only at startup. It carries what the
-		// crew has cost, which changes with every task, and a total from when the console opened is
+		// system has cost, which changes with every task, and a total from when the console opened is
 		// worse than none: it looks live and is not.
 		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 	case rowsMsg:
 		next := m.applyRows(msg)
 		// A first listing with nothing in it is the one moment the guided setup can be worth
-		// offering. Whether the crew is genuinely empty is the workspaces' answer, not this
-		// view's: the console opens on sessions, and a crew can have workspaces and no sessions.
+		// offering. Whether the system is genuinely empty is the workspaces' answer, not this
+		// view's: the console opens on sessions, and a system can have workspaces and no sessions.
 		if !next.offeredSetup && next.mode == modeBrowse && next.parent == "" &&
 			len(msg.rows) == 0 && next.client != nil {
 			next.offeredSetup = true
@@ -416,7 +416,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Held, because the refresh on the next line is what used to blank it.
 		m.err, m.held = msg.err, msg.err != nil
-		// The wizard is finished the moment the crew answers, so it closes and the refreshed list
+		// The wizard is finished the moment the system answers, so it closes and the refreshed list
 		// shows what it made. Left open it drew "making it" over a list it had already updated, which
 		// reads as nothing having happened at all. A refusal comes back on the list rather than
 		// trapping the operator on a question that is no longer being asked.
@@ -584,8 +584,8 @@ func (m Model) bodyHeight() int {
 	return body
 }
 
-// firstRunCmd asks whether the crew has any workspaces. An error is not an empty crew: offering a
-// setup over a crew that could not answer would offer to remake what may exist.
+// firstRunCmd asks whether the system has any workspaces. An error is not an empty system: offering a
+// setup over a system that could not answer would offer to remake what may exist.
 func firstRunCmd(client quaycrewv1.ControlPlaneServiceClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -617,7 +617,7 @@ func listCmd(resource Resource, parent string) tea.Cmd {
 	}
 }
 
-// infoCmd asks the crew what it is running. A control plane without the call at all is reported,
+// infoCmd asks the system what it is running. A control plane without the call at all is reported,
 // because that is the common case after an upgrade and showing four fewer lines reads as the console
 // being broken. Any other failure is swallowed: a status block is not worth an error screen.
 func infoCmd(source InfoSource) tea.Cmd {

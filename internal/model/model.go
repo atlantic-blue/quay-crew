@@ -12,7 +12,7 @@ import (
 // Request is one task to run against the model.
 type Request struct {
 	Text string
-	// ModelSessionID is the conversation this task runs in. The crew names it before the task starts,
+	// ModelSessionID is the conversation this task runs in. The system names it before the task starts,
 	// so a task always has one. Empty leaves the naming to the runtime, which tells nobody what it
 	// chose until the task is over.
 	ModelSessionID string
@@ -38,14 +38,14 @@ type Request struct {
 type Response struct {
 	Reply          string
 	ModelSessionID string
-	// Usage is what this one task spent, in the same four numbers the crew already reads off a
+	// Usage is what this one task spent, in the same four numbers the system already reads off a
 	// conversation's transcript. The transcript carries a conversation's running total, which is the
 	// right shape for "what has this session cost"; this is the per task figure, which is the right
 	// shape for a counter.
 	Usage sandbox.Usage
 	// CostUSD is what the model's own tooling says this task would cost at published prices. The
-	// crew runs under a subscription, so it is not a charge anybody receives: it is the number that
-	// says whether a crew of agents is affordable, and it is worth having for exactly that.
+	// system runs under a subscription, so it is not a charge anybody receives: it is the number that
+	// says whether a system of agents is affordable, and it is worth having for exactly that.
 	CostUSD float64
 	// UsageReported distinguishes a task that spent nothing from a task whose backend never said. A
 	// zero that means "unknown" read as "free" is how a cost dashboard lies.

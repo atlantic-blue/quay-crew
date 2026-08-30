@@ -33,14 +33,14 @@ Feature: A job can put a question to a person
     When the task the controller sent lands
     And the controller ticks 3 times
     Then the job is still asking
-    And the crew was asked to run 1 task
+    And the system was asked to run 1 task
 
   Scenario: The answer arrives as the session's next task
     Given the session running that job asked its question
     And the task the controller sent lands
     When the operator answers the job with "the key value store, on demand, because nothing bills while nobody uses it"
     And the controller ticks again
-    Then the crew was asked to run 2 tasks
+    Then the system was asked to run 2 tasks
     And the second task carries the answer and the question it answers
     And the second task does not send the brief again
     And the job is running again
@@ -55,11 +55,11 @@ Feature: A job can put a question to a person
   Scenario: The session that asked cannot answer itself
     Given the session running that job asked its question
     When that session tries to answer its own question
-    Then the crew refuses it, and the job is still asking
+    Then the system refuses it, and the job is still asking
 
   # The identifier is checked against the credential rather than trusted. A caller that could name
   # any job could stop any job.
   Scenario: A session cannot ask about somebody else's job
     Given another job titled "read the electricity bill"
     When the session running the first job asks about the other one
-    Then the crew refuses it, naming the job the credential is for
+    Then the system refuses it, naming the job the credential is for

@@ -18,7 +18,7 @@ type EventLog interface {
 	Publish(ctx context.Context, topic string, key, value []byte) error
 	Consume(ctx context.Context, group string, topics []string, handler Handler) error
 	// ConsumePattern includes topics created after consumption started. Streams are named after
-	// workspaces, and a workspace made while the crew is running would otherwise be ignored.
+	// workspaces, and a workspace made while the system is running would otherwise be ignored.
 	ConsumePattern(ctx context.Context, group, pattern string, handler Handler) error
 	Close()
 }

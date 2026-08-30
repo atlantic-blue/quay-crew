@@ -38,9 +38,9 @@ edges:
 `
 
 // The whole of the slice against the database that holds it: something happens, nobody starts
-// anything, and the crew's own tick runs the job.
+// anything, and the system's own tick runs the job.
 func TestATriggerStartsAFlowRunInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &echoingRunner{})
+	s, kept := aSystemWithAController(t, &echoingRunner{})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.ImportFlow(ctx, &quaycrewv1.ImportFlowRequest{Definition: reactingFlow}); err != nil {
@@ -50,14 +50,14 @@ func TestATriggerStartsAFlowRunInPostgres(t *testing.T) {
 	raised, err := anEngineOn(kept, s).Raise(ctx, flow.Trigger{
 		GraphName: "fix-red", Workspace: workspace, Project: project,
 		Payload: map[string]string{"url": "https://ci.test/9"},
-		Source:  "a caller inside the crew",
+		Source:  "a caller inside the system",
 	})
 	if err != nil {
 		t.Fatalf("Raise: %v", err)
 	}
 	// Nothing has run. The trigger is a row, and the row is all there is until a tick reads it.
 	if runs, err := kept.ListFlowRuns(ctx, project); err != nil || len(runs) != 0 {
-		t.Fatalf("%d runs exist before the crew ticked (%v)", len(runs), err)
+		t.Fatalf("%d runs exist before the system ticked (%v)", len(runs), err)
 	}
 
 	started := waitForTrigger(t, kept, raised.ID, flow.TriggerStarted, s)
@@ -94,10 +94,10 @@ func TestATriggerStartsAFlowRunInPostgres(t *testing.T) {
 	}
 }
 
-// Two control planes over one database, ticking together. One run, or the crew pays twice for one
+// Two control planes over one database, ticking together. One run, or the system pays twice for one
 // thing happening.
 func TestConcurrentPollersStartOneRunFromOneTriggerInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "fixed"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "fixed"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.ImportFlow(ctx, &quaycrewv1.ImportFlowRequest{Definition: reactingFlow}); err != nil {
@@ -158,10 +158,10 @@ func TestConcurrentPollersStartOneRunFromOneTriggerInPostgres(t *testing.T) {
 	}
 }
 
-// A trigger the crew cannot start a run from keeps the sentence saying why, on the row, in the
+// A trigger the system cannot start a run from keeps the sentence saying why, on the row, in the
 // database. Nothing else ever reads that failure.
 func TestATriggerThatStartsNothingSaysWhyOnItsRowInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "fixed"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "fixed"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -180,7 +180,7 @@ func TestATriggerThatStartsNothingSaysWhyOnItsRowInPostgres(t *testing.T) {
 		t.Fatalf("%d runs were started for a flow nobody imported (%v)", len(runs), err)
 	}
 	// It is not offered again, so a trigger nobody can start is not read and refused on every tick
-	// for as long as the crew runs.
+	// for as long as the system runs.
 	s.TickFlows(ctx)
 	again, err := kept.GetTrigger(ctx, raised.ID)
 	if err != nil {
@@ -191,13 +191,13 @@ func TestATriggerThatStartsNothingSaysWhyOnItsRowInPostgres(t *testing.T) {
 	}
 }
 
-// anEngineOn is the engine the crew builds for itself: the store it keeps, and the control plane it
+// anEngineOn is the engine the system builds for itself: the store it keeps, and the control plane it
 // asks to prepare job and put sessions away.
 func anEngineOn(kept store.Store, s *controlplane.Server) *flow.Engine {
 	return flow.NewEngine(kept, s, s, s)
 }
 
-// waitForTrigger ticks the crew's own poller until the row reaches a status, so a test never asserts
+// waitForTrigger ticks the system's own poller until the row reaches a status, so a test never asserts
 // on a trigger the poller has not read yet.
 func waitForTrigger(t *testing.T, kept store.Store, id, want string, s *controlplane.Server) *flow.Trigger {
 	t.Helper()

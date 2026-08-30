@@ -70,7 +70,7 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew has no event log configured$`, func(ctx context.Context) error {
+	sc.Step(`^the system has no event log configured$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.events = nil
 		w.info.Events = ""
@@ -261,14 +261,14 @@ func initializeEventsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew reports that nothing is connected to the event log$`, func(ctx context.Context) error {
+	sc.Step(`^the system reports that nothing is connected to the event log$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		resp, err := w.client.GetInfo(ctx, &quaycrewv1.GetInfoRequest{})
 		if err != nil {
 			return err
 		}
 		if resp.GetEvents() != "" {
-			return fmt.Errorf("the crew reports the events engine as %q, want nothing", resp.GetEvents())
+			return fmt.Errorf("the system reports the events engine as %q, want nothing", resp.GetEvents())
 		}
 		return nil
 	})

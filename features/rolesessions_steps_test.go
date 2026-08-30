@@ -68,9 +68,9 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew built (\d+) sandboxe?s?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system built (\d+) sandboxe?s?$`, func(ctx context.Context, want int) error {
 		if got := len(worldFrom(ctx).provider.Created); got != want {
-			return fmt.Errorf("the crew built %d sandboxes, want %d", got, want)
+			return fmt.Errorf("the system built %d sandboxes, want %d", got, want)
 		}
 		return nil
 	})
@@ -206,7 +206,7 @@ func initializeRoleSessionSteps(sc *godog.ScenarioContext) {
 		for _, held := range []struct {
 			scope store.ContextScope
 			owner string
-		}{{store.ContextCrew, ""}, {store.ContextWorkspace, w.workspaceID}} {
+		}{{store.ContextSystem, ""}, {store.ContextWorkspace, w.workspaceID}} {
 			stored, err := w.store.GetContext(ctx, held.scope, held.owner)
 			if err != nil {
 				continue
@@ -261,7 +261,7 @@ func roleSession(ctx context.Context) (*quaycrewv1.Session, error) {
 	return nil, fmt.Errorf("the run started no session running as a role: %v", kept.State)
 }
 
-// roleSandbox is the configuration the crew built the role's container from.
+// roleSandbox is the configuration the system built the role's container from.
 func roleSandbox(ctx context.Context) (sandbox.Config, error) {
 	session, err := roleSession(ctx)
 	if err != nil {

@@ -7,7 +7,7 @@ Feature: Every task is exported to the event log, when there is one
   A task is exported whether it worked or not, because a task that failed is exactly the one
   somebody comes looking for.
 
-  Exporting never fails a task, and a crew with no broker configured loses nothing but the export.
+  Exporting never fails a task, and a system with no broker configured loses nothing but the export.
   The task already ran and the store already holds it; an unreachable broker is not a reason to tell
   the operator their work did not happen.
 
@@ -48,7 +48,7 @@ Feature: Every task is exported to the event log, when there is one
   # What an operator pastes into a conversation can be a credential, and the log keeps what is
   # published, so the payload goes through the same redaction a failure message does before it is
   # written anywhere. Every value the workspace keeps sealed is matched exactly; the subscription
-  # token's published shape is caught even when the crew never held the value. A value the crew
+  # token's published shape is caught even when the system never held the value. A value the system
   # could not know about is not protected, and the documents say so.
   Scenario: A secret pasted into a conversation does not reach the log
     Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-a-credential-somebody-pasted"
@@ -57,7 +57,7 @@ Feature: Every task is exported to the event log, when there is one
     And nothing on the published task says "ghp-a-credential-somebody-pasted"
     And the published task names "GITHUB_TOKEN" as redacted
 
-  Scenario: A token shaped value is caught even when the crew never held it
+  Scenario: A token shaped value is caught even when the system never held it
     When the operator dispatches "what is sk-ant-abcdefghijklmnop" to the project
     Then 1 task is on the log for "acme"
     And nothing on the published task says "sk-ant-abcdefghijklmnop"
@@ -68,7 +68,7 @@ Feature: Every task is exported to the event log, when there is one
     Then the session's history carries no "ghp-a-credential-somebody-pasted"
 
   Scenario: A stack with no broker runs tasks and says there is no export
-    Given the crew has no event log configured
+    Given the system has no event log configured
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
-    And the crew reports that nothing is connected to the event log
+    And the system reports that nothing is connected to the event log

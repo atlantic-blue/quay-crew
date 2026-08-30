@@ -153,8 +153,8 @@ func TestALineNamesEveryReasonNobodyElseCanReadIt(t *testing.T) {
 	}
 }
 
-// A role imported before the crew recorded any of this. It is not a loose directory and saying so
-// would be an accusation the crew cannot support.
+// A role imported before the system recorded any of this. It is not a loose directory and saying so
+// would be an accusation the system cannot support.
 func TestAnOriginNothingRecordedSaysThatAndNotThatItIsLoose(t *testing.T) {
 	var nothing origin.Origin
 
@@ -186,7 +186,7 @@ func TestARemoteAddressIsWrittenTheOneWay(t *testing.T) {
 	}
 }
 
-// A remote address that carries a credential must not travel into the crew, where a listing prints
+// A remote address that carries a credential must not travel into the system, where a listing prints
 // it and a database keeps it.
 func TestACredentialInARemoteAddressIsNotKept(t *testing.T) {
 	got := origin.Address("https://someone:ghp_notarealtoken@github.com/atlantic-blue/quay-crew.git")
@@ -199,8 +199,8 @@ func aRepository(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	git(t, dir, "init", "--initial-branch=main")
-	git(t, dir, "config", "user.email", "crew@example.com")
-	git(t, dir, "config", "user.name", "crew")
+	git(t, dir, "config", "user.email", "system@example.com")
+	git(t, dir, "config", "user.name", "system")
 	git(t, dir, "remote", "add", "origin", "https://github.com/atlantic-blue/quay-crew.git")
 	return dir
 }

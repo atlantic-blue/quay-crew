@@ -17,9 +17,9 @@ import (
 // second task for a job that has already been paid for.
 
 // aLeasedController is a controller with a name and a lease short enough for a test to outlive.
-func aLeasedController(t *testing.T, owner string, lease time.Duration) (*job.Controller, *rows, *crew) {
+func aLeasedController(t *testing.T, owner string, lease time.Duration) (*job.Controller, *rows, *system) {
 	t.Helper()
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	return job.NewController(kept, plane, nil, nil, nil).Owned(owner).Leasing(lease), kept, plane
 }
 
@@ -71,9 +71,9 @@ func TestAControllerThatDiedMidTaskLeavesTheAnswerToBeAdoptedOnce(t *testing.T) 
 
 	dead.Tick(ctx)
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
-	// The controller is gone from here on. Its task lands anyway, because the sandbox is the crew's.
+	// The controller is gone from here on. Its task lands anyway, because the sandbox is the system's.
 	plane.lands("the bill is due on the 14th")
 	waitForLeaseToRunOut(t, kept, one.ID)
 
@@ -88,7 +88,7 @@ func TestAControllerThatDiedMidTaskLeavesTheAnswerToBeAdoptedOnce(t *testing.T) 
 		t.Fatalf("the answer is %q, want the one the dead controller's task left behind", got.Answer)
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want the one that was already paid for", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want the one that was already paid for", plane.sent())
 	}
 	if got.Attempts != 1 {
 		t.Fatalf("the job is on attempt %d, want 1", got.Attempts)
@@ -116,7 +116,7 @@ func TestAControllerThatDiedWhileTheTaskRunsTakesTheLeaseAndWaits(t *testing.T) 
 		t.Fatalf("the job is held by %q, want the controller that took it over", got.LeaseOwner)
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want the one already under way", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want the one already under way", plane.sent())
 	}
 
 	// And when the task does answer, the controller that took it over writes what came back.
@@ -130,8 +130,8 @@ func TestAControllerThatDiedWhileTheTaskRunsTakesTheLeaseAndWaits(t *testing.T) 
 // A controller that died before it dispatched left nothing behind. Nothing was paid for, so the job
 // goes back to pending and is run properly.
 func TestJobWhoseControllerDiedBeforeDispatchingGoesBackToPending(t *testing.T) {
-	kept, plane := newRows(), newCrew()
-	// A crew that refuses the dispatch leaves the row exactly as a controller killed between the
+	kept, plane := newRows(), newSystem()
+	// A system that refuses the dispatch leaves the row exactly as a controller killed between the
 	// claim and the call would: running, with a lease, and no session.
 	one := kept.add(declaredJob("read the electricity bill"))
 	kept.claim(one.ID, "controller-a", time.Now().Add(-time.Second))
@@ -145,7 +145,7 @@ func TestJobWhoseControllerDiedBeforeDispatchingGoesBackToPending(t *testing.T) 
 			got.Phase, got.LeaseOwner)
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want the one nobody had sent yet", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want the one nobody had sent yet", plane.sent())
 	}
 }
 
@@ -153,7 +153,7 @@ func TestJobWhoseControllerDiedBeforeDispatchingGoesBackToPending(t *testing.T) 
 // writing the session onto the row. A task is running and the row does not say so. Releasing that
 // job to pending would send a second task and pay twice.
 func TestJobDispatchedButNeverRecordedIsAdoptedRatherThanSentAgain(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	one := kept.add(declaredJob("read the electricity bill"))
 	kept.claim(one.ID, "controller-a", time.Now().Add(-time.Second))
 	// The task the dead controller sent, in the session named after the job, with nothing on the
@@ -167,7 +167,7 @@ func TestJobDispatchedButNeverRecordedIsAdoptedRatherThanSentAgain(t *testing.T)
 
 	got := kept.get(one.ID)
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want the one the dead controller had already sent", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want the one the dead controller had already sent", plane.sent())
 	}
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q, want done from the answer that was already there", got.Phase)
@@ -200,7 +200,7 @@ func TestAControllerRenewsTheLeaseWhileItsTaskRuns(t *testing.T) {
 
 // Two controllers claiming the same row at the same moment. One wins, and the loser leaves it alone.
 func TestTwoControllersClaimingAtOnceLeaveOneTask(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	first := job.NewController(kept, plane, nil, nil, nil).Owned("controller-a").Leasing(time.Minute)
 	second := job.NewController(kept, plane, nil, nil, nil).Owned("controller-b").Leasing(time.Minute)
 	one := kept.add(declaredJob("read the electricity bill"))
@@ -219,7 +219,7 @@ func TestTwoControllersClaimingAtOnceLeaveOneTask(t *testing.T) {
 	waiting.Wait()
 
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 	if holder := kept.get(one.ID).LeaseOwner; holder != "controller-a" && holder != "controller-b" {
 		t.Fatalf("the job is held by %q, want one of the two that raced", holder)
@@ -229,7 +229,7 @@ func TestTwoControllersClaimingAtOnceLeaveOneTask(t *testing.T) {
 // Two controllers taking over the same abandoned row at the same moment. The same rule, one step
 // later in the life of a job.
 func TestTwoControllersTakingOverAtOnceLeaveOneHolder(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	one := kept.add(declaredJob("read the electricity bill"))
 	kept.claim(one.ID, "controller-a", time.Now().Add(-time.Second))
 	kept.setSession(one.ID, "session-job-"+one.ID)
@@ -319,10 +319,10 @@ func TestJobThatEndedHoldsNoLease(t *testing.T) {
 	}
 }
 
-// The lease is a number the crew can say out loud, and a controller given none takes the measured
+// The lease is a number the system can say out loud, and a controller given none takes the measured
 // default rather than holding job forever.
 func TestAControllerGivenNoLeaseTakesTheMeasuredDefault(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	controller := job.NewController(kept, plane, nil, nil, nil).Owned("controller-a")
 	one := kept.add(declaredJob("read the electricity bill"))
 
@@ -341,7 +341,7 @@ func TestAControllerGivenNoLeaseTakesTheMeasuredDefault(t *testing.T) {
 // A controller with no name of its own still has one, or two controllers would be indistinguishable
 // on the record and neither could tell its own job from the other's.
 func TestAControllerAlwaysHasAName(t *testing.T) {
-	kept, plane := newRows(), newCrew()
+	kept, plane := newRows(), newSystem()
 	first := job.NewController(kept, plane, nil, nil, nil)
 	second := job.NewController(kept, plane, nil, nil, nil)
 	one := kept.add(declaredJob("read the electricity bill"))

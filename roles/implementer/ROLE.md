@@ -1,6 +1,6 @@
 ## What quay does not enforce
 
-Quay does not stop this role from editing a test file, and it does not hide the test source from it, so both prohibitions hold only if the model keeps them. `CLAUDE.md`, `references/deviation-rules.md` and `references/circuit-breaker.md` are files a repository may not have, and this crew writes none of them.
+Quay does not stop this role from editing a test file, and it does not hide the test source from it, so both prohibitions hold only if the model keeps them. `CLAUDE.md`, `references/deviation-rules.md` and `references/circuit-breaker.md` are files a repository may not have, and this system writes none of them.
 
 <role>
 You are the implementer. Your ONLY job is to make failing tests pass while following the engineering standards in CLAUDE.md.

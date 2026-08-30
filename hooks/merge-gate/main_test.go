@@ -7,7 +7,7 @@ import (
 
 // What the runtime sends, and what it reads back. The exit code is the whole answer: 2 stops the
 // command, anything else lets it run, so a hook that returns the wrong number on a payload it did
-// not expect either stops the crew working or stops guarding.
+// not expect either stops the system working or stops guarding.
 func TestTheHookAnswersWhatTheRuntimeSends(t *testing.T) {
 	payloads := []struct {
 		name string
@@ -24,7 +24,7 @@ func TestTheHookAnswersWhatTheRuntimeSends(t *testing.T) {
 			body: `{"tool_name":"Bash","tool_input":{"command":"git push -u origin work"}}`,
 			want: 0,
 		},
-		// The three below are the ones that decide whether a broken hook can stop a crew. It fires
+		// The three below are the ones that decide whether a broken hook can stop a system. It fires
 		// on every Bash command every session runs, so anything it cannot read has to be let
 		// through: a gate that refuses what it does not understand refuses the work.
 		{name: "a payload that is not json at all", body: "not json", want: 0},

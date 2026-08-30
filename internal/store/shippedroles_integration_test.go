@@ -14,7 +14,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// The briefs the crew hands a session, read back out of the real database.
+// The briefs the system hands a session, read back out of the real database.
 //
 // The unit tier reads roles/ off disk and holds every file to the rule. What only this tier reaches
 // is the crossing: a brief is written into a column by one call and read back by another, and the
@@ -28,7 +28,7 @@ const shippedRoles = "../../roles"
 // brief must not carry, the prefix it put on its own agents, and the prefix its own commands took.
 var notOurs = regexp.MustCompile(`(?i)greenlight|\bgl-|/gl:`)
 
-func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
+func TestTheBriefsTheSystemHoldsNameNoOtherProduct(t *testing.T) {
 	onDisk, err := role.All(shippedRoles)
 	if err != nil {
 		t.Fatalf("loading the roles this build ships: %v", err)
@@ -37,7 +37,7 @@ func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
 		t.Fatal("roles/ holds none, so this test would sweep nothing and report a pass")
 	}
 
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{})
 	ctx := context.Background()
 	for _, one := range onDisk {
 		files := make([]*quaycrewv1.RoleFile, 0, 2)
@@ -49,7 +49,7 @@ func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
 			files = append(files, &quaycrewv1.RoleFile{Path: file.Path, Body: file.Body})
 		}
 		if _, err := s.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: files}); err != nil {
-			t.Fatalf("the crew refused the %s role, which ships with it: %v", one.Name, err)
+			t.Fatalf("the system refused the %s role, which ships with it: %v", one.Name, err)
 		}
 	}
 
@@ -89,7 +89,7 @@ func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
 		checked++
 		for at, line := range strings.Split(one.Brief, "\n") {
 			if notOurs.MatchString(line) {
-				t.Errorf("the brief the crew would hand a %s session names a product that is not quay, at line %d: %s",
+				t.Errorf("the brief the system would hand a %s session names a product that is not quay, at line %d: %s",
 					one.Name, at+1, strings.TrimSpace(line))
 			}
 		}
@@ -104,7 +104,7 @@ func TestTheBriefsTheCrewHoldsNameNoOtherProduct(t *testing.T) {
 // refused by this check on the far side of the database, so the guard cannot be satisfied by a read
 // that returns nothing.
 func TestABriefCarryingAnotherProductIsCaughtAfterTheDatabaseRoundTrip(t *testing.T) {
-	s, _ := aCrewWithRoles(t, &model.FakeRunner{})
+	s, _ := aSystemWithRoles(t, &model.FakeRunner{})
 	ctx := context.Background()
 
 	read, err := role.ReadDir(shippedRoles + "/test-writer")

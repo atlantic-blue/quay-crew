@@ -12,7 +12,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The hooks a crew holds, driven over the control plane's real interface. What a hook does once it is
+// The hooks a system holds, driven over the control plane's real interface. What a hook does once it is
 // inside a sandbox is a different question, proved against a real container.
 func initializeHookSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator imports a hook "([^"]*)" firing on "([^"]*)" for "([^"]*)"$`,
@@ -49,11 +49,11 @@ func initializeHookSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the operator attaches the hook "([^"]*)" to the crew$`,
+	sc.Step(`^the operator attaches the hook "([^"]*)" to the system$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			_, w.lastErr = w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
-				Scope: "crew", Name: name,
+				Scope: "system", Name: name,
 			})
 			return w.lastErr
 		})
@@ -67,11 +67,11 @@ func initializeHookSteps(sc *godog.ScenarioContext) {
 			return w.lastErr
 		})
 
-	sc.Step(`^the operator takes the hook "([^"]*)" off the crew$`,
+	sc.Step(`^the operator takes the hook "([^"]*)" off the system$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
 			_, w.lastErr = w.client.DetachHook(ctx, &quaycrewv1.DetachHookRequest{
-				Scope: "crew", Name: name,
+				Scope: "system", Name: name,
 			})
 			return w.lastErr
 		})
@@ -86,13 +86,13 @@ func initializeHookSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew holds (\d+) hooks?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system holds (\d+) hooks?$`, func(ctx context.Context, want int) error {
 		listed, err := worldFrom(ctx).client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
 		if err != nil {
 			return err
 		}
 		if got := len(listed.GetHooks()); got != want {
-			return fmt.Errorf("the crew holds %d hooks, want %d", got, want)
+			return fmt.Errorf("the system holds %d hooks, want %d", got, want)
 		}
 		return nil
 	})
@@ -124,12 +124,12 @@ func initializeHookSteps(sc *godog.ScenarioContext) {
 				}
 				return fmt.Errorf("%s fires on %+v, not on %s", name, one.GetEvents(), event)
 			}
-			return fmt.Errorf("the crew does not hold a hook called %s", name)
+			return fmt.Errorf("the system does not hold a hook called %s", name)
 		})
 
 	// Where a hook came from, so a listing does not leave the operator guessing why a workspace they
 	// attached nothing to is under three constraints.
-	sc.Step(`^that hook is reported as the crew's$`, func(ctx context.Context) error {
+	sc.Step(`^that hook is reported as the system's$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		listed, err := w.client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{
 			Workspace: w.otherWorkspaceID,
@@ -140,8 +140,8 @@ func initializeHookSteps(sc *godog.ScenarioContext) {
 		if len(listed.GetHooks()) == 0 {
 			return fmt.Errorf("the workspace is under no hooks at all")
 		}
-		if !listed.GetHooks()[0].GetCrew() {
-			return fmt.Errorf("the hook does not say it came from the crew: %+v", listed.GetHooks()[0])
+		if !listed.GetHooks()[0].GetSystem() {
+			return fmt.Errorf("the hook does not say it came from the system: %+v", listed.GetHooks()[0])
 		}
 		return nil
 	})
@@ -197,14 +197,14 @@ func importOf(name string, version int, event, matcher, body string) *quaycrewv1
 
 // The hooks this build ships, seeded the way the real main seeds them at startup.
 func initializeSeededHookSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^a crew seeded with the hooks this build ships$`, func(ctx context.Context) error {
+	sc.Step(`^a system seeded with the hooks this build ships$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.seedHooks = true
 		w.server.SeedHooks(ctx, "../hooks", slog.New(slog.NewTextHandler(io.Discard, nil)))
 		return nil
 	})
 
-	sc.Step(`^the crew holds the "([^"]*)" hook$`, func(ctx context.Context, name string) error {
+	sc.Step(`^the system holds the "([^"]*)" hook$`, func(ctx context.Context, name string) error {
 		listed, err := worldFrom(ctx).client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
 		if err != nil {
 			return err
@@ -214,16 +214,16 @@ func initializeSeededHookSteps(sc *godog.ScenarioContext) {
 				return nil
 			}
 		}
-		return fmt.Errorf("the crew does not hold %s: %+v", name, listed.GetHooks())
+		return fmt.Errorf("the system does not hold %s: %+v", name, listed.GetHooks())
 	})
 }
 
-// Versions of a shipped hook, which is how a fix reaches a crew that already has one.
+// Versions of a shipped hook, which is how a fix reaches a system that already has one.
 func initializeHookVersionSteps(sc *godog.ScenarioContext) {
-	// The crew as it was before this build: holding, and under, an earlier version of a hook this
+	// The system as it was before this build: holding, and under, an earlier version of a hook this
 	// build also ships. Seeded by hand at version 1, so the shipped one is genuinely newer and the
 	// upgrade has something to do.
-	sc.Step(`^a crew already under version (\d+) of "([^"]*)"$`,
+	sc.Step(`^a system already under version (\d+) of "([^"]*)"$`,
 		func(ctx context.Context, version int, name string) error {
 			w := worldFrom(ctx)
 			w.seedHooks = true
@@ -231,14 +231,14 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			if _, err := w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
-				Scope: "crew", Name: name,
+				Scope: "system", Name: name,
 			}); err != nil {
 				return err
 			}
 			return nil
 		})
 
-	sc.Step(`^the crew holds "([^"]*)" at the version this build ships$`,
+	sc.Step(`^the system holds "([^"]*)" at the version this build ships$`,
 		func(ctx context.Context, name string) error {
 			want, err := shippedVersion(name)
 			if err != nil {
@@ -249,9 +249,9 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			if got != want {
-				// The catalogue is what the crew could run. A fix that never reaches it can never be
+				// The catalogue is what the system could run. A fix that never reaches it can never be
 				// taken by anybody.
-				return fmt.Errorf("the newest %s the crew holds is version %d, want %d", name, got, want)
+				return fmt.Errorf("the newest %s the system holds is version %d, want %d", name, got, want)
 			}
 			return nil
 		})
@@ -263,7 +263,7 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			if got != int32(want) {
-				return fmt.Errorf("an upgrade moved the crew to version %d on its own, and a hook is pinned so it cannot change under a running session",
+				return fmt.Errorf("an upgrade moved the system to version %d on its own, and a hook is pinned so it cannot change under a running session",
 					got)
 			}
 			return nil
@@ -277,7 +277,7 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 			}
 			w := worldFrom(ctx)
 			if _, err := w.client.AttachHook(ctx, &quaycrewv1.AttachHookRequest{
-				Scope: "crew", Name: "prompt-analyser",
+				Scope: "system", Name: "prompt-analyser",
 			}); err != nil {
 				return err
 			}
@@ -293,10 +293,10 @@ func initializeHookVersionSteps(sc *godog.ScenarioContext) {
 }
 
 // shippedVersion is what version of a hook this build carries, read from the hooks directory the
-// crew seeds from.
+// system seeds from.
 //
 // Read rather than written into the scenario, because the behaviour being described is "newer than
-// what the crew already held", not a particular number. Written down, every one of these scenarios
+// what the system already held", not a particular number. Written down, every one of these scenarios
 // fails the next time somebody edits the hook, which teaches the reader that the number is the point
 // when it never was.
 func shippedVersion(name string) (int32, error) {
@@ -318,7 +318,7 @@ func shippedVersion(name string) (int32, error) {
 	return 0, fmt.Errorf("this build ships no hook called %s", name)
 }
 
-// newestHeld is the newest version of a hook in the crew's catalogue.
+// newestHeld is the newest version of a hook in the system's catalogue.
 func newestHeld(ctx context.Context, name string) (int32, error) {
 	listed, err := worldFrom(ctx).client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
 	if err != nil {
@@ -329,7 +329,7 @@ func newestHeld(ctx context.Context, name string) (int32, error) {
 			return one.GetVersion(), nil
 		}
 	}
-	return 0, fmt.Errorf("the crew does not hold %s at all", name)
+	return 0, fmt.Errorf("the system does not hold %s at all", name)
 }
 
 // workspaceVersion is the version of a hook the workspace's sessions actually run under.

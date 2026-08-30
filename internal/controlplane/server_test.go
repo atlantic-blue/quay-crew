@@ -68,12 +68,12 @@ func TestDispatchStartsAndContinuesSession(t *testing.T) {
 	if first.GetReply() != "done" || first.GetHandle() == "" {
 		t.Fatalf("bad dispatch response: %+v", first)
 	}
-	// The crew names the conversation before the task starts, and the first task starts it rather than
+	// The system names the conversation before the task starts, and the first task starts it rather than
 	// resuming it. Both halves matter: a first task that carried no name left the runtime to name its
 	// own conversation and tell nobody until the task was over.
 	named := runner.LastReq.ModelSessionID
 	if named == "" {
-		t.Fatal("the first task carries no conversation, so the runtime names one the crew cannot see")
+		t.Fatal("the first task carries no conversation, so the runtime names one the system cannot see")
 	}
 	if runner.LastReq.ConversationStarted {
 		t.Fatal("the first task resumes a conversation nothing has written, which exits saying there is none")

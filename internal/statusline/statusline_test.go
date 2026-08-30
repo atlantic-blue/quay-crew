@@ -71,7 +71,7 @@ func TestTheLineSaysHowMuchOfTheContextWindowIsUsed(t *testing.T) {
 		{
 			name: "a window reported as more than full", used: 1_040_000, size: million,
 			want:    warned("context 100% used (1M of 1M), over the 30% mark"),
-			because: "a hundred and four per cent reads as a defect in the crew, and this is a conversation about to be compacted rather than a broken one",
+			because: "a hundred and four per cent reads as a defect in the system, and this is a conversation about to be compacted rather than a broken one",
 		},
 		{
 			name: "a count that makes no sense at all", used: -12, size: million,
@@ -135,7 +135,7 @@ func TestThePrintedShareAndTheWarningNeverDisagree(t *testing.T) {
 
 // A runtime older than this build, or one that is not the model's own tool at all, hands over a
 // payload with no context window in it. The line then says that, rather than saying nothing or
-// guessing a window size, because a status line that goes blank reads as the crew being broken and a
+// guessing a window size, because a status line that goes blank reads as the system being broken and a
 // guessed window is a confident wrong number.
 func TestTheLineSaysWhenTheRuntimeDoesNotReportIt(t *testing.T) {
 	for _, tc := range []struct {

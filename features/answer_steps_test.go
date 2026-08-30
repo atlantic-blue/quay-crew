@@ -9,12 +9,12 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for reading an answer back out of the crew as data. They run the real tool through the
+// Steps for reading an answer back out of the system as data. They run the real tool through the
 // harness in tool_steps_test.go, because what is specified is which stream each thing goes to.
 
 type answerKey struct{}
 
-// answerWorld is what one scenario asked the crew for.
+// answerWorld is what one scenario asked the system for.
 type answerWorld struct {
 	sessionID string
 	handle    string
@@ -51,7 +51,7 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 		return answerDispatch(ctx, strings.Repeat("x", 400))
 	})
 
-	// A driver session is one the crew opens and nobody has dispatched to, which is the only way a
+	// A driver session is one the system opens and nobody has dispatched to, which is the only way a
 	// session exists with an empty history.
 	sc.Step(`^a session that was opened and never asked anything$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), answerFrom(ctx)
@@ -86,7 +86,7 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want exactly one", len(listed.GetSessions()))
+			return fmt.Errorf("the system has %d sessions, want exactly one", len(listed.GetSessions()))
 		}
 		a.sessionID = listed.GetSessions()[0].GetId()
 		a.handle = listed.GetSessions()[0].GetHandle()

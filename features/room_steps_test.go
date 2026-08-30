@@ -29,7 +29,7 @@ func roomFrom(ctx context.Context) *roomWorld {
 }
 
 // killedProcess is a command that was killed. Docker reports the status of the process inside the
-// container as its own, so a task taken by signal 9 arrives at the crew as exit status 137.
+// container as its own, so a task taken by signal 9 arrives at the system as exit status 137.
 type killedProcess struct{}
 
 func (killedProcess) Error() string { return "exit status 137" }

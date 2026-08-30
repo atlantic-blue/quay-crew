@@ -10,7 +10,7 @@ import (
 //
 // An upgrade adds configuration and nobody's own file grows with it. Compose fills a key that is
 // not there with an empty string, so whatever it turns on is simply off, and nothing anywhere says
-// why: a driver whose crew had no address reported that the control plane was refusing connections
+// why: a driver whose system had no address reported that the control plane was refusing connections
 // for an evening, while the control plane was up the whole time.
 //
 // It runs the real target rather than reading the Makefile, because what is being checked is what the
@@ -27,7 +27,7 @@ func TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave(t *testing.T) {
 			name: "a copy made before the driver existed",
 			file: "deploy/testdata/partial.env",
 			want: []string{"QC_SANDBOX_NETWORK", "QC_SANDBOX_CONTROL_PLANE"},
-			because: "these are what let a session reach the crew, and without them it reaches " +
+			because: "these are what let a session reach the system, and without them it reaches " +
 				"localhost inside its own container",
 		},
 		{

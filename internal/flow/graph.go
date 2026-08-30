@@ -73,7 +73,7 @@ type Limits struct {
 type Graph struct {
 	Name    string
 	Version int
-	// Every is how often the crew starts a run of this graph on its own. Zero means never: the
+	// Every is how often the system starts a run of this graph on its own. Zero means never: the
 	// graph runs when a person asks for it, which is every graph until one says otherwise.
 	Every time.Duration
 	// Mode is what the run's turns may do, as the model spells it. Every graph declares one, and a
@@ -94,7 +94,7 @@ type Graph struct {
 
 // Expect is what a dispatch node declares will show its task did the job.
 //
-// The crew checks it. That is the whole point of it: a model asked to read a file that is not there
+// The system checks it. That is the whole point of it: a model asked to read a file that is not there
 // answers plausibly instead of stopping, so the reply is not evidence. Whichever of these is declared
 // is checked; declaring neither is refused at import.
 type Expect struct {
@@ -143,7 +143,7 @@ type Node struct {
 	// a question can say what it is asking about.
 	Text string
 	// For is how long a wait node waits. It becomes a due time on the run, read by a poller, so a
-	// waiting run costs nothing and survives the crew being restarted underneath it.
+	// waiting run costs nothing and survives the system being restarted underneath it.
 	For time.Duration
 }
 
@@ -226,7 +226,7 @@ func Parse(source []byte) (Graph, error) {
 	// A graph that says nothing is refused for the same reason it is refused at all. A run works with
 	// nobody there, so a step that stops to ask for approval waits on a person who will never answer:
 	// it does not fail, it sits, and the bill is what the model spent finding that out. The mode a
-	// session is born in is the crew's choice about the sessions a person types into, and it is not an
+	// session is born in is the system's choice about the sessions a person types into, and it is not an
 	// answer to what an automation may do unwatched, so declaring one is the author's to do.
 	offered := model.PermissionModesOffered()
 	declared := strings.TrimSpace(file.Mode)
@@ -357,7 +357,7 @@ func Parse(source []byte) (Graph, error) {
 }
 
 // StartsOnTrigger says whether a run of this graph begins because something happened. It is the
-// question the crew asks of a graph a trigger names, so a trigger cannot start an automation whose
+// question the system asks of a graph a trigger names, so a trigger cannot start an automation whose
 // author never said it reacts.
 func (g Graph) StartsOnTrigger() bool {
 	return g.Nodes[g.Start].Type == NodeTrigger
@@ -417,7 +417,7 @@ func usableEdges(graph Graph, name string, node Node) error {
 //
 // The path is read inside the session's working directory, so an absolute one or one that climbs out
 // of it would be asking about a file the run never touched, and a graph is written by whoever may
-// import one rather than by whoever runs the crew.
+// import one rather than by whoever runs the system.
 func usableExpectFile(node, path string) error {
 	if path == "" {
 		return nil

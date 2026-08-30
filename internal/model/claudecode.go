@@ -63,7 +63,7 @@ func buildArgs(req Request, model string) []string {
 		mode = "plan"
 	}
 	args := []string{"-p", req.Text, "--output-format", "stream-json", "--verbose", "--permission-mode", mode}
-	// Which model, when the crew has been told. Left off when it has not, so a crew can always fall
+	// Which model, when the system has been told. Left off when it has not, so a system can always fall
 	// back to whatever the CLI picks for itself: a name the CLI stops accepting would otherwise fail
 	// every task with no way to configure around it.
 	if model != "" {
@@ -75,7 +75,7 @@ func buildArgs(req Request, model string) []string {
 	if req.ModelSessionID != "" {
 		args = append(args, conversationFlag(req.ConversationStarted), req.ModelSessionID)
 	}
-	// Additional settings, so the operator's own file inside the sandbox still applies and the crew's
+	// Additional settings, so the operator's own file inside the sandbox still applies and the system's
 	// hooks are added to it rather than replacing it. Left off when there are none, because a path to
 	// a file that is not there is a task that fails before it starts.
 	if req.Settings != "" {
@@ -161,7 +161,7 @@ type exitStatus interface{ ExitCode() int }
 
 // wasKilled says whether a command was taken by signal 9 rather than exiting on its own.
 //
-// Read from the status rather than from the process, because the process the crew waits on is the
+// Read from the status rather than from the process, because the process the system waits on is the
 // docker command line and the one that died is inside the container. Docker reports the container
 // process status as its own, so the number is the same either way.
 func wasKilled(exit error) bool {
@@ -169,7 +169,7 @@ func wasKilled(exit error) bool {
 	if errors.As(exit, &status) && status.ExitCode() == killedStatus {
 		return true
 	}
-	// A process the crew started itself, rather than through the docker command line, carries no
+	// A process the system started itself, rather than through the docker command line, carries no
 	// exit status at all. Go reports the signal instead, and the status reads -1. Measured rather
 	// than assumed: a shell told to kill itself with signal 9 arrives here as "signal: killed".
 	return exit != nil && strings.Contains(exit.Error(), signalKilled)
@@ -199,7 +199,7 @@ type streamEvent struct {
 	IsError        bool `json:"is_error"`
 	APIErrorStatus int  `json:"api_error_status"`
 	// TotalCostUSD and Usage arrive on the result event and were being read past. The stream has
-	// carried them the whole time, so the crew was throwing away the only number that says what a
+	// carried them the whole time, so the system was throwing away the only number that says what a
 	// task cost.
 	TotalCostUSD *float64 `json:"total_cost_usd"`
 	Usage        *struct {
@@ -310,18 +310,18 @@ func conversationFlag(started bool) string {
 	return "--session-id"
 }
 
-// ConversationCheck compares the conversation the crew named with the one the runtime reported in its
+// ConversationCheck compares the conversation the system named with the one the runtime reported in its
 // output stream, and returns what to say when they differ. Empty means nothing to say.
 //
 // The identifier in the stream used to be where the name came from, which is why it arrived too late
-// to be any use. It is a check now: the crew hands the name down before the task starts, so a stream
-// carrying a different one means the runtime ignored the flag, and everything the crew reports about
+// to be any use. It is a check now: the system hands the name down before the task starts, so a stream
+// carrying a different one means the runtime ignored the flag, and everything the system reports about
 // that session afterwards, its history and what it cost, is being read from a transcript nobody wrote.
 // Both names are in the sentence, because the job is under the second one.
 func ConversationCheck(asked, reported string) string {
 	if asked == "" || reported == "" || asked == reported {
 		return ""
 	}
-	return fmt.Sprintf("the crew asked the model runtime for conversation %s and it used %s instead, "+
+	return fmt.Sprintf("the system asked the model runtime for conversation %s and it used %s instead, "+
 		"so the flag was ignored and this session's history is under %s", asked, reported, reported)
 }

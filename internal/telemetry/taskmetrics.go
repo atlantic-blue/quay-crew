@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// The names the crew publishes. Spelled once here, because a dashboard and an alert are written
+// The names the system publishes. Spelled once here, because a dashboard and an alert are written
 // against these strings and renaming one quietly empties both.
 const (
 	TasksMetric  = "quaycrew.tasks"
@@ -39,7 +39,7 @@ type TaskMeasurement struct {
 	// spends tokens, and a cost dashboard that counts only the tasks that worked understates the
 	// bill in exactly the situation somebody is investigating.
 	Status string
-	// Usage is the four numbers a task spends, in the crew's existing vocabulary for them.
+	// Usage is the four numbers a task spends, in the system's existing vocabulary for them.
 	Usage   sandbox.Usage
 	CostUSD float64
 	// Reported says the backend gave numbers. A task that reports nothing is still counted as a
@@ -47,7 +47,7 @@ type TaskMeasurement struct {
 	Reported bool
 }
 
-// TaskMetrics is the crew's spending, published as OpenTelemetry instruments.
+// TaskMetrics is the system's spending, published as OpenTelemetry instruments.
 type TaskMetrics struct {
 	tasks  metric.Int64Counter
 	tokens metric.Int64Counter
@@ -56,7 +56,7 @@ type TaskMetrics struct {
 
 // NewTaskMetrics creates the instruments. It reads the global meter provider, so Init has to have
 // run; with no provider installed the instruments are the no operation ones and recording costs
-// nothing, which is what the tests and a crew with telemetry off both want.
+// nothing, which is what the tests and a system with telemetry off both want.
 func NewTaskMetrics() (*TaskMetrics, error) {
 	meter := otel.Meter("github.com/atlantic-blue/quay-crew")
 
@@ -71,7 +71,7 @@ func NewTaskMetrics() (*TaskMetrics, error) {
 		return nil, fmt.Errorf("telemetry: tokens counter: %w", err)
 	}
 	cost, err := meter.Float64Counter(CostMetric,
-		metric.WithDescription("what the tasks would cost at published prices; the crew runs under a subscription, so this is not a charge"))
+		metric.WithDescription("what the tasks would cost at published prices; the system runs under a subscription, so this is not a charge"))
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cost counter: %w", err)
 	}

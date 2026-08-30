@@ -10,7 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/statusline"
 )
 
-// The column that says whether a conversation is still worth continuing. A share where the crew knows
+// The column that says whether a conversation is still worth continuing. A share where the system knows
 // how big the window is, and the count on its own where nothing told it, because a share an operator
 // acts on has to be true and a guessed one is worse than none.
 func TestTheContextCellSaysAShareOrACount(t *testing.T) {
@@ -39,7 +39,7 @@ func TestTheContextCellSaysAShareOrACount(t *testing.T) {
 			name:    "a conversation the runtime is about to compact",
 			window:  &quaycrewv1.ContextWindow{Used: 1_040_000, Size: 1_000_000},
 			want:    "100%",
-			because: "a hundred and four per cent reads as a defect in the crew",
+			because: "a hundred and four per cent reads as a defect in the system",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

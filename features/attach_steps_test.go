@@ -53,9 +53,9 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return a.err
 	})
 
-	// The crew's name for the conversation, read from the row rather than from the command, so this
-	// says the crew knows it rather than only that it passed something down.
-	sc.Step(`^the driver has a conversation the crew can name$`, func(ctx context.Context) error {
+	// The system's name for the conversation, read from the row rather than from the command, so this
+	// says the system knows it rather than only that it passed something down.
+	sc.Step(`^the driver has a conversation the system can name$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		resp, err := w.client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: w.drivers[0].GetId()})
 		if err != nil {
@@ -67,9 +67,9 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The name the crew holds is the name the sandbox is told, or the crew is naming something nobody
+	// The name the system holds is the name the sandbox is told, or the system is naming something nobody
 	// uses and the transcript on disk still belongs to nobody.
-	sc.Step(`^the command opens the conversation the crew holds$`, func(ctx context.Context) error {
+	sc.Step(`^the command opens the conversation the system holds$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
 		id := ""
 		if len(w.drivers) > 0 {
@@ -87,10 +87,10 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		}
 		held := resp.GetSession().GetModelSessionId()
 		if held == "" {
-			return fmt.Errorf("the crew holds no conversation for this session")
+			return fmt.Errorf("the system holds no conversation for this session")
 		}
 		if got := conversationIn(a.spec); got != held {
-			return fmt.Errorf("the sandbox is told to open %q and the crew holds %q", got, held)
+			return fmt.Errorf("the sandbox is told to open %q and the system holds %q", got, held)
 		}
 		return nil
 	})
@@ -111,7 +111,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	})
 
 	// While the task runs, not after it. Read off the task itself rather than off the session, so this
-	// says the operator lands where the job is happening rather than only that two of the crew's own
+	// says the operator lands where the job is happening rather than only that two of the system's own
 	// fields agree with each other.
 	sc.Step(`^the command opens the conversation the task is running in$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
@@ -129,9 +129,9 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The name came from the crew, before the task, which is what makes it knowable while the task
+	// The name came from the system, before the task, which is what makes it knowable while the task
 	// runs. A task that resumed instead would be asking for a conversation nothing has written yet.
-	sc.Step(`^the crew named the conversation before the task started$`, func(ctx context.Context) error {
+	sc.Step(`^the system named the conversation before the task started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		first, found := w.runner.task(0)
 		if !found {
@@ -172,7 +172,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("expected one session with no conversation, got %d", len(sessions.GetSessions()))
 		}
 		only := sessions.GetSessions()[0]
-		// Recorded as the session in play, so the steps that name the sandbox and read the crew's
+		// Recorded as the session in play, so the steps that name the sandbox and read the system's
 		// conversation back can be asked about it. The dispatch failed, so nothing else recorded it.
 		w.tasks = append(w.tasks, task{sessionID: only.GetId(), handle: only.GetHandle()})
 		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: only.GetId()})
@@ -200,7 +200,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
 		// The conversation the task itself ran in, read off the task rather than off the session, so
-		// this says the operator lands where the job happened rather than only that two of the crew's
+		// this says the operator lands where the job happened rather than only that two of the system's
 		// own fields agree.
 		ran, err := w.conversationOfFirstTask()
 		if err != nil {
@@ -307,7 +307,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("attaching was allowed, expected a refusal")
 		}
 		// A refusal that only says no leaves the operator staring at a session they cannot open, and one
-		// written in the crew's own vocabulary leaves them asking what it means. It says what to do
+		// written in the system's own vocabulary leaves them asking what it means. It says what to do
 		// instead, in words that appear on their screen.
 		for _, want := range []string{"no conversation left", "quay task"} {
 			if !strings.Contains(a.err.Error(), want) {

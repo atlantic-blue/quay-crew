@@ -10,7 +10,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/display"
 )
 
-// A description costs a model call, and a crew running automation makes a session per run, so when one
+// A description costs a model call, and a system running automation makes a session per run, so when one
 // is written matters as much as what it says. These cases are that decision written down.
 
 func TestWhenASessionIsWorthDescribingAgain(t *testing.T) {
@@ -44,7 +44,7 @@ func TestWhenASessionIsWorthDescribingAgain(t *testing.T) {
 		},
 		{
 			name: "describing is off", tasks: 5, lastAt: 0, every: 0, described: false,
-			because: "a crew that turned it off pays for nothing, and off has to mean off on the first task too",
+			because: "a system that turned it off pays for nothing, and off has to mean off on the first task too",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestALongDescriptionIsCapped(t *testing.T) {
 	}
 }
 
-// The setting is read from the crew's configuration, and an unreadable value must not quietly task
+// The setting is read from the system's configuration, and an unreadable value must not quietly task
 // describing off or on.
 func TestHowOftenASessionIsDescribed(t *testing.T) {
 	for _, tc := range []struct {
@@ -113,7 +113,7 @@ func TestHowOftenASessionIsDescribed(t *testing.T) {
 		{configured: "3", want: 3},
 		{configured: "off", want: 0},
 		{configured: "0", want: 0},
-		// Not a number and not "off". Keeping the default rather than refusing, because the crew
+		// Not a number and not "off". Keeping the default rather than refusing, because the system
 		// starting is worth more than this setting being exactly right.
 		{configured: "sometimes", want: describeEveryDefault},
 		{configured: "-4", want: describeEveryDefault},
@@ -129,58 +129,58 @@ func TestHowOftenASessionIsDescribed(t *testing.T) {
 // The cases above are the decision. This one is the feature: a session that has had a task says what
 // it is about, without anybody naming it.
 func TestASessionDescribesItselfAfterItsFirstTask(t *testing.T) {
-	crew := describingCrewOf(t, 10)
+	system := describingSystemOf(t, 10)
 
-	crew.dispatch(t, "help me write the blog post about the agentic harness")
+	system.dispatch(t, "help me write the blog post about the agentic harness")
 
-	if got := crew.description(t); got != "blog post about the agentic harness" {
+	if got := system.description(t); got != "blog post about the agentic harness" {
 		t.Fatalf("the session describes itself as %q", got)
 	}
 }
 
-// A description is a convenience. A task that worked is not reported as failed because the crew could
+// A description is a convenience. A task that worked is not reported as failed because the system could
 // not think of a name for it, and the operator is not left waiting for one either.
 func TestATaskSucceedsEvenWhenDescribingFails(t *testing.T) {
-	crew := describingCrewOf(t, 10)
-	crew.runner.DescribeErr = errors.New("the model is not answering")
+	system := describingSystemOf(t, 10)
+	system.runner.DescribeErr = errors.New("the model is not answering")
 
-	reply := crew.dispatch(t, "help me write the blog post")
+	reply := system.dispatch(t, "help me write the blog post")
 
 	if reply == "" {
 		t.Fatal("the task itself failed because describing did")
 	}
-	if got := crew.description(t); got != "" {
+	if got := system.description(t); got != "" {
 		t.Fatalf("a failed description was kept anyway: %q", got)
 	}
 }
 
-// A crew that turned it off pays for nothing, which is the whole reason the setting exists: a flow
+// A system that turned it off pays for nothing, which is the whole reason the setting exists: a flow
 // makes a session per run.
-func TestACrewWithDescribingOffNeverAsks(t *testing.T) {
-	crew := describingCrewOf(t, 0)
+func TestASystemWithDescribingOffNeverAsks(t *testing.T) {
+	system := describingSystemOf(t, 0)
 
-	crew.dispatch(t, "help me write the blog post")
+	system.dispatch(t, "help me write the blog post")
 
-	if crew.runner.Described != 0 {
-		t.Fatalf("the crew asked for %d descriptions with describing off", crew.runner.Described)
+	if system.runner.Described != 0 {
+		t.Fatalf("the system asked for %d descriptions with describing off", system.runner.Described)
 	}
 }
 
 // Describing must not touch the operator's own name for a session, which is the one thing in a listing
 // that is certainly right.
 func TestDescribingNeverOverwritesTheNameYouChose(t *testing.T) {
-	crew := describingCrewOf(t, 10)
-	crew.dispatch(t, "help me write the blog post about the agentic harness")
+	system := describingSystemOf(t, 10)
+	system.dispatch(t, "help me write the blog post about the agentic harness")
 
-	if err := crew.store.SetLabel(context.Background(), crew.sessionID, "the harness post"); err != nil {
+	if err := system.store.SetLabel(context.Background(), system.sessionID, "the harness post"); err != nil {
 		t.Fatalf("SetLabel: %v", err)
 	}
 	// Far enough past the description to be written again.
 	for range 11 {
-		crew.dispatch(t, "and another thing")
+		system.dispatch(t, "and another thing")
 	}
 
-	session, err := crew.store.GetSession(context.Background(), crew.sessionID)
+	session, err := system.store.GetSession(context.Background(), system.sessionID)
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
@@ -216,15 +216,15 @@ func TestTheQuestionComingBackIsNotADescription(t *testing.T) {
 	}
 }
 
-// And end to end: a crew whose model echoes names nothing, rather than naming everything after the
+// And end to end: a system whose model echoes names nothing, rather than naming everything after the
 // question.
-func TestACrewWhoseModelEchoesNamesNothing(t *testing.T) {
-	crew := describingCrewOf(t, 10)
-	crew.runner.Echoes = true
+func TestASystemWhoseModelEchoesNamesNothing(t *testing.T) {
+	system := describingSystemOf(t, 10)
+	system.runner.Echoes = true
 
-	crew.dispatch(t, "help me write the blog post")
+	system.dispatch(t, "help me write the blog post")
 
-	if got := crew.description(t); got != "" {
+	if got := system.description(t); got != "" {
 		t.Fatalf("the session is described as %q, which is the question it was asked", got)
 	}
 }

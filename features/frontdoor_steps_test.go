@@ -11,7 +11,7 @@ import (
 )
 
 // The front door's scenarios read README.md and check it against the things it makes claims about.
-// They touch no control plane: what a reader is promised, and whether the crew can deliver it, is a
+// They touch no control plane: what a reader is promised, and whether the system can deliver it, is a
 // behaviour somebody sees the moment they type the first line.
 //
 // The checks themselves live in frontdoor_test.go, next to the plain Go cases that run them without
@@ -67,7 +67,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^every command it says to run is one the crew has$`, func(ctx context.Context) error {
+	sc.Step(`^every command it says to run is one the system has$`, func(ctx context.Context) error {
 		commands, err := quayCommands()
 		if err != nil {
 			return err
@@ -83,7 +83,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 			}
 		}
 		if len(missing) > 0 {
-			return fmt.Errorf("it tells a reader to run %s, and the crew has no such command",
+			return fmt.Errorf("it tells a reader to run %s, and the system has no such command",
 				strings.Join(missing, ", "))
 		}
 		return nil
@@ -124,7 +124,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the quick start is one command to a running crew$`, func(ctx context.Context) error {
+	sc.Step(`^the quick start is one command to a running system$`, func(ctx context.Context) error {
 		quickStart, err := sectionOf(frontDoorFrom(ctx).body, "## Quick start")
 		if err != nil {
 			return err

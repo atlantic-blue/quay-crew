@@ -10,7 +10,7 @@ import (
 // what the console acts on and what a container is named after, and the address a session scoped
 // command takes when the operator moves into the session with `use`.
 
-// theIdentifierOnScreen is the first cell of the crew's one session, read the way an operator reads
+// theIdentifierOnScreen is the first cell of the system's one session, read the way an operator reads
 // it: off the listing, rather than out of the code that produced it.
 func theIdentifierOnScreen(t *testing.T, listed string) string {
 	t.Helper()

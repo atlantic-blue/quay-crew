@@ -18,9 +18,9 @@ stty -ixon 2>/dev/null || true
 conversation="$1"
 mode="$2"
 
-# What the crew tells the runtime: the hooks this session runs under, and the line it draws under the
-# conversation. The crew renders the file and mounts it read only, so its presence is the whole
-# question, and a sandbox made before the crew rendered one simply has none.
+# What the system tells the runtime: the hooks this session runs under, and the line it draws under the
+# conversation. The system renders the file and mounts it read only, so its presence is the whole
+# question, and a sandbox made before the system rendered one simply has none.
 #
 # Checked here rather than passed in, so opening a conversation is under the same constraints a
 # dispatched task is. A gate that only runs on dispatched tasks is one the operator walks around by
@@ -36,8 +36,8 @@ fi
 transcript="$HOME/.claude/projects/-home-agent-workspace/$conversation.jsonl"
 
 while true; do
-    # The crew names the conversation and hands the name down, so a conversation opened here is one
-    # the crew can find afterwards: its history, and what it cost. A name with no transcript behind it
+    # The system names the conversation and hands the name down, so a conversation opened here is one
+    # the system can find afterwards: its history, and what it cost. A name with no transcript behind it
     # is the first open rather than a loss, and starting it under that name is what makes the name
     # true. Resuming a name that is not there would print "No conversation found" and exit.
     if [ -z "$conversation" ]; then

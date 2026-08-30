@@ -184,7 +184,7 @@ func TestTheOldDangerousKeySaysWhereTheModePickerWent(t *testing.T) {
 	}
 }
 
-// wantedMode is the protocol's spelling of a mode the listing prints, for asserting on what the crew
+// wantedMode is the protocol's spelling of a mode the listing prints, for asserting on what the system
 // was actually told.
 func wantedMode(spoken string) string {
 	switch spoken {

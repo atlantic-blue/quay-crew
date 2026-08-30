@@ -56,7 +56,7 @@ func (m Model) View() string {
 	return strings.Join(lines, "\n")
 }
 
-// headerLines is the status block with the key hints beside it: what this crew is on the left, what
+// headerLines is the status block with the key hints beside it: what this system is on the left, what
 // the keyboard does on the right.
 func (m Model) headerLines() []string {
 	if m.headless {
@@ -69,7 +69,7 @@ func (m Model) headerLines() []string {
 	// wordmark go at a wider window than the total did, which is the wrong way round.
 	status := m.statusLines("")
 	// What joins the first line, in the order it earns its place: the machine first, because a full
-	// machine stops the crew and what it cost does not. Each is added only while the whole block
+	// machine stops the system and what it cost does not. Each is added only while the whole block
 	// still leaves room for the wordmark, so the header stays one row and the wordmark stays on it.
 	trailer := ""
 	for _, extra := range []string{m.roomPhrase(), m.spent()} {
@@ -91,7 +91,7 @@ func (m Model) headerLines() []string {
 		}
 	}
 
-	// The block is as tall as the tallest of them: neither the crew's description nor the keys
+	// The block is as tall as the tallest of them: neither the system's description nor the keys
 	// available may be cut off because the other one is shorter.
 	height := len(status)
 	if len(hints) > height {
@@ -179,7 +179,7 @@ func (m Model) withLogo(lines []string) []string {
 	return lines
 }
 
-// statusLines is the crew this console is pointed at: where it is, what a task would run in, and
+// statusLines is the system this console is pointed at: where it is, what a task would run in, and
 // whether any of it survives a restart. Anything the control plane did not say is left out rather
 // than guessed at.
 // roomFor says whether the header block would still leave the wordmark somewhere to go once the
@@ -240,7 +240,7 @@ func (m Model) statusLines(spent string) []string {
 //
 // One row rather than one line of its own, because the header is one row and the whole point of it
 // is what can be read at a glance. The word is coloured rather than only spelled, because a full
-// machine has to be readable without reading the number beside it. A crew that measured nothing says
+// machine has to be readable without reading the number beside it. A system that measured nothing says
 // unknown, and unknown is never green: a header that claimed room it had not measured is what let
 // eighteen sandboxes be killed with nothing said about it.
 func (m Model) roomPhrase() string {
@@ -267,9 +267,9 @@ func roomWord(state string) string {
 	}
 }
 
-// sandboxImagePhrase names the build every session is running, and says in red when the crew has
-// moved on from it. Sessions run whatever that image holds, so an image left behind is a crew whose
-// conversations are on the build from before, with the quay inside them older than the crew or not
+// sandboxImagePhrase names the build every session is running, and says in red when the system has
+// moved on from it. Sessions run whatever that image holds, so an image left behind is a system whose
+// conversations are on the build from before, with the quay inside them older than the system or not
 // there at all. An image that does not say which build it is is left out rather than guessed at.
 func sandboxImagePhrase(info Info) string {
 	if info.SandboxBuild == "" {
@@ -281,7 +281,7 @@ func sandboxImagePhrase(info Info) string {
 	return info.SandboxBuild
 }
 
-// spent is what the crew has cost, drawn beside the build when there is room for it and the wordmark
+// spent is what the system has cost, drawn beside the build when there is room for it and the wordmark
 // both. It gives way first: the number is in the listing too.
 func (m Model) spent() string {
 	if m.info.Spent.Empty() {
@@ -443,11 +443,11 @@ func (m Model) panelBottom() string {
 func (m Model) helpBody() []string {
 	height := m.bodyHeight() + 1
 
-	// The crew block is drawn at full width, and only the keys are folded into columns. Folded in
+	// The system block is drawn at full width, and only the keys are folded into columns. Folded in
 	// together, one long line about where state is kept made every column that wide, which left room
 	// for one column, which pushed the keys off the end of the panel. They were not shortened, they
 	// were dropped, and a help panel missing half its keys looks exactly like a complete one.
-	described := m.crewBlock()
+	described := m.systemBlock()
 	entries := described
 	if room := height - len(described); room > 0 {
 		entries = append(described, intoColumns(m.helpLines(), room, m.innerWidth())...)
@@ -804,7 +804,7 @@ func (m Model) offered() string {
 }
 
 // wizardPrompt shows what has been typed, asterisks for a secret. A step that chooses from what the
-// crew already has lists it: asking somebody to name a workspace they cannot see leaves them able
+// system already has lists it: asking somebody to name a workspace they cannot see leaves them able
 // only to make new ones.
 func (m Model) wizardPrompt() string {
 	if m.making.step() == stepWorking {
@@ -948,11 +948,11 @@ func truncate(text string, width int) string {
 	return string(runes) + "…"
 }
 
-// crewLines describe the crew this console is pointed at: where it is, where you are standing in it,
+// systemLines describe the system this console is pointed at: where it is, where you are standing in it,
 // and what it is running underneath. They were the header until the header had no room left for the
 // wordmark, and they are also the stats view, which is the one to leave open beside what you are
 // doing.
-func (m Model) crewLines() []string {
+func (m Model) systemLines() []string {
 	lines := make([]string, 0, 9)
 	add := func(key, value string) {
 		if value != "" {
@@ -977,11 +977,11 @@ func (m Model) crewLines() []string {
 	return lines
 }
 
-// crewBlock is what the crew is, drawn at full width above the keys. The header carries the wordmark
+// systemBlock is what the system is, drawn at full width above the keys. The header carries the wordmark
 // and which build this is; everything it used to carry is here.
-func (m Model) crewBlock() []string {
-	lines := []string{crumb.Render("  this crew")}
-	for _, described := range m.crewLines() {
+func (m Model) systemBlock() []string {
+	lines := []string{crumb.Render("  this system")}
+	for _, described := range m.systemLines() {
 		lines = append(lines, "    "+described)
 	}
 	return append(lines, "")

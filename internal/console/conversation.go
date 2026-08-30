@@ -19,7 +19,7 @@ import (
 // toggleConversation shows the conversation beside the console, or hides the one already there.
 func (m Model) toggleConversation() (Model, tea.Cmd) {
 	if m.beside == nil {
-		m.err = fmt.Errorf("this console cannot open a conversation: it was opened without a crew")
+		m.err = fmt.Errorf("this console cannot open a conversation: it was opened without a system")
 		return m, nil
 	}
 	here := os.Getenv("TMUX_PANE")
@@ -181,12 +181,12 @@ func parsePane(line string) (id string, left, top int, ok bool) {
 
 // startFreshConversation ends the one the driver is in and opens a new one in its place.
 //
-// Coming back to the conversation you were in is what opening the crew does, and what ctrl-q is for.
+// Coming back to the conversation you were in is what opening the system does, and what ctrl-q is for.
 // This is the other thing somebody wants sometimes: a clean start, without losing the old one by
 // accident. Ending it here is deliberate and asked for.
 func (m Model) startFreshConversation() (Model, tea.Cmd) {
 	if m.beside == nil || m.freshen == nil {
-		m.err = fmt.Errorf("this console cannot open a conversation: it was opened without a crew")
+		m.err = fmt.Errorf("this console cannot open a conversation: it was opened without a system")
 		return m, nil
 	}
 	here := os.Getenv("TMUX_PANE")

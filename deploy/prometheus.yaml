@@ -1,7 +1,7 @@
 # Prometheus for local development.
 #
 # It was started with no configuration file at all, so it fell back to the image default and scraped
-# nothing but itself. The crew's metrics arrive at the OpenTelemetry collector over OTLP and the
+# nothing but itself. The system's metrics arrive at the OpenTelemetry collector over OTLP and the
 # collector republishes them for scraping, so the collector is the target that matters here.
 #
 # Nothing creates a metric instrument yet, so this scrapes a real endpoint that publishes an empty

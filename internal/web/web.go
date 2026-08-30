@@ -1,4 +1,4 @@
-// Package web serves a read only view of the crew to a browser on the operator's own machine.
+// Package web serves a read only view of the system to a browser on the operator's own machine.
 //
 // A terminal pane is a poor place to read a long reply with code in it, and that is the one gap this
 // answers. It opens no new network, it needs no new call in the control plane, and it cannot change
@@ -72,7 +72,7 @@ func Serve(ctx context.Context, reader Reader, addr string, out io.Writer) error
 // loopbackOnly refuses to bind anywhere but this machine.
 //
 // The control plane listens on a local only port guarded by one shared token, and this server holds
-// that token. Serving it to a routable address would hand the whole crew to the network without the
+// that token. Serving it to a routable address would hand the whole system to the network without the
 // three things that would need: a token for each device, a way to withdraw one, and a rule about
 // encryption. None of those exist, so this is a wall rather than a default. An address with no host
 // is refused too, because ":8080" binds every interface there is.
@@ -88,7 +88,7 @@ func loopbackOnly(addr string) error {
 		return nil
 	}
 	return fmt.Errorf("quay web serves this machine only, and %q is not on it: use %s. "+
-		"Reaching the crew from another device is a separate decision, and a chat channel is the "+
+		"Reaching the system from another device is a separate decision, and a chat channel is the "+
 		"road planned for it", addr, DefaultAddress)
 }
 

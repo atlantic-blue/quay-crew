@@ -54,10 +54,10 @@ func moved(typed string) (string, bool) {
 	return instead, gone
 }
 
-// RoomFrom asks the crew what the machine has left: one figure and one word.
+// RoomFrom asks the system what the machine has left: one figure and one word.
 //
-// The crew answers from its own last sample rather than from the daemon, so this may be asked every
-// second. A crew too old to answer, or one that could not read its machine, leaves both empty and
+// The system answers from its own last sample rather than from the daemon, so this may be asked every
+// second. A system too old to answer, or one that could not read its machine, leaves both empty and
 // the header says nothing rather than claiming room nobody measured.
 func RoomFrom(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) (line, state string) {
 	answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
@@ -80,8 +80,8 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 		known.Store, known.State, known.Events = resp.GetStore(), resp.GetState(), resp.GetEvents()
 		known.Secrets = resp.GetSecrets()
 		known.SandboxBuild = resp.GetSandboxBuild()
-		// What the crew has cost, which is a running total rather than configuration, so it comes
-		// from its own call. A crew that cannot answer still has a header worth drawing, so this
+		// What the system has cost, which is a running total rather than configuration, so it comes
+		// from its own call. A system that cannot answer still has a header worth drawing, so this
 		// failure is swallowed where the one above is not.
 		if spent, err := client.GetUsage(ctx, &quaycrewv1.GetUsageRequest{}); err == nil {
 			known.Spent = sandbox.Usage{
@@ -91,8 +91,8 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 				CacheWritten: spent.GetTotal().GetCacheWritten(),
 			}
 		}
-		// What the machine has left, from the crew's own last sample. Swallowed the same way and for
-		// the same reason: a crew that cannot say still has a header worth drawing.
+		// What the machine has left, from the system's own last sample. Swallowed the same way and for
+		// the same reason: a system that cannot say still has a header worth drawing.
 		known.Room, known.RoomState = RoomFrom(ctx, client)
 		return known, nil
 	}

@@ -78,14 +78,32 @@ func Validate(what, value string) error {
 	return fmt.Errorf("%s name %q cannot be part of an address: use lowercase letters, digits and hyphens, for example %q", what, value, suggestion)
 }
 
-// Crew is the word an address takes to mean the level above every workspace: what the whole crew
-// holds, rather than what one workspace holds. `quay skill attach crew`, `quay secret set crew` and
-// `quay context set crew` all read it.
-const Crew = "crew"
+// System is the word an address takes to mean the level above every workspace: what the whole system
+// holds, rather than what one workspace holds. `quay skill attach system`, `quay secret set system` and
+// `quay context set system` all read it.
+const System = "system"
+
+// Retired is the word that meant this level until it became System.
+//
+// It is refused by name wherever the new word is taken, rather than falling through to be read as
+// the name of a workspace that cannot exist. A word that stops working quietly is the worse of the
+// two failures: `quay secret set crew CLAUDE_CODE_OAUTH_TOKEN`, typed out of habit, would come back
+// saying there is no such workspace, which sends the operator looking for a workspace instead of
+// telling them the one thing they need, which is what to type instead.
+const Retired = "crew"
+
+// RefuseRetired returns the refusal for the word this level used to take, and nil for anything else,
+// so a caller puts it in front of whatever it does with an address and nothing else changes.
+func RefuseRetired(typed string) error {
+	if strings.TrimSpace(typed) != Retired {
+		return nil
+	}
+	return fmt.Errorf("%q is not a word this takes any more: the level above every workspace is called %q, so type %q", Retired, System, System)
+}
 
 // ValidateWorkspace is Validate plus the one name a workspace cannot take.
 //
-// A workspace called "crew" would shadow the word in every address, so `quay secret set crew TOKEN`
+// A workspace called "system" would shadow the word in every address, so `quay secret set system TOKEN`
 // would set a secret on that workspace and no other workspace would ever read it. The refusal is
 // here rather than in the command line tool because every way in creates through the same control
 // plane.
@@ -93,8 +111,13 @@ func ValidateWorkspace(value string) error {
 	if err := Validate("workspace", value); err != nil {
 		return err
 	}
-	if strings.TrimSpace(value) == Crew {
-		return fmt.Errorf("a workspace cannot be called %q: that word means the whole crew, so %q would take secrets and skills meant for every workspace", Crew, Crew)
+	if strings.TrimSpace(value) == System {
+		return fmt.Errorf("a workspace cannot be called %q: that word means the whole system, so %q would take secrets and skills meant for every workspace", System, System)
+	}
+	// The word that used to mean the level stays reserved. A workspace holding it would be handed
+	// everything typed out of habit, quietly, and nothing anywhere would say that the word had moved.
+	if strings.TrimSpace(value) == Retired {
+		return fmt.Errorf("a workspace cannot be called %q: that word used to mean the level above every workspace, so `quay secret set %s` typed out of habit would land here. The word is now %q", Retired, Retired, System)
 	}
 	return nil
 }

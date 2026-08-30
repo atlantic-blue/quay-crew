@@ -33,12 +33,12 @@ const (
 	EventRunStopped  = "flow.run.stopped"
 )
 
-// pollBatch is how many landed steps one tick carries on. A crew with a thousand finished runs is
+// pollBatch is how many landed steps one tick carries on. A system with a thousand finished runs is
 // not a reason for one tick to hold the store open.
 const pollBatch = 50
 
 // Store is what the engine needs from the database: a graph to run, and a run whose every
-// transition lands in the same transaction as the state it describes. Implemented by the crew's
+// transition lands in the same transaction as the state it describes. Implemented by the system's
 // store; defined here so this package stays importable by it.
 type Store interface {
 	// ImportFlowGraph stores a graph at a version. The same name and version twice is refused,
@@ -71,7 +71,7 @@ type Store interface {
 	// starting the run, so a start that fails does not leave the schedule firing every tick.
 	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
 	// DueFlowRuns are the waiting runs whose time has come. The poller asks for these and nothing
-	// else, so a crew with a thousand finished runs and one waiting does one row's job per tick.
+	// else, so a system with a thousand finished runs and one waiting does one row's job per tick.
 	DueFlowRuns(ctx context.Context, now time.Time) ([]*Run, error)
 	// LandedFlowSteps are the runs whose step has ended: working runs whose step's job reached a
 	// terminal phase. This is what moves a run now that it does not hold its own dispatch open.
@@ -119,7 +119,7 @@ type Store interface {
 // this caller left it: somebody stopped it, or another poller carried it on first.
 var ErrRunHalted = errors.New("flow: the run is no longer where this movement left it")
 
-// Schedule is a graph the crew starts on its own, in one project, every so often.
+// Schedule is a graph the system starts on its own, in one project, every so often.
 type Schedule struct {
 	GraphName string
 	Project   string
@@ -195,7 +195,7 @@ type RecordedTransition struct {
 // movement and hands it to the reducer, which is the only way a ceiling can stop a task before it
 // is paid for rather than after.
 //
-// It takes the session rather than a conversation because resolving one to the other is the crew's
+// It takes the session rather than a conversation because resolving one to the other is the system's
 // job, not the engine's: the session row knows which conversation it is having and which workspace
 // keeps the transcript. An implementation that cannot tell answers zero.
 type Spend interface {
@@ -211,7 +211,7 @@ type ControlPlane interface {
 	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
 }
 
-// Works is what the engine needs from the crew to keep a run inside the job tree.
+// Works is what the engine needs from the system to keep a run inside the job tree.
 //
 // It prepares rather than writes, because the declaration and the movement that asked for it land in
 // one transaction. Preparing is where every rule a caller's declaration is held to is applied: the
@@ -258,7 +258,7 @@ func (e *Engine) WithClock(clock func() time.Time) *Engine {
 }
 
 // NewEngine builds one. A nil spend reader means the token ceiling has nothing to read, so a graph
-// declaring one is bounded by its transition cap alone; the crew wires the real reader in.
+// declaring one is bounded by its transition cap alone; the system wires the real reader in.
 func NewEngine(store Store, plane ControlPlane, spend Spend, works Works) *Engine {
 	return &Engine{store: store, plane: plane, spend: spend, works: works}
 }
@@ -323,7 +323,7 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 			graphName, version, graph.Start, graph.Nodes[graph.Start].Type, NodeTrigger)
 	}
 	if e.works == nil {
-		return Run{}, "", Graph{}, fmt.Errorf("flow: this crew cannot declare job, so it cannot run a flow: a run is carried by a job")
+		return Run{}, "", Graph{}, fmt.Errorf("flow: this system cannot declare job, so it cannot run a flow: a run is carried by a job")
 	}
 
 	state := from.state
@@ -408,11 +408,11 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 	if dispatch != nil {
 		declared, record, err := e.declare(ctx, graph, next, at.carrier, *dispatch)
 		if err != nil {
-			// The crew refused this step: too deep, a role the workspace does not hold, a project
+			// The system refused this step: too deep, a role the workspace does not hold, a project
 			// that has gone. No job was declared, so the run must not walk a success edge on a reply
-			// that will never exist. It stops with the crew's own sentence, which names what to do.
+			// that will never exist. It stops with the system's own sentence, which names what to do.
 			next.Status = StatusStopped
-			next.Reason = fmt.Sprintf("stopped at %s, which the crew refused: %s", dispatch.Node, oneLine(err.Error()))
+			next.Reason = fmt.Sprintf("stopped at %s, which the system refused: %s", dispatch.Node, oneLine(err.Error()))
 			dispatch = nil
 		} else {
 			written.Declared, written.Records = declared, append(written.Records, record)
@@ -458,7 +458,7 @@ func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier stri
 		Title: fmt.Sprintf("%s step %s", run.GraphName, dispatch.Node),
 		Brief: dispatch.Prompt,
 		Role:  dispatch.Role,
-		// The mode travels with every step. A session is born in the crew's own mode, so this is the
+		// The mode travels with every step. A session is born in the system's own mode, so this is the
 		// only moment anything can say what an automation's tasks may do without asking.
 		Mode: graph.Mode,
 		Labels: map[string]string{
@@ -548,7 +548,7 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error
 		Node:   run.Node,
 		Reply:  replyOf(step),
 		Failed: step.Phase == job.PhaseFailed,
-		// Job halted over a claim it did not meet is the reducer's unmet: the crew knows the job
+		// Job halted over a claim it did not meet is the reducer's unmet: the system knows the job
 		// did not happen and does not know why, so the run stops rather than branching.
 		Unmet: unmetOf(step),
 	})

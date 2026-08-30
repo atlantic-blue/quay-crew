@@ -18,7 +18,7 @@ import (
 // One word sends a task. It waits for the answer, and --dispatch lets go of it.
 //
 // Letting go used to be a word of its own, and before that it did not exist at all: the task was
-// held in the client for as long as the job took, so the terminal was the weakest part of the crew.
+// held in the client for as long as the job took, so the terminal was the weakest part of the system.
 // A task killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
 // nothing about why, and the job was gone.
 //
@@ -26,9 +26,9 @@ import (
 // command comes back before its task does, and a test that waits a duration for that passes on a
 // fast machine by accident.
 
-// aHeldCrew is a crew whose model will not answer until the returned func lets it, and which says
+// aHeldSystem is a system whose model will not answer until the returned func lets it, and which says
 // when a task has genuinely reached it.
-func aHeldCrew(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeRunner) {
+func aHeldSystem(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeRunner) {
 	t.Helper()
 	runner := &model.FakeRunner{
 		Reply: "the electricity bill is due on the ninth",
@@ -49,7 +49,7 @@ func aHeldCrew(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeR
 // otherwise hold this test open for as long as the runner is held, which is forever, and a suite
 // that hangs says nothing about what is wrong.
 func TestTheDispatchFlagLetsGoOfTheTask(t *testing.T) {
-	client, runner := aHeldCrew(t)
+	client, runner := aHeldSystem(t)
 
 	said := letGoOf(t, client, "when is the electricity bill due")
 
@@ -81,7 +81,7 @@ func TestTheDispatchFlagLetsGoOfTheTask(t *testing.T) {
 
 // Somebody typing a short question is looking at the terminal, so the word on its own answers there.
 func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
-	client, runner := aHeldCrew(t)
+	client, runner := aHeldSystem(t)
 
 	answered := make(chan string, 1)
 	go func() {
@@ -120,10 +120,10 @@ func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
 	}
 }
 
-// The job is the crew's now, so a caller that goes away does not take it. This is the failure that
+// The job is the system's now, so a caller that goes away does not take it. This is the failure that
 // started it: seventeen minutes of work lost with the terminal that asked for it.
 func TestATaskOutlivesTheCommandThatStartedIt(t *testing.T) {
-	client, runner := aHeldCrew(t)
+	client, runner := aHeldSystem(t)
 
 	handle := handleFrom(t, letGoOf(t, client, "read the repository"))
 	select {
@@ -362,7 +362,7 @@ func handleFrom(t *testing.T, said string) string {
 	return strings.TrimSuffix(strings.TrimSpace(after), ")")
 }
 
-// waitForTheAnswer waits until the crew has finished with a task it was let go of, so an assertion
+// waitForTheAnswer waits until the system has finished with a task it was let go of, so an assertion
 // about what landed is never made against a task still in flight.
 func waitForTheAnswer(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, handle string) {
 	t.Helper()

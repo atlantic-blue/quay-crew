@@ -1,7 +1,7 @@
 # Skills
 
 A session opens knowing nothing about how you job. It has a model, a sandbox, and whatever context
-the crew has written into it. Ask it to open a pull request and it will find `git` in the image, no
+the system has written into it. Ask it to open a pull request and it will find `git` in the image, no
 identity, no credential, and no `gh`, and it will tell you the control plane is refusing connections.
 
 A skill is the missing piece: a capability a session can be given, written down as code, shared the
@@ -15,7 +15,7 @@ A skill is four things and nothing else:
 - **A brief.** How this kind of work is done here. Prose the model reads, not prompt engineering.
 - **The binaries it needs.** `gh` for GitHub, `terraform` for infrastructure. Declared, so a session
   missing one is refused with a sentence rather than discovering it halfway through.
-- **The secrets it names.** By name, never by value. The crew binds them from its own sealed store.
+- **The secrets it names.** By name, never by value. The system binds them from its own sealed store.
 - **Its own setup.** A script that runs inside the sandbox to make the capability real, for example
   configuring a git identity and a credential helper.
 
@@ -26,7 +26,7 @@ different entity with its own design in [`ARCHITECTURE.md`](ARCHITECTURE.md). Se
 
 ## Where a skill lives
 
-Authored as files, imported into the crew, rendered back into the sandbox. Each of those three is
+Authored as files, imported into the system, rendered back into the sandbox. Each of those three is
 answering a different question, and this repository has already answered two of them in opposite
 directions for good reasons.
 
@@ -38,7 +38,7 @@ A skill needs both properties, so it gets both layers.
 
 ```mermaid
 flowchart LR
-    A["a repository of skills<br/>files, reviewed, versioned"] -->|"quay skill import"| B["the crew's store<br/>pinned to a version"]
+    A["a repository of skills<br/>files, reviewed, versioned"] -->|"quay skill import"| B["the system's store<br/>pinned to a version"]
     B -->|"quay skill attach"| C["a workspace"]
     C --> D["every session in it<br/>files written, secrets injected,<br/>a line in the memory file"]
     E["the sealed secrets store"] -->|"only what the skill names"| D
@@ -47,9 +47,9 @@ flowchart LR
 **Files are the authoring and sharing format.** A skill is a directory in a git repository, which
 makes it reviewable, diffable, versioned, and testable in continuous integration. "Shared across
 users" then needs no invention: it is a repository somebody clones, or a directory in a repository
-several crews already read.
+several systems already read.
 
-**The store is the runtime.** Importing copies the skill in and pins it to a version, so a crew on a
+**The store is the runtime.** Importing copies the skill in and pins it to a version, so a system on a
 pod with no host directory still has its skills, a listing can answer which skills a session holds,
 and a skill cannot change under a session that is using it.
 
@@ -79,11 +79,11 @@ secrets:
 `GH_TOKEN` rather than `GITHUB_TOKEN`, because `gh` reads both and prefers the first, so one name serves
 the tool and anything else that needs a credential for the same host.
 
-There is no `identity` field. Who a commit is by is carried by the crew already, as
+There is no `identity` field. Who a commit is by is carried by the system already, as
 `QC_GIT_AUTHOR_NAME` and `QC_GIT_AUTHOR_EMAIL`, and a field in a manifest that nothing reads looks
 configured and does nothing. Identity per workspace arrives with signing, and gets a field then.
 
-A field the crew does not know is refused by name rather than ignored, for the same reason.
+A field the system does not know is refused by name rather than ignored, for the same reason.
 
 The manifest is a description, never a program. No expression language, no conditionals, no hooks
 that run on the host. The only executable part is `bin/setup`, and it runs inside the sandbox as the
@@ -93,22 +93,22 @@ sandbox user, which is the boundary that was already there.
 
 A skill reaches a session three ways, at the outer two of the four levels context already has.
 
-The crew's own skills directory reaches every session: that is the crew level, for skills the operator
-keeps as files on the machine. An imported skill attached to the crew reaches every session too, with
-`quay skill attach crew <name>`, taking the same word where a workspace goes that `quay context set
-crew` takes. That is the crew level again, reached from the tool rather than from the filesystem,
-which matters because a crew on a pod has no directory to drop files into and because setting a crew
+The system's own skills directory reaches every session: that is the system level, for skills the operator
+keeps as files on the machine. An imported skill attached to the system reaches every session too, with
+`quay skill attach system <name>`, taking the same word where a workspace goes that `quay context set
+system` takes. That is the system level again, reached from the tool rather than from the filesystem,
+which matters because a system on a pod has no directory to drop files into and because setting a system
 up once is the difference from setting each workspace up again. A skill imported and attached to one
 workspace reaches that workspace's sessions: that is the workspace level, and it is where something
 narrow belongs, because a capability for one kind of work should not be in front of every session the
-crew has.
+system has.
 
-A crew whose catalogue is empty is given the skills this build ships with when the control plane
-starts: all seven imported, git and github taken at the crew level, the rest waiting to be attached.
-It happens only on an empty catalogue, so it is where a crew begins rather than a policy that undoes a
+A system whose catalogue is empty is given the skills this build ships with when the control plane
+starts: all seven imported, git and github taken at the system level, the rest waiting to be attached.
+It happens only on an empty catalogue, so it is where a system begins rather than a policy that undoes a
 decision later.
 
-A skill the crew holds is rendered into each workspace's own directory and mounted from there, exactly
+A skill the system holds is rendered into each workspace's own directory and mounted from there, exactly
 as a workspace's own skill is, so the writing out, the sweeping when it is let go, and the staleness of
 a sandbox born before it all come for free rather than as a second path.
 
@@ -133,9 +133,9 @@ At sandbox creation the control plane resolves the skills that reach this sessio
    image. A capability that cannot work should say so before a task runs, not through the model
    discovering `gh: command not found`. A secret the skill names and the workspace has not set is
    answered differently: that skill alone is left out of the session, and the listing carries the
-   reason. The image is one thing for the whole crew, while a secret is one workspace's to set, and
+   reason. The image is one thing for the whole system, while a secret is one workspace's to set, and
    refusing every task in a workspace over one skill it has not finished setting up is the wrong
-   trade the moment a skill is held crew wide rather than attached one workspace at a time.
+   trade the moment a skill is held system wide rather than attached one workspace at a time.
 2. Mounts each skill's directory read only, so a session can read its scripts and cannot edit them. A
    skill imported into the store is written onto the host first, under the workspace it belongs to,
    because it has to be somewhere before it can be mounted from anywhere. Nothing about a skill is ever
@@ -153,19 +153,19 @@ At sandbox creation the control plane resolves the skills that reach this sessio
    line is what every conversation pays for and the brief is opened when that kind of work comes up.
 
 All five are built, and steps 1 and 4 cover both sources: a workspace's own skill is refused for a
-missing secret or a missing binary exactly as one from the crew's directory is.
+missing secret or a missing binary exactly as one from the system's directory is.
 
 ## Credentials
 
 A skill names its secrets and never carries them. The values stay in the sealed store where the
-subscription token already lives, and the crew binds them at sandbox creation.
+subscription token already lives, and the system binds them at sandbox creation.
 
 The cost is the same one [`ARCHITECTURE.md`](ARCHITECTURE.md) states for the model token, and it is
 worth restating because a GitHub token is a different kind of loss. Values set on a sandbox are
 readable for the life of the container, for example through `docker inspect`, and they are readable
 by the model, which is the point of giving them to it. A token that can push to your repositories is
 in the hands of something that decides what to do next on its own. Scope it to what the skill needs,
-set it per workspace rather than per crew, and treat attaching a credential bearing skill as the same
+set it per workspace rather than per system, and treat attaching a credential bearing skill as the same
 kind of decision as turning on the driver's network access.
 
 ## What it costs
@@ -173,9 +173,9 @@ kind of decision as turning on the driver's network access.
 Every attached skill puts a line in the file the model reads when a conversation starts, so a skill is
 not free, and what goes in that line is the decision that matters.
 
-The measurement that matters was taken on a real crew rather than imagined. Its four levels of context
+The measurement that matters was taken on a real system rather than imagined. Its four levels of context
 rendered to 51,727 bytes at the workspace, roughly thirteen thousand tokens, and every session in
-every workspace paid it before a word was typed, because all of it sat at the crew level. Nothing in
+every workspace paid it before a word was typed, because all of it sat at the system level. Nothing in
 that file was a skill. The lesson is not about skills at all: it is that a level which reaches
 everything will be filled until it hurts, and skills are the next thing that would fill it.
 
@@ -189,7 +189,7 @@ So a brief is short by construction, and the mount is what makes that possible:
   reads only when it needs them. A convention document, a checklist, an example, a reference. None of
   it costs anything until something opens it.
 - **A skill is attached at a level, so nothing is loaded everywhere.** This is the structural
-  difference from context as it stands: context at the crew level reaches every session
+  difference from context as it stands: context at the system level reaches every session
   unconditionally, and a skill reaches the sessions somebody attached it to.
 
 The rule of thumb that follows: if a brief is long enough that you would skim it, the model is paying
@@ -201,7 +201,7 @@ A skill cannot conjure a binary. `gh` is not in the sandbox image, and no amount
 it there.
 
 The first version does the honest thing rather than the clever one: the image carries the binaries the
-skills in use need, a skill declares what it requires, and the crew checks before the sandbox runs and
+skills in use need, a skill declares what it requires, and the system checks before the sandbox runs and
 refuses with a message naming the missing binary and the image that has to carry it. A skill that
 installs software at task time would need network access, a package manager and a trust story, and
 would make every task slower and less reproducible.
@@ -225,7 +225,7 @@ either a skill grows control flow, which is an agent framework in a trench coat,
 carrying credentials, which puts a token in something that branches.
 
 What they share is real and worth building once: both are authored as files, both are pinned by
-version, both are attached at a level of the crew, and both are reviewed before they apply.
+version, both are attached at a level of the system, and both are reviewed before they apply.
 
 ## Not tied to one model
 
@@ -262,13 +262,13 @@ Verified against the repository and a running stack, rather than assumed:
 
 - `git` version 2.39.5, `rg` and `tmux` are in the sandbox image, and there is still no `gh`: verified by
   running `command -v gh` inside a real session's container on 8 August 2026. A commit has an author and a
-  committer now, from the crew's configuration.
+  committer now, from the system's configuration.
 - A workspace's secrets reach that workspace's sandboxes. A session holding the github skill is given
   `GH_TOKEN` because the workspace holds it. A skill naming a secret the workspace has not set is
   left out of the session instead, and `quay skill list` says which secret left it out and how to set
   it, so the task still runs and the model is never handed a brief it cannot follow. A manifest
   naming a secret
-  starting `QC_` or `CLAUDE_` is refused at validation, because those names are the crew's own, and a
+  starting `QC_` or `CLAUDE_` is refused at validation, because those names are the system's own, and a
   workspace secret starting `QC_` never travels for the same reason.
 - Context already has the four levels, the store, the rendering into files and the reading back, and
   a skill's brief follows that path rather than inventing a second one.
@@ -281,7 +281,7 @@ if the rest waits:
 
 1. A workspace's secrets reach a sandbox by name rather than one hardcoded key. Done.
 2. A git identity in a sandbox, from the workspace, so a commit has an author. Done.
-3. A skill reaches a session from the crew's directory: read, mounted read only, refused early, set up.
+3. A skill reaches a session from the system's directory: read, mounted read only, refused early, set up.
    Done.
 4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
    Done. This is one slice of [#179](https://github.com/atlantic-blue/quay-crew/issues/179), whose

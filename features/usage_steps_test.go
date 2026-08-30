@@ -11,7 +11,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// What a conversation cost, which the crew reads from the transcript the model keeps rather than from
+// What a conversation cost, which the system reads from the transcript the model keeps rather than from
 // anything it recorded itself.
 type usageWorld struct {
 	listed []*quaycrewv1.Session
@@ -113,7 +113,7 @@ func onlySpender(ctx context.Context) (*quaycrewv1.Usage, error) {
 // with the usage on the assistant's messages.
 func writeTranscript(dir, workspace, conversation string, in, out, cached int) error {
 	if conversation == "" {
-		return fmt.Errorf("the crew holds no conversation for this session, so there is nowhere to write")
+		return fmt.Errorf("the system holds no conversation for this session, so there is nowhere to write")
 	}
 	at := filepath.Join(dir, "workspaces", workspace, "claude", "projects", "-home-agent-workspace")
 	if err := os.MkdirAll(at, 0o777); err != nil {

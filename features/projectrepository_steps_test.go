@@ -61,7 +61,7 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the repository is (public|private), and the crew says its pipeline minutes are (free|metered)$`,
+	sc.Step(`^the repository is (public|private), and the system says its pipeline minutes are (free|metered)$`,
 		func(ctx context.Context, kind, bill string) error {
 			held, err := theProject(ctx)
 			if err != nil {
@@ -71,7 +71,7 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 				return fmt.Errorf("the repository is %q, want %q", held.GetVisibility(), kind)
 			}
 			if said := repository.Costs(held.GetVisibility()); !strings.Contains(said, bill) {
-				return fmt.Errorf("the crew says %q, want it to say the minutes are %s", said, bill)
+				return fmt.Errorf("the system says %q, want it to say the minutes are %s", said, bill)
 			}
 			return nil
 		})
@@ -89,7 +89,7 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 	})
 
 	// What the session doing the job is actually sent, which is the half a record cannot buy on its
-	// own: the line the crew puts in front of a brief is what tells a session where to push.
+	// own: the line the system puts in front of a brief is what tells a session where to push.
 	sc.Step(`^the session doing it is asked to open a pull request against "([^"]*)"$`,
 		func(ctx context.Context, want string) error {
 			one, err := readJob(ctx, 0)
@@ -124,12 +124,12 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 		})
 }
 
-// theProject reads the project back out of the crew, so an assertion is about what the crew holds
+// theProject reads the project back out of the system, so an assertion is about what the system holds
 // rather than about what a call answered.
 func theProject(ctx context.Context) (*quaycrewv1.Project, error) {
 	w := worldFrom(ctx)
 	if w.lastErr != nil {
-		return nil, fmt.Errorf("the crew refused it: %w", w.lastErr)
+		return nil, fmt.Errorf("the system refused it: %w", w.lastErr)
 	}
 	resp, err := w.client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: w.projectID})
 	if err != nil {

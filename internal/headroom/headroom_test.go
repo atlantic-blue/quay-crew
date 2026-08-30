@@ -9,7 +9,7 @@ import (
 
 const mib = int64(1 << 20)
 
-// Rule five of issue 405: no number the crew cannot measure. A figure nothing read says the word,
+// Rule five of issue 405: no number the system cannot measure. A figure nothing read says the word,
 // and it must never read as a zero, because zero megabytes held is a machine that is empty and an
 // operator acts differently on the two.
 func TestAFigureNothingMeasuredSaysUnknownRatherThanZero(t *testing.T) {
@@ -88,8 +88,8 @@ func TestTheLimitThatBindsIsTheDaemonsAndNotTheMachines(t *testing.T) {
 	}
 }
 
-// Rule five again, at the sample. A crew that could not read the machine must not report room: the
-// header that drew a healthy crew through eighteen kills is the fault this closes.
+// Rule five again, at the sample. A system that could not read the machine must not report room: the
+// header that drew a healthy system through eighteen kills is the fault this closes.
 func TestASampleNothingCouldReadIsUnknownAndNeverRoom(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -186,7 +186,7 @@ func TestTheHeaderLineCarriesTheFigureAndTheWord(t *testing.T) {
 
 // The view answers which session to stop, so the largest is first. A sandbox nothing measured sorts
 // last: an unknown figure is not a large one, and putting it first would send the operator to stop
-// the one container the crew knows nothing about.
+// the one container the system knows nothing about.
 func TestSandboxesAreOrderedLargestFirstAndUnknownLast(t *testing.T) {
 	ordered := headroom.Sorted([]headroom.Sandbox{
 		{Session: "small", Held: headroom.Measured(2 * mib)},
@@ -221,10 +221,10 @@ func sessions(boxes []headroom.Sandbox) []string {
 	return names
 }
 
-// A crew that has never read its machine says so, rather than describing a machine of zeros.
-func TestASampleNobodyTookSaysTheCrewHasNotRead(t *testing.T) {
+// A system that has never read its machine says so, rather than describing a machine of zeros.
+func TestASampleNobodyTookSaysTheSystemHasNotRead(t *testing.T) {
 	said := headroom.Describe(headroom.Sample{Used: headroom.Unknown(), Limit: headroom.Unknown()})
 	if !strings.Contains(said, "has not read the machine yet") {
-		t.Fatalf("the crew says:\n%s", said)
+		t.Fatalf("the system says:\n%s", said)
 	}
 }

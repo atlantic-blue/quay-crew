@@ -20,7 +20,7 @@ func initializeJobWaitingSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the crew refuses it and says a job cannot wait, and names the flow$`,
+	sc.Step(`^the system refuses it and says a job cannot wait, and names the flow$`,
 		func(ctx context.Context) error {
 			for _, phrase := range []string{"cannot wait", "flow", "quay flow import"} {
 				if err := theRefusalSays(phrase)(ctx); err != nil {

@@ -2,7 +2,7 @@
 //
 // Every change used to write its entry at the top of CHANGELOG.md. Two changes made at the same time
 // then wrote the same lines of the same file, so they collided by construction, and the resolution
-// was always the same and always mechanical: keep both entries. A crew that runs work in parallel
+// was always the same and always mechanical: keep both entries. A system that runs work in parallel
 // pays that on every batch rather than occasionally.
 //
 // A fragment is one small file per change, named after the issue it closes. Two changes write two

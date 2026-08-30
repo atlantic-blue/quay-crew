@@ -1,6 +1,6 @@
-Feature: A job is a record the crew keeps
+Feature: A job is a record the system keeps
 
-  A caller declares a job and the crew keeps it. The intent is a row, so it outlives the
+  A caller declares a job and the system keeps it. The intent is a row, so it outlives the
   terminal that asked for it, the session that will run it, and the process that read it. Nothing
   runs the job yet: this is the record, the refusals and the read path.
 
@@ -19,7 +19,7 @@ Feature: A job is a record the crew keeps
 
   Scenario: Intent survives the caller
     Given a job titled "read the electricity bill"
-    When the caller goes away and the crew is asked again
+    When the caller goes away and the system is asked again
     Then the job is still there, pending, with its brief whole
 
   Scenario: A job opens pending, at depth zero, with no parent
@@ -28,29 +28,29 @@ Feature: A job is a record the crew keeps
     And the job is at depth 0 with no parent
     And the job carries the moment it was declared
 
-  Scenario: The crew assigns the identifier
+  Scenario: The system assigns the identifier
     When the caller declares a job carrying an identifier of its own
-    Then the crew refuses it and says it assigns the identifier
+    Then the system refuses it and says it assigns the identifier
 
   Scenario: The parent is never taken from the request
     When the caller declares a job carrying a parent
-    Then the crew refuses it and says the parent comes from the credential
+    Then the system refuses it and says the parent comes from the credential
 
   Scenario: Job with no title is refused
     When the caller declares a job with no title
-    Then the crew refuses it and says a title is needed
+    Then the system refuses it and says a title is needed
 
   Scenario: A title of 201 bytes is refused
     When the caller declares a job with a title of 201 bytes
-    Then the crew refuses it and says the ceiling is 200
+    Then the system refuses it and says the ceiling is 200
 
   Scenario: A brief of 16385 bytes is refused
     When the caller declares a job with a brief of 16385 bytes
-    Then the crew refuses it and says the ceiling is 16384
+    Then the system refuses it and says the ceiling is 16384
 
   Scenario: Job naming a role the workspace does not hold is refused
     When the caller declares a job in the role "backlog-clearer"
-    Then the crew refuses it and names the role
+    Then the system refuses it and names the role
 
   Scenario: Job in a role the workspace holds is pinned to the version it holds
     Given the workspace holds the role "backlog-clearer" at version 1
@@ -62,7 +62,7 @@ Feature: A job is a record the crew keeps
   Scenario: Job that requires material its role does not receive is refused
     Given the workspace holds the role "test-writer" at version 1 receiving "job"
     When the caller declares a job in the role "test-writer" requiring "context"
-    Then the crew refuses it, naming the role, the material and what to change
+    Then the system refuses it, naming the role, the material and what to change
     And no job was written
 
   Scenario: Job that requires what its role does receive is kept
@@ -70,9 +70,9 @@ Feature: A job is a record the crew keeps
     When the caller declares a job in the role "backlog-clearer" requiring "context"
     Then the job requires "context"
 
-  Scenario: Job that requires something the crew does not hand out is refused
+  Scenario: Job that requires something the system does not hand out is refused
     When the caller declares a job requiring "the codebase"
-    Then the crew refuses it and lists the material it hands out
+    Then the system refuses it and lists the material it hands out
 
   # Job that names no role requires its material of nobody, so nothing here applies to it.
   Scenario: Job with no role is held to no boundary
@@ -94,21 +94,21 @@ Feature: A job is a record the crew keeps
 
   Scenario: A repository that is not an owner and a name is refused
     When the caller declares a job in the repository "quay-crew"
-    Then the crew refuses it and says how to write a repository
+    Then the system refuses it and says how to write a repository
 
   # A job cannot wait. It runs once and answers, and nothing wakes it when the checks land, so a
   # brief that says "merge on green" asks for something the runtime does not have and the session
   # invents an answer. The shape that can do it is a flow, and the refusal says so.
   Scenario: A brief that asks the job to wait for the checks is refused
     When the caller declares a job briefed to "fix the defect, push, watch the checks and merge on green"
-    Then the crew refuses it and says a job cannot wait, and names the flow
+    Then the system refuses it and says a job cannot wait, and names the flow
 
   # The rule reads English, so it is held narrow. A brief merging a branch is ordinary work.
   Scenario: A brief that merges a branch is ordinary work
     When the caller declares a job briefed to "merge origin/main into the branch, then run the gates"
     Then the job is declared
 
-  # The line the crew itself puts in front of a session says not to merge. A brief that says it back
+  # The line the system itself puts in front of a session says not to merge. A brief that says it back
   # must not be the thing that gets refused.
   Scenario: A brief that says not to merge is not a brief that merges
     When the caller declares a job briefed to "push the branch, then do not merge the pull request"
@@ -116,19 +116,19 @@ Feature: A job is a record the crew keeps
 
   Scenario: Job naming a mode that is not a mode is refused
     When the caller declares a job in the mode "yolo"
-    Then the crew refuses it and lists the modes
+    Then the system refuses it and lists the modes
 
   Scenario: A job whose expected file is absolute is refused
     When the caller declares a job expecting the file "/etc/passwd"
-    Then the crew refuses it and says the path is read inside the working directory
+    Then the system refuses it and says the path is read inside the working directory
 
   Scenario: A job whose expected file climbs out of the working directory is refused
     When the caller declares a job expecting the file "../secrets.txt"
-    Then the crew refuses it and says the path climbs out
+    Then the system refuses it and says the path climbs out
 
   Scenario: Job waiting on something that does not exist is refused
     When the caller declares a job after "0123456789abcdef01234567"
-    Then the crew refuses it and names the identifier it cannot find
+    Then the system refuses it and names the identifier it cannot find
 
   Scenario: A job waits for a job that exists
     Given a job titled "read the electricity bill"
@@ -137,27 +137,27 @@ Feature: A job is a record the crew keeps
 
   Scenario: A budget below zero is refused
     When the caller declares a job with a budget of -1 tokens
-    Then the crew refuses it and says a budget cannot be below zero
+    Then the system refuses it and says a budget cannot be below zero
 
   Scenario: Seventeen labels are refused
     When the caller declares a job carrying 17 labels
-    Then the crew refuses it and says the ceiling is 16
+    Then the system refuses it and says the ceiling is 16
 
   Scenario: A label value of 64 characters is refused
     When the caller declares a job carrying a label value of 64 characters
-    Then the crew refuses it and says the ceiling is 63
+    Then the system refuses it and says the ceiling is 63
 
   # A workspace with no credential took a whole tree of job and said nothing about it. Every session
-  # in it would have died on its first clone, after the budget was spent starting them. The crew
+  # in it would have died on its first clone, after the budget was spent starting them. The system
   # already knew: the skill listing named the skill, the secret and the command that sets it,
   # unprompted. That is one listing nobody is required to read, so the declaration says it too, while
   # the person who typed it is looking.
   #
-  # It says rather than refuses. The crew cannot know which skill a brief will reach for, so refusing
+  # It says rather than refuses. The system cannot know which skill a brief will reach for, so refusing
   # would stop a job that reads an electricity bill over a forge token it never wanted, and one unset
   # secret would be enough to stop every job in the workspace.
   Scenario: Declaring a job says which skills the session starts without
-    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    Given the system has a skill "github" needing the secret "GH_TOKEN"
     When the caller declares a job titled "fix the defect"
     Then the job is declared
     And the declaration says the session starts without the "github" skill, needing "GH_TOKEN"
@@ -165,7 +165,7 @@ Feature: A job is a record the crew keeps
   # A note printed every time is a note nobody reads, so a workspace that can supply what its skills
   # need hears nothing.
   Scenario: A workspace that has its credentials is told nothing extra
-    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    Given the system has a skill "github" needing the secret "GH_TOKEN"
     And the workspace has the secret "GH_TOKEN" set to "a token"
     When the caller declares a job titled "fix the defect"
     Then the job is declared
@@ -173,7 +173,7 @@ Feature: A job is a record the crew keeps
 
   # A role that does not receive skills is given none of them by design, so there is no gap to report.
   Scenario: A job whose role receives no skills is told nothing about them
-    Given the crew has a skill "github" needing the secret "GH_TOKEN"
+    Given the system has a skill "github" needing the secret "GH_TOKEN"
     And the workspace holds the role "backlog-clearer" at version 1
     When the caller declares a job in the role "backlog-clearer"
     Then the declaration names no skill the session starts without
@@ -185,7 +185,7 @@ Feature: A job is a record the crew keeps
   # The tool, in its own process, because what is specified here is the exit status and which stream
   # the sentence went to, and neither exists inside the test process.
   Scenario: The tool declares what a job requires
-    Given the crew listens on an address the tool can dial
+    Given the system listens on an address the tool can dial
     When the caller declares a job with "--requires context" through the tool
     Then the command succeeds
     And reading that job back says it requires "context"
@@ -193,7 +193,7 @@ Feature: A job is a record the crew keeps
   # The way off the old flag. A removed flag that is quietly ignored reads as a command that worked,
   # and the operator finds out from the record later that the boundary was never declared.
   Scenario: The flag that went refuses, names what to type, and fails
-    Given the crew listens on an address the tool can dial
+    Given the system listens on an address the tool can dial
     When the caller declares a job with "--hands context" through the tool
     Then standard error says "--hands is gone"
     And standard error says "--requires"
@@ -230,7 +230,7 @@ Feature: A job is a record the crew keeps
     Given a job titled "read the electricity bill"
     When the caller stops the first job saying "the bill is not due yet"
     And the caller stops the first job saying "changed my mind"
-    Then the crew refuses it and says the job already ended
+    Then the system refuses it and says the job already ended
     And the reason on the job is still "the bill is not due yet"
 
   Scenario: Job nobody has is refused by name
@@ -241,9 +241,9 @@ Feature: A job is a record the crew keeps
   # the row it describes, written in the same transaction. Nothing is published to the log yet.
   Scenario: Declaring job writes the record of the declaration
     Given a job titled "read the electricity bill"
-    Then the crew holds a "job.declared" record for it, naming the title
+    Then the system holds a "job.declared" record for it, naming the title
 
   Scenario: Stopping job writes the record of the stop
     Given a job titled "read the electricity bill"
     When the caller stops the first job saying "the bill is not due yet"
-    Then the crew holds a "job.stopped" record for it, naming the reason
+    Then the system holds a "job.stopped" record for it, naming the reason

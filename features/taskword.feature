@@ -22,7 +22,7 @@ Feature: One word sends a task, and the three it replaced refuse
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew listens on an address the tool can dial
+    And the system listens on an address the tool can dial
 
   Scenario: The word on its own sends a task and waits for the answer
     When the caller types "task" against the project with "when is the electricity bill due"
@@ -31,7 +31,7 @@ Feature: One word sends a task, and the three it replaced refuse
 
   Scenario: The flag lets go, and names how to read the answer back
     When the caller types "task --dispatch" against the project with "read the repository"
-    Then standard output says the crew has it
+    Then standard output says the system has it
     And standard output says to read it back with "quay task list"
     And the command succeeds
 

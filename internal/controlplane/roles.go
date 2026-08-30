@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// The roles a crew holds. A role is imported, pinned to a version, and attached at a level, which is
+// The roles a system holds. A role is imported, pinned to a version, and attached at a level, which is
 // the shape a skill and a hook already have.
 //
 // A session may run as one. Dispatch names the role when it makes the session, the session keeps it
@@ -25,7 +25,7 @@ import (
 // else. Attaching a role changes nothing about a conversation already open, because a role is read
 // when a session is made.
 
-// ImportRole takes a role into the crew from the files a client read out of its directory.
+// ImportRole takes a role into the system from the files a client read out of its directory.
 //
 // The files travel and this side validates, because the control plane runs in a container where a
 // path on the operator's machine means nothing, and because one validator is one answer.
@@ -67,14 +67,14 @@ func (s *Server) ImportRole(ctx context.Context, req *quaycrewv1.ImportRoleReque
 	return &quaycrewv1.ImportRoleResponse{Role: asRole(stored)}, nil
 }
 
-// ListRoles says what the crew has imported, or what one workspace holds.
+// ListRoles says what the system has imported, or what one workspace holds.
 func (s *Server) ListRoles(ctx context.Context, req *quaycrewv1.ListRolesRequest) (*quaycrewv1.ListRolesResponse, error) {
 	var held []store.ImportedRole
 	var err error
 	if req.GetWorkspace() != "" {
 		held, err = s.store.WorkspaceRoles(ctx, req.GetWorkspace())
 		if err == nil {
-			held = s.withCrewRoles(ctx, held)
+			held = s.withSystemRoles(ctx, held)
 		}
 	} else {
 		held, err = s.store.ListRoles(ctx)
@@ -82,32 +82,35 @@ func (s *Server) ListRoles(ctx context.Context, req *quaycrewv1.ListRolesRequest
 	if err != nil {
 		return nil, storeError(err, "list roles")
 	}
-	// Which of them the crew holds, so a listing says where a role came from rather than leaving the
+	// Which of them the system holds, so a listing says where a role came from rather than leaving the
 	// operator to guess why a workspace they attached nothing to has three.
-	crew := map[string]bool{}
-	if roles, err := s.store.CrewRoles(ctx); err == nil {
+	system := map[string]bool{}
+	if roles, err := s.store.SystemRoles(ctx); err == nil {
 		for _, one := range roles {
-			crew[one.Name] = true
+			system[one.Name] = true
 		}
 	}
 	out := make([]*quaycrewv1.Role, 0, len(held))
 	for _, one := range held {
 		carried := asRole(one)
-		carried.Crew = crew[one.Name]
+		carried.System = system[one.Name]
 		out = append(out, carried)
 	}
 	return &quaycrewv1.ListRolesResponse{Roles: out}, nil
 }
 
-// AttachRole gives a workspace a role, or gives it to the whole crew.
+// AttachRole gives a workspace a role, or gives it to the whole system.
 func (s *Server) AttachRole(ctx context.Context, req *quaycrewv1.AttachRoleRequest) (*quaycrewv1.AttachRoleResponse, error) {
-	if req.GetScope() == crewScope {
-		attached, err := s.store.AttachCrewRole(ctx, req.GetName())
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	if req.GetScope() == systemScope {
+		attached, err := s.store.AttachSystemRole(ctx, req.GetName())
 		if err != nil {
 			return nil, storeError(err, "attach role")
 		}
 		carried := asRole(attached)
-		carried.Crew = true
+		carried.System = true
 		return &quaycrewv1.AttachRoleResponse{Role: carried}, nil
 	}
 	attached, err := s.store.AttachRole(ctx, req.GetWorkspace(), req.GetName())
@@ -117,10 +120,13 @@ func (s *Server) AttachRole(ctx context.Context, req *quaycrewv1.AttachRoleReque
 	return &quaycrewv1.AttachRoleResponse{Role: asRole(attached)}, nil
 }
 
-// DetachRole takes a role away from a workspace, or away from the crew.
+// DetachRole takes a role away from a workspace, or away from the system.
 func (s *Server) DetachRole(ctx context.Context, req *quaycrewv1.DetachRoleRequest) (*quaycrewv1.DetachRoleResponse, error) {
-	if req.GetScope() == crewScope {
-		if err := s.store.DetachCrewRole(ctx, req.GetName()); err != nil {
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	if req.GetScope() == systemScope {
+		if err := s.store.DetachSystemRole(ctx, req.GetName()); err != nil {
 			return nil, storeError(err, "detach role")
 		}
 		return &quaycrewv1.DetachRoleResponse{}, nil
@@ -131,12 +137,12 @@ func (s *Server) DetachRole(ctx context.Context, req *quaycrewv1.DetachRoleReque
 	return &quaycrewv1.DetachRoleResponse{}, nil
 }
 
-// withCrewRoles adds what the crew holds to what a workspace attached for itself.
+// withSystemRoles adds what the system holds to what a workspace attached for itself.
 //
 // The workspace's own wins a name, being the narrower and more deliberate statement of what that
 // workspace should hold, which is the rule skills already follow.
-func (s *Server) withCrewRoles(ctx context.Context, workspace []store.ImportedRole) []store.ImportedRole {
-	crew, err := s.store.CrewRoles(ctx)
+func (s *Server) withSystemRoles(ctx context.Context, workspace []store.ImportedRole) []store.ImportedRole {
+	system, err := s.store.SystemRoles(ctx)
 	if err != nil {
 		return workspace
 	}
@@ -145,7 +151,7 @@ func (s *Server) withCrewRoles(ctx context.Context, workspace []store.ImportedRo
 		own[one.Name] = true
 	}
 	out := workspace
-	for _, one := range crew {
+	for _, one := range system {
 		if !own[one.Name] {
 			out = append(out, one)
 		}
@@ -155,7 +161,7 @@ func (s *Server) withCrewRoles(ctx context.Context, workspace []store.ImportedRo
 }
 
 // asRole renders a role for a client. The brief does not travel here: a listing was asked what the
-// crew holds, not for a copy of every instruction, so the brief travels in GetRole and nowhere else.
+// system holds, not for a copy of every instruction, so the brief travels in GetRole and nowhere else.
 func asRole(one store.ImportedRole) *quaycrewv1.Role {
 	out := &quaycrewv1.Role{
 		Name:     one.Name,
@@ -181,7 +187,7 @@ func asRole(one store.ImportedRole) *quaycrewv1.Role {
 
 // roleFor is the role a workspace holds under this name, at the version it pinned.
 //
-// A workspace's own attachment wins over the crew's, which is the rule everywhere else: the narrower
+// A workspace's own attachment wins over the system's, which is the rule everywhere else: the narrower
 // statement is the more deliberate one. A name nobody attached is refused rather than ignored, and
 // the refusal names the role and how to give it, because a step that names a role the workspace does
 // not hold has to fail with a sentence rather than half run.
@@ -190,7 +196,7 @@ func (s *Server) roleFor(ctx context.Context, workspace, name string) (store.Imp
 	if err != nil {
 		return store.ImportedRole{}, storeError(err, "read the workspace's roles")
 	}
-	for _, one := range s.withCrewRoles(ctx, held) {
+	for _, one := range s.withSystemRoles(ctx, held) {
 		if one.Name == name {
 			return one, nil
 		}
@@ -202,7 +208,7 @@ func (s *Server) roleFor(ctx context.Context, workspace, name string) (store.Imp
 
 // receives says whether this session is given a kind of material.
 //
-// A session that runs as nobody in particular receives everything, which is every session the crew
+// A session that runs as nobody in particular receives everything, which is every session the system
 // had before roles existed. A session that runs as a role receives what the role declares and
 // nothing else.
 //
@@ -222,7 +228,7 @@ func (s *Server) receives(ctx context.Context, session *quaycrewv1.Session, mate
 }
 
 // roleBrief is the instruction of the role a session runs as, empty for a session running as nobody
-// in particular or for a role the crew can no longer read.
+// in particular or for a role the system can no longer read.
 //
 // It is read from the version the workspace pinned, so a role edited after the session started does
 // not change how that session was told to work.
@@ -241,7 +247,7 @@ func (s *Server) roleBrief(ctx context.Context, session *quaycrewv1.Session) str
 // RoleFor is how the job controller reads the role a job names, over an interface that
 // carries only the question it asks: does this role receive this material.
 //
-// The role the workspace holds now, which is the same one the crew would build the session from. Two
+// The role the workspace holds now, which is the same one the system would build the session from. Two
 // answers to "which role is this" is how a boundary comes to be checked against one role and applied
 // against another.
 func (s *Server) RoleFor(ctx context.Context, workspace, named string) (job.Receiver, error) {
@@ -258,7 +264,7 @@ func (s *Server) RoleFor(ctx context.Context, workspace, named string) (job.Rece
 //
 // The brief is the role. It is the several hundred words that decide how a session behaves, and
 // until this existed an imported role could not be read back at all: an operator could not diff what
-// the crew holds against the file it came from, and could not tell whether a run went the way it did
+// the system holds against the file it came from, and could not tell whether a run went the way it did
 // because of a clause they edited an hour ago. So this is the audit, and it reads from the same
 // place a session is built from rather than from a second copy.
 func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*quaycrewv1.GetRoleResponse, error) {
@@ -280,13 +286,13 @@ func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*
 	}
 
 	carried := asRole(*found)
-	crew, err := s.store.CrewRoles(ctx)
+	system, err := s.store.SystemRoles(ctx)
 	if err != nil {
-		return nil, storeError(err, "read the crew's roles")
+		return nil, storeError(err, "read the system's roles")
 	}
-	for _, one := range crew {
+	for _, one := range system {
 		if one.Name == name {
-			carried.Crew = true
+			carried.System = true
 		}
 	}
 	holders, err := s.workspacesHolding(ctx, name)
@@ -299,7 +305,7 @@ func (s *Server) GetRole(ctx context.Context, req *quaycrewv1.GetRoleRequest) (*
 }
 
 // rolesVisibleTo is what a name could mean at an address, and what to call that address in a
-// refusal: the roles one workspace holds, its own and the crew's, or everything the crew has
+// refusal: the roles one workspace holds, its own and the system's, or everything the system has
 // imported. It is the rule a listing already follows, so show and list cannot disagree about which
 // roles exist.
 func (s *Server) rolesVisibleTo(ctx context.Context, workspace string) ([]store.ImportedRole, string, error) {
@@ -308,18 +314,18 @@ func (s *Server) rolesVisibleTo(ctx context.Context, workspace string) ([]store.
 		if err != nil {
 			return nil, "", storeError(err, "list roles")
 		}
-		return held, "the crew", nil
+		return held, "the system", nil
 	}
 	held, err := s.store.WorkspaceRoles(ctx, workspace)
 	if err != nil {
 		return nil, "", storeError(err, "list roles")
 	}
-	return s.withCrewRoles(ctx, held), "this workspace", nil
+	return s.withSystemRoles(ctx, held), "this workspace", nil
 }
 
 // workspacesHolding names the workspaces that attached a role for themselves, sorted.
 //
-// The crew's own holding is not in here and is said separately, because the two are different
+// The system's own holding is not in here and is said separately, because the two are different
 // statements: one workspace decided this, or everybody has it including the workspace made tomorrow.
 //
 // A workspace whose roles cannot be read is left out rather than failing the whole answer. The

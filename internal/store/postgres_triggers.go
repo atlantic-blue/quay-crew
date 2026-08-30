@@ -14,7 +14,7 @@ import (
 
 // The pending trigger queue. A trigger row is written in the transaction of whatever caused it, read
 // off an indexed query, and claimed with a conditional write in one statement, which is the same
-// mechanism the crew already uses for waits, for dispatch idempotency and for job events.
+// mechanism the system already uses for waits, for dispatch idempotency and for job events.
 //
 // The claim is the part that has to be exact. Two pollers reading the same pending row must leave one
 // holder, so the condition and the write are one statement and never a read followed by an update.
@@ -44,7 +44,7 @@ func (p *Postgres) RaiseTrigger(ctx context.Context, trigger *flow.Trigger) erro
 }
 
 // PendingTriggers are the triggers nothing has started a run from and nobody is holding, oldest
-// first. Only those: a crew with a million triggers behind it does the work of the few that arrived
+// first. Only those: a system with a million triggers behind it does the work of the few that arrived
 // since the last tick, which is what the partial index is for.
 func (p *Postgres) PendingTriggers(ctx context.Context, limit int) ([]*flow.Trigger, error) {
 	query := `select ` + triggerColumns + ` from pending_triggers

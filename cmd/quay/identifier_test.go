@@ -104,7 +104,7 @@ func TestTheOldThreadFlagIsRefusedAndNamesTheAddress(t *testing.T) {
 }
 
 // Setting the mode through the handle has to reach the model, not only the store. Reading it back
-// from the crew would pass on a command that recorded the mode and never applied it.
+// from the system would pass on a command that recorded the mode and never applied it.
 func TestTheNextTaskRunsInTheModeSetThroughTheHandle(t *testing.T) {
 	client, runner := aSessionWatchingTheModel(t)
 	handle := onlySession(t, client).GetHandle()[:8]
@@ -118,7 +118,7 @@ func TestTheNextTaskRunsInTheModeSetThroughTheHandle(t *testing.T) {
 }
 
 // A refusal that names only what was typed leaves the operator guessing which identifier the command
-// wanted. It has to say what the crew does hold.
+// wanted. It has to say what the system does hold.
 func TestARefusedSessionNamesTheSessionsThatExist(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 	session := onlySession(t, client)

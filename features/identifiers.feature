@@ -1,9 +1,9 @@
 Feature: One identifier reaches every surface
 
-  A session carries two identifiers. The id is the crew's own: it is the primary key of the row and
+  A session carries two identifiers. The id is the system's own: it is the primary key of the row and
   it names the session's container. The handle is the name a channel dispatches to, because a chat
-  channel knows what it calls a conversation before the crew has a session for it. It sends that
-  name, and the crew makes the session under it. When nobody supplies one, the crew mints one.
+  channel knows what it calls a conversation before the system has a session for it. It sends that
+  name, and the system makes the session under it. When nobody supplies one, the system mints one.
 
   A listing prints the id, in a column headed session, and the name column carries what the operator
   called the session and nothing else. The handle stays valid, because it is in notes and in scripts
@@ -51,7 +51,7 @@ Feature: One identifier reaches every surface
   # Neither form is withdrawn, so the handle has to keep reaching the session from every surface too.
   Scenario: Every surface still takes the handle, which is what a channel sends
     Given a session started by dispatching "remember this"
-    When the operator copies the handle out of the crew
+    When the operator copies the handle out of the system
     Then dispatch on what was copied continues that session
     And tasks on what was copied lists that session's history
     And attach on what was copied opens that session's conversation
@@ -83,7 +83,7 @@ Feature: One identifier reaches every surface
     And the refusal names the identifier the listing prints
     And the refusal says how to send it as the message instead
     And that session was left with 1 task
-    And the crew holds 1 session
+    And the system holds 1 session
 
   Scenario: An ordinary first word is still the start of the message
     When the operator types "hello" and then "there"
@@ -93,7 +93,7 @@ Feature: One identifier reaches every surface
   # is fed back the way the runtime feeds it. What is asserted is where the operator is left.
   Scenario: Enter on a console row opens that session
     Given a session started by dispatching "remember this"
-    When the operator opens the console over the crew
+    When the operator opens the console over the system
     And the operator presses the enter key on the session row
     Then the conversation that opened belongs to that session
     And the console is back on its list with nothing to report
@@ -102,7 +102,7 @@ Feature: One identifier reaches every surface
   Scenario: A conversation that cannot be opened says why, and the refresh does not blank it
     Given a session started by dispatching "remember this"
     And the terminal cannot run what the console starts
-    When the operator opens the console over the crew
+    When the operator opens the console over the system
     And the operator presses the enter key on the session row
     Then the console says why the conversation did not open
     And the refreshed list is under it, with the reason still on the screen

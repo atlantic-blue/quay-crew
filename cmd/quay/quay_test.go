@@ -35,7 +35,7 @@ func testClientWith(t *testing.T, cfg controlplane.Config) quaycrewv1.ControlPla
 	return testClientFor(t, controlplane.NewServer(cfg))
 }
 
-// testClientFor serves a crew somebody else built, for a test that has to do something to the server
+// testClientFor serves a system somebody else built, for a test that has to do something to the server
 // before a client reaches it.
 func testClientFor(t *testing.T, srv *controlplane.Server) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()

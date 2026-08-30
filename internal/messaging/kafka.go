@@ -95,7 +95,7 @@ func (c *Client) Consume(ctx context.Context, group string, topics []string, han
 }
 
 // ConsumePattern consumes every topic matching a regular expression, and keeps up with topics
-// created after it started, which is how a workspace made while the crew is running gets read.
+// created after it started, which is how a workspace made while the system is running gets read.
 func (c *Client) ConsumePattern(ctx context.Context, group, pattern string, handler Handler) error {
 	if pattern == "" {
 		return fmt.Errorf("messaging: consume requires a pattern")

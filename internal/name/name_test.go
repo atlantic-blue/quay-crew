@@ -81,24 +81,24 @@ func TestValidateNamesWhatWouldJob(t *testing.T) {
 	}
 }
 
-// "crew" is the word every address takes for the level above a workspace. A workspace called crew
+// "system" is the word every address takes for the level above a workspace. A workspace called system
 // would take the secrets, skills, hooks and roles meant for every workspace, and nothing else would
 // ever read them.
-func TestAWorkspaceCannotBeCalledCrew(t *testing.T) {
-	err := name.ValidateWorkspace(name.Crew)
+func TestAWorkspaceCannotBeCalledSystem(t *testing.T) {
+	err := name.ValidateWorkspace(name.System)
 	if err == nil {
-		t.Fatal("ValidateWorkspace(\"crew\") = nil, want a refusal")
+		t.Fatal("ValidateWorkspace(\"system\") = nil, want a refusal")
 	}
 	// The reason, not only the refusal. An operator told no and not why types it again.
-	if !strings.Contains(err.Error(), "whole crew") {
+	if !strings.Contains(err.Error(), "whole system") {
 		t.Fatalf("the refusal is %q, and it does not say why", err)
 	}
-	if err := name.ValidateWorkspace("crews"); err != nil {
-		t.Fatalf("ValidateWorkspace(\"crews\") = %v, want it accepted", err)
+	if err := name.ValidateWorkspace("systems"); err != nil {
+		t.Fatalf("ValidateWorkspace(\"systems\") = %v, want it accepted", err)
 	}
-	// A project may still be called crew: an address names a project under a workspace, so there is
+	// A project may still be called system: an address names a project under a workspace, so there is
 	// nothing for it to shadow.
-	if err := name.Validate("project", name.Crew); err != nil {
-		t.Fatalf("Validate(project, \"crew\") = %v, want it accepted", err)
+	if err := name.Validate("project", name.System); err != nil {
+		t.Fatalf("Validate(project, \"system\") = %v, want it accepted", err)
 	}
 }

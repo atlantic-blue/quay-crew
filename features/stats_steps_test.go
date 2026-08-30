@@ -8,10 +8,10 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// initializeStatsSteps registers the steps for what the stats view says about each part of the crew.
+// initializeStatsSteps registers the steps for what the stats view says about each part of the system.
 // Its own file, so the health scenarios' reach into the console does not widen the console's steps.
 func initializeStatsSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the crew probes itself$`, func(ctx context.Context) error {
+	sc.Step(`^the system probes itself$`, func(ctx context.Context) error {
 		worldFrom(ctx).server.ProbeHealth(ctx)
 		return nil
 	})

@@ -107,7 +107,7 @@ type Action struct {
 	Shell func(row Row) (*exec.Cmd, error)
 	// After runs once a Shell command has finished, for the part that cannot happen while the
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
-	// this is what tells the crew about it.
+	// this is what tells the system about it.
 	After func(ctx context.Context, row Row) error
 	// Asks is what a key that wants a line of text says while it waits, for example "call it". A key
 	// with it opens the line rather than acting, and RunTyped is what acts once enter is pressed.

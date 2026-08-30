@@ -3,7 +3,7 @@ Feature: A project says where it deploys
   A workspace is a bag of secrets and a project is a name, so which cloud account a body of work
   ships to lived in one person's memory. On the acceptance run of 29 August 2026 the operator had to
   say "use atlantic blue instead", then "otherwise where are you going to deploy it?", because
-  nothing in the crew held that fact.
+  nothing in the system held that fact.
 
   So a project declares it: the account, the region inside it, and the role a pipeline assumes to get
   there. Three values, all of them or none. Half a target reads as an answer to "where does this go"

@@ -37,7 +37,7 @@ func TestDrainSaysWhichSessionsItPutDown(t *testing.T) {
 	}
 }
 
-func TestDrainOnACrewWithNothingLiveSaysSo(t *testing.T) {
+func TestDrainOnASystemWithNothingLiveSaysSo(t *testing.T) {
 	client := testClient(t)
 
 	said := mustRun(t, client, "drain")
@@ -76,7 +76,7 @@ func TestDrainRefusesTheFlagSpelling(t *testing.T) {
 // The refusal is the whole point of the plain word: an operator who cannot see whose task is working
 // cannot decide whether to wait for it.
 func TestDrainRefusesWhileATaskIsWorkingAndNamesIt(t *testing.T) {
-	client, handle := aCrewWithATaskUnderWay(t)
+	client, handle := aSystemWithATaskUnderWay(t)
 
 	var out bytes.Buffer
 	err := run(context.Background(), client, []string{"drain"}, &out, "")
@@ -92,7 +92,7 @@ func TestDrainRefusesWhileATaskIsWorkingAndNamesIt(t *testing.T) {
 }
 
 func TestDrainAnywaySaysWhatItInterrupted(t *testing.T) {
-	client, handle := aCrewWithATaskUnderWay(t)
+	client, handle := aSystemWithATaskUnderWay(t)
 
 	said := mustRun(t, client, "drain", "anyway")
 
@@ -104,10 +104,10 @@ func TestDrainAnywaySaysWhatItInterrupted(t *testing.T) {
 	}
 }
 
-// aCrewWithATaskUnderWay is a crew with one session the store calls running, which is what a task in
+// aSystemWithATaskUnderWay is a system with one session the store calls running, which is what a task in
 // flight looks like to anything asking. The model double answers at once, so the status is set here
 // rather than by holding a task open, which a command line test has no way to do.
-func aCrewWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
+func aSystemWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
 	t.Helper()
 	memory := store.NewMemory()
 	client := testClientWith(t, controlplane.Config{
@@ -125,38 +125,38 @@ func aCrewWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient,
 	return client, session.GetHandle()[:8]
 }
 
-// A crew that predates this command answers Unimplemented, and it answers that during the very
+// A system that predates this command answers Unimplemented, and it answers that during the very
 // upgrade that installs the answer: `make upgrade` builds the tool before it rebuilds the stack, so
-// the new binary talks to the old crew exactly once. Failing there would block the upgrade forever.
-func TestDrainCarriesOnAgainstACrewFromBeforeIt(t *testing.T) {
-	client := clientOfACrewThatServesNothing(t)
+// the new binary talks to the old system exactly once. Failing there would block the upgrade forever.
+func TestDrainCarriesOnAgainstASystemFromBeforeIt(t *testing.T) {
+	client := clientOfASystemThatServesNothing(t)
 
 	var out bytes.Buffer
 	if err := run(context.Background(), client, []string{"drain"}, &out, ""); err != nil {
-		t.Fatalf("drain failed against an older crew, which would block the upgrade: %v", err)
+		t.Fatalf("drain failed against an older system, which would block the upgrade: %v", err)
 	}
 	if !strings.Contains(out.String(), "from before draining") {
 		t.Fatalf("the drain does not say why it could not put anything down: %q", out.String())
 	}
 }
 
-// A crew that is not up runs no tasks, so there is nothing to lose and nothing to refuse. Failing
+// A system that is not up runs no tasks, so there is nothing to lose and nothing to refuse. Failing
 // here would stop an upgrade on a machine whose stack is simply down, which is most of them.
-func TestDrainCarriesOnWhenTheCrewIsNotUp(t *testing.T) {
-	client := clientOfACrewThatIsNotUp(t)
+func TestDrainCarriesOnWhenTheSystemIsNotUp(t *testing.T) {
+	client := clientOfASystemThatIsNotUp(t)
 
 	var out bytes.Buffer
 	if err := run(context.Background(), client, []string{"drain"}, &out, ""); err != nil {
-		t.Fatalf("drain failed against a crew that is not up: %v", err)
+		t.Fatalf("drain failed against a system that is not up: %v", err)
 	}
 	if !strings.Contains(out.String(), "not up") {
-		t.Fatalf("the drain does not say the crew is not up: %q", out.String())
+		t.Fatalf("the drain does not say the system is not up: %q", out.String())
 	}
 }
 
-// clientOfACrewThatServesNothing dials a real gRPC server with no service registered, which is what
-// an older crew looks like from here: it answers, and it answers Unimplemented.
-func clientOfACrewThatServesNothing(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+// clientOfASystemThatServesNothing dials a real gRPC server with no service registered, which is what
+// an older system looks like from here: it answers, and it answers Unimplemented.
+func clientOfASystemThatServesNothing(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
@@ -165,8 +165,8 @@ func clientOfACrewThatServesNothing(t *testing.T) quaycrewv1.ControlPlaneService
 	return clientOver(t, func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) })
 }
 
-// clientOfACrewThatIsNotUp dials nothing at all.
-func clientOfACrewThatIsNotUp(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+// clientOfASystemThatIsNotUp dials nothing at all.
+func clientOfASystemThatIsNotUp(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	return clientOver(t, func(context.Context, string) (net.Conn, error) {
 		return nil, errors.New("connection refused")

@@ -10,7 +10,7 @@
 # the image is shared. A missing include is not an error in git, so a workspace that mounts nothing
 # reads exactly as it did before.
 #
-# The crew appends to this file at sandbox birth, and what it appends wins: git takes the last value
+# The system appends to this file at sandbox birth, and what it appends wins: git takes the last value
 # it reads for a setting, and an include is read where it sits.
 [include]
 	path = /run/secrets/gitconfig

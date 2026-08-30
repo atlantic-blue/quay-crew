@@ -70,7 +70,7 @@ func (s *Server) ReclaimSession(ctx context.Context, req *quaycrewv1.ReclaimSess
 // while every container runs on; a question that built a sandbox to answer would start the very
 // container it is asked about taking away. A session with none answers that nobody is in it.
 //
-// The session is read first so that a session the crew does not have comes back as an error. Nobody
+// The session is read first so that a session the system does not have comes back as an error. Nobody
 // is in a session that does not exist, but the caller reads a false here as licence to close a
 // container, and it must not get that answer from a lookup that failed.
 func (s *Server) SessionAttached(ctx context.Context, id string) (bool, error) {

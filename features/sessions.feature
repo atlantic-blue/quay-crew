@@ -251,7 +251,7 @@ Feature: Sessions run in isolated sandboxes
     And the answer carries no credential
 
   # Watching a task is the reason to attach, and the one moment it did not work was while a task ran,
-  # which is every moment that matters. The crew passed no name on a session's first task, so the model
+  # which is every moment that matters. The system passed no name on a session's first task, so the model
   # runtime named that conversation itself and told nobody until the task was over. Attaching meanwhile
   # found nothing on the session, named a second conversation and opened that one: empty, beside the
   # work, and real enough that typing in it left two conversations in one session.
@@ -260,7 +260,7 @@ Feature: Sessions run in isolated sandboxes
     And a task dispatched without waiting for it
     And a task is under way
     When the operator asks how to attach to the session
-    Then the crew named the conversation before the task started
+    Then the system named the conversation before the task started
     And the command opens the conversation the task is running in
     When the model finishes the task
     Then the session still holds the conversation the first task started
@@ -286,19 +286,19 @@ Feature: Sessions run in isolated sandboxes
   # A handle can outlive what it points at. Every conversation from a sandbox built before state was
   # kept on the host died with that container while the row kept the handle. This was refused, because
   # resuming one printed "No conversation found" and exited, which from the console looks like nothing
-  # happening. It cannot be refused any more: a conversation the crew has just named has no transcript
+  # happening. It cannot be refused any more: a conversation the system has just named has no transcript
   # either, and that is a first open rather than a loss. The sandbox is the only place that can tell
   # them apart, so it resumes what is there and starts what is not, under the name it was given.
-  Scenario: A session whose conversation is gone opens under the name the crew holds
+  Scenario: A session whose conversation is gone opens under the name the system holds
     Given a session started by dispatching "remember this"
     When the conversation the model kept is lost
     And the operator asks how to attach to the session
     Then the control plane names the session's sandbox
-    And the command opens the conversation the crew holds
+    And the command opens the conversation the system holds
 
-  # Tokens are what a crew costs, and the conversations that cost the most never pass through the
+  # Tokens are what a system costs, and the conversations that cost the most never pass through the
   # control plane: an operator talking in the panel is talking to the sandbox. The model's own
-  # transcript is the only record, so that is what the crew reads.
+  # transcript is the only record, so that is what the system reads.
   Scenario: A session reports what its conversation has cost
     Given a session started by dispatching "hello"
     When the model has written 52 in, 6917 out and 1723404 read from cache
@@ -312,14 +312,14 @@ Feature: Sessions run in isolated sandboxes
     Then the driver reports no cost, rather than a cost of nothing
 
   # A conversation started inside a sandbox picks its own identifier and tells nobody, so every
-  # conversation opened from the panel was one the crew could not name: no history to read back, no
-  # tokens to count, and no way to tell one transcript in a workspace from another. The crew names it
+  # conversation opened from the panel was one the system could not name: no history to read back, no
+  # tokens to count, and no way to tell one transcript in a workspace from another. The system names it
   # instead.
-  Scenario: The crew names a conversation when it opens one
+  Scenario: The system names a conversation when it opens one
     When the operator opens the driver
     And the operator asks how to attach to the driver
-    Then the driver has a conversation the crew can name
-    And the command opens the conversation the crew holds
+    Then the driver has a conversation the system can name
+    And the command opens the conversation the system holds
 
   Scenario: Opening a conversation twice keeps the name it was given
     When the operator opens the driver
@@ -345,9 +345,9 @@ Feature: Sessions run in isolated sandboxes
     Then the reply is "you said: and again"
     And a second sandbox has been created for that session
 
-  # The row is the crew's own bookkeeping and it used to decide whether a conversation could be
+  # The row is the system's own bookkeeping and it used to decide whether a conversation could be
   # opened. `make upgrade` drains first, and a drain puts every live session down, so after an
-  # upgrade every session in the crew said stopped and every one of them refused to open. The row is
+  # upgrade every session in the system said stopped and every one of them refused to open. The row is
   # brought up to date instead: a session somebody is talking in is not put down.
   Scenario: A stopped session opens, and its row comes back to idle
     Given a session started by dispatching "remember this"
@@ -380,12 +380,12 @@ Feature: Sessions run in isolated sandboxes
     And the workspace has 0 archived sessions
 
   # A session exists from the moment a task is dispatched, so a first task that failed leaves one
-  # holding no conversation. It sat in the listing with no way to open it at all. The crew names a
+  # holding no conversation. It sat in the listing with no way to open it at all. The system names a
   # conversation for it, exactly as it does for the driver.
-  Scenario: A session whose first task failed opens under a conversation the crew names
+  Scenario: A session whose first task failed opens under a conversation the system names
     When the operator asks how to attach to a session that has never had a task
     Then the control plane names the session's sandbox
-    And the command opens the conversation the crew holds
+    And the command opens the conversation the system holds
 
   # Every model failure read "run exited: exit status 1": the same sentence for an expired token, a
   # network failure, a missing binary in the image and the model refusing outright. The reason was
@@ -425,7 +425,7 @@ Feature: Sessions run in isolated sandboxes
     And the refusal says "quay room"
     And the refusal says "container went away"
 
-  # The console shows the crew and a conversation shows one session, and using both meant losing sight
+  # The console shows the system and a conversation shows one session, and using both meant losing sight
   # of one. The panel puts them on the screen at once, half the width each, side by side.
   #
   # tmux does the splitting, the same tmux that already keeps an open conversation alive behind
@@ -455,7 +455,7 @@ Feature: Sessions run in isolated sandboxes
   # is what the multiplexer does with a pane whose command has ended.
   Scenario: A conversation that cannot be opened says why and stays on the screen
     Given a terminal with the console in it
-    When quay attach is put beside the console and cannot reach the crew
+    When quay attach is put beside the console and cannot reach the system
     Then the reason is on the screen
     And pressing enter gives the operator the console back
 
@@ -471,28 +471,28 @@ Feature: Sessions run in isolated sandboxes
     Then the panel says there is no conversation to put beside the console
     And it says how to start one
 
-  # A session that can reach the control plane can drive the crew: make a workspace, start a session,
+  # A session that can reach the control plane can drive the system: make a workspace, start a session,
   # write a context, the same way the operator does. It is a real widening, so it is turned on rather
   # than assumed, and the sandbox is what bounds it.
-  Scenario: The driver is told where to reach the crew
-    Given a crew that sessions can reach at "controlplane:50051"
+  Scenario: The driver is told where to reach the system
+    Given a system that sessions can reach at "controlplane:50051"
     When the operator opens the driver
     And the driver is sent "hello"
-    Then the sandbox carries the address of the crew
+    Then the sandbox carries the address of the system
     And the sandbox carries the driver's own token, not the operator's
     And the sandbox carries no address it was not given
 
-  Scenario: An ordinary session is told nothing, even when the crew can be reached
-    Given a crew that sessions can reach at "controlplane:50051"
+  Scenario: An ordinary session is told nothing, even when the system can be reached
+    Given a system that sessions can reach at "controlplane:50051"
     When the operator dispatches "hello" to the project
     Then the sandbox carries no address at all
-    And the sandbox carries no crew token
+    And the sandbox carries no system token
 
   Scenario: The driver is the same session every time it is opened
     When the operator opens the driver
     And the operator opens the driver again
     Then it is the same driver both times
-    And the crew has one driver
+    And the system has one driver
 
   # The driver acts for the operator rather than doing work of its own, and one that stops to ask
   # before every step describes the task instead of doing it: asked to make a project it explained
@@ -511,20 +511,20 @@ Feature: Sessions run in isolated sandboxes
     And the driver is sent "make me a project"
     Then the task ran in permission mode "acceptEdits"
 
-  # The driver opens knowing what quay is, rather than having to be told every time. It is the crew
+  # The driver opens knowing what quay is, rather than having to be told every time. It is the system
   # describing itself: the command list the tool prints, and the behaviour specification the binary
   # carries, neither of which can drift from what the tool actually does.
   Scenario: The driver opens knowing what quay is
     When the operator opens the driver
     Then the driver has been told what quay is
-    And what it was told names the words a crew is made of
+    And what it was told names the words a system is made of
 
   # Being told is not the same as being able to read it. The manual is written into the store, and the
   # driver only ever sees the file: a driver made before any of this had a memory file with none of
-  # the crew's marks in it, that file was read back as an edit of what it had never seen, and the
+  # the system's marks in it, that file was read back as an edit of what it had never seen, and the
   # manual was gone again before anybody opened the conversation.
   Scenario: A driver that already had notes reads both them and the manual
-    Given a driver made before the crew described itself
+    Given a driver made before the system described itself
     And its memory file already says "the boiler code is 1985"
     When the operator opens the driver
     Then the driver's memory file says what quay is
@@ -544,36 +544,36 @@ Feature: Sessions run in isolated sandboxes
   Scenario: Deleting a workspace closes the sandboxes it was hiding
     Given a session started by dispatching "hello"
     When the operator deletes the workspace
-    Then every sandbox the crew made is closed
+    Then every sandbox the system made is closed
 
   Scenario: Deleting a project closes the sandboxes it was hiding
     Given a session started by dispatching "hello"
     When the operator deletes the project
-    Then every sandbox the crew made is closed
+    Then every sandbox the system made is closed
 
-  # The crew's map of live sandboxes is a process map, so a restart empties it while the containers
+  # The system's map of live sandboxes is a process map, so a restart empties it while the containers
   # keep running. Stopping a session then marked the row and left the container: the close has to ask
   # the daemon, not the map.
   Scenario: Stopping a session after a restart still removes its container
     Given a session started by dispatching "hello"
     When the control plane restarts
     And the operator stops the session
-    Then every sandbox the crew made is closed
+    Then every sandbox the system made is closed
 
-  # The leak above already happened on real crews, so starting up reaps what it finds: a container
+  # The leak above already happened on real systems, so starting up reaps what it finds: a container
   # whose row says stopped or archived, or whose row is gone, belongs to nobody.
-  Scenario: A container whose session was stopped behind the crew's back is reaped at startup
+  Scenario: A container whose session was stopped behind the system's back is reaped at startup
     Given a session started by dispatching "hello"
     And the session's row says stopped while its container still runs
     When the control plane restarts
-    Then every sandbox the crew made is closed
+    Then every sandbox the system made is closed
 
   # A clone or a skill setup that fails used to leave the container it had just made running and
   # untracked, one per attempt.
   Scenario: A sandbox that cannot be provisioned is not left running
-    Given the crew has a skill "git" that says "Branch first."
+    Given the system has a skill "git" that says "Branch first."
     And the git skill has a file "bin/setup" saying "exit 1"
     And every command run in a sandbox fails
     When the operator dispatches "hello" to the project
-    Then the crew refuses it saying "could not set itself up"
-    And every sandbox the crew made is closed
+    Then the system refuses it saying "could not set itself up"
+    And every sandbox the system made is closed

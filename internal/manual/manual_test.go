@@ -7,7 +7,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/features"
 )
 
-// TestTheManualNamesTheWords. A session told nothing about the crew guesses at the model, and the
+// TestTheManualNamesTheWords. A session told nothing about the system guesses at the model, and the
 // words here are load bearing: a project is not a workspace, and a sandbox is not a session.
 func TestTheManualNamesTheWords(t *testing.T) {
 	got := Text()

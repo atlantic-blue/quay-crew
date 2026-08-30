@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// scenarioWait is what a scenario about a budget running out gives the crew. The measured budget is
+// scenarioWait is what a scenario about a budget running out gives the system. The measured budget is
 // a minute, and a suite that waits a minute to watch one is a suite nobody runs.
 const scenarioWait = 200 * time.Millisecond
 
@@ -37,7 +37,7 @@ func (stallingEventLog) ConsumePattern(context.Context, string, string, messagin
 func (stallingEventLog) Close() {}
 
 // stallingStore reads the way the real one does and never takes a write, which is the shape of the
-// crew this is all about: every listing answered and nothing started.
+// system this is all about: every listing answered and nothing started.
 type stallingStore struct {
 	store.Store
 }
@@ -47,7 +47,7 @@ func (s stallingStore) Probe(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Steps for the scenarios about a crew that cannot start job: what it says instead of waiting, and
+// Steps for the scenarios about a system that cannot start job: what it says instead of waiting, and
 // what it answers when something asks whether it is well.
 func initializeWaitsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a sandbox that never starts$`, func(ctx context.Context) error {
@@ -71,13 +71,13 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 		return w.restart()
 	})
 
-	sc.Step(`^the crew says it waited for "([^"]*)"$`, func(ctx context.Context, what string) error {
+	sc.Step(`^the system says it waited for "([^"]*)"$`, func(ctx context.Context, what string) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the dispatch came back with no error, so the crew said nothing about waiting")
+			return fmt.Errorf("the dispatch came back with no error, so the system said nothing about waiting")
 		}
 		if !strings.Contains(w.lastErr.Error(), what) {
-			return fmt.Errorf("the crew said %q, and it does not name %q", w.lastErr.Error(), what)
+			return fmt.Errorf("the system said %q, and it does not name %q", w.lastErr.Error(), what)
 		}
 		return nil
 	})
@@ -89,7 +89,7 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want the one the dispatch made",
+			return fmt.Errorf("the system has %d sessions, want the one the dispatch made",
 				len(listed.GetSessions()))
 		}
 		session := listed.GetSessions()[0]
@@ -107,7 +107,7 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew is asked whether it is serving$`, func(ctx context.Context) error {
+	sc.Step(`^the system is asked whether it is serving$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		answer, err := w.health.Check(ctx, &grpc_health_v1.HealthCheckRequest{})
 		if err != nil {
@@ -117,16 +117,16 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew answers that it is serving$`, func(ctx context.Context) error {
+	sc.Step(`^the system answers that it is serving$`, func(ctx context.Context) error {
 		if got := worldFrom(ctx).lastHealth; got != grpc_health_v1.HealthCheckResponse_SERVING {
-			return fmt.Errorf("the crew answered %s, want SERVING", got)
+			return fmt.Errorf("the system answered %s, want SERVING", got)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew answers that it is not serving$`, func(ctx context.Context) error {
+	sc.Step(`^the system answers that it is not serving$`, func(ctx context.Context) error {
 		if got := worldFrom(ctx).lastHealth; got != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-			return fmt.Errorf("the crew answered %s, want NOT_SERVING", got)
+			return fmt.Errorf("the system answered %s, want NOT_SERVING", got)
 		}
 		return nil
 	})

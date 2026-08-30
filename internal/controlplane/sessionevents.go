@@ -30,9 +30,9 @@ const (
 	// conversation, and the next dispatch continues it. Writing this as session.stopped would tell a
 	// consumer a live session had been put down.
 	KindSessionHalted = "session.halted"
-	// KindSessionReclaimed is the crew taking a session's container back. It is beside stopped rather
+	// KindSessionReclaimed is the system taking a session's container back. It is beside stopped rather
 	// than folded into it, because a reader has to be able to tell a session somebody halted from one
-	// the crew tidied up.
+	// the system tidied up.
 	KindSessionReclaimed = "session.reclaimed"
 	KindSessionArchived  = "session.archived"
 	KindSessionRestored  = "session.restored"
@@ -41,7 +41,7 @@ const (
 
 // sessionsStream is the logical stream a session's lifecycle is published on, within a workspace's
 // namespace. It is beside the tasks stream rather than mixed into it: a consumer that wants to know
-// what the crew is doing should not have to read every prompt and reply to find out.
+// what the system is doing should not have to read every prompt and reply to find out.
 const sessionsStream = "sessions"
 
 // detailLine is how much of a detail is kept. A reply runs to paragraphs and this is one line about
@@ -51,7 +51,7 @@ const detailLine = 240
 // emit records one thing that happened to a session, and offers it to the export.
 //
 // The store first and the log after, for the same reason a task is written that way: the store is
-// the truth, so a crew whose broker is down still knows what happened, and a view reading the store
+// the truth, so a system whose broker is down still knows what happened, and a view reading the store
 // works whether or not anything is listening. Neither write ever fails what it describes, because
 // the thing already happened.
 //
@@ -110,7 +110,7 @@ func (s *Server) exportSessionEvent(ctx context.Context, session *quaycrewv1.Ses
 	}
 }
 
-// oneShortLine flattens a detail onto one line and caps it. A listing of what the crew is doing is
+// oneShortLine flattens a detail onto one line and caps it. A listing of what the system is doing is
 // for finding the moment you want; the task record holds the whole of what was said.
 func oneShortLine(text string) string {
 	flat := strings.Join(strings.Fields(text), " ")
@@ -120,7 +120,7 @@ func oneShortLine(text string) string {
 	return flat[:detailLine-1] + "…"
 }
 
-// ListSessionEvents says what happened to a session, oldest first, or to the whole crew when the
+// ListSessionEvents says what happened to a session, oldest first, or to the whole system when the
 // request names none.
 func (s *Server) ListSessionEvents(ctx context.Context, req *quaycrewv1.ListSessionEventsRequest) (*quaycrewv1.ListSessionEventsResponse, error) {
 	events, err := s.store.ListSessionEvents(ctx, req.GetSession(), int(req.GetLimit()))

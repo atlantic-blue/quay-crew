@@ -17,7 +17,7 @@ repository's image is built on both arm and amd machines. The image build runs t
 the binary a sandbox mounts is built for the machine it runs on.
 
 This is its own Go module. A hook is a plugin: a thing somebody reviews, versions and hands to
-another crew, so it does not share the crew's dependencies and cannot import its internals. It needs
+another system, so it does not share the system's dependencies and cannot import its internals. It needs
 the standard library and nothing else, which is why `go.mod` has no requirements.
 
 Because it is a separate module, `go test ./...` at the root of the repository does not reach it.
@@ -28,8 +28,8 @@ Because it is a separate module, `go test ./...` at the root of the repository d
 What it reads inside a sandbox differs from what the same hook reads on the operator's machine, which
 is why the paths are configuration and not code:
 
-- the skills at `/home/agent/skills`, which is where the crew mounts what a session holds
-- what the session was told, at `/home/agent/.claude/CLAUDE.md`, which the crew renders
+- the skills at `/home/agent/skills`, which is where the system mounts what a session holds
+- what the session was told, at `/home/agent/.claude/CLAUDE.md`, which the system renders
 
 `hook.config.json` is found beside the running binary rather than in the working directory, because
 the runtime runs the hook from wherever the session happens to be.

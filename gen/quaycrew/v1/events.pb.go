@@ -56,8 +56,8 @@ type TaskEvent struct {
 	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
 	// trace_id is the trace the call that ran this task belonged to, 32 hexadecimal characters, and
 	// empty for a task nothing was tracing. It is the one value that joins this record to the trace
-	// and to every log line written under it, because the crew's correlation id is the trace id
-	// rather than a second identifier beside it. Without it the durable record of what the crew did
+	// and to every log line written under it, because the system's correlation id is the trace id
+	// rather than a second identifier beside it. Without it the durable record of what the system did
 	// links to neither, and weeks later the logs are gone and the row is all that is left. See
 	// issue 346.
 	TraceId       string `protobuf:"bytes,11,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
@@ -204,7 +204,7 @@ type SessionEvent struct {
 	Project   string `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`
 	Handle    string `protobuf:"bytes,6,opt,name=handle,proto3" json:"handle,omitempty"`
 	// detail is one short line about this event, empty on the kinds that need none. It carries what
-	// the model replied and what a failure said, so it goes through the crew's redactor first.
+	// the model replied and what a failure said, so it goes through the system's redactor first.
 	Detail string `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"`
 	// occurred_at is when it happened.
 	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
@@ -302,11 +302,11 @@ func (x *SessionEvent) GetOccurredAt() *timestamppb.Timestamp {
 //
 // It goes to the `job_events` table in the same transaction as the row it describes, and to
 // `<workspace>.job` after, keyed by the job identifier so one job's records stay in
-// order on one partition. The store is the truth: a crew with no broker keeps the whole history and
+// order on one partition. The store is the truth: a system with no broker keeps the whole history and
 // loses only the export.
 //
 // The kinds split in two, and the split is the useful part. A dashboard counting jobs must not break
-// because the crew changed how it leases.
+// because the system changed how it leases.
 type JobEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
@@ -343,7 +343,7 @@ type JobEvent struct {
 	Parent    string `protobuf:"bytes,6,opt,name=parent,proto3" json:"parent,omitempty"`
 	Depth     int32  `protobuf:"varint,7,opt,name=depth,proto3" json:"depth,omitempty"`
 	// detail is one short line about this event: the title declared, the session and attempt, what it
-	// spent, the reason it stopped. It can carry what a caller typed, so it goes through the crew's
+	// spent, the reason it stopped. It can carry what a caller typed, so it goes through the system's
 	// redactor before it is written or exported.
 	Detail string `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
 	// trace_id is the trace the whole tree belongs to, minted at the root and inherited by every

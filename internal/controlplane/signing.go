@@ -10,7 +10,7 @@ import (
 )
 
 // SigningKeySecret is the workspace secret that holds the private key a session signs commits with,
-// in OpenSSH format. Mounted, never set: it is a file, and it is the most sensitive thing this crew
+// in OpenSSH format. Mounted, never set: it is a file, and it is the most sensitive thing this system
 // carries.
 //
 // Signing with ssh needs one private key file and nothing else: no agent, no keyring, no pinentry,
@@ -58,7 +58,7 @@ var mountedOnly = map[string]bool{
 // for.
 //
 // The key is already in the sandbox by the time this runs, written as a file by readySecretFiles, so
-// there is nothing here but pointing git at it. It was written out by hand before the crew could
+// there is nothing here but pointing git at it. It was written out by hand before the system could
 // mount anything, and that path put the private key in the container's environment for the life of
 // the container, where docker inspect reads it.
 //
@@ -98,7 +98,7 @@ func (s *Server) signingScript(ctx context.Context, workspace string) string {
 }
 
 // mountedSecrets asks the listing which secrets reach this workspace's sandboxes as files, rather
-// than asking for the values, because no value is wanted here and a crew that never handles one
+// than asking for the values, because no value is wanted here and a system that never handles one
 // cannot leak it.
 func (s *Server) mountedSecrets(ctx context.Context, workspace string) map[string]bool {
 	mounted := map[string]bool{}

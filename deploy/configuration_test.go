@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// Configuration that lives inside the checkout cannot be given to anybody: a crew that was installed
+// Configuration that lives inside the checkout cannot be given to anybody: a system that was installed
 // rather than cloned has no checkout to put it in. These cases hold the stack to that.
 
 // TestTheStackIsToldWhereItsConfigurationIs.
@@ -28,7 +28,7 @@ func TestTheStackIsToldWhereItsConfigurationIs(t *testing.T) {
 	}
 }
 
-// TestTheConfigurationPathIsOutsideTheCheckout, and sits under QUAY_HOME, which is where a crew keeps
+// TestTheConfigurationPathIsOutsideTheCheckout, and sits under QUAY_HOME, which is where a system keeps
 // what belongs to it on this machine.
 func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 	printed := makeVariable(t, "ENV_FILE")
@@ -66,7 +66,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	itself := filepath.Join("deploy", "configuration_test.go")
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
-	oneCrewDirectory := []string{home, homeTest, itself, "Makefile"}
+	oneSystemDirectory := []string{home, homeTest, itself, "Makefile"}
 	retired := []struct {
 		path    string
 		because string
@@ -74,12 +74,12 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	}{
 		{
 			path:    "deploy/.env",
-			because: "an installed crew has no checkout to hold it",
+			because: "an installed system has no checkout to hold it",
 			allowed: []string{itself},
 		},
-		{path: ".quaycrew/", because: "a crew keeps everything it owns in ~/.quay", allowed: oneCrewDirectory},
-		{path: `".quaycrew"`, because: "a crew keeps everything it owns in ~/.quay", allowed: oneCrewDirectory},
-		{path: ".config/quay", because: "a crew keeps everything it owns in ~/.quay", allowed: oneCrewDirectory},
+		{path: ".quaycrew/", because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
+		{path: `".quaycrew"`, because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
+		{path: ".config/quay", because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
 	}
 
 	tracked, err := exec.Command("git", "-C", "..", "ls-files").Output()
@@ -117,10 +117,10 @@ func makeVariable(t *testing.T, name string) string {
 
 // TestTheStackRefusesToStartOnAnEmptyDataDirectory.
 //
-// The tool refuses when a crew's files are still in the layout from before ~/.quay held everything.
+// The tool refuses when a system's files are still in the layout from before ~/.quay held everything.
 // The stack is a second way in, and it does not go through the tool: `make up` mounts the data
 // directory straight into the control plane. Without the same refusal it would mount an empty one,
-// mint a new token, and come up looking exactly like a crew that had lost every conversation.
+// mint a new token, and come up looking exactly like a system that had lost every conversation.
 func TestTheStackRefusesToStartOnAnEmptyDataDirectory(t *testing.T) {
 	old := filepath.Join(t.TempDir(), "home")
 	if err := os.MkdirAll(filepath.Join(old, ".quaycrew", "data"), 0o755); err != nil {
@@ -131,7 +131,7 @@ func TestTheStackRefusesToStartOnAnEmptyDataDirectory(t *testing.T) {
 		"home-check", "HOME="+old, "QUAY_HOME="+filepath.Join(old, ".quay")).CombinedOutput()
 
 	if err == nil {
-		t.Fatalf("the stack started on a crew whose data is still in the old place:\n%s", out)
+		t.Fatalf("the stack started on a system whose data is still in the old place:\n%s", out)
 	}
 	want := "mv " + filepath.Join(old, ".quaycrew", "data") + " " + filepath.Join(old, ".quay", "data")
 	if !strings.Contains(string(out), want) {
@@ -153,18 +153,18 @@ func TestTheStackStartsOnceTheDataHasMoved(t *testing.T) {
 		"home-check", "HOME="+home, "QUAY_HOME="+filepath.Join(home, ".quay")).CombinedOutput()
 
 	if err != nil {
-		t.Fatalf("a crew that has already moved was refused: %v\n%s", err, out)
+		t.Fatalf("a system that has already moved was refused: %v\n%s", err, out)
 	}
 }
 
-// TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt.
+// TestTheSystemsDirectoryIsMadeBeforeComposeCouldMakeIt.
 //
-// Docker creates a missing bind mount source itself, as root. The crew's directory now holds the
+// Docker creates a missing bind mount source itself, as root. The system's directory now holds the
 // files the tool writes as well as the data the stack mounts, so a stack that came up first would
 // leave it owned by root and the next `quay use` would fail with permission denied on a path it had
 // just been told to write. That is what happened: the tests were green and the composed stack was not.
-func TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "crew")
+func TestTheSystemsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "system")
 
 	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
 		"config", "QUAY_HOME="+home).CombinedOutput()
@@ -186,6 +186,6 @@ func TestTheCrewsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
 	// daemon do it.
 	probe := filepath.Join(home, "context")
 	if err := os.WriteFile(probe, []byte("me/bills\n"), 0o644); err != nil {
-		t.Fatalf("the crew's directory is not writable by the operator: %v", err)
+		t.Fatalf("the system's directory is not writable by the operator: %v", err)
 	}
 }

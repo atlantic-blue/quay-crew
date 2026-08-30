@@ -77,7 +77,7 @@ func TestACostIsNeverWorthFailingAListingOver(t *testing.T) {
 	}{
 		{
 			name: "a conversation nobody has spoken in", workspace: "ws1", conversati: "never",
-			because: "the crew names a conversation before it exists, and that is not a failure",
+			because: "the system names a conversation before it exists, and that is not a failure",
 		},
 		{
 			name: "a half written last line", workspace: "ws1", conversati: "c2",

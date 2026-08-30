@@ -28,7 +28,7 @@ type Usage struct {
 	CacheWritten int64
 }
 
-// Add sums two, so a caller can total a project or a crew without knowing what is in one.
+// Add sums two, so a caller can total a project or a system without knowing what is in one.
 func (u Usage) Add(other Usage) Usage {
 	return Usage{
 		Input:        u.Input + other.Input,
@@ -159,7 +159,7 @@ func (s Storage) conversationDir(cfg Config) (string, bool) {
 }
 
 // usageCache keeps what each transcript came to, so a console refreshing every few seconds does not
-// reread and reparse every conversation in the crew each time.
+// reread and reparse every conversation in the system each time.
 var usageCache = &transcripts{read: map[string]counted{}}
 
 // counted is one transcript's total and what the file looked like when it was counted. A transcript
@@ -243,22 +243,22 @@ func sum(path string) (total, carried Usage) {
 const assistantRecord = "assistant"
 
 // ContextWindowFile is where a session writes down how big the model's context window is, inside the
-// conversation directory the crew mounts into every sandbox.
+// conversation directory the system mounts into every sandbox.
 //
-// The crew cannot work the size out for itself: it is not in the transcript, and a list of models in
+// The system cannot work the size out for itself: it is not in the transcript, and a list of models in
 // the code would be right today and quietly wrong at the next one. The model runtime knows it and
-// says it to the status line, so the status line writes it down where the crew already reads.
+// says it to the status line, so the status line writes it down where the system already reads.
 const ContextWindowFile = "context-window"
 
 // ContextWindowSize is how big the model's context window is for a workspace, and whether anything
-// has said. It is a property of the model the crew runs rather than of one conversation, so the last
+// has said. It is a property of the model the system runs rather than of one conversation, so the last
 // session to be told answers for all of them.
 func (s Storage) ContextWindowSize(workspace string) (int64, bool) {
 	if s.Dir == "" || usableAsPath("workspace", workspace) != nil {
 		return 0, false
 	}
 	at := filepath.Join(s.Dir, "workspaces", workspace, "claude", ContextWindowFile)
-	said, err := os.ReadFile(at) //nolint:gosec // a path built from the crew's own data directory
+	said, err := os.ReadFile(at) //nolint:gosec // a path built from the system's own data directory
 	if err != nil {
 		return 0, false
 	}
@@ -277,7 +277,7 @@ func (s Storage) ContextWindowSize(workspace string) (int64, bool) {
 // conversation for an operator asks the same question of the same file from inside the sandbox, so
 // the two cannot disagree about whether a conversation exists.
 //
-// False for anything it cannot read, and for a crew that keeps no state on the host at all. Both mean
+// False for anything it cannot read, and for a system that keeps no state on the host at all. Both mean
 // the conversation is not there as far as anything here can tell, and starting a conversation that is
 // somehow already there is refused loudly, where resuming one that is not there fails with a sentence
 // about no conversation found.

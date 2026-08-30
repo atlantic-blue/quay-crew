@@ -21,7 +21,7 @@ import (
 // that a loaded machine does not trip it, short enough that watching one run out is not a wait.
 const testWait = 300 * time.Millisecond
 
-// stalledLog takes a record and never answers, which is the broker that held a whole crew's
+// stalledLog takes a record and never answers, which is the broker that held a whole system's
 // dispatches inside the call: the connection was accepted and nothing came back.
 type stalledLog struct{}
 
@@ -35,8 +35,8 @@ func (stalledLog) ConsumePattern(context.Context, string, string, messaging.Hand
 }
 func (stalledLog) Close() {}
 
-// waitingCrew is a control plane with short budgets, so a test can watch one run out.
-func waitingCrew(cfg controlplane.Config) *controlplane.Server {
+// waitingSystem is a control plane with short budgets, so a test can watch one run out.
+func waitingSystem(cfg controlplane.Config) *controlplane.Server {
 	if cfg.Store == nil {
 		cfg.Store = store.NewMemory()
 	}
@@ -57,7 +57,7 @@ func waitingCrew(cfg controlplane.Config) *controlplane.Server {
 // context there is deliberately detached from the caller's, so nothing was left to end the wait: the
 // row was written, no task was recorded, no container was made, and the caller stayed in the call.
 func TestADispatchIsNotHeldByAnEventLogThatNeverAnswers(t *testing.T) {
-	server := waitingCrew(controlplane.Config{Events: stalledLog{}})
+	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
 	_, project := newProject(t, server)
 
 	answered := make(chan error, 1)
@@ -93,7 +93,7 @@ func TestADispatchIsNotHeldByAnEventLogThatNeverAnswers(t *testing.T) {
 // wait it gave up on, because "the dispatch failed" sends the reader to the whole path.
 func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
 	provider := &sandbox.FakeProvider{Hold: make(chan struct{})}
-	server := waitingCrew(controlplane.Config{Provider: provider})
+	server := waitingSystem(controlplane.Config{Provider: provider})
 	_, project := newProject(t, server)
 
 	_, err := server.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
@@ -103,7 +103,7 @@ func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
 		t.Fatal("the dispatch answered, and no sandbox was ever made for it")
 	}
 	if !strings.Contains(err.Error(), "the sandbox to be created") {
-		t.Fatalf("the crew said %q, and it does not say what it waited for", err)
+		t.Fatalf("the system said %q, and it does not say what it waited for", err)
 	}
 
 	// And the row says so too. A row left idle with no task reads as a session waiting for work.
@@ -120,7 +120,7 @@ func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
 	}
 }
 
-// The crew starts one sandbox at a time. That was a mutex held across the whole start, so a start
+// The system starts one sandbox at a time. That was a mutex held across the whole start, so a start
 // that never ended held every later dispatch behind it with no way out, and nothing said so.
 func TestADispatchBehindAStartThatNeverEndsSaysSoAndComesBack(t *testing.T) {
 	written := &bytes.Buffer{}
@@ -129,7 +129,7 @@ func TestADispatchBehindAStartThatNeverEndsSaysSoAndComesBack(t *testing.T) {
 	defer slog.SetDefault(restore)
 
 	provider := &sandbox.FakeProvider{Hold: make(chan struct{})}
-	server := waitingCrew(controlplane.Config{Provider: provider})
+	server := waitingSystem(controlplane.Config{Provider: provider})
 	_, project := newProject(t, server)
 
 	held := make(chan error, 1)
@@ -174,7 +174,7 @@ func TestTheLogSaysADispatchArrivedAndWhatItWaitsFor(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(written, nil)))
 	defer slog.SetDefault(restore)
 
-	server := waitingCrew(controlplane.Config{})
+	server := waitingSystem(controlplane.Config{})
 	_, project := newProject(t, server)
 	if _, err := server.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
 		Project: project, Text: "hello",
@@ -183,14 +183,14 @@ func TestTheLogSaysADispatchArrivedAndWhatItWaitsFor(t *testing.T) {
 	}
 
 	said := written.String()
-	for _, line := range []string{"a dispatch arrived", "the crew is waiting", "the sandbox to be created"} {
+	for _, line := range []string{"a dispatch arrived", "the system is waiting", "the sandbox to be created"} {
 		if !strings.Contains(said, line) {
 			t.Fatalf("the log does not say %q. It says:\n%s", line, said)
 		}
 	}
 }
 
-// oneSession is the crew's single session, which is what a test that dispatched once asserts on.
+// oneSession is the system's single session, which is what a test that dispatched once asserts on.
 func oneSession(t *testing.T, server *controlplane.Server) *quaycrewv1.Session {
 	t.Helper()
 	listed, err := server.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
@@ -198,7 +198,7 @@ func oneSession(t *testing.T, server *controlplane.Server) *quaycrewv1.Session {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if len(listed.GetSessions()) != 1 {
-		t.Fatalf("the crew has %d sessions, want one", len(listed.GetSessions()))
+		t.Fatalf("the system has %d sessions, want one", len(listed.GetSessions()))
 	}
 	return listed.GetSessions()[0]
 }
@@ -213,5 +213,5 @@ func waitFor(t *testing.T, want func() bool) {
 		}
 		time.Sleep(testWait / 20)
 	}
-	t.Fatal("the crew never reached the state this test is about")
+	t.Fatal("the system never reached the state this test is about")
 }

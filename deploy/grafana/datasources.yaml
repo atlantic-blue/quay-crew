@@ -35,7 +35,7 @@ datasources:
     access: proxy
     url: http://loki:3100
     jsonData:
-      # Every line the crew writes under a call carries the trace id, so a line in Loki becomes a
+      # Every line the system writes under a call carries the trace id, so a line in Loki becomes a
       # link to the trace that produced it. This is what the correlation id was for: without the
       # link the id is a string somebody copies by hand.
       derivedFields:

@@ -44,14 +44,14 @@ type fakeClient struct {
 	contexts         []*quaycrewv1.ContextDir
 	secrets          []*quaycrewv1.SecretRef
 	listErr          error
-	// health is what the crew last found when it probed the parts of itself a dispatch writes to.
-	// Nil is a crew that has probed nothing yet, and healthErr a crew that will not answer the call
+	// health is what the system last found when it probed the parts of itself a dispatch writes to.
+	// Nil is a system that has probed nothing yet, and healthErr a system that will not answer the call
 	// at all, which is what a control plane built before that call does.
 	health    []*quaycrewv1.HealthComponent
 	healthErr error
 }
 
-// GetInfo describes the crew the stats view reads. The double answers with something for every field,
+// GetInfo describes the system the stats view reads. The double answers with something for every field,
 // because a field the control plane does not answer for is a different scenario.
 func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grpc.CallOption) (*quaycrewv1.GetInfoResponse, error) {
 	return &quaycrewv1.GetInfoResponse{
@@ -60,7 +60,7 @@ func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grp
 	}, nil
 }
 
-// GetHealth is the crew's last probe of itself. The double answers with whatever the test put in it,
+// GetHealth is the system's last probe of itself. The double answers with whatever the test put in it,
 // because every case worth writing here is a different reading.
 func (f *fakeClient) GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error) {
 	if f.healthErr != nil {
@@ -1220,7 +1220,7 @@ func TestEditingOpensSomethingWithNoEditorSet(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "CLAUDE.md")
 
 	edit := actionBoundTo(t, Contexts(&fakeClient{}), "e")
-	command, err := edit.Shell(Row{Cells: []string{"crew", "crew", "", ""}})
+	command, err := edit.Shell(Row{Cells: []string{"system", "system", "", ""}})
 	if err != nil {
 		t.Fatalf("editing with nothing set: %v", err)
 	}
@@ -1336,14 +1336,14 @@ func TestTheConsoleCallsThemSessions(t *testing.T) {
 	if !strings.Contains(view, "<sessions>") {
 		t.Fatalf("the breadcrumb does not say sessions:\n%s", view)
 	}
-	// The crew has one word for a conversation. The chrome saying the other one means the console is
+	// The system has one word for a conversation. The chrome saying the other one means the console is
 	// translating between two words for one thing.
 	if strings.Contains(view, "thread") {
 		t.Fatalf("the console still says thread somewhere:\n%s", view)
 	}
 }
 
-// TestEveryWordForTheSessionsViewOpensIt keeps the muscle memory working for the words the crew
+// TestEveryWordForTheSessionsViewOpensIt keeps the muscle memory working for the words the system
 // still uses.
 func TestEveryWordForTheSessionsViewOpensIt(t *testing.T) {
 	client := &fakeClient{}
@@ -1362,7 +1362,7 @@ func TestEveryWordForTheSessionsViewOpensIt(t *testing.T) {
 	}
 }
 
-// The words the crew dropped resolve to nothing, so the console cannot quietly teach one of them
+// The words the system dropped resolve to nothing, so the console cannot quietly teach one of them
 // back. A refusal in the command bar is the console's way off, the way a named error is the command
 // line's.
 func TestTheDroppedWordsResolveToNothing(t *testing.T) {
@@ -1555,7 +1555,7 @@ func TestTheHelpPanelCarriesWhatTheHeaderDropped(t *testing.T) {
 	shown := model.View()
 
 	for _, want := range []string{
-		"this crew", "localhost:50051", "juliantellez", "quay-crew", "claude-code",
+		"this system", "localhost:50051", "juliantellez", "quay-crew", "claude-code",
 		"Sandbox engine", "Store engine", "Secrets", "Events engine", "State",
 	} {
 		if !strings.Contains(shown, want) {
@@ -1568,9 +1568,9 @@ func TestTheHelpPanelCarriesWhatTheHeaderDropped(t *testing.T) {
 	}
 }
 
-// TestTheWordmarkIsThereBeforeTheCrewAnswers is how it went missing: against a control plane too old
+// TestTheWordmarkIsThereBeforeTheSystemAnswers is how it went missing: against a control plane too old
 // to say what it is running, the status block is three lines, and the mark is six.
-func TestTheWordmarkIsThereBeforeTheCrewAnswers(t *testing.T) {
+func TestTheWordmarkIsThereBeforeTheSystemAnswers(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	model, _ = update(t, model, tea.WindowSizeMsg{Width: 150, Height: 30})
 	model, _ = update(t, model, infoMsg{info: Info{Version: "709b79e", Address: "localhost:50051", Workspace: "demo", Project: "default"}})
@@ -1620,15 +1620,15 @@ func TestTheHeaderCostsTheLogosRows(t *testing.T) {
 	}
 }
 
-// TestTheHelpPanelSaysWhichCrewItIsConnectedTo, so an operator with two of them can tell which one
+// TestTheHelpPanelSaysWhichSystemItIsConnectedTo, so an operator with two of them can tell which one
 // they are about to act on.
-func TestTheHelpPanelSaysWhichCrewItIsConnectedTo(t *testing.T) {
+func TestTheHelpPanelSaysWhichSystemItIsConnectedTo(t *testing.T) {
 	model := tallTestModel(t, Sessions(&fakeClient{}))
 	model.info = Info{Version: "dev", Address: "localhost:50051", Store: "postgres"}
 	model, _ = update(t, model, runes("?"))
 
 	if !strings.Contains(model.View(), "localhost:50051") {
-		t.Fatalf("the help panel does not say which crew this is:\n%s", model.View())
+		t.Fatalf("the help panel does not say which system this is:\n%s", model.View())
 	}
 }
 
@@ -1700,7 +1700,7 @@ func TestAControlPlaneTooOldToAnswerSaysSo(t *testing.T) {
 	model, _ = update(t, model, behindMsg{})
 	view := model.View()
 	if !strings.Contains(view, "Quay:") || !strings.Contains(view, "older than the tool") || !strings.Contains(view, "make upgrade") {
-		t.Fatalf("the status block does not say the crew is behind, or how to fix it:\n%s", view)
+		t.Fatalf("the status block does not say the system is behind, or how to fix it:\n%s", view)
 	}
 }
 
@@ -1895,7 +1895,7 @@ func TestTheViewIsExactlyTheHeightOfTheWindow(t *testing.T) {
 		size [2]int
 	}{
 		{name: "nothing known yet", size: [2]int{120, 24}},
-		{name: "the crew answered", info: Info{
+		{name: "the system answered", info: Info{
 			Address: "localhost:50051", Model: "claude-code", Sandbox: "docker", Store: "postgres",
 			State: "host directory /Users/x/.quay/data",
 		}, size: [2]int{120, 24}},
@@ -1964,7 +1964,7 @@ func TestTheSecretsViewNeverShowsAValue(t *testing.T) {
 	}
 }
 
-// wizardClient records everything the wizard asks the crew to make.
+// wizardClient records everything the wizard asks the system to make.
 type wizardClient struct {
 	fakeClient
 	workspaces, projects, secrets, contexts, dispatched []string
@@ -1999,13 +1999,13 @@ func (w *wizardClient) Dispatch(_ context.Context, req *quaycrewv1.DispatchReque
 	return &quaycrewv1.DispatchResponse{}, nil
 }
 
-// made is everything the wizard asked the crew for, in one number. It is what "and nothing else" is
+// made is everything the wizard asked the system for, in one number. It is what "and nothing else" is
 // asserted against.
 func (w *wizardClient) made() int {
 	return len(w.workspaces) + len(w.projects) + len(w.secrets) + len(w.contexts) + len(w.dispatched)
 }
 
-// wizardAt opens the console on a crew that already has a workspace and a project in it, which is the
+// wizardAt opens the console on a system that already has a workspace and a project in it, which is the
 // situation the wizard could do nothing with: everything it made, it made from nothing.
 func wizardAt(t *testing.T, client *wizardClient) Model {
 	t.Helper()
@@ -2043,7 +2043,7 @@ func answerAll(t *testing.T, model Model, answers ...string) (Model, tea.Cmd) {
 }
 
 // TestTheWizardMakesOneThing is the whole point of it: each kind can be made on its own, against a
-// crew that already has a workspace and a project, and each touches exactly one call.
+// system that already has a workspace and a project, and each touches exactly one call.
 func TestTheWizardMakesOneThing(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -2092,7 +2092,7 @@ func TestTheWizardMakesOneThing(t *testing.T) {
 	}
 }
 
-// TestPickingAnExistingParentMakesNoSecondOne: the pick step resolves against what the crew has, so
+// TestPickingAnExistingParentMakesNoSecondOne: the pick step resolves against what the system has, so
 // answering "acme" where there is an "acme" reuses it. The identifier proves it, because a workspace
 // made on the way would carry the double's own new one.
 func TestPickingAnExistingParentMakesNoSecondOne(t *testing.T) {
@@ -2289,7 +2289,7 @@ func TestEveryWizardQuestionIsNeeded(t *testing.T) {
 }
 
 // TestTheWizardNeverShowsTheToken: a value on a screen is a value in that terminal's scrollback, and
-// this one runs every task the crew makes.
+// this one runs every task the system makes.
 func TestTheWizardNeverShowsTheToken(t *testing.T) {
 	client := &wizardClient{}
 	model := wizardAt(t, client)
@@ -2329,7 +2329,7 @@ func TestTheWizardClosesWhenItHasMadeSomething(t *testing.T) {
 	}
 }
 
-// TestKeysWhileTheWizardIsWorkingAreNotAnswers: until the crew answers, the wizard is asking nothing,
+// TestKeysWhileTheWizardIsWorkingAreNotAnswers: until the system answers, the wizard is asking nothing,
 // so a keypress is not an answer to anything. Accepted as an empty answer to the working step, enter
 // is refused as "making it: this one is needed", which names no question the operator was ever
 // asked.
@@ -2345,14 +2345,14 @@ func TestKeysWhileTheWizardIsWorkingAreNotAnswers(t *testing.T) {
 		t.Fatalf("enter while working reported %q, want nothing: the operator was asked no question", model.err)
 	}
 	if cmd != nil {
-		t.Fatal("enter while working asked the crew to make it a second time")
+		t.Fatal("enter while working asked the system to make it a second time")
 	}
 
 	model = typeAll(t, model, "stray")
 	if model.making.typed != "" {
 		t.Fatalf("keys while working were kept as %q", model.making.typed)
 	}
-	// Escape is the one key that still works, so a crew that never answers is not a trap.
+	// Escape is the one key that still works, so a system that never answers is not a trap.
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
 	if model.mode != modeBrowse {
 		t.Fatalf("escape while working left the console in %v", model.mode)
@@ -2571,12 +2571,12 @@ func TestTheHelpPanelScrollsRatherThanDroppingItsEnd(t *testing.T) {
 func TestTheHelpPanelNeverAsksAQuestionItHasAnswered(t *testing.T) {
 	told := tallTestModel(t, Sessions(&fakeClient{}))
 	told.info = Info{Version: "dev", Address: "localhost:50051", Workspace: "acme"}
-	if strings.Contains(strings.Join(told.crewLines(), "\n"), "still asking") {
-		t.Fatalf("the help panel asks what it has been told:\n%s", strings.Join(told.crewLines(), "\n"))
+	if strings.Contains(strings.Join(told.systemLines(), "\n"), "still asking") {
+		t.Fatalf("the help panel asks what it has been told:\n%s", strings.Join(told.systemLines(), "\n"))
 	}
 	// And it still says so when it is the truth, or this passes by deleting the line.
 	untold := tallTestModel(t, Sessions(&fakeClient{}))
-	if !strings.Contains(strings.Join(untold.crewLines(), "\n"), "still asking") {
+	if !strings.Contains(strings.Join(untold.systemLines(), "\n"), "still asking") {
 		t.Fatal("a console that has been told nothing says nothing about it")
 	}
 }
@@ -2629,8 +2629,8 @@ func TestTheKeysViewCarriesEveryKeyThatWorksEverywhere(t *testing.T) {
 	}
 }
 
-// TestPressingPWithNoCrewSaysSo rather than looking like a key that does nothing.
-func TestPressingPWithNoCrewSaysSo(t *testing.T) {
+// TestPressingPWithNoSystemSaysSo rather than looking like a key that does nothing.
+func TestPressingPWithNoSystemSaysSo(t *testing.T) {
 	model, cmd := update(t, newTestModel(t, Sessions(&fakeClient{})), runes("p"))
 	if cmd != nil {
 		t.Fatal("p tried to open something with nothing to open")
@@ -2732,7 +2732,7 @@ func TestTheWordmarkIsDrawnInAHeaderOfOneRow(t *testing.T) {
 	}
 }
 
-// TestBigPStartsAFreshConversationAndPEndsNothing. Opening the crew comes back to the conversation
+// TestBigPStartsAFreshConversationAndPEndsNothing. Opening the system comes back to the conversation
 // you were in, because it runs in a tmux session inside the sandbox that is attached to rather than
 // started when it is already there. That is what ctrl-q is for, and it is why the driver could never
 // give you a clean start.
@@ -2803,7 +2803,7 @@ func TestNReplacesTheConversationBesideItRatherThanAddingOne(t *testing.T) {
 
 // TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild. `make upgrade` rebuilt the tool and the
 // stack and left the sandbox image alone, so every conversation carried on running the build from
-// before: the quay inside a sandbox was older than the crew, or was not in the image at all. Nothing
+// before: the quay inside a sandbox was older than the system, or was not in the image at all. Nothing
 // on screen said so, which is the half that made it cost an evening.
 func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
 	registry, err := NewDefaultRegistry(&fakeClient{})
@@ -2820,7 +2820,7 @@ func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
 			name:    "an image from an older build",
 			info:    Info{Version: "37b070b", SandboxBuild: "5d8b08f"},
 			says:    true,
-			because: "the sandboxes are running a build the crew has moved on from",
+			because: "the sandboxes are running a build the system has moved on from",
 		},
 		{
 			name:    "an image from this build",
@@ -2830,7 +2830,7 @@ func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
 		{
 			name:    "an image that does not say which build it is",
 			info:    Info{Version: "37b070b"},
-			because: "an image made before this was stamped says nothing, and neither should the crew",
+			because: "an image made before this was stamped says nothing, and neither should the system",
 		},
 		{
 			name:    "a tool that does not know its own build",
@@ -2932,7 +2932,7 @@ func TestASessionsCostIsInTheListing(t *testing.T) {
 }
 
 // TestASessionThatHasSpentNothingSaysNothing. A conversation nobody has had has not cost zero, it has
-// no cost, and a column of zeroes reads as a crew that is free.
+// no cost, and a column of zeroes reads as a system that is free.
 func TestASessionThatHasSpentNothingSaysNothing(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{{
 		Id: "s1", Workspace: "acme", Handle: "t1", Status: "idle",
@@ -3059,9 +3059,9 @@ func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
 	}
 }
 
-// TestTheHeaderCarriesWhatTheCrewHasCost, beside the build, where the operator is looking while they
+// TestTheHeaderCarriesWhatTheSystemHasCost, beside the build, where the operator is looking while they
 // job rather than only when they go and look at the listing.
-func TestTheHeaderCarriesWhatTheCrewHasCost(t *testing.T) {
+func TestTheHeaderCarriesWhatTheSystemHasCost(t *testing.T) {
 	registry, err := NewDefaultRegistry(&fakeClient{})
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry: %v", err)
@@ -3079,9 +3079,9 @@ func TestTheHeaderCarriesWhatTheCrewHasCost(t *testing.T) {
 	}
 }
 
-// TestACrewThatHasSpentNothingSaysNothingInTheHeader. A row of zeroes beside the build reads as a
-// crew that is free, and it is the first thing anybody sees.
-func TestACrewThatHasSpentNothingSaysNothingInTheHeader(t *testing.T) {
+// TestASystemThatHasSpentNothingSaysNothingInTheHeader. A row of zeroes beside the build reads as a
+// system that is free, and it is the first thing anybody sees.
+func TestASystemThatHasSpentNothingSaysNothingInTheHeader(t *testing.T) {
 	registry, err := NewDefaultRegistry(&fakeClient{})
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry: %v", err)
@@ -3091,7 +3091,7 @@ func TestACrewThatHasSpentNothingSaysNothingInTheHeader(t *testing.T) {
 		t.Fatalf("HeaderOnly: %v", err)
 	}
 	if strings.Contains(strings.Join(lines, "\n"), "⟳") {
-		t.Fatalf("a crew nobody has used reports a cost:\n%s", strings.Join(lines, "\n"))
+		t.Fatalf("a system nobody has used reports a cost:\n%s", strings.Join(lines, "\n"))
 	}
 }
 
@@ -3128,12 +3128,12 @@ func TestTheTotalGivesWayBeforeTheWordmark(t *testing.T) {
 	}
 }
 
-// TestTheContextViewSaysHowBigEachLevelIs: the crew level reached 100,179 characters and nothing
+// TestTheContextViewSaysHowBigEachLevelIs: the system level reached 100,179 characters and nothing
 // anywhere reported it, so it had to be read out of the contexts table. The console and the command
 // line are two clients of one call, so they say it the same way or they drift.
 func TestTheContextViewSaysHowBigEachLevelIs(t *testing.T) {
 	client := &fakeClient{contexts: []*quaycrewv1.ContextDir{
-		{Scope: "crew", Name: "crew", Written: true, Body: strings.Repeat("a", 100_179)},
+		{Scope: "system", Name: "system", Written: true, Body: strings.Repeat("a", 100_179)},
 		{Scope: "workspace", Name: "demo", Owner: "w1", Written: true, Body: strings.Repeat("a", 1_886)},
 		{Scope: "project", Name: "default", Owner: "p1"},
 	}}

@@ -208,7 +208,7 @@ func TestARestartSettlesASessionLeftRunning(t *testing.T) {
 		t.Fatal("the detached task never reached the runner")
 	}
 
-	// The crew comes up and finds the row mid task, which is all a restart can see.
+	// The system comes up and finds the row mid task, which is all a restart can see.
 	server.SettleTasks(context.Background())
 
 	session := sessionByID(t, server, resp.GetId())
@@ -220,7 +220,7 @@ func TestARestartSettlesASessionLeftRunning(t *testing.T) {
 		t.Fatalf("ListTasks: %v", err)
 	}
 	if len(tasks.GetTasks()) == 0 || !strings.Contains(tasks.GetTasks()[0].GetFailure(), "restarted") {
-		t.Fatalf("the settled task should say the crew restarted, got %+v", tasks.GetTasks())
+		t.Fatalf("the settled task should say the system restarted, got %+v", tasks.GetTasks())
 	}
 
 	close(runner.Gate)
@@ -228,7 +228,7 @@ func TestARestartSettlesASessionLeftRunning(t *testing.T) {
 }
 
 // Settling is for sessions that were mid task. A session sitting idle is not one, and marking it failed
-// on every boot would task a quiet crew into a wall of failures.
+// on every boot would task a quiet system into a wall of failures.
 func TestSettlingLeavesAnIdleSessionAlone(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "done"}
 	server, project := detachServer(t, runner)

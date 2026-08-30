@@ -13,11 +13,11 @@ import (
 // console back, so a key that routes correctly and leaves the operator somewhere useless still fails.
 //
 // The console's own table tests cover which key routes where. What these add is the real control
-// plane underneath: the rows a jump lands on are sessions the crew actually made.
+// plane underneath: the rows a jump lands on are sessions the system actually made.
 
 func initializeKeysSteps(sc *godog.ScenarioContext) {
-	// The crew is handed over the way the real console is built, because the key that makes something
-	// asks the crew rather than a view, and a console without one refuses it.
+	// The system is handed over the way the real console is built, because the key that makes something
+	// asks the system rather than a view, and a console without one refuses it.
 	sc.Step(`^the operator is at the console$`, func(ctx context.Context) error {
 		c, w := consoleFrom(ctx), worldFrom(ctx)
 		if err := c.openModel(w); err != nil {

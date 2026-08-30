@@ -1,4 +1,4 @@
-// Package auth is the crew's token: how it is minted and kept on the host, how a client presents
+// Package auth is the system's token: how it is minted and kept on the host, how a client presents
 // it, and how the control plane refuses a call that does not carry it. Client and server both read
 // the wire contract from here, so they cannot drift apart.
 package auth
@@ -21,19 +21,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TokenFile is the file the crew's token lives in, under the crew's data directory. It sits beside
-// the key that seals secrets and is kept the same way, because both are things the crew has to read
+// TokenFile is the file the system's token lives in, under the system's data directory. It sits beside
+// the key that seals secrets and is kept the same way, because both are things the system has to read
 // back as they are: a value sealed into the store can never reach the operator's tool, by
 // construction, so the token cannot live there.
-const TokenFile = "crew.token"
+const TokenFile = "system.token"
 
-// DriverTokenFile is the file the driver's token lives in, beside the crew's. The driver holds its
-// own token rather than the operator's so the crew can tell its calls apart and refuse it the ones
+// DriverTokenFile is the file the driver's token lives in, beside the system's. The driver holds its
+// own token rather than the operator's so the system can tell its calls apart and refuse it the ones
 // that grant capability, and so a token that leaks out of a driver sandbox grants strictly less
 // than the operator holds.
 const DriverTokenFile = "driver.token"
 
-// TokenEnv is what a client reads first, and what the crew puts into a sandbox that is allowed to
+// TokenEnv is what a client reads first, and what the system puts into a sandbox that is allowed to
 // drive it.
 const TokenEnv = "QC_TOKEN"
 
@@ -48,7 +48,7 @@ const (
 // tokenBytes is how much randomness a minted token holds.
 const tokenBytes = 32
 
-// TokenAt reads the crew's token, minting one the first time.
+// TokenAt reads the system's token, minting one the first time.
 //
 // Made rather than asked for, like the key that seals secrets: a step the operator has to perform
 // before anything works is a step that gets skipped. It is written readable only by its owner, and
@@ -96,14 +96,14 @@ type Grant struct {
 	// Verbs are what the job's role declared it may call. Empty may call nothing.
 	Verbs []string
 	// ExpiresAt is when the credential stops working on its own. Zero never expires, which is what a
-	// test wants and what a crew should not have.
+	// test wants and what a system should not have.
 	//
 	// It is the backstop rather than the control. What normally ends a credential is Ended below: a
 	// job that is over is a better reason to refuse a session than a clock nobody watches, and a
 	// credential handed to a sandbox at dispatch is never refreshed.
 	ExpiresAt time.Time
 	// Ended is the phase the job this credential belongs to finished in, and it is empty while that
-	// job runs. The crew writes it when it takes the credential back.
+	// job runs. The system writes it when it takes the credential back.
 	Ended string
 }
 
@@ -125,7 +125,7 @@ func (g Grant) expired(now time.Time) bool {
 	return !g.ExpiresAt.IsZero() && !g.ExpiresAt.After(now)
 }
 
-// Grants is what recognises a job token. The crew holds the minted ones; this package only asks.
+// Grants is what recognises a job token. The system holds the minted ones; this package only asks.
 type Grants interface {
 	Grant(token string) (Grant, bool)
 }
@@ -135,7 +135,7 @@ type Grants interface {
 // credential nobody judges is a credential that grants everything.
 type JobDeny func(fullMethod string, request any, grant Grant) error
 
-// Policy is who the crew recognises, and what each of them may do.
+// Policy is who the system recognises, and what each of them may do.
 type Policy struct {
 	// Token is the operator's own, and it is refused nothing.
 	Token string
@@ -168,7 +168,7 @@ func GrantFrom(ctx context.Context) (Grant, bool) {
 	return grant, carried
 }
 
-// ServerOptions returns the interceptors that refuse every call not carrying one of the crew's
+// ServerOptions returns the interceptors that refuse every call not carrying one of the system's
 // tokens, and put a recognised driver through the deny policy.
 //
 // A server built with no tokens refuses everything rather than everything getting in: the guard
@@ -228,7 +228,7 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 func (p Policy) judgeJob(fullMethod string, request any, grant Grant) error {
 	if p.DeniedToJob == nil {
 		return status.Error(codes.PermissionDenied,
-			"this crew judges no job credential, so a job may call nothing")
+			"this system judges no job credential, so a job may call nothing")
 	}
 	return p.DeniedToJob(fullMethod, request, grant)
 }
@@ -244,19 +244,19 @@ const (
 
 // recognise says who a call is from by the token it carries, or why it is refused.
 //
-// The operator first, then the driver, then the job credentials the crew has minted. A crew holding
+// The operator first, then the driver, then the job credentials the system has minted. A system holding
 // no token of its own recognises nobody, because a guard that fails open is the one thing this
 // package exists to prevent.
 func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
 	if p.Token == "" && p.DriverToken == "" {
 		return 0, Grant{}, status.Error(codes.Unauthenticated,
-			"this crew holds no token, so it cannot recognise any caller: restart the control plane with a data directory and one is minted")
+			"this system holds no token, so it cannot recognise any caller: restart the control plane with a data directory and one is minted")
 	}
 	presented := presentedToken(ctx)
 	if presented == "" {
 		return 0, Grant{}, status.Error(codes.Unauthenticated,
-			"this call carries no crew token, so the crew cannot tell who is calling: quay reads "+
-				TokenEnv+", or crew.token in the crew's data directory")
+			"this call carries no system token, so the system cannot tell who is calling: quay reads "+
+				TokenEnv+", or system.token in the system's data directory")
 	}
 	if p.Token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(p.Token)) == 1 {
 		return callerOperator, Grant{}, nil
@@ -269,20 +269,20 @@ func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
 			return p.judgeCredential(grant)
 		}
 	}
-	return 0, Grant{}, status.Error(codes.Unauthenticated, "the token this call carries is not this crew's")
+	return 0, Grant{}, status.Error(codes.Unauthenticated, "the token this call carries is not this system's")
 }
 
-// judgeCredential answers with the job a live credential names, or with why one this crew minted no
+// judgeCredential answers with the job a live credential names, or with why one this system minted no
 // longer works.
 //
 // Each refusal names its own cause. A credential that had run out used to fall through to the
-// refusal a forged token gets, and a session told the token is not this crew's reads that as holding
+// refusal a forged token gets, and a session told the token is not this system's reads that as holding
 // a bad credential and stops calling. That is what a root job did for twenty eight of its twenty
 // nine minutes, in issue 449.
 func (p Policy) judgeCredential(grant Grant) (caller, Grant, error) {
 	if grant.Ended != "" {
 		return 0, Grant{}, status.Errorf(codes.Unauthenticated,
-			"the crew took this credential back when job %s ended, and that job is %s: a credential lasts "+
+			"the system took this credential back when job %s ended, and that job is %s: a credential lasts "+
 				"as long as the job it was minted for", grant.Job, grant.Ended)
 	}
 	if now := p.now(); grant.expired(now) {
@@ -316,7 +316,7 @@ func presentedToken(ctx context.Context) string {
 	return ""
 }
 
-// Credentials returns what a client attaches to every call to present the crew's token.
+// Credentials returns what a client attaches to every call to present the system's token.
 func Credentials(token string) credentials.PerRPCCredentials {
 	return tokenCredentials(token)
 }
@@ -327,7 +327,7 @@ func (t tokenCredentials) GetRequestMetadata(context.Context, ...string) (map[st
 	return map[string]string{header: scheme + string(t)}, nil
 }
 
-// RequireTransportSecurity is false because the crew listens on loopback by default and the
+// RequireTransportSecurity is false because the system listens on loopback by default and the
 // connection is plaintext today. The token is what a caller is recognised by, not what hides the
 // conversation; an operator exposing the port beyond the machine owns the transport in front of it.
 func (tokenCredentials) RequireTransportSecurity() bool { return false }

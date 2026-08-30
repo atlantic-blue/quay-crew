@@ -104,7 +104,7 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// What the model wrote in its own transcript, which is the only record of a conversation the crew
+	// What the model wrote in its own transcript, which is the only record of a conversation the system
 	// never saw. The context is what the last answer carried, so one answer is enough to say it.
 	sc.Step(`^the model has answered carrying (\d+) tokens of context$`,
 		func(ctx context.Context, carried int) error {
@@ -121,8 +121,8 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 				session.GetSession().GetModelSessionId(), 0, 400, carried)
 		})
 
-	// The crew cannot work the size out for itself. A session writes down what the model runtime told
-	// it, in the conversation directory the crew mounts.
+	// The system cannot work the size out for itself. A session writes down what the model runtime told
+	// it, in the conversation directory the system mounts.
 	sc.Step(`^a session in the workspace was told the window holds (\d+)$`,
 		func(ctx context.Context, size int) error {
 			world := worldFrom(ctx)
@@ -162,7 +162,7 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 				return fmt.Errorf("the session reports %d tokens of context, want %d", window.GetUsed(), want)
 			}
 			if window.GetSize() != 0 {
-				return fmt.Errorf("the crew claims a window of %d, and nothing told it", window.GetSize())
+				return fmt.Errorf("the system claims a window of %d, and nothing told it", window.GetSize())
 			}
 			return nil
 		})

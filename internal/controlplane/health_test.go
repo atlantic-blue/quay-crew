@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// stalledStore reads the way the real one does and never takes a write, which is the crew this is
+// stalledStore reads the way the real one does and never takes a write, which is the system this is
 // all about: every listing answered and nothing started.
 type stalledStore struct {
 	store.Store
@@ -25,21 +25,21 @@ func (stalledStore) Probe(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func TestACrewThatCanWriteIsServing(t *testing.T) {
-	health := controlplane.NewHealth(waitingCrew(controlplane.Config{}))
+func TestASystemThatCanWriteIsServing(t *testing.T) {
+	health := controlplane.NewHealth(waitingSystem(controlplane.Config{}))
 	answer, err := health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	if err != nil {
 		t.Fatalf("Check: %v", err)
 	}
 	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_SERVING {
-		t.Fatalf("a crew that writes answered %s", answer.GetStatus())
+		t.Fatalf("a system that writes answered %s", answer.GetStatus())
 	}
 }
 
-// The check has to write, because the crew it exists for answered every read in under a second while
+// The check has to write, because the system it exists for answered every read in under a second while
 // it started no work at all.
-func TestACrewWhoseStoreTakesNoWriteIsNotServing(t *testing.T) {
-	health := controlplane.NewHealth(waitingCrew(controlplane.Config{
+func TestASystemWhoseStoreTakesNoWriteIsNotServing(t *testing.T) {
+	health := controlplane.NewHealth(waitingSystem(controlplane.Config{
 		Store: stalledStore{Store: store.NewMemory()},
 	}))
 	answer, err := health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
@@ -47,24 +47,24 @@ func TestACrewWhoseStoreTakesNoWriteIsNotServing(t *testing.T) {
 		t.Fatalf("Check: %v", err)
 	}
 	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		t.Fatalf("a crew whose store takes no write answered %s", answer.GetStatus())
+		t.Fatalf("a system whose store takes no write answered %s", answer.GetStatus())
 	}
 }
 
-func TestACrewWhoseEventLogNeverAnswersIsNotServing(t *testing.T) {
-	health := controlplane.NewHealth(waitingCrew(controlplane.Config{Events: stalledLog{}}))
+func TestASystemWhoseEventLogNeverAnswersIsNotServing(t *testing.T) {
+	health := controlplane.NewHealth(waitingSystem(controlplane.Config{Events: stalledLog{}}))
 	answer, err := health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	if err != nil {
 		t.Fatalf("Check: %v", err)
 	}
 	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		t.Fatalf("a crew whose event log never answers answered %s", answer.GetStatus())
+		t.Fatalf("a system whose event log never answers answered %s", answer.GetStatus())
 	}
 }
 
-// A crew asked about its one service says the same thing about it.
+// A system asked about its one service says the same thing about it.
 func TestTheListingOfServicesSaysWhatTheCheckSays(t *testing.T) {
-	health := controlplane.NewHealth(waitingCrew(controlplane.Config{}))
+	health := controlplane.NewHealth(waitingSystem(controlplane.Config{}))
 	listed, err := health.List(context.Background(), &grpc_health_v1.HealthListRequest{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -101,10 +101,10 @@ func stateOf(reading controlplane.HealthReading, name string) (string, string) {
 	return "", ""
 }
 
-// TestTheReadingNamesTheStoreThatTookNoWrite. A verdict on its own is what the crew already had, and
+// TestTheReadingNamesTheStoreThatTookNoWrite. A verdict on its own is what the system already had, and
 // it went to a container's log where nobody reading a console would find it.
 func TestTheReadingNamesTheStoreThatTookNoWrite(t *testing.T) {
-	server := waitingCrew(controlplane.Config{
+	server := waitingSystem(controlplane.Config{
 		Store:  stalledStore{Store: store.NewMemory()},
 		Events: messaging.NewMemory(),
 	})
@@ -124,9 +124,9 @@ func TestTheReadingNamesTheStoreThatTookNoWrite(t *testing.T) {
 }
 
 // TestTheReadingNamesTheEventLogThatNeverAnswered is issue 445 as a reading: the broker was gone for
-// sixteen hours and every view of the crew was drawn from configuration, which had not changed.
+// sixteen hours and every view of the system was drawn from configuration, which had not changed.
 func TestTheReadingNamesTheEventLogThatNeverAnswered(t *testing.T) {
-	server := waitingCrew(controlplane.Config{Events: stalledLog{}})
+	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
 	reading := server.ProbeHealth(context.Background())
 
 	state, detail := stateOf(reading, display.HealthEvents)
@@ -141,23 +141,23 @@ func TestTheReadingNamesTheEventLogThatNeverAnswered(t *testing.T) {
 	}
 }
 
-// TestACrewWithNoEventLogSaysSoRatherThanReadingAsServing. A crew configured with none writes to a
+// TestASystemWithNoEventLogSaysSoRatherThanReadingAsServing. A system configured with none writes to a
 // log that discards, so the write succeeds. Reading that as health is the failure this whole reading
-// exists to stop, one step earlier: a crew recording nothing, drawn as a crew recording everything.
-func TestACrewWithNoEventLogSaysSoRatherThanReadingAsServing(t *testing.T) {
-	server := waitingCrew(controlplane.Config{})
+// exists to stop, one step earlier: a system recording nothing, drawn as a system recording everything.
+func TestASystemWithNoEventLogSaysSoRatherThanReadingAsServing(t *testing.T) {
+	server := waitingSystem(controlplane.Config{})
 	state, _ := stateOf(server.ProbeHealth(context.Background()), display.HealthEvents)
 	if state != display.HealthNotConfigured {
-		t.Fatalf("a crew with nothing connected to its log reads %q", state)
+		t.Fatalf("a system with nothing connected to its log reads %q", state)
 	}
 }
 
-// TestAskingHowTheCrewIsDoesNotProbeIt. The view that reads this draws on a timer, and the part that
+// TestAskingHowTheSystemIsDoesNotProbeIt. The view that reads this draws on a timer, and the part that
 // is down is the part that takes the export budget to say so. A call that probed would hand the
 // operator a console that hangs for as long as the broker stays dead.
-func TestAskingHowTheCrewIsDoesNotProbeIt(t *testing.T) {
+func TestAskingHowTheSystemIsDoesNotProbeIt(t *testing.T) {
 	counting := &countingStore{Store: store.NewMemory()}
-	server := waitingCrew(controlplane.Config{Store: counting, Events: messaging.NewMemory()})
+	server := waitingSystem(controlplane.Config{Store: counting, Events: messaging.NewMemory()})
 	ctx := context.Background()
 
 	server.ProbeHealth(ctx)
@@ -168,14 +168,14 @@ func TestAskingHowTheCrewIsDoesNotProbeIt(t *testing.T) {
 		}
 	}
 	if got := counting.probes.Load(); got != after {
-		t.Fatalf("asking how the crew is probed the store %d more times", got-after)
+		t.Fatalf("asking how the system is probed the store %d more times", got-after)
 	}
 }
 
-// TestACrewAnswersHowItIsWithWhatItLastFound, over the wire, so the console reads a probe rather than
+// TestASystemAnswersHowItIsWithWhatItLastFound, over the wire, so the console reads a probe rather than
 // configuration.
-func TestACrewAnswersHowItIsWithWhatItLastFound(t *testing.T) {
-	server := waitingCrew(controlplane.Config{Events: stalledLog{}})
+func TestASystemAnswersHowItIsWithWhatItLastFound(t *testing.T) {
+	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
 	ctx := context.Background()
 	server.ProbeHealth(ctx)
 
@@ -184,32 +184,32 @@ func TestACrewAnswersHowItIsWithWhatItLastFound(t *testing.T) {
 		t.Fatalf("GetHealth: %v", err)
 	}
 	if answer.GetCheckedAt() == nil {
-		t.Fatal("a crew that has probed does not say when")
+		t.Fatal("a system that has probed does not say when")
 	}
 	states := map[string]string{}
 	for _, component := range answer.GetComponents() {
 		states[component.GetName()] = component.GetState()
 	}
 	if states[display.HealthEvents] != display.HealthDown {
-		t.Fatalf("the crew says its dead event log is %q", states[display.HealthEvents])
+		t.Fatalf("the system says its dead event log is %q", states[display.HealthEvents])
 	}
 	if states[display.HealthStore] != display.HealthServing {
-		t.Fatalf("the crew says its working store is %q", states[display.HealthStore])
+		t.Fatalf("the system says its working store is %q", states[display.HealthStore])
 	}
 }
 
-// TestACrewThatHasNeverProbedClaimsNothing. Answering serving before anything looked is the same lie
-// the stats view told for sixteen hours, and a crew comes up before its first probe lands.
-func TestACrewThatHasNeverProbedClaimsNothing(t *testing.T) {
-	answer, err := waitingCrew(controlplane.Config{}).GetHealth(
+// TestASystemThatHasNeverProbedClaimsNothing. Answering serving before anything looked is the same lie
+// the stats view told for sixteen hours, and a system comes up before its first probe lands.
+func TestASystemThatHasNeverProbedClaimsNothing(t *testing.T) {
+	answer, err := waitingSystem(controlplane.Config{}).GetHealth(
 		context.Background(), &quaycrewv1.GetHealthRequest{})
 	if err != nil {
 		t.Fatalf("GetHealth: %v", err)
 	}
 	if len(answer.GetComponents()) != 0 {
-		t.Fatalf("a crew that has never probed says %d things about itself", len(answer.GetComponents()))
+		t.Fatalf("a system that has never probed says %d things about itself", len(answer.GetComponents()))
 	}
 	if answer.GetCheckedAt() != nil {
-		t.Fatalf("a crew that has never probed says it was checked at %s", answer.GetCheckedAt().AsTime())
+		t.Fatalf("a system that has never probed says it was checked at %s", answer.GetCheckedAt().AsTime())
 	}
 }

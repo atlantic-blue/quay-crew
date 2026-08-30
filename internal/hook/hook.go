@@ -134,7 +134,7 @@ func FromFiles(files []File) (Hook, error) {
 	}
 	var read manifest
 	decoder := yaml.NewDecoder(strings.NewReader(string(raw.Body)))
-	// A field the crew does not know is refused by name rather than ignored. Ignored, it looks
+	// A field the system does not know is refused by name rather than ignored. Ignored, it looks
 	// configured and does nothing, which sends whoever wrote it looking somewhere else entirely.
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&read); err != nil {
@@ -230,8 +230,8 @@ func (h Hook) check(directory string, byPath map[string]File) error {
 			return fmt.Errorf("hook: %s names a secret %q, which is not an environment variable name",
 				directory, name)
 		}
-		if crewOwnName(name) {
-			return fmt.Errorf("hook: %s names the secret %s, and names starting QC_ or CLAUDE_ are the crew's own: a hook cannot ask for the crew's configuration or the model's token",
+		if systemOwnName(name) {
+			return fmt.Errorf("hook: %s names the secret %s, and names starting QC_ or CLAUDE_ are the system's own: a hook cannot ask for the system's configuration or the model's token",
 				directory, name)
 		}
 		if strings.TrimSpace(h.Secrets[name]) == "" {
@@ -303,14 +303,14 @@ func plain(binary string) bool { return commandShape.MatchString(binary) }
 
 func environmentName(name string) bool { return environmentShape.MatchString(name) }
 
-// crewOwnName says the name belongs to the crew rather than to whoever wrote the hook.
-func crewOwnName(name string) bool {
+// systemOwnName says the name belongs to the system rather than to whoever wrote the hook.
+func systemOwnName(name string) bool {
 	return strings.HasPrefix(name, "QC_") || strings.HasPrefix(name, "CLAUDE_")
 }
 
 // insideOwnDirectory says the path stays under the hook's directory: relative, no parent steps, no
 // root. A hook is written by somebody and imported by somebody else, so a path that climbs out of
-// the directory is a path that writes wherever the crew happens to be standing.
+// the directory is a path that writes wherever the system happens to be standing.
 func insideOwnDirectory(relative string) bool {
 	if relative == "" || path.IsAbs(relative) || strings.HasPrefix(relative, "/") {
 		return false

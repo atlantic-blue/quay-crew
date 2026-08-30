@@ -1,20 +1,20 @@
 # Drivers
 
-A crew runs somebody else's agent inside its own sandbox. Today that agent is Claude Code, and the
-crew knows it: the flags, the stream format, the transcript path, the environment variable holding
+A system runs somebody else's agent inside its own sandbox. Today that agent is Claude Code, and the
+system knows it: the flags, the stream format, the transcript path, the environment variable holding
 the token, and the vocabulary of permission modes are all Claude Code's, spread across five packages.
 
 Principle 6 in [`ARCHITECTURE.md`](ARCHITECTURE.md) says the model provider is configuration. This
 document is the delta between that sentence and the code, and a plan to close it.
 
-A **driver** is the unit: everything the crew needs to know to run one agent command line tool inside
+A **driver** is the unit: everything the system needs to know to run one agent command line tool inside
 a sandbox. Its argument vectors, how to read what it says back, where it keeps a conversation, the
 secret it authenticates with, and its own vocabulary for autonomy.
 
 One property of a driver is worth stating up front because it has to be answered to somebody else. A
 driver does not by itself decide where the model runs: swapping Claude Code for another vendor's
 command line tool sends the code somewhere else rather than nowhere. So the driver declares where its
-model runs, and the crew writes that with the task, and an operator can read it off the log rather
+model runs, and the system writes that with the task, and an operator can read it off the log rather
 than reason about a configuration file.
 
 ## What is already true
@@ -86,10 +86,10 @@ test rather than an integration test.
   which is the half that has no seam today.
 - **How do I tell resuming from starting?** Where this agent keeps a conversation, so the sandbox can
   mount it and the open path can look for it.
-- **What does it authenticate with?** A named secret, never a value, so the crew binds it from its own
+- **What does it authenticate with?** A named secret, never a value, so the system binds it from its own
   store the way a skill does.
-- **What autonomy words does it use?** A mapping from the crew's vocabulary to this agent's, so a
-  crew level mode survives a change of driver.
+- **What autonomy words does it use?** A mapping from the system's vocabulary to this agent's, so a
+  system level mode survives a change of driver.
 - **Where does its model run?** One of: the operator's subscription, a vendor API, the operator's own
   cloud account, or an endpoint the operator controls. Declared, reported, and written to the event
   log with the task.
@@ -101,14 +101,14 @@ client where their code went can read it off the log rather than reason about a 
 
 The sandbox, the event log, the store, the console and the automation graphs are all untouched. A
 driver is a description of a subprocess. The permission mode concept stays exactly as it is at the
-crew's edge; only its values become per driver. `EchoRunner` stays as the driver with no model, which
+system's edge; only its values become per driver. `EchoRunner` stays as the driver with no model, which
 is how the smoke test drives a real task without a subscription and how the first table tests for the
 registry run.
 
 The image already assumes what this document argues for, and does not enforce it. The Makefile builds
 `deploy/sandbox/claude.Dockerfile` as `quaycrew-sandbox-claude:local`, and `deploy/env.example` pairs
 `QC_SANDBOX_IMAGE` with `QC_MODEL=claude-code`. One image per driver is therefore the existing
-convention rather than an open question; what is missing is that nothing checks the pair. A crew
+convention rather than an open question; what is missing is that nothing checks the pair. A system
 configured with one driver and another driver's image starts, runs, and fails at the first task with
 whatever the missing binary says.
 
@@ -163,5 +163,5 @@ not. Deciding they stay separate is defensible; deciding it without writing down
 
 **Whether a driver and image mismatch is refused.** The pairing exists in configuration and nothing
 checks it, so the failure arrives at the first task rather than at startup. Refusing it early is
-cheap, and it is the same shape as `make env-check` naming configuration that the crew's own file does
+cheap, and it is the same shape as `make env-check` naming configuration that the system's own file does
 not have.

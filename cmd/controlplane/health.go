@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// healthArg is what this binary is run with to ask the crew beside it whether it is serving. It is a
+// healthArg is what this binary is run with to ask the system beside it whether it is serving. It is a
 // second mode of the same binary rather than a second tool, because the image the control plane runs
 // in carries this binary and nothing else: no shell, no client, nothing to ask with.
 const healthArg = "health"
@@ -22,7 +22,7 @@ const healthArg = "health"
 // probeHealth asks the control plane on this machine whether it can still write, and is the process
 // exit code a container health check reads. Zero is serving.
 //
-// The crew guards every call, so this presents the same token the server minted, read from the same
+// The system guards every call, so this presents the same token the server minted, read from the same
 // data directory the server keeps it in.
 func probeHealth() int {
 	ctx, giveUp := context.WithTimeout(context.Background(), healthProbeWait)
@@ -30,7 +30,7 @@ func probeHealth() int {
 
 	token, err := os.ReadFile(filepath.Join(os.Getenv("QC_DATA_DIR"), auth.TokenFile))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "health: the crew's token could not be read: %v\n", err)
+		fmt.Fprintf(os.Stderr, "health: the system's token could not be read: %v\n", err)
 		return 1
 	}
 
@@ -38,18 +38,18 @@ func probeHealth() int {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithPerRPCCredentials(auth.Credentials(strings.TrimSpace(string(token)))))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "health: the crew could not be dialled: %v\n", err)
+		fmt.Fprintf(os.Stderr, "health: the system could not be dialled: %v\n", err)
 		return 1
 	}
 	defer func() { _ = conn.Close() }()
 
 	answer, err := grpc_health_v1.NewHealthClient(conn).Check(ctx, &grpc_health_v1.HealthCheckRequest{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "health: the crew did not answer: %v\n", err)
+		fmt.Fprintf(os.Stderr, "health: the system did not answer: %v\n", err)
 		return 1
 	}
 	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_SERVING {
-		fmt.Fprintf(os.Stderr, "health: the crew is %s: it answers reads and cannot write. "+
+		fmt.Fprintf(os.Stderr, "health: the system is %s: it answers reads and cannot write. "+
 			"Its own log says which write did not land.\n", answer.GetStatus())
 		return 1
 	}
@@ -57,8 +57,8 @@ func probeHealth() int {
 	return 0
 }
 
-// healthProbeWait is how long the probe waits for the answer. Longer than the crew's own budget for
-// a write, so a crew that has already given up on one answers this rather than being cut off mid
+// healthProbeWait is how long the probe waits for the answer. Longer than the system's own budget for
+// a write, so a system that has already given up on one answers this rather than being cut off mid
 // sentence and reported as silent.
 const healthProbeWait = 10 * time.Second
 

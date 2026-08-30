@@ -16,7 +16,7 @@ a finding.
 
 The operator declares one job. After that the operator only answers questions.
 
-**Answering** is a reply to a question the crew asked. There are two commands, because there are two
+**Answering** is a reply to a question the system asked. There are two commands, because there are two
 things that ask. `quay flow answer` answers an ask node in a graph. `quay job answer` answers a
 question a session put about the job it is running, which shipped on 30 August 2026 out of the first
 run's own finding, `quay-crew#446`: a session chose a store that bills while idle and the operator
@@ -43,14 +43,14 @@ Each issue carries six things:
 - the job identifier, or the run identifier;
 - what the operator typed;
 - what the operator expected to answer instead;
-- what the crew showed at that moment, quoted from the terminal;
+- what the system showed at that moment, quoted from the terminal;
 - the record that should have made the command unnecessary.
 
-The last one is the useful field. A finding is not "the crew is bad". A finding names the row, the
+The last one is the useful field. A finding is not "the system is bad". A finding names the row, the
 event or the view that was missing.
 
 The score of the run is the count of these issues. A run with no findings passes rule one. A run with
-fifteen findings tells the crew what to build next, in order.
+fifteen findings tells the system what to build next, in order.
 
 ## 2. When it runs
 
@@ -166,7 +166,7 @@ children and declares nothing else. It then goes to `waiting`, because a parent 
 The infrastructure job runs as `infrastructure-writer` and declares three children of its own, because the
 distribution, the store and the alarm are three deliverables with three reviews.
 
-The fetching job tries to declare a child at depth three. The crew refuses it, and the refusal names the
+The fetching job tries to declare a child at depth three. The system refuses it, and the refusal names the
 limit, the current depth and the command that raises it. **That refusal is a step of the test and not an
 accident.** The session then does that one child's work itself, which is the one refusal an
 orchestrator may work around. Every other refusal ends the job with the refusal written into the answer,
@@ -204,7 +204,7 @@ merges.
 **Why the `verbs` lists still differ.** `releaser` cannot declare a job, because a session that can push and
 can also fan out could spend the whole budget on pushes nobody reviewed. `infrastructure-writer` cannot
 stop one, because stopping a job is the orchestrator's. `receives` still bounds what reaches the container
-at all, which is a different question from what a session may ask the crew for.
+at all, which is a different question from what a session may ask the system for.
 
 **An orchestrator does not absorb the tree.** The first version of its brief said that a refused
 declaration meant doing that work itself. That was written for the depth limit in section 6 and it was
@@ -219,7 +219,7 @@ orchestrator's brief now says that any deliverable carrying logic is declared as
 orchestrator to use them.
 
 **What the run must observe.** Every child ends with a pull request address in its answer, and nothing is
-merged by the crew. A session running as `infrastructure-writer` that runs an apply, rather than writing
+merged by the system. A session running as `infrastructure-writer` that runs an apply, rather than writing
 the pipeline that applies on merge, is a finding of the worst kind.
 
 ## 8. The flows
@@ -245,13 +245,13 @@ What each node type proves, and what a failure looks like:
   while it waits.
 - **Choice: the run branches on data.** It reads the field the step returned, not prose. A failure walks
   the success edge after a red gate.
-- **Wait: a run survives time.** The wait is a column and not a timer. Section 13 restarts the crew inside
+- **Wait: a run survives time.** The wait is a column and not a timer. Section 13 restarts the system inside
   this wait on purpose, and it must still come due.
-- **Ask: the crew stops for a person.** A failure takes silence for a yes.
+- **Ask: the system stops for a person.** A failure takes silence for a yes.
 
 **The scheduled read.** Every fifteen minutes: read one known transcript through the edge, then branch on
 whether the text came back. If it did, say nothing. If it did not, write what is missing into the answer.
-The crew refuses a schedule shorter than fifteen minutes, which is `flow.MinimumEvery` in
+The system refuses a schedule shorter than fifteen minutes, which is `flow.MinimumEvery` in
 `internal/flow/graph.go`, and that constraint costs this product nothing. A page that serves stored text
 from a cache does not need a check every minute.
 
@@ -282,8 +282,8 @@ The ask node in the release flow asks this:
 **Why this is a real question.** The page cannot render without an answer, and the answer decides what a
 reader sees on a page the operator's name is on.
 
-**Why the crew cannot derive it.** There is no history and there are no readers yet, so no measurement in
-the crew contains the answer. Both answers are defensible. Text in another language is still text a reader
+**Why the system cannot derive it.** There is no history and there are no readers yet, so no measurement in
+the system contains the answer. Both answers are defensible. Text in another language is still text a reader
 can put through a translator, and it is also a wall of characters that makes the page look broken. That
 trade is a judgement about who the page is for, and only the operator holds it.
 
@@ -308,11 +308,11 @@ later.
   first appears. Section 13 takes it during the run.
 - **`budget_tokens` on the root.** Set from what one day of model use costs today. The measurement is the
   median `quaycrew.tokens` for a completed job over the first fifty, and this run produces the first fifty.
-- **The lease length.** The crew refuses to start with it unset. The measurement is the ninety fifth
+- **The lease length.** The system refuses to start with it unset. The measurement is the ninety fifth
   percentile of `quaycrew.job.duration` over the first fifty completed jobs.
 
 The run records the real figure for each one. That is the point of running it: after this test the next
-crew derives these numbers instead of guessing them.
+system derives these numbers instead of guessing them.
 
 ## 12. The checklist
 
@@ -330,7 +330,7 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 7. **secret set, list.** The platform key. A failure lets it reach a log, a task record or a listing.
 8. **hook import, attach.** A hook refuses a command that changes infrastructure from inside a sandbox,
    because infrastructure ships through the pipeline. A failure runs an apply and nothing stops it.
-9. **context at four levels.** Crew: the house rules. Workspace: what this project is. Project: the shape
+9. **context at four levels.** System: the house rules. Workspace: what this project is. Project: the shape
    of the stored transcript. Session: what one attempt learned. A failure is a child told again in its
    brief, or two children that build two different shapes.
 10. **flow import.** Both flows. A failure imports a graph that dies at its first movement.
@@ -338,7 +338,7 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 12. **role detach, skill detach.** `releaser` and the git skill come off once the site is live. A failure
     is a session that still holds the token afterwards.
 
-**The crew, while the job runs.**
+**The system, while the job runs.**
 
 13. **job create, list, show.** A failure hides the tree, or truncates an answer.
 14. **job stop.** The operator stops nothing, because stopping is driving. The budget exercises it: a job
@@ -359,21 +359,21 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 23. **flow start, show, list, answer, stop.** The release flow starts from the job that finished, not from
     a person. A failure is a halted run and a quiet run reading the same.
 24. **Triggers.** Section 9.
-25. **Sessions, attach, label.** The crew names each session itself. A failure lists identifiers with no
+25. **Sessions, attach, label.** The system names each session itself. A failure lists identifiers with no
     names, or silently restores an archived session.
 
 **The record, read at the end.**
 
 26. **Events.** Every movement writes a row. A failure is a state change that emits nothing.
 27. **Tracing.** One trace covers the root and every child. A failure is a dozen unrelated traces.
-28. **Headroom.** A failure says there is room while the crew runs out of memory.
+28. **Headroom.** A failure says there is room while the system runs out of memory.
 29. **Drain and version drift.** The operator drains before the upgrade and compares the three builds
     after it. A failure reports a clean drain while a task is still working.
 30. **Health.** A failure answers every read, starts no work, and reports itself healthy.
 31. **The console, the panel and the web view.** A failure is a flat session list, or a view that shows a
     session and not what it was asked.
-32. **Manual and features.** The orchestrator reads `quay manual` to learn how to drive the crew. A
-    failure has to be told in its brief what the crew can do.
+32. **Manual and features.** The orchestrator reads `quay manual` to learn how to drive the system. A
+    failure has to be told in its brief what the system can do.
 
 That is thirty two capabilities, and two dropped in section 5.
 
@@ -405,7 +405,7 @@ The headroom figure is sampled for the whole run, plus four counts:
 - the peak memory against the limit that binds, which on this machine is the Docker virtual machine's
   cap and not the host's memory;
 - the greatest number of sandboxes alive at one moment;
-- the count of dispatches the crew refused because the machine was full, which must be a refusal with a
+- the count of dispatches the system refused because the machine was full, which must be a refusal with a
   reason and never a silent block;
 - the count of processes the kernel killed, which must be zero.
 
@@ -426,28 +426,28 @@ Any one of these is a failure.
 - **The budget did not hold.** A tree that spent past its root.
 - **The capability boundary did not hold.** A session that pushed when its role gave it no way to push.
 - **A run took silence for an answer.**
-- **The machine died.** The kernel killed a sandbox, or the crew stopped serving.
+- **The machine died.** The kernel killed a sandbox, or the system stopped serving.
 - **The record cannot explain the run.** The site ships and the operator cannot rebuild what happened
   from rows, events and traces alone. A container log does not count, because the container is gone.
 - **The upgrade cost the intent.** Section 13.
 
-A site that does not ship is not automatically a failure. If the crew carried the work honestly, and the
+A site that does not ship is not automatically a failure. If the system carried the work honestly, and the
 operator only answered, and the model simply did not finish in twenty four hours, that is a result about
-the model and about the size of the idea. Record it as such. The crew is what is under test here.
+the model and about the size of the idea. Record it as such. The system is what is under test here.
 
 ## 15. What this test does not cover
 
-- **One operator, one machine, one model.** Nothing here covers a shared crew or a second operator.
+- **One operator, one machine, one model.** Nothing here covers a shared system or a second operator.
 - **Fairness across workspaces.** One workspace, so `max_running` starving one project behind another is
   untested.
 - **Deleting a workspace or a project.** The run creates and reads and never removes.
-- **Backup and restore.** A crew can still be destroyed by an ordinary Docker command.
+- **Backup and restore.** A system can still be destroyed by an ordinary Docker command.
 - **A chat channel.** Questions arrive through the command line tool.
 - **Kubernetes and remote sandboxes.** Everything runs on one machine's Docker daemon.
 - **Driving from the web view.** It is read only, so this run proves reading and never writing there.
 - **The inside of a session.** Nothing in the container adopts the trace context, so the trace stops at
   the attempt.
-- **Cost accuracy.** The crew reports what the published prices say. The run does not compare that
+- **Cost accuracy.** The system reports what the published prices say. The run does not compare that
   against the bill, and the bill is what the budget alarm is set from.
 - **Whether the captions are right.** The page shows what the platform holds. Nothing proves that text
   matches the audio.

@@ -5,7 +5,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
 
   The boundary is the point of it. A role that writes tests must not receive the code, or the two
   sessions are one conversation wearing two names. So what a role receives is declared, and a role
-  that names material the crew does not hand out is refused at import.
+  that names material the system does not hand out is refused at import.
 
   Nothing here runs as a role yet. This is the catalogue and the two levels it attaches at, which is
   the same shape a skill already has. What a session running as a role receives comes next.
@@ -15,56 +15,56 @@ Feature: A role is imported, pinned to a version, and attached at a level
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: A crew that has imported nothing holds no roles
-    When the operator lists the crew's roles
-    Then the crew holds no roles
+  Scenario: A system that has imported nothing holds no roles
+    When the operator lists the system's roles
+    Then the system holds no roles
 
-  Scenario: A role is imported and the crew says what it is
+  Scenario: A role is imported and the system says what it is
     When the operator imports the "test-writer" role
-    Then the crew holds the "test-writer" role
+    Then the system holds the "test-writer" role
     And the listing says the "test-writer" role runs on "opus"
     And the listing says the "test-writer" role receives "context, job"
 
   # A boundary that means nothing looks exactly like one that holds, and import is the only moment
   # anybody is looking.
-  Scenario: A role receiving material the crew does not hand out is refused, and names it
+  Scenario: A role receiving material the system does not hand out is refused, and names it
     When the operator imports a role receiving "the whole repository"
-    Then the crew refuses the role saying "the whole repository"
-    And the crew holds no roles
+    Then the system refuses the role saying "the whole repository"
+    And the system holds no roles
 
-  # What a role costs is part of what it is, so the crew will not choose it for the operator.
+  # What a role costs is part of what it is, so the system will not choose it for the operator.
   Scenario: A role naming no model is refused
     When the operator imports a role naming no model
-    Then the crew refuses the role saying "names no model"
-    And the crew holds no roles
+    Then the system refuses the role saying "names no model"
+    And the system holds no roles
 
   Scenario: A role that says nothing about what it receives is refused
     When the operator imports a role declaring nothing it receives
-    Then the crew refuses the role saying "boundary"
-    And the crew holds no roles
+    Then the system refuses the role saying "boundary"
+    And the system holds no roles
 
   Scenario: A role with no version is refused, because a session is pinned to one
     When the operator imports a role with no version
-    Then the crew refuses the role saying "pinned"
-    And the crew holds no roles
+    Then the system refuses the role saying "pinned"
+    And the system holds no roles
 
   # A workspace pins the version it attached, so raising the version in the repository is the way to
   # change a role rather than editing one under a workspace already holding it.
   Scenario: Importing a different role at the same version is refused
     Given the operator imported the "test-writer" role
     When the operator imports a different "test-writer" role at the same version
-    Then the crew refuses the role saying "already imported and is a different role"
+    Then the system refuses the role saying "already imported and is a different role"
 
   # The brief is the role. It is the several hundred words that decide how a session behaves, and a
   # role that cannot be read back is a run nobody can audit: the operator has no way to diff what the
-  # crew holds against the file it came from, or to tell which version produced what they just read.
+  # system holds against the file it came from, or to tell which version produced what they just read.
   Scenario: A role is read back whole, brief and all
     Given the operator imported the "test-writer" role
     When the operator reads the "test-writer" role back
     Then the role comes back with its brief
     And the role comes back saying what it receives
 
-  # The version a workspace pinned, not the newest the crew holds, because reading the wrong one is
+  # The version a workspace pinned, not the newest the system holds, because reading the wrong one is
   # the failure this ends: an operator diffing a brief against a run that was never given it.
   Scenario: A workspace reads back the version it pinned
     Given the operator imported the "test-writer" role
@@ -78,7 +78,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
   Scenario: Reading back a role nobody holds names the roles that are there
     Given the operator imported the "test-writer" role
     When the operator reads the "test-writter" role back
-    Then the crew refuses the role saying "test-writer"
+    Then the system refuses the role saying "test-writer"
 
   # What a role may call is declared under verbs, which is the word kubernetes uses for the same
   # question, so an operator arrives already knowing it.
@@ -88,13 +88,13 @@ Feature: A role is imported, pinned to a version, and attached at a level
     Then the role comes back saying it may call "job.create, job.read"
 
   # The way off the old spelling, tested alongside the way on to the new one. A role file is in
-  # somebody's repository and in their fingers, so a key the crew renamed is refused by name rather
+  # somebody's repository and in their fingers, so a key the system renamed is refused by name rather
   # than ignored: ignored, the role grants nothing and reads exactly like one that holds.
   Scenario: A role file still saying may is refused, and told what to write instead
     When the operator imports a role saying "may" where it should say "verbs"
-    Then the crew refuses the role saying "may"
-    And the crew refuses the role saying "verbs"
-    And the crew holds no roles
+    Then the system refuses the role saying "may"
+    And the system refuses the role saying "verbs"
+    And the system holds no roles
 
   Scenario: A workspace with no roles attached says so
     When the operator lists the workspace's roles
@@ -126,45 +126,45 @@ Feature: A role is imported, pinned to a version, and attached at a level
     And the operator attached the "test-writer" role to the workspace
     When the operator detaches the "test-writer" role from the workspace
     Then the workspace holds no roles
-    And the crew holds the "test-writer" role
+    And the system holds the "test-writer" role
 
-  # A role given to the crew is held by every workspace, including the ones made after it, which is
-  # the difference between setting a crew up once and setting each workspace up again. It takes the
-  # word crew where a workspace goes, exactly as quay skill attach does.
-  Scenario: A role the crew holds reaches a workspace that attached nothing
+  # A role given to the system is held by every workspace, including the ones made after it, which is
+  # the difference between setting a system up once and setting each workspace up again. It takes the
+  # word system where a workspace goes, exactly as quay skill attach does.
+  Scenario: A role the system holds reaches a workspace that attached nothing
     Given the operator imported the "test-writer" role
-    When the operator attaches the "test-writer" role to the crew
+    When the operator attaches the "test-writer" role to the system
     Then the workspace holds the "test-writer" role
-    And the listing says the "test-writer" role is held by the crew
+    And the listing says the "test-writer" role is held by the system
 
-  Scenario: A workspace created after the crew took a role holds it too
+  Scenario: A workspace created after the system took a role holds it too
     Given the operator imported the "test-writer" role
-    And the operator attached the "test-writer" role to the crew
+    And the operator attached the "test-writer" role to the system
     When a second workspace named "widgets"
     Then the second workspace holds the "test-writer" role
 
   # Two separate statements, and the wider one does not undo the narrower one.
-  Scenario: Taking a role off the crew leaves a workspace's own attachment alone
+  Scenario: Taking a role off the system leaves a workspace's own attachment alone
     Given the operator imported the "test-writer" role
-    And the operator attached the "test-writer" role to the crew
+    And the operator attached the "test-writer" role to the system
     And the operator attached the "test-writer" role to the workspace
-    When the operator detaches the "test-writer" role from the crew
+    When the operator detaches the "test-writer" role from the system
     Then the workspace holds the "test-writer" role
 
-  Scenario: Taking a role off the crew takes it off a workspace that only had it that way
+  Scenario: Taking a role off the system takes it off a workspace that only had it that way
     Given the operator imported the "test-writer" role
-    And the operator attached the "test-writer" role to the crew
+    And the operator attached the "test-writer" role to the system
     And the workspace holds the "test-writer" role
-    When the operator detaches the "test-writer" role from the crew
+    When the operator detaches the "test-writer" role from the system
     Then the workspace holds no roles
 
-  Scenario: Attaching a role the crew has not imported is refused
+  Scenario: Attaching a role the system has not imported is refused
     When the operator attaches the "architect" role to the workspace
-    Then the crew refuses the role saying "not found"
+    Then the system refuses the role saying "not found"
 
   # Where a role came from. A role is imported from a directory, and a directory is anywhere: the
   # acceptance run was driven by three roles that sat in a folder on one machine, so no pull request
-  # touched them, nobody reviewed them and nothing versioned them, while every listing the crew
+  # touched them, nobody reviewed them and nothing versioned them, while every listing the system
   # printed showed them looking exactly like the roles that ship in this repository.
   #
   # Nothing is refused over it. A role written in a scratch directory while somebody is finding the
@@ -186,14 +186,14 @@ Feature: A role is imported, pinned to a version, and attached at a level
     Then the listing says the commit is on no remote branch
     And the listing says nobody else can read it
 
-  # The commit is the evidence of what the crew holds. For an edited directory it is evidence of
+  # The commit is the evidence of what the system holds. For an edited directory it is evidence of
   # something else.
   Scenario: A role edited after its commit says the files are uncommitted
     When the operator imports a role edited after its commit
     Then the listing says the files are uncommitted
     And the listing says nobody else can read it
 
-  # The way out, so the warning has to clear. A crew that kept the first answer would leave the
+  # The way out, so the warning has to clear. A system that kept the first answer would leave the
   # operator committing the role, importing it again and watching nothing change.
   Scenario: Committing a loose role and importing it again clears the warning
     Given the operator imported a role from a folder that is not in a repository
@@ -201,9 +201,9 @@ Feature: A role is imported, pinned to a version, and attached at a level
     Then the listing says where the role came from
     And the listing does not say nobody else can read it
 
-  # A role the crew took in before it recorded any of this. Calling it loose would be an accusation
-  # the crew cannot support.
-  Scenario: A role imported before the crew recorded any of this says only that
+  # A role the system took in before it recorded any of this. Calling it loose would be an accusation
+  # the system cannot support.
+  Scenario: A role imported before the system recorded any of this says only that
     When the operator imports the "test-writer" role
     Then the listing says where the role came from was not recorded
 
@@ -211,9 +211,9 @@ Feature: A role is imported, pinned to a version, and attached at a level
   # directory rather than from a list in the test, so a role added later is held to the same rules
   # without anybody remembering, and a roles/ that lost its contents fails this rather than passing
   # over nothing.
-  Scenario: The crew imports every role this build ships
+  Scenario: The system imports every role this build ships
     When the operator imports every role this build ships
-    Then the crew holds every role this build ships
+    Then the system holds every role this build ships
     And the listing says the "test-writer" role runs on "sonnet"
     And the listing says the "test-writer" role receives "context, job, skills"
 
@@ -224,14 +224,14 @@ Feature: A role is imported, pinned to a version, and attached at a level
 
   # The check that catches an invented material in a ported brief. It is a shipped role with one word
   # changed, so it fails the way a bad port would rather than the way an invented test would.
-  Scenario: A shipped role carrying a word the crew does not hand out is refused
+  Scenario: A shipped role carrying a word the system does not hand out is refused
     When the operator imports a shipped role receiving "the whole repository"
-    Then the crew refuses the role saying "the whole repository"
-    And the crew holds no roles
+    Then the system refuses the role saying "the whole repository"
+    And the system holds no roles
 
   # The three roles the acceptance run used, which were written outside this repository, so nobody
   # could read them, review them or change them. They ship in roles/ now, and this is what each one
-  # is: what reaches its container, and what its credential lets it ask the crew for.
+  # is: what reaches its container, and what its credential lets it ask the system for.
   #
   # A push is not a deploy. What runs a pipeline is a merge, so the merge is the operator's gate, and
   # every one of these receives skills because a role that cannot push is a role whose work nobody
@@ -257,7 +257,7 @@ Feature: A role is imported, pinned to a version, and attached at a level
     Given the workspace allows jobs down to depth 2
     And a job running as the "releaser" role this build ships
     When that session declares a job running as the "test-writer" role
-    Then the crew refuses it and names the verb it lacks
+    Then the system refuses it and names the verb it lacks
 
   # A boundary in the direction that costs money. The infrastructure writer declares its own
   # children, and it cannot stop a job, which is the one verb an orchestrator holds and it does not.

@@ -36,7 +36,7 @@ func aWorkingSession(t *testing.T, s *controlplane.Server, project string, gate,
 func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
 	runner := &model.FakeRunner{Reply: "done", Gate: gate, Started: started}
-	s := aCrewWithProvider(runner, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(runner, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
@@ -48,7 +48,7 @@ func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
 		t.Fatalf("StopTask: %v", err)
 	}
 	if !resp.GetStopped() {
-		t.Fatal("the crew says there was nothing to stop, and a task was under way")
+		t.Fatal("the system says there was nothing to stop, and a task was under way")
 	}
 
 	// The command answers only when the task has actually stopped, so the record is already closed
@@ -81,7 +81,7 @@ func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testi
 	gate, started := make(chan struct{}), make(chan struct{})
 	runner := &model.FakeRunner{Reply: "done", Gate: gate, Started: started}
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(runner, provider)
+	s := aSystemWithProvider(runner, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
@@ -119,7 +119,7 @@ func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testi
 
 // A stop while nothing is running says so and changes nothing.
 func TestStoppingASessionWithNothingRunningSaysSo(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -129,7 +129,7 @@ func TestStoppingASessionWithNothingRunningSaysSo(t *testing.T) {
 		t.Fatalf("StopTask: %v", err)
 	}
 	if resp.GetStopped() {
-		t.Fatal("the crew says it stopped a task, and the session was idle")
+		t.Fatal("the system says it stopped a task, and the session was idle")
 	}
 	tasks, _ := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
 	if len(tasks.GetTasks()) != 1 || tasks.GetTasks()[0].GetStatus() != controlplane.StatusIdle {
@@ -140,7 +140,7 @@ func TestStoppingASessionWithNothingRunningSaysSo(t *testing.T) {
 // A stop with no words still says it was a stop, so a listing never reads it as a crash.
 func TestAStopWithNoReasonStillReadsAsAStop(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
@@ -162,7 +162,7 @@ func TestAStopWithNoReasonStillReadsAsAStop(t *testing.T) {
 }
 
 func TestStoppingASessionNobodyHasIsNotFound(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{}, &sandbox.FakeProvider{})
 	_, err := s.StopTask(context.Background(), &quaycrewv1.StopTaskRequest{Id: "ghost"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("stopping a missing session answered %v, want NotFound", err)
@@ -173,7 +173,7 @@ func TestStoppingASessionNobodyHasIsNotFound(t *testing.T) {
 // overwriting the first.
 func TestTwoStopsLeaveOneReason(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)

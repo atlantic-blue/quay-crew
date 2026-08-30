@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The shape an ask is for: the crew does something, then a person decides whether it goes further.
+// The shape an ask is for: the system does something, then a person decides whether it goes further.
 // That decision is the whole difference between an automation and a shell script.
 const askingGraph = `
 name: careful

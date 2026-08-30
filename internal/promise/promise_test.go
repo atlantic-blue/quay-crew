@@ -84,11 +84,11 @@ func TestWhatAChangeIsAskedFor(t *testing.T) {
 		{
 			// buf writes it, and the proto it comes from is already counted.
 			name:  "generated code on its own is not behaviour",
-			files: edited("gen/quaycrew/v1/crew.pb.go"),
+			files: edited("gen/quaycrew/v1/system.pb.go"),
 		},
 		{
 			name:  "a contract is behaviour",
-			files: edited("proto/quaycrew/v1/crew.proto"),
+			files: edited("proto/quaycrew/v1/system.proto"),
 			want:  []string{ChangelogEntry, Scenario},
 		},
 		{

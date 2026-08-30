@@ -1,4 +1,4 @@
-// Package job is the declared unit of intent: a caller writes a job, and the crew keeps
+// Package job is the declared unit of intent: a caller writes a job, and the system keeps
 // it.
 //
 // The record is the whole point. A caller declares what it wants, closes its terminal, and the
@@ -8,7 +8,7 @@
 // Almost every rule below is checked at the moment of the write, because a refusal that arrives
 // hours later, inside a run, has nothing to point back at. The one exception is what a role
 // receives, which is checked again at the dispatch: a role can be detached, imported again and
-// attached again while a job sits pending, so what the crew would put in front of a session is only
+// attached again while a job sits pending, so what the system would put in front of a session is only
 // settled at the moment it hands it over.
 package job
 
@@ -87,7 +87,7 @@ type Job struct {
 	// that pull request. Empty claims nothing and is checked as nothing.
 	Repository string
 
-	// What the crew assigned, and the caller may not.
+	// What the system assigned, and the caller may not.
 	Parent string
 	Depth  int
 	// Version rises on every write to a declared field, so a status can be told current from stale.
@@ -102,7 +102,7 @@ type Job struct {
 	Answer   string
 	Reason   string
 	Question string
-	// Told is the last thing a person told this job, and it is what the crew sends the session when
+	// Told is the last thing a person told this job, and it is what the system sends the session when
 	// the job starts again. It stays on the row after it has been handed over: what somebody decided
 	// is part of the record of the job, and a field that empties itself leaves a reader unable to say
 	// whether an answer was ever given.
@@ -151,7 +151,7 @@ type Event struct {
 	Project   string
 	Parent    string
 	Depth     int
-	// Detail is a short line about what happened. It goes through the crew's redactor before it is
+	// Detail is a short line about what happened. It goes through the system's redactor before it is
 	// written.
 	Detail string
 	// TraceID is the trace this happened in, and the same value the job carries. A reader holding
@@ -160,16 +160,16 @@ type Event struct {
 	OccurredAt time.Time
 }
 
-// The kinds of event the crew writes. The contract another service may one day depend on is wider:
+// The kinds of event the system writes. The contract another service may one day depend on is wider:
 // the two a lease writes belong to the slice that adds one.
 const (
 	EventDeclared = "job.declared"
 	// EventClaimed and EventReleased are internal, and nothing outside should read them. A dashboard
-	// counting job must not break because the crew changed how it leases.
+	// counting job must not break because the system changed how it leases.
 	EventClaimed  = "job.claimed"
 	EventReleased = "job.released"
 	EventStarted  = "job.started"
-	// EventHeld is written when the crew will not start a job yet: the machine has no room for its
+	// EventHeld is written when the system will not start a job yet: the machine has no room for its
 	// sandbox. It is not a movement, because the job stays pending, and it is written once per
 	// reason rather than once per tick.
 	EventHeld     = "job.held"
@@ -185,7 +185,7 @@ const (
 
 // Contract says whether a kind is one another service may depend on.
 //
-// The split is the useful part. A dashboard counting jobs must never break because the crew changed
+// The split is the useful part. A dashboard counting jobs must never break because the system changed
 // how it leases, and a dashboard counting leases has taken a dependency it was told not to take.
 func Contract(kind string) bool {
 	switch kind {
@@ -196,7 +196,7 @@ func Contract(kind string) bool {
 	}
 }
 
-// Filter narrows a listing. The zero value is every job the crew holds.
+// Filter narrows a listing. The zero value is every job the system holds.
 type Filter struct {
 	// Project wins over Workspace when both are set, being the narrower.
 	Workspace string
@@ -212,7 +212,7 @@ type Filter struct {
 	LabelValue string
 }
 
-// Declaration is what a caller writes. Everything else on a job is the crew's to assign.
+// Declaration is what a caller writes. Everything else on a job is the system's to assign.
 //
 // ID and Parent are here so they can be refused. A field that is quietly ignored is worse than one
 // that does not exist: the caller believes it took effect.
@@ -256,7 +256,7 @@ func (d Declaration) Validate() error {
 	tidy := d.Tidied()
 	switch {
 	case tidy.ID != "":
-		return fmt.Errorf("job carries an identifier of its own, and the crew assigns the identifier: "+
+		return fmt.Errorf("job carries an identifier of its own, and the system assigns the identifier: "+
 			"declare it without one and read the identifier back from the answer (you sent %q)", tidy.ID)
 	case tidy.Parent != "":
 		return fmt.Errorf("job carries a parent, and the parent comes from the credential the caller "+
@@ -381,7 +381,7 @@ func KnownPhase(phase string) bool {
 
 // Cycle walks what a job would wait for and reports the pair that closes a loop.
 //
-// A caller cannot reach this today: the crew assigns every identifier and `after` must name job
+// A caller cannot reach this today: the system assigns every identifier and `after` must name job
 // that already exists, so a declaration cannot be waited on by anything yet. It is the guard for the
 // first thing that rewrites `after`, and a loop of jobs waiting on one another would otherwise sit
 // pending forever with nothing saying why.
@@ -433,24 +433,24 @@ type Limits struct {
 	MaxRunning int
 	// BudgetTokens is what a tree may spend when its root declares none. Zero is unset.
 	BudgetTokens int64
-	// LeaseSeconds is how long a controller holds a job here. Zero takes the crew's own
+	// LeaseSeconds is how long a controller holds a job here. Zero takes the system's own
 	// measured default.
 	LeaseSeconds int
-	// ReclaimSeconds is how long a settled session here keeps its container before the crew takes it
+	// ReclaimSeconds is how long a settled session here keeps its container before the system takes it
 	// back. Zero is unset, and it ships unset: see Reclaim.
 	ReclaimSeconds int
-	// ArchiveSeconds is how long a reclaimed session here waits before the crew files it away. Zero
+	// ArchiveSeconds is how long a reclaimed session here waits before the system files it away. Zero
 	// is unset, and it ships unset for the same reason.
 	ArchiveSeconds int
 	// RequestMemoryBytes and RequestProcessor are what one sandbox in this workspace asks the machine
-	// for. The crew adds up what it has placed and admits a job only where its runtime still has that
+	// for. The system adds up what it has placed and admits a job only where its runtime still has that
 	// much unallocated, so a workspace whose jobs run heavier says so here rather than being counted
-	// the same as every other. Zero on either takes the crew's own measured request.
+	// the same as every other. Zero on either takes the system's own measured request.
 	RequestMemoryBytes int64
 	RequestProcessor   int
 }
 
-// Request is what one sandbox in this workspace asks for, or the crew's own where it says nothing.
+// Request is what one sandbox in this workspace asks for, or the system's own where it says nothing.
 func (l Limits) Request(standard capacity.Request) capacity.Request {
 	return capacity.Request{Memory: l.RequestMemoryBytes, Processor: l.RequestProcessor}.Or(standard)
 }
@@ -468,7 +468,7 @@ func (l Limits) Lease(standard time.Duration) time.Duration {
 //
 // There is no default beside it, unlike Lease. A lease is a property of the loop and the loop was
 // measured; a reclaim time is a property of how an operator uses a conversation, and nothing has
-// measured that. Three runs would set it and none of them has happened, so the crew refuses a number
+// measured that. Three runs would set it and none of them has happened, so the system refuses a number
 // it was never given rather than choosing one. Section 11 of docs/ORCHESTRATION.md names the runs.
 func (l Limits) Reclaim() time.Duration { return seconds(l.ReclaimSeconds) }
 
@@ -508,13 +508,13 @@ func TidyRequires(required []string) []string {
 	return tidy
 }
 
-// validateRequires holds what a caller required to the words the crew hands out, and offers those
+// validateRequires holds what a caller required to the words the system hands out, and offers those
 // words back. A word nobody assembles is a boundary that quietly means nothing, and a boundary that
 // means nothing looks exactly like one that holds.
 func (d Declaration) validateRequires() error {
 	for _, material := range d.Requires {
 		if !handedOut(material) {
-			return fmt.Errorf("job requires %q, which is not material the crew hands out; it is one of: %s",
+			return fmt.Errorf("job requires %q, which is not material the system hands out; it is one of: %s",
 				material, strings.Join(role.Material, ", "))
 		}
 	}
@@ -554,7 +554,7 @@ func Unreceived(required []string, held Receiver) string {
 	return ""
 }
 
-// RefusedMaterial is what the crew says to a job whose role cannot be given the material it requires.
+// RefusedMaterial is what the system says to a job whose role cannot be given the material it requires.
 // It names the role, the material the role does not receive, and the two ways out, because a refusal
 // a caller cannot act on is a refusal that sends them looking.
 func RefusedMaterial(named, material string) string {

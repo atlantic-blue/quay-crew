@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// A crew only ever grew: a workspace made by a typo was there for good, a secret could be
+// A system only ever grew: a workspace made by a typo was there for good, a secret could be
 // overwritten but never removed, and starting again meant going around the tool entirely, into
 // Docker and the data directory.
 func TestAWorkspaceCanBeRemovedWithEverythingUnderIt(t *testing.T) {

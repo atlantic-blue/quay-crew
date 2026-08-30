@@ -3,12 +3,12 @@
 // A skill is a capability a session can be given: a brief the model reads, the binaries it needs, the
 // secrets it names, and its own setup. The design is in docs/SKILLS.md. Files are the authoring and
 // sharing format, which is what makes a skill code somebody can review, version and hand to another
-// crew, and this package is the part that reads them.
+// system, and this package is the part that reads them.
 //
-// A skill reaches a session two ways, and this package serves both. The crew's own skills directory is
+// A skill reaches a session two ways, and this package serves both. The system's own skills directory is
 // read from disk and given to every session. A skill imported into the store arrives as its files over
 // the wire, because the control plane runs in a container where a path on the operator's machine means
-// nothing, and a crew on a pod has no host directory to go back to for whatever it did not copy. One
+// nothing, and a system on a pod has no host directory to go back to for whatever it did not copy. One
 // set of rules either way: FromFiles is what both end up in.
 package skill
 
@@ -48,7 +48,7 @@ const SummaryLimit = 200
 // BriefLimit is how long a brief may be, in bytes. Roughly a thousand tokens, which is about a page.
 //
 // The ceiling is written down while the directories are still nearly empty, because the alternative has
-// already happened to this crew, to its context rather than to a skill: four levels rendered to 51,727
+// already happened to this system, to its context rather than to a skill: four levels rendered to 51,727
 // bytes at the workspace and every session paid it before a word was typed. A place that holds prose
 // gets filled until it hurts.
 //
@@ -73,15 +73,15 @@ type Skill struct {
 	// Brief is how the work is done, read from SKILL.md.
 	Brief string
 	// Dir is where the skill is, as this process sees it. Empty for a skill that arrived over the wire,
-	// which has no directory anywhere until the crew writes one.
+	// which has no directory anywhere until the system writes one.
 	Dir string
 	// HasSetup says whether there is anything to run inside the sandbox before the first task.
 	HasSetup bool
 	// Files is every file of the skill's directory, by path relative to it, the manifest and the brief
 	// among them.
 	//
-	// Carried so a skill can live in the store and be whole wherever the crew runs. A skill read from the
-	// crew's own directory does not need them, because that directory is mounted as it is, so this is
+	// Carried so a skill can live in the store and be whole wherever the system runs. A skill read from the
+	// system's own directory does not need them, because that directory is mounted as it is, so this is
 	// filled only when something is going to have to write the skill out again.
 	Files []File
 }
@@ -98,7 +98,7 @@ type File struct {
 
 // Held is a skill a session holds and where its brief is inside that sandbox.
 //
-// The path travels with the skill because the two sources land in different places: the crew's own
+// The path travels with the skill because the two sources land in different places: the system's own
 // skills are mounted from the directory the operator keeps them in, and a workspace's are written out of
 // the store. Whoever reads the index does not need to know which.
 type Held struct {
@@ -157,7 +157,7 @@ func Load(dir string) ([]Skill, error) {
 // One reads a single skill from its directory.
 //
 // The whole directory is read, not just the manifest and the brief, so the same skill can be handed to
-// the store and be whole there. Reading a few files that the crew's own directory would have mounted
+// the store and be whole there. Reading a few files that the system's own directory would have mounted
 // anyway is cheaper than two ways of loading a skill.
 func One(dir string) (Skill, error) {
 	if _, err := os.Stat(filepath.Join(dir, ManifestFile)); err != nil {
@@ -184,7 +184,7 @@ func One(dir string) (Skill, error) {
 // FromFiles builds a skill from the files of its directory, wherever they came from.
 //
 // This is the one validator. A client reads a directory and sends the files, because the control plane
-// runs in a container and a path on the operator's machine means nothing to it, so everything the crew
+// runs in a container and a path on the operator's machine means nothing to it, so everything the system
 // refuses is refused here rather than once per client.
 func FromFiles(files []File) (Skill, error) {
 	byPath := make(map[string][]byte, len(files))
@@ -198,7 +198,7 @@ func FromFiles(files []File) (Skill, error) {
 	}
 	var read manifest
 	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
-	// A field the crew does not know is refused by name rather than ignored. Ignored, it looks
+	// A field the system does not know is refused by name rather than ignored. Ignored, it looks
 	// configured and does nothing, which sends whoever wrote it looking somewhere else entirely.
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&read); err != nil {
@@ -293,7 +293,7 @@ func FingerprintHeld(held []Held) string {
 //
 // This is why a skill can carry more than a page without every session paying for it. The line says the
 // skill exists and when to reach for it; the brief at the path says how, and is opened only when that
-// kind of work comes up. A crew with ten skills spends ten lines rather than ten pages.
+// kind of work comes up. A system with ten skills spends ten lines rather than ten pages.
 //
 // Nothing held is no section at all, rather than a heading with nothing under it, which is a thing the
 // model opens and learns nothing from.
@@ -320,7 +320,7 @@ func BriefPathIn(root, name string) string { return path.Join(DirIn(root, name),
 //
 // Named rather than guessed at every task: a skill whose name does not match its directory is the
 // same skill under two names as soon as anybody attaches it, and a secret name that is not a name is
-// something the crew would have to quote into an environment.
+// something the system would have to quote into an environment.
 func (s Skill) check(directory string) error {
 	switch {
 	case s.Name == "":
@@ -358,8 +358,8 @@ func (s Skill) check(directory string) error {
 			return fmt.Errorf("skill: %s names a secret %q, which is not an environment variable name",
 				directory, name)
 		}
-		if CrewOwnName(name) {
-			return fmt.Errorf("skill: %s names the secret %s, and names starting QC_ or CLAUDE_ are the crew's own: a skill cannot ask for the crew's configuration or the model's token",
+		if SystemOwnName(name) {
+			return fmt.Errorf("skill: %s names the secret %s, and names starting QC_ or CLAUDE_ are the system's own: a skill cannot ask for the system's configuration or the model's token",
 				directory, name)
 		}
 		if strings.TrimSpace(s.Secrets[name]) == "" {
@@ -396,8 +396,8 @@ func usableName(name string) bool {
 
 // insideOwnDirectory refuses a path that would climb out of the skill.
 //
-// Files arrive over the wire from a client and are written into a directory the crew then mounts into a
-// container, so a path of "../../etc/something" would be the crew writing wherever a caller asked.
+// Files arrive over the wire from a client and are written into a directory the system then mounts into a
+// container, so a path of "../../etc/something" would be the system writing wherever a caller asked.
 func insideOwnDirectory(file string) bool {
 	switch {
 	case file == "", path.IsAbs(file), file == "..",
@@ -434,11 +434,11 @@ func plain(value string) bool {
 	return true
 }
 
-// CrewOwnName says whether a secret name belongs to the crew rather than to any skill: the crew's
+// SystemOwnName says whether a secret name belongs to the system rather than to any skill: the system's
 // own configuration (QC_) and the model's own token and settings (CLAUDE_). A skill declaring one
 // is refused at validation, and one stored by a build from before that refusal is filtered at the
-// sandbox boundary, so neither road hands a session the crew's own names.
-func CrewOwnName(name string) bool {
+// sandbox boundary, so neither road hands a session the system's own names.
+func SystemOwnName(name string) bool {
 	return strings.HasPrefix(name, "QC_") || strings.HasPrefix(name, "CLAUDE_")
 }
 

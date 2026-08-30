@@ -37,9 +37,9 @@ func (s Storage) WorkspaceHooksHost(workspace string) (string, bool) {
 // it no longer holds, and renders the settings file that binds them to their events.
 //
 // The settings go in the same directory as the hooks and not in the conversation directory, which is
-// written by the runtime and edited by the operator. One directory the crew owns entirely means no
+// written by the runtime and edited by the operator. One directory the system owns entirely means no
 // merge, and no losing somebody's edit the first time a merge is wrong. It is also the only place the
-// crew can say anything to the runtime at all: the conversation directory is a mount, and a mount
+// system can say anything to the runtime at all: the conversation directory is a mount, and a mount
 // hides whatever the image put under it.
 //
 // Detaching removes the hook's own files and stops the settings binding it. A hook left behind is a

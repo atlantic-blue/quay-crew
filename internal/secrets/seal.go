@@ -66,7 +66,7 @@ func sealer(key []byte) (cipher.AEAD, error) {
 	return sealed, nil
 }
 
-// KeyAt reads the key that seals this crew's secrets, making one the first time.
+// KeyAt reads the key that seals this system's secrets, making one the first time.
 //
 // It lives on the host beside the data rather than in the database, so holding the database is not
 // enough, and it is made rather than asked for because a step the operator has to perform before

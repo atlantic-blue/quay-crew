@@ -10,15 +10,15 @@ import (
 //
 // A reservation is taken before the job is claimed and released by the controller on every road out
 // of a start, so this is only the backstop for a controller that died between the two. It is longer
-// than the crew's whole dispatch budget on purpose: the incident this exists for had a sandbox take
+// than the system's whole dispatch budget on purpose: the incident this exists for had a sandbox take
 // two minutes and seven seconds to be made, and a reservation that expired underneath it would let
 // the next job in against capacity that is already spoken for.
 const ReservedFor = 10 * time.Minute
 
-// A Ledger is what the crew has placed and what it has promised to place.
+// A Ledger is what the system has placed and what it has promised to place.
 //
 // The reservation is the part a count cannot do. A dispatch is detached, so a container appears
-// seconds after the job that asked for it was admitted, and the crew reads its runtime on a timer
+// seconds after the job that asked for it was admitted, and the system reads its runtime on a timer
 // ten seconds wide. Nine jobs admitted inside one of those windows all measure the same empty
 // machine and all fit, which is how nine went onto a machine with room for eight. So admission
 // writes down what it has just promised, in the same movement as the decision, and the next job
@@ -71,7 +71,7 @@ func (l *Ledger) Reserve(key string, request Request) {
 
 // Place records a sandbox that exists, under the key its reservation was taken with.
 //
-// Anything else holding this key or this session is dropped first, so a sandbox the crew reserved
+// Anything else holding this key or this session is dropped first, so a sandbox the system reserved
 // for, adopted after a restart, and then placed is one entry throughout rather than three.
 func (l *Ledger) Place(key, session string, request Request) {
 	if l == nil || key == "" {
@@ -94,7 +94,7 @@ func (l *Ledger) Release(key string) {
 }
 
 // ReleaseSession drops what a session holds, which is how a container going away gives its room
-// back. The crew closes a sandbox by session and not by the key it was admitted under.
+// back. The system closes a sandbox by session and not by the key it was admitted under.
 func (l *Ledger) ReleaseSession(session string) {
 	if l == nil || session == "" {
 		return
@@ -104,11 +104,11 @@ func (l *Ledger) ReleaseSession(session string) {
 	l.forgetSession(session)
 }
 
-// Seed records the sandboxes already running that this crew never admitted, which is every one of
-// them after a restart: the containers outlive the process, and a crew that started counting from
+// Seed records the sandboxes already running that this system never admitted, which is every one of
+// them after a restart: the containers outlive the process, and a system that started counting from
 // zero would admit a second machine's worth of work onto a full machine.
 //
-// A sandbox seeded this way is counted at the crew's standard request, because what it was admitted
+// A sandbox seeded this way is counted at the system's standard request, because what it was admitted
 // under went with the process that admitted it.
 func (l *Ledger) Seed(sessions []string, request Request) {
 	if l == nil {
@@ -153,7 +153,7 @@ func (l *Ledger) Count() int {
 	return len(l.holds)
 }
 
-// Keys is what the ledger holds, sorted, for a test and for a crew saying what it is holding.
+// Keys is what the ledger holds, sorted, for a test and for a system saying what it is holding.
 func (l *Ledger) Keys() []string {
 	if l == nil {
 		return nil
@@ -194,7 +194,7 @@ func (l *Ledger) forgetSession(session string) {
 
 // Without is everything spoken for except what one key holds. It is what a placement asks: the
 // sandbox about to be made is already holding its reservation under this key, and counting that
-// against itself would refuse every job the crew has correctly admitted.
+// against itself would refuse every job the system has correctly admitted.
 func (l *Ledger) Without(key string) Request {
 	if l == nil {
 		return Request{}

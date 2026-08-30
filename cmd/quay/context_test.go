@@ -27,7 +27,7 @@ func saying(t *testing.T, text string) {
 	t.Cleanup(func() { os.Stdin = was; _ = file.Close() })
 }
 
-// Writing an org's context into a fresh workspace and then being told the crew holds nothing was the
+// Writing an org's context into a fresh workspace and then being told the system holds nothing was the
 // listing walking projects: a workspace with none contributed no row, so what had been written was
 // invisible until a project happened to exist.
 func TestAWorkspaceWithNoProjectsStillShowsItsContext(t *testing.T) {
@@ -116,7 +116,7 @@ func TestTheUsageNamesEveryContextCommand(t *testing.T) {
 }
 
 // A level could be written and never read back, so it could only be overwritten. Adding a paragraph
-// meant already holding the whole text, and recovering what the crew held meant reading the contexts
+// meant already holding the whole text, and recovering what the system held meant reading the contexts
 // table in the database.
 func TestShowPrintsWhatALevelSaysAndNothingElse(t *testing.T) {
 	client := testClient(t)
@@ -176,15 +176,15 @@ func TestALevelCanBeAddedToRatherThanOverwritten(t *testing.T) {
 	}
 }
 
-// The crew's level is the one `quay context edit` refuses by name, and it is the one an operator
-// most wants to read: every session in the crew is told it.
-func TestShowReadsTheCrewLevelByName(t *testing.T) {
+// The system's level is the one `quay context edit` refuses by name, and it is the one an operator
+// most wants to read: every session in the system is told it.
+func TestShowReadsTheSystemLevelByName(t *testing.T) {
 	client := testClient(t)
 	saying(t, "no acronyms\n")
-	mustRun(t, client, "context", "set", "crew")
+	mustRun(t, client, "context", "set", "system")
 
-	if got := mustRun(t, client, "context", "show", "crew"); got != "no acronyms\n" {
-		t.Fatalf("the crew level printed %q", got)
+	if got := mustRun(t, client, "context", "show", "system"); got != "no acronyms\n" {
+		t.Fatalf("the system level printed %q", got)
 	}
 }
 
@@ -223,7 +223,7 @@ func TestShowRefusesALevelThatSaysNothing(t *testing.T) {
 // A level standing among every other level in the listing, which is where a body is read from.
 func TestPickContextFindsOneLevelAmongMany(t *testing.T) {
 	dirs := []*quaycrewv1.ContextDir{
-		{Scope: "crew", Owner: "", Body: "no acronyms"},
+		{Scope: "system", Owner: "", Body: "no acronyms"},
 		{Scope: "workspace", Owner: "w1", Body: "the org context"},
 		{Scope: "workspace", Owner: "w2", Body: "another org"},
 		{Scope: "project", Owner: "p1", Body: "pay the water bill first"},
@@ -231,7 +231,7 @@ func TestPickContextFindsOneLevelAmongMany(t *testing.T) {
 	for _, one := range []struct {
 		scope, owner, want string
 	}{
-		{"crew", "", "no acronyms"},
+		{"system", "", "no acronyms"},
 		{"workspace", "w1", "the org context"},
 		{"workspace", "w2", "another org"},
 		{"project", "p1", "pay the water bill first"},
@@ -250,7 +250,7 @@ func TestPickContextFindsOneLevelAmongMany(t *testing.T) {
 
 // The size the acceptance run of 29 August 2026 read out of the store, because nothing in the tool
 // would say it.
-const crewOnTheDay = 100_179
+const systemOnTheDay = 100_179
 
 func longBody(length int) string { return strings.Repeat("a", length) }
 
@@ -275,13 +275,13 @@ func TestTheListingSaysHowBigEachLevelIs(t *testing.T) {
 	}
 }
 
-// The finding itself: whoever writes a hundred thousand characters into the crew's level is told at
+// The finding itself: whoever writes a hundred thousand characters into the system's level is told at
 // the moment they write it, rather than by reading the contexts table in Postgres.
 func TestSettingALevelOverTheMarkSaysWhoCarriesIt(t *testing.T) {
 	client := testClient(t)
 
-	saying(t, longBody(crewOnTheDay))
-	set := mustRun(t, client, "context", "set", "crew")
+	saying(t, longBody(systemOnTheDay))
+	set := mustRun(t, client, "context", "set", "system")
 	for _, want := range []string{
 		"100,179 characters",
 		"over the 20,000 character mark",
@@ -289,7 +289,7 @@ func TestSettingALevelOverTheMarkSaysWhoCarriesIt(t *testing.T) {
 		"quay context set <workspace>",
 	} {
 		if !strings.Contains(set, want) {
-			t.Errorf("setting the crew's level never says %q:\n%s", want, set)
+			t.Errorf("setting the system's level never says %q:\n%s", want, set)
 		}
 	}
 }
@@ -300,7 +300,7 @@ func TestSettingASmallLevelDoesNotWarn(t *testing.T) {
 	client := testClient(t)
 
 	saying(t, "no acronyms")
-	set := mustRun(t, client, "context", "set", "crew")
+	set := mustRun(t, client, "context", "set", "system")
 	if !strings.Contains(set, "11 characters") {
 		t.Errorf("setting did not report what it wrote: %q", set)
 	}
@@ -312,12 +312,12 @@ func TestSettingASmallLevelDoesNotWarn(t *testing.T) {
 // The listing carries the same warning, so somebody who never ran the set finds out by looking.
 func TestTheListingWarnsAboutALevelOverTheMark(t *testing.T) {
 	client := testClient(t)
-	saying(t, longBody(crewOnTheDay))
-	mustRun(t, client, "context", "set", "crew")
+	saying(t, longBody(systemOnTheDay))
+	mustRun(t, client, "context", "set", "system")
 
 	listed := mustRun(t, client, "context")
 	if !strings.Contains(listed, "100,179 over the mark") {
-		t.Errorf("the crew's row does not say it is over the mark:\n%s", listed)
+		t.Errorf("the system's row does not say it is over the mark:\n%s", listed)
 	}
 	if !strings.Contains(listed, "Every session in every workspace reads it") {
 		t.Errorf("the listing says over the mark and never says what that costs:\n%s", listed)

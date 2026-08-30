@@ -7,7 +7,7 @@ Feature: What this build does is a command, and not a view
   The console listed the same scenarios in a view of its own. Its second column was headed "proved
   by". The column named a scenario. It never said whether that scenario passed on this build, so it
   claimed evidence that nobody had checked. The view also asked the control plane nothing. It said
-  the same thing whichever crew was on screen.
+  the same thing whichever system was on screen.
 
   So there is one list, and it is the command. The console's command bar runs commands, so the word
   still works there. The list arrives in the output panel. The short spellings that opened the view
@@ -20,7 +20,7 @@ Feature: What this build does is a command, and not a view
     And a project named "house-bills"
 
   Scenario: The command prints what this build does
-    Given the crew listens on an address the tool can dial
+    Given the system listens on an address the tool can dial
     When the caller asks what this build does
     Then standard output names a feature of this build
     And standard output names a scenario under that feature

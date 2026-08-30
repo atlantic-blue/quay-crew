@@ -48,14 +48,14 @@ type Config struct {
 	// are readable for the life of the container, through docker inspect among other things, so pass
 	// only what the session needs.
 	Env []string
-	// Mounts are directories this session gets on top of the state the crew keeps for it.
+	// Mounts are directories this session gets on top of the state the system keeps for it.
 	Mounts []Mount
 	// Driver joins the control plane's network and gets the host paths handed to the driver. An
 	// ordinary session gets neither.
 	Driver bool
-	// Request is what this sandbox asks the machine for. The crew admits a sandbox only where its
+	// Request is what this sandbox asks the machine for. The system admits a sandbox only where its
 	// runtime still has this much unallocated, and the container carries the processor half of it as
-	// a share, so the runtime shares its processors out in the proportions the crew reserved rather
+	// a share, so the runtime shares its processors out in the proportions the system reserved rather
 	// than equally between a compile and a session waiting on a model.
 	//
 	// It is a request and not a limit. Nothing here stops a sandbox taking more than it asked for
@@ -75,17 +75,17 @@ type Provider interface {
 	// every container runs on; removing by name is what makes stopping a session mean something then.
 	// A sandbox that is not there is a remove that already happened, not an error.
 	Remove(ctx context.Context, sessionID string) error
-	// Stranded lists the sessions whose sandboxes this provider still holds, so the crew can reap the
+	// Stranded lists the sessions whose sandboxes this provider still holds, so the system can reap the
 	// ones whose sessions no longer want one.
 	Stranded(ctx context.Context) ([]string, error)
 	// Attached says whether somebody has this session's conversation open inside its sandbox.
 	//
 	// It is asked by name rather than through a handle, the way Remove and Stranded are, because the
 	// handles are a map in one process and the containers are not: after a restart the map is empty
-	// while every container runs on, and a crew that could only answer for the ones it remembers
+	// while every container runs on, and a system that could only answer for the ones it remembers
 	// would say nobody is attached to a conversation somebody is typing into.
 	//
-	// A failure is not "nobody is attached": it is the crew being unable to tell, and the caller must
+	// A failure is not "nobody is attached": it is the system being unable to tell, and the caller must
 	// read it that way. Absent is different, and answers false: a session with no container has
 	// nobody in it.
 	Attached(ctx context.Context, sessionID string) (bool, error)
@@ -93,7 +93,7 @@ type Provider interface {
 	//
 	// It sits beside Attached rather than inside it because they are different states and only one of
 	// them was ever visible. A conversation somebody opened, worked in, and detached from leaves the
-	// runtime answering with nobody watching it, and the crew read that as an empty container: on 28
+	// runtime answering with nobody watching it, and the system read that as an empty container: on 28
 	// August 2026, six of eighteen sandboxes held a running runtime and every one of them listed as
 	// idle.
 	//
@@ -101,7 +101,7 @@ type Provider interface {
 	// containers are not, so a question that built a sandbox to answer would start the very container
 	// it is asked about taking away.
 	//
-	// A failure is not "nothing is running": it is the crew being unable to tell, and the caller must
+	// A failure is not "nothing is running": it is the system being unable to tell, and the caller must
 	// read it that way. Absent is different, and answers false: a session with no container is running
 	// nothing.
 	RuntimeRunning(ctx context.Context, sessionID string) (bool, error)
@@ -124,7 +124,7 @@ const (
 	SkillsPath       = "/home/agent/skills"
 	// HooksPath is where the hooks a session runs under are mounted, read only, together with the
 	// settings file that binds them to their events. The runtime is pointed at that file explicitly,
-	// which is what lets the crew own this directory outright rather than merging into the
+	// which is what lets the system own this directory outright rather than merging into the
 	// conversation directory's own settings.
 	HooksPath = "/home/agent/hooks"
 	// SharedPath is the workspace's own volume, mounted read write into every session in it. The
@@ -141,7 +141,7 @@ const (
 	// would register one path between them, and the second would prune the first.
 	WorktreesPath = SharedPath + "/worktrees"
 	// SessionIDEnv is how a session reads its own identifier. It is what a session names anything of
-	// its own in the shared volume after, a working tree among them, and it is an identifier the crew
+	// its own in the shared volume after, a working tree among them, and it is an identifier the system
 	// already shows rather than a credential.
 	SessionIDEnv = "QC_SESSION_ID"
 	// SecretsPath is where a file projected secret lands, one file per secret, named after it. The
@@ -151,7 +151,7 @@ const (
 	// Memory backed, so a value never reaches the container's writable layer or the host's disk.
 	SecretsPath = "/run/secrets"
 	// UserID is the identifier of the image's agent user. A memory backed mount belongs to root
-	// unless it is told otherwise, and the crew writes secrets into it as the sandbox's own user, so
+	// unless it is told otherwise, and the system writes secrets into it as the sandbox's own user, so
 	// the mount has to name that user.
 	UserID = 1001
 	// AttachedSessionName is the operator's open conversation inside the sandbox. One per sandbox, so
@@ -171,7 +171,7 @@ const (
 	// aliases and settings reach a session from any shell rather than only the process a task runs.
 	GitConfigSecret = "gitconfig"
 	// GitConfigPath is the sandbox user's git configuration, the file git reads as global. Shipped by
-	// the image holding the include, and written to by the crew at sandbox birth.
+	// the image holding the include, and written to by the system at sandbox birth.
 	GitConfigPath = "/home/agent/.gitconfig"
 )
 

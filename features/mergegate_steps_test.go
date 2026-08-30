@@ -14,11 +14,11 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The merge gate, run the way the model runtime runs it: the entry point the crew would mount, fed a
+// The merge gate, run the way the model runtime runs it: the entry point the system would mount, fed a
 // PreToolUse payload on standard input, answering with an exit code.
 //
 // It runs the real binary rather than calling the hook's own code, because the hook is a separate
-// module and the crew cannot import it. That is the point of the shape: what is proved here is the
+// module and the system cannot import it. That is the point of the shape: what is proved here is the
 // file a sandbox mounts, so a gate whose entry point was never built fails this rather than passing
 // over nothing.
 
@@ -105,7 +105,7 @@ func fireMergeGate(ctx context.Context, payload string) error {
 	return nil
 }
 
-// mergeGateEntry is the file the crew would mount, found through the loader the control plane uses,
+// mergeGateEntry is the file the system would mount, found through the loader the control plane uses,
 // so a manifest that renamed its entry point cannot leave this pointing at the old path.
 func mergeGateEntry() (string, error) {
 	hooks, err := hook.Load("../hooks")

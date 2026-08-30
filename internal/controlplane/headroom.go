@@ -15,7 +15,7 @@ import (
 // machine holding nothing from a machine nobody read.
 const unmeasured = int64(-1)
 
-// GetHeadroom is the crew's last reading of the machine it runs on.
+// GetHeadroom is the system's last reading of the machine it runs on.
 //
 // It answers from the last sample and never from the daemon. The header asks this every second, and
 // reading the daemon takes as long as the daemon takes: `docker stats` waits for it to sample every
@@ -62,8 +62,8 @@ func (s *Server) headroomSandbox(ctx context.Context, box headroom.Sandbox) *qua
 	}
 	session, err := s.store.GetSession(ctx, box.Session)
 	if err != nil {
-		// A container the crew holds no session for. It is a stray rather than a session, and saying
-		// nothing about it is right: the crew does not know what it is.
+		// A container the system holds no session for. It is a stray rather than a session, and saying
+		// nothing about it is right: the system does not know what it is.
 		return answer
 	}
 	answer.Status = session.GetStatus()

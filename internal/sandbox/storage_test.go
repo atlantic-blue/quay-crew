@@ -209,8 +209,8 @@ func TestHasConversationReadsTheStoreARoleKeepsItsOwn(t *testing.T) {
 	}
 }
 
-// TestHasConversationSaysNoWhenItCannotTell: a crew that keeps nothing on the host has nowhere to
-// look. Saying no starts the conversation under the name the crew gave it, which is the answer that
+// TestHasConversationSaysNoWhenItCannotTell: a system that keeps nothing on the host has nowhere to
+// look. Saying no starts the conversation under the name the system gave it, which is the answer that
 // leaves the name true; saying yes would resume a name nothing has written.
 func TestHasConversationSaysNoWhenItCannotTell(t *testing.T) {
 	tests := map[string]struct {

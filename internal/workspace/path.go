@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-crew/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-crew/internal/name"
 )
 
 // Separator divides the levels of an address.
 const Separator = "/"
 
-// Path is an address into the crew: a workspace, optionally a project inside it, optionally a session
+// Path is an address into the system: a workspace, optionally a project inside it, optionally a session
 // inside that. "me", "me/house-bills" and "me/house-bills/3cb04bf5" are all paths.
 //
 // It says what the operator typed, not what it points at. Tasking it into identifiers is Resolve's
@@ -28,6 +29,12 @@ func ParsePath(value string) (Path, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return Path{}, fmt.Errorf("workspace: an address is required, for example me/house-bills")
+	}
+	// The word the level above every workspace used to take. It is not an address and no workspace
+	// may be called it, so reading it as one would answer every command that takes an address with a
+	// workspace that was never going to be there.
+	if err := name.RefuseRetired(trimmed); err != nil {
+		return Path{}, err
 	}
 	segments := strings.Split(trimmed, Separator)
 	if len(segments) > 3 {

@@ -22,9 +22,9 @@ func refused(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, args ...
 	return err
 }
 
-// A crew with two workspaces, one of which has a project and a session, which is enough shape for
+// A system with two workspaces, one of which has a project and a session, which is enough shape for
 // every level of an address to be got wrong.
-func aCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+func aSystem(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "itv")
@@ -37,7 +37,7 @@ func aCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 // name: project \"nope\"", which names the wrong level, blames the one part of the address that was
 // right, and sends the operator to check their workspace.
 func TestAMissingProjectNamesTheWorkspaceAndSaysWhatItHas(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 
 	err := refused(t, client, "use", "itv/nope")
 	for _, want := range []string{"itv", "no project", "nope", "fe-player"} {
@@ -50,8 +50,8 @@ func TestAMissingProjectNamesTheWorkspaceAndSaysWhatItHas(t *testing.T) {
 	}
 }
 
-func TestAMissingWorkspaceSaysWhatTheCrewHas(t *testing.T) {
-	client := aCrew(t)
+func TestAMissingWorkspaceSaysWhatTheSystemHas(t *testing.T) {
+	client := aSystem(t)
 
 	err := refused(t, client, "use", "nope")
 	for _, want := range []string{"no workspace", "nope", "itv", "acme"} {
@@ -62,7 +62,7 @@ func TestAMissingWorkspaceSaysWhatTheCrewHas(t *testing.T) {
 }
 
 func TestAMissingSessionSaysWhatTheProjectHas(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	mustRun(t, client, "task", flagDispatch, "itv/fe-player", "hello")
 
 	err := refused(t, client, "use", "itv/fe-player/ffffffff")
@@ -76,7 +76,7 @@ func TestAMissingSessionSaysWhatTheProjectHas(t *testing.T) {
 // A level with nothing in it is a different sentence, because there is nothing to offer and telling
 // somebody what a level has when it has nothing reads as a bug.
 func TestAnEmptyLevelSaysHowToMakeOneRatherThanListingNothing(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 
 	err := refused(t, client, "use", "acme/anything")
 	for _, want := range []string{"acme", "no projects yet", "quay project create"} {
@@ -89,7 +89,7 @@ func TestAnEmptyLevelSaysHowToMakeOneRatherThanListingNothing(t *testing.T) {
 // Callers that only care whether something was missing keep working, which is what lets the message
 // change without every caller changing with it.
 func TestEveryLevelIsStillRecognisedAsNotFound(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	mustRun(t, client, "task", flagDispatch, "itv/fe-player", "hello")
 
 	for _, address := range []string{"nope", "itv/nope", "itv/fe-player/ffffffff"} {
@@ -99,13 +99,13 @@ func TestEveryLevelIsStillRecognisedAsNotFound(t *testing.T) {
 	}
 }
 
-// Where you are standing is kept on this machine and the crew's state is not, so a wiped crew, a
-// fresh install or a different crew leaves the tool pointing at something gone. Every command that
+// Where you are standing is kept on this machine and the system's state is not, so a wiped system, a
+// fresh install or a different system leaves the tool pointing at something gone. Every command that
 // defaults to where you are then refused with a sentence about a missing workspace, which reads as
-// the crew being broken rather than as you being nowhere.
-func TestStandingSomewhereTheCrewNoLongerHasSaysSo(t *testing.T) {
-	client := aCrew(t)
-	// What a wipe leaves behind: the tool still standing in an address the crew has never heard of.
+// the system being broken rather than as you being nowhere.
+func TestStandingSomewhereTheSystemNoLongerHasSaysSo(t *testing.T) {
+	client := aSystem(t)
+	// What a wipe leaves behind: the tool still standing in an address the system has never heard of.
 	if err := moveTo(workspace.Path{Workspace: "ghost", Project: "gone"}); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestStandingSomewhereTheCrewNoLongerHasSaysSo(t *testing.T) {
 // An address the operator typed is their mistake to fix and gets the plain refusal, not a sentence
 // about where they are standing, which would be wrong and confusing.
 func TestATypedAddressIsNotBlamedOnWhereYouAreStanding(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	mustRun(t, client, "use", "itv/fe-player")
 
 	err := refused(t, client, "sessions", "nope")

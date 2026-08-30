@@ -9,8 +9,8 @@ import (
 //
 // The second list is the one that decides whether this hook is worth having. A hook that refuses
 // wrongly blocks the work and costs the operator an interruption, which is worse than no hook, and
-// every role in this crew pushes a branch and opens a pull request on every slice. So a false
-// refusal here stops the crew delivering anything.
+// every role in this system pushes a branch and opens a pull request on every slice. So a false
+// refusal here stops the system delivering anything.
 func TestTheGateRefusesAMerge(t *testing.T) {
 	refused := []struct {
 		name    string

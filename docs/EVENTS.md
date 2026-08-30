@@ -1,8 +1,8 @@
 # The event log
 
-Quay Crew runs a Kafka compatible event log, served locally by Redpanda, which starts with the rest
+Quay System runs a Kafka compatible event log, served locally by Redpanda, which starts with the rest
 of the stack. It is an audit export, not the road anything travels by: history lives in Postgres,
-written in the same breath as each task, and a crew with no broker loses nothing but the export.
+written in the same breath as each task, and a system with no broker loses nothing but the export.
 
 Read the next section before you go looking for messages in it. The path one task takes, from the
 moment it is dispatched to the records it leaves in the store and on the log, is in
@@ -21,11 +21,11 @@ task that failed is exported too, because that is the one somebody comes looking
 
 **The payload is redacted before it is written anywhere.** The record carries the prompt, the reply
 and the failure, and what an operator pastes into a conversation can be a credential, so all three
-go through the crew's redactor first: every value the workspace keeps sealed is matched exactly and
+go through the system's redactor first: every value the workspace keeps sealed is matched exactly and
 replaced with the secret's name, the driver's token is matched for a driver session, and anything
-shaped like a subscription token is caught even when the crew never held the value. A value the
-crew could not know about, a password typed in that was never sealed as a secret, is stored as
-typed: the log and the `tasks` table hold what was said minus what the crew can recognise, not a
+shaped like a subscription token is caught even when the system never held the value. A value the
+system could not know about, a password typed in that was never sealed as a secret, is stored as
+typed: the log and the `tasks` table hold what was said minus what the system can recognise, not a
 guarantee that nothing sensitive was ever said.
 
 **Nothing consumes it.** There is no projection any more: history does not travel through the log,
@@ -76,12 +76,12 @@ that tells them apart is `status`, which is `idle` or `failed`:
   saying which: a refusal, a crash, a deadline the caller set, or a caller that went away.
 - **The sandbox could not be made.** `failed`, with `failure` naming the sandbox and what the daemon
   said.
-- **The crew restarted while the task was running.** `failed`, with no `prompt` at all, because the
-  crew is settling a row it found on the way up rather than reporting a task it ran.
+- **The system restarted while the task was running.** `failed`, with no `prompt` at all, because the
+  system is settling a row it found on the way up rather than reporting a task it ran.
 
 So a consumer of this stream reads `status`, then `failure`, and there is nothing else to branch on.
 The stream below is the one with a kind on every record, and it is the one to subscribe to when what
-you want is to know what the crew is doing.
+you want is to know what the system is doing.
 
 **`<workspace>.sessions` carries a `SessionEvent`**, one every time something happens to a session.
 This is the stream a consumer subscribes to, and the one a workflow trigger will match on, because
@@ -98,7 +98,7 @@ The kinds, and each is something that happened rather than a state the session i
   The session survives, so this is not `session.stopped`: it keeps its container and its
   conversation, and the next dispatch continues it
 - `session.stopped`, it was put down and its container with it
-- `session.reclaimed`, the crew took its container back on its own. Nothing else went, so a task
+- `session.reclaimed`, the system took its container back on its own. Nothing else went, so a task
   sent to it builds a fresh container over the same conversation. See section 11 of
   `docs/ORCHESTRATION.md`
 - `session.archived` and `session.restored`
@@ -115,11 +115,11 @@ whole of what was said stays in the task record.
 **`<workspace>.job` carries a `JobEvent`**, one per movement of a job, keyed by the job
 identifier so one job's records stay in order on one partition. A consumer rebuilding a
 tree depends on that. The row goes into `job_events` in the same transaction as the change it
-describes, and the export follows the commit, so a crew with no broker keeps the whole history and
+describes, and the export follows the commit, so a system with no broker keeps the whole history and
 loses only the copy.
 
 The kinds split in two, and the split is the useful part. A dashboard counting jobs must never break
-because the crew changed how it leases, and a dashboard counting leases has taken a dependency it was
+because the system changed how it leases, and a dashboard counting leases has taken a dependency it was
 told not to take.
 
 The contract, which another service may depend on:
@@ -162,10 +162,10 @@ inherited unchanged by every descendant, so one identifier joins a job, its chil
 tasks they ran and the spans around them. `TaskEvent` carries the same field, and so does the `tasks`
 row, which is what closes
 [issue 346](https://github.com/atlantic-blue/quay-crew/issues/346): before it, the durable record of
-what the crew did joined to neither the trace nor the log lines, and weeks later the logs are gone
+what the system did joined to neither the trace nor the log lines, and weeks later the logs are gone
 and the row is all that is left.
 
-Each `detail` goes through the crew's redactor before it is written or exported, the same way a task
+Each `detail` goes through the system's redactor before it is written or exported, the same way a task
 does, because what a caller types into a title or a reason can be a credential.
 
 Two more streams are designed and not built:
@@ -203,7 +203,7 @@ The log earns its place at the point where the system stops being one operator a
 - **Decoupling.** Each service publishes and subscribes on its own, which is what makes a second
   channel additive rather than a change to the first one.
 - **A second consumer.** A dashboard, a data pipeline or another machine reads the export without
-  touching the crew's database. That consumer does not exist yet, which is exactly why the export
+  touching the system's database. That consumer does not exist yet, which is exactly why the export
   is optional.
 
 Automation graphs are deliberately not on this list: flows are a Postgres state machine, with their
@@ -226,7 +226,7 @@ flowchart LR
 ## How it runs
 
 `make up` starts it, like everything else. It used to sit behind an `export` profile, on the argument
-that a crew with no second consumer needs no broker; the cost of that was an export nobody had
+that a system with no second consumer needs no broker; the cost of that was an export nobody had
 switched on and a second command to know about. From `deploy/docker-compose.yml`:
 
 - image `redpandadata/redpanda:v24.2.7`, started in `dev-container` mode with a single core
@@ -276,7 +276,7 @@ contain a dot, a slash or whitespace, so the separator stays unambiguous.
 
 ## Prove the broker works
 
-The plumbing is easy to verify without any Quay Crew code being involved. This creates a throwaway
+The plumbing is easy to verify without any Quay System code being involved. This creates a throwaway
 topic, writes one message, reads it back and cleans up:
 
 ```

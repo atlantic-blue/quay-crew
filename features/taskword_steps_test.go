@@ -80,8 +80,8 @@ func initializeTaskWordSteps(sc *godog.ScenarioContext) {
 		return says("standard output", toolFrom(ctx).stdout, want)
 	})
 
-	sc.Step(`^standard output says the crew has it$`, func(ctx context.Context) error {
-		return says("standard output", toolFrom(ctx).stdout, "the crew has it")
+	sc.Step(`^standard output says the system has it$`, func(ctx context.Context) error {
+		return says("standard output", toolFrom(ctx).stdout, "the system has it")
 	})
 
 	sc.Step(`^standard output says to read it back with "([^"]*)"$`,

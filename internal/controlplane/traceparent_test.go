@@ -79,7 +79,7 @@ func TestATaskNothingIsTracingCarriesNoTraceContext(t *testing.T) {
 	}
 }
 
-// Issue 346: the durable record of what the crew did joins to the trace, because weeks later the
+// Issue 346: the durable record of what the system did joins to the trace, because weeks later the
 // logs are gone and this row is all that is left.
 func TestATaskRowCarriesTheTraceOfTheCallThatRanIt(t *testing.T) {
 	server := controlplane.NewServer(controlplane.Config{

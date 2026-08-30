@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Every is how often the crew reads the machine.
+// Every is how often the system reads the machine.
 //
 // It is a timer of its own because the header redraws every second and reading the daemon is not a
 // once a second cost: `docker stats --no-stream` waits for the daemon to sample every container. So
@@ -32,7 +32,7 @@ type Sampler struct {
 	taken int
 }
 
-// NewSampler builds one over a source. A nil source is a crew with no daemon to read, and it reports
+// NewSampler builds one over a source. A nil source is a system with no daemon to read, and it reports
 // unknown for ever rather than refusing to start.
 func NewSampler(source Source, every time.Duration) *Sampler {
 	if every <= 0 {
@@ -62,7 +62,7 @@ func (s *Sampler) Taken() int {
 	return s.taken
 }
 
-// Run samples until the context ends. It takes one sample immediately, because a crew that started
+// Run samples until the context ends. It takes one sample immediately, because a system that started
 // ten seconds ago should not report unknown to the first operator who looks.
 //
 // A source that fails never stops the loop and never fails a command. The failure is kept on the
@@ -97,7 +97,7 @@ func (s *Sampler) Once(ctx context.Context) {
 func (s *Sampler) take(ctx context.Context) {
 	sample, err := s.source.Sample(ctx)
 	if err != nil {
-		slog.WarnContext(ctx, "the machine could not be read, so the crew reports unknown headroom",
+		slog.WarnContext(ctx, "the machine could not be read, so the system reports unknown headroom",
 			"error", err)
 		// The failure is kept where a reader will find it, and the figures stay unknown. Nothing
 		// here estimates: an operator stops a session on these numbers.

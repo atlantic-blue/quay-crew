@@ -38,25 +38,25 @@ type Memory struct {
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
 	// repositories are the repositories each workspace works in, in the order they were added.
-	// skills is every revision the crew holds, keyed by name and version, and attached is which
+	// skills is every revision the system holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
 	skills   map[string]Imported
 	attached map[string]map[string]int
-	// crewAttached is which version of which skill the whole crew pinned, so every workspace holds
+	// systemAttached is which version of which skill the whole system pinned, so every workspace holds
 	// it without an attachment of its own.
-	crewAttached map[string]int
-	// hooks is every revision of every hook the crew holds, and hooksAttached and crewHooks are the
+	systemAttached map[string]int
+	// hooks is every revision of every hook the system holds, and hooksAttached and systemHooks are the
 	// same two attachment levels again. Separate maps rather than one generic set: a skill and a
 	// hook are different entities, and sharing the storage here would be the first step to sharing
 	// the semantics.
 	hooks         map[string]ImportedHook
 	hooksAttached map[string]map[string]int
-	crewHooks     map[string]int
-	// roles is every revision of every role the crew holds, and rolesAttached and crewRoles are the
+	systemHooks   map[string]int
+	// roles is every revision of every role the system holds, and rolesAttached and systemRoles are the
 	// same two attachment levels once more.
 	roles           map[string]ImportedRole
 	rolesAttached   map[string]map[string]int
-	crewRoles       map[string]int
+	systemRoles     map[string]int
 	flowGraphs      map[string]map[int]string
 	flowRuns        map[string]*flow.Run
 	flowTransitions map[string][]flow.RecordedTransition
@@ -79,7 +79,7 @@ type Memory struct {
 	// taskSeen does for tasks.
 	sessionEvents []*quaycrewv1.SessionEvent
 	eventSeen     map[string]bool
-	// jobs is the declared intent the crew holds, and jobEvents is what happened to each of
+	// jobs is the declared intent the system holds, and jobEvents is what happened to each of
 	// them, keyed by the event identifier so writing one twice leaves one.
 	jobs      map[string]*job.Job
 	jobEvents map[string]*job.Event
@@ -300,7 +300,7 @@ func (m *Memory) RecordTask(_ context.Context, id, modelSessionID, status string
 	}
 	session.Status = status
 	// A task is running or has landed, so the session holds a container again and the stamp that said
-	// the crew took the last one back is no longer true.
+	// the system took the last one back is no longer true.
 	session.ReclaimedAt = nil
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
@@ -362,7 +362,7 @@ func (m *Memory) StopSession(_ context.Context, id string) error {
 	return nil
 }
 
-// ReclaimSession records that the crew took the session's container back. The stamp is its own,
+// ReclaimSession records that the system took the session's container back. The stamp is its own,
 // because the archive time is measured against how long the session has been reclaimed and
 // UpdatedAt moves on every write.
 func (m *Memory) ReclaimSession(_ context.Context, id string) error {
@@ -486,7 +486,7 @@ func (m *Memory) SetLabel(_ context.Context, id, label string) error {
 	return nil
 }
 
-// SetDescription records what the crew observed a session to be.
+// SetDescription records what the system observed a session to be.
 func (m *Memory) SetDescription(_ context.Context, id, description string, atTask int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -558,7 +558,7 @@ func (m *Memory) SetContext(_ context.Context, scope ContextScope, owner, body s
 
 func contextKey(scope ContextScope, owner string) string { return string(scope) + "/" + owner }
 
-// ImportSkill takes a skill into the crew, refusing a version that already exists carrying something
+// ImportSkill takes a skill into the system, refusing a version that already exists carrying something
 // different.
 func (m *Memory) ImportSkill(_ context.Context, imported Imported) error {
 	m.mu.Lock()
@@ -612,7 +612,7 @@ func (m *Memory) ListSkills(_ context.Context) ([]Imported, error) {
 	return out, nil
 }
 
-// AttachSkill gives a workspace a skill at the newest revision the crew holds.
+// AttachSkill gives a workspace a skill at the newest revision the system holds.
 func (m *Memory) AttachSkill(_ context.Context, workspace, name string) (Imported, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -664,38 +664,38 @@ func (m *Memory) WorkspaceSkills(_ context.Context, workspace string) ([]Importe
 	return out, nil
 }
 
-// AttachCrewSkill gives the whole crew a skill at the newest revision it holds.
-func (m *Memory) AttachCrewSkill(_ context.Context, name string) (Imported, error) {
+// AttachSystemSkill gives the whole system a skill at the newest revision it holds.
+func (m *Memory) AttachSystemSkill(_ context.Context, name string) (Imported, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	newest, found := m.newestSkill(name)
 	if !found {
 		return Imported{}, ErrNotFound
 	}
-	if m.crewAttached == nil {
-		m.crewAttached = make(map[string]int)
+	if m.systemAttached == nil {
+		m.systemAttached = make(map[string]int)
 	}
-	m.crewAttached[name] = newest.Version
+	m.systemAttached[name] = newest.Version
 	return newest, nil
 }
 
-// DetachCrewSkill takes a skill away from the crew.
-func (m *Memory) DetachCrewSkill(_ context.Context, name string) error {
+// DetachSystemSkill takes a skill away from the system.
+func (m *Memory) DetachSystemSkill(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, found := m.crewAttached[name]; !found {
+	if _, found := m.systemAttached[name]; !found {
 		return ErrNotFound
 	}
-	delete(m.crewAttached, name)
+	delete(m.systemAttached, name)
 	return nil
 }
 
-// CrewSkills returns what the crew holds, at the versions it pinned.
-func (m *Memory) CrewSkills(_ context.Context) ([]Imported, error) {
+// SystemSkills returns what the system holds, at the versions it pinned.
+func (m *Memory) SystemSkills(_ context.Context) ([]Imported, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]Imported, 0, len(m.crewAttached))
-	for name, version := range m.crewAttached {
+	out := make([]Imported, 0, len(m.systemAttached))
+	for name, version := range m.systemAttached {
 		held, found := m.skills[skillKey(name, version)]
 		if !found {
 			continue
@@ -706,7 +706,7 @@ func (m *Memory) CrewSkills(_ context.Context) ([]Imported, error) {
 	return out, nil
 }
 
-// newestSkill is the highest version of a name the crew holds. Callers hold the lock.
+// newestSkill is the highest version of a name the system holds. Callers hold the lock.
 func (m *Memory) newestSkill(name string) (Imported, bool) {
 	var newest Imported
 	var found bool
@@ -828,7 +828,7 @@ func (m *Memory) AppendSessionEvent(_ context.Context, event *quaycrewv1.Session
 	return nil
 }
 
-// ListSessionEvents returns a session's lifecycle oldest first, or the whole crew's when no session
+// ListSessionEvents returns a session's lifecycle oldest first, or the whole system's when no session
 // is named, capped the way a history is: the most recent, turned back the right way round.
 func (m *Memory) ListSessionEvents(_ context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error) {
 	m.mu.RLock()

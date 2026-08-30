@@ -4,7 +4,7 @@
 # The image carries no credentials. The subscription token is injected at task time as
 # CLAUDE_CODE_OAUTH_TOKEN (minted by `claude setup-token`, stored as a per project secret), so the
 # same image is safe to build, share, and run anywhere.
-# quay itself, so a session can drive the crew from inside its sandbox. Built here rather than mounted
+# quay itself, so a session can drive the system from inside its sandbox. Built here rather than mounted
 # from the host, because the host's binary is built for the host: a darwin build does not run in a
 # linux container, and the cloud has no host to mount from at all.
 FROM golang:1.25 AS tool
@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Which build this image was made from. The tool inside a sandbox reports it, and the image carries
-# it as a label so the crew can say when its sandboxes are running something older than itself.
+# it as a label so the system can say when its sandboxes are running something older than itself.
 ARG QC_VERSION=unknown
 RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$QC_VERSION" -o /out/quay ./cmd/quay
 
@@ -156,7 +156,7 @@ COPY deploy/sandbox/tmux.conf /home/agent/.tmux.conf
 COPY --chmod=0755 deploy/sandbox/open-conversation.sh /usr/local/bin/open-conversation
 
 # Where a session's git configuration comes from. A file in the repository rather than a printf here,
-# so a test can read the same thing the image ships. Owned by the sandbox user, because the crew
+# so a test can read the same thing the image ships. Owned by the sandbox user, because the system
 # writes to it at sandbox birth.
 COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 
@@ -168,9 +168,9 @@ COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 # working" because nothing ever gets far enough to authenticate. The runtime rewrites this file as it
 # runs; these are only the starting values.
 #
-# The directory is made here, as the sandbox user, and nothing else is put in it. The crew mounts the
+# The directory is made here, as the sandbox user, and nothing else is put in it. The system mounts the
 # workspace's own directory over this path in every sandbox, so a file the image writes here is a file
-# no session ever reads: what the runtime is told, beyond this first run, is rendered by the crew and
+# no session ever reads: what the runtime is told, beyond this first run, is rendered by the system and
 # mounted read only somewhere the mount cannot hide. Everything the runtime keeps about a conversation
 # lands in this directory, the transcripts among them, so it has to be the sandbox user's.
 RUN mkdir -p /home/agent/.claude \

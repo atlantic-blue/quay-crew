@@ -1,4 +1,4 @@
-Feature: The front door says what the crew is and how to start it
+Feature: The front door says what the system is and how to start it
 
   The README is the first and often the only thing anybody reads. A reader takes it at its word,
   types what it says, and when that fails they conclude the product is broken rather than the
@@ -6,9 +6,9 @@ Feature: The front door says what the crew is and how to start it
   list, a roadmap and a page of prior art. Nobody read any of it, and the list of what works had
   already gone stale.
 
-  So it is held to four things and no more. What the crew is, the words for what it holds, one quick
+  So it is held to four things and no more. What the system is, the words for what it holds, one quick
   start, and where to read next. Everything else it used to hold lives in the documents it points at,
-  and the scenarios in this directory say what the crew actually does.
+  and the scenarios in this directory say what the system actually does.
 
   Each promise it makes is checked against something with an answer elsewhere in this repository:
   the commands the tool actually has, the targets the Makefile actually declares, and the documents
@@ -19,7 +19,7 @@ Feature: The front door says what the crew is and how to start it
   naming no command passes every scenario here. The rest of this directory is what says whether a
   capability is real; these say the front door points at it.
 
-  Scenario: It says what the crew is, the words for what it holds, how to start it, and where to read next
+  Scenario: It says what the system is, the words for what it holds, how to start it, and where to read next
     When a reader opens the front door
     Then it holds those four parts and no other section
 
@@ -27,9 +27,9 @@ Feature: The front door says what the crew is and how to start it
     When a reader opens the front door
     Then it is shorter than the length a person gives it
 
-  Scenario: It names no command the crew does not have
+  Scenario: It names no command the system does not have
     When a reader opens the front door
-    Then every command it says to run is one the crew has
+    Then every command it says to run is one the system has
 
   Scenario: It names no build step that is not there
     When a reader opens the front door
@@ -41,16 +41,16 @@ Feature: The front door says what the crew is and how to start it
 
   Scenario: A first run is one command
     When a reader opens the front door
-    Then the quick start is one command to a running crew
+    Then the quick start is one command to a running system
 
   Scenario: The picture of a job is where it sends a reader for it
     When a reader opens the front door
     Then the document it names for the job carries a picture of one, through the controller, the lease, the session and the role
 
   # A word a reader meets for the first time inside a command is a word they guess at. The eleven are
-  # the whole of what the crew holds, so the list is exact: the twelfth resource is defined here in
+  # the whole of what the system holds, so the list is exact: the twelfth resource is defined here in
   # the change that adds it, or a reader finds it in the help text and has to work out what it is.
-  Scenario: It defines every resource the crew keeps
+  Scenario: It defines every resource the system keeps
     When a reader opens the front door
     Then it defines the eleven resources, in order, and says which of them are not resources
 

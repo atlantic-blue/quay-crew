@@ -17,15 +17,15 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// On 29 August 2026 a crew's event log had been dead for sixteen hours. The container health check
+// On 29 August 2026 a system's event log had been dead for sixteen hours. The container health check
 // had failed 1,467 times in a row and nothing watched it, so an operator working through this tool
-// all day read a crew that looked well. See issue 445.
+// all day read a system that looked well. See issue 445.
 
 // probeWait is what a test gives a write that will never land. The measured budget is five seconds,
 // and a suite that waits five seconds to watch one is a suite nobody runs.
 const probeWait = 200 * time.Millisecond
 
-// part builds one entry of a reading, the way the crew hands it over.
+// part builds one entry of a reading, the way the system hands it over.
 func part(name, state, detail string) *quaycrewv1.HealthComponent {
 	return &quaycrewv1.HealthComponent{Name: name, State: state, Detail: detail}
 }
@@ -52,7 +52,7 @@ func TestTheLineNamesThePartThatIsDownAndWhy(t *testing.T) {
 	}
 }
 
-// Both, because a crew whose store and log are both gone is a crew where naming one of them sends
+// Both, because a system whose store and log are both gone is a system where naming one of them sends
 // the operator to fix half of it.
 func TestEveryPartThatIsDownGetsALine(t *testing.T) {
 	lines := degraded([]*quaycrewv1.HealthComponent{
@@ -81,7 +81,7 @@ func TestAPartThatIsDownWithNoDetailStillSaysWhereToLook(t *testing.T) {
 	}
 }
 
-// Nothing on every other state. A crew with no event log configured is a real crew, and a part
+// Nothing on every other state. A system with no event log configured is a real system, and a part
 // nothing probes is the absence of a reading: a warning on either, on every command, forever, is a
 // line nobody can act on. The console's stats view is where all four states are said.
 func TestNothingIsSaidAboutAPartThatIsNotDown(t *testing.T) {
@@ -95,10 +95,10 @@ func TestNothingIsSaidAboutAPartThatIsNotDown(t *testing.T) {
 	}
 }
 
-// A crew that has never probed claims nothing about itself, so neither does this.
-func TestNothingIsSaidAboutACrewThatHasProbedNothing(t *testing.T) {
+// A system that has never probed claims nothing about itself, so neither does this.
+func TestNothingIsSaidAboutASystemThatHasProbedNothing(t *testing.T) {
 	if lines := degraded(nil); len(lines) != 0 {
-		t.Fatalf("a crew that has probed nothing is reported as down: %q", lines)
+		t.Fatalf("a system that has probed nothing is reported as down: %q", lines)
 	}
 }
 
@@ -119,9 +119,9 @@ func (stallingLog) ConsumePattern(context.Context, string, string, messaging.Han
 
 func (stallingLog) Close() {}
 
-// aCrewWhoseEventLogIsDead is the crew of 29 August 2026: the store takes every write, the broker is
-// gone, and the crew has probed itself and knows.
-func aCrewWhoseEventLogIsDead(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+// aSystemWhoseEventLogIsDead is the system of 29 August 2026: the store takes every write, the broker is
+// gone, and the system has probed itself and knows.
+func aSystemWhoseEventLogIsDead(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
@@ -132,10 +132,10 @@ func aCrewWhoseEventLogIsDead(t *testing.T) quaycrewv1.ControlPlaneServiceClient
 	return testClientFor(t, server)
 }
 
-// Over the wire, against a real control plane, because the whole finding is that the crew knew and
+// Over the wire, against a real control plane, because the whole finding is that the system knew and
 // the tool never asked.
-func TestACommandAgainstADegradedCrewNamesTheDependencyThatIsDown(t *testing.T) {
-	client := aCrewWhoseEventLogIsDead(t)
+func TestACommandAgainstADegradedSystemNamesTheDependencyThatIsDown(t *testing.T) {
+	client := aSystemWhoseEventLogIsDead(t)
 
 	var said bytes.Buffer
 	reportDegraded(context.Background(), client, &said)
@@ -147,15 +147,15 @@ func TestACommandAgainstADegradedCrewNamesTheDependencyThatIsDown(t *testing.T) 
 	}
 }
 
-// The warning belongs on standard error, and the command still answers. A degraded crew takes reads
+// The warning belongs on standard error, and the command still answers. A degraded system takes reads
 // perfectly well, which is exactly why nobody noticed for sixteen hours.
-func TestACommandStillAnswersAgainstADegradedCrew(t *testing.T) {
-	client := aCrewWhoseEventLogIsDead(t)
+func TestACommandStillAnswersAgainstADegradedSystem(t *testing.T) {
+	client := aSystemWhoseEventLogIsDead(t)
 	mustRun(t, client, "workspace", "create", "acme")
 
 	listed, err := runQuay(t, client, "workspace", "list")
 	if err != nil {
-		t.Fatalf("quay workspace list against a degraded crew: %v", err)
+		t.Fatalf("quay workspace list against a degraded system: %v", err)
 	}
 	if !strings.Contains(listed, "acme") {
 		t.Fatalf("the listing is missing its answer: %q", listed)
@@ -165,9 +165,9 @@ func TestACommandStillAnswersAgainstADegradedCrew(t *testing.T) {
 	}
 }
 
-// A crew that writes where a dispatch writes says nothing at all, or the line is on every command
+// A system that writes where a dispatch writes says nothing at all, or the line is on every command
 // forever and stops being read.
-func TestNothingIsSaidAboutACrewThatCanWrite(t *testing.T) {
+func TestNothingIsSaidAboutASystemThatCanWrite(t *testing.T) {
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
@@ -179,17 +179,17 @@ func TestNothingIsSaidAboutACrewThatCanWrite(t *testing.T) {
 	reportDegraded(context.Background(), testClientFor(t, server), &said)
 
 	if said.String() != "" {
-		t.Fatalf("standard error says %q about a crew that takes every write", said.String())
+		t.Fatalf("standard error says %q about a system that takes every write", said.String())
 	}
 }
 
-// The check must never stop a command, and a crew that cannot be reached is the command's own
+// The check must never stop a command, and a system that cannot be reached is the command's own
 // business to report.
-func TestNothingIsSaidWhenTheCrewCannotBeReached(t *testing.T) {
+func TestNothingIsSaidWhenTheSystemCannotBeReached(t *testing.T) {
 	var said bytes.Buffer
 	reportDegraded(context.Background(), unreachableClient(t), &said)
 
 	if said.String() != "" {
-		t.Fatalf("standard error says %q about a crew nobody reached", said.String())
+		t.Fatalf("standard error says %q about a system nobody reached", said.String())
 	}
 }

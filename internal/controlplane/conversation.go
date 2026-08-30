@@ -12,9 +12,9 @@ import (
 
 // nameConversation gives a session the name of the conversation its tasks run in, and keeps it.
 //
-// Before the task rather than after it, which is the whole point. The crew used to pass no name at
+// Before the task rather than after it, which is the whole point. The system used to pass no name at
 // all on a session's first task, read the name the runtime chose out of the output stream, and record
-// it once the task had landed. So for the whole life of that first task the crew held no name, and
+// it once the task had landed. So for the whole life of that first task the system held no name, and
 // opening the session meanwhile found an empty field, named a second conversation and opened that
 // one. The operator watched an empty conversation while the job happened in another.
 //
@@ -40,10 +40,10 @@ func (s *Server) nameConversation(ctx context.Context, session *quaycrewv1.Sessi
 // conversationStarted says whether the model runtime has opened this conversation already, which is
 // what decides whether the next task starts it or resumes it.
 //
-// Two sources, and they answer for different crews. The transcript on the host is the truth wherever
-// the crew keeps state there, and it is the same file the sandbox script reads when an operator opens
-// a conversation by hand, so a conversation somebody typed in is known to have started. A crew that
-// keeps nothing on the host can see no transcript at all, and for that one the crew's own memory of
+// Two sources, and they answer for different systems. The transcript on the host is the truth wherever
+// the system keeps state there, and it is the same file the sandbox script reads when an operator opens
+// a conversation by hand, so a conversation somebody typed in is known to have started. A system that
+// keeps nothing on the host can see no transcript at all, and for that one the system's own memory of
 // the runtime having reported the name back is all there is.
 func (s *Server) conversationStarted(session *quaycrewv1.Session, name string) bool {
 	if name == "" {
@@ -55,16 +55,16 @@ func (s *Server) conversationStarted(session *quaycrewv1.Session, name string) b
 	return s.opened.holds(name)
 }
 
-// confirmConversation checks what the runtime called the conversation against the name the crew gave
+// confirmConversation checks what the runtime called the conversation against the name the system gave
 // it, and returns the name to record against the session.
 //
 // The identifier in the output stream is a check now rather than the source. A runtime that was given
-// a name and used it confirms the crew's bookkeeping; one that used a different name ignored the flag,
-// and everything the crew reports for that session afterwards is read from a transcript nobody wrote,
+// a name and used it confirms the system's bookkeeping; one that used a different name ignored the flag,
+// and everything the system reports for that session afterwards is read from a transcript nobody wrote,
 // so it says so with both names in the line.
 //
-// It returns the reported name only for a session the crew never named, which is a session whose task
-// started before this crew did. Recording nothing leaves the stored name alone.
+// It returns the reported name only for a session the system never named, which is a session whose task
+// started before this system did. Recording nothing leaves the stored name alone.
 func (s *Server) confirmConversation(ctx context.Context, session *quaycrewv1.Session, reported string) string {
 	asked := session.GetModelSessionId()
 	if asked == "" {
@@ -81,9 +81,9 @@ func (s *Server) confirmConversation(ctx context.Context, session *quaycrewv1.Se
 	return ""
 }
 
-// opened is the conversations this process has watched a model runtime open, which is how a crew that
+// opened is the conversations this process has watched a model runtime open, which is how a system that
 // keeps no state on the host still knows a second task must resume rather than start. It is in memory
-// on purpose: a crew that keeps state on the host reads the transcript instead, and that survives a
+// on purpose: a system that keeps state on the host reads the transcript instead, and that survives a
 // restart, where this does not.
 type opened struct {
 	mu    sync.Mutex

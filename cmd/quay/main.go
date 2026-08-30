@@ -36,7 +36,7 @@ func main() {
 	}
 
 	options := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if token := crewToken(os.Getenv, os.ReadFile); token != "" {
+	if token := systemToken(os.Getenv, os.ReadFile); token != "" {
 		options = append(options, grpc.WithPerRPCCredentials(auth.Credentials(token)))
 	}
 	conn, err := grpc.NewClient(addr, options...)
@@ -70,13 +70,13 @@ func inAContainer() bool {
 
 // unreachable turns "connection refused" inside a sandbox into the thing that is actually wrong.
 //
-// A session that was never told where the crew is falls back to localhost, and localhost inside a
+// A session that was never told where the system is falls back to localhost, and localhost inside a
 // container is the container: there is nothing there and there never will be. The dial error names an
-// address the operator did not choose and cannot fix, which reads as the crew being down. What is
+// address the operator did not choose and cannot fix, which reads as the system being down. What is
 // actually true is that nothing told this session where to go, and that cannot be set from in here.
 //
-// A task is told where the crew is when it runs a job, so the ordinary reason to see this
-// is a task that is running none. The other reason is a crew whose own address is unset.
+// A task is told where the system is when it runs a job, so the ordinary reason to see this
+// is a task that is running none. The other reason is a system whose own address is unset.
 func unreachable(err error, told string, sandboxed bool) error {
 	if err == nil || !sandboxed || told != "" {
 		return err
@@ -84,11 +84,11 @@ func unreachable(err error, told string, sandboxed bool) error {
 	if status.Code(err) != codes.Unavailable {
 		return err
 	}
-	return fmt.Errorf("this session was not told where the crew is, so there is nothing at the "+
-		"address it fell back to. A task is told where the crew is when it runs a job, and what "+
+	return fmt.Errorf("this session was not told where the system is, so there is nothing at the "+
+		"address it fell back to. A task is told where the system is when it runs a job, and what "+
 		"it may do there comes from that job's role. So either this task is running none, or the "+
-		"crew has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
-		"the crew's configuration file, ~/.quay/env on a compose stack. (%w)", err)
+		"system has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
+		"the system's configuration file, ~/.quay/env on a compose stack. (%w)", err)
 }
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.
@@ -96,7 +96,7 @@ func unreachable(err error, told string, sandboxed bool) error {
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) > 0 {
 		// Before the command, so an operator watching a task run sees it rather than finding it
-		// above the answer afterwards. The console says which build the crew is in its own header
+		// above the answer afterwards. The console says which build the system is in its own header
 		// and which part of it is down in its stats view, and a line drawn over a full screen view
 		// would corrupt it.
 		reportDrift(ctx, client, os.Stderr)
@@ -106,24 +106,24 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		return console.Plain(ctx, client, os.Stdout)
 	}
-	return openTheCrew(
+	return openTheSystem(
 		func() error { return runPanel(ctx, client, nil, os.Stdout, addr) },
 		func() error { return openConsoleAlone(ctx, client, addr) },
 	)
 }
 
-// openTheCrew is what `quay` with no arguments does: the panel, and the console on its own when there
+// openTheSystem is what `quay` with no arguments does: the panel, and the console on its own when there
 // is nothing to put beside it yet.
 //
-// One command opens everything. A crew with no conversation in it is the first run, and refusing to
+// One command opens everything. A system with no conversation in it is the first run, and refusing to
 // open at all then would be absurd, so the console opens on its own.
 //
 // That is the only reason it falls back. Every failure used to land here and come out as a single
-// console pane: tmux missing, a crew with two projects and nowhere named to open, a header that would
+// console pane: tmux missing, a system with two projects and nowhere named to open, a header that would
 // not fit. They all looked identical from the outside, which is a panel that sometimes does not
 // appear and never says why. Anything else is reported, because every one of those refusals already
 // names what to do about it and the operator cannot act on a message nobody prints.
-func openTheCrew(panel, alone func() error) error {
+func openTheSystem(panel, alone func() error) error {
 	err := panel()
 	switch {
 	case err == nil:

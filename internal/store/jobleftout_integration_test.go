@@ -20,7 +20,7 @@ import (
 // secret are all rows, the skills are the ones an operator actually gets, and the answer is assembled
 // from rows a different call wrote.
 
-// declarationLeftOut declares one job and answers with the skills the crew said its session starts
+// declarationLeftOut declares one job and answers with the skills the system said its session starts
 // without, keyed by name against the reason.
 func declarationLeftOut(t *testing.T, s *controlplane.Server, project, named string) map[string]string {
 	t.Helper()
@@ -40,7 +40,7 @@ func declarationLeftOut(t *testing.T, s *controlplane.Server, project, named str
 // TestDeclaringJobNamesTheSkillsTheWorkspaceCannotSupply is the whole of what this change buys,
 // against the database that holds it.
 func TestDeclaringJobNamesTheSkillsTheWorkspaceCannotSupply(t *testing.T) {
-	s, _ := aCrewThatHoldsSkills(t)
+	s, _ := aSystemThatHoldsSkills(t)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -83,7 +83,7 @@ func TestDeclaringJobNamesTheSkillsTheWorkspaceCannotSupply(t *testing.T) {
 // The role is a row here rather than a manifest a test parsed, which is the half a unit tier cannot
 // reach: the boundary is read back by the code that answers the declaration.
 func TestAJobWhoseRoleReceivesNoSkillsIsToldNothingAboutThem(t *testing.T) {
-	s, _ := aCrewThatHoldsSkills(t)
+	s, _ := aSystemThatHoldsSkills(t)
 	workspace, project := aProjectOnPostgres(t, s)
 	importRoleOnPostgres(t, s, workspace, "backlog-clearer", 1, "job", "context")
 	importRoleOnPostgres(t, s, workspace, "releaser", 1, "job", "skills")
@@ -92,7 +92,7 @@ func TestAJobWhoseRoleReceivesNoSkillsIsToldNothingAboutThem(t *testing.T) {
 		t.Errorf("the declaration names %v, want nothing for a role that receives no skills", keysOf(left))
 	}
 	// And the same workspace, the same missing secret, a role that does receive them: without this
-	// the check above would pass on a crew that says nothing to anybody.
+	// the check above would pass on a system that says nothing to anybody.
 	if left := declarationLeftOut(t, s, project, "releaser"); len(left) == 0 {
 		t.Error("the declaration names nothing for a role that does receive skills")
 	}

@@ -13,9 +13,9 @@ import (
 )
 
 // The wizard makes one thing. It asks what first, then only the questions that thing needs, and where
-// a question needs a parent it offers what the crew already has rather than a blank name.
+// a question needs a parent it offers what the system already has rather than a blank name.
 //
-// It shipped able to make a whole crew and nothing else: a workspace and a project were both required
+// It shipped able to make a whole system and nothing else: a workspace and a project were both required
 // on the way to anything, so adding a project to a workspace you had, or setting a token on one, meant
 // dropping to the command line and knowing what to type.
 //
@@ -77,13 +77,13 @@ const (
 	stepContext
 	// stepMessage takes a first message, which is the only way a session comes into existence.
 	stepMessage
-	// stepPickSkill chooses a skill the crew holds in its store, to attach to the workspace.
+	// stepPickSkill chooses a skill the system holds in its store, to attach to the workspace.
 	stepPickSkill
 	// stepMode chooses what the session's tasks may do without asking. It is asked rather than
 	// defaulted, because a sandbox is born with its capabilities: a session started in the wrong mode
 	// costs a restart, and one that cannot act is a session that apologises instead of working.
 	stepMode
-	// stepWorking is the crew being asked to make it.
+	// stepWorking is the system being asked to make it.
 	stepWorking
 )
 
@@ -118,7 +118,7 @@ func without(steps []wizardStep, drop wizardStep) []wizardStep {
 	return kept
 }
 
-// wizardChoice is one thing the crew already has, offered where a step needs a parent.
+// wizardChoice is one thing the system already has, offered where a step needs a parent.
 type wizardChoice struct {
 	id   string
 	name string
@@ -132,7 +132,7 @@ type wizard struct {
 	at    int
 	typed string
 
-	// workspace and project are what was picked, so they carry an identifier the crew gave us rather
+	// workspace and project are what was picked, so they carry an identifier the system gave us rather
 	// than a name to be resolved later.
 	workspace wizardChoice
 	project   wizardChoice
@@ -146,7 +146,7 @@ type wizard struct {
 	mode  string
 	skill wizardChoice
 
-	// choices is what the current step can offer, and loaded says the crew has answered. The two are
+	// choices is what the current step can offer, and loaded says the system has answered. The two are
 	// separate because no workspaces at all is a real answer and needs its own sentence.
 	choices []wizardChoice
 	loaded  bool
@@ -159,7 +159,7 @@ type wizard struct {
 	cycleBase string
 	cycleAt   int
 
-	// guided is the first run flow: the stages run as a chain in the order a crew needs them, an
+	// guided is the first run flow: the stages run as a chain in the order a system needs them, an
 	// empty answer skips a stage, and escape leaves the setup rather than cancelling, because the
 	// stages behind it are already made.
 	guided bool
@@ -167,9 +167,9 @@ type wizard struct {
 	chain []wizardKind
 }
 
-// guidedSetup is the wizard as the first run opens it: every stage a crew needs, in dependency
+// guidedSetup is the wizard as the first run opens it: every stage a system needs, in dependency
 // order. Skills come after the token and the context because attaching one is the only stage that
-// can be impossible (a crew holding none), and a stage that skips itself should not sit in the
+// can be impossible (a system holding none), and a stage that skips itself should not sit in the
 // middle of the questions that cannot.
 func guidedSetup() wizard {
 	return wizard{kind: kindWorkspace, guided: true,
@@ -207,8 +207,8 @@ func (w wizard) step() wizardStep {
 		return stepKind
 	}
 	steps := w.kind.steps()
-	// The guided setup does not ask. It is the first run of an empty crew, walking somebody through
-	// six questions already, and a session it starts keeps the crew's default the way every session did
+	// The guided setup does not ask. It is the first run of an empty system, walking somebody through
+	// six questions already, and a session it starts keeps the system's default the way every session did
 	// before this step existed. Asking is for the wizard the operator opens deliberately.
 	if w.guided {
 		steps = without(steps, stepMode)
@@ -227,7 +227,7 @@ func (w wizard) picking() bool {
 
 // modeOrder is the order the modes are offered, narrowest first, so the most permissive is never the
 // one under the cursor. The words themselves live with the model, because the command line, this
-// wizard and the crew's configuration all have to take the same ones.
+// wizard and the system's configuration all have to take the same ones.
 var modeOrder = model.PermissionModesOffered()
 
 // prompt is what the step asks, and what pressing enter accepts.
@@ -346,7 +346,7 @@ func mod(a, n int) int {
 }
 
 // shown is what the operator sees of what they have typed. A secret is never echoed: a value on a
-// screen is a value in that terminal's scrollback, and this one runs every task the crew makes.
+// screen is a value in that terminal's scrollback, and this one runs every task the system makes.
 func (w wizard) shown() string {
 	if w.step() == stepSecret {
 		return strings.Repeat("*", len([]rune(w.typed)))
@@ -423,7 +423,7 @@ func (w wizard) accept() (wizard, error) {
 	return w, nil
 }
 
-// pick resolves what was typed against what the crew already has. It never creates: the whole point of
+// pick resolves what was typed against what the system already has. It never creates: the whole point of
 // the step is that an existing workspace is reused rather than made a second time.
 func (w wizard) pick(answer, what, within string) (wizardChoice, error) {
 	if !w.loaded {
@@ -523,12 +523,12 @@ func (m Model) updateWizardKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		// Nothing has been made yet, by construction, so there is nothing to undo. Escape works while
-		// the crew is being asked too, so a crew that never answers is not a trap.
+		// the system is being asked too, so a system that never answers is not a trap.
 		m.mode, m.making = modeBrowse, wizard{}
 		return m, nil
 	}
 	if m.making.step() == stepWorking {
-		// The crew is making it and the wizard is asking nothing, so a key is not an answer to
+		// The system is making it and the wizard is asking nothing, so a key is not an answer to
 		// anything. Taken as an empty answer to this step, enter is refused as "making it: this one is
 		// needed", naming no question anybody was asked.
 		return m, nil
@@ -593,7 +593,7 @@ func (m Model) advanceGuided() (Model, tea.Cmd) {
 	return m, listCmd(m.active, m.parent)
 }
 
-// wizardChoicesCmd asks the crew what the step it has just arrived at can offer, and nothing at all
+// wizardChoicesCmd asks the system what the step it has just arrived at can offer, and nothing at all
 // when the step takes free text.
 func (m Model) wizardChoicesCmd() tea.Cmd {
 	step := m.making.step()
@@ -625,7 +625,7 @@ func (m Model) wizardChoicesCmd() tea.Cmd {
 			}
 		case stepPickSkill:
 			// The store's skills, because attaching is what this stage does and only imported
-			// skills attach. The crew's own directory reaches every session without being asked.
+			// skills attach. The system's own directory reaches every session without being asked.
 			listed, err := client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{})
 			if err != nil {
 				return wizardChoicesMsg{step: step, err: fmt.Errorf("the skills: %w", err)}
@@ -652,7 +652,7 @@ func (m Model) applyWizardChoices(msg wizardChoicesMsg) Model {
 	return m
 }
 
-// makeCmd asks the crew to make the one thing that was answered. It touches exactly one call, so a
+// makeCmd asks the system to make the one thing that was answered. It touches exactly one call, so a
 // wizard opened to add a project cannot leave a workspace behind it.
 func makeCmd(client quaycrewv1.ControlPlaneServiceClient, plan wizard) tea.Cmd {
 	return func() tea.Msg {

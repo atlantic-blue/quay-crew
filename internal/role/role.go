@@ -3,11 +3,11 @@
 // A role is a named way of working that a session is given: a brief the model reads, the model it
 // runs on, and the material it is allowed to receive. The design is in docs/ROLES.md. Files are the
 // authoring and sharing format, the same answer skills and hooks already gave, so a role is code
-// somebody can review, version and hand to another crew.
+// somebody can review, version and hand to another system.
 //
 // The important part of a role is not the persona. It is the boundary. A role that writes tests must
 // not receive the code, and a role that writes code must not receive the test bodies, or the two
-// sessions are one conversation wearing two names. So `receives` is a declaration the crew can hold
+// sessions are one conversation wearing two names. So `receives` is a declaration the system can hold
 // a session to, rather than prose in a brief that asks it nicely.
 package role
 
@@ -28,7 +28,7 @@ import (
 const ManifestFile = "role.yaml"
 
 // BriefFile is how this role works. It is the whole instruction a session running as the role is
-// given, so it is read once by that session rather than by every session the crew has.
+// given, so it is read once by that session rather than by every session the system has.
 const BriefFile = "ROLE.md"
 
 // SummaryLimit is how long a summary may be, in bytes. It is the line a listing shows.
@@ -45,14 +45,14 @@ const BriefLimit = 16384
 
 // Material is what a role may declare it receives. An allow list rather than free text.
 //
-// A name the crew does not assemble is a boundary that quietly means nothing, and a boundary that
+// A name the system does not assemble is a boundary that quietly means nothing, and a boundary that
 // means nothing looks exactly like one that holds. Refusing at import is the only moment somebody is
-// looking. These three are what the crew puts in front of a session today.
+// looking. These three are what the system puts in front of a session today.
 var Material = []string{
 	// Job is the job the role was given. Every role receives it: a task without its job
 	// is not a task.
 	MaterialJob,
-	// Context is what the crew, the workspace and the project know, as the memory files carry it.
+	// Context is what the system, the workspace and the project know, as the memory files carry it.
 	MaterialContext,
 	// Skills are the skills the workspace holds, their index and their files.
 	MaterialSkills,
@@ -95,9 +95,9 @@ const (
 
 // Retired is every word a manifest used to carry, against what it is called now.
 //
-// A role is a file in somebody's repository, so a word the crew stopped using is still in their
+// A role is a file in somebody's repository, so a word the system stopped using is still in their
 // manifests, their notes and their fingers. Each one is refused at import by name. An unknown word
-// says only that the crew does not have it, which sends the author looking; a word quietly ignored
+// says only that the system does not have it, which sends the author looking; a word quietly ignored
 // is worse than both, because the boundary then means nothing and reads exactly like one that holds.
 //
 // One table for both lists, rather than a case per word, so the next rename cannot forget half of
@@ -118,13 +118,13 @@ var RetiredKey = map[string]string{
 	"may": "verbs",
 }
 
-// RetiredWord says what a word is called now, and whether it is one the crew retired.
+// RetiredWord says what a word is called now, and whether it is one the system retired.
 func RetiredWord(word string) (string, bool) {
 	instead, retired := Retired[strings.TrimSpace(word)]
 	return instead, retired
 }
 
-// RetiredManifestKey says what a manifest key is called now, and whether it is one the crew retired.
+// RetiredManifestKey says what a manifest key is called now, and whether it is one the system retired.
 func RetiredManifestKey(key string) (string, bool) {
 	instead, retired := RetiredKey[strings.TrimSpace(key)]
 	return instead, retired
@@ -156,7 +156,7 @@ type Role struct {
 	Dir string
 }
 
-// File is one file of a role's directory, on its way into the crew.
+// File is one file of a role's directory, on its way into the system.
 type File struct {
 	// Path is relative to the role's directory, with forward slashes whatever the host uses.
 	Path string
@@ -198,7 +198,7 @@ func One(dir string) (Role, error) {
 //
 // This is the one validator. A client reads a directory and sends the files, because the control
 // plane runs in a container and a path on the operator's machine means nothing to it, so everything
-// the crew refuses is refused here rather than once per client.
+// the system refuses is refused here rather than once per client.
 func FromFiles(files []File) (Role, error) {
 	byPath := make(map[string][]byte, len(files))
 	for _, file := range files {
@@ -215,7 +215,7 @@ func FromFiles(files []File) (Role, error) {
 
 	var read manifest
 	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
-	// A field the crew does not know is refused by name rather than ignored. Ignored, it looks
+	// A field the system does not know is refused by name rather than ignored. Ignored, it looks
 	// configured and does nothing, which sends whoever wrote it looking somewhere else entirely.
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&read); err != nil {
@@ -241,8 +241,8 @@ func FromFiles(files []File) (Role, error) {
 
 // refuseRetiredKeys names the key to write instead, before the strict decode refuses it as unknown.
 //
-// yaml's own refusal for a key the crew does not take names the Go type it was decoding into, which
-// is not a sentence about anybody's manifest. So the keys the crew renamed are read off the document
+// yaml's own refusal for a key the system does not take names the Go type it was decoding into, which
+// is not a sentence about anybody's manifest. So the keys the system renamed are read off the document
 // first and answered with the word that replaced them.
 func refuseRetiredKeys(raw []byte) error {
 	var keyed map[string]yaml.Node
@@ -266,7 +266,7 @@ func refuseRetiredKeys(raw []byte) error {
 	return nil
 }
 
-// ReadDir reads a role's directory, so what travels to the crew is the role rather than a path on
+// ReadDir reads a role's directory, so what travels to the system is the role rather than a path on
 // somebody's machine.
 func ReadDir(dir string) ([]File, error) {
 	if _, err := os.Stat(filepath.Join(dir, ManifestFile)); err != nil {
@@ -389,7 +389,7 @@ func (r Role) check(directory string) error {
 				directory, material, instead, instead)
 		}
 		if !known(material) {
-			return fmt.Errorf("role: %s receives %q, which is not material the crew hands out; it is one of: %s",
+			return fmt.Errorf("role: %s receives %q, which is not material the system hands out; it is one of: %s",
 				directory, material, strings.Join(Material, ", "))
 		}
 	}
@@ -400,7 +400,7 @@ func (r Role) check(directory string) error {
 				directory, verb, instead, instead)
 		}
 		if !knownVerb(verb) {
-			return fmt.Errorf("role: %s may %q, which is not a verb the crew grants; it is one of: %s",
+			return fmt.Errorf("role: %s may %q, which is not a verb the system grants; it is one of: %s",
 				directory, verb, strings.Join(Grantable, ", "))
 		}
 	}

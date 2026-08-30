@@ -17,7 +17,7 @@ import (
 // own works in that one.
 //
 // The failure this is against is the one the acceptance run hit: a session told to push, holding a
-// token that works, and no repository to push to. The crew knew the workspace, the project and the
+// token that works, and no repository to push to. The system knew the workspace, the project and the
 // token, and nowhere held the one fact that says where the work goes.
 
 // record is the repository command, run against the server.
@@ -92,8 +92,8 @@ func TestARepositoryThatIsNotAnOwnerAndANameIsRefused(t *testing.T) {
 }
 
 // A kind that is neither is refused rather than taken for the default. A forge has other kinds, and
-// recording "internal" as public would be the crew writing down a cost fact nobody told it.
-func TestAKindOfRepositoryTheCrewDoesNotKnowIsRefused(t *testing.T) {
+// recording "internal" as public would be the system writing down a cost fact nobody told it.
+func TestAKindOfRepositoryTheSystemDoesNotKnowIsRefused(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 
@@ -110,7 +110,7 @@ func TestAKindOfRepositoryTheCrewDoesNotKnowIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheRepositoryOfAProjectTheCrewDoesNotHoldIsNotFound(t *testing.T) {
+func TestTheRepositoryOfAProjectTheSystemDoesNotHoldIsNotFound(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, err := s.SetProjectRepository(context.Background(), &quaycrewv1.SetProjectRepositoryRequest{
 		Project: "ghost", Repository: "atlantic-blue/transcript",
@@ -132,7 +132,7 @@ func TestAJobWorksInTheProjectsRepository(t *testing.T) {
 	if declared.GetRepository() != "atlantic-blue/transcript" {
 		t.Fatalf("the job works in %q, want the project's atlantic-blue/transcript", declared.GetRepository())
 	}
-	// And the session doing it is told, which is the whole point: the line the crew puts in front of
+	// And the session doing it is told, which is the whole point: the line the system puts in front of
 	// a session is what stops work that nobody can read.
 	asked := job.Asked(&job.Job{Brief: "open the bill", Repository: declared.GetRepository()})
 	if !strings.Contains(asked, "atlantic-blue/transcript") || !strings.Contains(asked, "pull request") {

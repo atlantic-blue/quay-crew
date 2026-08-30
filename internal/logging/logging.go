@@ -1,4 +1,4 @@
-// Package logging is the crew's log event shape. Every service writes one JSON object per event to
+// Package logging is the system's log event shape. Every service writes one JSON object per event to
 // its own stdout, and every line carries the same three fields on top of what the call site adds:
 //
 //	service         which service wrote the line
@@ -11,7 +11,7 @@
 // site logs with a context. A line logged without one carries no correlation id, which is correct
 // for a line written on the way up before any call has arrived.
 //
-// Init makes this logger the default as well as returning it, because most of the crew logs through
+// Init makes this logger the default as well as returning it, because most of the system logs through
 // the package level slog.WarnContext rather than through a logger it was handed.
 package logging
 
@@ -32,7 +32,7 @@ const (
 	CorrelationKey = "correlation_id"
 )
 
-// Init builds the crew's logger, writing JSON to out, and makes it the default.
+// Init builds the system's logger, writing JSON to out, and makes it the default.
 func Init(service string, out io.Writer) *slog.Logger {
 	return install(service, correlated{slog.NewJSONHandler(out, nil)})
 }
@@ -117,7 +117,7 @@ func (c correlated) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // WithGroup nests the correlation id inside the group, because a record's attributes are added
-// wherever the handler is currently open. Nothing in the crew opens a group, and a caller that does
+// wherever the handler is currently open. Nothing in the system opens a group, and a caller that does
 // should read the id from CorrelationID instead of expecting it at the top level.
 func (c correlated) WithGroup(name string) slog.Handler {
 	return correlated{c.inner.WithGroup(name)}

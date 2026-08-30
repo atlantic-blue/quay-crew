@@ -1,13 +1,13 @@
 # merge-gate
 
-Refuses the command that merges. It is the first hook in this crew that refuses anything.
+Refuses the command that merges. It is the first hook in this system that refuses anything.
 
 Every role brief here ends a slice the same way: commit, push the branch, open a pull request, and
 never merge. A push applies nothing. A merge runs the pipeline, and the pipeline is what spends money
 and changes infrastructure, so the merge is the operator's gate.
 
 Until this hook, that gate was a sentence in a brief. What a role `may` do is a list of the verbs a
-session calls on the crew, and merging is not one of them: it is a github action a session takes with
+session calls on the system, and merging is not one of them: it is a github action a session takes with
 a credential a skill gave it. So the one boundary the whole shape rests on was the one thing nothing
 checked, while smaller boundaries were held by a credential. This is the check.
 
@@ -42,8 +42,8 @@ trade this hook exists on the right side of.
 **A merge from anywhere that is not the Bash tool.** The gate is bound to `Bash`, because that is
 where a session runs `gh`. A tool that reaches github another way is not covered.
 
-**Anything, if the operator takes the hook off.** `quay hook detach crew merge-gate` is how somebody
-decides this crew may merge. That is the honest shape of it: the boundary is now a thing the crew
+**Anything, if the operator takes the hook off.** `quay hook detach system merge-gate` is how somebody
+decides this system may merge. That is the honest shape of it: the boundary is now a thing the system
 holds and an operator can remove deliberately, rather than a sentence a model may or may not keep.
 
 ## How it refuses
@@ -55,7 +55,7 @@ that quietly opens.
 
 Everything else exits 0, including a payload it cannot read. It fires on every Bash command every
 session runs, so a gate that refuses what it does not understand refuses the work, and a broken hook
-must not be able to stop a crew.
+must not be able to stop a system.
 
 ## Reading a command line
 

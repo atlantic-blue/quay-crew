@@ -14,13 +14,13 @@ import (
 
 const megabyte = int64(1 << 20)
 
-// aMachine is a machine the crew was given, so a scenario can be a crew on a full machine without
+// aMachine is a machine the system was given, so a scenario can be a system on a full machine without
 // filling one. The daemon is the only thing these scenarios stand in for, because a scenario cannot
 // make a machine run out of memory on purpose.
 type aMachine struct {
 	sample headroom.Sample
 	err    error
-	// read counts how often the crew read it, which is what says the header is not on this path.
+	// read counts how often the system read it, which is what says the header is not on this path.
 	read int
 }
 
@@ -29,7 +29,7 @@ func (m *aMachine) Sample(context.Context) (headroom.Sample, error) {
 	return m.sample, m.err
 }
 
-// headroomWorld is what a scenario said about the machine and what the crew said back.
+// headroomWorld is what a scenario said about the machine and what the system said back.
 type headroomWorld struct {
 	machine *aMachine
 	answer  *quaycrewv1.GetHeadroomResponse
@@ -42,9 +42,9 @@ func headroomFrom(ctx context.Context) *headroomWorld {
 	return h
 }
 
-// Steps for the scenarios about what the crew says of the machine it runs on. The fault they close:
+// Steps for the scenarios about what the system says of the machine it runs on. The fault they close:
 // on 27 August 2026 the host ran out of memory, the kernel killed eighteen sandboxes in one event,
-// and the console kept drawing a healthy crew. See issue 405.
+// and the console kept drawing a healthy system. See issue 405.
 func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, headroomKey{}, &headroomWorld{}), nil
@@ -71,14 +71,14 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 		func(ctx context.Context, used, total int) error {
 			h, w := headroomFrom(ctx), worldFrom(ctx)
 			if h.machine == nil {
-				return fmt.Errorf("no machine was given to the crew yet")
+				return fmt.Errorf("no machine was given to the system yet")
 			}
 			h.machine.sample.Machine.SwapUsed = headroom.Measured(int64(used) * megabyte)
 			h.machine.sample.Machine.SwapTotal = headroom.Measured(int64(total) * megabyte)
 			return w.restart()
 		})
 
-	sc.Step(`^the crew cannot read the machine$`, func(ctx context.Context) error {
+	sc.Step(`^the system cannot read the machine$`, func(ctx context.Context) error {
 		h, w := headroomFrom(ctx), worldFrom(ctx)
 		h.machine = &aMachine{err: fmt.Errorf("the daemon is not answering")}
 		w.machine = h.machine
@@ -95,7 +95,7 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 			return holdSandbox(ctx, int64(held), false)
 		})
 
-	sc.Step(`^the crew reads the machine$`, func(ctx context.Context) error {
+	sc.Step(`^the system reads the machine$`, func(ctx context.Context) error {
 		worldFrom(ctx).server.SampleHeadroom(ctx)
 		return nil
 	})
@@ -111,28 +111,28 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew says it holds "([^"]*)" of "([^"]*)"$`,
+	sc.Step(`^the system says it holds "([^"]*)" of "([^"]*)"$`,
 		func(ctx context.Context, used, limit string) error {
 			h := headroomFrom(ctx)
 			if h.answer.GetUsed() != used || h.answer.GetLimit() != limit {
-				return fmt.Errorf("the crew says %q of %q, want %q of %q",
+				return fmt.Errorf("the system says %q of %q, want %q of %q",
 					h.answer.GetUsed(), h.answer.GetLimit(), used, limit)
 			}
 			return nil
 		})
 
-	sc.Step(`^the crew says the machine is "([^"]*)"$`, func(ctx context.Context, state string) error {
+	sc.Step(`^the system says the machine is "([^"]*)"$`, func(ctx context.Context, state string) error {
 		if got := headroomFrom(ctx).answer.GetState(); got != state {
-			return fmt.Errorf("the crew says the machine is %q, want %q", got, state)
+			return fmt.Errorf("the system says the machine is %q, want %q", got, state)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew says the swap is "([^"]*)" of "([^"]*)"$`,
+	sc.Step(`^the system says the swap is "([^"]*)" of "([^"]*)"$`,
 		func(ctx context.Context, used, total string) error {
 			h := headroomFrom(ctx)
 			if h.answer.GetSwapUsed() != used || h.answer.GetSwapTotal() != total {
-				return fmt.Errorf("the crew says swap is %q of %q, want %q of %q",
+				return fmt.Errorf("the system says swap is %q of %q, want %q of %q",
 					h.answer.GetSwapUsed(), h.answer.GetSwapTotal(), used, total)
 			}
 			return nil
@@ -159,17 +159,17 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew says why it knows nothing$`, func(ctx context.Context) error {
+	sc.Step(`^the system says why it knows nothing$`, func(ctx context.Context) error {
 		if said := headroomFrom(ctx).answer.GetFailed(); said == "" {
-			return fmt.Errorf("the crew says nothing about why it could not read the machine")
+			return fmt.Errorf("the system says nothing about why it could not read the machine")
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew still answers everything else$`, func(ctx context.Context) error {
+	sc.Step(`^the system still answers everything else$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if _, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{}); err != nil {
-			return fmt.Errorf("a crew that could not read its machine stopped serving: %w", err)
+			return fmt.Errorf("a system that could not read its machine stopped serving: %w", err)
 		}
 		return nil
 	})
@@ -259,15 +259,15 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the crew read the machine once$`, func(ctx context.Context) error {
+	sc.Step(`^the system read the machine once$`, func(ctx context.Context) error {
 		if read := headroomFrom(ctx).machine.read; read != 1 {
-			return fmt.Errorf("the crew read the machine %d times, and a header redraws every second", read)
+			return fmt.Errorf("the system read the machine %d times, and a header redraws every second", read)
 		}
 		return nil
 	})
 }
 
-// consoleHeader draws the real header from what the crew answered, so a scenario reads what the
+// consoleHeader draws the real header from what the system answered, so a scenario reads what the
 // operator reads rather than a description of it.
 func consoleHeader(w *world, line, state string) (string, error) {
 	registry, err := console.NewDefaultRegistry(w.client)
@@ -285,12 +285,12 @@ func consoleHeader(w *world, line, state string) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-// holdSandbox gives the machine a container for a real session of this crew, working or idle, so the
-// listing a scenario reads is joined to rows the crew actually holds.
+// holdSandbox gives the machine a container for a real session of this system, working or idle, so the
+// listing a scenario reads is joined to rows the system actually holds.
 func holdSandbox(ctx context.Context, held int64, working bool) error {
 	h, w := headroomFrom(ctx), worldFrom(ctx)
 	if h.machine == nil {
-		return fmt.Errorf("no machine was given to the crew yet")
+		return fmt.Errorf("no machine was given to the system yet")
 	}
 	if working {
 		// A task still in the model, so the session's row says running while the listing is read.

@@ -16,21 +16,21 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// A crew is three parts, each built on its own: the tool, the control plane and the image every
+// A system is three parts, each built on its own: the tool, the control plane and the image every
 // session runs in. Three defects on 27 August 2026 were investigated as live and were all fixed
 // already, because the tool in use was thirteen minutes older than the first fix and nothing said so.
 
-// aCrewBuiltFrom stands up a control plane that reports the builds it is given.
-func aCrewBuiltFrom(t *testing.T, crew, sandboxImage string) quaycrewv1.ControlPlaneServiceClient {
+// aSystemBuiltFrom stands up a control plane that reports the builds it is given.
+func aSystemBuiltFrom(t *testing.T, system, sandboxImage string) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	return testClientWith(t, controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
-		Info: controlplane.Info{Version: crew, SandboxBuild: sandboxImage},
+		Info: controlplane.Info{Version: system, SandboxBuild: sandboxImage},
 	})
 }
 
-// unreachableClient is a client dialling an address with nothing on it, which is what a crew that is
+// unreachableClient is a client dialling an address with nothing on it, which is what a system that is
 // down looks like to the tool.
 func unreachableClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
@@ -45,15 +45,15 @@ func unreachableClient(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 }
 
 // All three, because an operator chasing a defect has to know which of them is behind.
-func TestVersionNamesTheToolTheCrewAndTheSandboxImage(t *testing.T) {
-	client := aCrewBuiltFrom(t, "cafe1234", "01dimage")
+func TestVersionNamesTheToolTheSystemAndTheSandboxImage(t *testing.T) {
+	client := aSystemBuiltFrom(t, "cafe1234", "01dimage")
 
 	printed := mustRun(t, client, "version")
 
 	// Each on a line of its own, labelled, because a build named only inside a sentence about a
 	// difference disappears the moment there is no difference to report.
 	for label, want := range map[string]string{
-		"tool": version, "crew": "cafe1234", "sandbox image": "01dimage",
+		"tool": version, "system": "cafe1234", "sandbox image": "01dimage",
 	} {
 		if !hasLine(printed, label, want) {
 			t.Errorf("quay version has no %q line saying %q: %q", label, want, printed)
@@ -61,7 +61,7 @@ func TestVersionNamesTheToolTheCrewAndTheSandboxImage(t *testing.T) {
 	}
 }
 
-// hasLine says whether one line of the output labels a part of the crew and gives its build.
+// hasLine says whether one line of the output labels a part of the system and gives its build.
 func hasLine(printed, label, build string) bool {
 	for _, line := range strings.Split(printed, "\n") {
 		if strings.HasPrefix(line, label) && strings.TrimSpace(strings.TrimPrefix(line, label)) == build {
@@ -72,12 +72,12 @@ func hasLine(printed, label, build string) bool {
 }
 
 // Naming both builds is the whole value: "behind" without the two builds is a fact nobody can act on.
-func TestVersionSaysWhenTheToolAndTheCrewAreDifferentBuilds(t *testing.T) {
-	client := aCrewBuiltFrom(t, "cafe1234", "")
+func TestVersionSaysWhenTheToolAndTheSystemAreDifferentBuilds(t *testing.T) {
+	client := aSystemBuiltFrom(t, "cafe1234", "")
 
 	printed := mustRun(t, client, "version")
 
-	if !strings.Contains(printed, "the tool and the crew are different builds") {
+	if !strings.Contains(printed, "the tool and the system are different builds") {
 		t.Fatalf("quay version does not report the difference: %q", printed)
 	}
 	if strings.Count(printed, "cafe1234") < 2 || strings.Count(printed, version) < 2 {
@@ -86,7 +86,7 @@ func TestVersionSaysWhenTheToolAndTheCrewAreDifferentBuilds(t *testing.T) {
 }
 
 func TestVersionSaysWhenTheSandboxImageIsADifferentBuild(t *testing.T) {
-	client := aCrewBuiltFrom(t, version, "01dimage")
+	client := aSystemBuiltFrom(t, version, "01dimage")
 
 	printed := mustRun(t, client, "version")
 
@@ -98,9 +98,9 @@ func TestVersionSaysWhenTheSandboxImageIsADifferentBuild(t *testing.T) {
 	}
 }
 
-// A crew all of one build must say nothing, or the warning is noise and stops being read.
+// A system all of one build must say nothing, or the warning is noise and stops being read.
 func TestVersionSaysNothingAboutADifferenceWhenEveryPartMatches(t *testing.T) {
-	client := aCrewBuiltFrom(t, version, version)
+	client := aSystemBuiltFrom(t, version, version)
 
 	printed := mustRun(t, client, "version")
 
@@ -109,16 +109,16 @@ func TestVersionSaysNothingAboutADifferenceWhenEveryPartMatches(t *testing.T) {
 	}
 }
 
-// A crew from before this field existed answers with nothing. That is an old crew, not a fault.
-func TestACrewTooOldToSayWhichBuildItIsIsNotAnError(t *testing.T) {
-	client := aCrewBuiltFrom(t, "", "")
+// A system from before this field existed answers with nothing. That is an old system, not a fault.
+func TestASystemTooOldToSayWhichBuildItIsIsNotAnError(t *testing.T) {
+	client := aSystemBuiltFrom(t, "", "")
 
 	printed := mustRun(t, client, "version")
 
 	if !strings.Contains(printed, "unknown") {
-		t.Fatalf("quay version does not say the crew's build is unknown: %q", printed)
+		t.Fatalf("quay version does not say the system's build is unknown: %q", printed)
 	}
-	if !strings.Contains(printed, firstCrewBuildThatSays) {
+	if !strings.Contains(printed, firstSystemBuildThatSays) {
 		t.Fatalf("quay version does not name the build that first reports it: %q", printed)
 	}
 	if strings.Contains(printed, "different build") {
@@ -126,32 +126,32 @@ func TestACrewTooOldToSayWhichBuildItIsIsNotAnError(t *testing.T) {
 	}
 }
 
-// A crew that cannot be reached at all is not a build difference either, and the version of the tool
+// A system that cannot be reached at all is not a build difference either, and the version of the tool
 // is still worth printing.
-func TestVersionAnswersWhenTheCrewCannotBeReached(t *testing.T) {
+func TestVersionAnswersWhenTheSystemCannotBeReached(t *testing.T) {
 	client := unreachableClient(t)
 
 	printed, err := runQuay(t, client, "version")
 	if err != nil {
-		t.Fatalf("quay version against a crew that is down: %v", err)
+		t.Fatalf("quay version against a system that is down: %v", err)
 	}
 	if !strings.Contains(printed, version) {
 		t.Fatalf("quay version does not name the tool's own build: %q", printed)
 	}
 	if strings.Contains(printed, "different build") {
-		t.Fatalf("a crew nobody reached was reported as a different build: %q", printed)
+		t.Fatalf("a system nobody reached was reported as a different build: %q", printed)
 	}
 }
 
 // The warning belongs on standard error. Standard output is where a caller reads data, and one extra
 // line there is a value nobody asked for in the middle of a value they did.
 func TestTheDriftLineGoesToStandardError(t *testing.T) {
-	client := aCrewBuiltFrom(t, "cafe1234", "")
+	client := aSystemBuiltFrom(t, "cafe1234", "")
 
 	var said bytes.Buffer
 	reportDrift(context.Background(), client, &said)
 
-	if !strings.Contains(said.String(), "the tool and the crew are different builds") {
+	if !strings.Contains(said.String(), "the tool and the system are different builds") {
 		t.Fatalf("no drift line on standard error: %q", said.String())
 	}
 	for _, want := range []string{version, "cafe1234"} {
@@ -164,45 +164,45 @@ func TestTheDriftLineGoesToStandardError(t *testing.T) {
 	}
 }
 
-func TestNothingIsSaidWhenTheToolAndTheCrewAreTheSameBuild(t *testing.T) {
-	client := aCrewBuiltFrom(t, version, "")
+func TestNothingIsSaidWhenTheToolAndTheSystemAreTheSameBuild(t *testing.T) {
+	client := aSystemBuiltFrom(t, version, "")
 
 	var said bytes.Buffer
 	reportDrift(context.Background(), client, &said)
 
 	if said.String() != "" {
-		t.Fatalf("standard error says %q about a tool and a crew of one build", said.String())
+		t.Fatalf("standard error says %q about a tool and a system of one build", said.String())
 	}
 }
 
-// An old crew says nothing about its build, and warning on every command against one would be a line
+// An old system says nothing about its build, and warning on every command against one would be a line
 // nobody can act on, on every command, forever.
-func TestNothingIsSaidWhenTheCrewCannotSayWhichBuildItIs(t *testing.T) {
-	client := aCrewBuiltFrom(t, "", "")
+func TestNothingIsSaidWhenTheSystemCannotSayWhichBuildItIs(t *testing.T) {
+	client := aSystemBuiltFrom(t, "", "")
 
 	var said bytes.Buffer
 	reportDrift(context.Background(), client, &said)
 
 	if said.String() != "" {
-		t.Fatalf("standard error says %q about a crew that reports no build", said.String())
+		t.Fatalf("standard error says %q about a system that reports no build", said.String())
 	}
 }
 
-// The check must never stop a command. A crew that is down is the command's own business to report.
-func TestTheDriftCheckSaysNothingWhenTheCrewCannotBeReached(t *testing.T) {
+// The check must never stop a command. A system that is down is the command's own business to report.
+func TestTheDriftCheckSaysNothingWhenTheSystemCannotBeReached(t *testing.T) {
 	client := unreachableClient(t)
 
 	var said bytes.Buffer
 	reportDrift(context.Background(), client, &said)
 
 	if said.String() != "" {
-		t.Fatalf("standard error says %q about a crew nobody reached", said.String())
+		t.Fatalf("standard error says %q about a system nobody reached", said.String())
 	}
 }
 
 // The command runs whatever the check found, so a command's own answer is never held back by it.
-func TestACommandStillAnswersWhenTheCrewIsADifferentBuild(t *testing.T) {
-	client := aCrewBuiltFrom(t, "cafe1234", "")
+func TestACommandStillAnswersWhenTheSystemIsADifferentBuild(t *testing.T) {
+	client := aSystemBuiltFrom(t, "cafe1234", "")
 	mustRun(t, client, "workspace", "create", "me")
 
 	listed, err := runQuay(t, client, "workspace", "list")

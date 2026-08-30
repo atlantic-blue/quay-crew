@@ -1,8 +1,8 @@
-Feature: A hook is a constraint the crew holds
+Feature: A hook is a constraint the system holds
 
-  A crew gives every session its rules as context, and context is advice. A hook is the other kind of
+  A system gives every session its rules as context, and context is advice. A hook is the other kind of
   statement: what a session may not do, checked when it tries. It is authored as files, imported into
-  the crew, and attached to a workspace or to the whole crew, which is the shape a skill already has.
+  the system, and attached to a workspace or to the whole system, which is the shape a skill already has.
 
   These scenarios drive the control plane over its real interface. What a hook does inside a sandbox
   is proved separately, against a real container, because a hook the runtime never calls is a hook
@@ -13,9 +13,9 @@ Feature: A hook is a constraint the crew holds
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: A hook is imported and the crew holds it
+  Scenario: A hook is imported and the system holds it
     When the operator imports a hook "git-approval" firing on "PreToolUse" for "Bash"
-    Then the crew holds 1 hook
+    Then the system holds 1 hook
     And the hook "git-approval" fires on "PreToolUse"
 
   # This is the refusal that matters most. A misspelled event imports, attaches, mounts and is never
@@ -24,7 +24,7 @@ Feature: A hook is a constraint the crew holds
     When the operator imports a hook "guard" firing on "PreToolUseHook" for ""
     Then the control plane refuses it as invalid
     And the refusal names "PreToolUseHook"
-    And the crew holds 0 hooks
+    And the system holds 0 hooks
 
   # Overwriting would change a constraint under sessions already running under it, which is how a gate
   # quietly stops gating.
@@ -46,21 +46,21 @@ Feature: A hook is a constraint the crew holds
     When the operator attaches the hook "git-approval" to the workspace
     Then the other workspace runs under 0 hooks
 
-  # Issue 280's second acceptance criterion. This is the level most hooks want: a constraint the crew
+  # Issue 280's second acceptance criterion. This is the level most hooks want: a constraint the system
   # agreed on is not usually a per workspace opinion.
-  Scenario: A hook held by the crew reaches a workspace made after it
+  Scenario: A hook held by the system reaches a workspace made after it
     Given a hook "git-approval" imported firing on "PreToolUse"
-    When the operator attaches the hook "git-approval" to the crew
+    When the operator attaches the hook "git-approval" to the system
     And another workspace named "later"
     Then the other workspace runs under 1 hook
-    And that hook is reported as the crew's
+    And that hook is reported as the system's
 
   # Two separate statements, and the wider one does not undo the narrower one.
-  Scenario: Taking a hook off the crew leaves a workspace that attached it for itself
+  Scenario: Taking a hook off the system leaves a workspace that attached it for itself
     Given a hook "git-approval" imported firing on "PreToolUse"
-    When the operator attaches the hook "git-approval" to the crew
+    When the operator attaches the hook "git-approval" to the system
     And the operator attaches the hook "git-approval" to the workspace
-    And the operator takes the hook "git-approval" off the crew
+    And the operator takes the hook "git-approval" off the system
     Then the workspace runs under 1 hook
 
   Scenario: Detaching a hook leaves it imported, so another workspace can still have it
@@ -68,14 +68,14 @@ Feature: A hook is a constraint the crew holds
     When the operator attaches the hook "git-approval" to the workspace
     And the operator detaches the hook "git-approval" from the workspace
     Then the workspace runs under 0 hooks
-    And the crew holds 1 hook
+    And the system holds 1 hook
 
-  Scenario: Attaching a hook the crew has not imported is refused
+  Scenario: Attaching a hook the system has not imported is refused
     When the operator attaches the hook "nowhere" to the workspace
     Then the control plane refuses it as not found
 
-  Scenario: A crew with no hooks enforces nothing, and says so rather than saying nothing
-    Then the crew holds 0 hooks
+  Scenario: A system with no hooks enforces nothing, and says so rather than saying nothing
+    Then the system holds 0 hooks
 
   # A hook reaches a session by being mounted and bound, and both halves have to be true. The files
   # without the settings is a directory nothing reads; the settings without the files names a command
@@ -95,10 +95,10 @@ Feature: A hook is a constraint the crew holds
     When the operator dispatches "hello" to the project
     Then the task loaded the hooks settings
 
-  # The settings the crew renders carry more than hooks: the line the runtime draws under the
+  # The settings the system renders carry more than hooks: the line the runtime draws under the
   # conversation is in there too, and an operator attached to a session with no hooks needs that line
   # as much as anybody. So the directory and the file travel to every session, holding no hook.
-  Scenario: A session under no hooks still carries the crew's settings
+  Scenario: A session under no hooks still carries the system's settings
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries the hooks directory
     And the settings file binds nothing to any event
@@ -106,34 +106,34 @@ Feature: A hook is a constraint the crew holds
 
   # A seeded hook used to mean a hook that cannot refuse, because a hook that refuses wrongly blocks
   # the work. The merge gate refuses, and it is seeded anyway: it refuses one thing, no session in
-  # this crew is ever meant to do that thing, and a gate somebody has to remember to attach is off in
-  # every crew nobody set up.
-  Scenario: A fresh crew is already under the hooks this build ships
-    Given a crew seeded with the hooks this build ships
-    Then the crew holds the "prompt-analyser" hook
-    And the crew holds the "merge-gate" hook
+  # this system is ever meant to do that thing, and a gate somebody has to remember to attach is off in
+  # every system nobody set up.
+  Scenario: A fresh system is already under the hooks this build ships
+    Given a system seeded with the hooks this build ships
+    Then the system holds the "prompt-analyser" hook
+    And the system holds the "merge-gate" hook
     And the workspace runs under 2 hooks
 
   # An operator who takes a hook off has said something. Putting it back on the next restart is the
-  # crew overruling the person operating it.
-  Scenario: A hook taken off the crew stays off across a restart
-    Given a crew seeded with the hooks this build ships
-    When the operator takes the hook "prompt-analyser" off the crew
+  # system overruling the person operating it.
+  Scenario: A hook taken off the system stays off across a restart
+    Given a system seeded with the hooks this build ships
+    When the operator takes the hook "prompt-analyser" off the system
     And the control plane restarts
     Then the workspace runs under no "prompt-analyser" hook
 
-  # A fix to a shipped hook has to be able to reach a crew that is already using it. Seeding once
-  # reached only a crew with no hooks at all, which is no crew that has ever been used, and the
+  # A fix to a shipped hook has to be able to reach a system that is already using it. Seeding once
+  # reached only a system with no hooks at all, which is no system that has ever been used, and the
   # analyser's first fix was stranded there.
-  Scenario: A newer version of a shipped hook reaches a crew that already holds an older one
-    Given a crew already under version 1 of "prompt-analyser"
+  Scenario: A newer version of a shipped hook reaches a system that already holds an older one
+    Given a system already under version 1 of "prompt-analyser"
     When the control plane restarts
-    Then the crew holds "prompt-analyser" at the version this build ships
+    Then the system holds "prompt-analyser" at the version this build ships
 
   # Importing offers it. Being under it is a separate decision, because a hook is pinned so it cannot
   # change under a session already running with it.
-  Scenario: An upgrade does not move a crew onto a newer version of a hook by itself
-    Given a crew already under version 1 of "prompt-analyser"
+  Scenario: An upgrade does not move a system onto a newer version of a hook by itself
+    Given a system already under version 1 of "prompt-analyser"
     When the control plane restarts
     Then the workspace is still under "prompt-analyser" at version 1
     And attaching it again moves the workspace to the version this build ships

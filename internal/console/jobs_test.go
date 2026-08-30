@@ -189,7 +189,7 @@ func TestStoppingAJobAsksFirstAndUsesTheWholeIdentifier(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 	if len(client.stopped) != 1 || client.stopped[0] != "1111111111111111aaaaaaaa" {
-		t.Fatalf("the crew was asked to stop %v, want the whole identifier", client.stopped)
+		t.Fatalf("the system was asked to stop %v, want the whole identifier", client.stopped)
 	}
 }
 
@@ -211,7 +211,7 @@ func TestTheJobsViewNarrowsToOneProject(t *testing.T) {
 		t.Fatalf("listing jobs: %v", err)
 	}
 	if client.listedFor != "p1" {
-		t.Fatalf("the crew was asked for project %q, want p1", client.listedFor)
+		t.Fatalf("the system was asked for project %q, want p1", client.listedFor)
 	}
 	if len(rows) != 1 {
 		t.Fatalf("the view lists %d jobs, want the one job in that project", len(rows))

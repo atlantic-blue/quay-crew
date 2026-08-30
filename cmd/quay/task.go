@@ -66,7 +66,7 @@ func lettingGo(args []string) (letGo bool, rest []string, err error) {
 //
 // Letting go is what real work wants, because a task takes as long as the job takes, which is
 // minutes and sometimes an hour, and holding it in the client makes the terminal the weakest part of
-// the crew: a task killed at seventeen minutes recorded "failed: model: run exited: signal: killed",
+// the system: a task killed at seventeen minutes recorded "failed: model: run exited: signal: killed",
 // said nothing about why, and the job was gone. Waiting is what a short question wants, because the
 // person typing it is looking at the terminal and the reply is the point.
 func sendTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string,
@@ -93,7 +93,7 @@ func sendTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		}
 		project, handle = located.ProjectID, located.SessionID
 	default:
-		// One bare identifier, read off the session column. The crew's own call takes a project and a
+		// One bare identifier, read off the session column. The system's own call takes a project and a
 		// handle, so both are read from the session the operator named rather than worked out again.
 		session, err := workspace.Session(ctx, client, typed)
 		if err != nil {
@@ -111,7 +111,7 @@ func sendTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 	// Said out loud, because an empty line where a reply used to be reads as a task that answered
 	// nothing. It names both ways back in: the history, and the conversation itself.
 	if letGo {
-		fmt.Fprintf(out, "started. the crew has it, and nothing here is waiting for it.\n")
+		fmt.Fprintf(out, "started. the system has it, and nothing here is waiting for it.\n")
 		fmt.Fprintf(out, "read it back with quay task list %s, or sit in it with quay attach %s\n",
 			display.ShortID(resp.GetHandle()), display.ShortID(resp.GetHandle()))
 	} else {
@@ -126,7 +126,7 @@ func sendTask(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 // This is the way off `quay tasks <session>`, which the same fingers now type as `quay task
 // <session>`. That used to print a history and would otherwise send the session's own identifier to
 // the model as a message: the command succeeds, the operator reads a listing that does not have what
-// they asked for, and nothing anywhere says the word changed. An identifier the crew does not hold
+// they asked for, and nothing anywhere says the word changed. An identifier the system does not hold
 // is refused a level down, so this covers the one that it does.
 func notASessionOnItsOwn(args []string) error {
 	if len(args) != 1 || !workspace.NamesASession(args[0]) {
@@ -181,7 +181,7 @@ func runTaskList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	// The session is the scope here, and it is named for the same reason every other listing names
 	// where it looked: a history read off the wrong session is unreadable as a mistake.
-	where := narrowedTo("tasks", "session "+display.ShortID(sessionID), "quay sessions crew lists every session")
+	where := narrowedTo("tasks", "session "+display.ShortID(sessionID), "quay sessions system lists every session")
 	if len(resp.GetTasks()) == 0 {
 		where.nothing(out)
 		return nil

@@ -26,7 +26,7 @@ import (
 // Everything else was green. The hook loaded, the manifest validated, the settings bound it, the
 // mount was right. It failed on the first message, inside a container, with nothing outside saying so.
 //
-// The image is the crew's own sandbox image rather than busybox, because what is being proved is that
+// The image is the system's own sandbox image rather than busybox, because what is being proved is that
 // this image can run this hook. QC_TEST_SANDBOX_IMAGE names it; without one there is nothing to prove
 // against and the test says so rather than passing.
 //
@@ -38,7 +38,7 @@ import (
 func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the system's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
@@ -123,7 +123,7 @@ func TestTheShippedAnalyserRunsInsideTheRealSandboxImage(t *testing.T) {
 func TestTheAnalysersChildKeepsTheSubscriptionToken(t *testing.T) {
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		t.Skip("set QC_TEST_SANDBOX_IMAGE to the crew's sandbox image to run this")
+		t.Skip("set QC_TEST_SANDBOX_IMAGE to the system's sandbox image to run this")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()

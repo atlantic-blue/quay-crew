@@ -569,8 +569,8 @@ func Trouble(timedOut, err error, said string, config Config) string {
 // it was never there to keep.
 const NotLoggedIn = "the model call is not logged in, so this hook cannot analyse anything. " +
 	"The subscription token reaches your session but not what the session starts, and a hook is " +
-	"started by the session. Until the crew hands the hook a credential of its own, turn it off with: " +
-	"quay hook detach crew prompt-analyser"
+	"started by the session. Until the system hands the hook a credential of its own, turn it off with: " +
+	"quay hook detach system prompt-analyser"
 
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(text, "\n")

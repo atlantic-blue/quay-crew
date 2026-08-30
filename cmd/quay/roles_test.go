@@ -85,19 +85,19 @@ func TestARoleIsAttachedToAWorkspaceAndTakenAwayAgain(t *testing.T) {
 	}
 }
 
-// The word crew where a workspace goes, which is what quay skill attach and quay context set already
+// The word system where a workspace goes, which is what quay skill attach and quay context set already
 // take. A second word for the same level would be one to remember for no reason.
-func TestARoleIsGivenToTheWholeCrew(t *testing.T) {
+func TestARoleIsGivenToTheWholeSystem(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
 
-	printed := mustRun(t, client, "role", "attach", "crew", "test-writer")
-	if !strings.Contains(printed, "the crew holds the test-writer role") {
-		t.Errorf("attaching to the crew said: %q", printed)
+	printed := mustRun(t, client, "role", "attach", "system", "test-writer")
+	if !strings.Contains(printed, "the system holds the test-writer role") {
+		t.Errorf("attaching to the system said: %q", printed)
 	}
 	listed := mustRun(t, client, "role", "list", "me")
-	if !strings.Contains(listed, "held by the crew") {
+	if !strings.Contains(listed, "held by the system") {
 		t.Errorf("the workspace's listing does not say where it came from: %q", listed)
 	}
 }
@@ -118,13 +118,13 @@ receives:
 	if !strings.Contains(err.Error(), "the whole repository") {
 		t.Errorf("the refusal does not name what is wrong: %v", err)
 	}
-	// Nothing was sent, so the crew holds nothing.
+	// Nothing was sent, so the system holds nothing.
 	listed, listErr := client.ListRoles(t.Context(), &quaycrewv1.ListRolesRequest{})
 	if listErr != nil {
 		t.Fatalf("ListRoles: %v", listErr)
 	}
 	if len(listed.GetRoles()) != 0 {
-		t.Errorf("the crew holds %d roles after a refused import", len(listed.GetRoles()))
+		t.Errorf("the system holds %d roles after a refused import", len(listed.GetRoles()))
 	}
 }
 
@@ -148,7 +148,7 @@ func TestTheRoleCommandNamesWhatItTakes(t *testing.T) {
 }
 
 // aBrief is a role's instruction with the shapes a brief actually has: paragraphs, a blank line, a
-// list and trailing punctuation. A renderer that reflows or trims any of it prints a role the crew
+// list and trailing punctuation. A renderer that reflows or trims any of it prints a role the system
 // does not hold, which is the one thing this command must not do.
 const aBrief = `You write the tests and nothing else.
 
@@ -232,14 +232,14 @@ func TestShowingARoleSaysWhoHoldsIt(t *testing.T) {
 		t.Errorf("it does not name the workspace holding it: %q", printed)
 	}
 
-	mustRun(t, client, "role", "attach", "crew", "test-writer")
-	if printed := mustRun(t, client, "role", "show", "test-writer"); !strings.Contains(printed, "held by the crew") {
-		t.Errorf("it does not say the crew holds it: %q", printed)
+	mustRun(t, client, "role", "attach", "system", "test-writer")
+	if printed := mustRun(t, client, "role", "show", "test-writer"); !strings.Contains(printed, "held by the system") {
+		t.Errorf("it does not say the system holds it: %q", printed)
 	}
 }
 
 // A workspace pins the version it attached, so showing at that address has to read that version
-// rather than the newest the crew has. Reading the wrong one is the whole failure this command
+// rather than the newest the system has. Reading the wrong one is the whole failure this command
 // exists to end: an operator diffing a brief against a run that was never given it.
 func TestShowingARoleAtAWorkspaceReadsTheVersionItPinned(t *testing.T) {
 	client := testClient(t)
@@ -259,9 +259,9 @@ receives:
 	if !strings.Contains(held, "Version one says this.") {
 		t.Errorf("the workspace's pinned version was not what came back: %q", held)
 	}
-	crew := mustRun(t, client, "role", "show", "test-writer")
-	if !strings.Contains(crew, "Version two says something else.") {
-		t.Errorf("the crew's newest version was not what came back: %q", crew)
+	system := mustRun(t, client, "role", "show", "test-writer")
+	if !strings.Contains(system, "Version two says something else.") {
+		t.Errorf("the system's newest version was not what came back: %q", system)
 	}
 }
 
@@ -272,7 +272,7 @@ func TestNamingARoleThatIsNotThereNamesTheOnesThatAre(t *testing.T) {
 
 	empty := refused(t, client, "role", "show", "orchestrator")
 	if !strings.Contains(empty.Error(), "holds no roles at all") {
-		t.Errorf("a crew holding nothing did not say so: %v", empty)
+		t.Errorf("a system holding nothing did not say so: %v", empty)
 	}
 
 	mustRun(t, client, "role", "import", aRoleDir(t, "test-writer", testWriterManifest))
@@ -295,7 +295,7 @@ func TestNamingARoleThatIsNotThereNamesTheOnesThatAre(t *testing.T) {
 	}
 }
 
-// A brief the crew has lost is not a brief that says nothing, and rendering the two the same way
+// A brief the system has lost is not a brief that says nothing, and rendering the two the same way
 // would let an audit read an empty page as a role with no instructions. Import refuses an empty
 // brief, so this reaches the renderer directly, which is the only place the case can exist.
 func TestARoleWithNoBriefStillPrintsWhatItIs(t *testing.T) {
@@ -320,8 +320,8 @@ func aRoleDirInARepository(t *testing.T, name, manifest string) string {
 	t.Helper()
 	repository := t.TempDir()
 	git(t, repository, "init", "--initial-branch=main")
-	git(t, repository, "config", "user.email", "crew@example.com")
-	git(t, repository, "config", "user.name", "crew")
+	git(t, repository, "config", "user.email", "system@example.com")
+	git(t, repository, "config", "user.name", "system")
 	git(t, repository, "remote", "add", "origin", "https://github.com/atlantic-blue/quay-crew.git")
 
 	dir := filepath.Join(repository, "roles", name)
@@ -351,7 +351,7 @@ func git(t *testing.T, dir string, args ...string) {
 }
 
 // A role that lives in a repository says which one, at which commit, in every place a role is
-// printed. Until this, the crew held a role and nobody could tell where it came from.
+// printed. Until this, the system held a role and nobody could tell where it came from.
 func TestARoleImportedFromARepositorySaysWhichOneAndAtWhatCommit(t *testing.T) {
 	client := testClient(t)
 	dir := aRoleDirInARepository(t, "test-writer", testWriterManifest)
@@ -370,7 +370,7 @@ func TestARoleImportedFromARepositorySaysWhichOneAndAtWhatCommit(t *testing.T) {
 	}
 }
 
-// The failure the acceptance run hit: three roles in a folder on one machine, printed by the crew
+// The failure the acceptance run hit: three roles in a folder on one machine, printed by the system
 // exactly like the roles that ship in this repository.
 func TestARoleImportedFromALooseDirectorySaysNobodyElseCanReadIt(t *testing.T) {
 	client := testClient(t)
@@ -393,7 +393,7 @@ func TestARoleImportedFromALooseDirectorySaysNobodyElseCanReadIt(t *testing.T) {
 	}
 }
 
-// Committing the role and importing it again is the way out, so the warning has to clear. A crew
+// Committing the role and importing it again is the way out, so the warning has to clear. A system
 // that kept the first answer would leave the operator fixing it and watching nothing change.
 func TestCommittingALooseRoleAndImportingItAgainClearsTheWarning(t *testing.T) {
 	client := testClient(t)
@@ -414,7 +414,7 @@ func TestCommittingALooseRoleAndImportingItAgainClearsTheWarning(t *testing.T) {
 	}
 }
 
-// A role edited after the commit it names. The commit reads as evidence of what the crew holds, and
+// A role edited after the commit it names. The commit reads as evidence of what the system holds, and
 // for an edited directory it is evidence of something else.
 func TestARoleEditedAfterItsCommitSaysTheFilesAreUncommitted(t *testing.T) {
 	client := testClient(t)

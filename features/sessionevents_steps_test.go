@@ -13,11 +13,11 @@ import (
 )
 
 // The session lifecycle, driven through the same interface every other caller uses. What these prove
-// is that the crew says what happened to a session, in order, whether or not a broker is listening.
+// is that the system says what happened to a session, in order, whether or not a broker is listening.
 
 // sessionEventsOf reads back one session's lifecycle from the store, oldest first.
 // A task that did not land leaves no record of itself in the scenario's own list, which is exactly
-// the case where the events matter most. So a scenario with no landed task asks for the whole crew's
+// the case where the events matter most. So a scenario with no landed task asks for the whole system's
 // events instead, which these scenarios run one session at a time to keep honest.
 func sessionEventsOf(ctx context.Context, w *world) ([]*quaycrewv1.SessionEvent, error) {
 	session := ""

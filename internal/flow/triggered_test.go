@@ -29,7 +29,7 @@ edges:
 // The whole of the slice, in one test: something happened, nobody started anything, and a tick later
 // a run is doing the work with what the trigger carried.
 func TestATriggerStartsARunOnTheNextTick(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
 	raised, err := engine.Raise(ctx, flow.Trigger{
@@ -42,7 +42,7 @@ func TestATriggerStartsARunOnTheNextTick(t *testing.T) {
 	}
 	// Nothing has happened yet. The latency is the poll interval, and this is inside it.
 	if runs := runsOf(t, it, "fix-red"); len(runs) != 0 {
-		t.Fatalf("%d runs exist before the crew ticked", len(runs))
+		t.Fatalf("%d runs exist before the system ticked", len(runs))
 	}
 
 	tick(t, engine)
@@ -77,7 +77,7 @@ func TestATriggerStartsARunOnTheNextTick(t *testing.T) {
 // One tree, and it is the job tree. A run something triggered is carried by a job like
 // any other, so stopping that job stops the run and the tree budget counts what it spends.
 func TestATriggeredRunIsCarriedByAJob(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
 	raised := raise(t, engine, flow.Trigger{GraphName: "fix-red", Workspace: workspace, Project: project})
@@ -109,7 +109,7 @@ func TestATriggeredRunIsCarriedByAJob(t *testing.T) {
 // flow started by job that finished is bounded by the same depth limit as everything else in the
 // tree. This is what stops a flow that triggers itself running forever.
 func TestARunHangsUnderTheJobThatCausedItsTrigger(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
 	cause, _, err := it.PrepareJob(ctx, "", job.Declaration{
@@ -151,7 +151,7 @@ func TestARunHangsUnderTheJobThatCausedItsTrigger(t *testing.T) {
 // A trigger naming a flow nobody imported must not quietly do nothing. The row keeps the sentence
 // that says what to do about it, because the row is the only place this is ever read.
 func TestATriggerForAFlowNobodyImportedFailsOnItsRow(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
 	raised := raise(t, engine, flow.Trigger{
@@ -172,7 +172,7 @@ func TestATriggerForAFlowNobodyImportedFailsOnItsRow(t *testing.T) {
 	if runs := runsOf(t, it, "never-imported"); len(runs) != 0 {
 		t.Errorf("%d runs were started for a flow nobody imported", len(runs))
 	}
-	// And it is not read again on every tick for as long as the crew runs.
+	// And it is not read again on every tick for as long as the system runs.
 	tick(t, engine)
 	again, err := it.store.GetTrigger(ctx, raised.ID)
 	if err != nil {
@@ -186,7 +186,7 @@ func TestATriggerForAFlowNobodyImportedFailsOnItsRow(t *testing.T) {
 // A graph that begins with a dispatch begins when a person or a schedule says so. A trigger starting
 // it would be an automation running for a reason its own file does not carry.
 func TestATriggerForAGraphThatDoesNotReactFailsOnItsRow(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, twoStepGraph)
+	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
 	raised := raise(t, engine, flow.Trigger{GraphName: "fix-red", Workspace: workspace, Project: project})
@@ -210,7 +210,7 @@ func TestATriggerForAGraphThatDoesNotReactFailsOnItsRow(t *testing.T) {
 // Two pollers, one trigger, one run. The claim is what makes this true, and paying for two runs of
 // one thing happening is what it costs when it is not.
 func TestTwoPollersStartOneRunFromOneTrigger(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 
 	raise(t, engine, flow.Trigger{GraphName: "fix-red", Workspace: workspace, Project: project})
 
@@ -227,7 +227,7 @@ func TestTwoPollersStartOneRunFromOneTrigger(t *testing.T) {
 // A trigger has to say what to run and where. Refused where it is raised rather than on a row nobody
 // reads, because this one is the caller's own mistake and they are still here to be told.
 func TestATriggerThatNamesNothingIsRefusedWhereItIsRaised(t *testing.T) {
-	engine, it, workspace, project := aCrew(t, reactingGraph)
+	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
 	if _, err := engine.Raise(ctx, flow.Trigger{Workspace: workspace, Project: project}); err == nil {
@@ -262,7 +262,7 @@ func tick(t *testing.T, engine *flow.Engine) {
 }
 
 // runsOf is every run of one graph, whoever or whatever started it.
-func runsOf(t *testing.T, it *crew, graph string) []*flow.Run {
+func runsOf(t *testing.T, it *system, graph string) []*flow.Run {
 	t.Helper()
 	listed, err := it.store.ListFlowRuns(context.Background(), "")
 	if err != nil {

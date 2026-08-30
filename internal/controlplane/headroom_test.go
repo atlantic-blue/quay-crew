@@ -17,7 +17,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// countedSource records how often the crew read the machine, so a test can say the daemon was not
+// countedSource records how often the system read the machine, so a test can say the daemon was not
 // reached rather than infer it from a figure that could have come from anywhere.
 type countedSource struct {
 	mu     sync.Mutex
@@ -58,7 +58,7 @@ func theMachine() headroom.Sample {
 	}
 }
 
-func crewReading(t *testing.T, source headroom.Source) *controlplane.Server {
+func systemReading(t *testing.T, source headroom.Source) *controlplane.Server {
 	t.Helper()
 	return controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
@@ -71,7 +71,7 @@ func crewReading(t *testing.T, source headroom.Source) *controlplane.Server {
 // sample. A call that read the daemon would put a `docker stats` on the redraw path.
 func TestTheHeadroomCallNeverReadsTheMachine(t *testing.T) {
 	source := &countedSource{sample: theMachine()}
-	server := crewReading(t, source)
+	server := systemReading(t, source)
 	ctx := context.Background()
 
 	server.SampleHeadroom(ctx)
@@ -86,7 +86,7 @@ func TestTheHeadroomCallNeverReadsTheMachine(t *testing.T) {
 			t.Fatalf("GetHeadroom: %v", err)
 		}
 		if answer.GetUsed() != "3628 MiB" {
-			t.Fatalf("the crew says it holds %q", answer.GetUsed())
+			t.Fatalf("the system says it holds %q", answer.GetUsed())
 		}
 	}
 	if source.count() != 1 {
@@ -95,9 +95,9 @@ func TestTheHeadroomCallNeverReadsTheMachine(t *testing.T) {
 }
 
 // Rule two: the limit that binds, named. And the word, which must be readable on its own.
-func TestTheCrewReportsTheLimitThatBindsAndOneWordAboutIt(t *testing.T) {
+func TestTheSystemReportsTheLimitThatBindsAndOneWordAboutIt(t *testing.T) {
 	source := &countedSource{sample: theMachine()}
-	server := crewReading(t, source)
+	server := systemReading(t, source)
 	server.SampleHeadroom(context.Background())
 
 	answer, err := server.GetHeadroom(context.Background(), &quaycrewv1.GetHeadroomRequest{})
@@ -123,9 +123,9 @@ func TestTheCrewReportsTheLimitThatBindsAndOneWordAboutIt(t *testing.T) {
 
 // Rule three. The machine underneath the daemon is reported apart from it, because that is where
 // the kill came from while the daemon sat at less than half its cap.
-func TestTheCrewReportsTheMachinesPressureApartFromTheDaemons(t *testing.T) {
+func TestTheSystemReportsTheMachinesPressureApartFromTheDaemons(t *testing.T) {
 	source := &countedSource{sample: theMachine()}
-	server := crewReading(t, source)
+	server := systemReading(t, source)
 	server.SampleHeadroom(context.Background())
 
 	answer, err := server.GetHeadroom(context.Background(), &quaycrewv1.GetHeadroomRequest{})
@@ -133,7 +133,7 @@ func TestTheCrewReportsTheMachinesPressureApartFromTheDaemons(t *testing.T) {
 		t.Fatalf("GetHeadroom: %v", err)
 	}
 	if answer.GetMachineName() != "Docker Desktop" {
-		t.Fatalf("the machine is named %q, and a crew must not claim to know a machine it cannot read",
+		t.Fatalf("the machine is named %q, and a system must not claim to know a machine it cannot read",
 			answer.GetMachineName())
 	}
 	if answer.GetSwapUsed() != "16402 MiB" || answer.GetSwapTotal() != "17408 MiB" {
@@ -148,7 +148,7 @@ func TestTheCrewReportsTheMachinesPressureApartFromTheDaemons(t *testing.T) {
 // still works, and nothing anywhere reads as a zero or as room.
 func TestADaemonThatWillNotAnswerLeavesUnknownAndFailsNothing(t *testing.T) {
 	source := &countedSource{err: fmt.Errorf("the daemon is not answering")}
-	server := crewReading(t, source)
+	server := systemReading(t, source)
 	server.SampleHeadroom(context.Background())
 
 	answer, err := server.GetHeadroom(context.Background(), &quaycrewv1.GetHeadroomRequest{})
@@ -164,7 +164,7 @@ func TestADaemonThatWillNotAnswerLeavesUnknownAndFailsNothing(t *testing.T) {
 		}
 	}
 	if answer.GetState() != headroom.StateUnknown {
-		t.Fatalf("the state reads %q, and a crew that measured nothing must never say room", answer.GetState())
+		t.Fatalf("the state reads %q, and a system that measured nothing must never say room", answer.GetState())
 	}
 	if answer.GetUsedBytes() != -1 || answer.GetLimitBytes() != -1 {
 		t.Fatalf("the byte counts read %d and %d, and zero bytes is a machine that is empty",
@@ -174,21 +174,21 @@ func TestADaemonThatWillNotAnswerLeavesUnknownAndFailsNothing(t *testing.T) {
 		t.Fatalf("the answer does not say why it knows nothing: %q", answer.GetFailed())
 	}
 
-	// And the crew still serves everything else, which is what "never fail a command" means.
+	// And the system still serves everything else, which is what "never fail a command" means.
 	if _, err := server.ListWorkspaces(context.Background(), &quaycrewv1.ListWorkspacesRequest{}); err != nil {
-		t.Fatalf("a crew that could not read its machine stopped serving: %v", err)
+		t.Fatalf("a system that could not read its machine stopped serving: %v", err)
 	}
 }
 
-// A crew nobody has sampled yet, which is every crew for the first moment of its life.
-func TestACrewThatHasNotReadTheMachineSaysSoRatherThanReportingRoom(t *testing.T) {
-	server := crewReading(t, &countedSource{sample: theMachine()})
+// A system nobody has sampled yet, which is every system for the first moment of its life.
+func TestASystemThatHasNotReadTheMachineSaysSoRatherThanReportingRoom(t *testing.T) {
+	server := systemReading(t, &countedSource{sample: theMachine()})
 	answer, err := server.GetHeadroom(context.Background(), &quaycrewv1.GetHeadroomRequest{})
 	if err != nil {
 		t.Fatalf("GetHeadroom: %v", err)
 	}
 	if answer.GetTakenAt() != nil {
-		t.Fatal("a crew that never sampled says when it read the machine")
+		t.Fatal("a system that never sampled says when it read the machine")
 	}
 	if answer.GetState() != headroom.StateUnknown {
 		t.Fatalf("it says %q", answer.GetState())
@@ -216,7 +216,7 @@ func TestTheSandboxesComeBackLargestFirstAndSayWhatEachSessionIsDoing(t *testing
 		t.Fatalf("Dispatch: %v", err)
 	}
 
-	// The daemon reports the smaller one first, and a stray container the crew holds no session for.
+	// The daemon reports the smaller one first, and a stray container the system holds no session for.
 	sample := theMachine()
 	sample.Sandboxes = []headroom.Sandbox{
 		{Session: first.GetId(), Held: headroom.Measured(2 * mebibyte), Processor: headroom.MeasuredShare(0.1)},
@@ -243,18 +243,18 @@ func TestTheSandboxesComeBackLargestFirstAndSayWhatEachSessionIsDoing(t *testing
 		t.Fatalf("its processor share reads %q", boxes[0].GetProcessor())
 	}
 	if boxes[0].GetStatus() != controlplane.StatusIdle {
-		t.Fatalf("the crew says that session is %q, and the row beside the container is what says so",
+		t.Fatalf("the system says that session is %q, and the row beside the container is what says so",
 			boxes[0].GetStatus())
 	}
 	if boxes[0].GetIdle() == "" {
 		t.Fatal("no line says how long since that session's last task, which is what a listing is read for")
 	}
-	// The stray sits between them by size, and the crew says nothing about a session it does not have.
+	// The stray sits between them by size, and the system says nothing about a session it does not have.
 	if boxes[1].GetSession() != "a00d36d6454a3de66d02c6a3" {
 		t.Fatalf("the second line is %s", boxes[1].GetSession())
 	}
 	if boxes[1].GetStatus() != "" {
-		t.Fatalf("the crew claims a stray container is %q", boxes[1].GetStatus())
+		t.Fatalf("the system claims a stray container is %q", boxes[1].GetStatus())
 	}
 	if boxes[2].GetSession() != first.GetId() {
 		t.Fatalf("the last line is %s, want the smallest", boxes[2].GetSession())
@@ -265,7 +265,7 @@ func TestTheSandboxesComeBackLargestFirstAndSayWhatEachSessionIsDoing(t *testing
 // as holding nothing. An operator reads a small figure as safe to leave alone.
 func TestASandboxTheDaemonCouldNotReadSaysUnknownAndSortsLast(t *testing.T) {
 	source := &countedSource{}
-	server := crewReading(t, source)
+	server := systemReading(t, source)
 	sample := theMachine()
 	sample.Sandboxes = []headroom.Sandbox{
 		{Session: "b11e47e7565b4ef77e13d7b4", Held: headroom.Unknown(), Processor: headroom.UnknownShare()},

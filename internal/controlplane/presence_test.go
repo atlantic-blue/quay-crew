@@ -20,7 +20,7 @@ import (
 // dispatched task was open, so a conversation somebody opened and left answering read idle, and idle
 // is the word that invites a restart, a drain or a reclaim.
 
-// listOne lists the crew's sessions, asking what is in each sandbox, and returns the only one.
+// listOne lists the system's sessions, asking what is in each sandbox, and returns the only one.
 func listOne(t *testing.T, s *controlplane.Server) *quaycrewv1.Session {
 	t.Helper()
 	listed, err := s.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{Presence: true})
@@ -28,7 +28,7 @@ func listOne(t *testing.T, s *controlplane.Server) *quaycrewv1.Session {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if len(listed.GetSessions()) != 1 {
-		t.Fatalf("the crew has %d sessions, so there is no single one to read",
+		t.Fatalf("the system has %d sessions, so there is no single one to read",
 			len(listed.GetSessions()))
 	}
 	return listed.GetSessions()[0]
@@ -39,16 +39,16 @@ func listOne(t *testing.T, s *controlplane.Server) *quaycrewv1.Session {
 // listed as idle, which is what makes a drain and a reclaim dangerous: both act on the listing.
 func TestASessionWhoseRuntimeIsRunningDoesNotReadIdle(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	session := anIdleSession(t, s, project)
 
-	// A conversation answering with nobody watching it: the state nothing in the crew could see.
+	// A conversation answering with nobody watching it: the state nothing in the system could see.
 	provider.Wake(session.GetId())
 
 	listed := listOne(t, s)
 	if listed.GetPresence() != quaycrewv1.SessionPresence_SESSION_PRESENCE_AWAKE {
-		t.Fatalf("the crew read the sandbox as %v, and a runtime is running in it",
+		t.Fatalf("the system read the sandbox as %v, and a runtime is running in it",
 			listed.GetPresence())
 	}
 	if word := display.SessionStatus(listed); word == display.StatusIdle {
@@ -69,7 +69,7 @@ func TestASessionWhoseRuntimeIsRunningDoesNotReadIdle(t *testing.T) {
 // worth telling apart: one is a person at a keyboard and the other is a conversation to go back to.
 func TestSomebodyTypingReadsAsAttached(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	session := anIdleSession(t, s, project)
 
@@ -89,7 +89,7 @@ func TestSomebodyTypingReadsAsAttached(t *testing.T) {
 // that container empty.
 func TestAConversationSomebodyClosedButIsStillSittingInReadsAttached(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	session := anIdleSession(t, s, project)
 
@@ -101,10 +101,10 @@ func TestAConversationSomebodyClosedButIsStillSittingInReadsAttached(t *testing.
 }
 
 // TestAnEmptySandboxIsTheOnlyRealIdle. The other half of the rule. Without this the reclaim can never
-// take a container back, and the crew holds every container it ever made.
+// take a container back, and the system holds every container it ever made.
 func TestAnEmptySandboxIsTheOnlyRealIdle(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	anIdleSession(t, s, project)
 
@@ -119,7 +119,7 @@ func TestAnEmptySandboxIsTheOnlyRealIdle(t *testing.T) {
 }
 
 // TestADaemonThatWillNotAnswerIsNeverIdle. The sad path that matters most. A provider that cannot
-// tell returns an error, and a crew that turned that into "nothing is there" would hand an operator
+// tell returns an error, and a system that turned that into "nothing is there" would hand an operator
 // the exact word that invites them to take the container.
 func TestADaemonThatWillNotAnswerIsNeverIdle(t *testing.T) {
 	for name, breaking := range map[string]func(p *sandbox.FakeProvider){
@@ -132,17 +132,17 @@ func TestADaemonThatWillNotAnswerIsNeverIdle(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			provider := &sandbox.FakeProvider{}
-			s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+			s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 			_, project := newProject(t, s)
 			anIdleSession(t, s, project)
 			breaking(provider)
 
 			listed := listOne(t, s)
 			if listed.GetPresence() != quaycrewv1.SessionPresence_SESSION_PRESENCE_UNTOLD {
-				t.Fatalf("the crew could not tell and reported %v", listed.GetPresence())
+				t.Fatalf("the system could not tell and reported %v", listed.GetPresence())
 			}
 			if word := display.SessionStatus(listed); word == display.StatusIdle {
-				t.Fatal("the crew could not reach the daemon and reported the session as idle, " +
+				t.Fatal("the system could not reach the daemon and reported the session as idle, " +
 					"which reads as licence to take its container")
 			} else if word != display.StatusUnknown {
 				t.Fatalf("the listing says %q, want %q", word, display.StatusUnknown)
@@ -157,7 +157,7 @@ func TestADaemonThatWillNotAnswerIsNeverIdle(t *testing.T) {
 // that is not there.
 func TestASessionWithNoContainerIsIdleRatherThanUnknown(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	session := anIdleSession(t, s, project)
 
@@ -220,7 +220,7 @@ func TestAListingThatDidNotAskLeavesTheRowAlone(t *testing.T) {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if asked := provider.asked(); asked != 0 {
-		t.Fatalf("nobody asked for presence and the crew put %d questions to the daemon", asked)
+		t.Fatalf("nobody asked for presence and the system put %d questions to the daemon", asked)
 	}
 	if got := listed.GetSessions()[0].GetPresence(); got != quaycrewv1.SessionPresence_SESSION_PRESENCE_UNSPECIFIED {
 		t.Fatalf("presence reads %v on a listing that did not ask for it", got)
@@ -266,20 +266,20 @@ func (p *countingProvider) reset() {
 	p.questions = 0
 }
 
-// TestASessionTheCrewDoesNotHaveIsAnErrorRatherThanAnIdleRow. The sad path that must never be
+// TestASessionTheSystemDoesNotHaveIsAnErrorRatherThanAnIdleRow. The sad path that must never be
 // answered with a word at all. Nobody is in a session that does not exist, and a caller reads idle as
 // licence to close a container, so it must not get that answer from a lookup that failed.
-func TestASessionTheCrewDoesNotHaveIsAnErrorRatherThanAnIdleRow(t *testing.T) {
+func TestASessionTheSystemDoesNotHaveIsAnErrorRatherThanAnIdleRow(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	newProject(t, s)
 	ctx := context.Background()
 
 	if _, err := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: "a-session-nobody-made"}); err == nil {
-		t.Fatal("the crew answered for a session it does not have")
+		t.Fatal("the system answered for a session it does not have")
 	}
 	if _, err := s.SessionAttached(ctx, "a-session-nobody-made"); err == nil {
-		t.Fatal("the crew said whether somebody is attached to a session it does not have")
+		t.Fatal("the system said whether somebody is attached to a session it does not have")
 	}
 	// And a listing narrowed to a workspace that is not there is empty rather than a row of idles.
 	listed, err := s.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
@@ -289,7 +289,7 @@ func TestASessionTheCrewDoesNotHaveIsAnErrorRatherThanAnIdleRow(t *testing.T) {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if len(listed.GetSessions()) != 0 {
-		t.Fatalf("the crew listed %d sessions for a workspace it does not have",
+		t.Fatalf("the system listed %d sessions for a workspace it does not have",
 			len(listed.GetSessions()))
 	}
 }
@@ -313,7 +313,7 @@ func (hangingProvider) RuntimeRunning(ctx context.Context, _ string) (bool, erro
 // one that would freeze a console: the daemon takes the request and goes quiet.
 //
 // More rows than the sweep asks at once, on purpose. A budget spent per session rather than per
-// listing would hold this crew for four waves, so the number of sessions has to be large enough that
+// listing would hold this system for four waves, so the number of sessions has to be large enough that
 // the two answers are different lengths of time apart.
 func TestADaemonThatNeverAnswersStillGivesTheOperatorAListing(t *testing.T) {
 	quiet := controlplane.NewServer(controlplane.Config{

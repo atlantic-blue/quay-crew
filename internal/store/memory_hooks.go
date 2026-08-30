@@ -10,7 +10,7 @@ import (
 // The in memory store's hooks. The same six questions as skills, answered the same way, kept in
 // their own file because the skill block in memory.go is already long enough to hide a bug in.
 
-// ImportHook takes a hook into the crew at the version its manifest declares.
+// ImportHook takes a hook into the system at the version its manifest declares.
 func (m *Memory) ImportHook(_ context.Context, imported ImportedHook) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -63,7 +63,7 @@ func (m *Memory) ListHooks(_ context.Context) ([]ImportedHook, error) {
 	return out, nil
 }
 
-// AttachHook gives a workspace a hook at the newest revision the crew holds.
+// AttachHook gives a workspace a hook at the newest revision the system holds.
 func (m *Memory) AttachHook(_ context.Context, workspace, name string) (ImportedHook, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -115,38 +115,38 @@ func (m *Memory) WorkspaceHooks(_ context.Context, workspace string) ([]Imported
 	return out, nil
 }
 
-// AttachCrewHook gives the whole crew a hook at the newest revision it holds.
-func (m *Memory) AttachCrewHook(_ context.Context, name string) (ImportedHook, error) {
+// AttachSystemHook gives the whole system a hook at the newest revision it holds.
+func (m *Memory) AttachSystemHook(_ context.Context, name string) (ImportedHook, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	newest, found := m.newestHook(name)
 	if !found {
 		return ImportedHook{}, ErrNotFound
 	}
-	if m.crewHooks == nil {
-		m.crewHooks = make(map[string]int)
+	if m.systemHooks == nil {
+		m.systemHooks = make(map[string]int)
 	}
-	m.crewHooks[name] = newest.Version
+	m.systemHooks[name] = newest.Version
 	return newest, nil
 }
 
-// DetachCrewHook takes a hook away from the crew.
-func (m *Memory) DetachCrewHook(_ context.Context, name string) error {
+// DetachSystemHook takes a hook away from the system.
+func (m *Memory) DetachSystemHook(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, found := m.crewHooks[name]; !found {
+	if _, found := m.systemHooks[name]; !found {
 		return ErrNotFound
 	}
-	delete(m.crewHooks, name)
+	delete(m.systemHooks, name)
 	return nil
 }
 
-// CrewHooks returns what the crew holds, at the versions it pinned.
-func (m *Memory) CrewHooks(_ context.Context) ([]ImportedHook, error) {
+// SystemHooks returns what the system holds, at the versions it pinned.
+func (m *Memory) SystemHooks(_ context.Context) ([]ImportedHook, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]ImportedHook, 0, len(m.crewHooks))
-	for name, version := range m.crewHooks {
+	out := make([]ImportedHook, 0, len(m.systemHooks))
+	for name, version := range m.systemHooks {
 		held, found := m.hooks[skillKey(name, version)]
 		if !found {
 			continue
@@ -157,7 +157,7 @@ func (m *Memory) CrewHooks(_ context.Context) ([]ImportedHook, error) {
 	return out, nil
 }
 
-// newestHook is the highest version of a name the crew holds. Callers hold the lock.
+// newestHook is the highest version of a name the system holds. Callers hold the lock.
 func (m *Memory) newestHook(name string) (ImportedHook, bool) {
 	var newest ImportedHook
 	var found bool

@@ -12,15 +12,15 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The steps for the scenarios about what the crew admits. The fault they close: on 30 August 2026
-// the crew admitted nine jobs onto a runtime with room for fewer, and the runtime exited with the
+// The steps for the scenarios about what the system admits. The fault they close: on 30 August 2026
+// the system admitted nine jobs onto a runtime with room for fewer, and the runtime exited with the
 // control plane, the database and eight running jobs inside it. See issue 466.
 //
-// The runtime is the one thing stood in for. Everything else here is the real crew: the controller
+// The runtime is the one thing stood in for. Everything else here is the real system: the controller
 // decides, the ledger counts what has been promised, and the store holds what came of it.
 
 // aSizedRuntime is a container runtime a scenario gave a size to. A scenario changes what it says
-// and asks the crew to read it again, because a machine that fills and empties is the whole point.
+// and asks the system to read it again, because a machine that fills and empties is the whole point.
 type aSizedRuntime struct {
 	memory     int64
 	held       int64
@@ -61,10 +61,10 @@ func initializeAdmissionSteps(sc *godog.ScenarioContext) {
 		func(ctx context.Context, held int) error {
 			runtime := runtimeFrom(ctx)
 			if runtime == nil {
-				return fmt.Errorf("no runtime was given to the crew yet")
+				return fmt.Errorf("no runtime was given to the system yet")
 			}
-			// The crew's own containers let go. The reserve is measured rather than declared, so what
-			// the crew keeps back falls with them and the room appears.
+			// The system's own containers let go. The reserve is measured rather than declared, so what
+			// the system keeps back falls with them and the room appears.
 			runtime.held = int64(held) * megabyte
 			return nil
 		})
@@ -141,7 +141,7 @@ func initializeAdmissionSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// namesAResource says whether this is the crew holding a job back for want of room, which is the one
+// namesAResource says whether this is the system holding a job back for want of room, which is the one
 // thing it writes on a job that is still pending.
 func namesAResource(reason string) bool {
 	return strings.Contains(reason, "not enough memory") ||

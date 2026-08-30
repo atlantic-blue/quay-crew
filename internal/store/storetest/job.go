@@ -522,7 +522,7 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
 
-		demanding := jobShaped(t, s, workspace, project, "needs the crew's context", func(w *job.Job) {
+		demanding := jobShaped(t, s, workspace, project, "needs the system's context", func(w *job.Job) {
 			w.Role, w.RoleVersion = "backlog-clearer", 1
 			w.Requires = []string{"context", "skills"}
 		})
@@ -607,7 +607,7 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 
 	// A job the machine has no room for is held rather than moved. The phase stays pending, because
 	// a machine that is full now has room in ten minutes and the job is still the next thing to run,
-	// and the reason is the difference between a crew that is full and a crew that has stalled.
+	// and the reason is the difference between a system that is full and a system that has stalled.
 	t.Run("a pending job is held with a reason, and the reason goes when it starts", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -665,7 +665,7 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		}
 	})
 
-	t.Run("claiming job the crew does not hold is not found", func(t *testing.T) {
+	t.Run("claiming job the system does not hold is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		if _, err := s.StartJob(context.Background(), "0123456789abcdef01234567", aLease("controller-a"),
@@ -1021,7 +1021,7 @@ func runJobLeaseConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 
 	// The holder giving up an attempt it made, which is a different movement from a release: the job
 	// has a session and a live lease, and the controller that holds it is the one putting it back.
-	t.Run("a job the crew could not start goes back to pending, and is offered again", func(t *testing.T) {
+	t.Run("a job the system could not start goes back to pending, and is offered again", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -1230,7 +1230,7 @@ func releasedEvent(id, workspace, project string) *job.Event {
 //
 // The one that matters is the default: a workspace nobody configured must answer with a depth of
 // zero, because that is what stops a session declaring job until an operator says otherwise. A
-// store that answered "not found" instead would make a crew that grants everything until it is
+// store that answered "not found" instead would make a system that grants everything until it is
 // configured, which is the wrong direction to fail in.
 func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
@@ -1379,12 +1379,12 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		}
 		unset, _ := s.WorkspaceLimits(ctx, "nobody")
 		if got := unset.Lease(time.Minute); got != time.Minute {
-			t.Fatalf("a hold where nothing is named lasts %s, want the crew's own", got)
+			t.Fatalf("a hold where nothing is named lasts %s, want the system's own", got)
 		}
 	})
 }
 
-// heldEvent is the record the crew writes when it will not start a job yet.
+// heldEvent is the record the system writes when it will not start a job yet.
 func heldEvent(id, workspace, project, reason string) *job.Event {
 	return &job.Event{
 		ID: store.NewID(), Kind: job.EventHeld, Job: id,

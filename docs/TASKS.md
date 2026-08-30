@@ -14,7 +14,7 @@ tables. This is the path between them.
 
 A task is a message. You send text, a session answers, and that is the whole life of it.
 
-A job is declared intent. You write down what you want done and the crew keeps that record, so it has
+A job is declared intent. You write down what you want done and the system keeps that record, so it has
 a phase you can read at any moment: pending, running, done, failed or stopped. It can run as a named
 role, carry a budget and a deadline, and declare jobs of its own. Two more phases are written down
 and nothing reaches them yet: `waiting`, because no controller honours ordering, and `asking`, which
@@ -29,20 +29,20 @@ Declaring a job does not replace sending a task. A controller sends the brief as
 session, the same way you do. So the rest of this document is what happens inside a job too.
 `docs/ORCHESTRATION.md` is the record, the controller loop, the lease and the capability model.
 
-The words come from Kubernetes, which the crew already borrows from: a Lease, a Phase, a Role, and
+The words come from Kubernetes, which the system already borrows from: a Lease, a Phase, a Role, and
 verbs on a resource. A job is a Kubernetes Job. Declared intent, run to completion, watched by a
 controller, with a disposable container underneath, which is this down to the phase field.
 
 **A session is deliberately not a Pod**, and that is the obvious next question. A Pod is disposable
 and interchangeable with its replacement: kill one, another takes its place, and nothing is lost. A
 session is the opposite. Its value is the history it holds, so killing one loses the conversation
-that made it worth having. Borrowing a word whose contract the crew does not honour would be worse
+that made it worth having. Borrowing a word whose contract the system does not honour would be worse
 than breaking the pattern on purpose, so the pattern is broken on purpose.
 
 ```mermaid
 flowchart LR
     YOU(["you"]) -->|"quay task"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
-    YOU -->|"quay job create"| JOB["a job:<br/>a record the crew keeps<br/>a readable phase for"]
+    YOU -->|"quay job create"| JOB["a job:<br/>a record the system keeps<br/>a readable phase for"]
     JOB --> CTL["a controller reads the row"]
     CTL -->|"sends the brief"| TASK
     TASK --> SESSION["a session, in its own container"]
@@ -52,9 +52,9 @@ flowchart LR
 
 ## The words
 
-**The store** is the database the crew treats as the truth. In a real crew it is Postgres:
+**The store** is the database the system treats as the truth. In a real system it is Postgres:
 `QC_DATABASE_URL` points at it, and the control plane applies its migrations on start. With no url
-set the crew uses an in memory store instead, which is what the tests run against and which loses
+set the system uses an in memory store instead, which is what the tests run against and which loses
 everything on restart.
 
 **The broker** is a separate server that keeps named streams of records and hands them to whoever
@@ -63,7 +63,7 @@ asks for them. Locally it is Redpanda, which speaks the Kafka protocol. It is it
 
 **A seed** is an address the client dials first. A cluster can hold many brokers, and you do not list
 them all: you give one or two seed addresses, the client connects, asks the cluster who else is
-there, and learns the rest. `QC_KAFKA_SEEDS=redpanda:9092` is one seed. Empty means the crew builds
+there, and learns the rest. `QC_KAFKA_SEEDS=redpanda:9092` is one seed. Empty means the system builds
 no client at all, and nothing is exported.
 
 **A topic** is one named stream. A task lands on `<workspace name>.tasks`, so two workspaces on one
@@ -78,7 +78,7 @@ A task is one word on the command line, the way a job and a flow are each one wo
 
 ```
 quay task [<address>] <text>              send a task, and wait here for the answer
-quay task --dispatch [<address>] <text>   send it, and let go. The crew runs it
+quay task --dispatch [<address>] <text>   send it, and let go. The system runs it
 quay task list <session>                  what a session was sent, and what came back
 ```
 
@@ -177,13 +177,13 @@ sequenceDiagram
 ## Redaction
 
 What an operator pastes into a conversation can be a credential, and everything above is persisted.
-So the prompt, the reply and the failure all go through the crew's redactor before anything is
+So the prompt, the reply and the failure all go through the system's redactor before anything is
 written. It matches every value the workspace keeps sealed, the driver's own token, and anything
 shaped like a published subscription token.
 
-A value the crew has never been told cannot be protected. A password typed into a conversation, and
+A value the system has never been told cannot be protected. A password typed into a conversation, and
 never set as a secret, is stored as typed. The store and the log hold what was said minus what the
-crew can recognise, which is not the same as a guarantee.
+system can recognise, which is not the same as a guarantee.
 
 ## When something fails
 
@@ -193,13 +193,13 @@ crew can recognise, which is not the same as a guarantee.
 - **The caller hangs up.** The write is on a context detached from the request, so the record of a
   long task survives a command line that gave up waiting for it.
 - **The store write fails.** It is logged and the task is not failed, because the task already
-  happened. A store that cannot be written is a problem for the whole crew, not for this one path.
+  happened. A store that cannot be written is a problem for the whole system, not for this one path.
 - **The broker is unreachable, or no seeds are set.** The export is dropped and logged. It never
   fails a task. The log is the copy; the store is the record.
 
 ## What does not exist yet
 
-- **A task finishing is the only event the crew emits.** A session being created, stopped, archived
+- **A task finishing is the only event the system emits.** A session being created, stopped, archived
   or restored writes no event anywhere. That is
   https://github.com/atlantic-blue/quay-crew/issues/349
 - **Nothing consumes the log.** The export accumulates records that nothing reads, which is the
@@ -217,7 +217,7 @@ Read the store, which always works:
 quay task list <session>
 ```
 
-Read one answer as data, which is what a caller outside the crew pipes into the next command:
+Read one answer as data, which is what a caller outside the system pipes into the next command:
 
 ```
 quay answer <session>

@@ -1,8 +1,8 @@
 Feature: A task outlives the caller that started it
 
-  A task is started with a dispatch that lets go of it. The crew runs the task, which takes as long as
+  A task is started with a dispatch that lets go of it. The system runs the task, which takes as long as
   the job takes, so nothing on the operator's machine has to stay alive for it. Holding a task in
-  the client made the terminal the weakest part of the crew: a dispatch killed at seventeen minutes
+  the client made the terminal the weakest part of the system: a dispatch killed at seventeen minutes
   recorded "failed: model: run exited: signal: killed", said nothing about why, and the job was
   gone.
 
@@ -21,27 +21,27 @@ Feature: A task outlives the caller that started it
     And a task dispatched by a caller that then goes away
     And a task is under way
     When the model finishes the task
-    Then the crew's one session is reported as idle
+    Then the system's one session is reported as idle
     And the session carries what the model said
 
   Scenario: A dispatch that lets go answers before the task lands
     Given the model takes longer over a task than anybody will wait
     And a task dispatched without waiting for it
     And a task is under way
-    Then the crew's one session is reported as running
+    Then the system's one session is reported as running
 
   Scenario: A caller that waits is given the answer
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
 
-  # A crew once wrote the session row, waited on something that never answered, and said nothing at
+  # A system once wrote the session row, waited on something that never answered, and said nothing at
   # all: no task, no container, no line in the log. Every listing kept answering in under a second,
-  # so the crew read as well while it started no work for an hour. A dispatch that cannot start now
+  # so the system read as well while it started no work for an hour. A dispatch that cannot start now
   # ends, and says which wait it gave up on.
   Scenario: A dispatch that cannot start says what it waited for
     Given a sandbox that never starts
     When the operator dispatches "read the repository" to the project
-    Then the crew says it waited for "the sandbox to be created"
+    Then the system says it waited for "the sandbox to be created"
     And the session left behind is not sitting idle
 
   # The audit export is a copy of a record the store already holds, so a broker that never answers

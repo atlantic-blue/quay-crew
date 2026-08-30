@@ -14,7 +14,7 @@ import (
 
 // jobStream is the logical stream a job's movements are published on, within a
 // workspace's namespace. It is beside the tasks and sessions streams rather than mixed into them: a
-// consumer that wants to know what the crew was asked to do should not have to read every prompt and
+// consumer that wants to know what the system was asked to do should not have to read every prompt and
 // reply to find out.
 const jobStream = "job"
 
@@ -37,7 +37,7 @@ func (s *Server) traceJob(ctx context.Context, declared *job.Job, parent *job.Jo
 		declared.TraceID = inherited
 		return
 	}
-	// Nothing was tracing this call, which is a crew with no exporter configured or a caller whose
+	// Nothing was tracing this call, which is a system with no exporter configured or a caller whose
 	// own tool starts no trace. The identifier is minted anyway, because it is what joins the tree
 	// together afterwards and a root with none leaves every descendant unjoined.
 	declared.TraceID = telemetry.NewTraceID()
@@ -46,7 +46,7 @@ func (s *Server) traceJob(ctx context.Context, declared *job.Job, parent *job.Jo
 // ExportJob offers each record of a movement to the event log, after the transaction that wrote it.
 //
 // The store is the truth and the log is the copy. So this is called after the write has landed, it
-// never fails what it describes, and a crew with no broker configured loses the export and nothing
+// never fails what it describes, and a system with no broker configured loses the export and nothing
 // else. It is exported to `<workspace>.job`, keyed by the job identifier, so one job's
 // records stay in order on one partition. A consumer rebuilding a tree depends on that.
 //

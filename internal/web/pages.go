@@ -54,16 +54,16 @@ func (v *view) sessions(w http.ResponseWriter, r *http.Request) {
 	// holding a live conversation. It costs a question to each idle session's sandbox.
 	listed, err := v.reader.ListSessions(r.Context(), &quaycrewv1.ListSessionsRequest{Presence: true})
 	if err != nil {
-		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	names, err := v.names(r.Context())
 	if err != nil {
-		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	// The order the crew answered in, untouched. It is last moved first, so the age column reads in
+	// The order the system answered in, untouched. It is last moved first, so the age column reads in
 	// order, and it is the same order the console and the command line show: a page that sorted the
 	// listing again would be a second order to keep in step with this one.
 	rows := make([]sessionRow, 0, len(listed.GetSessions()))
@@ -86,12 +86,12 @@ func (v *view) session(w http.ResponseWriter, r *http.Request) {
 	}
 	names, err := v.names(r.Context())
 	if err != nil {
-		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	turns, err := v.reader.ListTasks(r.Context(), &quaycrewv1.ListTasksRequest{Session: got.GetSession().GetId()})
 	if err != nil {
-		http.Error(w, "the crew did not answer: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 

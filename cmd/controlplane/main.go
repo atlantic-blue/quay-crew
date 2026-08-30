@@ -32,12 +32,12 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// version is the build this control plane is, stamped in at build time by the image build. A crew
+// version is the build this control plane is, stamped in at build time by the image build. A system
 // that cannot say which build it is leaves an operator diagnosing a defect that is already fixed.
 var version = "dev"
 
 func main() {
-	// Asked whether the crew beside it is serving, this binary asks and exits. It is the container
+	// Asked whether the system beside it is serving, this binary asks and exits. It is the container
 	// health check, and it goes before anything else here because it starts nothing.
 	if len(os.Args) > 1 && os.Args[1] == healthArg {
 		os.Exit(probeHealth())
@@ -47,7 +47,7 @@ func main() {
 	logger := logging.Init(serviceName, os.Stdout)
 
 	otelEndpoint := envOr("QC_OTEL_ENDPOINT", "localhost:4317")
-	// Loopback unless the operator says otherwise: the port is the whole crew, so it is not
+	// Loopback unless the operator says otherwise: the port is the whole system, so it is not
 	// published to the network by default. The compose stack overrides this, because in a container
 	// loopback is the container, and binds the host side to loopback instead.
 	grpcAddr := envOr("QC_GRPC_ADDR", "127.0.0.1:50051")
@@ -66,7 +66,7 @@ func main() {
 	logger = logging.AlsoExport(serviceName, os.Stdout)
 
 	// QC_MODEL is the backend; QC_CLAUDE_MODEL is which model that backend runs against. Two keys
-	// because they are two decisions: a crew can run the echo backend, which has no model at all.
+	// because they are two decisions: a system can run the echo backend, which has no model at all.
 	runner, err := model.NewRunner(os.Getenv("QC_MODEL"), os.Getenv("QC_WORKDIR"), os.Getenv("QC_CLAUDE_MODEL"))
 	if err != nil {
 		logger.Error("model runner config failed", "error", err)
@@ -95,13 +95,13 @@ func main() {
 		Image:   os.Getenv("QC_SANDBOX_IMAGE"),
 		Mounts:  splitAndTrim(os.Getenv("QC_SANDBOX_MOUNTS")),
 		Storage: storage,
-		// The crew's own network, which only the driver joins, and the host paths only it gets.
-		// Unset leaves the driver on the session network below, which reaches the crew and nothing
+		// The system's own network, which only the driver joins, and the host paths only it gets.
+		// Unset leaves the driver on the session network below, which reaches the system and nothing
 		// else, and leaves it seeing nothing of the machine.
 		Network: os.Getenv("QC_SANDBOX_NETWORK"),
 		// The network every sandbox joins so a session can reach this control plane. The compose
 		// file creates it and puts this service on it, and the store, the broker and the dashboards
-		// are not on it. Unset leaves a session unable to reach the crew, so its credential buys it
+		// are not on it. Unset leaves a session unable to reach the system, so its credential buys it
 		// nothing.
 		SessionNetwork: os.Getenv("QC_SESSION_NETWORK"),
 		DriverMounts:   splitAndTrim(os.Getenv("QC_DRIVER_MOUNTS")),
@@ -120,7 +120,7 @@ func main() {
 			"whole machine, and the kernel kills them against what the rest of it has left")
 	}
 	// The skills the operator has written, read from files. A skill that does not make sense stops
-	// the crew starting rather than going quietly missing later, because a capability that is absent
+	// the system starting rather than going quietly missing later, because a capability that is absent
 	// without a reason is one the session improvises around.
 	skills, err := skill.Load(os.Getenv("QC_SKILLS_DIR"))
 	if err != nil {
@@ -134,7 +134,7 @@ func main() {
 	if notice, retired := sandboxSecretsRetired(os.Getenv("QC_SANDBOX_SECRETS")); retired {
 		logger.Warn(notice)
 	}
-	if notice, mismatched := unreachableCrew(sandboxKind,
+	if notice, mismatched := unreachableSystem(sandboxKind,
 		os.Getenv("QC_SANDBOX_CONTROL_PLANE"), os.Getenv("QC_SESSION_NETWORK")); mismatched {
 		logger.Warn(notice)
 	}
@@ -151,8 +151,8 @@ func main() {
 
 	credentials, secretsKind := openSecrets(durable, storage, logger)
 
-	token := crewToken(storage, logger, auth.TokenFile)
-	driverToken := crewToken(storage, logger, auth.DriverTokenFile)
+	token := systemToken(storage, logger, auth.TokenFile)
+	driverToken := systemToken(storage, logger, auth.DriverTokenFile)
 
 	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
 	defer events.Close()
@@ -163,27 +163,27 @@ func main() {
 	}
 
 	server := controlplane.NewServer(controlplane.Config{
-		// How often a session describes itself, from the crew's configuration.
+		// How often a session describes itself, from the system's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
 		// How long the controller holds a job before another may take it, and the name it
 		// writes on the hold so an investigator knows which machine stopped.
 		JobLease:       controlplane.JobLease(leaseSetting, logger),
 		ControllerName: controlplane.ControllerName(os.Hostname),
-		// What reads the machine. Only where a daemon is what makes the sandboxes: a crew running
+		// What reads the machine. Only where a daemon is what makes the sandboxes: a system running
 		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
 		// to a command that is not there.
 		Headroom: headroomSource(sandboxKind, logger),
-		// What the crew holds back for its own containers before it admits any sandbox. The control
+		// What the system holds back for its own containers before it admits any sandbox. The control
 		// plane, the database and the event log are containers inside the same runtime the work
-		// fills, so a crew that reserves nothing goes down with its own workload.
-		CrewReserve: controlplane.EnvReserve(logger),
-		Store:       durable,
-		Runner:      runner,
-		Provider:    provider,
-		Secrets:     credentials,
-		Storage:     storage,
-		Events:      events,
-		// What a session's tasks may do when it is born, from the crew's configuration.
+		// fills, so a system that reserves nothing goes down with its own workload.
+		SystemReserve: controlplane.EnvReserve(logger),
+		Store:         durable,
+		Runner:        runner,
+		Provider:      provider,
+		Secrets:       credentials,
+		Storage:       storage,
+		Events:        events,
+		// What a session's tasks may do when it is born, from the system's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
@@ -206,21 +206,21 @@ func main() {
 			State:   stateKind(storage),
 			Events:  eventsKind,
 			Secrets: secretsKind,
-			// What the sandboxes are running, so the tool can say when the crew has moved on and
+			// What the sandboxes are running, so the tool can say when the system has moved on and
 			// they have not.
 			SandboxBuild: sandboxBuild,
-			// Which build this control plane is, so the tool can say when it and the crew are
+			// Which build this control plane is, so the tool can say when it and the system are
 			// different builds. Stamped in at build time, the way the tool is.
 			Version: version,
 		},
 	})
-	// Waits that came due while the crew was down are resumed on the way up, and every one after
+	// Waits that came due while the system was down are resumed on the way up, and every one after
 	// that on a tick: a wait is a row, so a restart loses none of them.
 	go server.RunFlowPoller(ctx)
 
-	// And the jobs the crew holds are made to happen the same way: a controller reads the rows, sends
+	// And the jobs the system holds are made to happen the same way: a controller reads the rows, sends
 	// a task for what has not started, and writes what came back. Declared intent is a row, so a job
-	// declared while the crew was down starts on the way up.
+	// declared while the system was down starts on the way up.
 	go server.RunJobController(ctx)
 
 	// And the machine itself, on its own timer. The header reads the last sample rather than the
@@ -228,30 +228,30 @@ func main() {
 	// every second.
 	go server.RunHeadroom(ctx)
 
-	// And the parts the crew has to write to before a dispatch starts, so a view of them reads a probe
-	// rather than a guess. The health check keeps this fresh wherever one runs; the timer is for a crew
+	// And the parts the system has to write to before a dispatch starts, so a view of them reads a probe
+	// rather than a guess. The health check keeps this fresh wherever one runs; the timer is for a system
 	// nobody checks, which had no reading at all.
 	go server.RunHealth(ctx)
 
-	// What strayed while the crew was down is reaped on the way up: a container whose session was
+	// What strayed while the system was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
 	// And what survived is counted, before a single job is admitted. Containers outlive the process
-	// that made them, so a crew that started counting from zero would admit a whole machine's worth
+	// that made them, so a system that started counting from zero would admit a whole machine's worth
 	// of work onto a machine that is already full.
 	server.SeedCapacity(ctx)
 
-	// And what was mid task when the crew went down is settled the same way: a task runs in this
+	// And what was mid task when the system went down is settled the same way: a task runs in this
 	// process, so a session the store still calls running is one whose task died with the last one.
 	server.SettleTasks(ctx)
 
-	// A crew with no skills at all is a fresh one, and it starts with the ones this build ships
+	// A system with no skills at all is a fresh one, and it starts with the ones this build ships
 	// with rather than making every operator import them by hand. Only ever on an empty catalogue,
 	// so it is a starting point and not a policy that undoes a decision.
 	server.Seed(ctx, envOr("QC_SEED_SKILLS_DIR", controlplane.SeedDir), logger)
 
-	// And the hooks, on the same terms: only into a crew that holds none, so taking one off and
+	// And the hooks, on the same terms: only into a system that holds none, so taking one off and
 	// restarting does not put it back.
 	server.SeedHooks(ctx, envOr("QC_SEED_HOOKS_DIR", controlplane.SeedHooksDir), logger)
 
@@ -265,7 +265,7 @@ func main() {
 		})...,
 	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
-	// What the container health check asks. It writes rather than reads, because this crew answered
+	// What the container health check asks. It writes rather than reads, because this system answered
 	// every read for an hour while it started no work at all.
 	grpc_health_v1.RegisterHealthServer(grpcServer, controlplane.NewHealth(server))
 
@@ -300,12 +300,12 @@ func main() {
 	}
 }
 
-// headroomSource is what reads the machine the crew runs on, and nil where there is nothing to read
-// it with. Nil is a crew that reports unknown headroom, which is the honest answer for a crew whose
+// headroomSource is what reads the machine the system runs on, and nil where there is nothing to read
+// it with. Nil is a system that reports unknown headroom, which is the honest answer for a system whose
 // sessions do not run on a daemon at all.
 func headroomSource(sandboxKind string, logger *slog.Logger) headroom.Source {
 	if sandboxKind != sandbox.KindDocker {
-		logger.Info("sessions do not run on a docker daemon, so the crew reports no headroom",
+		logger.Info("sessions do not run on a docker daemon, so the system reports no headroom",
 			"sandbox", sandboxKind)
 		return nil
 	}
@@ -335,18 +335,18 @@ func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string
 	return client, "kafka"
 }
 
-// crewToken is a token a caller has to present, minted the first time and kept beside the key that
-// seals secrets. With nowhere to keep one the crew refuses every caller rather than serving them
+// systemToken is a token a caller has to present, minted the first time and kept beside the key that
+// seals secrets. With nowhere to keep one the system refuses every caller rather than serving them
 // all: the guard failing open is the one thing it must never do. A token file that exists but
 // cannot be read is a misconfiguration worth stopping for, not working around.
-func crewToken(storage sandbox.Storage, logger *slog.Logger, file string) string {
+func systemToken(storage sandbox.Storage, logger *slog.Logger, file string) string {
 	if storage.Dir == "" {
-		logger.Warn("the crew has nowhere to keep a token and will refuse every caller: set QC_DATA_DIR")
+		logger.Warn("the system has nowhere to keep a token and will refuse every caller: set QC_DATA_DIR")
 		return ""
 	}
 	token, err := auth.TokenAt(filepath.Join(storage.Dir, file))
 	if err != nil {
-		logger.Error("crew token", "error", err)
+		logger.Error("system token", "error", err)
 		os.Exit(1)
 	}
 	return token
@@ -360,7 +360,7 @@ func crewToken(storage sandbox.Storage, logger *slog.Logger, file string) string
 //
 // The key is made rather than asked for: a step the operator has to perform before anything works is
 // a step that gets skipped. Anything that goes wrong here falls back to memory with the reason said
-// out loud, because a crew that will not start is worse than one that forgets a token.
+// out loud, because a system that will not start is worse than one that forgets a token.
 func openSecrets(durable store.Store, storage sandbox.Storage, logger *slog.Logger) (secrets.Store, string) {
 	postgres, durableStore := durable.(*store.Postgres)
 	if !durableStore {
@@ -415,20 +415,20 @@ func stateKind(storage sandbox.Storage) string {
 // that used to decide which secrets reached a sandbox, and whether there is anything to say.
 //
 // A setting that quietly stops being read is worse than one that never existed: the operator chose
-// which secrets could travel, the crew now hands over all of a workspace's own, and nothing on the
+// which secrets could travel, the system now hands over all of a workspace's own, and nothing on the
 // screen would say the two disagree.
 func sandboxSecretsRetired(value string) (string, bool) {
 	if strings.TrimSpace(value) == "" {
 		return "", false
 	}
 	return "QC_SANDBOX_SECRETS is set and is no longer read: a workspace's secrets reach that " +
-		"workspace's sandboxes, so the list can be removed from the crew's configuration", true
+		"workspace's sandboxes, so the list can be removed from the system's configuration", true
 }
 
-// renamedSettings are the crew's settings that changed their name, against what they are called now.
+// renamedSettings are the system's settings that changed their name, against what they are called now.
 //
 // A table rather than a case each, so the next rename is covered the moment its entry is added. The
-// value is still read from the old name where the new one says nothing, because a crew that silently
+// value is still read from the old name where the new one says nothing, because a system that silently
 // went back to the default lease after an upgrade is the exact failure a rename must not cause.
 var renamedSettings = map[string]string{
 	"QC_WORK_LEASE": "QC_JOB_LEASE",
@@ -438,7 +438,7 @@ var renamedSettings = map[string]string{
 // tell an operator whose file still carries the old spelling.
 //
 // Silence would be worse than the warning. An operator who tuned the lease and then upgraded would
-// keep a file that looks configured while the crew ran the measured default, and nothing on the
+// keep a file that looks configured while the system ran the measured default, and nothing on the
 // screen would say the two disagree.
 func renamedSetting(now string, read func(string) string) (value, notice string) {
 	value = strings.TrimSpace(read(now))
@@ -452,30 +452,30 @@ func renamedSetting(now string, read func(string) string) (value, notice string)
 		}
 		if value == "" {
 			return old, was + " is set and is called " + now + " now: it is still being read, and " +
-				"renaming it in the crew's configuration is what makes that stop being luck"
+				"renaming it in the system's configuration is what makes that stop being luck"
 		}
 		return value, was + " is set and is called " + now + " now: " + now +
-			" is set too and wins, so the old line can be removed from the crew's configuration"
+			" is set too and wins, so the old line can be removed from the system's configuration"
 	}
 	return value, ""
 }
 
-// unreachableCrew says what to tell an operator whose crew hands out an address no session can
+// unreachableSystem says what to tell an operator whose system hands out an address no session can
 // resolve, and whether there is anything to say.
 //
-// This is the fault the check exists for, and it is silent from both ends. The crew tells a session
+// This is the fault the check exists for, and it is silent from both ends. The system tells a session
 // running a job where it is and mints it a credential; the sandbox joins no network that reaches
-// that address; and the session reports "produced zero addresses", which reads as the crew being
+// that address; and the session reports "produced zero addresses", which reads as the system being
 // down rather than as configuration. Only this process can see both halves.
 //
-// A crew that tells a session nothing is not warned about. That crew hands out no credential either,
+// A system that tells a session nothing is not warned about. That system hands out no credential either,
 // so the two halves agree.
-func unreachableCrew(kind, reachable, sessionNetwork string) (string, bool) {
+func unreachableSystem(kind, reachable, sessionNetwork string) (string, bool) {
 	if kind != sandbox.KindDocker || reachable == "" || sessionNetwork != "" {
 		return "", false
 	}
 	return "QC_SANDBOX_CONTROL_PLANE is set and QC_SESSION_NETWORK is not: a session running a job " +
-		"is told where the crew is, and its sandbox joins no network that reaches that address, so " +
+		"is told where the system is, and its sandbox joins no network that reaches that address, so " +
 		"every call it makes fails to resolve the name", true
 }
 
@@ -503,10 +503,10 @@ func envOr(key, fallback string) string {
 // birthPermissionMode reads what a session's tasks may do when it is born.
 //
 // It refuses a value that is not a mode rather than falling back, because falling back is silent: a
-// crew configured for "planning" would run every task in acceptEdits and look exactly like a crew
+// system configured for "planning" would run every task in acceptEdits and look exactly like a system
 // configured for acceptEdits. Startup is where the operator is standing and can fix it.
 //
-// Empty is not a refusal. It is what every crew's configuration says until somebody sets this, and it
+// Empty is not a refusal. It is what every system's configuration says until somebody sets this, and it
 // keeps the mode every session has had since the control plane was written.
 func birthPermissionMode(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {

@@ -1,4 +1,4 @@
-Feature: Workspaces hold the crew's work
+Feature: Workspaces hold the system's work
 
   A workspace is the unit of tenancy. Channels attach to a workspace, secrets belong to a workspace, and
   every session runs inside one. Workspaces are created at runtime through the interface, never
@@ -67,9 +67,9 @@ Feature: Workspaces hold the crew's work
     Then the reference is refused as ambiguous
     And the refusal names both workspaces
 
-  # An operator needs to know the token is there. What it says is the crew's business: there is no call
+  # An operator needs to know the token is there. What it says is the system's business: there is no call
   # that returns a value, so this cannot leak one by mistake rather than by policy.
-  Scenario: The crew says which secrets a workspace has, and never what they say
+  Scenario: The system says which secrets a workspace has, and never what they say
     Given a workspace named "acme"
     And the workspace has the subscription token "tok-xyz"
     When the operator asks which secrets the workspace has

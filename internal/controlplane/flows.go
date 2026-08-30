@@ -221,13 +221,13 @@ func (s *Server) UnscheduleFlow(ctx context.Context, req *quaycrewv1.UnscheduleF
 // goroutine and owns its lifetime.
 //
 // A wait is a row rather than a timer somebody is holding, which is what makes it survive a
-// restart: this reads the rows on the way up, so a crew restarted onto a pile of overdue waits
+// restart: this reads the rows on the way up, so a system restarted onto a pile of overdue waits
 // resumes them immediately rather than losing them.
 func (s *Server) RunFlowPoller(ctx context.Context) {
 	s.flowPoller.Run(ctx)
 }
 
-// TickFlows moves every run the crew holds on by one step: a wait that came due, a schedule that
+// TickFlows moves every run the system holds on by one step: a wait that came due, a schedule that
 // fired, a step whose job ended. Exported so a test and a scenario drive one tick rather than
 // waiting for a ticker, which would be slow when it passed and flaky when it did not.
 func (s *Server) TickFlows(ctx context.Context) {
@@ -246,13 +246,13 @@ func (s *Server) SessionTokens(ctx context.Context, id string) int64 {
 }
 
 // SessionHolds says whether a path is in a session's own working directory, which is how a graph's
-// claim about what its task would leave behind is checked by the crew rather than by the model.
+// claim about what its task would leave behind is checked by the system rather than by the model.
 //
-// It reads the directory rather than the sandbox. The working directory is state the crew keeps on
+// It reads the directory rather than the sandbox. The working directory is state the system keeps on
 // the host and mounts in, so this is the same files the model was looking at, answered without
 // starting a container and without a road into one.
 //
-// A path that cannot be reached is an error rather than a false: a crew that keeps no state on disk,
+// A path that cannot be reached is an error rather than a false: a system that keeps no state on disk,
 // or a session it does not have, must stop the run rather than quietly satisfy the check.
 func (s *Server) SessionHolds(ctx context.Context, id, path string) (bool, error) {
 	if id == "" {
@@ -264,10 +264,10 @@ func (s *Server) SessionHolds(ctx context.Context, id, path string) (bool, error
 	}
 	dir, kept := s.storage.WorkingDir(boxOf(session))
 	if !kept {
-		return false, fmt.Errorf("this crew keeps no working directory on disk to look in")
+		return false, fmt.Errorf("this system keeps no working directory on disk to look in")
 	}
 	// Cleaned and held inside the session's own directory. The parser refuses a path that climbs, and
-	// this is the second of the two, because the graph and the crew are edited by different hands.
+	// this is the second of the two, because the graph and the system are edited by different hands.
 	inside := filepath.Join(dir, filepath.Clean("/"+path))
 	if _, err := os.Stat(inside); err != nil {
 		if os.IsNotExist(err) {

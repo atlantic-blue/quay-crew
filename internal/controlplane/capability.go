@@ -13,12 +13,25 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 	"github.com/atlantic-blue/quay-crew/internal/skill"
 	"github.com/atlantic-blue/quay-crew/internal/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// crewScope is what a caller says to mean the whole crew rather than one workspace. It is the same
+// systemScope is what a caller says to mean the whole system rather than one workspace. It is the same
 // word the context calls address uses, so a skill and a piece of context are given to everything the
-// crew does the same way, and it is the word no workspace may be called.
-const crewScope = name.Crew
+// system does the same way, and it is the word no workspace may be called.
+const systemScope = name.System
+
+// refusedScope is the refusal for a scope that says the word this level used to take, and nil for
+// every other scope. It is here rather than only in the tool because a tool from a build before the
+// word moved reaches this process, and so does every channel: without it the call is read as a
+// workspace and comes back saying no such workspace, which says nothing about the word.
+func refusedScope(scope string) error {
+	if err := name.RefuseRetired(scope); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	return nil
+}
 
 // capability is everything a session holds, answered in one place: the skills, where each mounts
 // inside the sandbox, and which of them live in the store and need their files written to the host
@@ -27,7 +40,7 @@ const crewScope = name.Crew
 // the one the skill listing reports, so the listing cannot say one thing while the sandbox does
 // another.
 type capability struct {
-	// held is what the session holds, sorted by name: the crew's own skills and the workspace's,
+	// held is what the session holds, sorted by name: the system's own skills and the workspace's,
 	// the workspace winning a name collision because the narrower statement is the more deliberate
 	// one.
 	held []skill.Held
@@ -55,7 +68,7 @@ type notGiven struct {
 
 // capabilityOf answers what a session holds, in one store round trip.
 //
-// A failure reading the store is not a failure of the task: the crew's skills still reach the
+// A failure reading the store is not a failure of the task: the system's skills still reach the
 // session, and a session with one skill instead of two is better than a session that will not
 // start.
 func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) capability {
@@ -82,12 +95,12 @@ func (s *Server) leftOutIn(ctx context.Context, workspace string) []notGiven {
 }
 
 // heldIn is every skill a workspace's sessions could hold, before the workspace's own secrets are
-// held against it: the crew's and the workspace's, with where each mounts.
+// held against it: the system's and the workspace's, with where each mounts.
 func (s *Server) heldIn(ctx context.Context, workspace string) capability {
 	var caps capability
 	attached, err := s.store.WorkspaceSkills(ctx, workspace)
 	if err == nil {
-		attached = s.withCrewSkills(ctx, attached)
+		attached = s.withSystemSkills(ctx, attached)
 		caps.attached = attached
 		caps.attachedKnown = true
 		workspaceHost, hostKnown := s.storage.WorkspaceSkillsHost(workspace)
@@ -129,23 +142,23 @@ func (s *Server) heldIn(ctx context.Context, workspace string) capability {
 	return caps
 }
 
-// withCrewSkills adds what the crew holds to what this workspace holds, the workspace winning a name
+// withSystemSkills adds what the system holds to what this workspace holds, the workspace winning a name
 // collision because the narrower statement is the more deliberate one.
 //
-// A crew skill is rendered into the workspace's own directory and mounted from there, exactly like a
+// A system skill is rendered into the workspace's own directory and mounted from there, exactly like a
 // skill the workspace attached itself. Duplicating the files per workspace costs a few kilobytes and
 // buys the whole existing path: the writing out, the sweeping when it is let go, the staleness of a
 // sandbox born before it, and one mount root rather than two.
 //
-// A failure reading the crew's skills leaves the workspace's own alone, for the same reason the
+// A failure reading the system's skills leaves the workspace's own alone, for the same reason the
 // caller survives a failed workspace read: fewer skills is better than no task.
-func (s *Server) withCrewSkills(ctx context.Context, attached []store.Imported) []store.Imported {
-	crew, err := s.store.CrewSkills(ctx)
-	if err != nil || len(crew) == 0 {
+func (s *Server) withSystemSkills(ctx context.Context, attached []store.Imported) []store.Imported {
+	system, err := s.store.SystemSkills(ctx)
+	if err != nil || len(system) == 0 {
 		return attached
 	}
 	out := attached
-	for _, one := range crew {
+	for _, one := range system {
 		if slices.ContainsFunc(attached, func(held store.Imported) bool { return held.Name == one.Name }) {
 			continue
 		}

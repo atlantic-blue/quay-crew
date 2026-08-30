@@ -1,7 +1,7 @@
 Feature: A flow run starts because something happened
 
   A run could only ever start three ways: a person asked for one, a schedule came due, or a wait
-  finished. All three are the crew talking to itself. Nothing said that the world had changed, which
+  finished. All three are the system talking to itself. Nothing said that the world had changed, which
   is the difference between an automation you set off and an automation that reacts.
 
   A trigger is that fourth way in. Something happens, and whatever noticed writes one row saying what
@@ -10,7 +10,7 @@ Feature: A flow run starts because something happened
   trigger carried becomes the run's opening state, so the first step is asked about the thing that
   happened.
 
-  Nothing outside this process can raise one yet. There is no ingress and no broker: the crew still
+  Nothing outside this process can raise one yet. There is no ingress and no broker: the system still
   runs with QC_KAFKA_SEEDS unset and loses only the export. Reading the event log and writing a
   trigger row from it is the next slice.
 
@@ -18,7 +18,7 @@ Feature: A flow run starts because something happened
     Given a running control plane
     And a workspace named "acme"
     And a project named "house-bills"
-    And the crew holds this flow graph:
+    And the system holds this flow graph:
       """
       name: fix-red
       version: 1
@@ -34,7 +34,7 @@ Feature: A flow run starts because something happened
   Scenario: Something happens, and a run starts on the next tick
     When something happens and raises a trigger of "fix-red" carrying "url" as "https://ci.test/9"
     Then no run of "fix-red" has started
-    When the crew ticks
+    When the system ticks
     Then a run of "fix-red" has started and finished
     And the run's steps were asked "the build at https://ci.test/9 is red. Fix it."
     And the trigger reads back as started, naming the run
@@ -43,7 +43,7 @@ Feature: A flow run starts because something happened
   # that job stops the run and the tree budget counts what it spends.
   Scenario: The run a trigger started is a job in the tree
     When something happens and raises a trigger of "fix-red" carrying "url" as "https://ci.test/9"
-    And the crew ticks
+    And the system ticks
     Then the run's own job is labelled with the trigger that caused it
     And the run's steps hang under the run's own job
 
@@ -51,12 +51,12 @@ Feature: A flow run starts because something happened
   # exactly like a trigger nobody has got to yet.
   Scenario: A trigger naming a flow nobody imported says so on its row
     When something happens and raises a trigger of "never-imported" carrying "url" as "https://ci.test/9"
-    And the crew ticks
+    And the system ticks
     Then the trigger reads back as failed, saying "quay flow import"
     And no run of "never-imported" has started
 
   Scenario: A trigger for a graph that does not begin at a trigger node is refused on its row
-    Given the crew holds this flow graph:
+    Given the system holds this flow graph:
       """
       name: started-by-hand
       version: 1
@@ -67,7 +67,7 @@ Feature: A flow run starts because something happened
         - [fix, done]
       """
     When something happens and raises a trigger of "started-by-hand" carrying "url" as "https://ci.test/9"
-    And the crew ticks
+    And the system ticks
     Then the trigger reads back as failed, saying "trigger"
     And no run of "started-by-hand" has started
 

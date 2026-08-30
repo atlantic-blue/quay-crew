@@ -8,10 +8,10 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/sandbox"
 )
 
-// The only way the crew ever learns how big the model's context window is. The runtime says it to the
+// The only way the system ever learns how big the model's context window is. The runtime says it to the
 // status line and to nothing else, so a status line that draws the line and writes nothing down
-// leaves the console with a count and no share on every session in the crew.
-func TestTheStatusLineWritesTheWindowSizeDownForTheCrew(t *testing.T) {
+// leaves the console with a count and no share on every session in the system.
+func TestTheStatusLineWritesTheWindowSizeDownForTheSystem(t *testing.T) {
 	dir := t.TempDir()
 	at := filepath.Join(dir, sandbox.ContextWindowFile)
 

@@ -8,7 +8,7 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for the scenarios about a task the crew keeps after the caller has gone. The caller's own
+// Steps for the scenarios about a task the system keeps after the caller has gone. The caller's own
 // context is cancelled here, which is what a closed terminal does to the call it was holding.
 func initializeDispatchingSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a task dispatched by a caller that then goes away$`, func(ctx context.Context) error {

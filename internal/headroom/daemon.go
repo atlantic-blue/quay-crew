@@ -15,7 +15,7 @@ import (
 )
 
 // A Source takes one sample of the machine. It is an interface so the control plane can be built
-// with no source at all, which is what a crew running the local sandbox provider does: it then
+// with no source at all, which is what a system running the local sandbox provider does: it then
 // reports unknown rather than shelling out to a daemon that is not there.
 type Source interface {
 	Sample(ctx context.Context) (Sample, error)
@@ -30,7 +30,7 @@ const field = "\t"
 //
 // It shells out rather than dialling the daemon's own interface for the reason the sandbox provider
 // gives: the tool is in the image, it is the same tool the operator runs by hand, and a figure the
-// crew reports can be checked against the command that produced it.
+// system reports can be checked against the command that produced it.
 type Daemon struct {
 	// Run runs one command and returns its standard output. A test replaces it. Nil takes the real
 	// one.
@@ -126,7 +126,7 @@ func (d Daemon) run(ctx context.Context, name string, args ...string) ([]byte, e
 //
 // The processors are the second ceiling. On 29 August 2026 eight jobs held 7,488 megabytes of a
 // 7,653 megabyte cap and 913 per cent of a processor at the same moment, and what stopped answering
-// was the daemon rather than the memory. A crew that read memory alone would have admitted a ninth.
+// was the daemon rather than the memory. A system that read memory alone would have admitted a ninth.
 func parseInfo(out []byte) (Figure, Share, string) {
 	line := strings.TrimSpace(string(out))
 	if line == "" {
@@ -164,12 +164,12 @@ func name(parts []string) string {
 // parseStats adds up what every container holds, on both axes, and pulls the sandboxes out of the
 // list.
 //
-// Every container rather than the crew's own, because the cap binds all of them: the question the
+// Every container rather than the system's own, because the cap binds all of them: the question the
 // figure answers is whether another sandbox will start, and a container belonging to something else
 // takes the same memory and the same processors.
 //
 // A container the daemon could not read is skipped rather than counted as zero. A total that
-// silently leaves one out is worse than a total that is missing, so a line the crew cannot read
+// silently leaves one out is worse than a total that is missing, so a line the system cannot read
 // leaves the total unknown.
 func parseStats(out []byte) (Figure, Share, []Sandbox) {
 	body := strings.TrimSpace(string(out))
@@ -225,7 +225,7 @@ func parseStats(out []byte) (Figure, Share, []Sandbox) {
 }
 
 // sessionOf is the session a container belongs to, and false for a container that is not a sandbox.
-// The crew's own services are containers too, and they hold memory, but nobody stops one of them to
+// The system's own services are containers too, and they hold memory, but nobody stops one of them to
 // make room.
 func sessionOf(container string) (string, bool) {
 	rest, found := strings.CutPrefix(container, sandbox.ContainerPrefix)
@@ -241,7 +241,7 @@ func sessionOf(container string) (string, bool) {
 }
 
 // parseSize reads the left of "1.201GiB / 7.653GiB", which is what the daemon prints for the memory
-// one container holds. It states a unit rather than bytes, so this is the only place in the crew
+// one container holds. It states a unit rather than bytes, so this is the only place in the system
 // that turns one back into a number.
 func parseSize(text string) (Figure, bool) {
 	held, _, _ := strings.Cut(text, "/")
@@ -305,11 +305,11 @@ func parsePercent(text string) Share {
 	return MeasuredShare(value)
 }
 
-// Describe is what `quay room` prints when it answers from the crew rather than from a sandbox.
+// Describe is what `quay room` prints when it answers from the system rather than from a sandbox.
 func Describe(sample Sample) string {
 	var out strings.Builder
 	if !sample.Taken() {
-		out.WriteString("the crew has not read the machine yet, so it says nothing about it.\n")
+		out.WriteString("the system has not read the machine yet, so it says nothing about it.\n")
 		if sample.Failed != "" {
 			fmt.Fprintf(&out, "\n  %s\n", sample.Failed)
 		}
@@ -353,7 +353,7 @@ func Describe(sample Sample) string {
 }
 
 // Sorted orders sandboxes by what they hold, largest first, which is the order an operator deciding
-// what to stop reads them in. A sandbox the crew could not measure sorts last rather than first,
+// what to stop reads them in. A sandbox the system could not measure sorts last rather than first,
 // because an unknown figure is not a large one.
 func Sorted(boxes []Sandbox) []Sandbox {
 	ordered := make([]Sandbox, len(boxes))

@@ -17,7 +17,7 @@ import (
 // is authored, imported and attached the same way, and they are separate calls because the two
 // entities are separate things.
 
-// ImportHook takes a hook into the crew from the files a client read out of its directory.
+// ImportHook takes a hook into the system from the files a client read out of its directory.
 //
 // The files travel and this side validates, for the reason ImportSkill gives: the control plane runs
 // in a container where a path on the operator's machine means nothing, and one validator is one
@@ -53,7 +53,7 @@ func (s *Server) ImportHook(ctx context.Context, req *quaycrewv1.ImportHookReque
 	return &quaycrewv1.ImportHookResponse{Hook: asHook(stored)}, nil
 }
 
-// ListHooks says what the crew holds, what one workspace holds, or what one session runs under.
+// ListHooks says what the system holds, what one workspace holds, or what one session runs under.
 func (s *Server) ListHooks(ctx context.Context, req *quaycrewv1.ListHooksRequest) (*quaycrewv1.ListHooksResponse, error) {
 	// A session's listing is the same answer its sandbox is built from, so the listing cannot say one
 	// thing while the sandbox does another.
@@ -81,18 +81,18 @@ func (s *Server) ListHooks(ctx context.Context, req *quaycrewv1.ListHooksRequest
 	if err != nil {
 		return nil, storeError(err, "list hooks")
 	}
-	// Which of them the crew holds, so a listing says where a hook came from rather than leaving the
+	// Which of them the system holds, so a listing says where a hook came from rather than leaving the
 	// operator to guess why a workspace they attached nothing to has three.
-	crew := map[string]bool{}
-	if fromCrew, err := s.store.CrewHooks(ctx); err == nil {
-		for _, one := range fromCrew {
-			crew[one.Name] = true
+	system := map[string]bool{}
+	if fromSystem, err := s.store.SystemHooks(ctx); err == nil {
+		for _, one := range fromSystem {
+			system[one.Name] = true
 		}
 	}
 	out := make([]*quaycrewv1.Hook, 0, len(held))
 	for _, one := range held {
 		carried := asHook(one)
-		carried.Crew = crew[one.Name]
+		carried.System = system[one.Name]
 		out = append(out, carried)
 	}
 	return &quaycrewv1.ListHooksResponse{Hooks: out}, nil
@@ -105,13 +105,16 @@ func (s *Server) ListHooks(ctx context.Context, req *quaycrewv1.ListHooksRequest
 // already exists, and saying otherwise would be worse than saying nothing: the operator would
 // believe a gate is on.
 func (s *Server) AttachHook(ctx context.Context, req *quaycrewv1.AttachHookRequest) (*quaycrewv1.AttachHookResponse, error) {
-	if req.GetScope() == crewScope {
-		attached, err := s.store.AttachCrewHook(ctx, req.GetName())
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	if req.GetScope() == systemScope {
+		attached, err := s.store.AttachSystemHook(ctx, req.GetName())
 		if err != nil {
 			return nil, storeError(err, "attach hook")
 		}
 		carried := asHook(attached)
-		carried.Crew = true
+		carried.System = true
 		return &quaycrewv1.AttachHookResponse{Hook: carried}, nil
 	}
 	attached, err := s.store.AttachHook(ctx, req.GetWorkspace(), req.GetName())
@@ -123,8 +126,11 @@ func (s *Server) AttachHook(ctx context.Context, req *quaycrewv1.AttachHookReque
 
 // DetachHook takes a hook away from a workspace. The hook stays imported.
 func (s *Server) DetachHook(ctx context.Context, req *quaycrewv1.DetachHookRequest) (*quaycrewv1.DetachHookResponse, error) {
-	if req.GetScope() == crewScope {
-		if err := s.store.DetachCrewHook(ctx, req.GetName()); err != nil {
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	if req.GetScope() == systemScope {
+		if err := s.store.DetachSystemHook(ctx, req.GetName()); err != nil {
 			return nil, storeError(err, "detach hook")
 		}
 		return &quaycrewv1.DetachHookResponse{}, nil
@@ -135,19 +141,19 @@ func (s *Server) DetachHook(ctx context.Context, req *quaycrewv1.DetachHookReque
 	return &quaycrewv1.DetachHookResponse{}, nil
 }
 
-// hooksFor is every hook a workspace's sessions run under: its own and the crew's, the workspace
+// hooksFor is every hook a workspace's sessions run under: its own and the system's, the workspace
 // winning a name collision because the narrower statement is the more deliberate one.
 //
-// A failure reading either is not a failure of the caller. Fewer hooks is a weaker crew and no
+// A failure reading either is not a failure of the caller. Fewer hooks is a weaker system and no
 // answer at all is a broken one, and the listing is what an operator reads to find out which.
 func (s *Server) hooksFor(ctx context.Context, workspace string) []store.ImportedHook {
 	held, err := s.store.WorkspaceHooks(ctx, workspace)
 	if err != nil {
 		held = nil
 	}
-	crew, err := s.store.CrewHooks(ctx)
+	system, err := s.store.SystemHooks(ctx)
 	if err == nil {
-		for _, one := range crew {
+		for _, one := range system {
 			if containsHook(held, one.Name) {
 				continue
 			}
@@ -167,7 +173,7 @@ func containsHook(held []store.ImportedHook, name string) bool {
 	return false
 }
 
-// asHook renders a hook for a client. The files never travel back: a client asked what the crew
+// asHook renders a hook for a client. The files never travel back: a client asked what the system
 // enforces, not for a copy of every script.
 func asHook(one store.ImportedHook) *quaycrewv1.Hook {
 	out := &quaycrewv1.Hook{

@@ -11,7 +11,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/controlplane"
 )
 
-// Reading a level's context back out of the crew, against the real database.
+// Reading a level's context back out of the system, against the real database.
 //
 // The unit tier proves the command prints what it is given and refuses an empty level, against a
 // store in memory. What only this tier reaches is the crossing the command exists for: the operator
@@ -22,10 +22,10 @@ import (
 //
 // Byte for byte is the assertion, at every level and on a body larger than any page of prose. A
 // truncation, an encoding, or a column that quietly keeps the first few thousand bytes shows here and
-// nowhere else, and each one would hand somebody a level to edit that the crew does not hold.
+// nowhere else, and each one would hand somebody a level to edit that the system does not hold.
 
 // aBodyLargerThanAPage is prose of about 70 kilobytes, which is past the point where a column of the
-// wrong type starts dropping the end of it. A crew's own context is already this size.
+// wrong type starts dropping the end of it. A system's own context is already this size.
 func aBodyLargerThanAPage() string {
 	var b strings.Builder
 	for b.Len() < 70_000 {
@@ -35,10 +35,10 @@ func aBodyLargerThanAPage() string {
 }
 
 // TestEveryLevelComesBackByteForByteThroughTheListing writes a body at each of the three levels a
-// crew has and reads each one back, comparing against what was written rather than against the
+// system has and reads each one back, comparing against what was written rather than against the
 // write's own answer, which could hand back what it was sent while the database held none of it.
 func TestEveryLevelComesBackByteForByteThroughTheListing(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -47,7 +47,7 @@ func TestEveryLevelComesBackByteForByteThroughTheListing(t *testing.T) {
 	levels := []struct {
 		scope, owner, body string
 	}{
-		{"crew", "", "No acronyms.  \n\n\tSpell things out.\nОдно слово, одно значение."},
+		{"system", "", "No acronyms.  \n\n\tSpell things out.\nОдно слово, одно значение."},
 		{"workspace", workspace, aBodyLargerThanAPage()},
 		{"project", project, "pay the water bill first"},
 	}
@@ -77,15 +77,15 @@ func TestEveryLevelComesBackByteForByteThroughTheListing(t *testing.T) {
 		read++
 	}
 	if read != len(levels) {
-		t.Fatalf("%d levels came back whole and a crew has %d", read, len(levels))
+		t.Fatalf("%d levels came back whole and a system has %d", read, len(levels))
 	}
 	t.Logf("read %d levels back off the database", read)
 }
 
 // What comes out goes back in unchanged. This is the pair the issue asked for, run against the real
-// column: `quay context show crew > file` and `quay context set crew < file`.
+// column: `quay context show system > file` and `quay context set system < file`.
 func TestWhatIsReadBackIsWrittenBackUnchanged(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	workspace, _ := aProjectOnPostgres(t, s)
 	body := "Never touch production data.  \n\nDeploy through the pipeline, never from a shell."
@@ -115,35 +115,35 @@ func TestWhatIsReadBackIsWrittenBackUnchanged(t *testing.T) {
 // A level is added to rather than overwritten, which is what could not be done at all before the read
 // existed. The operator reads the level out, appends, and writes it back.
 func TestALevelIsAddedToRatherThanOverwritten(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	if _, err := s.SetContext(ctx, &quaycrewv1.SetContextRequest{
-		Scope: "crew", Body: "Never touch production data.\n",
+		Scope: "system", Body: "Never touch production data.\n",
 	}); err != nil {
 		t.Fatalf("SetContext: %v", err)
 	}
 
-	held := bodyOnPostgres(t, s, "crew", "")
+	held := bodyOnPostgres(t, s, "system", "")
 	if _, err := s.SetContext(ctx, &quaycrewv1.SetContextRequest{
-		Scope: "crew", Body: held + "\nDeploy through the pipeline.\n",
+		Scope: "system", Body: held + "\nDeploy through the pipeline.\n",
 	}); err != nil {
 		t.Fatalf("setting the level back with a paragraph added: %v", err)
 	}
 
-	got := bodyOnPostgres(t, s, "crew", "")
+	got := bodyOnPostgres(t, s, "system", "")
 	for _, want := range []string{"Never touch production data.", "Deploy through the pipeline."} {
 		if !strings.Contains(got, want) {
-			t.Errorf("the crew level no longer says %q: %q", want, got)
+			t.Errorf("the system level no longer says %q: %q", want, got)
 		}
 	}
 }
 
-// A project's context is held in the store, and the row describing it was dropped whenever the crew
+// A project's context is held in the store, and the row describing it was dropped whenever the system
 // could not name the directories on disk. A control plane told no data directory then reported every
 // project as saying nothing, and `quay context clear` read the same rows, so it announced a level as
-// already empty while it held a body. This crew has no data directory, which is the condition.
-func TestAProjectReadsBackOnACrewWithNoDataDirectory(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+// already empty while it held a body. This system has no data directory, which is the condition.
+func TestAProjectReadsBackOnASystemWithNoDataDirectory(t *testing.T) {
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 

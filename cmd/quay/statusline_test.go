@@ -11,13 +11,13 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/hook"
 )
 
-// shipped reads the command the crew asks the runtime to run for its status line, out of the settings
-// the crew renders for every session.
+// shipped reads the command the system asks the runtime to run for its status line, out of the settings
+// the system renders for every session.
 func shipped(t *testing.T) string {
 	t.Helper()
 	rendered, err := hook.Settings("/home/agent/hooks", nil)
 	if err != nil {
-		t.Fatalf("render the settings the crew mounts: %v", err)
+		t.Fatalf("render the settings the system mounts: %v", err)
 	}
 	var settings struct {
 		StatusLine struct {
@@ -26,34 +26,34 @@ func shipped(t *testing.T) string {
 		} `json:"statusLine"`
 	}
 	if err := json.Unmarshal(rendered, &settings); err != nil {
-		t.Fatalf("the settings the crew renders are not readable as JSON: %v", err)
+		t.Fatalf("the settings the system renders are not readable as JSON: %v", err)
 	}
 	if settings.StatusLine.Type != "command" {
-		t.Fatalf("the crew asks for a status line of type %q, and the runtime only runs %q",
+		t.Fatalf("the system asks for a status line of type %q, and the runtime only runs %q",
 			settings.StatusLine.Type, "command")
 	}
 	if settings.StatusLine.Command == "" {
-		t.Fatal("the crew asks for no status line, so an attached operator sees nothing")
+		t.Fatal("the system asks for no status line, so an attached operator sees nothing")
 	}
 	return settings.StatusLine.Command
 }
 
-// The words the crew renders have to be words this binary answers to. Both halves passed their own
+// The words the system renders have to be words this binary answers to. Both halves passed their own
 // tests while disagreeing: a settings file naming a subcommand that does not exist leaves the runtime
 // running something that fails on every draw, and the operator sees a blank line rather than an
-// error, which reads as the crew having no answer.
-func TestTheStatusLineTheCrewConfiguresIsOneThisBinaryDraws(t *testing.T) {
+// error, which reads as the system having no answer.
+func TestTheStatusLineTheSystemConfiguresIsOneThisBinaryDraws(t *testing.T) {
 	words := strings.Fields(shipped(t))
 	if len(words) < 2 || words[0] != "quay" {
-		t.Fatalf("the crew's status line runs %q, which is not this tool", strings.Join(words, " "))
+		t.Fatalf("the system's status line runs %q, which is not this tool", strings.Join(words, " "))
 	}
 
 	printed := drawn(t, words[1:], payload(296_000, 1_000_000))
 	if !strings.Contains(printed, "context 30% used (296k of 1M)") {
-		t.Errorf("running the command the crew configures printed %q, which does not say the context", printed)
+		t.Errorf("running the command the system configures printed %q, which does not say the context", printed)
 	}
 	if !strings.Contains(printed, "over the 30% mark") {
-		t.Errorf("running the command the crew configures printed %q, which does not warn", printed)
+		t.Errorf("running the command the system configures printed %q, which does not warn", printed)
 	}
 }
 

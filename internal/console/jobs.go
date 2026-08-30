@@ -9,7 +9,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
-// Jobs lists what the crew has been asked to do, which is the work itself rather than the layer
+// Jobs lists what the system has been asked to do, which is the work itself rather than the layer
 // underneath it. The console was built when a session was the unit of work, and a job is what an
 // operator declares now: five were running on this repository the day this view did not exist.
 //
@@ -29,7 +29,7 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// listing heads its first column session.
 			{Title: "job", Width: 10, Colour: dim},
 			{Title: "phase", Width: 9, Colour: colourOfPhase},
-			// Gives way third: a crew where every job names a role has a column of one word, and by
+			// Gives way third: a system where every job names a role has a column of one word, and by
 			// then the title is worth more than it is.
 			{Title: "role", Width: 16, Give: 3, Colour: colourOfName},
 			// The flexible column, because it is the line an operator reads to know what this is.
@@ -70,7 +70,7 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			},
 		},
 		// parent is a project id when this view is drilled into from one, and empty at the top level,
-		// which is every job the crew holds.
+		// which is every job the system holds.
 		List: func(ctx context.Context, project string) ([]Row, error) {
 			resp, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: project})
 			if err != nil {

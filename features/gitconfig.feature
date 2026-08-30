@@ -12,14 +12,14 @@ Feature: An operator's git configuration reaches a session
   Identity, aliases and settings then reach every git process in the sandbox, from any shell. A
   workspace that mounts nothing is unchanged, because git ignores an include that is not there.
 
-  Signing is the one thing the crew decides rather than the operator, and it has to, because most
+  Signing is the one thing the system decides rather than the operator, and it has to, because most
   operators who sign have signing on for everything against a key their machine holds and a container
   does not. A workspace that mounts a signing key signs with it, in either format: an ssh key, which
   git reads as a file, or a gpg key, which the sandbox imports into a keyring it makes in memory. A
   workspace that mounts none says so to git, rather than saying nothing and letting the mounted
   configuration fail every commit.
 
-  These scenarios use a sandbox double, so they say what the crew asks a sandbox to do and not that
+  These scenarios use a sandbox double, so they say what the system asks a sandbox to do and not that
   git honours it. The real thing is proved against the image in
   TestAnOperatorsConfigurationDecidesWhoCommits and TestASessionWithNoKeyCommitsWithoutSigning.
 

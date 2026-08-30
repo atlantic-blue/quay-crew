@@ -35,7 +35,7 @@ func TestTheShippedSteSkillIsOffUntilItIsAskedFor(t *testing.T) {
 }
 
 // The reason it is off by default. Simplified Technical English strips rhythm and register, which is
-// what a blog post is made of, and this crew's context is a voice specification: a skill that quietly
+// what a blog post is made of, and this system's context is a voice specification: a skill that quietly
 // flattened a draft would be undoing the thing the operator cares most about.
 func TestTheShippedSteSkillRefusesWritingMeantToBeEnjoyed(t *testing.T) {
 	brief := flowed(shippedSkill(t, "ste").Brief)

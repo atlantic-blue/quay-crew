@@ -24,7 +24,7 @@ import (
 )
 
 // The headroom answer joins two things that live in two places: what the daemon says a container
-// holds, and what the crew's own row says the session beside it is doing. The second half is a real
+// holds, and what the system's own row says the session beside it is doing. The second half is a real
 // store read, and the memory store cannot speak for how Postgres stamps `updated_at`.
 //
 // So this runs the whole path: a real Postgres, the real control plane, the real gRPC interface, and
@@ -103,7 +103,7 @@ func TestTheHeadroomAnswerJoinsTheDaemonToTheRealStore(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
-	// The daemon reports a container for that session, and one the crew holds no row for.
+	// The daemon reports a container for that session, and one the system holds no row for.
 	sample := theMachine()
 	sample.Sandboxes = []headroom.Sandbox{
 		{Session: "a00d36d6454a3de66d02c6a3", Held: headroom.Measured(2 * mebibyte)},
@@ -139,12 +139,12 @@ func TestTheHeadroomAnswerJoinsTheDaemonToTheRealStore(t *testing.T) {
 		t.Fatal("no line says how long since the last task, so nothing says which session to stop")
 	}
 	if boxes[1].GetStatus() != "" {
-		t.Fatalf("the crew claims a container it holds no row for is %q", boxes[1].GetStatus())
+		t.Fatalf("the system claims a container it holds no row for is %q", boxes[1].GetStatus())
 	}
 
 	// And the figures survived the wire whole.
 	if answer.GetLimit() != "7837 MiB" || answer.GetState() != headroom.StateRoom {
-		t.Fatalf("the crew says %s of %s, %s", answer.GetUsed(), answer.GetLimit(), answer.GetState())
+		t.Fatalf("the system says %s of %s, %s", answer.GetUsed(), answer.GetLimit(), answer.GetState())
 	}
 
 	// The daemon was read once, by the sampler, and never by the call.

@@ -27,8 +27,8 @@ import (
 // document, a nullable parent that a foreign key holds, and a transaction that has to carry the row
 // and the record of it together. Those either job against the real engine or they do not.
 
-// aCrewOnPostgres stands the control plane up on a real database, empty of rows.
-func aCrewOnPostgres(t *testing.T) (*controlplane.Server, store.Store) {
+// aSystemOnPostgres stands the control plane up on a real database, empty of rows.
+func aSystemOnPostgres(t *testing.T) (*controlplane.Server, store.Store) {
 	t.Helper()
 	truncate(t)
 	kept, err := store.NewPostgres(context.Background(), databaseURL)
@@ -60,7 +60,7 @@ func aProjectOnPostgres(t *testing.T, s *controlplane.Server) (workspace, projec
 // Everything a caller declares has to come back off the database the way it went in. The array, the
 // document and the moment are the three the in memory store cannot say anything about.
 func TestJobRoundTripsThroughPostgres(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 	deadline := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
@@ -108,7 +108,7 @@ func TestJobRoundTripsThroughPostgres(t *testing.T) {
 
 // The row and the record of how it came to exist are written together or not at all.
 func TestTheRecordOfADeclarationIsCommittedWithTheJob(t *testing.T) {
-	s, kept := aCrewOnPostgres(t)
+	s, kept := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -144,10 +144,10 @@ func TestTheRecordOfADeclarationIsCommittedWithTheJob(t *testing.T) {
 	}
 }
 
-// A declaration the crew refuses must leave nothing behind, which is a claim about the transaction
+// A declaration the system refuses must leave nothing behind, which is a claim about the transaction
 // as much as about the check.
 func TestARefusedDeclarationLeavesNoRowInTheDatabase(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -160,7 +160,7 @@ func TestARefusedDeclarationLeavesNoRowInTheDatabase(t *testing.T) {
 		Project: project, Title: "read the bill", Brief: "open it",
 		After: []string{"0123456789abcdef01234567"},
 	}); err == nil {
-		t.Fatal("job waiting on something the crew does not hold was accepted")
+		t.Fatal("job waiting on something the system does not hold was accepted")
 	}
 
 	listed, err := s.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: project})
@@ -174,7 +174,7 @@ func TestARefusedDeclarationLeavesNoRowInTheDatabase(t *testing.T) {
 
 // The listing narrows in the database rather than in the process, so each of these is a query.
 func TestAListingNarrowsInTheDatabase(t *testing.T) {
-	s, kept := aCrewOnPostgres(t)
+	s, kept := aSystemOnPostgres(t)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
@@ -232,7 +232,7 @@ func TestAListingNarrowsInTheDatabase(t *testing.T) {
 // Job that already ended is not stopped again, and the database is where that has to hold: the
 // update is conditional on the phase, so two callers racing cannot both win.
 func TestJobThatAlreadyEndedIsNotStoppedAgainInTheDatabase(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -269,7 +269,7 @@ func TestJobThatAlreadyEndedIsNotStoppedAgainInTheDatabase(t *testing.T) {
 // Intent outlives the process. A second connection pool is a different process as far as the rows
 // are concerned.
 func TestJobOutlivesTheProcessThatDeclaredIt(t *testing.T) {
-	s, _ := aCrewOnPostgres(t)
+	s, _ := aSystemOnPostgres(t)
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 

@@ -15,7 +15,7 @@ import (
 const theSecretValue = "sk-ant-the-value-nobody-should-store"
 
 // Steps for the scenarios about the record every movement leaves. The store is the truth and the log
-// is the copy, so these read both: a record that is only on the log is a record a crew with no
+// is the copy, so these read both: a record that is only on the log is a record a system with no
 // broker would never have.
 func initializeJobEventsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a job titled "([^"]*)" is declared$`, func(ctx context.Context, title string) error {
@@ -24,7 +24,7 @@ func initializeJobEventsSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the crew's event log refuses every record$`, func(ctx context.Context) error {
+	sc.Step(`^the system's event log refuses every record$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.eventsRefuse = true
 		return w.restart()
@@ -209,7 +209,7 @@ func jobTopic(w *world) string { return w.workspaceName + ".job" }
 func jobRecords(ctx context.Context) ([]*quaycrewv1.JobEvent, error) {
 	w := worldFrom(ctx)
 	if w.events == nil {
-		return nil, fmt.Errorf("this crew has no event log, so nothing was exported")
+		return nil, fmt.Errorf("this system has no event log, so nothing was exported")
 	}
 	var events []*quaycrewv1.JobEvent
 	for _, record := range w.events.RecordsOn(jobTopic(w)) {
@@ -222,7 +222,7 @@ func jobRecords(ctx context.Context) ([]*quaycrewv1.JobEvent, error) {
 	return events, nil
 }
 
-// storedDetails is what the store holds about the last job, which is the record a crew
+// storedDetails is what the store holds about the last job, which is the record a system
 // with no broker keeps.
 func storedDetails(ctx context.Context) ([]string, error) {
 	w := worldFrom(ctx)

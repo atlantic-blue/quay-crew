@@ -1,7 +1,7 @@
 Feature: An attached operator sees how much of the model's context window is used
 
   Attaching to a session puts you in the conversation, talking to the model directly. Everything the
-  crew knows about that conversation is on the other screen, and one number decides whether the
+  system knows about that conversation is on the other screen, and one number decides whether the
   conversation is still worth continuing: how much of the model's context window it has filled. It was
   nowhere. Not in the console, not in the panel's header, and asking the model for it costs a task and
   fills a little more of the window to answer.
@@ -14,16 +14,16 @@ Feature: An attached operator sees how much of the model's context window is use
 
   The window's size is the runtime's to say rather than this build's to remember. A runtime that does
   not say says so on the line, because a guessed window is a confident wrong number and a blank line
-  reads as the crew being broken.
+  reads as the system being broken.
 
   The console answers the same question for a session nobody is attached to. It reads what the last
   answer carried out of the transcript, which is not what the conversation cost: cost only grows, and
   the window empties again when the model compacts. The size of the window is the runtime's to say
-  there too, so a session writes it down where the crew reads, and until one does the listing shows
+  there too, so a session writes it down where the system reads, and until one does the listing shows
   the count rather than a share it made up.
 
-  The crew says all of this in the settings file it renders and mounts read only, not in the sandbox
-  image. The image cannot say it: the crew mounts the workspace's own directory over the conversation
+  The system says all of this in the settings file it renders and mounts read only, not in the sandbox
+  image. The image cannot say it: the system mounts the workspace's own directory over the conversation
   directory in every sandbox, and a mount hides whatever the image put underneath it.
 
   Background:

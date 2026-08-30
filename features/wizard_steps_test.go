@@ -69,35 +69,35 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 			return c.press(tea.KeyMsg{Type: tea.KeyEnter})
 		})
 
-	sc.Step(`^the crew has (\d+) workspaces?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system has (\d+) workspaces?$`, func(ctx context.Context, want int) error {
 		listed, err := worldFrom(ctx).client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
 		if err != nil {
 			return err
 		}
 		if got := len(listed.GetWorkspaces()); got != want {
-			return fmt.Errorf("the crew has %d workspaces, want %d", got, want)
+			return fmt.Errorf("the system has %d workspaces, want %d", got, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew has (\d+) projects?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system has (\d+) projects?$`, func(ctx context.Context, want int) error {
 		listed, err := worldFrom(ctx).client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
 		if err != nil {
 			return err
 		}
 		if got := len(listed.GetProjects()); got != want {
-			return fmt.Errorf("the crew has %d projects, want %d", got, want)
+			return fmt.Errorf("the system has %d projects, want %d", got, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew has (\d+) sessions?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system has (\d+) sessions?$`, func(ctx context.Context, want int) error {
 		listed, err := worldFrom(ctx).client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {
 			return err
 		}
 		if got := len(listed.GetSessions()); got != want {
-			return fmt.Errorf("the crew has %d sessions, want %d", got, want)
+			return fmt.Errorf("the system has %d sessions, want %d", got, want)
 		}
 		return nil
 	})
@@ -124,7 +124,7 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, want the one the wizard started", len(listed.GetSessions()))
+			return fmt.Errorf("the system has %d sessions, want the one the wizard started", len(listed.GetSessions()))
 		}
 		view := c.model.View()
 		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
@@ -153,7 +153,7 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 }
 
 // openWizard opens the real console over the live control plane and presses the key that makes
-// something. The console needs the crew handed to it separately, because listing goes through each
+// something. The console needs the system handed to it separately, because listing goes through each
 // view's own lister and the wizard is the one thing no view owns.
 func (c *consoleWorld) openWizard(client quaycrewv1.ControlPlaneServiceClient) error {
 	registry, err := console.NewDefaultRegistry(client)
@@ -172,7 +172,7 @@ func (c *consoleWorld) openWizard(client quaycrewv1.ControlPlaneServiceClient) e
 }
 
 // answerWizard types each row of the table and presses enter, which is what answering a question is.
-// Every command the console asks for is run on the way, so a step that reads what the crew already
+// Every command the console asks for is run on the way, so a step that reads what the system already
 // has has an answer by the time the next key arrives.
 func (c *consoleWorld) answerWizard(answers *godog.Table) error {
 	for _, row := range answers.Rows {
@@ -188,7 +188,7 @@ func (c *consoleWorld) answerWizard(answers *godog.Table) error {
 	return nil
 }
 
-// The mode a session was born in, read off the crew rather than off the wizard, because what matters
+// The mode a session was born in, read off the system rather than off the wizard, because what matters
 // is what the session holds and not what was typed at it.
 func initializeWizardModeSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^that session's mode is "([^"]*)"$`, func(ctx context.Context, want string) error {
@@ -197,7 +197,7 @@ func initializeWizardModeSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if len(listed.GetSessions()) != 1 {
-			return fmt.Errorf("the crew has %d sessions, so there is no single one to ask about",
+			return fmt.Errorf("the system has %d sessions, so there is no single one to ask about",
 				len(listed.GetSessions()))
 		}
 		if got := listed.GetSessions()[0].GetPermissionMode(); got != want {

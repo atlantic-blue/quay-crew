@@ -82,9 +82,9 @@ func TestATraceWithNoSpanStillJoins(t *testing.T) {
 	}
 }
 
-// A record the crew cannot read leaves the context as it was. Half a trace context is worse than
+// A record the system cannot read leaves the context as it was. Half a trace context is worse than
 // none: it sends a reader to a trace that does not exist.
-func TestARecordedTraceTheCrewCannotReadIsIgnored(t *testing.T) {
+func TestARecordedTraceTheSystemCannotReadIsIgnored(t *testing.T) {
 	for _, bad := range []string{"", "not a trace", "4bf92f35", strings.Repeat("z", 32)} {
 		ctx := telemetry.Under(context.Background(), bad, "00f067aa0ba902b7")
 		if got := telemetry.TraceIDFrom(ctx); got != "" {

@@ -8,23 +8,23 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// SeedToCrew is which of the shipped skills a fresh crew is given, rather than merely offered.
+// SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.
 //
-// These two are how work is done in any repository, they are what the crew's own documentation
+// These two are how work is done in any repository, they are what the system's own documentation
 // assumes, and neither is specific to one kind of work the way the cloud and tracker skills are.
 // The rest are imported so `quay skill list` can show them, and attaching one is a decision.
-var SeedToCrew = []string{"git", "github"}
+var SeedToSystem = []string{"git", "github"}
 
-// Seed puts the skills this build ships with into a crew that has none.
+// Seed puts the skills this build ships with into a system that has none.
 //
-// A crew that starts empty makes every operator do the same setup: import each skill, then attach
-// each one to each workspace. The files are already in the image, so the crew can simply have them.
+// A system that starts empty makes every operator do the same setup: import each skill, then attach
+// each one to each workspace. The files are already in the image, so the system can simply have them.
 //
 // Only when the catalogue is empty, which is what makes this a starting point rather than a policy
-// that reasserts itself. An operator who takes a skill off the crew has said something, and starting
+// that reasserts itself. An operator who takes a skill off the system has said something, and starting
 // the control plane again must not undo it.
 //
-// A failure to seed is logged and not fatal. A crew that starts with no skills is a crew that works,
+// A failure to seed is logged and not fatal. A system that starts with no skills is a system that works,
 // and refusing to start over a skill nobody has asked for yet would be the worse answer.
 func (s *Server) Seed(ctx context.Context, dir string, logger *slog.Logger) {
 	if dir == "" {
@@ -53,8 +53,8 @@ func (s *Server) Seed(ctx context.Context, dir string, logger *slog.Logger) {
 		if !wanted(one.Name) {
 			continue
 		}
-		if _, err := s.store.AttachCrewSkill(ctx, one.Name); err != nil {
-			logger.Warn("a shipped skill was not given to the crew", "skill", one.Name, "error", err)
+		if _, err := s.store.AttachSystemSkill(ctx, one.Name); err != nil {
+			logger.Warn("a shipped skill was not given to the system", "skill", one.Name, "error", err)
 			continue
 		}
 		given++
@@ -62,12 +62,12 @@ func (s *Server) Seed(ctx context.Context, dir string, logger *slog.Logger) {
 	if seeded == 0 {
 		return
 	}
-	logger.Info("skills seeded", "imported", seeded, "held by the crew", given, "directory", dir)
+	logger.Info("skills seeded", "imported", seeded, "held by the system", given, "directory", dir)
 }
 
-// wanted says whether a shipped skill is one the crew is given rather than merely offered.
+// wanted says whether a shipped skill is one the system is given rather than merely offered.
 func wanted(name string) bool {
-	for _, one := range SeedToCrew {
+	for _, one := range SeedToSystem {
 		if one == name {
 			return true
 		}

@@ -16,8 +16,8 @@ import (
 )
 
 // What a graph's claim about its own job is checked against: the session's working directory as the
-// crew keeps it, read without starting a container.
-func aCrewWithASession(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
+// system keeps it, read without starting a container.
+func aSystemWithASession(t *testing.T) (*controlplane.Server, sandbox.Storage, string) {
 	t.Helper()
 	dir := t.TempDir()
 	storage := sandbox.Storage{Dir: dir, Host: dir}
@@ -46,7 +46,7 @@ func aCrewWithASession(t *testing.T) (*controlplane.Server, sandbox.Storage, str
 }
 
 func TestASessionHoldsWhatTheTaskLeftInIt(t *testing.T) {
-	server, storage, session := aCrewWithASession(t)
+	server, storage, session := aSystemWithASession(t)
 	ctx := context.Background()
 
 	held, err := server.SessionHolds(ctx, session, "package.json")
@@ -65,7 +65,7 @@ func TestASessionHoldsWhatTheTaskLeftInIt(t *testing.T) {
 		ID: session, Workspace: room.GetSession().GetWorkspace(), Project: room.GetSession().GetProject(),
 	})
 	if !kept {
-		t.Fatal("the crew keeps no working directory for a session it just ran a task in")
+		t.Fatal("the system keeps no working directory for a session it just ran a task in")
 	}
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		t.Fatalf("make the working directory: %v", err)
@@ -87,14 +87,14 @@ func TestASessionHoldsWhatTheTaskLeftInIt(t *testing.T) {
 // error and carries on past a false. A check that quietly passes when nothing could look is the same
 // false green as no check at all.
 func TestASessionNobodyHasCannotSatisfyACheck(t *testing.T) {
-	server, _, _ := aCrewWithASession(t)
+	server, _, _ := aSystemWithASession(t)
 
 	if _, err := server.SessionHolds(context.Background(), "no-such-session", "package.json"); err == nil {
-		t.Fatal("a session the crew does not have answered a question about its files")
+		t.Fatal("a session the system does not have answered a question about its files")
 	}
 }
 
-func TestACrewKeepingNothingOnDiskSaysSoRatherThanAnsweringNo(t *testing.T) {
+func TestASystemKeepingNothingOnDiskSaysSoRatherThanAnsweringNo(t *testing.T) {
 	server := controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: &model.FakeRunner{Reply: "ok"},
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
@@ -119,7 +119,7 @@ func TestACrewKeepingNothingOnDiskSaysSoRatherThanAnsweringNo(t *testing.T) {
 
 	_, err = server.SessionHolds(ctx, dispatched.GetId(), "package.json")
 	if err == nil {
-		t.Fatal("a crew with nowhere to look answered a question about a session's files")
+		t.Fatal("a system with nowhere to look answered a question about a session's files")
 	}
 	if !strings.Contains(err.Error(), "working directory") {
 		t.Errorf("it says %q, want it to say there is nowhere to look", err)

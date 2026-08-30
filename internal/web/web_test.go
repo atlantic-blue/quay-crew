@@ -24,7 +24,7 @@ import (
 )
 
 // TestTheViewCanOnlyRead is the read only rule, held by the compiler and checked here as a class
-// rather than call by call. Anything that changes the crew is spelled Create, Set, Delete, Dispatch,
+// rather than call by call. Anything that changes the system is spelled Create, Set, Delete, Dispatch,
 // Attach, Stop, Restart, Archive, Import or Answer, so a Reader that names only List and Get cannot
 // hold one. Adding a write call to the interface fails this before it reaches a handler.
 func TestTheViewCanOnlyRead(t *testing.T) {
@@ -35,7 +35,7 @@ func TestTheViewCanOnlyRead(t *testing.T) {
 	for index := range reader.NumMethod() {
 		name := reader.Method(index).Name
 		if !strings.HasPrefix(name, "List") && !strings.HasPrefix(name, "Get") {
-			t.Errorf("Reader names %s, which is not a call that reads: the web view may not change the crew", name)
+			t.Errorf("Reader names %s, which is not a call that reads: the web view may not change the system", name)
 		}
 	}
 }
@@ -70,7 +70,7 @@ func TestItServesThisMachineAndRefusesEverywhereElse(t *testing.T) {
 }
 
 func TestTheListingShowsEveryLiveConversation(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	dispatch(t, client, projectOf(t, client), "", "when is the electricity bill due")
 
 	body, status := get(t, client, "/")
@@ -86,7 +86,7 @@ func TestTheListingShowsEveryLiveConversation(t *testing.T) {
 }
 
 func TestAConversationReadsBackInTheOrderItHappened(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	project := projectOf(t, client)
 	first := dispatch(t, client, project, "", "hello")
 	dispatch(t, client, project, first.GetHandle(), "and again")
@@ -105,10 +105,10 @@ func TestAConversationReadsBackInTheOrderItHappened(t *testing.T) {
 	}
 }
 
-// TestACrewWithNoConversationsSaysSo keeps an empty crew from rendering an empty page. A blank
-// listing and a crew nobody has spoken to look identical, and one of them is a bug.
-func TestACrewWithNoConversationsSaysSo(t *testing.T) {
-	client := aCrew(t)
+// TestASystemWithNoConversationsSaysSo keeps an empty system from rendering an empty page. A blank
+// listing and a system nobody has spoken to look identical, and one of them is a bug.
+func TestASystemWithNoConversationsSaysSo(t *testing.T) {
+	client := aSystem(t)
 
 	body, status := get(t, client, "/")
 
@@ -116,12 +116,12 @@ func TestACrewWithNoConversationsSaysSo(t *testing.T) {
 		t.Fatalf("the listing answered %d", status)
 	}
 	if !strings.Contains(body, "no live conversations") {
-		t.Errorf("an empty crew should say it is empty:\n%s", body)
+		t.Errorf("an empty system should say it is empty:\n%s", body)
 	}
 }
 
-func TestASessionTheCrewDoesNotHaveIsNotFound(t *testing.T) {
-	client := aCrew(t)
+func TestASessionTheSystemDoesNotHaveIsNotFound(t *testing.T) {
+	client := aSystem(t)
 
 	body, status := get(t, client, "/session/nothing-by-this-name")
 
@@ -137,7 +137,7 @@ func TestASessionTheCrewDoesNotHaveIsNotFound(t *testing.T) {
 // a task that was refused. They must never render the same.
 func TestAFailedTaskSaysWhatWentWrong(t *testing.T) {
 	runner := &model.FakeRunner{Err: errors.New("the model refused")}
-	client := crewWith(t, runner)
+	client := systemWith(t, runner)
 	project := projectOf(t, client)
 	_, _ = client.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{Project: project, Text: "hello"})
 
@@ -164,14 +164,14 @@ func get(t *testing.T, reader Reader, path string) (string, int) {
 	return recorder.Body.String(), recorder.Code
 }
 
-func aCrew(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+func aSystem(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	return crewWith(t, &model.FakeRunner{Reply: "ok"})
+	return systemWith(t, &model.FakeRunner{Reply: "ok"})
 }
 
-// crewWith is a whole control plane in memory, reached over a real connection, so these tests drive
+// systemWith is a whole control plane in memory, reached over a real connection, so these tests drive
 // the thing the operator drives rather than a double of it.
-func crewWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
@@ -240,7 +240,7 @@ func dispatch(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, project
 func TestATaskStillRunningSaysSoRatherThanShowingAnEmptyReply(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "the electricity bill is due on the ninth",
 		Gate: make(chan struct{}), Started: make(chan struct{})}
-	client := crewWith(t, runner)
+	client := systemWith(t, runner)
 	project := projectOf(t, client)
 
 	// Detached, so the page can be read while the model is still working.
@@ -301,20 +301,20 @@ func waitUntilLanded(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, 
 	t.Fatal("the task never landed")
 }
 
-// The page shows how long ago each session moved and reads it from the same stamp the crew orders by,
+// The page shows how long ago each session moved and reads it from the same stamp the system orders by,
 // so the column runs down the page. It does not order the listing itself: one order decided in the
-// crew is what keeps this page, the console and the command line saying the same thing.
+// system is what keeps this page, the console and the command line saying the same thing.
 //
-// The waits are real because the crew stamps its own rows and takes no stamp from a caller. Without
+// The waits are real because the system stamps its own rows and takes no stamp from a caller. Without
 // them the two sessions would share a moment, the identifier would decide, and this would pass on
 // whichever identifier happened to be minted first.
 func TestTheListingPutsTheSessionLastWorkedInAtTheTop(t *testing.T) {
-	client := aCrew(t)
+	client := aSystem(t)
 	project := projectOf(t, client)
 
 	// The handles are chosen so that any order taken from the address runs against the answer: the
 	// session that belongs at the top is the one whose address sorts last. Left to generated handles
-	// this case passes or fails on which identifier the crew happened to mint first.
+	// this case passes or fails on which identifier the system happened to mint first.
 	early := dispatch(t, client, project, "zzz-older-subject", "the older subject")
 	time.Sleep(10 * time.Millisecond)
 	late := dispatch(t, client, project, "aaa-newer-subject", "a newer subject")

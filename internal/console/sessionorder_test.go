@@ -12,7 +12,7 @@ import (
 
 // The console shows the same listing the command line and the web page show, and the order is the
 // control plane's to decide. Sorting here as well would be a second order to keep in step with the
-// other two, and it was: the view sorted by the session column while the crew answered last moved
+// other two, and it was: the view sorted by the session column while the system answered last moved
 // first, so the age column arrived in order and was shuffled before anybody saw it.
 
 func movedAt(id, project string, hoursAgo int, archived bool) *quaycrewv1.Session {
@@ -27,7 +27,7 @@ func movedAt(id, project string, hoursAgo int, archived bool) *quaycrewv1.Sessio
 }
 
 // listedBy drives a resource's own List, the way the console does on a refresh, and hands back what
-// the operator is left looking at rather than what the crew answered.
+// the operator is left looking at rather than what the system answered.
 func listedBy(t *testing.T, resource Resource, client *fakeClient) []string {
 	t.Helper()
 	rows, err := resource.List(context.Background(), "")
@@ -52,9 +52,9 @@ func sameOrder(t *testing.T, got, want []string) {
 	}
 }
 
-// The identifiers here run backwards against the order the crew answered in, so a view that sorts by
+// The identifiers here run backwards against the order the system answered in, so a view that sorts by
 // the session column comes back exactly reversed.
-func TestTheSessionsViewKeepsTheOrderTheCrewAnsweredIn(t *testing.T) {
+func TestTheSessionsViewKeepsTheOrderTheSystemAnsweredIn(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{
 		movedAt("ccc", "p", 1, false),
 		movedAt("bbb", "p", 24, false),
@@ -65,7 +65,7 @@ func TestTheSessionsViewKeepsTheOrderTheCrewAnsweredIn(t *testing.T) {
 }
 
 // The archived view is the same listing read from the other shelf, so it keeps the order too.
-func TestTheArchivedViewKeepsTheOrderTheCrewAnsweredIn(t *testing.T) {
+func TestTheArchivedViewKeepsTheOrderTheSystemAnsweredIn(t *testing.T) {
 	client := &fakeClient{sessions: []*quaycrewv1.Session{
 		movedAt("zzz", "p", 2, true),
 		movedAt("mmm", "p", 48, true),
@@ -83,7 +83,7 @@ func TestNeitherSessionViewClaimsToHaveOrderedAColumn(t *testing.T) {
 		model := newTestModel(t, resource)
 		model, _ = update(t, model, rowsFor(model, Row{ID: "aaa", Cells: []string{"aaa"}}))
 		if view := model.View(); strings.Contains(view, "↑") {
-			t.Fatalf("the %s view marks a column as sorted while the crew decides the order:\n%s", resource.Name, view)
+			t.Fatalf("the %s view marks a column as sorted while the system decides the order:\n%s", resource.Name, view)
 		}
 	}
 }

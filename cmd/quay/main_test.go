@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestMain points the crew's directory at a temporary one for every case in this package.
+// TestMain points the system's directory at a temporary one for every case in this package.
 //
 // The tool writes the address you are working in, and the panel's view, into that directory. A test
-// that forgets to isolate itself would write those into the operator's own crew and move them
+// that forgets to isolate itself would write those into the operator's own system and move them
 // somewhere they did not ask to be. Two cases isolated themselves through XDG_CONFIG_HOME, which
 // stopped isolating anything the moment the directory stopped following it, and the failure would
 // have been silent: the tests pass either way, and the operator finds out later.

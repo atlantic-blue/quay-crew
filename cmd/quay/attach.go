@@ -77,10 +77,10 @@ func cannotOpen(sessionID string, err error) error {
 	var missing *exec.Error
 	if errors.As(err, &missing) && errors.Is(missing.Err, exec.ErrNotFound) {
 		return fmt.Errorf("cannot open the conversation in %s: it runs in that session's own "+
-			"container, and %s is not on this machine. Open it from the machine the crew runs on",
+			"container, and %s is not on this machine. Open it from the machine the system runs on",
 			where, missing.Name)
 	}
-	return fmt.Errorf("cannot open the conversation in %s: %w. Check the crew is up with "+
+	return fmt.Errorf("cannot open the conversation in %s: %w. Check the system is up with "+
 		"quay sessions, then open it again", where, err)
 }
 
@@ -99,7 +99,7 @@ func attachCommand(spec *quaycrewv1.AttachSessionResponse) (*exec.Cmd, error) {
 }
 
 // resolveSession turns what the operator typed into a session id, which is what every command here
-// works in. Reading it is the crew's job, not this tool's, so it goes through the one resolver.
+// works in. Reading it is the system's job, not this tool's, so it goes through the one resolver.
 func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, reference string) (string, error) {
 	session, err := workspace.Session(ctx, client, reference)
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// runJob drives the job the crew keeps: declared intent, read back as data.
+// runJob drives the job the system keeps: declared intent, read back as data.
 //
 // A job is a row rather than a command that runs now. Declaring it records what should
 // happen; nothing here dispatches anything.
@@ -71,7 +71,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: quay job create [<workspace>/<project>] %s \"...\" %s \"...\"", flagTitle, flagBrief)
 	}
-	// The parent is refused here rather than sent, in the words the crew refuses it with, because a
+	// The parent is refused here rather than sent, in the words the system refuses it with, because a
 	// caller that could set its own parent could set its own depth.
 	if values.first(flagParent) != "" {
 		return fmt.Errorf("%s is not yours to set: the parent comes from the credential the caller presented, "+
@@ -133,7 +133,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 // sayWhatIsLeftOut names the skills the session running this job starts without, and how to fix each.
 //
 // It prints where the declaration is made, because that is the last moment anybody is looking. The
-// crew has always known this and said it only in quay skill list, which is a listing nobody is
+// system has always known this and said it only in quay skill list, which is a listing nobody is
 // required to read, so a workspace with no credential took a whole tree of job and every session in
 // it died on its first clone.
 //
@@ -148,13 +148,13 @@ func sayWhatIsLeftOut(out io.Writer, leftOut []*quaycrewv1.Skill) {
 	}
 }
 
-// whereTheJobRuns is the project to declare in, and empty when the crew is to read it from the
+// whereTheJobRuns is the project to declare in, and empty when the system is to read it from the
 // credential the caller presented.
 //
 // A session running a job is standing nowhere and types no address. It cannot resolve one either:
 // resolving an address means listing workspaces and projects, and a role grants the four job verbs
 // and nothing else. What it does hold is a credential minted for the job it is running, and that
-// credential already says which project that job is in, so the crew reads it there. The same place
+// credential already says which project that job is in, so the system reads it there. The same place
 // the parent comes from.
 //
 // An operator standing somewhere is unchanged, and an operator standing in a workspace with no
@@ -204,17 +204,17 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	// The word that reads every project. Without it a listing narrows to where the operator stands
 	// and says nothing about having done so, which is how nine jobs one address away go unseen.
-	where := crewWide("jobs")
+	where := systemWide("jobs")
 	request := &quaycrewv1.ListJobsRequest{
 		Parent: values.first(flagParent), RootsOnly: values.has(flagRoots), Phase: values.first(flagPhase),
 	}
-	if !readsTheCrew(typed) {
+	if !readsTheSystem(typed) {
 		located, err := locate(ctx, client, typed)
 		if err != nil {
 			return err
 		}
 		request.Workspace, request.Project = located.WorkspaceID, located.ProjectID
-		where = narrowedTo("jobs", located.Path.String(), "quay job list crew reads every project")
+		where = narrowedTo("jobs", located.Path.String(), "quay job list system reads every project")
 	}
 	labels, err := readLabels(values[flagLabel])
 	if err != nil {
@@ -257,7 +257,7 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
-	// is the machine and not the crew. A full machine and a stalled crew look identical otherwise.
+	// is the machine and not the system. A full machine and a stalled system look identical otherwise.
 	if holding != "" {
 		fmt.Fprintf(out, "\nheld: %s\n", holding)
 	}
@@ -265,7 +265,7 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	return nil
 }
 
-// phaseOf is the word the listing carries. A pending job the crew is holding back reads "held"
+// phaseOf is the word the listing carries. A pending job the system is holding back reads "held"
 // rather than "pending": both are waiting, and only one of them is waiting for a machine.
 func phaseOf(one *quaycrewv1.Job) string {
 	if heldForRoom(one) {
@@ -274,13 +274,13 @@ func phaseOf(one *quaycrewv1.Job) string {
 	return one.GetPhase()
 }
 
-// heldForRoom says whether this job is pending because the crew would not start it. Only the crew
+// heldForRoom says whether this job is pending because the system would not start it. Only the system
 // writes a reason on a pending job, and it writes one only when it holds the job back.
 func heldForRoom(one *quaycrewv1.Job) bool {
 	return one.GetPhase() == job.PhasePending && one.GetReason() != ""
 }
 
-// jobAddresses maps a project identifier to the address a person reads, so a crew wide listing can
+// jobAddresses maps a project identifier to the address a person reads, so a system wide listing can
 // say where each row is. A name it cannot find falls back to the short identifier rather than
 // leaving the column blank.
 func jobAddresses(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]string {
@@ -396,7 +396,7 @@ func runJobStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 // runJobAsk puts a question to a person about the job this session is running.
 //
-// It names no job. The crew reads which job is asking from the credential this session holds, the
+// It names no job. The system reads which job is asking from the credential this session holds, the
 // same way it reads the parent of anything the session declares: a caller that could name any job
 // could stop any job.
 func runJobAsk(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
@@ -519,7 +519,7 @@ func readFlags(args []string) (given, []string, error) {
 	return values, rest, nil
 }
 
-// readLabels turns key=value pairs into the map the crew keeps.
+// readLabels turns key=value pairs into the map the system keeps.
 func readLabels(pairs []string) (map[string]string, error) {
 	if len(pairs) == 0 {
 		return nil, nil

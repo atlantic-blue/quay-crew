@@ -106,7 +106,7 @@ func sessionAtAddress(ctx context.Context, client quaycrewv1.ControlPlaneService
 			return session, nil
 		}
 	}
-	return nil, fmt.Errorf("%q resolved to a session the crew no longer lists", typed)
+	return nil, fmt.Errorf("%q resolved to a session the system no longer lists", typed)
 }
 
 // sessionWithIdentifier matches a bare word against both identifiers a session has. An exact match

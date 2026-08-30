@@ -8,7 +8,7 @@ import (
 func TestAConfiguredAllowlistIsSaidToBeIgnored(t *testing.T) {
 	notice, retired := sandboxSecretsRetired("GH_TOKEN,LINEAR_API_KEY")
 	if !retired {
-		t.Fatal("a crew configured with QC_SANDBOX_SECRETS said nothing about it")
+		t.Fatal("a system configured with QC_SANDBOX_SECRETS said nothing about it")
 	}
 	for _, want := range []string{"QC_SANDBOX_SECRETS", "no longer read", "configuration"} {
 		if !strings.Contains(notice, want) {
@@ -19,7 +19,7 @@ func TestAConfiguredAllowlistIsSaidToBeIgnored(t *testing.T) {
 
 func TestNothingIsSaidWhenTheAllowlistWasNeverSet(t *testing.T) {
 	if _, retired := sandboxSecretsRetired(""); retired {
-		t.Error("a crew with no QC_SANDBOX_SECRETS was told about one")
+		t.Error("a system with no QC_SANDBOX_SECRETS was told about one")
 	}
 	// Whitespace is how a commented out line comes back from compose, and a warning about a setting
 	// the operator has already removed is noise.
@@ -28,17 +28,17 @@ func TestNothingIsSaidWhenTheAllowlistWasNeverSet(t *testing.T) {
 	}
 }
 
-// TestACrewThatHandsOutAnAddressNoSessionCanResolveSaysSo.
+// TestASystemThatHandsOutAnAddressNoSessionCanResolveSaysSo.
 //
-// This is the fault the notice exists for, and it is silent from both ends. The crew tells a session
+// This is the fault the notice exists for, and it is silent from both ends. The system tells a session
 // running a job where it is and mints it a credential; the sandbox joins no network that
-// reaches that address; and the session reports "produced zero addresses", which reads as the crew
+// reaches that address; and the session reports "produced zero addresses", which reads as the system
 // being down. Only this process can see both halves at once.
-func TestACrewThatHandsOutAnAddressNoSessionCanResolveSaysSo(t *testing.T) {
-	notice, mismatched := unreachableCrew("docker", "controlplane:50051", "")
+func TestASystemThatHandsOutAnAddressNoSessionCanResolveSaysSo(t *testing.T) {
+	notice, mismatched := unreachableSystem("docker", "controlplane:50051", "")
 
 	if !mismatched {
-		t.Fatal("a crew handing out an address its sessions cannot resolve said nothing about it")
+		t.Fatal("a system handing out an address its sessions cannot resolve said nothing about it")
 	}
 	for _, want := range []string{"QC_SANDBOX_CONTROL_PLANE", "QC_SESSION_NETWORK", "resolve"} {
 		if !strings.Contains(notice, want) {
@@ -71,18 +71,18 @@ func TestNothingIsSaidWhenTheTwoHalvesAgree(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, mismatched := unreachableCrew(tc.kind, tc.reachable, tc.sessionNetwork); mismatched {
-				t.Errorf("the crew was warned, and %s", tc.because)
+			if _, mismatched := unreachableSystem(tc.kind, tc.reachable, tc.sessionNetwork); mismatched {
+				t.Errorf("the system was warned, and %s", tc.because)
 			}
 		})
 	}
 }
 
-// What a session may do when it is born comes from the crew's configuration. These hold the reading of
-// it, and in particular hold it to refusing rather than falling back, because a crew configured for
-// "planning" that quietly ran everything in acceptEdits would look exactly like a crew configured for
+// What a session may do when it is born comes from the system's configuration. These hold the reading of
+// it, and in particular hold it to refusing rather than falling back, because a system configured for
+// "planning" that quietly ran everything in acceptEdits would look exactly like a system configured for
 // acceptEdits, and the operator would find out when a task did something they had asked it not to.
-func TestTheBirthModeIsReadFromTheCrewsConfiguration(t *testing.T) {
+func TestTheBirthModeIsReadFromTheSystemsConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		configured string
 		want       string
@@ -92,7 +92,7 @@ func TestTheBirthModeIsReadFromTheCrewsConfiguration(t *testing.T) {
 		{configured: "dangerous", want: "bypassPermissions"},
 		{configured: "bypassPermissions", want: "bypassPermissions"},
 		{configured: "  Plan  ", want: "plan"},
-		// Nothing set is not a choice, and it keeps what every crew has had until now.
+		// Nothing set is not a choice, and it keeps what every system has had until now.
 		{configured: "", want: ""},
 	} {
 		t.Run(tc.configured, func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestTheBirthModeIsReadFromTheCrewsConfiguration(t *testing.T) {
 	}
 }
 
-func TestAConfiguredModeThatIsNotAModeStopsTheCrewStarting(t *testing.T) {
+func TestAConfiguredModeThatIsNotAModeStopsTheSystemStarting(t *testing.T) {
 	for _, wrong := range []string{"planning", "yolo", "accept", "true"} {
 		t.Run(wrong, func(t *testing.T) {
 			_, err := birthPermissionMode(wrong)
@@ -128,7 +128,7 @@ func TestAConfiguredModeThatIsNotAModeStopsTheCrewStarting(t *testing.T) {
 // line to rename.
 //
 // Silence would be the failure here. An operator who tuned the lease and then upgraded would keep a
-// configuration file that looks configured while the crew ran the measured default, and nothing on
+// configuration file that looks configured while the system ran the measured default, and nothing on
 // the screen would say the two disagree.
 func TestASettingIsStillReadUnderTheNameItUsedToHave(t *testing.T) {
 	for _, tc := range []struct {
@@ -165,7 +165,7 @@ func TestASettingIsStillReadUnderTheNameItUsedToHave(t *testing.T) {
 			env:     map[string]string{},
 			want:    "",
 			absent:  true,
-			because: "a crew that configured nothing is not drifting from anything",
+			because: "a system that configured nothing is not drifting from anything",
 		},
 		{
 			// Whitespace is how a commented out line comes back from compose.

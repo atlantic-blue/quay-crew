@@ -12,20 +12,20 @@ import (
 )
 
 // DeniedToDriver is the deny policy for the driver's token: the calls that grant capability are the
-// operator's to make, so a session that can drive the crew can never grant itself anything. Secrets
+// operator's to make, so a session that can drive the system can never grant itself anything. Secrets
 // because a secret becomes readable inside whatever sandbox it reaches; skills because a skill
 // carries mounts, secret names and a setup that executes; a session's permission mode because
-// loosening its own is the plainest self grant there is; and the crew's context because it is
+// loosening its own is the plainest self grant there is; and the system's context because it is
 // injected into every session, including the driver itself.
 //
 // Importing a flow graph is refused for the same reason importing a skill is: writing an automation
-// down is the operator deciding what the crew may do on its own. Starting a run of one the operator
+// down is the operator deciding what the system may do on its own. Starting a run of one the operator
 // already imported is not refused, because a run is dispatch, which the driver already has: it can
 // reach nothing through a flow that it could not reach by dispatching directly.
 //
 // A role is refused on the same line as a skill. It carries a brief, a model and the material a
 // session is allowed to receive, so a session that could import or attach one could write itself a
-// way of working nobody approved and then be run as it. Reading what the crew already holds stays
+// way of working nobody approved and then be run as it. Reading what the system already holds stays
 // open, because choosing from what the operator attached is the point.
 //
 // A hook is refused on all four of its calls, and the listing is the one place this differs from a
@@ -54,7 +54,7 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_ImportFlow_FullMethodName:
 		return refusedToDriver(fullMethod)
 	case quaycrewv1.ControlPlaneService_SetContext_FullMethodName:
-		if req, ok := request.(*quaycrewv1.SetContextRequest); ok && req.GetScope() == "crew" {
+		if req, ok := request.(*quaycrewv1.SetContextRequest); ok && req.GetScope() == "system" {
 			return refusedToDriver(fullMethod)
 		}
 	}
@@ -64,14 +64,14 @@ func DeniedToDriver(fullMethod string, request any) error {
 func refusedToDriver(fullMethod string) error {
 	name := shortMethod(fullMethod)
 	return status.Error(codes.PermissionDenied, fmt.Sprintf(
-		"the driver drives the crew, it does not widen it: %s grants capability and is the operator's to make", name))
+		"the driver drives the system, it does not widen it: %s grants capability and is the operator's to make", name))
 }
 
 // DeniedToJob is the policy over what a job may call.
 //
 // Default deny, and the difference from the driver's policy is the direction: the driver is refused
 // a named list and holds everything else, while a job holds a named list and is refused
-// everything else. A credential minted for one job is the narrowest thing the crew hands
+// everything else. A credential minted for one job is the narrowest thing the system hands
 // out, so it grants what its role declared and nothing beside it.
 //
 // The refusal names the verb, because a session that was refused has to know what to ask its
@@ -96,12 +96,12 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 				"and an operator widens it by importing the role again and attaching it",
 			verb)
 	}
-	// The job a caller names on a dispatch decides which credential the crew mints for that task, so
+	// The job a caller names on a dispatch decides which credential the system mints for that task, so
 	// only the operator may name one. A session that could name any job could mint itself
 	// that job's grant.
 	if named, ok := request.(*quaycrewv1.DispatchRequest); ok && named.GetJob() != "" {
 		return status.Error(codes.PermissionDenied,
-			"a session may not name the job a task runs for: the crew reads that from the credential")
+			"a session may not name the job a task runs for: the system reads that from the credential")
 	}
 	return nil
 }

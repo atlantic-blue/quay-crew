@@ -56,18 +56,18 @@ const (
 	StatusFailed = "failed"
 	// StatusStopped is a session that was put down. Its sandbox is gone and its history is not.
 	StatusStopped = "stopped"
-	// StatusReclaimed is a session the crew took the container back from. Its sandbox is gone and
+	// StatusReclaimed is a session the system took the container back from. Its sandbox is gone and
 	// everything else it has is not, so the next task builds a fresh one over the same conversation
 	// and the same files.
 	//
 	// It is deliberately not stopped. A stop is an operator's decision and somebody reading it goes
-	// looking for who made it; a reclaim is the crew saving memory on a session nobody is using, and
+	// looking for who made it; a reclaim is the system saving memory on a session nobody is using, and
 	// somebody reading it looks for nothing, because the next dispatch fixes it.
 	StatusReclaimed = store.StatusReclaimed
 )
 
 // Info is what this control plane is running, reported over the API so an operator can see which
-// crew they are about to act on. It is configuration: never a secret, and never a health verdict.
+// system they are about to act on. It is configuration: never a secret, and never a health verdict.
 type Info struct {
 	// Model is the backend a task runs against, for example "claude-code".
 	Model string
@@ -82,7 +82,7 @@ type Info struct {
 	Events string
 	// Secrets is where a workspace's credentials are kept, for example "postgres, sealed".
 	Secrets string
-	// SandboxBuild is the build of the crew the sandbox image was made from. Empty means the image
+	// SandboxBuild is the build of the system the sandbox image was made from. Empty means the image
 	// does not say, and nothing is then claimed about it.
 	SandboxBuild string
 	// Version is the build this control plane binary was made from, stamped in at build time. Empty
@@ -105,7 +105,7 @@ type Config struct {
 	Events messaging.EventLog
 	// Info describes the three above in words, for the console's status block.
 	Info Info
-	// Skills are the capabilities the crew has been given, read from files, and every session gets them.
+	// Skills are the capabilities the system has been given, read from files, and every session gets them.
 	// A skill imported into the store and attached to a workspace reaches that workspace's sessions as
 	// well, which is the other half of the same idea. See docs/SKILLS.md.
 	Skills []skill.Skill
@@ -118,14 +118,14 @@ type Config struct {
 	// Without it git refuses to commit rather than guessing.
 	GitAuthor Identity
 	// Reachable is the address a session should dial to reach this control plane, put into every
-	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the crew without being told where it is.
+	// sandbox as QC_GRPC_ADDR so `quay` inside one drives the system without being told where it is.
 	//
-	// Empty means a session cannot reach the crew at all, which is the default: a session that can
-	// drive the crew can also stop other sessions, so it is turned on rather than assumed.
+	// Empty means a session cannot reach the system at all, which is the default: a session that can
+	// drive the system can also stop other sessions, so it is turned on rather than assumed.
 	Reachable string
-	// DriverToken is the driver's own token, handed to it beside the crew's address, because an
+	// DriverToken is the driver's own token, handed to it beside the system's address, because an
 	// address without a token is a door that will not open. It is the driver's rather than the
-	// operator's so the crew can tell the two apart and refuse the driver the calls that grant
+	// operator's so the system can tell the two apart and refuse the driver the calls that grant
 	// capability (see DeniedToDriver).
 	DriverToken string
 	// BirthPermissionMode is what a session's tasks may do when nothing else says. It used to be a
@@ -134,16 +134,16 @@ type Config struct {
 	// because an upgrade that quietly widens what a session may do is the worst way to learn this
 	// setting exists.
 	BirthPermissionMode string
-	// DescribeEvery is how many tasks past its description a conversation goes before the crew writes
+	// DescribeEvery is how many tasks past its description a conversation goes before the system writes
 	// it again. Zero is off.
 	DescribeEvery int
-	// Headroom reads the machine the crew runs on. Nil means the crew cannot read it, and every
-	// figure then says unknown, which is what a crew with no daemon to ask should say.
+	// Headroom reads the machine the system runs on. Nil means the system cannot read it, and every
+	// figure then says unknown, which is what a system with no daemon to ask should say.
 	Headroom headroom.Source
-	// CrewReserve is what the crew holds back for its own containers before it admits any sandbox.
-	// The zero value takes the measured floor. What binds is the larger of this and what the crew's
+	// SystemReserve is what the system holds back for its own containers before it admits any sandbox.
+	// The zero value takes the measured floor. What binds is the larger of this and what the system's
 	// own containers are actually holding, read on every sample.
-	CrewReserve capacity.Request
+	SystemReserve capacity.Request
 	// HeadroomEvery is how often the machine is read. Zero takes headroom.Every.
 	HeadroomEvery time.Duration
 	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
@@ -155,14 +155,14 @@ type Config struct {
 	// FlowPollEvery is how often the flow poller looks for runs to carry on: a wait that came due, a
 	// schedule that fired, a step whose job ended. Zero takes flow.DefaultPollEvery.
 	FlowPollEvery time.Duration
-	// JobTickEvery is how often the job controller looks at the job the crew holds. Zero takes
+	// JobTickEvery is how often the job controller looks at the job the system holds. Zero takes
 	// job.DefaultTickEvery.
 	JobTickEvery time.Duration
 	// JobLease is how long a controller holds a job before another may take it. Zero takes
 	// job.DefaultLease, which is derived from what a tick costs rather than chosen.
 	JobLease time.Duration
-	// ControllerName is what this crew writes on the leases it takes, on a job and on a
-	// trigger alike. Empty mints one, which is right for a test and wrong for a crew an investigator
+	// ControllerName is what this system writes on the leases it takes, on a job and on a
+	// trigger alike. Empty mints one, which is right for a test and wrong for a system an investigator
 	// has to read a record from.
 	ControllerName string
 }
@@ -183,8 +183,8 @@ func (i Identity) Complete() bool {
 type Server struct {
 	quaycrewv1.UnimplementedControlPlaneServiceServer
 	store store.Store
-	// secrets reads a workspace's own over the crew's, so every path that asks a workspace what it
-	// holds gets the crew's too and none of them has to remember to ask twice. The unmerged levels
+	// secrets reads a workspace's own over the system's, so every path that asks a workspace what it
+	// holds gets the system's too and none of them has to remember to ask twice. The unmerged levels
 	// are still reachable through it, for the one caller that wants them apart: an operator's
 	// listing, which says where each secret came from.
 	secrets  secrets.Levels
@@ -197,10 +197,10 @@ type Server struct {
 	// flowPoller resumes waiting runs whose time has come. Started by whoever owns the process,
 	// because a goroutine hidden inside a constructor is a lifetime nobody can see.
 	flowPoller *flow.Poller
-	// jobController makes reality match the job the crew holds. Started the same way and for the
+	// jobController makes reality match the job the system holds. Started the same way and for the
 	// same reason.
 	jobController *job.Controller
-	// grants are the credentials this crew has minted for jobs, so a call carrying one is
+	// grants are the credentials this system has minted for jobs, so a call carrying one is
 	// recognised as that job rather than as the operator.
 	grants *grants
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
@@ -212,8 +212,8 @@ type Server struct {
 	gitAuthor Identity
 	// birthMode is what a session's tasks may do when nothing else says. Empty means acceptEdits.
 	birthMode string
-	// describeEvery is how many tasks past its description a conversation goes before the crew writes
-	// it again. Zero is off, which is what a crew paying for automation runs wants.
+	// describeEvery is how many tasks past its description a conversation goes before the system writes
+	// it again. Zero is off, which is what a system paying for automation runs wants.
 	describeEvery int
 	// describing counts the descriptions still being written, so a test can wait for them rather than
 	// sleeping and a shutdown can tell whether any are in flight.
@@ -227,14 +227,14 @@ type Server struct {
 	sandboxImage string
 	events       messaging.EventLog
 	info         Info
-	// taskMetrics publishes what each task spent. Nil records nothing, which is what a crew with no
+	// taskMetrics publishes what each task spent. Nil records nothing, which is what a system with no
 	// telemetry provider installed does.
 	taskMetrics *telemetry.TaskMetrics
-	// placed is what the crew has put on this machine and what it has promised to put there. It is
+	// placed is what the system has put on this machine and what it has promised to put there. It is
 	// what admission adds up, and it is a ledger rather than a reading because a container appears
 	// seconds after the job that asked for it was admitted.
 	placed *capacity.Ledger
-	// reserve is the floor under what the crew keeps for its own containers.
+	// reserve is the floor under what the system keeps for its own containers.
 	reserve capacity.Request
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
@@ -248,11 +248,11 @@ type Server struct {
 
 	// startWait is the budget from a session row to a sandbox ready for its first task, and
 	// exportWait what one export to the event log is given. Both are fields rather than constants so
-	// a test can drive a crew whose waits run out while somebody is watching.
+	// a test can drive a system whose waits run out while somebody is watching.
 	startWait  time.Duration
 	exportWait time.Duration
 
-	// starts is the crew's one sandbox start at a time, held as a channel rather than a mutex
+	// starts is the system's one sandbox start at a time, held as a channel rather than a mutex
 	// because a mutex cannot be given up: a start that never ended held every later dispatch behind
 	// it with no way out. A slot taken from here is abandoned when the budget runs out.
 	starts chan struct{}
@@ -266,7 +266,7 @@ type Server struct {
 	runningMu sync.Mutex
 	running   map[string]*running
 
-	// opened is the conversations this process has watched a model runtime open. It is what a crew
+	// opened is the conversations this process has watched a model runtime open. It is what a system
 	// that keeps no state on the host has in place of a transcript to look at.
 	opened opened
 }
@@ -293,15 +293,15 @@ func NewServer(cfg Config) *Server {
 		sandboxes:     make(map[string]sandbox.Sandbox),
 		headroom:      headroom.NewSampler(cfg.Headroom, cfg.HeadroomEvery),
 		placed:        capacity.NewLedger(),
-		reserve:       reserveOr(cfg.CrewReserve),
+		reserve:       reserveOr(cfg.SystemReserve),
 		startWait:     orWait(cfg.StartWait, startWait),
 		exportWait:    orWait(cfg.ExportWait, exportWait),
 		starts:        make(chan struct{}, 1),
 		grants:        newGrants(),
 	}
 	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
-	// in this file rather than an operator's problem. Say it and carry on unmeasured: a crew that
-	// will not start because a counter would not be made is worse than a crew with no counter.
+	// in this file rather than an operator's problem. Say it and carry on unmeasured: a system that
+	// will not start because a counter would not be made is worse than a system with no counter.
 	metrics, err := telemetry.NewTaskMetrics()
 	if err != nil {
 		slog.Warn("tasks are not being measured", "error", err)
@@ -312,8 +312,8 @@ func NewServer(cfg Config) *Server {
 	// reaches nothing the caller could not, because these are the same two methods.
 	engine := flow.NewEngine(cfg.Store, server, server, server)
 	server.flows = engine
-	// The same name the job controller writes on its leases, because both claims are this crew's and
-	// an investigator reading either wants to know which crew took it.
+	// The same name the job controller writes on its leases, because both claims are this system's and
+	// an investigator reading either wants to know which system took it.
 	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil).Owned(cfg.ControllerName)
 	// The controller reads and writes rows and dispatches through this same server, which is the
 	// property that lets it move out of this process later without changing a line of its logic.
@@ -323,7 +323,7 @@ func NewServer(cfg Config) *Server {
 		// The machine, asked before a job is started rather than after it has been killed.
 		Placing(server).
 		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
-		// a credential in a working crew; its expiry is the backstop behind it.
+		// a credential in a working system; its expiry is the backstop behind it.
 		Revoking(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
@@ -331,13 +331,13 @@ func NewServer(cfg Config) *Server {
 	return server
 }
 
-// reserveOr is what the crew keeps back for itself, and the measured floor where it was given
+// reserveOr is what the system keeps back for itself, and the measured floor where it was given
 // nothing on that axis.
 func reserveOr(configured capacity.Request) capacity.Request {
 	return configured.Or(capacity.DefaultReserve())
 }
 
-// orWait is the budget the crew was configured with, and the measured default when it was given none.
+// orWait is the budget the system was configured with, and the measured default when it was given none.
 func orWait(configured, standard time.Duration) time.Duration {
 	if configured > 0 {
 		return configured
@@ -358,7 +358,7 @@ func eventsOr(log messaging.EventLog) messaging.EventLog {
 // the same breath as each task.
 //
 // It reads the store rather than the log: the log is the write side and replaying it on every
-// request would make a listing cost more the longer a crew has been running.
+// request would make a listing cost more the longer a system has been running.
 func (s *Server) ListTasks(ctx context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error) {
 	if req.GetSession() == "" {
 		return nil, status.Error(codes.InvalidArgument, "session is required")
@@ -387,7 +387,7 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 	}, nil
 }
 
-// GetUsage adds up what every conversation in the crew has cost. Its own call rather than part of
+// GetUsage adds up what every conversation in the system has cost. Its own call rather than part of
 // GetInfo, which answers configuration and is fetched once. Archived sessions are counted: a total
 // that shrinks when somebody tidies up is worse than no total.
 func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*quaycrewv1.GetUsageResponse, error) {
@@ -422,7 +422,7 @@ func (s *Server) GetUsage(ctx context.Context, _ *quaycrewv1.GetUsageRequest) (*
 //
 // A refusal that already says what it is keeps saying it. Wrapping everything as Internal turned "the
 // github skill needs gh and the image does not have it", which the operator can act on, into a server
-// fault, which reads as the crew being broken.
+// fault, which reads as the system being broken.
 func sandboxError(err error, what string) error {
 	if _, said := status.FromError(err); said && status.Code(err) != codes.Unknown {
 		return err
@@ -444,7 +444,7 @@ func storeError(err error, what string) error {
 // conversation is authenticated too. A token set after the first task does not reach the existing
 // sandbox: stop the session to get a fresh one.
 func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
-	// One start at a time, as it has always been, and now abandonable: the crew took this as a mutex
+	// One start at a time, as it has always been, and now abandonable: the system took this as a mutex
 	// held across the whole start, so a start that never ended held every later dispatch, and every
 	// stop, behind it.
 	if err := waited(ctx, session.GetId(), waitStartAhead, s.takeStart); err != nil {
@@ -475,7 +475,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 		return nil, err
 	}
 	cfg := boxOf(session)
-	// What it asked for travels with it, so the container carries the request the crew reserved.
+	// What it asked for travels with it, so the container carries the request the system reserved.
 	cfg.Request = s.requestFor(ctx, session.GetWorkspace())
 	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
 	// credential written here would label every later task with the first task's grant, and one
@@ -586,7 +586,7 @@ func (s *Server) has(ctx context.Context, box sandbox.Sandbox, binary string) bo
 	return proc.Wait() == nil
 }
 
-// imageName is the image to go and fix, and something readable when the crew was not told which it is.
+// imageName is the image to go and fix, and something readable when the system was not told which it is.
 func (s *Server) imageName() string {
 	if s.sandboxImage == "" {
 		return "the sandbox image"
@@ -598,7 +598,7 @@ func (s *Server) imageName() string {
 //
 // The store holds context because a pod has no host directory to mount. The file is a rendering of
 // it, and it is read back first: an agent that wrote into its own CLAUDE.md has learned something,
-// and overwriting that would make the crew's memory worse than a text file.
+// and overwriting that would make the system's memory worse than a text file.
 //
 // A failure here never fails a task.
 func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
@@ -616,9 +616,9 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 	if len(dirs) != 2 {
 		return
 	}
-	// A session running as a role is never read back into the crew's memory.
+	// A session running as a role is never read back into the system's memory.
 	//
-	// It was given a brief rather than the crew's context, so what sits in its file is not an edit of
+	// It was given a brief rather than the system's context, so what sits in its file is not an edit of
 	// what the store holds: whoever wrote it had never seen the body it would be replacing. Reading it
 	// back is also the hole in the boundary, and the one that matters most. A role that receives no
 	// context still writes a note at the end of its file, unmarked text belongs to the last scope,
@@ -630,7 +630,7 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 	}
 	for at, levels := range contextFiles(session) {
 		// Read back first. Something inside the sandbox writing into its own memory has learned
-		// something, and overwriting that on the next task would make the crew's memory strictly
+		// something, and overwriting that on the next task would make the system's memory strictly
 		// worse than a text file.
 		// The skills index is a section in the same file and is not a level: it is rendered from what the
 		// session holds rather than written by anybody. It is named in every file so the read back
@@ -659,7 +659,7 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 				if err != nil || kept == body {
 					continue
 				}
-				// An unmarked file was never rendered by the crew, so what is in it cannot be an
+				// An unmarked file was never rendered by the system, so what is in it cannot be an
 				// edit of what the store holds: whoever wrote it had never seen the store's body.
 				// Treating it as one costs the store's body entirely, which is how a driver taught
 				// the manual lost it again on the first sync after being told. Both are kept.
@@ -699,7 +699,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 	if len(dirs) != 2 {
 		return
 	}
-	// What the session may be told. A role receives the crew's context only where it says so, and the
+	// What the session may be told. A role receives the system's context only where it says so, and the
 	// brief of the role it runs as always: the brief is not context, it is the whole instruction of
 	// this session.
 	receivesContext := s.receives(ctx, session, role.MaterialContext)
@@ -733,7 +733,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			sections = append(sections, sandbox.Section{Scope: string(level.scope), Body: body})
 		}
 		// The index goes in the outer file, beside the workspace's own context, because every session in
-		// a workspace holds the same skills: the crew's, and the ones attached to that workspace. It is
+		// a workspace holds the same skills: the system's, and the ones attached to that workspace. It is
 		// rendered from what the session holds every time and never read back, so a skill edited in its
 		// own directory reaches the next sandbox and an edit from inside one does not survive.
 		if at == outerFile {
@@ -752,7 +752,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 // sends the model to open a file that does not exist, and files with no index are a capability nothing
 // ever mentions.
 //
-// The crew's skills are not written: they are already a directory the operator keeps, and they are
+// The system's skills are not written: they are already a directory the operator keeps, and they are
 // mounted from it. Only the ones that live in the store have to be put somewhere before they can be.
 //
 // A failure here does not fail a task, for the same reason a context failure does not. The model is told
@@ -795,7 +795,7 @@ func (s *Server) renderTo(ctx context.Context, scope store.ContextScope, owner s
 // reads says whether a session's memory files carry this level of context.
 func reads(session *quaycrewv1.Session, scope store.ContextScope, owner string) bool {
 	switch scope {
-	case store.ContextCrew:
+	case store.ContextSystem:
 		return true
 	case store.ContextWorkspace:
 		return session.GetWorkspace() == owner
@@ -809,7 +809,7 @@ func reads(session *quaycrewv1.Session, scope store.ContextScope, owner string) 
 }
 
 // The two memory files a session reads: the outer one in the workspace's conversation store, carrying
-// the crew's context, the workspace's, and the index of the skills the session holds; the inner one in
+// the system's context, the workspace's, and the index of the skills the session holds; the inner one in
 // the session's own working directory, carrying the project's context and the session's own.
 const (
 	outerFile = 0
@@ -827,7 +827,7 @@ type contextLevel struct {
 // this session's own working directory, which only it reads.
 func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 	return [][]contextLevel{
-		{{store.ContextCrew, ""}, {store.ContextWorkspace, session.GetWorkspace()}},
+		{{store.ContextSystem, ""}, {store.ContextWorkspace, session.GetWorkspace()}},
 		{{store.ContextProject, session.GetProject()}, {store.ContextSession, session.GetId()}},
 	}
 }
@@ -873,7 +873,7 @@ func (s *Server) stopSessions(ctx context.Context, filter store.SessionFilter) [
 }
 
 // ReapStrays removes the sandboxes of sessions that no longer want one: the row is gone, archived, or
-// says stopped. Anything stopped or deleted while the crew was down was marked in the store and left
+// says stopped. Anything stopped or deleted while the system was down was marked in the store and left
 // running on the daemon, so this runs once at startup.
 func (s *Server) ReapStrays(ctx context.Context) {
 	ids, err := s.provider.Stranded(ctx)
@@ -916,7 +916,7 @@ func (s *Server) WaitForTasks(ctx context.Context) {
 //
 // A task runs in this process. Nothing survives the process going down, so a row saying running on
 // the way up is a task that died with the last one, and leaving it says a session is busy for as long
-// as the crew lives. That reads as a hung conversation and there is nothing to wait for.
+// as the system lives. That reads as a hung conversation and there is nothing to wait for.
 func (s *Server) SettleTasks(ctx context.Context) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
 	if err != nil {
@@ -927,7 +927,7 @@ func (s *Server) SettleTasks(ctx context.Context) {
 			continue
 		}
 		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
-		s.settleHistory(ctx, session, "the crew restarted while this task was running, so it did not finish")
+		s.settleHistory(ctx, session, "the system restarted while this task was running, so it did not finish")
 	}
 }
 
@@ -1015,14 +1015,17 @@ func (s *Server) AttachChannel(ctx context.Context, req *quaycrewv1.AttachChanne
 	return &quaycrewv1.AttachChannelResponse{Channel: channel}, nil
 }
 
-// SetSecret stores a secret in the secrets backend, on one workspace or on the crew. The value is
+// SetSecret stores a secret in the secrets backend, on one workspace or on the system. The value is
 // never returned.
 func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest) (*quaycrewv1.SetSecretResponse, error) {
-	crew := req.GetScope() == crewScope
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	system := req.GetScope() == systemScope
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	if !crew {
+	if !system {
 		if req.GetWorkspace() == "" {
 			return nil, status.Error(codes.InvalidArgument, "workspace and key are required")
 		}
@@ -1047,15 +1050,15 @@ func (s *Server) SetSecret(ctx context.Context, req *quaycrewv1.SetSecretRequest
 	// it is held to the same rule.
 	if mountedOnly[secret.Name] && secret.Projection.Or() != secrets.File {
 		where := req.GetWorkspace()
-		if crew {
-			where = crewScope
+		if system {
+			where = systemScope
 		}
 		return nil, status.Errorf(codes.InvalidArgument,
 			"a signing key is mounted, not set: quay secret mount %s %s <path to the file holding it>",
 			where, secret.Name)
 	}
-	if crew {
-		if err := s.secrets.SetCrew(ctx, secret); err != nil {
+	if system {
+		if err := s.secrets.SetSystem(ctx, secret); err != nil {
 			return nil, status.Errorf(codes.Internal, "set secret: %v", err)
 		}
 		return &quaycrewv1.SetSecretResponse{}, nil
@@ -1087,34 +1090,34 @@ func wireProjection(projection secrets.Projection) quaycrewv1.SecretProjection {
 //
 // The response has no field for a value, so this cannot leak one by mistake rather than by policy.
 // What an operator needs from a list of secrets is whether the thing is there, and everything else
-// about it is the crew's business.
+// about it is the system's business.
 func (s *Server) ListSecrets(ctx context.Context, req *quaycrewv1.ListSecretsRequest) (*quaycrewv1.ListSecretsResponse, error) {
 	workspaces, err := s.store.ListWorkspaces(ctx)
 	if err != nil {
 		return nil, storeError(err, "list workspaces")
 	}
 
-	// The crew's own first and once, rather than repeated under every workspace that reads them. They
+	// The system's own first and once, rather than repeated under every workspace that reads them. They
 	// are in the answer even when one workspace was asked for, because they reach that workspace too
 	// and a listing that hid them would say a token is missing that is already there.
-	crew, err := s.secrets.ListCrew(ctx)
+	system, err := s.secrets.ListSystem(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
 	}
-	out := make([]*quaycrewv1.SecretRef, 0, len(crew)+len(workspaces))
-	for _, ref := range crew {
+	out := make([]*quaycrewv1.SecretRef, 0, len(system)+len(workspaces))
+	for _, ref := range system {
 		out = append(out, &quaycrewv1.SecretRef{
 			Name:       ref.Name,
 			Projection: wireProjection(ref.Projection),
-			Crew:       true,
+			System:     true,
 		})
 	}
 	for _, workspace := range workspaces {
 		if req.GetWorkspace() != "" && workspace.GetId() != req.GetWorkspace() {
 			continue
 		}
-		// What this workspace set itself, unmerged: a workspace that overrode a crew secret shows as
-		// having its own, and the crew's row above says the crew holds one under that name too.
+		// What this workspace set itself, unmerged: a workspace that overrode a system secret shows as
+		// having its own, and the system's row above says the system holds one under that name too.
 		refs, err := s.secrets.Store.List(ctx, workspace.GetId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "list secrets: %v", err)
@@ -1234,7 +1237,7 @@ func (s *Server) SetDeployTarget(ctx context.Context, req *quaycrewv1.SetDeployT
 // Dispatch starts or continues a session, running one task through the model runner.
 func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	// Said before anything is done, because a dispatch that stopped inside this call wrote no line at
-	// all and the crew read as healthy while it answered none of them.
+	// all and the system read as healthy while it answered none of them.
 	slog.InfoContext(ctx, "a dispatch arrived",
 		"project", req.GetProject(), "handle", req.GetHandle(), "detached", req.GetDetach())
 	if req.GetProject() == "" {
@@ -1279,7 +1282,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 
-	// The conversation is named before any task runs in it, so the crew can say which conversation a
+	// The conversation is named before any task runs in it, so the system can say which conversation a
 	// session is working in while it is working rather than once it has finished. A session opened
 	// meanwhile lands in the conversation doing the work.
 	s.nameConversation(ctx, session)
@@ -1367,7 +1370,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 			return "", s.landStopped(ctx, session, task, model.Response{}, reason)
 		}
 		s.recordTask(ctx, session.GetId(), "", StatusFailed)
-		// The crew's own words for a task it never started, from the one place they are written down.
+		// The system's own words for a task it never started, from the one place they are written down.
 		// The controller reads this to tell a job it could not start from a job that was wrong, and
 		// puts the first back to pending rather than failing it.
 		failure := job.NoSandbox + ": " + err.Error()
@@ -1407,7 +1410,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	s.landTask(ctx, session, task, StatusIdle, resp.Reply, "")
 	s.emit(ctx, session, KindSessionCompleted, resp.Reply)
 
-	// Behind the answer, so the operator waits for their task rather than for the crew to think of a
+	// Behind the answer, so the operator waits for their task rather than for the system to think of a
 	// name for it. Only the identifier crosses into it: everything else is read again in there, so
 	// nothing this call is still holding can be written underneath it.
 	s.describing.Add(1)
@@ -1424,13 +1427,13 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 // On the task and never on the sandbox, and that is the whole point of it being here rather than in
 // taskEnv. A sandbox is born with its environment and is then reused across every later task, so a
 // trace context written at birth labels the tenth task with the first task's span for as long as the
-// container lives. The same trap the crew's refusal message names about a capability granted after
+// container lives. The same trap the system's refusal message names about a capability granted after
 // birth: the container already running never sees the new value, and the value it does hold is the
 // one from a moment that has passed.
 //
 // The honest limit, stated because a reader will look for it: nothing inside the container adopts
-// this yet. The model's own tool does not read it, so what the crew gets is one span per attempt
-// written by the crew, around a job whose inside is opaque.
+// this yet. The model's own tool does not read it, so what the system gets is one span per attempt
+// written by the system, around a job whose inside is opaque.
 func withTraceparent(ctx context.Context, env map[string]string) map[string]string {
 	parent := telemetry.Traceparent(ctx)
 	if parent == "" {
@@ -1445,8 +1448,8 @@ func withTraceparent(ctx context.Context, env map[string]string) map[string]stri
 
 // measureTask publishes what a task spent and where it was spent.
 //
-// The workspace and the project are on it because the useful question is never "what did the crew
-// cost" but "what did this job cost". The model is on it because a crew that moved from
+// The workspace and the project are on it because the useful question is never "what did the system
+// cost" but "what did this job cost". The model is on it because a system that moved from
 // one model to another wants to see the step.
 func (s *Server) measureTask(ctx context.Context, session *quaycrewv1.Session, resp model.Response, status string) {
 	s.taskMetrics.Record(ctx, telemetry.TaskMeasurement{
@@ -1507,7 +1510,7 @@ func permissionModeOf(session *quaycrewv1.Session, born string) string {
 	return model.PermissionAcceptEdits
 }
 
-// ListContexts says where the files the model reads live: for one project, or for the whole crew.
+// ListContexts says where the files the model reads live: for one project, or for the whole system.
 //
 // The tool runs on the operator's machine and knows nothing of where this process keeps data, so the
 // paths come from here. Both the console and the command line are clients of this one call rather
@@ -1527,13 +1530,13 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 	}
 
 	dirs := make([]*quaycrewv1.ContextDir, 0, len(projects)*2+1)
-	// The crew's own context, first, because it is the level everything else sits inside, and however
-	// narrow the question it is part of the answer: every session in the crew reads it. It belongs to
+	// The system's own context, first, because it is the level everything else sits inside, and however
+	// narrow the question it is part of the answer: every session in the system reads it. It belongs to
 	// no directory, being rendered into every workspace's file, so there is no one file to name.
-	dirs = append(dirs, s.contextDir(ctx, store.ContextCrew, "", "crew", sandbox.Context{}))
+	dirs = append(dirs, s.contextDir(ctx, store.ContextSystem, "", "system", sandbox.Context{}))
 	seenWorkspace := map[string]bool{}
 	for _, project := range projects {
-		// The directories, where the crew can describe them. A crew that was told no data directory
+		// The directories, where the system can describe them. A system that was told no data directory
 		// can describe none, and what a level says is held in the store rather than on a disk, so the
 		// row still carries the body and simply names no directory. Dropping the row instead took
 		// every project's context out of the one call that reads a level back.
@@ -1555,7 +1558,7 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 	}
 	// A workspace with no projects contributed no row at all, because the rows were built by walking
 	// projects. Its context is stored and rendered either way, so writing an org's context into a
-	// fresh workspace and then being told the crew held nothing was the listing's fault, not the
+	// fresh workspace and then being told the system held nothing was the listing's fault, not the
 	// write's. There is no directory to name yet: a context directory belongs to a project.
 	if req.GetProject() == "" {
 		for _, workspace := range workspaces {
@@ -1572,13 +1575,16 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 // SetContext records what the model should be told at a scope, and renders it into every directory
 // that already exists for it, so a sandbox already running picks it up on its next task.
 func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextRequest) (*quaycrewv1.SetContextResponse, error) {
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
 	scope := store.ContextScope(req.GetScope())
 	if !store.KnownContextScope(scope) {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a scope: use %s, %s or %s",
-			req.GetScope(), store.ContextCrew, store.ContextWorkspace, store.ContextProject)
+			req.GetScope(), store.ContextSystem, store.ContextWorkspace, store.ContextProject)
 	}
-	if scope != store.ContextCrew && req.GetOwner() == "" {
+	if scope != store.ContextSystem && req.GetOwner() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "a %s context needs to say which one", scope)
 	}
 	if err := s.store.SetContext(ctx, scope, req.GetOwner(), req.GetBody()); err != nil {
@@ -1596,7 +1602,7 @@ func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextReque
 	}, nil
 }
 
-// contextProjects is the projects a listing covers: one when asked for, else every one the crew has.
+// contextProjects is the projects a listing covers: one when asked for, else every one the system has.
 func (s *Server) contextProjects(ctx context.Context, project string) ([]*quaycrewv1.Project, error) {
 	if project == "" {
 		projects, err := s.store.ListProjects(ctx, "")
@@ -1636,7 +1642,7 @@ func (s *Server) contextDir(ctx context.Context, scope store.ContextScope, owner
 // The mode belongs to the session rather than to a task, so a session started to plan something keeps
 // planning instead of being re armed on every dispatch. An unknown mode is refused here rather than
 // handed to the model, which would take it as far as its own argument parser and no further.
-// ImportSkill takes a skill into the crew from the files a client read out of its directory.
+// ImportSkill takes a skill into the system from the files a client read out of its directory.
 //
 // The files travel and this side validates, because the control plane runs in a container where a path
 // on the operator's machine means nothing, and because one validator is one answer: a client that
@@ -1673,7 +1679,7 @@ func (s *Server) ImportSkill(ctx context.Context, req *quaycrewv1.ImportSkillReq
 	return &quaycrewv1.ImportSkillResponse{Skill: asSkill(stored)}, nil
 }
 
-// ListSkills says what the crew can do, or what one workspace holds.
+// ListSkills says what the system can do, or what one workspace holds.
 func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsRequest) (*quaycrewv1.ListSkillsResponse, error) {
 	// A session's listing is the same answer its sandbox is built from, so the listing cannot say
 	// one thing while the sandbox does another.
@@ -1702,7 +1708,7 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 	if req.GetWorkspace() != "" {
 		held, err = s.store.WorkspaceSkills(ctx, req.GetWorkspace())
 		if err == nil {
-			held = s.withCrewSkills(ctx, held)
+			held = s.withSystemSkills(ctx, held)
 		}
 	} else {
 		held, err = s.store.ListSkills(ctx)
@@ -1710,20 +1716,20 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 	if err != nil {
 		return nil, storeError(err, "list skills")
 	}
-	// Which of them the crew holds, so a listing says where a skill came from rather than leaving the
+	// Which of them the system holds, so a listing says where a skill came from rather than leaving the
 	// operator to guess why a workspace they attached nothing to has four.
-	crew := map[string]bool{}
-	if held, err := s.store.CrewSkills(ctx); err == nil {
+	system := map[string]bool{}
+	if held, err := s.store.SystemSkills(ctx); err == nil {
 		for _, one := range held {
-			crew[one.Name] = true
+			system[one.Name] = true
 		}
 	}
 	out := make([]*quaycrewv1.Skill, 0, len(held))
 	for _, one := range held {
 		carried := asSkill(one)
-		carried.Crew = crew[one.Name]
+		carried.System = system[one.Name]
 		// A workspace's listing answers the same question its sessions do, so a skill its secrets
-		// leave out says so here rather than only once a session exists. The crew's own listing has
+		// leave out says so here rather than only once a session exists. The system's own listing has
 		// no workspace to answer for, so it says nothing.
 		if req.GetWorkspace() != "" {
 			carried.LeftOut = s.secretMissing(ctx, req.GetWorkspace(), skill.Held{Skill: one.Skill})
@@ -1738,16 +1744,19 @@ func (s *Server) ListSkills(ctx context.Context, req *quaycrewv1.ListSkillsReque
 // at container creation, so the honest thing is to mark it stale in the listing rather than
 // rewrite an index it cannot follow.
 func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillRequest) (*quaycrewv1.AttachSkillResponse, error) {
-	// The crew holding a skill is one statement about every workspace, so it renders to every live
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	// The system holding a skill is one statement about every workspace, so it renders to every live
 	// session rather than to one workspace's.
-	if req.GetScope() == crewScope {
-		attached, err := s.store.AttachCrewSkill(ctx, req.GetName())
+	if req.GetScope() == systemScope {
+		attached, err := s.store.AttachSystemSkill(ctx, req.GetName())
 		if err != nil {
 			return nil, storeError(err, "attach skill")
 		}
-		s.renderTo(ctx, store.ContextCrew, "")
+		s.renderTo(ctx, store.ContextSystem, "")
 		carried := asSkill(attached)
-		carried.Crew = true
+		carried.System = true
 		return &quaycrewv1.AttachSkillResponse{Skill: carried}, nil
 	}
 	attached, err := s.store.AttachSkill(ctx, req.GetWorkspace(), req.GetName())
@@ -1760,11 +1769,14 @@ func (s *Server) AttachSkill(ctx context.Context, req *quaycrewv1.AttachSkillReq
 
 // DetachSkill takes a skill away from a workspace, and takes its files off the sessions that held it.
 func (s *Server) DetachSkill(ctx context.Context, req *quaycrewv1.DetachSkillRequest) (*quaycrewv1.DetachSkillResponse, error) {
-	if req.GetScope() == crewScope {
-		if err := s.store.DetachCrewSkill(ctx, req.GetName()); err != nil {
+	if err := refusedScope(req.GetScope()); err != nil {
+		return nil, err
+	}
+	if req.GetScope() == systemScope {
+		if err := s.store.DetachSystemSkill(ctx, req.GetName()); err != nil {
 			return nil, storeError(err, "detach skill")
 		}
-		s.renderTo(ctx, store.ContextCrew, "")
+		s.renderTo(ctx, store.ContextSystem, "")
 		return &quaycrewv1.DetachSkillResponse{}, nil
 	}
 	if err := s.store.DetachSkill(ctx, req.GetWorkspace(), req.GetName()); err != nil {
@@ -1774,7 +1786,7 @@ func (s *Server) DetachSkill(ctx context.Context, req *quaycrewv1.DetachSkillReq
 	return &quaycrewv1.DetachSkillResponse{}, nil
 }
 
-// asSkill renders a skill for a client. The files never travel back: a client asked what the crew can
+// asSkill renders a skill for a client. The files never travel back: a client asked what the system can
 // do, not for a copy of every script.
 func asSkill(one store.Imported) *quaycrewv1.Skill {
 	out := skillAsProto(one.Skill)
@@ -1784,7 +1796,7 @@ func asSkill(one store.Imported) *quaycrewv1.Skill {
 	return out
 }
 
-// skillAsProto is a skill on the wire, however the crew came to hold it. A skill from the crew's
+// skillAsProto is a skill on the wire, however the system came to hold it. A skill from the system's
 // own directory has no imported moment, which is why the timestamp is asSkill's business.
 func skillAsProto(one skill.Skill) *quaycrewv1.Skill {
 	out := &quaycrewv1.Skill{
@@ -1815,7 +1827,7 @@ func (s *Server) SetSessionPermissionMode(ctx context.Context, req *quaycrewv1.S
 	// machine the operator is sitting at.
 	if req.GetMode() == model.PermissionBypass && s.info.Sandbox == "local" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"this crew runs tasks on the host, not in a container, so %s would give the model your machine",
+			"this system runs tasks on the host, not in a container, so %s would give the model your machine",
 			model.PermissionBypass)
 	}
 	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
@@ -1900,16 +1912,16 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	env := map[string]string{}
 	// Who this session is. The volume is shared by every session in the workspace, so anything a
 	// session puts there needs a name of its own to avoid the session beside it: the git brief names
-	// a working tree and a branch after this. It is an identifier the crew already shows and never a
+	// a working tree and a branch after this. It is an identifier the system already shows and never a
 	// credential, so every session is told it rather than the driver alone.
 	if id := session.GetId(); id != "" {
 		env[sandbox.SessionIDEnv] = id
 	}
-	// Where to reach the crew, so `quay` run inside the driver works with nothing to configure. The
-	// driver holds the crew's own interface, which is why it is told here and why it is told the
-	// driver's token: an ordinary session has no business driving the crew. A session running a job
+	// Where to reach the system, so `quay` run inside the driver works with nothing to configure. The
+	// driver holds the system's own interface, which is why it is told here and why it is told the
+	// driver's token: an ordinary session has no business driving the system. A session running a job
 	// is told the same address below, with a credential that buys it four verbs rather than
-	// the crew.
+	// the system.
 	//
 	// Every sandbox is on a network that reaches the control plane, so being told is what decides
 	// this and not what the container can address. The network carries no permission: a session
@@ -1917,7 +1929,7 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	if session.GetDriver() && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 		// The token travels with the address and only with it: an ordinary session is told
-		// neither, and an address the crew refuses to answer would read as the crew being down.
+		// neither, and an address the system refuses to answer would read as the system being down.
 		if s.driverToken != "" {
 			env[auth.TokenEnv] = s.driverToken
 		}
@@ -1967,11 +1979,11 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 		if _, already := env[name]; already {
 			continue
 		}
-		// QC_ is the crew's own configuration: the address a session dials and the token it dials
-		// with are put here by the crew, so a workspace secret answering to one of those would be
-		// posing as the crew rather than being handed out by it. CLAUDE_ names travel, since the
+		// QC_ is the system's own configuration: the address a session dials and the token it dials
+		// with are put here by the system, so a workspace secret answering to one of those would be
+		// posing as the system rather than being handed out by it. CLAUDE_ names travel, since the
 		// model's token is one and is set exactly this way.
-		if strings.HasPrefix(name, crewOwnPrefix) {
+		if strings.HasPrefix(name, systemOwnPrefix) {
 			continue
 		}
 		value, err := s.secrets.Get(ctx, session.GetWorkspace(), name)
@@ -1990,9 +2002,9 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 // tool inside a sandbox needs no arguments.
 const grpcAddrEnv = "QC_GRPC_ADDR"
 
-// crewOwnPrefix marks the names the crew puts into a sandbox itself, so a workspace secret cannot
-// take one of them and be read as configuration the crew wrote.
-const crewOwnPrefix = "QC_"
+// systemOwnPrefix marks the names the system puts into a sandbox itself, so a workspace secret cannot
+// take one of them and be read as configuration the system wrote.
+const systemOwnPrefix = "QC_"
 
 // ListSessions lists sessions, optionally filtered by workspace.
 //
@@ -2052,7 +2064,7 @@ func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Sessi
 }
 
 // withUsage puts what a session's conversation has cost onto it, read from the transcript the model
-// keeps rather than from anything the crew recorded.
+// keeps rather than from anything the system recorded.
 //
 // It has to come from there: the conversations worth counting are the ones held in the panel, and
 // those never pass through the control plane at all. A session nobody has spoken in is left without a
@@ -2075,7 +2087,7 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 // A different question from what the conversation cost, and the one that decides whether it is still
 // worth continuing: cost only grows, while the window empties again when the model compacts. The used
 // figure comes from the transcript, and the size of the window from whatever the model runtime last
-// told a session in this workspace, because nothing else in the crew knows it.
+// told a session in this workspace, because nothing else in the system knows it.
 //
 // A conversation nobody has spoken in is left without a figure. A window nobody has been told the
 // size of is reported as a count with no size, which a listing shows as tokens rather than as a share
@@ -2100,9 +2112,9 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
-	// The row never decides whether a conversation opens. It is the crew's own bookkeeping, and it
+	// The row never decides whether a conversation opens. It is the system's own bookkeeping, and it
 	// used to be the gate: a drain puts every live session down, `make upgrade` drains, so after an
-	// upgrade the whole crew said stopped and every session refused to open. An archived session was
+	// upgrade the whole system said stopped and every session refused to open. An archived session was
 	// worse. Archiving sets the row to stopped as well, so the refusal read "is stopped: restart it
 	// first", and restarting an archived session is itself refused. Attach named the one action that
 	// could not be taken.
@@ -2127,18 +2139,18 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 			return nil, storeError(err, "session")
 		}
 	}
-	// Opening a session opens the conversation the session already holds. The crew names one before
+	// Opening a session opens the conversation the session already holds. The system names one before
 	// any task runs in it, so by the time anybody can open a session there is a name to open, and
 	// naming one here would be naming a second conversation beside the first.
 	//
 	// A session with no name at all is one nothing has ever been dispatched to, or one carried over
-	// from a crew that named conversations after the task rather than before it. Naming it here is
+	// from a system that named conversations after the task rather than before it. Naming it here is
 	// what makes it openable: a first task that failed used to leave a session in the listing that
 	// nobody could open at all.
 	if session.GetModelSessionId() == "" {
 		if session.GetStatus() == StatusRunning {
 			// The one case where naming a conversation here is the defect rather than the fix. The task
-			// is working in a conversation this crew never named and cannot know the name of until the
+			// is working in a conversation this system never named and cannot know the name of until the
 			// task lands, and a name minted now would open an empty conversation beside the job.
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"session %s is running a task that named its own conversation: it lands on the session "+
@@ -2147,7 +2159,7 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 		}
 		s.nameConversation(ctx, session)
 	}
-	// A handle can outlive what it points at, and a conversation the crew has just named has no
+	// A handle can outlive what it points at, and a conversation the system has just named has no
 	// transcript either, so the two cannot be told apart here. The sandbox decides: it resumes a
 	// transcript that exists and starts one under the same name when it does not.
 	// The live sandboxes are a map in this process, so a restart empties it while the row still says
@@ -2345,7 +2357,7 @@ func namesOf(sessions []*quaycrewv1.Session) string {
 	return strings.Join(names, ", ")
 }
 
-// OpenDriver returns the project's driver, the session that drives the crew, creating it the first
+// OpenDriver returns the project's driver, the session that drives the system, creating it the first
 // time somebody opens it. It is what `quay` opens beside the console.
 func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverRequest) (*quaycrewv1.OpenDriverResponse, error) {
 	if req.GetProject() == "" {
@@ -2360,7 +2372,7 @@ func (s *Server) OpenDriver(ctx context.Context, req *quaycrewv1.OpenDriverReque
 }
 
 // teachDriver writes what quay is into the driver's own context, so it opens knowing what it is for
-// rather than having to be told every time. It is the crew describing itself: the command list the
+// rather than having to be told every time. It is the system describing itself: the command list the
 // tool prints, and the behaviour specification the binary carries.
 //
 // The driver's own level, not the project's, and written once: overwriting on every open would make
@@ -2371,10 +2383,10 @@ func (s *Server) teachDriver(ctx context.Context, session *quaycrewv1.Session) {
 	}
 	if err := s.store.SetContext(ctx, store.ContextSession, session.GetId(), manual.Text()); err != nil {
 		// A driver that has not been told what quay is still opens, and can be told by hand. Refusing
-		// to open the crew over it would be worse than opening one that has to ask.
+		// to open the system over it would be worse than opening one that has to ask.
 		return
 	}
 	// Out to the file the driver reads, rather than waiting for its sandbox to be made. Notes it
-	// already had are kept: this is the crew adding what it is, not replacing what was there.
+	// already had are kept: this is the system adding what it is, not replacing what was there.
 	s.syncContext(ctx, session)
 }

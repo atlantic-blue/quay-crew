@@ -109,8 +109,8 @@ func TestFakeProviderAdoptsASessionsSandbox(t *testing.T) {
 	}
 }
 
-// TestASandboxJoinsNoNetworkByDefault. Neither network is assumed: a crew run outside the compose
-// stack may have no network to put a session on, and the crew's own network, which carries the store
+// TestASandboxJoinsNoNetworkByDefault. Neither network is assumed: a system run outside the compose
+// stack may have no network to put a session on, and the system's own network, which carries the store
 // and the broker, is a widening the operator asks for.
 func TestASandboxJoinsNoNetworkByDefault(t *testing.T) {
 	plain := sandbox.DockerProvider{Image: "quaycrew-sandbox-claude:local"}
@@ -121,7 +121,7 @@ func TestASandboxJoinsNoNetworkByDefault(t *testing.T) {
 
 // TestOptionsCarryBothNetworksThroughToTheBackend: the provider is built by converting the options
 // across, so a field added to one and not the other silently does nothing. Both, because a session
-// that never reaches the crew is exactly what this pair of fields exists to stop.
+// that never reaches the system is exactly what this pair of fields exists to stop.
 func TestOptionsCarryBothNetworksThroughToTheBackend(t *testing.T) {
 	provider, err := sandbox.NewProvider(sandbox.KindDocker, sandbox.Options{
 		Image: "img", Network: "quaycrew_default", SessionNetwork: "quaycrew_sessions",

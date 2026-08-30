@@ -18,9 +18,9 @@ import (
 
 // Reclaiming, and the signal that stops it closing a container somebody is in.
 
-// aCrewWithProvider is a control plane over a provider a test can drive, so a scenario can be a
+// aSystemWithProvider is a control plane over a provider a test can drive, so a scenario can be a
 // daemon that says somebody is attached, or one that will not answer at all.
-func aCrewWithProvider(runner model.Runner, provider *sandbox.FakeProvider) *controlplane.Server {
+func aSystemWithProvider(runner model.Runner, provider *sandbox.FakeProvider) *controlplane.Server {
 	return controlplane.NewServer(controlplane.Config{
 		Store: store.NewMemory(), Runner: runner, Provider: provider, Secrets: secrets.NewMemory(),
 	})
@@ -43,7 +43,7 @@ func anIdleSession(t *testing.T, s *controlplane.Server, project string) *quaycr
 
 func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -75,7 +75,7 @@ func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 func TestATaskSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
 	runner := &model.FakeRunner{Reply: "first"}
-	s := aCrewWithProvider(runner, provider)
+	s := aSystemWithProvider(runner, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -125,7 +125,7 @@ func TestASessionWithATaskUnderWayIsNotReclaimed(t *testing.T) {
 	gate := make(chan struct{})
 	started := make(chan struct{})
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done", Gate: gate, Started: started}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 
@@ -147,7 +147,7 @@ func TestASessionWithATaskUnderWayIsNotReclaimed(t *testing.T) {
 }
 
 func TestAStoppedSessionIsNotReclaimed(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -165,7 +165,7 @@ func TestAStoppedSessionIsNotReclaimed(t *testing.T) {
 }
 
 func TestReclaimingTwiceIsRefusedRatherThanRestamped(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -185,7 +185,7 @@ func TestReclaimingTwiceIsRefusedRatherThanRestamped(t *testing.T) {
 }
 
 func TestAnArchivedSessionIsNotReclaimed(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, &sandbox.FakeProvider{})
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -200,7 +200,7 @@ func TestAnArchivedSessionIsNotReclaimed(t *testing.T) {
 }
 
 func TestReclaimingASessionNobodyHasIsNotFound(t *testing.T) {
-	s := aCrewWithProvider(&model.FakeRunner{}, &sandbox.FakeProvider{})
+	s := aSystemWithProvider(&model.FakeRunner{}, &sandbox.FakeProvider{})
 	_, err := s.ReclaimSession(context.Background(), &quaycrewv1.ReclaimSessionRequest{Id: "ghost"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("reclaiming a missing session answered %v, want NotFound", err)
@@ -208,9 +208,9 @@ func TestReclaimingASessionNobodyHasIsNotFound(t *testing.T) {
 }
 
 // The attached signal, read the way the controller reads it.
-func TestTheCrewCanTellWhoIsInASession(t *testing.T) {
+func TestTheSystemCanTellWhoIsInASession(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -220,7 +220,7 @@ func TestTheCrewCanTellWhoIsInASession(t *testing.T) {
 		t.Fatalf("SessionAttached: %v", err)
 	}
 	if alone {
-		t.Fatal("the crew says somebody is in a session nobody has opened")
+		t.Fatal("the system says somebody is in a session nobody has opened")
 	}
 
 	provider.Watch(session.GetId())
@@ -229,15 +229,15 @@ func TestTheCrewCanTellWhoIsInASession(t *testing.T) {
 		t.Fatalf("SessionAttached: %v", err)
 	}
 	if !watched {
-		t.Fatal("the crew says nobody is in a session an operator has open")
+		t.Fatal("the system says nobody is in a session an operator has open")
 	}
 }
 
-// A daemon that will not answer is the crew being unable to tell, and it must come back as an error
+// A daemon that will not answer is the system being unable to tell, and it must come back as an error
 // rather than as nobody: the controller reads an error as attached and leaves the container alone.
 func TestADaemonThatWillNotAnswerIsNotTheSameAsNobody(t *testing.T) {
 	provider := &sandbox.FakeProvider{AttachErr: errors.New("the daemon is not there")}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -247,14 +247,14 @@ func TestADaemonThatWillNotAnswerIsNotTheSameAsNobody(t *testing.T) {
 	}
 }
 
-// A session with no container is nobody's to be in, and the crew must not build one to find out.
+// A session with no container is nobody's to be in, and the system must not build one to find out.
 //
 // The session is one somebody was in before its container went, which is the case that tells the
 // answer apart from a lookup of who was watching: the container is what is asked, so once it has gone
 // the answer is nobody whatever anybody was doing a moment earlier.
 func TestASessionWithNoContainerIsNobodyIsIn(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
-	s := aCrewWithProvider(&model.FakeRunner{Reply: "done"}, provider)
+	s := aSystemWithProvider(&model.FakeRunner{Reply: "done"}, provider)
 	_, project := newProject(t, s)
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
@@ -269,7 +269,7 @@ func TestASessionWithNoContainerIsNobodyIsIn(t *testing.T) {
 		t.Fatalf("SessionAttached: %v", err)
 	}
 	if watched {
-		t.Fatal("the crew says somebody is in a session whose container it took back")
+		t.Fatal("the system says somebody is in a session whose container it took back")
 	}
 	if len(provider.Configurations()) != made {
 		t.Fatal("asking who is in a session built a container, which would undo the reclaim it is asked about")

@@ -1,6 +1,6 @@
-# Quay Crew architecture
+# Quay System architecture
 
-Quay Crew is a self hosted, open source personal agent hub: a set of small independent services that
+Quay System is a self hosted, open source personal agent hub: a set of small independent services that
 let you drive AI agent work from any channel, run it in sandboxes, and see and audit everything. This
 document describes the design, the stack, and the delivery plan.
 
@@ -96,7 +96,7 @@ Each is its own Go service in its own container.
   on its own) and it lets a consumer added later read what already happened. It is **not the source
   of truth**: the store is, and publishing is deliberately lossy, because a broker that cannot be
   reached must never fail a task that already happened ([`EVENTS.md`](EVENTS.md) is the honest
-  account). Decided 9 August 2026: anything the crew cannot afford to lose is written to the store
+  account). Decided 9 August 2026: anything the system cannot afford to lose is written to the store
   in the same transaction as the thing it describes, and the log carries the same record outward as
   an export for whatever wants a stream. Unset seeds then mean no export, never lost history.
 - **Synchronous APIs: gRPC.** Request and response calls (managing workspaces, reading the read model)
@@ -206,11 +206,11 @@ with a model substitute that still execs inside the sandbox.
 Three levels, named the way Claude Projects and Linear name them, because the words should mean what
 a reader already expects.
 
-**Decided 16 August 2026: the crew has one word for a conversation and one for a job.
+**Decided 16 August 2026: the system has one word for a conversation and one for a job.
 They are session and task.** This reverses the 9 August decision below. The wire says `Session`: the
 session RPCs (`ListSessions`, `GetSession`, `AttachSession` and the rest), a `Task` and a `TaskEvent`
 that say which session they belong to, and a dispatch that returns the session's `id` beside its
-`handle`. A session carries three identifiers, each with one job: `id` is the crew's own row and
+`handle`. A session carries three identifiers, each with one job: `id` is the system's own row and
 names the sandbox container, `handle` is the name a channel dispatches to (dispatch to the same
 handle and the conversation continues), and `model_session_id` is the model's own word for the
 conversation it keeps, used to resume it. `quay threads` and `quay turns` are refused by name, and
@@ -226,14 +226,14 @@ refusal offers only that one.
 
 **Decided 29 August 2026: the `name` column reads three names, in the order of how much a reader
 should trust them.** The label the operator set, then the title the session was dispatched with, then
-the line the crew wrote about it. The label is first because it is the last word of the person who
+the line the system wrote about it. The label is first because it is the last word of the person who
 has seen the session, and the only one of the three they can change. The title is next because a
 person typed it too, at declaration, about the job the session was made for. A job is one long task
 and a description is written behind a task that has answered, so before this a screen of running jobs
 was a column of blank name cells. A title reaches a session only when the session is made, so a
 dispatch made again cannot rename a conversation the operator has since labelled.
 
-**Decided 9 August 2026, and now reversed: the operator facing word was thread.** The crew then ran
+**Decided 9 August 2026, and now reversed: the operator facing word was thread.** The system then ran
 two words for one thing, `Thread` on the wire and `session` in the store, so every reader had to
 learn both. `turn` came from conversation analysis and never said how long the job takes.
 
@@ -265,7 +265,7 @@ reason the level exists.
 A project also says **where it deploys**: the account, the region inside it, and the role a pipeline
 assumes to get there. It sits on the project rather than the workspace because a workspace holds
 several bodies of work and each ships somewhere of its own, and it is a record rather than a
-credential: nothing in the crew reaches that account with it. Three values, all of them or none,
+credential: nothing in the system reaches that account with it. Three values, all of them or none,
 because half a target reads as an answer to "where does this go" and is not one. The identity has to
 belong to the account the project names, which catches the role pasted from another account before a
 pipeline finds it. `quay target <workspace>/<project>` reads and declares it.
@@ -278,7 +278,7 @@ conversation the model keeps on its own disk.
 
 **Decided 30 August 2026: a project records its repository, written owner and name, and what kind of
 repository that is.** A project is a body of work, and the repository is where that body of work
-goes, so the crew holds it as a row. It sits beside the deploy target above and answers a different
+goes, so the system holds it as a row. It sits beside the deploy target above and answers a different
 question: the target says where the running thing ships, and this says where the work lands.
 
 ```
@@ -295,7 +295,7 @@ to.
 The kind is a cost fact rather than a permission. A pipeline's minutes are free on a public
 repository and metered on a private one, and that decision was being taken in a person's head once
 per project. Saying nothing records public, because free is the cheaper of the two and a project that
-cannot be public is the one that has to say so. The crew says what the kind costs in the same breath
+cannot be public is the one that has to say so. The system says what the kind costs in the same breath
 as the address, so the choice is read rather than remembered.
 
 What this does not do is create the repository, or look at it. The record is what the operator
@@ -332,7 +332,7 @@ means, the queries worth knowing, and how migrations are added.
 
 `features/` holds the behaviour specifications: feature files written in plain language, run by
 godog, driving the control plane over its real interface through an in memory connection. They are
-the readable answer to what Quay Crew does, and they fail when it stops doing it. `make features`
+the readable answer to what Quay System does, and they fail when it stops doing it. `make features`
 runs them and prints them.
 
 Three rules keep the layer worth having.
@@ -440,26 +440,26 @@ edges:
 achieved.** A task that could not do the work is not a failed task: asked to read a file that is not
 there, a capable model answers plausibly instead of stopping, and a graph branching on
 `result.failed` then walks its success path through a job that never happened. The first flow run
-against a real crew did exactly that. It finished at `done`, reported four transitions, and its
+against a real system did exactly that. It finished at `done`, reported four transitions, and its
 summary was the model's account of a repository it never found.
 
-**So a dispatch node may declare what will show it worked, and the crew checks it.** `expect: { file:
+**So a dispatch node may declare what will show it worked, and the system checks it.** `expect: { file:
 package.json }` is a path that must be in the run's session after the task, read from the working
-directory the crew keeps rather than asked of the model. `expect: { contains: "all green" }` is a
+directory the system keeps rather than asked of the model. `expect: { contains: "all green" }` is a
 string the reply must carry, which is weaker because it is still the model's own prose, and is there
 for a job that leaves no file behind. Whichever is declared is checked.
 
 **An expectation that does not hold stops the run**, with the reason naming the node and what was
-not there, and `result.expected` in the run's state. It stops rather than branching because the crew
+not there, and `result.expected` in the run's state. It stops rather than branching because the system
 knows the job did not happen and does not know why, and because a run that halts is read correctly
 while a run that finishes is believed. Its session is left alone rather than archived, since that is
 where the evidence is. A graph that declares nothing behaves exactly as it did.
 
-An expectation nothing can check stops the run too. A crew that keeps no working directory on disk
+An expectation nothing can check stops the run too. A system that keeps no working directory on disk
 cannot answer the question, and a check that quietly passes when it could not be run is the same
 false green as no check at all.
 
-Left out on purpose: a command the crew runs and requires to exit zero. It is the obvious third
+Left out on purpose: a command the system runs and requires to exit zero. It is the obvious third
 form, and it makes an imported graph a way to run arbitrary commands through the control plane,
 which is a decision to take on its own rather than in passing. A file covers the case that was
 found.
@@ -561,7 +561,7 @@ ended is the useful part.
 **A run can wait, and a restart does not lose it.** A `wait` node declares how long, as `for: 10m`,
 and reaching one puts the run down: it is recorded as waiting with a due time on its row, asks for
 nothing, and costs nothing until its time comes. A poller in the control plane reads the due rows
-every few seconds and carries those runs on, once on the way up as well, so a crew restarted onto a
+every few seconds and carries those runs on, once on the way up as well, so a system restarted onto a
 pile of overdue waits resumes them immediately. That is the whole reason a wait is a column rather
 than a timer somebody is holding: a process holding timers forgets every one of them when it
 restarts, and a run that was going to resume in ten minutes simply never would. A resumed run is
@@ -669,13 +669,13 @@ Secrets are never stored in the repository, and the code has no built in knowled
 
 ## Authentication
 
-**Decided 9 August 2026: a bearer token per crew.** One token, minted by the control plane the
+**Decided 9 August 2026: a bearer token per system.** One token, minted by the control plane the
 first time it starts, and refused to nobody who holds it: per client identities can follow when
 more than one operator exists, and the token is the smallest thing that makes the boundary real.
 
 How it works today, in `internal/auth`:
 
-- The token lives at `<data directory>/crew.token`, beside the key that seals secrets and kept the
+- The token lives at `<data directory>/system.token`, beside the key that seals secrets and kept the
   same way: made rather than asked for, readable only by its owner. It sits there rather than
   sealed in the store because a sealed value can never be read back out through the API, by
   construction, and the operator's own tool has to present this one.
@@ -686,14 +686,14 @@ How it works today, in `internal/auth`:
   the port on the host's loopback only. The token is what recognises a caller, not what hides the
   conversation: publishing the port beyond the machine needs transport the operator owns in front
   of it.
-- `quay` reads QC_TOKEN first, then the token file under the crew's data directory.
+- `quay` reads QC_TOKEN first, then the token file under the system's data directory.
 
 A driver session is a client like any other and gets less, not more. It is handed its own token at
-sandbox birth, minted into `driver.token` beside the crew's, so the control plane can tell its
+sandbox birth, minted into `driver.token` beside the system's, so the control plane can tell its
 calls apart and a token that leaks out of a driver sandbox grants strictly less than the operator
 holds. The calls that grant capability are refused to it, in `DeniedToDriver`: setting or listing
 secrets, importing, attaching or detaching skills, a session's permission mode, and context at the
-crew scope, which is injected into every session including the driver itself. Everything the
+system scope, which is injected into every session including the driver itself. Everything the
 driver exists to do stays open: workspaces, projects, sessions, dispatch, and context at the
 workspace and project scopes.
 
@@ -766,7 +766,7 @@ Concretely:
 - **Everything in Docker, and everything starts.** Each component is a container; a compose file
   wires them locally, and `make up` (alias `make start`) is the front door. There are no compose
   profiles: the observability stack and the broker used to sit behind one to keep the day to day loop
-  light, and the cost was a crew you could not see and an export nobody had switched on.
+  light, and the cost was a system you could not see and an export nobody had switched on.
 - **Local and cloud from one build.** The event log, storage, sandbox, and secrets are each behind an
   interface with a local implementation (Redpanda, files or a local database, local docker, an
   encrypted local store) and a cloud implementation (managed Kafka or Redpanda, object store, remote
@@ -796,14 +796,14 @@ doubles as the trace id, and token and cost counters land with the first model c
 
 ## Prior art
 
-Quay Crew learns from three points on the map.
+Quay System learns from three points on the map.
 
 - **OpenClaw:** a self hosted gateway with a control plane, many channel adapters, and config, memory,
-  and skills as files on disk. Quay Crew keeps the self hosted, files on disk, control plane shape and
+  and skills as files on disk. Quay System keeps the self hosted, files on disk, control plane shape and
   avoids an unvetted third party skill marketplace.
 - **Hermes Agent:** an agent loop that writes its own skills, a built in scheduler, and persistent
-  memory. Quay Crew borrows the learning loop and the scheduler but keeps changes reviewed rather than
+  memory. Quay System borrows the learning loop and the scheduler but keeps changes reviewed rather than
   self applied.
 - **Remote control features** that task a phone into a live window onto a local session: the safest way
-  to steer one session, but not a programmable, multi channel, self hosted hub. Quay Crew is the
+  to steer one session, but not a programmable, multi channel, self hosted hub. Quay System is the
   latter.

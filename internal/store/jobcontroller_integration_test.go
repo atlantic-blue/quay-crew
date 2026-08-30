@@ -30,8 +30,8 @@ import (
 // controller has to write onto the row rather than leave running.
 var errTheModelRefusedThisTask = errors.New("the model refused this task")
 
-// aCrewWithAController stands the control plane up on a real database, with a model that answers.
-func aCrewWithAController(t *testing.T, runner model.Runner) (*controlplane.Server, store.Store) {
+// aSystemWithAController stands the control plane up on a real database, with a model that answers.
+func aSystemWithAController(t *testing.T, runner model.Runner) (*controlplane.Server, store.Store) {
 	t.Helper()
 	truncate(t)
 	kept, err := store.NewPostgres(context.Background(), databaseURL)
@@ -70,7 +70,7 @@ func waitForJob(t *testing.T, s *controlplane.Server, id, phase string) *quaycre
 // The whole of what this slice buys, against the database that holds it: declared job runs, and the
 // answer is on the row afterwards.
 func TestDeclaredJobRunsAndItsAnswerIsOnTheRowInPostgres(t *testing.T) {
-	s, _ := aCrewWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	s, _ := aSystemWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -101,7 +101,7 @@ func TestDeclaredJobRunsAndItsAnswerIsOnTheRowInPostgres(t *testing.T) {
 // The claim is a conditional update in one statement, which is what keeps two controllers ticking at
 // the same moment from both starting the same job. A job is paid for, so twice is money.
 func TestTwoControllersTickingAtOnceStartTheJobOnceInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "done"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	_ = workspace
@@ -158,7 +158,7 @@ func TestTwoControllersTickingAtOnceStartTheJobOnceInPostgres(t *testing.T) {
 // Ticking over the same row again must not send a second task. The row is the guard, and the row
 // lives in the database.
 func TestTickingAgainSendsNoSecondTaskInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -193,7 +193,7 @@ func TestTickingAgainSendsNoSecondTaskInPostgres(t *testing.T) {
 // A task the model refuses leaves the job failed with the reason on the row, rather than running
 // forever with nothing behind it.
 func TestJobWhoseTaskFailedIsFailedOnTheRowInPostgres(t *testing.T) {
-	s, _ := aCrewWithAController(t, &model.FakeRunner{Err: errTheModelRefusedThisTask})
+	s, _ := aSystemWithAController(t, &model.FakeRunner{Err: errTheModelRefusedThisTask})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -214,7 +214,7 @@ func TestJobWhoseTaskFailedIsFailedOnTheRowInPostgres(t *testing.T) {
 // The failure this exists for, against the database that holds the row: a machine with no room to
 // make a container leaves the job pending rather than failed, and the job runs when the room comes
 // back. Failing it is how declared work was lost. See issue 465.
-func TestJobTheCrewCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.T) {
+func TestJobTheSystemCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.T) {
 	truncate(t)
 	kept, err := store.NewPostgres(context.Background(), databaseURL)
 	if err != nil {
@@ -257,20 +257,20 @@ func TestJobTheCrewCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.T)
 	if done.GetAttempts() < 2 {
 		t.Fatalf("the job ran on attempt %d, want the one after the machine had room", done.GetAttempts())
 	}
-	// One conversation, however many times the crew had to try: the retry lands where the job has
+	// One conversation, however many times the system had to try: the retry lands where the job has
 	// been all along rather than starting a second one.
 	sessions, err := s.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
 	}
 	if len(sessions.GetSessions()) != 1 {
-		t.Fatalf("the crew holds %d sessions, want the one the job ran in", len(sessions.GetSessions()))
+		t.Fatalf("the system holds %d sessions, want the one the job ran in", len(sessions.GetSessions()))
 	}
 }
 
 // Every movement is a row beside the row it describes, and they read in the order they happened.
 func TestEveryMovementIsOnTheRecordInPostgres(t *testing.T) {
-	s, kept := aCrewWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
+	s, kept := aSystemWithAController(t, &model.FakeRunner{Reply: "the bill is due on the 14th"})
 	ctx := context.Background()
 	_, project := aProjectOnPostgres(t, s)
 
@@ -310,8 +310,8 @@ func TestEveryMovementIsOnTheRecordInPostgres(t *testing.T) {
 func TestAJobsSessionIsNamedBeforeItsTaskAnswersInPostgres(t *testing.T) {
 	held, started := make(chan struct{}), make(chan struct{})
 	runner := &model.FakeRunner{Reply: "the bill is due on the 14th", Gate: held, Started: started}
-	s, _ := aCrewWithAController(t, runner)
-	// Closed however this test leaves, so the task behind the gate ends rather than holding the crew
+	s, _ := aSystemWithAController(t, runner)
+	// Closed however this test leaves, so the task behind the gate ends rather than holding the system
 	// open after the assertions.
 	defer close(held)
 	ctx := context.Background()
@@ -361,7 +361,7 @@ func TestAJobsSessionIsNamedBeforeItsTaskAnswersInPostgres(t *testing.T) {
 		}
 		return
 	}
-	t.Fatalf("the crew lists no session %s for the job that is running in it", sessionID)
+	t.Fatalf("the system lists no session %s for the job that is running in it", sessionID)
 }
 
 // waitForJobSession reads the row until the controller has written which session its task went to.

@@ -9,7 +9,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/job"
 )
 
-// A job that names a repository ends in a pull request against it, and the crew reads the address off
+// A job that names a repository ends in a pull request against it, and the system reads the address off
 // the answer rather than believing the model reported one.
 
 const thePullRequest = "https://github.com/atlantic-blue/quay-crew/pull/454"
@@ -21,7 +21,7 @@ func inARepository(title string) *job.Job {
 	return declared
 }
 
-// The session is told how the job ends, by the crew rather than by whoever wrote the brief. A brief
+// The session is told how the job ends, by the system rather than by whoever wrote the brief. A brief
 // that forgets to ask for a push produces work nobody can see, and every brief forgets eventually.
 func TestASessionDoingAJobInARepositoryIsToldItEndsInAPullRequest(t *testing.T) {
 	controller, kept, plane := aController(t)
@@ -71,7 +71,7 @@ func TestAnAnswerNamingThePullRequestLeavesTheJobDoneAndSaysWhereTheWorkIs(t *te
 	}
 	// Read once and asked once. A session that answered with the address is not asked again.
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 }
 
@@ -92,7 +92,7 @@ func TestAnAnswerNamingNoPullRequestSendsTheSessionBackForOne(t *testing.T) {
 			got.Phase, got.Reason)
 	}
 	if plane.sent() != 2 {
-		t.Fatalf("the crew was asked to run %d tasks, want 2: the work and the ask", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 2: the work and the ask", plane.sent())
 	}
 	asked := plane.dispatched[1].GetText()
 	for _, phrase := range []string{"atlantic-blue/quay-crew", "no pull request", "Do not merge"} {
@@ -150,7 +150,7 @@ func TestASessionThatStillNamesNoPullRequestStopsTheJobRatherThanBeingAskedAgain
 		t.Fatalf("the reason is %q, want it to name the repository", got.Reason)
 	}
 	if plane.sent() != 2 {
-		t.Fatalf("the crew was asked to run %d tasks, want 2: asked once and no more", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 2: asked once and no more", plane.sent())
 	}
 	// What the session said is kept. It is how somebody works out why nothing was pushed, and here it
 	// says exactly what stopped it.
@@ -159,7 +159,7 @@ func TestASessionThatStillNamesNoPullRequestStopsTheJobRatherThanBeingAskedAgain
 	}
 }
 
-// A crew that cannot ask again lands the job with the reason rather than holding a running row open
+// A system that cannot ask again lands the job with the reason rather than holding a running row open
 // waiting for a task nobody sent.
 func TestAJobWhoseSessionCannotBeAskedAgainStopsWithTheReason(t *testing.T) {
 	controller, kept, plane := aController(t)
@@ -201,6 +201,6 @@ func TestAnUnmetClaimStopsAJobInARepositoryBeforeItIsAskedForAPullRequest(t *tes
 		t.Fatalf("the reason is %q, want it to name what was claimed", got.Reason)
 	}
 	if plane.sent() != 1 {
-		t.Fatalf("the crew was asked to run %d tasks, want 1", plane.sent())
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
 	}
 }

@@ -165,9 +165,9 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the help panel names the crew it is pointed at$`, func(ctx context.Context) error {
+	sc.Step(`^the help panel names the system it is pointed at$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		for _, want := range []string{"this crew", "Workspace", "Address"} {
+		for _, want := range []string{"this system", "Workspace", "Address"} {
 			if !strings.Contains(view, want) {
 				return fmt.Errorf("the help panel does not name %q:\n%s", want, view)
 			}
@@ -175,7 +175,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the help panel names what the crew is running$`, func(ctx context.Context) error {
+	sc.Step(`^the help panel names what the system is running$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
 		for _, want := range []string{"Sandbox engine", "Store engine"} {
 			if !strings.Contains(view, want) {
@@ -281,7 +281,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		// The conversation the task ran in, read back rather than written down: the crew names one
+		// The conversation the task ran in, read back rather than written down: the system names one
 		// before the task starts, and the name is a fresh identifier every time.
 		ran, err := w.conversationOfFirstTask()
 		if err != nil {
@@ -362,9 +362,9 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 	})
 
 	// What the operator is left with, rather than what the key returned: the command opens the one
-	// session on their screen, and the crew can name the conversation it opens, so the history and
+	// session on their screen, and the system can name the conversation it opens, so the history and
 	// the cost of it belong to that session afterwards.
-	sc.Step(`^the console opens a conversation the crew can name$`, func(ctx context.Context) error {
+	sc.Step(`^the console opens a conversation the system can name$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		if c.openErr != nil {
 			return fmt.Errorf("enter was refused: %w", c.openErr)
@@ -582,7 +582,7 @@ func (c *consoleWorld) openModel(w *world) error {
 	if err != nil {
 		return err
 	}
-	// Ask the crew what it is running, the same way the console does on the way up, so the header a
+	// Ask the system what it is running, the same way the console does on the way up, so the header a
 	// scenario reads is filled in from the control plane rather than being the empty one a console
 	// shows before its first answer. Asked here rather than by running Init, because Init also starts
 	// the three second refresh clock and a scenario should not wait for it.

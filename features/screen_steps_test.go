@@ -70,9 +70,9 @@ func initializeScreenSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The real command, in a real pane, pointed at an address with no crew on it. A double that
+	// The real command, in a real pane, pointed at an address with no system on it. A double that
 	// printed something and waited would pass this while the tool exited, which is the defect.
-	sc.Step(`^quay attach is put beside the console and cannot reach the crew$`, func(ctx context.Context) error {
+	sc.Step(`^quay attach is put beside the console and cannot reach the system$`, func(ctx context.Context) error {
 		s := screenFrom(ctx)
 		built, err := quayBinary()
 		if err != nil {
@@ -163,7 +163,7 @@ func (s *screenWorld) beside(argv string) error {
 	return nil
 }
 
-// nowhere is an address with no crew behind it, which is the failure this scenario needs: everything
+// nowhere is an address with no system behind it, which is the failure this scenario needs: everything
 // about a session is on the other side of that connection, so attach cannot get past it.
 const nowhere = "127.0.0.1:59"
 
@@ -177,7 +177,7 @@ func quayBinary() (string, error) {
 			return
 		}
 		built = filepath.Join(dir, "quay")
-		// Stamped the way the install target stamps it, so a scenario can say the tool and the crew
+		// Stamped the way the install target stamps it, so a scenario can say the tool and the system
 		// are different builds and have the tool actually report one.
 		out, err := exec.Command("go", "build", "-ldflags", "-X main.version="+toolBuild,
 			"-o", built, "../cmd/quay").CombinedOutput()

@@ -20,9 +20,9 @@ import (
 
 // A session that has to decide something no measurement settles can ask, and the job stops there.
 // These drive the whole of it through the control plane's own interface: the session asks, the task
-// ends, the operator answers, and the crew sends the answer back into the same conversation.
+// ends, the operator answers, and the system sends the answer back into the same conversation.
 
-// heldOpen is a crew whose model waits to be let go, so a test can act while a task is under way.
+// heldOpen is a system whose model waits to be let go, so a test can act while a task is under way.
 type heldOpen struct {
 	server *controlplane.Server
 	runner *model.FakeRunner
@@ -47,7 +47,7 @@ func aJobUnderWay(t *testing.T) heldOpen {
 	return heldOpen{server: server, runner: runner, kept: kept, job: declared}
 }
 
-// asking is the job as the crew holds it now.
+// asking is the job as the system holds it now.
 func (h heldOpen) reading(t *testing.T) *quaycrewv1.Job {
 	t.Helper()
 	found, err := h.server.GetJob(context.Background(), &quaycrewv1.GetJobRequest{Id: h.job.GetId()})
@@ -66,10 +66,10 @@ const theQuestion = "The store for the transcripts. Aurora Serverless version tw
 // The whole of it, end to end: the session asks, the operator answers, and the answer arrives as
 // the session's next task. Stopping at "the job is asking" would prove half a feature.
 func TestAQuestionStopsTheJobAndTheAnswerReachesTheSessionThatAsked(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 	ctx := context.Background()
 
-	asked, err := crew.server.AskJob(asJobCredential(ctx, crew.job.GetId()),
+	asked, err := system.server.AskJob(asJobCredential(ctx, system.job.GetId()),
 		&quaycrewv1.AskJobRequest{Question: theQuestion})
 	if err != nil {
 		t.Fatalf("AskJob: %v", err)
@@ -83,15 +83,15 @@ func TestAQuestionStopsTheJobAndTheAnswerReachesTheSessionThatAsked(t *testing.T
 
 	// The task ends, the way a session that has asked ends its turn. The controller must not read
 	// that as the job being over: a job waiting on a person has not answered anything.
-	close(crew.runner.Gate)
-	waitFor(t, func() bool { return len(tasksOf(t, crew.server, crew.job.GetId())) == 1 })
-	crew.server.TickJob(ctx)
-	if phase := crew.reading(t).GetPhase(); phase != job.PhaseAsking {
+	close(system.runner.Gate)
+	waitFor(t, func() bool { return len(tasksOf(t, system.server, system.job.GetId())) == 1 })
+	system.server.TickJob(ctx)
+	if phase := system.reading(t).GetPhase(); phase != job.PhaseAsking {
 		t.Fatalf("the job moved to %q while it was waiting to be told something", phase)
 	}
 
-	answered, err := crew.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
-		Id: crew.job.GetId(), Answer: "DynamoDB on demand. Nothing bills while nobody uses it.",
+	answered, err := system.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: system.job.GetId(), Answer: "DynamoDB on demand. Nothing bills while nobody uses it.",
 	})
 	if err != nil {
 		t.Fatalf("AnswerJob: %v", err)
@@ -102,11 +102,11 @@ func TestAQuestionStopsTheJobAndTheAnswerReachesTheSessionThatAsked(t *testing.T
 
 	// And what the session is actually handed, which is the half a test that stops at the row never
 	// sees. It is read off the task record rather than off the double, because the record is what
-	// the crew really sent.
-	crew.server.TickJob(ctx)
+	// the system really sent.
+	system.server.TickJob(ctx)
 	var sent []*quaycrewv1.Task
 	waitFor(t, func() bool {
-		sent = tasksOf(t, crew.server, crew.job.GetId())
+		sent = tasksOf(t, system.server, system.job.GetId())
 		return len(sent) == 2
 	})
 	carried := sent[1].GetPrompt()
@@ -116,7 +116,7 @@ func TestAQuestionStopsTheJobAndTheAnswerReachesTheSessionThatAsked(t *testing.T
 	if !strings.Contains(carried, theQuestion) {
 		t.Fatalf("the second task does not restate the question, so the answer arrives at nothing:\n%s", carried)
 	}
-	if strings.Contains(carried, crew.job.GetBrief()) {
+	if strings.Contains(carried, system.job.GetBrief()) {
 		t.Fatalf("the second task sends the brief again, which asks the session to do the job over:\n%s", carried)
 	}
 }
@@ -124,20 +124,20 @@ func TestAQuestionStopsTheJobAndTheAnswerReachesTheSessionThatAsked(t *testing.T
 // The record says a question was put and answered, so somebody reading the run tomorrow can see the
 // decision without opening a container that is long gone.
 func TestAskingAndBeingToldAreBothOnTheRecord(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 	ctx := context.Background()
 
-	if _, err := crew.server.AskJob(asJobCredential(ctx, crew.job.GetId()),
+	if _, err := system.server.AskJob(asJobCredential(ctx, system.job.GetId()),
 		&quaycrewv1.AskJobRequest{Question: theQuestion}); err != nil {
 		t.Fatalf("AskJob: %v", err)
 	}
-	if _, err := crew.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
-		Id: crew.job.GetId(), Answer: "DynamoDB on demand",
+	if _, err := system.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: system.job.GetId(), Answer: "DynamoDB on demand",
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
 
-	listed, err := crew.kept.ListJobEvents(ctx, crew.job.GetId())
+	listed, err := system.kept.ListJobEvents(ctx, system.job.GetId())
 	if err != nil {
 		t.Fatalf("ListJobEvents: %v", err)
 	}
@@ -165,15 +165,15 @@ func TestAskingAndBeingToldAreBothOnTheRecord(t *testing.T) {
 // against the credential rather than trusted, because a caller that could name any job could stop
 // any job.
 func TestASessionCannotAskAboutSomebodyElsesJob(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 	ctx := context.Background()
 
-	_, err := crew.server.AskJob(asJobCredential(ctx, crew.job.GetId()),
+	_, err := system.server.AskJob(asJobCredential(ctx, system.job.GetId()),
 		&quaycrewv1.AskJobRequest{Question: "which store?", Id: "0123456789abcdef01234567"})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("naming another job was accepted: %v", err)
 	}
-	if phase := crew.reading(t).GetPhase(); phase != job.PhaseRunning {
+	if phase := system.reading(t).GetPhase(); phase != job.PhaseRunning {
 		t.Fatalf("the refused question moved the job to %q", phase)
 	}
 }
@@ -181,9 +181,9 @@ func TestASessionCannotAskAboutSomebodyElsesJob(t *testing.T) {
 // A caller running no job has nobody waiting on its answer, so there is nothing for it to ask about.
 // An operator wanting to ask a session something dispatches a task, which is the other direction.
 func TestACallerRunningNoJobCannotAsk(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 
-	_, err := crew.server.AskJob(context.Background(), &quaycrewv1.AskJobRequest{Question: "which store?"})
+	_, err := system.server.AskJob(context.Background(), &quaycrewv1.AskJobRequest{Question: "which store?"})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("a caller running no job asked a question: %v", err)
 	}
@@ -192,24 +192,24 @@ func TestACallerRunningNoJobCannotAsk(t *testing.T) {
 // An empty question is refused rather than written. A job stopped on a question nobody can read is
 // a job stopped for nothing, and the person answering has only what is written here.
 func TestAQuestionWithNoWordsIsRefused(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 
-	_, err := crew.server.AskJob(asJobCredential(context.Background(), crew.job.GetId()),
+	_, err := system.server.AskJob(asJobCredential(context.Background(), system.job.GetId()),
 		&quaycrewv1.AskJobRequest{Question: "   "})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("a question with no words was accepted: %v", err)
 	}
-	if phase := crew.reading(t).GetPhase(); phase != job.PhaseRunning {
+	if phase := system.reading(t).GetPhase(); phase != job.PhaseRunning {
 		t.Fatalf("the refused question moved the job to %q", phase)
 	}
 }
 
 // An answer to a job that asked nothing would start it again with a prompt nobody expects.
 func TestAnsweringAJobThatAskedNothingIsRefused(t *testing.T) {
-	crew := aJobUnderWay(t)
+	system := aJobUnderWay(t)
 
-	_, err := crew.server.AnswerJob(context.Background(), &quaycrewv1.AnswerJobRequest{
-		Id: crew.job.GetId(), Answer: "DynamoDB on demand",
+	_, err := system.server.AnswerJob(context.Background(), &quaycrewv1.AnswerJobRequest{
+		Id: system.job.GetId(), Answer: "DynamoDB on demand",
 	})
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("a job that asked nothing took an answer: %v", err)
@@ -235,7 +235,7 @@ func TestASessionMayAskWhateverItsRoleGrantsAndMayNeverAnswer(t *testing.T) {
 	}
 }
 
-// tasksOf is what the crew sent the session doing this job, in the order it sent them.
+// tasksOf is what the system sent the session doing this job, in the order it sent them.
 func tasksOf(t *testing.T, server *controlplane.Server, id string) []*quaycrewv1.Task {
 	t.Helper()
 	found, err := server.GetJob(context.Background(), &quaycrewv1.GetJobRequest{Id: id})

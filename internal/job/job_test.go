@@ -21,7 +21,7 @@ func TestADeclarationThatIsCompleteIsAccepted(t *testing.T) {
 	}
 }
 
-// The identifier is the crew's to mint. One a caller chooses is one a caller can collide.
+// The identifier is the system's to mint. One a caller chooses is one a caller can collide.
 func TestAnIdentifierTheCallerChoseIsRefused(t *testing.T) {
 	d := declared()
 	d.ID = "0123456789abcdef01234567"
@@ -31,7 +31,7 @@ func TestAnIdentifierTheCallerChoseIsRefused(t *testing.T) {
 		t.Fatal("a caller set the identifier and was allowed to")
 	}
 	if !strings.Contains(err.Error(), "assigns the identifier") {
-		t.Fatalf("the refusal says %q, want it to say the crew assigns the identifier", err)
+		t.Fatalf("the refusal says %q, want it to say the system assigns the identifier", err)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestAModeThatIsNotAModeIsRefusedAndTheModesAreListed(t *testing.T) {
 	}
 }
 
-func TestEveryModeTheCrewKnowsIsAccepted(t *testing.T) {
+func TestEveryModeTheSystemKnowsIsAccepted(t *testing.T) {
 	for _, mode := range []string{"plan", "edits", "dangerous"} {
 		d := declared()
 		d.Mode = mode
@@ -340,16 +340,16 @@ func TestTheSpaceAroundATitleAndABriefComesOff(t *testing.T) {
 	}
 }
 
-// What a job requires is held to the words the crew hands out, and the refusal offers
+// What a job requires is held to the words the system hands out, and the refusal offers
 // those words back. A word nobody assembles is a boundary that quietly means nothing.
-func TestJobRequiringSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
+func TestJobRequiringSomethingTheSystemDoesNotHandOutIsRefused(t *testing.T) {
 	d := declared()
 	d.Requires = []string{"the codebase"}
 
 	err := d.Validate()
 
 	if err == nil {
-		t.Fatal("job requiring material the crew does not hand out was accepted")
+		t.Fatal("job requiring material the system does not hand out was accepted")
 	}
 	for _, want := range []string{"the codebase", "job", "context", "skills"} {
 		if !strings.Contains(err.Error(), want) {
@@ -358,12 +358,12 @@ func TestJobRequiringSomethingTheCrewDoesNotHandOutIsRefused(t *testing.T) {
 	}
 }
 
-func TestJobRequiringMaterialTheCrewHandsOutIsAccepted(t *testing.T) {
+func TestJobRequiringMaterialTheSystemHandsOutIsAccepted(t *testing.T) {
 	d := declared()
 	d.Requires = []string{"context", "skills", "job"}
 
 	if err := d.Validate(); err != nil {
-		t.Fatalf("job requiring material the crew does hand out was refused: %v", err)
+		t.Fatalf("job requiring material the system does hand out was refused: %v", err)
 	}
 }
 

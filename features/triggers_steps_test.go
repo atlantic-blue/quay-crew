@@ -13,13 +13,13 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// The trigger scenarios drive the crew the way the crew drives itself. Nothing here starts a run:
+// The trigger scenarios drive the system the way the system drives itself. Nothing here starts a run:
 // something writes a row, the poller reads it on its tick, and the run appears. That is the whole
 // point, so a scenario that started the run itself would prove nothing.
 
 func initializeTriggerSteps(sc *godog.ScenarioContext) {
 	// The in process source, which is all there is today. A caller inside this process writes the
-	// row. There is no ingress, so nothing outside the crew can do this yet.
+	// row. There is no ingress, so nothing outside the system can do this yet.
 	sc.Step(`^something happens and raises a trigger of "([^"]*)" carrying "([^"]*)" as "([^"]*)"$`,
 		func(ctx context.Context, graph, key, value string) error {
 			w := worldFrom(ctx)
@@ -27,7 +27,7 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 			raised, err := engine.Raise(ctx, flow.Trigger{
 				GraphName: graph, Workspace: w.workspaceID, Project: w.projectID,
 				Payload: map[string]string{key: value},
-				Source:  "a caller inside the crew",
+				Source:  "a caller inside the system",
 			})
 			if err != nil {
 				return err
@@ -38,14 +38,14 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 
 	// One pass of both loops, then the run the trigger started becomes the run this scenario is
 	// about, which is what a person watching would do: read the row, follow it to the run.
-	sc.Step(`^the crew ticks$`, func(ctx context.Context) error {
-		if err := driveTheCrew(ctx); err != nil {
+	sc.Step(`^the system ticks$`, func(ctx context.Context) error {
+		if err := driveTheSystem(ctx); err != nil {
 			return err
 		}
 		return followTheTrigger(ctx)
 	})
 
-	// Two pollers over one store, ticking together, which is the crew running two control planes.
+	// Two pollers over one store, ticking together, which is the system running two control planes.
 	sc.Step(`^two pollers tick at once$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -59,7 +59,7 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 			}()
 		}
 		together.Wait()
-		if err := driveTheCrew(ctx); err != nil {
+		if err := driveTheSystem(ctx); err != nil {
 			return err
 		}
 		return followTheTrigger(ctx)

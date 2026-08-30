@@ -11,12 +11,12 @@ type Options struct {
 	// Storage is where a workspace's conversation store and a project's files are kept so they
 	// outlive the container. Leave it empty and they do not.
 	Storage Storage
-	// Network is the crew's own network, which only the driver joins. Empty puts the driver on the
+	// Network is the system's own network, which only the driver joins. Empty puts the driver on the
 	// session network instead.
 	Network string
 	// SessionNetwork is the network every sandbox joins to reach the control plane, and the control
-	// plane is the only thing of the crew's on it. Empty leaves a session where it cannot reach the
-	// crew at all.
+	// plane is the only thing of the system's on it. Empty leaves a session where it cannot reach the
+	// system at all.
 	SessionNetwork string
 	// DriverMounts are host paths only the driver gets, each "host:container[:ro]".
 	DriverMounts []string

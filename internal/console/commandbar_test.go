@@ -56,7 +56,7 @@ func openBar(t *testing.T, model Model) Model {
 	return next
 }
 
-// The whole point: typing a quay command runs it and shows what it said, so reading the crew does
+// The whole point: typing a quay command runs it and shows what it said, so reading the system does
 // not mean leaving the console for a shell.
 func TestTheBarRunsAQuayCommandAndShowsItsOutput(t *testing.T) {
 	ran := &ranCommand{output: "acme\nother\n"}

@@ -178,7 +178,7 @@ func TestAnEntryThatIsNotExecutableIsRefused(t *testing.T) {
 }
 
 // A hook is written by one person and imported by another, so a path that climbs out of the
-// directory writes wherever the crew happens to be standing.
+// directory writes wherever the system happens to be standing.
 func TestAnEntryThatClimbsOutOfTheDirectoryIsRefused(t *testing.T) {
 	for _, entry := range []string{"../escape", "/etc/passwd", "bin/../../escape"} {
 		_, err := hook.FromFiles(files(`
@@ -202,9 +202,9 @@ func TestAFileThatClimbsOutOfTheDirectoryIsRefused(t *testing.T) {
 	}
 }
 
-// The same rule a skill lives under: the crew's own configuration and the model's token are not
+// The same rule a skill lives under: the system's own configuration and the model's token are not
 // something content asks for.
-func TestAHookCannotAskForTheCrewsOwnSecrets(t *testing.T) {
+func TestAHookCannotAskForTheSystemsOwnSecrets(t *testing.T) {
 	for _, name := range []string{"QC_SANDBOX_SECRETS", "CLAUDE_CODE_OAUTH_TOKEN"} {
 		_, err := hook.FromFiles(files(`
 name: greedy
@@ -214,7 +214,7 @@ events:
   - on: UserPromptSubmit
     entry: bin/hook
 secrets:
-  ` + name + `: the crew's own
+  ` + name + `: the system's own
 `))
 		if err == nil {
 			t.Fatalf("a hook was allowed to name %s", name)
@@ -240,7 +240,7 @@ secrets:
 
 // Ignored, an unknown field looks configured and does nothing, which sends whoever wrote it looking
 // somewhere else entirely.
-func TestAManifestFieldTheCrewDoesNotKnowIsRefusedByName(t *testing.T) {
+func TestAManifestFieldTheSystemDoesNotKnowIsRefusedByName(t *testing.T) {
 	_, err := hook.FromFiles(files(`
 name: guard
 version: 1

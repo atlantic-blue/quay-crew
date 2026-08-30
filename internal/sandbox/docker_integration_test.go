@@ -428,7 +428,7 @@ func TestAMountedSecretIsAFileTheSandboxUserCanReadAndNobodyElseCan(t *testing.T
 	}
 	defer func() { _ = box.Close(ctx) }()
 
-	// The same shape the crew uses: the value through the environment of the one command, never as an
+	// The same shape the system uses: the value through the environment of the one command, never as an
 	// argument, and umask before the write so the file is never briefly readable.
 	const contents = "[user]\n\tname = operator\n"
 	at := sandbox.SecretFilePath("gitconfig")

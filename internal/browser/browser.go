@@ -46,7 +46,7 @@ type Drawing struct {
 }
 
 // A Browser draws a Drawing, and is an interface so the behaviour specification can say what the
-// crew asks for without a browser to ask.
+// system asks for without a browser to ask.
 type Browser interface {
 	Draw(Drawing) error
 }

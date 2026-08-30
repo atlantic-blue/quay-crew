@@ -32,7 +32,7 @@ func TestACredentialOutlastsTheControllersHoldOnItsJobByALongWay(t *testing.T) {
 	}
 	grant, recognised := s.Grants().Grant(token)
 	if !recognised {
-		t.Fatal("the crew does not recognise the credential it minted")
+		t.Fatal("the system does not recognise the credential it minted")
 	}
 
 	lasts := time.Until(grant.ExpiresAt)
@@ -50,14 +50,14 @@ func TestACredentialOutlastsTheControllersHoldOnItsJobByALongWay(t *testing.T) {
 }
 
 // A job that named a deadline said when it must be over, so its credential ends there. Both ways
-// round: a deadline is the whole answer and not only a ceiling on the crew's own guess.
+// round: a deadline is the whole answer and not only a ceiling on the system's own guess.
 func TestACredentialEndsWithTheJobsOwnDeadline(t *testing.T) {
 	for _, one := range []struct {
 		name string
 		in   time.Duration
 	}{
-		{name: "a deadline sooner than the crew's backstop", in: 90 * time.Second},
-		{name: "a deadline further out than the crew's backstop", in: 72 * time.Hour},
+		{name: "a deadline sooner than the system's backstop", in: 90 * time.Second},
+		{name: "a deadline further out than the system's backstop", in: 72 * time.Hour},
 	} {
 		t.Run(one.name, func(t *testing.T) {
 			s := newServer(&model.FakeRunner{})
@@ -82,9 +82,9 @@ func TestACredentialEndsWithTheJobsOwnDeadline(t *testing.T) {
 	}
 }
 
-// What ends a credential in a working crew is the job ending, and expiry is only the backstop
+// What ends a credential in a working system is the job ending, and expiry is only the backstop
 // behind that. A job an operator stopped is over, so its session stops being able to call.
-func TestTheCrewTakesACredentialBackWhenTheOperatorStopsTheJob(t *testing.T) {
+func TestTheSystemTakesACredentialBackWhenTheOperatorStopsTheJob(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 	declared := declareJob(t, s, project, "read the electricity bill")
@@ -101,11 +101,11 @@ func TestTheCrewTakesACredentialBackWhenTheOperatorStopsTheJob(t *testing.T) {
 		t.Fatalf("StopJob: %v", err)
 	}
 
-	// Still known, and known to be over. A credential the crew cannot find at all is refused as a
+	// Still known, and known to be over. A credential the system cannot find at all is refused as a
 	// forgery, and that refusal sends a session looking for a fault in the token it was handed.
 	grant, recognised := s.Grants().Grant(token)
 	if !recognised {
-		t.Fatal("the crew has forgotten the credential, so a session that calls is told its token is a forgery")
+		t.Fatal("the system has forgotten the credential, so a session that calls is told its token is a forgery")
 	}
 	if grant.Ended != job.PhaseStopped {
 		t.Fatalf("the credential reads as %q, want the phase the job ended in, %q", grant.Ended, job.PhaseStopped)
@@ -115,7 +115,7 @@ func TestTheCrewTakesACredentialBackWhenTheOperatorStopsTheJob(t *testing.T) {
 	}
 }
 
-// One job's end takes back one job's credentials. A crew that took every credential back would stop
+// One job's end takes back one job's credentials. A system that took every credential back would stop
 // every session in it.
 func TestStoppingOneJobLeavesAnotherJobsCredentialAlone(t *testing.T) {
 	s := newServer(&model.FakeRunner{})

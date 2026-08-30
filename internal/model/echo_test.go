@@ -74,7 +74,7 @@ func TestNewRunnerRejectsUnknownKinds(t *testing.T) {
 // answers the way a runtime that honours the flag answers: with the conversation it was given. A
 // double that reported a name of its own instead would read as the runtime ignoring the name on every
 // task, and the check that catches a runtime ignoring the name would be crying wolf in the one place
-// the crew is driven end to end.
+// the system is driven end to end.
 func TestEchoRunnerReportsTheConversationItWasGiven(t *testing.T) {
 	box := &sandbox.FakeSandbox{Output: "hello\n"}
 	const named = "1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"
@@ -88,6 +88,6 @@ func TestEchoRunnerReportsTheConversationItWasGiven(t *testing.T) {
 		t.Fatalf("it reports conversation %q, want the %q it was given", resp.ModelSessionID, named)
 	}
 	if said := model.ConversationCheck(named, resp.ModelSessionID); said != "" {
-		t.Fatalf("the crew reads this as the runtime ignoring the name: %s", said)
+		t.Fatalf("the system reads this as the runtime ignoring the name: %s", said)
 	}
 }

@@ -54,7 +54,7 @@ func (s *Server) landTask(ctx context.Context, session *quaycrewv1.Session, task
 // recordHistory writes a task into the store, in the same breath as the task itself, and then
 // offers it to the export. The store is the truth: history is complete whether or not any broker is
 // configured, reachable, or behind. It never fails the task, because the task already happened, and
-// a history write that could not land is a warning about the store, which the whole crew depends on
+// a history write that could not land is a warning about the store, which the whole system depends on
 // anyway.
 //
 // The context is detached first: a client hanging up after a long task used to cancel the write and
@@ -70,7 +70,7 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 
 	// What an operator pastes into a conversation can be a credential, and everything recorded here
 	// is persisted. So the payload goes through the same redaction a failure message does, before it
-	// is written anywhere. A value the crew could not know about cannot be protected; what it can
+	// is written anywhere. A value the system could not know about cannot be protected; what it can
 	// know is every value the workspace keeps sealed, the driver's token, and the published token
 	// shape.
 	sealed := s.sealedValues(ctx, session)
@@ -87,7 +87,7 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 	event.Handle = session.GetHandle()
 	event.OccurredAt = timestamppb.Now()
 	// The trace the call that ran this task belonged to, which is the same value every log line
-	// written under it carries. Without it the durable record of what the crew did joins to neither
+	// written under it carries. Without it the durable record of what the system did joins to neither
 	// the trace nor the lines: weeks later the logs are gone and this row is all that is left. A task
 	// nothing was tracing leaves it empty rather than inventing one. See issue 346.
 	event.TraceId = telemetry.TraceIDFrom(ctx)
@@ -108,7 +108,7 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 }
 
 // exportTask offers one already redacted task to the event log. The log is an audit export for
-// whatever second consumer eventually wants it, so a crew with no broker configured loses nothing
+// whatever second consumer eventually wants it, so a system with no broker configured loses nothing
 // but the export, and an export that could not land is logged and dropped rather than failing
 // anything.
 //
@@ -130,7 +130,7 @@ func (s *Server) exportTask(ctx context.Context, session *quaycrewv1.Session, ev
 	}
 }
 
-// sealedValues is everything the crew holds that must never be persisted in the clear, keyed by the
+// sealedValues is everything the system holds that must never be persisted in the clear, keyed by the
 // name it would be redacted under: every secret the workspace has sealed, whether or not any
 // sandbox was handed it, and the driver's token for a driver session. A name whose value cannot be
 // read is skipped rather than failing the task, because the redactor still catches the published

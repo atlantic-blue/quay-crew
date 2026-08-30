@@ -1,13 +1,13 @@
 // Package origin says where a directory of files came from, so somebody who did not import it can go
 // and read it.
 //
-// The crew imports a role, a skill and a hook from a directory, and a directory is anywhere. That
+// The system imports a role, a skill and a hook from a directory, and a directory is anywhere. That
 // makes the first import easy and everything after it invisible: an acceptance run of three hours
 // was driven by three roles that sat in a folder on one machine, so no pull request touched them,
 // nobody reviewed them and nothing versioned them. The clause that decided the whole outcome was
 // never read by anybody but the session it was handed to.
 //
-// So an import records where the files came from, and the crew says it back. A role does today;
+// So an import records where the files came from, and the system says it back. A role does today;
 // a skill and a hook have the same hole and are not this change.
 //
 // Nothing here refuses an import. A role written in a scratch directory while somebody is finding
@@ -82,7 +82,7 @@ func (o Origin) Reviewable() bool {
 // Says is what to tell an operator: where the files were read from, and when nobody else could read
 // them there, what to do about it.
 //
-// One place, because the crew says this in a listing, in an import and in whatever reads it next,
+// One place, because the system says this in a listing, in an import and in whatever reads it next,
 // and three copies of a sentence is three sentences that drift.
 func (o Origin) Says() []string {
 	said := []string{"from " + o.Line()}

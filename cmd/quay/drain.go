@@ -19,7 +19,7 @@ const drainAnyway = "anyway"
 //
 // `make upgrade` removes sandboxes by name from the daemon, which ends a task in flight as "exit
 // status 137" and says nothing about whose task it was. Draining first stops each session through the
-// crew, so the row says stopped and the sandbox is closed rather than ripped out.
+// system, so the row says stopped and the sandbox is closed rather than ripped out.
 func runDrain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	force := false
 	switch {
@@ -33,17 +33,17 @@ func runDrain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 
 	resp, err := client.DrainSessions(ctx, &quaycrewv1.DrainSessionsRequest{Force: force})
 	if err != nil {
-		// A crew from before this existed cannot be put down cleanly, and refusing would block the
+		// A system from before this existed cannot be put down cleanly, and refusing would block the
 		// upgrade that installs the answer. It says so and lets the caller carry on.
 		if status.Code(err) == codes.Unimplemented {
-			fmt.Fprintln(out, "this crew is from before draining, so its sessions cannot be put down "+
+			fmt.Fprintln(out, "this system is from before draining, so its sessions cannot be put down "+
 				"cleanly. Whatever takes their containers will end any task still working.")
 			return nil
 		}
-		// A crew that is not up runs no tasks, so there is nothing to lose and nothing to refuse. It
+		// A system that is not up runs no tasks, so there is nothing to lose and nothing to refuse. It
 		// says so rather than failing, because the caller is usually an upgrade about to start one.
 		if status.Code(err) == codes.Unavailable {
-			fmt.Fprintln(out, "the crew is not up, so no task is running and there is nothing to put down")
+			fmt.Fprintln(out, "the system is not up, so no task is running and there is nothing to put down")
 			return nil
 		}
 		return err
@@ -63,7 +63,7 @@ func runDrain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		fmt.Fprintf(out, "%s was working, and that task is gone\n", sessionSaid(session))
 	}
 	fmt.Fprintf(out, "\n%s down. Each keeps its conversation, and dispatching to one builds it a new "+
-		"sandbox on whatever the crew holds then.\n", sessionCount(len(stopped)))
+		"sandbox on whatever the system holds then.\n", sessionCount(len(stopped)))
 	return nil
 }
 

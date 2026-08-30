@@ -50,25 +50,25 @@ func initializeSecretFileSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew refuses it, saying to mount the key instead$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it, saying to mount the key instead$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the crew accepted it, and the key would be in every container's environment")
+			return fmt.Errorf("the system accepted it, and the key would be in every container's environment")
 		}
 		// The command, not just the objection. A refusal the operator cannot act on is a dead end.
 		if !strings.Contains(w.lastErr.Error(), "quay secret mount") {
-			return fmt.Errorf("the crew refused it saying %q, which does not say what to type", w.lastErr)
+			return fmt.Errorf("the system refused it saying %q, which does not say what to type", w.lastErr)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew refuses it, saying it cannot be a file name$`, func(ctx context.Context) error {
+	sc.Step(`^the system refuses it, saying it cannot be a file name$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the crew accepted it, and the name would have become a path")
+			return fmt.Errorf("the system accepted it, and the name would have become a path")
 		}
 		if !strings.Contains(w.lastErr.Error(), "file name") {
-			return fmt.Errorf("the crew refused it saying %q, which does not say why", w.lastErr)
+			return fmt.Errorf("the system refused it saying %q, which does not say why", w.lastErr)
 		}
 		return nil
 	})
@@ -154,8 +154,8 @@ func listedAs(ctx context.Context, name string, want quaycrewv1.SecretProjection
 	return fmt.Errorf("the listing does not name %q at all", name)
 }
 
-// filesWritten reads back what the crew asked the session's sandbox to write, keyed by the path it
-// wrote to. It reads the commands the sandbox was actually given rather than a recording the crew
+// filesWritten reads back what the system asked the session's sandbox to write, keyed by the path it
+// wrote to. It reads the commands the sandbox was actually given rather than a recording the system
 // keeps of its own intent, so a write that never reached the sandbox cannot pass.
 func filesWritten(w *world) (map[string]string, error) {
 	if len(w.provider.Boxes) != 1 {
@@ -191,7 +191,7 @@ func wroteTo(argv []string) (string, bool) {
 	return strings.TrimSpace(after), true
 }
 
-// valueIn reads what the write was given to write. The crew hands it through the environment of that
+// valueIn reads what the write was given to write. The system hands it through the environment of that
 // one command rather than as an argument, so this is where it is.
 func valueIn(env []string) (string, bool) {
 	for _, entry := range env {

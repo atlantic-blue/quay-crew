@@ -61,7 +61,7 @@ func TestAnArchivedSessionAnswersToItsHandle(t *testing.T) {
 }
 
 // The second listing must not swallow the refusal. A session nobody has is still refused, in the
-// words the live listing refuses it with, or an identifier typed wrongly would read as a crew that
+// words the live listing refuses it with, or an identifier typed wrongly would read as a system that
 // lost the session.
 func TestASessionNobodyHasIsStillRefused(t *testing.T) {
 	client := testClient(t)

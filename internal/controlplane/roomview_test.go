@@ -25,10 +25,10 @@ import (
 // real session in the store, and the console's own resource.
 //
 // The table tests in internal/console prove how the line is written from an answer. What they cannot
-// answer is whether it is the crew's actual reading: they build it from a response a case wrote. So
-// this gives the crew a machine, dispatches work into it, and reads the line the operator would be
+// answer is whether it is the system's actual reading: they build it from a response a case wrote. So
+// this gives the system a machine, dispatches work into it, and reads the line the operator would be
 // looking at.
-func TestTheRoomViewSummarisesTheMachineTheCrewActuallyRead(t *testing.T) {
+func TestTheRoomViewSummarisesTheMachineTheSystemActuallyRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -41,7 +41,7 @@ func TestTheRoomViewSummarisesTheMachineTheCrewActuallyRead(t *testing.T) {
 	client := roomServedOver(t, server)
 	room := theRoomView(t, client)
 
-	// A session of the crew's own, so the listing under the line is joined to a real row rather than
+	// A session of the system's own, so the listing under the line is joined to a real row rather than
 	// to a container nobody holds.
 	session := aDispatchedSession(t, ctx, client)
 	machine.holding(aMachineHolding(3628, 7837), headroom.Sandbox{
@@ -72,7 +72,7 @@ func TestTheRoomViewSummarisesTheMachineTheCrewActuallyRead(t *testing.T) {
 	}
 }
 
-// The word turns on the crew's next reading rather than on whatever it read when the console opened.
+// The word turns on the system's next reading rather than on whatever it read when the console opened.
 func TestTheSummaryTurnsWhenTheMachineFills(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -106,10 +106,10 @@ func TestTheSummaryTurnsWhenTheMachineFills(t *testing.T) {
 	}
 }
 
-// A crew whose machine cannot be read says so on the line. It is the one answer that must never come
-// back as healthy: the header that drew a healthy crew through eighteen kills is why this view
+// A system whose machine cannot be read says so on the line. It is the one answer that must never come
+// back as healthy: the header that drew a healthy system through eighteen kills is why this view
 // exists. See issue 405.
-func TestTheSummarySaysUnknownWhereTheCrewCouldNotReadTheMachine(t *testing.T) {
+func TestTheSummarySaysUnknownWhereTheSystemCouldNotReadTheMachine(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -140,7 +140,7 @@ type daemonSilent struct{}
 
 func (*daemonSilent) Error() string { return "the daemon is not answering" }
 
-// aReadableMachine is a machine the crew is given, so a case can be a crew on a full machine without
+// aReadableMachine is a machine the system is given, so a case can be a system on a full machine without
 // filling one. It can be given a different reading part way through, which is what a machine filling
 // up under a console looks like.
 type aReadableMachine struct {
@@ -171,7 +171,7 @@ func aMachineHolding(used, limit int64) headroom.Sample {
 	}
 }
 
-// theRoomView is the console's own room resource over this crew, so the case reads what the operator
+// theRoomView is the console's own room resource over this system, so the case reads what the operator
 // reads rather than a copy of it.
 func theRoomView(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) console.Resource {
 	t.Helper()
@@ -189,7 +189,7 @@ func theRoomView(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) cons
 	return room
 }
 
-// aDispatchedSession puts one real session in the crew and answers with its identifier.
+// aDispatchedSession puts one real session in the system and answers with its identifier.
 func aDispatchedSession(t *testing.T, ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) string {
 	t.Helper()
 	workspace, err := client.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
@@ -211,7 +211,7 @@ func aDispatchedSession(t *testing.T, ctx context.Context, client quaycrewv1.Con
 	return dispatched.GetId()
 }
 
-// roomServedOver puts the crew behind a real gRPC connection, because the console only ever talks to
+// roomServedOver puts the system behind a real gRPC connection, because the console only ever talks to
 // one through a client.
 func roomServedOver(t *testing.T, server *controlplane.Server) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()

@@ -38,7 +38,7 @@ func metricsFrom(ctx context.Context) *metricsWorld {
 	return m
 }
 
-// recorded is everything the crew has measured so far.
+// recorded is everything the system has measured so far.
 func recorded() (metricdata.ResourceMetrics, error) {
 	var collected metricdata.ResourceMetrics
 	if err := measured.Collect(context.Background(), &collected); err != nil {
@@ -112,7 +112,7 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	sc.Step(`^the crew measures (\d+) tokens spent on "([^"]*)" and "([^"]*)"$`,
+	sc.Step(`^the system measures (\d+) tokens spent on "([^"]*)" and "([^"]*)"$`,
 		func(ctx context.Context, want int, workspace, project string) error {
 			if err := worldFrom(ctx).settled(ctx); err != nil {
 				return err
@@ -126,24 +126,24 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 			}
 			if got != float64(want) {
 				anywhere, _ := measuredDuring(ctx, telemetry.TokensMetric, nil)
-				return fmt.Errorf("the crew measured %v tokens on %s and %s, want %d (%v were measured anywhere)",
+				return fmt.Errorf("the system measured %v tokens on %s and %s, want %d (%v were measured anywhere)",
 					got, workspace, project, want, anywhere)
 			}
 			return nil
 		})
 
-	sc.Step(`^the crew measures ([0-9.]+) of cost$`, func(ctx context.Context, want float64) error {
+	sc.Step(`^the system measures ([0-9.]+) of cost$`, func(ctx context.Context, want float64) error {
 		got, err := measuredDuring(ctx, telemetry.CostMetric, nil)
 		if err != nil {
 			return err
 		}
 		if got != want {
-			return fmt.Errorf("the crew measured %v of cost, want %v", got, want)
+			return fmt.Errorf("the system measured %v of cost, want %v", got, want)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew counts one task, which failed$`, func(ctx context.Context) error {
+	sc.Step(`^the system counts one task, which failed$`, func(ctx context.Context) error {
 		if err := worldFrom(ctx).settled(ctx); err != nil {
 			return err
 		}
@@ -154,12 +154,12 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if got != 1 {
-			return fmt.Errorf("the crew counted %v failed tasks, want 1", got)
+			return fmt.Errorf("the system counted %v failed tasks, want 1", got)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew counts one task$`, func(ctx context.Context) error {
+	sc.Step(`^the system counts one task$`, func(ctx context.Context) error {
 		if err := worldFrom(ctx).settled(ctx); err != nil {
 			return err
 		}
@@ -168,25 +168,25 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if got != 1 {
-			return fmt.Errorf("the crew counted %v tasks, want 1", got)
+			return fmt.Errorf("the system counted %v tasks, want 1", got)
 		}
 		return nil
 	})
 
-	sc.Step(`^the crew measures no tokens and no cost$`, func(ctx context.Context) error {
+	sc.Step(`^the system measures no tokens and no cost$`, func(ctx context.Context) error {
 		tokens, err := measuredDuring(ctx, telemetry.TokensMetric, nil)
 		if err != nil {
 			return err
 		}
 		if tokens != 0 {
-			return fmt.Errorf("the crew measured %v tokens for a task that reported none, want none", tokens)
+			return fmt.Errorf("the system measured %v tokens for a task that reported none, want none", tokens)
 		}
 		cost, err := measuredDuring(ctx, telemetry.CostMetric, nil)
 		if err != nil {
 			return err
 		}
 		if cost != 0 {
-			return fmt.Errorf("the crew measured %v of cost for a task that reported none, want none", cost)
+			return fmt.Errorf("the system measured %v of cost for a task that reported none, want none", cost)
 		}
 		return nil
 	})

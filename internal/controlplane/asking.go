@@ -83,7 +83,7 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound,
-				"the crew holds no job %s: quay job list --phase asking says which are waiting", req.GetId())
+				"the system holds no job %s: quay job list --phase asking says which are waiting", req.GetId())
 		}
 		return nil, storeError(err, "job")
 	}

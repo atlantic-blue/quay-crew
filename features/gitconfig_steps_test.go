@@ -81,8 +81,8 @@ func initializeGitConfigSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// sandboxRan answers whether the crew asked the session's sandbox to do something, by reading the
-// commands it was actually given. What the crew meant to run and never sent cannot pass.
+// sandboxRan answers whether the system asked the session's sandbox to do something, by reading the
+// commands it was actually given. What the system meant to run and never sent cannot pass.
 func sandboxRan(ctx context.Context, want string) error {
 	did := scripts(ctx)
 	if !strings.Contains(did, want) {
@@ -91,7 +91,7 @@ func sandboxRan(ctx context.Context, want string) error {
 	return nil
 }
 
-// scripts is every shell script the crew ran in the session's sandbox, in order.
+// scripts is every shell script the system ran in the session's sandbox, in order.
 func scripts(ctx context.Context) string {
 	var all []string
 	for _, box := range worldFrom(ctx).provider.Boxes {
@@ -102,8 +102,8 @@ func scripts(ctx context.Context) string {
 	return strings.Join(all, "\n")
 }
 
-// gitConfigured reads back every global git setting the crew asked the session's sandbox to write,
-// keyed by name. It reads the commands the sandbox was actually given, so a setting the crew meant
+// gitConfigured reads back every global git setting the system asked the session's sandbox to write,
+// keyed by name. It reads the commands the sandbox was actually given, so a setting the system meant
 // to write and never sent cannot pass.
 //
 // Only --global is counted. A setting written anywhere else does not sit in the file the operator's

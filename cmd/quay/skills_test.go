@@ -12,7 +12,7 @@ import (
 	"github.com/atlantic-blue/quay-crew/internal/store"
 )
 
-// TestSkillListOfASessionSaysWhatItActuallyHolds addresses a session and reads back the crew's own
+// TestSkillListOfASessionSaysWhatItActuallyHolds addresses a session and reads back the system's own
 // skill, which no workspace attachment row records: the answer has to come from the same resolver
 // the sandbox is built from.
 func TestSkillListOfASessionSaysWhatItActuallyHolds(t *testing.T) {
@@ -28,6 +28,6 @@ func TestSkillListOfASessionSaysWhatItActuallyHolds(t *testing.T) {
 
 	listed := mustRun(t, client, "skill", "list", "me/house-bills/"+handle[:8])
 	if !strings.Contains(listed, "git") {
-		t.Fatalf("the session's listing does not name the crew's git skill: %q", listed)
+		t.Fatalf("the session's listing does not name the system's git skill: %q", listed)
 	}
 }

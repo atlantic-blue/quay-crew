@@ -148,7 +148,7 @@ type ControlPlaneServiceClient interface {
 	// session running as it was told.
 	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
-	// Job is declared intent the crew keeps. A caller writes it, and a controller makes reality
+	// Job is declared intent the system keeps. A caller writes it, and a controller makes reality
 	// match it. Nothing here dispatches anything.
 	CreateJob(ctx context.Context, in *CreateJobRequest, opts ...grpc.CallOption) (*CreateJobResponse, error)
 	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
@@ -164,13 +164,13 @@ type ControlPlaneServiceClient interface {
 	SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
-	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
+	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
-	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error)
-	// GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+	// GetHealth is the system's last probe of the parts it has to write to before a dispatch can start.
 	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
 	// the reason GetHeadroom answers from the last sample.
 	GetHealth(ctx context.Context, in *GetHealthRequest, opts ...grpc.CallOption) (*GetHealthResponse, error)
@@ -887,7 +887,7 @@ type ControlPlaneServiceServer interface {
 	// session running as it was told.
 	GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
-	// Job is declared intent the crew keeps. A caller writes it, and a controller makes reality
+	// Job is declared intent the system keeps. A caller writes it, and a controller makes reality
 	// match it. Nothing here dispatches anything.
 	CreateJob(context.Context, *CreateJobRequest) (*CreateJobResponse, error)
 	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
@@ -903,13 +903,13 @@ type ControlPlaneServiceServer interface {
 	SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
-	// GetUsage adds up what every conversation in the crew has cost. It is a running total rather than
+	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
-	// GetHeadroom is the crew's last reading of the machine it runs on. It answers from that reading
+	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error)
-	// GetHealth is the crew's last probe of the parts it has to write to before a dispatch can start.
+	// GetHealth is the system's last probe of the parts it has to write to before a dispatch can start.
 	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
 	// the reason GetHeadroom answers from the last sample.
 	GetHealth(context.Context, *GetHealthRequest) (*GetHealthResponse, error)

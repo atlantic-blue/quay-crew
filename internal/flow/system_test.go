@@ -19,16 +19,16 @@ import (
 // job, and a movement writes both in one breath. A mock store would agree with whatever
 // the engine did. The in memory store is held to the same conformance suite Postgres is.
 //
-// The crew below is a double, of the two things the engine asks the control plane for: preparing a
+// The system below is a double, of the two things the engine asks the control plane for: preparing a
 // declaration and putting a session away. It applies the same rules the control plane's PrepareJob
 // does, and the whole road through the real one is proved in features/flows.feature.
 
-// crew is the control plane as the engine sees it.
-type crew struct {
+// system is the control plane as the engine sees it.
+type system struct {
 	store    store.Store
 	maxDepth int
 	// refuse is what PrepareJob answers instead, once the run itself has been declared, for the case
-	// where the crew will not take a step: too deep, a role the workspace does not hold.
+	// where the system will not take a step: too deep, a role the workspace does not hold.
 	refuse   error
 	prepared int
 	// exported is every record offered to the log, and archived every session put away.
@@ -36,7 +36,7 @@ type crew struct {
 	archived []string
 }
 
-func (c *crew) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
+func (c *system) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
 	c.prepared++
 	if c.refuse != nil && c.prepared > 1 {
 		return nil, nil, c.refuse
@@ -68,17 +68,17 @@ func (c *crew) PrepareJob(ctx context.Context, under string, declaration job.Dec
 	}, nil
 }
 
-func (c *crew) ExportJob(_ context.Context, events ...*job.Event) {
+func (c *system) ExportJob(_ context.Context, events ...*job.Event) {
 	c.exported = append(c.exported, events...)
 }
 
-func (c *crew) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
+func (c *system) ArchiveSession(_ context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
 	c.archived = append(c.archived, req.GetId())
 	return &quaycrewv1.ArchiveSessionResponse{}, nil
 }
 
-// aCrew stands an engine up over an empty store, with a workspace and a project to run in.
-func aCrew(t *testing.T, graph string) (*flow.Engine, *crew, string, string) {
+// aSystem stands an engine up over an empty store, with a workspace and a project to run in.
+func aSystem(t *testing.T, graph string) (*flow.Engine, *system, string, string) {
 	t.Helper()
 	ctx := context.Background()
 	kept := store.NewMemory()
@@ -99,12 +99,12 @@ func aCrew(t *testing.T, graph string) (*flow.Engine, *crew, string, string) {
 	}
 	// Deep enough that a run and its steps fit: the run's own job sits at the top and every step
 	// one below it.
-	it := &crew{store: kept, maxDepth: 4}
+	it := &system{store: kept, maxDepth: 4}
 	return flow.NewEngine(kept, it, nil, it), it, workspace.GetId(), project.GetId()
 }
 
 // started begins a run and answers with it and the store it was written to.
-func started(t *testing.T, engine *flow.Engine, it *crew, graph, workspace, project string) flow.Run {
+func started(t *testing.T, engine *flow.Engine, it *system, graph, workspace, project string) flow.Run {
 	t.Helper()
 	run, err := engine.Start(context.Background(), graph, workspace, project, nil)
 	if err != nil {
@@ -115,7 +115,7 @@ func started(t *testing.T, engine *flow.Engine, it *crew, graph, workspace, proj
 
 // stepOf is the job a run's current step went out as. It is found by the labels every step
 // carries, which is the road a person takes too: quay job list --label flow.run=<run>.
-func stepOf(t *testing.T, it *crew, run flow.Run) *job.Job {
+func stepOf(t *testing.T, it *system, run flow.Run) *job.Job {
 	t.Helper()
 	listed, err := it.store.ListJobs(context.Background(), job.Filter{
 		LabelKey: "flow.run", LabelValue: run.ID,
@@ -138,7 +138,7 @@ func stepOf(t *testing.T, it *crew, run flow.Run) *job.Job {
 
 // lands writes what came of a step, through the same three calls the job controller makes, so the
 // row the engine then reads is the row a real landing leaves.
-func lands(t *testing.T, it *crew, step *job.Job, session string, landed job.Landing) *job.Job {
+func lands(t *testing.T, it *system, step *job.Job, session string, landed job.Landing) *job.Job {
 	t.Helper()
 	ctx := context.Background()
 	lease := job.Lease{Owner: "a-controller", Until: time.Now().UTC().Add(time.Minute)}
@@ -165,7 +165,7 @@ func aRecord(of *job.Job, kind string) *job.Event {
 }
 
 // ticked runs one poll, which is what carries a run on from a step that ended.
-func ticked(t *testing.T, engine *flow.Engine, it *crew, run flow.Run) flow.Run {
+func ticked(t *testing.T, engine *flow.Engine, it *system, run flow.Run) flow.Run {
 	t.Helper()
 	flow.NewPoller(engine, 0, slog.New(slog.NewTextHandler(io.Discard, nil))).Tick(context.Background())
 	kept, err := it.store.GetFlowRun(context.Background(), run.ID)

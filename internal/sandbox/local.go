@@ -36,7 +36,7 @@ func (LocalProvider) Stranded(context.Context) ([]string, error) { return nil, n
 
 // Attached is false because there is nothing to attach to. A local sandbox is the host, so the
 // conversation an operator opens is a process on their own machine rather than one inside a
-// container, and no container exists for the crew to reclaim either.
+// container, and no container exists for the system to reclaim either.
 func (LocalProvider) Attached(context.Context, string) (bool, error) { return false, nil }
 
 // RuntimeRunning is false for the same reason Attached is: a local sandbox is the host. A command
