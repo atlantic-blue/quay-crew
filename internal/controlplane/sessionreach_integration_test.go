@@ -55,7 +55,7 @@ func TestASessionIsRefusedAVerbItsRoleDoesNotCarry(t *testing.T) {
 
 	// The role carries job.create and job.read and not job.stop, so the crew names the verb and
 	// says where a verb comes from. A session that was refused has to know what to ask for.
-	for _, want := range []string{role.VerbJobStop, "may not", "may list", "attaching it"} {
+	for _, want := range []string{role.VerbJobStop, "may not", "verbs list", "attaching it"} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("the session was told %q, want the crew's refusal naming %q", said, want)
 		}
@@ -299,7 +299,7 @@ func aCrewWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachableC
 // grants: job running as none holds a credential that may call nothing.
 func (c *reachableCrew) holdRole(ctx context.Context, t *testing.T, name string, verbs ...string) {
 	t.Helper()
-	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nmay:\n",
+	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nverbs:\n",
 		name)
 	for _, verb := range verbs {
 		manifest += "  - " + verb + "\n"

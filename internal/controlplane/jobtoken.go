@@ -143,7 +143,7 @@ func (s *Server) jobCredential(ctx context.Context, id string) (string, bool) {
 	}
 	if one.Role != "" {
 		if held, err := s.roleFor(ctx, one.Workspace, one.Role); err == nil {
-			grant.Verbs = append([]string(nil), held.May_...)
+			grant.Verbs = append([]string(nil), held.Verbs...)
 		}
 	}
 	// A job that named a deadline said when it must be over, so its credential ends exactly there and

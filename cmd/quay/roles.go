@@ -150,12 +150,14 @@ func writeRole(out io.Writer, resp *quaycrewv1.GetRoleResponse) {
 	fmt.Fprintf(out, "%s v%d  %s\n", shown.GetName(), shown.GetVersion(), shown.GetSummary())
 	fmt.Fprintf(out, "runs on %s\n", shown.GetModel())
 	fmt.Fprintf(out, "receives %s\n", strings.Join(shown.GetReceives(), ", "))
-	// Always, including when it is empty. A role that may call nothing is the default rather than an
-	// oversight, and a line that appears only when something is granted reads as a missing line.
-	if may := resp.GetMay(); len(may) > 0 {
-		fmt.Fprintf(out, "may call %s\n", strings.Join(may, ", "))
+	// The manifest's own word, under the manifest's other one, so an operator reading this back can
+	// find the line it came from. Always, including when it is empty: a role that may call nothing is
+	// the default rather than an oversight, and a line that appears only when something is granted
+	// reads as a missing line.
+	if verbs := resp.GetVerbs(); len(verbs) > 0 {
+		fmt.Fprintf(out, "verbs %s\n", strings.Join(verbs, ", "))
 	} else {
-		fmt.Fprintln(out, "may call nothing")
+		fmt.Fprintln(out, "verbs none, so it may call nothing")
 	}
 	if shown.GetCrew() {
 		fmt.Fprintln(out, "held by the crew, so every workspace has it")

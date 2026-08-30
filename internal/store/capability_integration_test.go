@@ -28,7 +28,7 @@ func aRoleThatMay(t *testing.T, s *controlplane.Server, workspace, name string, 
 	t.Helper()
 	manifest := "name: " + name + "\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n"
 	if len(verbs) > 0 {
-		manifest += "may:\n"
+		manifest += "verbs:\n"
 		for _, verb := range verbs {
 			manifest += "  - " + verb + "\n"
 		}

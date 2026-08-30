@@ -6057,9 +6057,9 @@ type GetRoleResponse struct {
 	// brief is the whole instruction a session running as this role is given. It travels here and
 	// nowhere else: a listing was asked what the crew holds, not for a copy of every instruction.
 	Brief string `protobuf:"bytes,2,opt,name=brief,proto3" json:"brief,omitempty"`
-	// may is what a session running as this role may call, sorted. Empty is a role that may call
-	// nothing, which is the default.
-	May []string `protobuf:"bytes,3,rep,name=may,proto3" json:"may,omitempty"`
+	// verbs is what a session running as this role may call, sorted, in the word kubernetes uses for
+	// the same question. Empty is a role that may call nothing, which is the default.
+	Verbs []string `protobuf:"bytes,3,rep,name=verbs,proto3" json:"verbs,omitempty"`
 	// held_by names every workspace that attached this role for itself, sorted. A role the crew holds
 	// says so on the role and reaches every workspace without being named here.
 	HeldBy        []string `protobuf:"bytes,4,rep,name=held_by,json=heldBy,proto3" json:"held_by,omitempty"`
@@ -6111,9 +6111,9 @@ func (x *GetRoleResponse) GetBrief() string {
 	return ""
 }
 
-func (x *GetRoleResponse) GetMay() []string {
+func (x *GetRoleResponse) GetVerbs() []string {
 	if x != nil {
-		return x.May
+		return x.Verbs
 	}
 	return nil
 }
@@ -8947,11 +8947,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12DetachRoleResponse\"B\n" +
 	"\x0eGetRoleRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"y\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"}\n" +
 	"\x0fGetRoleResponse\x12%\n" +
 	"\x04role\x18\x01 \x01(\v2\x11.quaycrew.v1.RoleR\x04role\x12\x14\n" +
-	"\x05brief\x18\x02 \x01(\tR\x05brief\x12\x10\n" +
-	"\x03may\x18\x03 \x03(\tR\x03may\x12\x17\n" +
+	"\x05brief\x18\x02 \x01(\tR\x05brief\x12\x14\n" +
+	"\x05verbs\x18\x03 \x03(\tR\x05verbs\x12\x17\n" +
 	"\aheld_by\x18\x04 \x03(\tR\x06heldBy\"/\n" +
 	"\x13ListContextsRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\"C\n" +

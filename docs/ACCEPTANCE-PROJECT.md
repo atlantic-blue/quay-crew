@@ -134,7 +134,7 @@ and held by the platform, and the platform key is a string. Deleting a workspace
 second, and section 15 says why.
 
 **A contrived version of this project looks like this.** A job tree with children that exist only to reach
-depth two. A secret that is set and never read. A second role whose `may` list differs by one verb that
+depth two. A secret that is set and never read. A second role whose `verbs` list differs by one verb that
 nothing calls. A schedule that runs a job which prints the date. An ask node that asks "continue?" and
 always gets yes.
 
@@ -181,14 +181,14 @@ Three roles, imported with `quay role import` and attached by the operator. They
 changed like anything else. They were written outside this repository for the first run, which is the
 reason the first run's version of this section was wrong in the three ways below.
 
-**`orchestrator`.** `receives: job, context, skills`. `may: job.create, job.read, job.stop`. It declares
+**`orchestrator`.** `receives: job, context, skills`. `verbs: job.create, job.read, job.stop`. It declares
 the three children, reads their answers, and writes the summary at the end.
 
-**`infrastructure-writer`.** `receives: job, context, skills`. `may: job.create, job.read`. It writes the
+**`infrastructure-writer`.** `receives: job, context, skills`. `verbs: job.create, job.read`. It writes the
 infrastructure into the working tree, declares its own three children, and opens the pull request for
 what it wrote. It never applies anything.
 
-**`releaser`.** `receives: job, skills`. `may: job.read`. It takes a working tree somebody else wrote and
+**`releaser`.** `receives: job, skills`. `verbs: job.read`. It takes a working tree somebody else wrote and
 gets it onto a branch, in a commit, in a pull request. It cannot declare a job.
 
 **A push is not a deploy, and the first version of this section confused the two.** What runs the pipeline
@@ -199,7 +199,7 @@ thing it changed was that the operator could not see what had been built until t
 role receives `skills`, every role pushes and opens a pull request when its slice is done, and no role
 merges.
 
-**Why the `may` lists still differ.** `releaser` cannot declare a job, because a session that can push and
+**Why the `verbs` lists still differ.** `releaser` cannot declare a job, because a session that can push and
 can also fan out could spend the whole budget on pushes nobody reviewed. `infrastructure-writer` cannot
 stop one, because stopping a job is the orchestrator's. `receives` still bounds what reaches the container
 at all, which is a different question from what a session may ask the crew for.
@@ -347,7 +347,7 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 16. **The budget.** Every child draws from the root. A failure is a tree that spends past it.
 17. **The lease.** Section 13 kills the controller while a child runs. A failure dispatches a job twice,
     or leaves one that never moves again.
-18. **The `may` and `receives` lists.** A failure declares a job the role does not grant, merges a pull
+18. **The `verbs` and `receives` lists.** A failure declares a job the role does not grant, merges a pull
     request the operator never read, or ends a slice with nothing pushed.
 19. **Dispatch, task list, answer.** A failure blocks without an end, or returns an answer only a person
     can read.

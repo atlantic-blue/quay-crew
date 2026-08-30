@@ -64,13 +64,17 @@ const (
 	MaterialSkills  = "skills"
 )
 
-// Verbs is what a role may declare it calls. An allow list, refused by name at import for the same
-// reason Material is: a boundary that quietly means nothing looks exactly like one that holds.
+// Grantable is every verb a role may declare it calls. An allow list, refused by name at import for
+// the same reason Material is: a boundary that quietly means nothing looks exactly like one that
+// holds.
+//
+// It is not called Verbs because that word is taken twice over: it is the manifest key, and it is
+// the list one role declared. This is the vocabulary both are held against.
 //
 // Four, and no more, because a verb nobody uses is a boundary that means nothing. Nothing here
 // creates a workspace, a project, a secret, a skill, a hook or a role: a session that could grant
 // itself a capability could write itself a way of working nobody approved and then run as it.
-var Verbs = []string{
+var Grantable = []string{
 	// VerbJobCreate declares a job. The parent comes from the credential, never from the
 	// caller, which is what keeps the depth count honest.
 	VerbJobCreate,
@@ -106,9 +110,23 @@ var Retired = map[string]string{
 	"work.stop":   VerbJobStop,
 }
 
+// RetiredKey is every key a manifest used to carry, against what it is called now.
+//
+// Separate from Retired because a key is not a word: these are the names on the left of the colon,
+// and Retired holds the words in the lists underneath them.
+var RetiredKey = map[string]string{
+	"may": "verbs",
+}
+
 // RetiredWord says what a word is called now, and whether it is one the crew retired.
 func RetiredWord(word string) (string, bool) {
 	instead, retired := Retired[strings.TrimSpace(word)]
+	return instead, retired
+}
+
+// RetiredManifestKey says what a manifest key is called now, and whether it is one the crew retired.
+func RetiredManifestKey(key string) (string, bool) {
+	instead, retired := RetiredKey[strings.TrimSpace(key)]
 	return instead, retired
 }
 
@@ -127,10 +145,11 @@ type Role struct {
 	Model string
 	// Receives is the material this role is given, sorted, drawn from Material.
 	Receives []string
-	// May_ is what a session running as this role may call, sorted, drawn from Verbs. Empty is a role
-	// that may call nothing, which is what every role written before this existed becomes: default
+	// Verbs is what a session running as this role may call, sorted, drawn from Grantable. It is the
+	// word kubernetes uses for the same question, so an operator arrives already knowing it. Empty is
+	// a role that may call nothing, which is what every role written before this existed becomes: default
 	// deny, so a boundary is something an author wrote rather than something they forgot.
-	May_ []string
+	Verbs []string
 	// Brief is how this role works, read from ROLE.md.
 	Brief string
 	// Dir is where the role is, as this process sees it. Empty for one that arrived over the wire.
@@ -152,7 +171,7 @@ type manifest struct {
 	Summary  string   `yaml:"summary"`
 	Model    string   `yaml:"model"`
 	Receives []string `yaml:"receives"`
-	May      []string `yaml:"may"`
+	Verbs    []string `yaml:"verbs"`
 }
 
 // One reads a single role from its directory.
@@ -190,6 +209,10 @@ func FromFiles(files []File) (Role, error) {
 	if !found {
 		return Role{}, fmt.Errorf("role: no %s, so there is nothing saying what it is", ManifestFile)
 	}
+	if err := refuseRetiredKeys(raw); err != nil {
+		return Role{}, err
+	}
+
 	var read manifest
 	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
 	// A field the crew does not know is refused by name rather than ignored. Ignored, it looks
@@ -210,10 +233,37 @@ func FromFiles(files []File) (Role, error) {
 		Summary:  strings.TrimSpace(read.Summary),
 		Model:    strings.TrimSpace(read.Model),
 		Receives: normalise(read.Receives),
-		May_:     normalise(read.May),
+		Verbs:    normalise(read.Verbs),
 		Brief:    strings.TrimRight(string(brief), "\n"),
 	}
 	return loaded, loaded.check(loaded.Name)
+}
+
+// refuseRetiredKeys names the key to write instead, before the strict decode refuses it as unknown.
+//
+// yaml's own refusal for a key the crew does not take names the Go type it was decoding into, which
+// is not a sentence about anybody's manifest. So the keys the crew renamed are read off the document
+// first and answered with the word that replaced them.
+func refuseRetiredKeys(raw []byte) error {
+	var keyed map[string]yaml.Node
+	// A manifest that is not a mapping is not this function's refusal to make. The decode below says
+	// what is wrong with it.
+	if err := yaml.Unmarshal(raw, &keyed); err != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(keyed))
+	for key := range keyed {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if instead, retired := RetiredManifestKey(key); retired {
+			return fmt.Errorf("role: %s says %q, which is called %q now: it is the word kubernetes uses "+
+				"for what an identity may call. Write %s: and import it again",
+				ManifestFile, key, instead, instead)
+		}
+	}
+	return nil
 }
 
 // ReadDir reads a role's directory, so what travels to the crew is the role rather than a path on
@@ -254,14 +304,14 @@ func (r Role) Fingerprint() string {
 	sum := sha256.New()
 	fmt.Fprintf(sum, "%s\x00%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00",
 		r.Name, r.Version, r.Summary, r.Model, strings.Join(r.Receives, ","),
-		strings.Join(r.May_, ","), r.Brief)
+		strings.Join(r.Verbs, ","), r.Brief)
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
 // May says whether a session running as this role may call a verb. A role that declared nothing may
 // call nothing.
 func (r Role) May(verb string) bool {
-	for _, held := range r.May_ {
+	for _, held := range r.Verbs {
 		if held == verb {
 			return true
 		}
@@ -343,7 +393,7 @@ func (r Role) check(directory string) error {
 				directory, material, strings.Join(Material, ", "))
 		}
 	}
-	for _, verb := range r.May_ {
+	for _, verb := range r.Verbs {
 		if instead, retired := RetiredWord(verb); retired {
 			return fmt.Errorf("role: %s may %q, which is called %q now: declared intent is a job, "+
 				"the way it is in Kubernetes. Write %s and import it again",
@@ -351,7 +401,7 @@ func (r Role) check(directory string) error {
 		}
 		if !knownVerb(verb) {
 			return fmt.Errorf("role: %s may %q, which is not a verb the crew grants; it is one of: %s",
-				directory, verb, strings.Join(Verbs, ", "))
+				directory, verb, strings.Join(Grantable, ", "))
 		}
 	}
 	if !r.Gets(MaterialJob) {
@@ -362,7 +412,7 @@ func (r Role) check(directory string) error {
 }
 
 func knownVerb(verb string) bool {
-	for _, one := range Verbs {
+	for _, one := range Grantable {
 		if one == verb {
 			return true
 		}

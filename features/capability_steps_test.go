@@ -287,7 +287,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the crew refuses it and names the verb it lacks and how an operator grants it$`,
 		func(ctx context.Context) error {
-			for _, want := range []string{role.VerbJobStop, "may list", "attaching it"} {
+			for _, want := range []string{role.VerbJobStop, "verbs list", "attaching it"} {
 				if err := theRefusalSays(want)(ctx); err != nil {
 					return err
 				}
@@ -494,7 +494,7 @@ func asTheSession(ctx context.Context) quaycrewv1.ControlPlaneServiceClient {
 func roleFilesThatMay(name string, verbs []string) []*quaycrewv1.RoleFile {
 	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: clears the backlog\nmodel: opus\nreceives:\n  - job\n", name)
 	if len(verbs) > 0 {
-		manifest += "may:\n"
+		manifest += "verbs:\n"
 		for _, verb := range verbs {
 			manifest += "  - " + verb + "\n"
 		}

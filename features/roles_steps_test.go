@@ -53,6 +53,25 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 			}))
 		})
 
+	sc.Step(`^the operator imported a role that may create and read jobs$`, func(ctx context.Context) error {
+		if err := importRole(ctx, roleFiles("test-writer", 1, roleManifest{
+			model: "opus", receives: []string{"job", "context"},
+			verbs: []string{role.VerbJobCreate, role.VerbJobRead},
+		})); err != nil {
+			return err
+		}
+		return worldFrom(ctx).lastErr
+	})
+
+	// The way off the retired key. A role file lives in somebody's repository, so the crew meets the
+	// old spelling long after it stopped using it.
+	sc.Step(`^the operator imports a role saying "may" where it should say "verbs"$`, func(ctx context.Context) error {
+		return importRole(ctx, roleFiles("test-writer", 1, roleManifest{
+			model: "opus", receives: []string{"job"},
+			verbs: []string{role.VerbJobCreate}, verbsKey: "may",
+		}))
+	})
+
 	sc.Step(`^the operator imports a role receiving "([^"]*)"$`,
 		func(ctx context.Context, material string) error {
 			return importRole(ctx, roleFiles("test-writer", 1, roleManifest{
@@ -226,6 +245,17 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the role comes back saying it may call "([^"]*)"$`, func(ctx context.Context, want string) error {
+		read := worldFrom(ctx).lastRole
+		if read == nil {
+			return fmt.Errorf("no role came back at all")
+		}
+		if got := strings.Join(read.GetVerbs(), ", "); got != want {
+			return fmt.Errorf("it came back able to call %q, and it declared %q", got, want)
+		}
+		return nil
+	})
+
 	sc.Step(`^the role comes back at version (\d+)$`, func(ctx context.Context, version int) error {
 		read := worldFrom(ctx).lastRole
 		if read == nil {
@@ -253,6 +283,10 @@ func initializeRoleSteps(sc *godog.ScenarioContext) {
 type roleManifest struct {
 	model    string
 	receives []string
+	verbs    []string
+	// verbsKey is the key the verbs are written under. Empty writes the one the crew takes, and a
+	// scenario naming the retired one is how the way off the old spelling is held to a test.
+	verbsKey string
 	brief    string
 }
 
@@ -271,6 +305,16 @@ func roleFiles(name string, version int, said roleManifest) []*quaycrewv1.RoleFi
 	if len(said.receives) > 0 {
 		manifest.WriteString("receives:\n")
 		for _, one := range said.receives {
+			fmt.Fprintf(&manifest, "  - %s\n", one)
+		}
+	}
+	if len(said.verbs) > 0 {
+		key := said.verbsKey
+		if key == "" {
+			key = "verbs"
+		}
+		fmt.Fprintf(&manifest, "%s:\n", key)
+		for _, one := range said.verbs {
 			fmt.Fprintf(&manifest, "  - %s\n", one)
 		}
 	}

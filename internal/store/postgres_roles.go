@@ -27,10 +27,10 @@ func (p *Postgres) ImportRole(ctx context.Context, imported ImportedRole) error 
 	}
 
 	if _, err := p.pool.Exec(ctx, `
-		insert into roles (name, version, summary, model, receives, "may", brief, fingerprint)
+		insert into roles (name, version, summary, model, receives, verbs, brief, fingerprint)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		imported.Name, imported.Version, imported.Summary, imported.Model,
-		textArray(imported.Receives), textArray(imported.May_), imported.Brief,
+		textArray(imported.Receives), textArray(imported.Verbs), imported.Brief,
 		imported.Fingerprint()); err != nil {
 		return fmt.Errorf("import role %s: %w", imported.Name, err)
 	}
@@ -45,7 +45,7 @@ func (p *Postgres) GetRole(ctx context.Context, name string, version int) (Impor
 // ListRoles returns the newest revision of every role.
 func (p *Postgres) ListRoles(ctx context.Context) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select r.name, r.version, r.summary, r.model, r.receives, r.verbs, r.brief, r.imported_at
 		from roles r
 		join (select name, max(version) as version from roles group by name) newest
 		  on newest.name = r.name and newest.version = r.version
@@ -87,7 +87,7 @@ func (p *Postgres) DetachRole(ctx context.Context, workspace, name string) error
 // WorkspaceRoles returns what a workspace holds, at the versions it pinned.
 func (p *Postgres) WorkspaceRoles(ctx context.Context, workspace string) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select r.name, r.version, r.summary, r.model, r.receives, r.verbs, r.brief, r.imported_at
 		from workspace_roles w
 		join roles r on r.name = w.name and r.version = w.version
 		where w.workspace = $1
@@ -125,7 +125,7 @@ func (p *Postgres) DetachCrewRole(ctx context.Context, name string) error {
 // CrewRoles returns what the crew holds, at the versions it pinned.
 func (p *Postgres) CrewRoles(ctx context.Context) ([]ImportedRole, error) {
 	return p.roleRows(ctx, `
-		select r.name, r.version, r.summary, r.model, r.receives, r."may", r.brief, r.imported_at
+		select r.name, r.version, r.summary, r.model, r.receives, r.verbs, r.brief, r.imported_at
 		from crew_roles c
 		join roles r on r.name = c.name and r.version = c.version
 		order by r.name`)
@@ -135,8 +135,8 @@ func (p *Postgres) CrewRoles(ctx context.Context) ([]ImportedRole, error) {
 func (p *Postgres) roleRow(ctx context.Context, where string, args ...any) (ImportedRole, error) {
 	var held ImportedRole
 	err := p.pool.QueryRow(ctx, `
-		select name, version, summary, model, receives, "may", brief, imported_at from roles `+where, args...).
-		Scan(&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.May_,
+		select name, version, summary, model, receives, verbs, brief, imported_at from roles `+where, args...).
+		Scan(&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives, &held.Verbs,
 			&held.Brief, &held.ImportedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ImportedRole{}, ErrNotFound
@@ -159,7 +159,7 @@ func (p *Postgres) roleRows(ctx context.Context, query string, args ...any) ([]I
 	for rows.Next() {
 		var held ImportedRole
 		if err := rows.Scan(&held.Name, &held.Version, &held.Summary, &held.Model, &held.Receives,
-			&held.May_, &held.Brief, &held.ImportedAt); err != nil {
+			&held.Verbs, &held.Brief, &held.ImportedAt); err != nil {
 			return nil, fmt.Errorf("list roles: %w", err)
 		}
 		out = append(out, held)
