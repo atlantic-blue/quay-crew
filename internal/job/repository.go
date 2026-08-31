@@ -104,6 +104,15 @@ func Asked(one *Job) string {
 	if one.Resuming != "" {
 		return Continued(one)
 	}
+	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
+	// told, because what a planned job was told is the correction to a plan rather than the answer to
+	// a question: a session given CarryOn here would be told to carry on with work it has not started.
+	if WaitingForItsPlan(one) {
+		if one.Told != "" {
+			return WriteThePlanAgain(one)
+		}
+		return WriteThePlan(one)
+	}
 	if one.Told != "" {
 		return CarryOn(one)
 	}
@@ -124,7 +133,14 @@ func Asked(one *Job) string {
 	// Last, because it is the system's line about how the job is done rather than part of what it is.
 	// It is here rather than in a brief because a brief that forgets it produces a job that can only
 	// ever be started again from nothing.
-	said = append(said, RecordEachStep())
+	//
+	// Where a person approved a plan, the plan carries this line with the numbers on it. Two lines
+	// about recording steps, saying it two ways, is how a session ends up doing neither.
+	if one.PlanApproved {
+		said = append(said, FollowThePlan(one.Plan))
+	} else {
+		said = append(said, RecordEachStep())
+	}
 	return strings.Join(said, "\n\n")
 }
 

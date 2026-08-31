@@ -415,6 +415,13 @@ type Store interface {
 	// phase it moves out of, in the same statement, so a question cannot be answered twice.
 	AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
 	AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
+	// ProposeJobPlan writes the plan the crew wrote for a job and puts the question about it to a
+	// person, in one movement, so a reader never finds a job asking with no plan on it. ApproveJobPlan
+	// is the other half: it records that a person said yes and puts the job back to pending, so the
+	// work starts against the plan that was approved. An answer that is not the approval takes the
+	// ordinary AnswerJob road, because it is a correction the session writes the next plan from.
+	ProposeJobPlan(ctx context.Context, id, plan, question string, event *job.Event) (*job.Job, error)
+	ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.

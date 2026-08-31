@@ -1,0 +1,22 @@
+-- A job that states the sentence writes its plan, and a person approves it before any work starts.
+--
+-- The failure it answers: a person says one sentence, something turns that sentence into a brief, and
+-- the crew executes the brief faithfully and fast. Nothing ever holds the brief against the sentence,
+-- because reading the brief costs nearly as much as reading the result. One of them ran to 1,109
+-- words for a 1,505 word result. So a misreading of one sentence became two days of correct work in
+-- the wrong direction, and it looked like progress the whole way.
+--
+-- The plan is what a person reads instead. It is at most seven steps of one line each, it is written
+-- by the crew rather than by the person, and the numbers on its steps are how the work is later
+-- accounted for: a session records each step it finishes with its number, and a step of an approved
+-- plan that nothing accounts for stops the job.
+--
+-- Two columns rather than one state word. The plan on a row that nobody has approved is the plan a
+-- person is being asked about, and the same plan with the flag set is the thing the work is held to.
+-- A single column would have to spell the difference out in text nothing could index.
+--
+-- Empty string and false rather than null, the way every other column on this table already is: a
+-- reader that has to tell null from empty is a reader with two cases where there is one. Every job
+-- written before this carries no plan and was approved by nobody, which is exactly what an errand is.
+alter table jobs add column if not exists plan text not null default '';
+alter table jobs add column if not exists plan_approved boolean not null default false;

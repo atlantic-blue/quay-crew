@@ -415,6 +415,19 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// and carries no reason at all: without this line it reads as a job that has always been this
 	// role's, and the three attempts that came before it are invisible.
 	sayItLooped(out, one)
+	// The plan, and whether a person approved it. It is above what the session finished, because the
+	// steps below are read against it: a reader holding both can see for themselves which step of the
+	// plan the work accounted for.
+	if plan := one.GetPlan(); plan != "" {
+		if one.GetPlanApproved() {
+			fmt.Fprintln(out, "plan, approved:")
+		} else {
+			fmt.Fprintln(out, "plan, not approved yet:")
+		}
+		for _, line := range strings.Split(plan, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
+		}
+	}
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {

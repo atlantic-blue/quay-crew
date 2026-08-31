@@ -8685,6 +8685,12 @@ type Job struct {
 	// It is what the job failed with, moved off the reason by the resume, so a job going again does not
 	// sit pending reading as one the machine is holding back.
 	Resuming string `protobuf:"bytes,39,opt,name=resuming,proto3" json:"resuming,omitempty"`
+	// plan is what the crew said it would do, one numbered step per line, and plan_approved says
+	// whether a person approved it. A job that states the sentence writes its plan before it does any
+	// work, and the numbers are how the work is accounted for: the session records each step it
+	// finishes with its number, and a step nothing accounts for stops the job.
+	Plan         string `protobuf:"bytes,45,opt,name=plan,proto3" json:"plan,omitempty"`
+	PlanApproved bool   `protobuf:"varint,46,opt,name=plan_approved,json=planApproved,proto3" json:"plan_approved,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -8977,6 +8983,20 @@ func (x *Job) GetResuming() string {
 		return x.Resuming
 	}
 	return ""
+}
+
+func (x *Job) GetPlan() string {
+	if x != nil {
+		return x.Plan
+	}
+	return ""
+}
+
+func (x *Job) GetPlanApproved() bool {
+	if x != nil {
+		return x.PlanApproved
+	}
+	return false
 }
 
 func (x *Job) GetEscalation() string {
@@ -11611,7 +11631,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xed\v\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xa6\f\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -11649,7 +11669,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\fpull_request\x18\" \x01(\tR\vpullRequest\x12!\n" +
 	"\fspent_tokens\x18\x18 \x01(\x03R\vspentTokens\x12*\n" +
 	"\x05steps\x18& \x03(\v2\x14.quaycrew.v1.JobStepR\x05steps\x12\x1a\n" +
-	"\bresuming\x18' \x01(\tR\bresuming\x12\x1e\n" +
+	"\bresuming\x18' \x01(\tR\bresuming\x12\x12\n" +
+	"\x04plan\x18- \x01(\tR\x04plan\x12#\n" +
+	"\rplan_approved\x18. \x01(\bR\fplanApproved\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +
