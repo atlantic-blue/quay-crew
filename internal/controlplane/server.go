@@ -1175,9 +1175,9 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 //
 // The address is held to its shape here, while the person who typed it is looking, for the same
 // reason a job's is: an address nothing can be pushed to is worth finding out about now rather than
-// an hour into the work. The kind is held to two words, and saying nothing means public, because
-// free pipeline minutes are the cheaper of the two and a project that cannot be public is the one
-// that has to say so.
+// an hour into the work. The kind is held to two words. Saying nothing keeps the kind the project
+// holds, and means public on a project nobody has told, because free pipeline minutes are the cheaper
+// of the two and a project that cannot be public is the one that has to say so.
 func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetProjectRepositoryRequest) (*quaycrewv1.SetProjectRepositoryResponse, error) {
 	if req.GetProject() == "" {
 		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
@@ -1189,6 +1189,19 @@ func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetPr
 	kind, err := repository.Kind(req.GetVisibility())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	// An omitted kind keeps the kind the project holds. Saying nothing means public on a project
+	// nobody has told, and it used to mean public on every write, so an operator correcting an
+	// address dropped that project from private to public in the same command and was told in the
+	// same breath that its pipeline minutes were free.
+	if strings.TrimSpace(req.GetVisibility()) == "" {
+		held, err := s.store.GetProject(ctx, req.GetProject())
+		if err != nil {
+			return nil, storeError(err, "project")
+		}
+		if held.GetVisibility() != "" {
+			kind = held.GetVisibility()
+		}
 	}
 	recorded, err := s.store.SetProjectRepository(ctx, req.GetProject(), address, kind)
 	if err != nil {
