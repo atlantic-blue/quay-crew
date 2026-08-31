@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/atlantic-blue/krewe/internal/publish"
 	"github.com/atlantic-blue/krewe/internal/repository"
 )
 
@@ -129,10 +130,62 @@ func AskedForThePullRequest(repository string) string {
 		"address. Do not merge it. If you cannot push, say what stopped you.", repository)
 }
 
-// NoPullRequest is why a job that names a repository stopped without one. It is written after the
-// session has been asked a second time, so it says that too: a reason that reads as though nobody
-// tried sends somebody looking for a step that already happened.
-func NoPullRequest(repository string) string {
-	return fmt.Sprintf("this job works in %s and no answer named a pull request against it, asked twice. "+
-		"The work is in the session and nowhere else: open it, and push what is there.", repository)
+// NoPullRequest is why a job that names a repository stopped without one, and where its work is.
+//
+// It is written after the session has been asked a second time, so it says that too: a reason that
+// reads as though nobody tried sends somebody looking for a step that already happened.
+//
+// What it must never do is tell a person to go into a container. That is what it used to do, and it
+// is the whole of this behaviour: the system holds the work, on a mount it made itself, so it either
+// publishes the branch or it says where the bytes are. Both of those an operator can act on. "Open
+// it, and push what is there" asks them to learn the layout first, and makes them the transport.
+//
+// Five sentences for five outcomes, and the empty one matters most. A reason that names a branch the
+// session never made sends the operator looking for work that was never done.
+func NoPullRequest(repository, session string, found publish.Work) string {
+	said := fmt.Sprintf("this job works in %s and no answer named a pull request against it, asked twice. ",
+		repository)
+	switch found.State {
+	case publish.Pushed:
+		if found.Pushed {
+			return said + fmt.Sprintf("The system pushed the branch %s, so the work is in the repository: "+
+				"open the pull request from it.", found.Branch)
+		}
+		return said + fmt.Sprintf("The branch %s is already in the repository, so the work is there: "+
+			"open the pull request from it.", found.Branch)
+	case publish.Held:
+		return said + fmt.Sprintf("The system could not push %s: %s.%s",
+			branchOrIt(found.Branch), found.Why, whereItIs(session, found.Host))
+	case publish.Nothing:
+		return said + "The session committed nothing, so there is no branch to push." +
+			whereItIs(session, found.Host)
+	case publish.Absent:
+		return said + "The session holds no repository." + whereItIs(session, found.Host)
+	default:
+		return said + fmt.Sprintf("The system could not read the work: %s.%s",
+			found.Why, whereItIs(session, found.Host))
+	}
+}
+
+// branchOrIt names the branch, or says "it" where there is none to name. A branch nobody made must
+// not appear in a sentence about pushing.
+func branchOrIt(branch string) string {
+	if branch == "" {
+		return "it"
+	}
+	return "the branch " + branch
+}
+
+// whereItIs is the half of every reason an operator can act on: the directory the work is in, on the
+// machine that runs the sandboxes, and the command that reads it without opening anything.
+//
+// A system that keeps nothing on disk has no path to give, and says that rather than printing an
+// empty one. It is the one case where the answer is that there is no answer, and it has to read as
+// such.
+func whereItIs(session, host string) string {
+	if host == "" {
+		return " This system keeps no working directory on disk, so there is nowhere to read it from."
+	}
+	return fmt.Sprintf(" The work is at %s on the machine running the sandboxes, and krewe read %s reads it.",
+		host, session)
 }

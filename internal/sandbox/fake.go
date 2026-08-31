@@ -46,6 +46,13 @@ type FakeProvider struct {
 	// RuntimeErr is the daemon refusing to say what a container is running, which is not the same
 	// answer as nothing: a system that cannot tell must not report the session as idle.
 	RuntimeErr error
+	// ExistingErr is the daemon refusing to say whether this session still has a container, which is
+	// not the same answer as none: a system that cannot tell must not report the work as unreachable.
+	ExistingErr error
+	// Replies are what particular commands answer, handed to every sandbox this makes. A scenario
+	// about what the system does with a session's git needs its commands to answer differently from
+	// each other, and a double with one canned answer for everything cannot say anything about that.
+	Replies []Reply
 	// questions counts what has been asked about the inside of a sandbox, attachment and runtime
 	// alike, so a test can hold how much one listing costs.
 	questions int
@@ -86,7 +93,7 @@ func (f *FakeProvider) Create(ctx context.Context, cfg Config) (Sandbox, error) 
 		return box, nil
 	}
 	f.Created = append(f.Created, cfg)
-	box := &FakeSandbox{Output: f.Output, Stderr: f.Stderr, ExitErr: f.ExitErr}
+	box := &FakeSandbox{Output: f.Output, Stderr: f.Stderr, ExitErr: f.ExitErr, Replies: f.Replies}
 	box.Without(f.Missing...)
 	if f.live == nil {
 		f.live = make(map[string]*FakeSandbox)
@@ -225,6 +232,9 @@ type FakeSandbox struct {
 	// run, or was not run twice.
 	Ran    []Spec
 	Closed bool
+	// Replies are answers to particular commands, tried in order before Output. The first whose Match
+	// is in the command line wins.
+	Replies []Reply
 	// without are the binaries this sandbox does not have, so a scenario can be a session whose image
 	// is missing what a skill needs.
 	without map[string]bool
@@ -268,7 +278,33 @@ func (f *FakeSandbox) Exec(_ context.Context, spec Spec) (Process, error) {
 		}
 		return readerProcess{r: strings.NewReader("/usr/bin/" + binary)}, nil
 	}
+	if reply, set := replyTo(f.Replies, spec); set {
+		return readerProcess{r: strings.NewReader(reply.Out), stderr: reply.Stderr, err: reply.Err}, nil
+	}
 	return readerProcess{r: strings.NewReader(f.Output), stderr: f.Stderr, err: f.ExitErr}, nil
+}
+
+// Reply is what one command answers, matched on a fragment of the command line rather than on the
+// whole of it: the paths in a command are made by the system and a scenario should not have to know
+// them to say what git said.
+type Reply struct {
+	// Match is the fragment. An empty one matches nothing, so a half written scenario answers with
+	// the sandbox's own Output rather than with every command at once.
+	Match  string
+	Out    string
+	Stderr string
+	Err    error
+}
+
+// replyTo is the canned answer for this command, and false where none was set for it.
+func replyTo(replies []Reply, spec Spec) (Reply, bool) {
+	line := strings.Join(spec.Argv, " ")
+	for _, reply := range replies {
+		if reply.Match != "" && strings.Contains(line, reply.Match) {
+			return reply, true
+		}
+	}
+	return Reply{}, false
 }
 
 // errNotFound is what a shell does when `command -v` finds nothing: it says nothing and exits non
@@ -292,4 +328,23 @@ func wantedBinary(spec Spec) (string, bool) {
 func (f *FakeSandbox) Close(context.Context) error {
 	f.Closed = true
 	return nil
+}
+
+// Existing is the sandbox this session already has, and false where it has none, the way the Docker
+// provider finds a container by name and finds nothing.
+//
+// It never creates one, which is the property worth holding a double to: a system that made a
+// container to look inside a finished session would cost a machine a sandbox and read an empty
+// directory, and a double that quietly created one would leave that untested.
+func (f *FakeProvider) Existing(_ context.Context, sessionID string) (Sandbox, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ExistingErr != nil {
+		return nil, false, f.ExistingErr
+	}
+	box, live := f.live[sessionID]
+	if !live || box.Closed {
+		return nil, false, nil
+	}
+	return box, true, nil
 }
