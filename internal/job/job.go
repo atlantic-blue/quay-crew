@@ -136,6 +136,19 @@ type Job struct {
 	// are what a continued job carries on from, and they are read with one job rather than with a
 	// listing: a listing of a hundred lists is a listing nobody can read.
 	Steps []Step
+	// Escalation is what this job does when it goes in circles, as the caller declared it: "ask" to put
+	// the question to the operator, or "role:<name>" to hand it to another role. Empty is asking, which
+	// is what a job whose author never thought about looping gets. See loop.go.
+	Escalation string
+	// Attempted is what each attempt at a step produced, with how like the earlier attempts at that
+	// step it was. Attempts, above, is how many times a session was started for this job; this is what
+	// those attempts said, which is the only thing a loop can be read off.
+	Attempted []Attempt
+	// LoopedStep is the step this job went in circles on, and zero for a job that never has.
+	// EscalatedTo is the route the system took when it did, in the shape it was declared. A job
+	// escalates once: the second loop stops it rather than escalating again.
+	LoopedStep  int
+	EscalatedTo string
 	// Resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
 	// It is what the job failed with, moved off the reason by the resume, so a job that is going again
 	// does not sit pending reading as one the machine is holding back.
@@ -211,6 +224,10 @@ const (
 	// movement: the job is running before it and running after it, and what it adds is the record a
 	// second attempt carries on from.
 	EventStepped = "job.stepped"
+	// EventLooped is written when a job goes in circles: the same step attempted three times in a way
+	// the system cannot tell apart. It is not a phase, because where the job goes next is what the job
+	// declared, so the record carries the loop and the row carries the escalation.
+	EventLooped = "job.looped"
 	// EventResumed is written when a person continues a job that failed, and EventRefused when they
 	// end one instead. They are the two answers to a failure, and which of the two was given is the
 	// part of the record somebody reads a week later.
@@ -267,8 +284,11 @@ type Declaration struct {
 	Requires       []string
 	Repository     string
 	Product        string
-	ID             string
-	Parent         string
+	// Escalation is what this job does when it goes in circles: "ask", or "role:<name>". Empty is
+	// asking, and every word is refused at the write, where the person who typed it is looking.
+	Escalation string
+	ID         string
+	Parent     string
 }
 
 // Tidied is the declaration as it is stored: the space around the lines it will be read as comes off.
@@ -279,6 +299,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
 	d.Product = TidySentence(d.Product)
+	d.Escalation = strings.ToLower(strings.TrimSpace(d.Escalation))
 	d.Requires = TidyRequires(d.Requires)
 	d.Repository = TidyRepository(d.Repository)
 	return d
@@ -323,6 +344,9 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := usableRepository(tidy.Repository); err != nil {
+		return err
+	}
+	if _, err := ReadRoute(tidy.Escalation); err != nil {
 		return err
 	}
 	if err := tidy.validateRequires(); err != nil {

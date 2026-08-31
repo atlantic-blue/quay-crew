@@ -87,6 +87,9 @@ type Memory struct {
 	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
 	// carries what a listing there carries.
 	jobSteps map[string][]job.Step
+	// jobAttempts is what each attempt at each job said, in the order the attempts were made, beside
+	// the jobs for the same reason the steps are.
+	jobAttempts map[string][]job.Attempt
 	// jobSteers is every moment the operator had to say something a job should have known, keyed by
 	// the steer identifier.
 	jobSteers map[string]*job.Steer

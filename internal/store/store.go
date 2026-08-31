@@ -440,6 +440,11 @@ type Store interface {
 	RenewLease(ctx context.Context, id string, lease job.Lease) error
 	RecordJobSession(ctx context.Context, id, session string) error
 	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
+	// LoopJob writes that a job went in circles at a step and takes the route the job declared: a
+	// question to the operator, a handoff to another role, or a stop where it had escalated already.
+	// It applies only to a running job the controller writing it still holds, in the same statement,
+	// and it writes the attempt that closed the loop with it.
+	LoopJob(ctx context.Context, id string, looped job.Loop, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// RecordSteer writes one steer and adds it to the count on each job in counted, in one

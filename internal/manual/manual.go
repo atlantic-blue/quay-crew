@@ -70,8 +70,12 @@ commands:
     [--expect-contains "..."]             names one is not done until its answer names a pull
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
-                                          and what they get back. Every job under this one carries
-                                          it, and it is what the design is read against. A brief
+    [--escalate ask|role:<name>]          and what they get back. Every job under this one carries
+                                          it, and it is what the design is read against.
+                                          --escalate says what happens when the job goes in
+                                          circles: ask puts the question to you, role:<name> hands
+                                          the job to another role in a conversation of its own,
+                                          carrying what the attempts already said. A brief
                                           that asks the job to wait for the checks, or to merge on
                                           the result, is refused: nothing wakes a job, so that
                                           shape is a flow
