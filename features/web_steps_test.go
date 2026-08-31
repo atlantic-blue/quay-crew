@@ -44,8 +44,10 @@ func initializeWebSteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, webKey{}, &webWorld{}), nil
 	})
 
-	sc.Step(`^the operator opens the web view$`, func(ctx context.Context) error {
-		return webFrom(ctx).visit(ctx, "/")
+	// The listing has its own page. The front door is the briefing, which answers the questions the
+	// listing never did.
+	sc.Step(`^the operator opens the session listing$`, func(ctx context.Context) error {
+		return webFrom(ctx).visit(ctx, "/sessions")
 	})
 
 	sc.Step(`^the operator opens the web view on that session$`, func(ctx context.Context) error {

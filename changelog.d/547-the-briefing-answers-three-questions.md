@@ -1,0 +1,31 @@
+**The web view answers the operator's questions instead of listing sessions a third time.** `krewe
+sessions`, the console and `krewe web` all drew the same four columns, and the question they answered
+was the one an operator asks least: what is running. Four jobs ran at once and everything he knew
+about them reached him because another person typed it into a terminal for him.
+
+The front door of `krewe web` is now the briefing. It answers three questions in the order a decision
+needs them: what is waiting on you, what is blocked, what the system produced. What is running comes
+last. The session listing keeps its page at `/sessions` and loses the door.
+
+A row carries what the system holds about the job: the question it asked and the command that answers
+it, the reason it stopped, the pull request it opened, and what it spent in tokens. A block with
+nothing in it says so in a sentence, because a page with nothing blocked and a page that failed to
+read the system must never look the same.
+
+Jobs are drawn as the tree in [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) section 12 rather than as
+a flat list: a child that asked a question is drawn under the work it belongs to, with the session as
+a cell on the row.
+
+**What it says about a pull request, and what it will not say.** The system keeps the address and has
+never read it back, so a row says the checks were not read. It never says they passed. Reading a forge
+is [#549](https://github.com/atlantic-blue/quay-crew/issues/549), and until that lands a red check is
+not a state this system can hold.
+
+**It still serves this machine and nowhere else.** The briefing carries more than a listing of names
+did, so the wall is worth more than it was. The refusal now names what would have to be true first: a
+reader who authenticates, with a credential that can be withdrawn from one device, and a transport
+that is encrypted. Neither exists, so nothing binds past loopback. Whether the briefing reaches a
+phone through a wider door or through a chat channel is
+[#550](https://github.com/atlantic-blue/quay-crew/issues/550).
+
+See [#547](https://github.com/atlantic-blue/quay-crew/issues/547).

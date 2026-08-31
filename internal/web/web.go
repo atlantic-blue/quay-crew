@@ -41,6 +41,7 @@ type Reader interface {
 	ListSessions(context.Context, *quaycrewv1.ListSessionsRequest, ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error)
 	GetSession(context.Context, *quaycrewv1.GetSessionRequest, ...grpc.CallOption) (*quaycrewv1.GetSessionResponse, error)
 	ListTasks(context.Context, *quaycrewv1.ListTasksRequest, ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error)
+	ListJobs(context.Context, *quaycrewv1.ListJobsRequest, ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error)
 }
 
 // Serve runs the view until ctx is done, writing the address it came up on to out.
@@ -72,10 +73,14 @@ func Serve(ctx context.Context, reader Reader, addr string, out io.Writer) error
 // loopbackOnly refuses to bind anywhere but this machine.
 //
 // The control plane listens on a local only port guarded by one shared token, and this server holds
-// that token. Serving it to a routable address would hand the whole system to the network without the
-// three things that would need: a token for each device, a way to withdraw one, and a rule about
-// encryption. None of those exist, so this is a wall rather than a default. An address with no host
-// is refused too, because ":8080" binds every interface there is.
+// that token. The briefing now carries what the system produced, what is blocked and what a person is
+// being asked, so an open port is a reading of the whole system rather than a listing of names.
+//
+// Two things have to be true before anything here binds past loopback, and neither is built: a reader
+// who authenticates as themselves, with a credential that can be withdrawn from one device without
+// withdrawing it from the rest, and a transport that is encrypted, because a briefing crosses a
+// network somebody else runs. Until both exist this is a wall rather than a default. An address with
+// no host is refused too, because ":8080" binds every interface there is.
 func loopbackOnly(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -88,6 +93,8 @@ func loopbackOnly(addr string) error {
 		return nil
 	}
 	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s. "+
+		"The briefing says what the system produced and what it was asked, so a wider address needs "+
+		"an authenticated reader and an encrypted transport first, and the system has neither. "+
 		"Reaching the system from another device is a separate decision, and a chat channel is the "+
 		"road planned for it", addr, DefaultAddress)
 }
@@ -103,7 +110,10 @@ func Handler(reader Reader) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(staticFiles))
-	mux.HandleFunc("GET /{$}", view.sessions)
+	// The briefing holds the front door, because the question an operator has when the tab opens is
+	// not "what is running". The session listing keeps its page and loses that door.
+	mux.HandleFunc("GET /{$}", view.briefing)
+	mux.HandleFunc("GET /sessions", view.sessions)
 	mux.HandleFunc("GET /session/{id}", view.session)
 	return mux, nil
 }
@@ -112,7 +122,7 @@ func Handler(reader Reader) (http.Handler, error) {
 // two of them in one set would collide.
 func parsePages() (map[string]*template.Template, error) {
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"sessions.html", "session.html"} {
+	for _, name := range []string{"briefing.html", "sessions.html", "session.html"} {
 		parsed, err := template.ParseFS(templateFiles, "templates/layout.html", "templates/"+name)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", name, err)
