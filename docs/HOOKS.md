@@ -169,8 +169,19 @@ Each one is a rule the system already carries and nothing else checks.
   infrastructure the deploy identity was never asked about, or over an action that came back denied.
   It is designed in
   [`hooks/deploy-identity-gate/README.md`](../hooks/deploy-identity-gate/README.md).
+- **prose-gate.** Reads prose written for a person and refuses what Simplified Technical English
+  refuses, for the part of it a program can measure: a sentence of more than 25 words, a paragraph of
+  more than 6 sentences, the perfect and the continuous tenses, and a dash used as punctuation. It
+  reads a markdown or a text file about to be written, and the prose a command carries as an
+  argument, which is a pull request body, an issue body or a commit message. The approved vocabulary
+  and the ban on idiom are not measurable and are not guessed at: they stay in a brief, and every
+  refusal says so. It is designed in
+  [`hooks/prose-gate/README.md`](../hooks/prose-gate/README.md).
 
-All three are seeded, so a fresh system is under them without anybody attaching anything.
+The first three are seeded, so a fresh system is under them without anybody attaching anything. The
+prose gate is offered rather than attached, because prose is what a role produces all day and the
+rules it holds are a style somebody chooses. `krewe hook attach <workspace> prose-gate` is how a
+workspace takes it.
 
 A seeded hook used to mean a hook that cannot refuse. The merge gate refuses and is seeded anyway,
 because it holds the boundary the whole shape of this system rests on: every role pushes and opens a
