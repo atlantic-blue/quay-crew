@@ -24,7 +24,15 @@ const SeedHooksDir = "/hooks"
 //
 // So the rule is not that a seeded hook never refuses. It is that a seeded hook refuses something no
 // session in this system is ever meant to do, exactly, and says what to do instead.
-var SeedHooksToSystem = []string{"merge-gate", "prompt-analyser"}
+//
+// The deploy identity gate is here on that rule. Opening a pull request that creates infrastructure
+// without saying whether the identity applying it may create anything is never a session's to do: it
+// hands the failure to whoever merges, and the merge is the one step this system does not take back.
+// The rule itself is already a skill every session is given, and a skill is a rule a session reads,
+// so the two halves of it a check can be exact about are held here instead. It reads only the command
+// and the change, so a workspace with no cloud credential keeps the gate, and it declares no binary,
+// so no image can refuse a task over it.
+var SeedHooksToSystem = []string{"merge-gate", "prompt-analyser", "deploy-identity-gate"}
 
 // SeedHooks offers the hooks this build ships, and puts a system that holds none under them.
 //
