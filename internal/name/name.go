@@ -94,30 +94,39 @@ const Retired = "crew"
 
 // RefuseRetired returns the refusal for the word this level used to take, and nil for anything else,
 // so a caller puts it in front of whatever it does with an address and nothing else changes.
+//
+// It reads the word however it was capitalised. A name is lowercase letters, digits and hyphens, so
+// "Crew" and "CREW" can never be the name of anything here. Whoever typed either meant this word,
+// and the answer they got instead was that no such workspace exists, which sends them looking for a
+// workspace. One spelling refused and the next one waved through is the same quiet failure as the
+// word being dropped altogether.
 func RefuseRetired(typed string) error {
-	if strings.TrimSpace(typed) != Retired {
+	if !strings.EqualFold(strings.TrimSpace(typed), Retired) {
 		return nil
 	}
 	return fmt.Errorf("%q is not a word this takes any more: the level above every workspace is called %q, so type %q", Retired, System, System)
 }
 
-// ValidateWorkspace is Validate plus the one name a workspace cannot take.
+// ValidateWorkspace is Validate plus the two names a workspace cannot take.
 //
 // A workspace called "system" would shadow the word in every address, so `krewe secret set system TOKEN`
 // would set a secret on that workspace and no other workspace would ever read it. The refusal is
 // here rather than in the command line tool because every way in creates through the same control
 // plane.
+//
+// The reserved words are read before the general rule, and however they were capitalised, because
+// the general rule's advice is the typed name lowercased. "System" is not a name a workspace can
+// hold, and the advice under the old order was to type "system", which is the one name this refuses.
+// Advice that cannot be followed is worse than no advice: it reads as the rule not applying here.
 func ValidateWorkspace(value string) error {
-	if err := Validate("workspace", value); err != nil {
-		return err
-	}
-	if strings.TrimSpace(value) == System {
+	trimmed := strings.TrimSpace(value)
+	if strings.EqualFold(trimmed, System) {
 		return fmt.Errorf("a workspace cannot be called %q: that word means the whole system, so %q would take secrets and skills meant for every workspace", System, System)
 	}
 	// The word that used to mean the level stays reserved. A workspace holding it would be handed
 	// everything typed out of habit, quietly, and nothing anywhere would say that the word had moved.
-	if strings.TrimSpace(value) == Retired {
+	if strings.EqualFold(trimmed, Retired) {
 		return fmt.Errorf("a workspace cannot be called %q: that word used to mean the level above every workspace, so `krewe secret set %s` typed out of habit would land here. The word is now %q", Retired, Retired, System)
 	}
-	return nil
+	return Validate("workspace", value)
 }

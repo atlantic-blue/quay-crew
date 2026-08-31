@@ -219,3 +219,55 @@ func TestTheShippedMergeGateFiresWhereACommandIsAboutToRun(t *testing.T) {
 		t.Errorf("the merge gate names %v, and it decides from the command alone", gate.Secrets)
 	}
 }
+
+// The deploy identity gate is bound where it can see the command it refuses, on the same argument as
+// the merge gate above: it reads a command line before it runs, so any other event or any other tool
+// is a hook that never fires on the thing it exists to stop.
+//
+// What it declares matters more here than for either of the others, because it is seeded to the whole
+// system. A binary it names is a binary every sandbox image has to carry, and a secret it names is a
+// secret every workspace has to set, or the constraint is missing from exactly the sessions it exists
+// for. The deploy-identity skill was written that way for the same reason.
+func TestTheShippedDeployIdentityGateFiresWhereACommandIsAboutToRun(t *testing.T) {
+	gate := shipped(t, "deploy-identity-gate")
+
+	if len(gate.Events) != 1 {
+		t.Fatalf("the deploy identity gate fires on %d events, and it reads one thing: a command about to run",
+			len(gate.Events))
+	}
+	binding := gate.Events[0]
+	if binding.On != "PreToolUse" {
+		t.Errorf("the deploy identity gate fires on %q, and a refusal after the pull request is open is not a gate",
+			binding.On)
+	}
+	if binding.Matcher != "Bash" {
+		t.Errorf("the deploy identity gate matches %q, and the command it refuses is run with Bash", binding.Matcher)
+	}
+	// It reads the change with git, which is a process rather than a string comparison, so a session
+	// waiting on the runtime's own default would be waiting longer than it has to.
+	if binding.TimeoutSeconds == 0 {
+		t.Error("the deploy identity gate has no timeout, and it fires on every command a session runs")
+	}
+	// git is used where it is there and the gate answers with no files where it is not, so declaring
+	// it would refuse every session on an image that lags for a check that degrades safely anyway.
+	if len(gate.Binaries) != 0 {
+		t.Errorf("the deploy identity gate declares %v, and one missing binary would take the rule out of every session",
+			gate.Binaries)
+	}
+	// A workspace whose pipeline authenticates by federated identity holds no cloud credential, and it
+	// is exactly the workspace this gate exists for.
+	if len(gate.Secrets) != 0 {
+		t.Errorf("the deploy identity gate names %v, and it decides from the command and the change alone",
+			gate.Secrets)
+	}
+	// Whole: the entry point. A hook missing it imports cleanly and dies on its first command.
+	carried := false
+	for _, file := range gate.Files {
+		if file.Path == "bin/hook" {
+			carried = true
+		}
+	}
+	if !carried {
+		t.Error("the deploy identity gate carries no bin/hook, so it would fail on its first command")
+	}
+}

@@ -368,6 +368,11 @@ type world struct {
 	lastRole           *quaycrewv1.GetRoleResponse
 	// mergeGate is what the shipped merge gate answered the last time a scenario fired it.
 	mergeGate gateAnswer
+	// deployGate is what the shipped deploy identity gate answered the last time a scenario fired it.
+	deployGate gateAnswer
+	// change is the repository a scenario built to stand for the change a session is opening a pull
+	// request for, because the gate reads the change rather than being told about it.
+	change string
 }
 
 type worldKey struct{}
@@ -688,6 +693,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAnswerSteps(sc)
 	initializeTaskWordSteps(sc)
 	initializeJobWordSteps(sc)
+	initializeHistorySteps(sc)
 	initializeLevelWordSteps(sc)
 	initializeVersionSteps(sc)
 	initializeJobSteps(sc)
@@ -720,6 +726,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeUsageSteps(sc)
 	initializeSkillSteps(sc)
 	initializeDeployIdentitySteps(sc)
+	initializeDeployIdentityGateSteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
 	initializeSystemSecretSteps(sc)

@@ -165,8 +165,12 @@ Each one is a rule the system already carries and nothing else checks.
   spelling, the same merge over `gh api`, `curl` or `wget`, the `mergePullRequest` mutation, and a
   `git push` onto `main` or `master`. It is designed in
   [`hooks/merge-gate/README.md`](../hooks/merge-gate/README.md).
+- **deploy-identity-gate.** Reads each Bash command and refuses one that opens a pull request over
+  infrastructure the deploy identity was never asked about, or over an action that came back denied.
+  It is designed in
+  [`hooks/deploy-identity-gate/README.md`](../hooks/deploy-identity-gate/README.md).
 
-Both are seeded, so a fresh system is under them without anybody attaching anything.
+All three are seeded, so a fresh system is under them without anybody attaching anything.
 
 A seeded hook used to mean a hook that cannot refuse. The merge gate refuses and is seeded anyway,
 because it holds the boundary the whole shape of this system rests on: every role pushes and opens a
@@ -175,6 +179,12 @@ spends money. A gate an operator has to remember to attach is off in every syste
 is where the boundary matters most. So the rule is not that a seeded hook never refuses. It is that a
 seeded hook refuses something no session is ever meant to do, exactly, and says what to do instead.
 `quay hook detach system merge-gate` is how somebody decides otherwise.
+
+The deploy identity gate is seeded on that same rule. Opening a pull request that creates
+infrastructure without saying whether the identity applying it may create anything hands the failure
+to whoever merges, and the merge is the one step this system does not take back. It reads only the
+command and the change, so it needs no credential, and it declares no binary, so no image can refuse
+a task over it.
 
 ### How a hook refuses
 
