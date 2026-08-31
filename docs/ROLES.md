@@ -206,7 +206,7 @@ silence.
 A role is imported from a directory, and a directory is anywhere. That makes the first import easy
 and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
 on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
-listing the system printed showed them looking exactly like the fifteen that ship in
+listing the system printed showed them looking exactly like the sixteen that ship in
 [`roles/`](../roles).
 
 So `quay role import` records where it read the files, and the system says it back in every place a
@@ -292,10 +292,11 @@ write what every session in the workspace is told.
 
 ## The roles this build ships
 
-Fifteen roles live in [`roles/`](../roles) at the root of this repository, one directory each. Twelve
-of them are a design phase: a way of working from a design to a shipped slice where each step runs as
-a session of its own, given only what its role declares. The other three deliver one, and they are
-below under "The three that deliver a slice".
+Sixteen roles live in [`roles/`](../roles) at the root of this repository, one directory each.
+Twelve of them are a design phase: a way of working from a design to a shipped slice where each step
+runs as a session of its own, given only what its role declares. Three deliver one, and they are
+below under "The three that deliver a slice". The sixteenth writes prose for a person outside the
+work, and it is below under "The one that writes for somebody who was not there".
 
 ```mermaid
 flowchart LR
@@ -312,6 +313,9 @@ flowchart LR
         ORCHESTRATOR["orchestrator"] --> INFRA["infrastructure-writer"]
         ORCHESTRATOR --> RELEASER["releaser"]
     end
+    subgraph TELL["telling somebody who was not there"]
+        WRITER["writer"]
+    end
     ASSESSOR --> DESIGNER
     ORCHESTRATOR --> TESTWRITER
 ```
@@ -322,7 +326,8 @@ The design phase, in order, and the model each one runs on:
 - `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
   the code that makes them pass.
 - `security` on sonnet reviews the change and writes a failing test for each defect, `verifier` on
-  sonnet checks the slice against its contracts, and `debugger` on sonnet finds a cause and fixes it.
+  sonnet checks the slice against its contracts and asks whether verification could have failed
+  at all, and `debugger` on sonnet finds a cause and fixes it.
 - For a codebase that already exists: `codebase-mapper` on sonnet documents it, `assessor` on sonnet
   reports its coverage, contracts and risks, and `wrapper` on sonnet locks an existing boundary with
   tests.
@@ -337,7 +342,7 @@ list, `job.create` and `job.read`, because its brief declares a security review 
 back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
 grant mean something.
 
-`skills` goes to all fifteen because each brief works inside a repository, and a repository reaches a
+`skills` goes to all sixteen because each brief works inside a repository, and a repository reaches a
 session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
 away the brief and the mounted directory and leave the workspace's secrets in the environment
 regardless, so it would break a role rather than fence one.
@@ -388,6 +393,51 @@ ending. In the acceptance run the brief said to do the work itself when a declar
 which was written for the depth limit and applied to a credential failure, so one session wrote the
 whole product and no child ever ran.
 
+### The one that writes for somebody who was not there
+
+`writer` on opus is the sixteenth role, and the only one whose reader is outside the work. The other
+fifteen write for each other or for the repository: contracts, tests, code, infrastructure, security
+findings, a marketing plan. A blog post, an announcement, a page and a product description had no
+role at all, so each one ran as a plain session and the method was typed into its brief.
+
+That brief ran to over a thousand words and almost none of it was about the subject. Read the voice
+specification. Read three existing pieces first. Do not use these words. No dash as punctuation. No
+table. State the cost as well as the result. Invent no number that is not in this material. All of it
+is the role now, so a writing job carries the subject and the material, and the next piece reads like
+the last one instead of like a different brief typed slightly differently.
+
+**It reads before it writes.** The voice specification in full, then the three most recent pieces
+already published in the repository it is writing for. Voice is observed rather than described. Where
+there is neither, the brief says to stop and ask, because a voice invented in the session is a voice
+the reader has never met.
+
+**Two drafts it refuses.** A draft carrying a figure the material does not carry, and a draft that
+states no cost. The first is the one that looks like research: "about a thousand", "roughly half" and
+"several times faster" each read exactly like a number somebody measured. The second is the one that
+looks finished: every sentence true, and the whole thing a pitch. Where the material carries no cost,
+the brief says to ask for one rather than to invent one, because an invented weakness is an invented
+number wearing modesty.
+
+**It holds no numbers of its own, which is why it grants no verb.** `marketing` may `job.read`, so it
+can read what this system actually did rather than remember it. A writer with the same grant would
+have a second source of figures, and the material would stop being the only one. Everything in a
+draft comes from what the job handed over, and the writer says which line each figure came from.
+
+**The surface decides the length and the pronoun, and the role does not.** A post, a newsletter, a
+social post, a pull request description and a product page are five lengths of one voice. The job
+names the surface, and the brief carries what each one takes.
+
+`skills` reaches it for the reason it reaches the other fifteen: a repository is where the published
+pieces are, and a repository reaches a session here through the git skill. It commits a draft, pushes
+the branch and opens a pull request. It does not publish, because sending something to a person is a
+person's decision.
+
+**Krewe enforces none of this**, and the brief opens by saying so. Nothing here reads a draft, so
+nothing compares a figure against the material and nothing refuses a draft that states no cost. Both
+refusals are the session's to keep. A hook that holds the measurable part of prose is
+[quay-crew#508](https://github.com/atlantic-blue/quay-crew/issues/508) and it is not built, so the
+`ste` skill and this brief are prose a model reads rather than a gate a command runs into.
+
 ### What a brief asks that quay does not enforce
 
 **Every one of these briefs describes a boundary about files, and quay has no word for a file.** A
@@ -412,17 +462,17 @@ there, and each brief says which document it writes.
 
 ### The two longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. Twelve of the fifteen fit under thirteen thousand. `architect` at 16,348
-and `assessor` at 16,237 are both within two hundred bytes of the ceiling, so a sentence added to
+A brief may be 16,384 bytes. Twelve of the sixteen fit under thirteen thousand. `architect` at 16,354
+and `assessor` at 16,243 are both within two hundred bytes of the ceiling, so a sentence added to
 either has to come out somewhere else, and both say so at the top. That is also why the phase ending
 about pushing and opening a pull request is written into the three delivery briefs rather than into
-all fifteen: those two have no room for it. Raising the ceiling is the change that would give them
+all sixteen: those two have no room for it. Raising the ceiling is the change that would give them
 room, and it is the operator's to make.
 
 ### What this does not do
 
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
-  and it is the reason every one of the fifteen carries a line saying so.
+  and it is the reason every one of the sixteen carries a line saying so.
 - A fresh system is seeded with none of them. Skills and hooks are seeded and roles are not, so an
   operator runs `quay role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
@@ -437,7 +487,8 @@ The scenarios that hold this up are in [`features/roles.feature`](../features/ro
 imports every role in `roles/`, refuses a directory holding none, and asks each of the three
 delivery roles for a verb it holds and a verb it does not; in
 [`features/rolesessions.feature`](../features/rolesessions.feature), which proves a role receiving
-`skills` is handed the git skill and one that does not is handed none; and in
+`skills` is handed the git skill and one that does not is handed none, and that a session running as
+the writer is told both of its refusals out of the role rather than out of the job's brief; and in
 [`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as one of
 them.
 

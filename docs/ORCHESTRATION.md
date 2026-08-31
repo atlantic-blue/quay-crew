@@ -335,10 +335,53 @@ there was nothing to measure the address shape against.
 
 **A job at the top that states none is not refused.** The system cannot write the sentence, and a
 tree that runs an errand needs none, so the tool says one is missing and how to write it, the way it
-already says which skills a session starts without. What is still missing is the gate: nothing reads
-the sentence back against what was delivered. That is the second half of
-[#520](https://github.com/atlantic-blue/quay-crew/issues/520), a run that stops at the first thing a
-person can open and asks whether it is what they wanted.
+already says which skills a session starts without.
+
+**The gate is in the flow engine, and section 14b describes it.** A graph says which of its steps
+builds the first thing a person can open, and a run of it stops there once and asks whether that
+thing does what the sentence says. Where a caller declares its jobs directly rather than through a
+graph, the sentence still reaches every session and nothing reads it back.
+
+**`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
+or a name two people would both use for the same thing. Empty claims nothing. It is held to the
+title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,
+because two people naming the same work from memory write it two ways and a claim that misses over a
+capital letter is a claim that did nothing.
+
+**A second job that claims work another job is holding is refused, and the refusal names that job.**
+The failure it answers happened twice in one run: two sessions picked up the same issue and built it
+under different names, and the first anybody knew was two pull requests conflicting on files both of
+them had created. The two designs disagreed in small places, which is the expensive part. Nothing was
+in the other's way in the filesystem, because `quay-crew#255` already gives each session its own
+working copy. They were in each other's way over the work itself.
+
+It is not a lock on a file. It is a record of intent, which is what was missing: both sessions would
+have read it before starting. So the claim is on the row, `quay job list` carries a column of what is
+claimed, and `quay job show` says it.
+
+**A claim ends three ways, and the third is the one to test.** The job settles, into any of the three
+terminal phases and not only `done`. Somebody stops it. Or nothing moves the job for longer than a
+claim lives, which is the crashed session: the container went, no controller is renewing anything,
+and the row is all that is left. Without the third, one dead container holds a piece of work for as
+long as the system runs, and every test about claiming still passes.
+
+The life is two hours, chosen rather than measured, and it is a constant rather than a setting
+because a system given no number would hold work forever. What it has to outlast is the longest gap
+between two movements of a job that is alive. A running job is not one of them: its controller renews
+the lease every tick and every renewal moves the row. The two long gaps are a job waiting for a
+person to answer its question and a job queued behind everything else in its workspace. The
+measurement that would replace the number is the distribution of that gap, which nothing takes yet.
+
+**The scope is the workspace**, which is the boundary this design already uses for concurrency and
+for fairness. Two projects inside one workspace are the same people's work, so a claim in one is a
+claim in the other.
+
+**Checked at the write, and only there.** Every other rule on a declaration is checked again at the
+dispatch, and this one is not: a job stopped hours later because somebody else claimed its work in
+the meantime is a refusal nobody can act on, and the second declaration was refused at its own write
+anyway. The check is a read inside the transaction that writes the row, under a lock taken on the
+claim, because a check made before the write is a check two callers declaring at the same moment both
+pass. No unique index does it instead, because an index cannot say that holding has run out.
 
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
@@ -489,6 +532,13 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
+- A job that claims a piece of work another job is holding is refused, and the refusal names that
+  job, its title, and how old the claim is.
+- The same piece of work written another way, with different capitals or extra space, is the same
+  claim and is refused the same.
+- A job that claims work a settled or stopped job claimed is declared.
+- A job that claims work nothing has moved for longer than a claim lives is declared.
+- A job with a claim of 201 bytes is refused.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
@@ -2797,6 +2847,69 @@ makes the design safe.
 Postgres is the state. The event log is the export. A run pins its version. A wait is a column, an
 ask moves on an answer and on nothing else, and a dispatch is idempotent per step and attempt. This
 section adds one table and one node type, and it changes none of those.
+
+## 14b. The first usable path
+
+A run stops once, at the first thing a person can open, and asks whether it is the product. This is
+the second half of `quay-crew#520`, and it shipped on 31 August 2026.
+
+The failure it answers is in section 3's `product` field. A tree of jobs built a design document
+faithfully and delivered it complete, every check was green, and the operator opened it two days
+later and could not use it. Section 3 gives the sentence to every session. It does not give a run
+anywhere to stop, so nothing ever measures what was built against the sentence while stopping is
+still cheap.
+
+**What a graph declares.** Two lines, and both are optional until the first one is used.
+
+- **`product`, at the top of the file.** The one sentence a run of this graph serves, held to the
+  same ceiling a job's is, `job.ProductLimit`. It goes onto the job carrying the run, so every step
+  under it carries the same one and every session doing a step is given it above its brief. Nothing
+  new does that: the inheritance in section 3 already does.
+- **`usable: true`, on one dispatch.** This step builds the thing a person opens, and it replies
+  with the address.
+
+**Three refusals at import**, because a refusal in the middle of a run arrives hours later with
+nothing pointing back at the file.
+
+- Two nodes marked usable, because a run stops once and which one is first is a property of the file
+  rather than a race in the run.
+- A node that is not a dispatch, because only a dispatch builds anything.
+- A usable node with no `product`, because the question is the sentence. Without it the operator is
+  shown an address and asked whether it is right, which is the question that was never worth asking:
+  right against what.
+
+**What the run does.** The step lands, and instead of following its edge the run goes to `asking`
+with a question naming the address the step replied with and the sentence the run serves. It holds
+nothing while it waits, which is already true of every asking run. A step that replied with no
+address stops the run instead, with a reason saying so, because a question naming something nobody
+can open is a gate that passes by being empty.
+
+It stops once. The run records that it asked in its own state rather than counting attempts, so a
+graph that sends the work round again over the same step does not put a question the operator has
+already answered, and the second time round the sentence is the new one.
+
+**What an answer does.** `yes` follows the edge and changes nothing. Anything else is the sentence
+the operator wanted instead: it is held to the sentence's ceiling, written onto the job carrying the
+run, and the run follows the same edge. So the run does not end, and every step declared after it
+carries the new sentence.
+
+**The order matters and it is the one thing here that is not obvious.** A step reads what it serves
+off the job above it as it is written down, so the replacement lands on that job before the step is
+declared, not in the transaction that declares it. Written a moment later it would reach every step
+except the one the answer was about, which is the step the answer was for.
+
+```mermaid
+flowchart TD
+    PAGE["dispatch: the first thing a person can open"] --> ASK{"the run stops and asks:<br/>here is the address, here is the sentence"}
+    ASK -->|"yes"| ON["the run carries on, the sentence unchanged"]
+    ASK -->|"anything else"| NEW["the sentence is replaced on the job carrying the run"]
+    NEW --> ON
+    ON --> NEXT["every step after this is declared with the sentence the run serves now"]
+```
+
+**What it does not do.** It is the flow engine's, so it reaches a tree of jobs only where a flow runs
+one. A caller that declares its jobs directly has nowhere to stop, and no graph in `flows/` marks a
+step yet, because none of the three builds a first usable path.
 
 ## 15. Delivery order
 

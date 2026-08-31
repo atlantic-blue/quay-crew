@@ -8344,6 +8344,10 @@ type Job struct {
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree.
 	Steers int32 `protobuf:"varint,37,opt,name=steers,proto3" json:"steers,omitempty"`
+	// claim is the piece of work this job is doing: an issue, a branch, or a name two people would
+	// both use for the same thing. A second job claiming it is refused while this one still holds it,
+	// so two sessions cannot build the same slice. Empty claims nothing.
+	Claim string `protobuf:"bytes,40,opt,name=claim,proto3" json:"claim,omitempty"`
 	// What the system assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -8383,17 +8387,17 @@ type Job struct {
 	Resuming string `protobuf:"bytes,39,opt,name=resuming,proto3" json:"resuming,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
-	Escalation string `protobuf:"bytes,40,opt,name=escalation,proto3" json:"escalation,omitempty"`
+	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
 	// attempted is what each attempt at a step said, with how like the earlier attempts at that step it
 	// was. attempts, above, is how many times a session was started for this job; this is what those
 	// attempts produced, and it is the only thing a loop can be read off. A listing leaves it out, the
 	// way it leaves out the answer.
-	Attempted []*JobAttempt `protobuf:"bytes,41,rep,name=attempted,proto3" json:"attempted,omitempty"`
+	Attempted []*JobAttempt `protobuf:"bytes,42,rep,name=attempted,proto3" json:"attempted,omitempty"`
 	// looped_step is the step this job went in circles on, and zero for a job that never has.
 	// escalated_to is the route the system took when it did, in the shape it was declared. A job
 	// escalates once: the second loop stops it rather than escalating it again.
-	LoopedStep  int32  `protobuf:"varint,42,opt,name=looped_step,json=loopedStep,proto3" json:"looped_step,omitempty"`
-	EscalatedTo string `protobuf:"bytes,43,opt,name=escalated_to,json=escalatedTo,proto3" json:"escalated_to,omitempty"`
+	LoopedStep  int32  `protobuf:"varint,43,opt,name=looped_step,json=loopedStep,proto3" json:"looped_step,omitempty"`
+	EscalatedTo string `protobuf:"bytes,44,opt,name=escalated_to,json=escalatedTo,proto3" json:"escalated_to,omitempty"`
 	// observed_version is the version of the declaration the status describes. A controller that has
 	// not caught up leaves this behind the version above.
 	ObservedVersion int32 `protobuf:"varint,25,opt,name=observed_version,json=observedVersion,proto3" json:"observed_version,omitempty"`
@@ -8568,6 +8572,13 @@ func (x *Job) GetSteers() int32 {
 		return x.Steers
 	}
 	return 0
+}
+
+func (x *Job) GetClaim() string {
+	if x != nil {
+		return x.Claim
+	}
+	return ""
 }
 
 func (x *Job) GetParent() string {
@@ -8948,11 +8959,14 @@ type CreateJobRequest struct {
 	// back. A job declared under another inherits its parent's, and stating a second one where the
 	// parent already carries one is refused rather than ignored.
 	Product string `protobuf:"bytes,16,opt,name=product,proto3" json:"product,omitempty"`
+	// claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
+	// declaration is refused where another job holds the same one, and the refusal names that job.
+	Claim string `protobuf:"bytes,17,opt,name=claim,proto3" json:"claim,omitempty"`
 	// escalation is what this job does when it goes in circles: "ask" to put the question to the
 	// operator, or "role:<name>" to hand it to another role in a conversation of its own. Empty is
 	// asking. It is declared rather than decided in the moment, because the moment a job is going
 	// nowhere is the worst moment to be working out what to do about it.
-	Escalation string `protobuf:"bytes,17,opt,name=escalation,proto3" json:"escalation,omitempty"`
+	Escalation string `protobuf:"bytes,18,opt,name=escalation,proto3" json:"escalation,omitempty"`
 	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -9086,6 +9100,13 @@ func (x *CreateJobRequest) GetRepository() string {
 func (x *CreateJobRequest) GetProduct() string {
 	if x != nil {
 		return x.Product
+	}
+	return ""
+}
+
+func (x *CreateJobRequest) GetClaim() string {
+	if x != nil {
+		return x.Claim
 	}
 	return ""
 }
@@ -11271,7 +11292,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xd7\v\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xed\v\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -11294,7 +11315,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"repository\x18! \x01(\tR\n" +
 	"repository\x12\x18\n" +
 	"\aproduct\x18$ \x01(\tR\aproduct\x12\x16\n" +
-	"\x06steers\x18% \x01(\x05R\x06steers\x12\x16\n" +
+	"\x06steers\x18% \x01(\x05R\x06steers\x12\x14\n" +
+	"\x05claim\x18( \x01(\tR\x05claim\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -11310,12 +11332,12 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05steps\x18& \x03(\v2\x14.quaycrew.v1.JobStepR\x05steps\x12\x1a\n" +
 	"\bresuming\x18' \x01(\tR\bresuming\x12\x1e\n" +
 	"\n" +
-	"escalation\x18( \x01(\tR\n" +
+	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +
-	"\tattempted\x18) \x03(\v2\x17.quaycrew.v1.JobAttemptR\tattempted\x12\x1f\n" +
-	"\vlooped_step\x18* \x01(\x05R\n" +
+	"\tattempted\x18* \x03(\v2\x17.quaycrew.v1.JobAttemptR\tattempted\x12\x1f\n" +
+	"\vlooped_step\x18+ \x01(\x05R\n" +
 	"loopedStep\x12!\n" +
-	"\fescalated_to\x18+ \x01(\tR\vescalatedTo\x12)\n" +
+	"\fescalated_to\x18, \x01(\tR\vescalatedTo\x12)\n" +
 	"\x10observed_version\x18\x19 \x01(\x05R\x0fobservedVersion\x12\x19\n" +
 	"\btrace_id\x18\x1e \x01(\tR\atraceId\x12$\n" +
 	"\x0eparent_span_id\x18\x1f \x01(\tR\fparentSpanId\x129\n" +
@@ -11346,7 +11368,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x03seq\x18\x01 \x01(\x05R\x03seq\x12\x18\n" +
 	"\asummary\x18\x02 \x01(\tR\asummary\x12;\n" +
 	"\vfinished_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"\xd9\x04\n" +
+	"finishedAt\"\xef\x04\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -11365,9 +11387,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"repository\x18\x0f \x01(\tR\n" +
 	"repository\x12\x18\n" +
-	"\aproduct\x18\x10 \x01(\tR\aproduct\x12\x1e\n" +
+	"\aproduct\x18\x10 \x01(\tR\aproduct\x12\x14\n" +
+	"\x05claim\x18\x11 \x01(\tR\x05claim\x12\x1e\n" +
 	"\n" +
-	"escalation\x18\x11 \x01(\tR\n" +
+	"escalation\x18\x12 \x01(\tR\n" +
 	"escalation\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
