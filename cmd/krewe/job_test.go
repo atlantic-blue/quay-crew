@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -477,5 +478,36 @@ func TestJobInARoleThatDoesNotReceiveSkillsSaysNothingAboutThem(t *testing.T) {
 
 	if strings.Contains(said, "starts without") {
 		t.Fatalf("krewe job create says %q, want nothing about skills a role never receives", said)
+	}
+}
+
+// The refusal reaches the person typing, which is where it has to arrive: a rule that only the
+// interface knows is a rule the operator meets after the session is spent.
+func TestJobCreateRefusesARepositoryInAModeThatCannotReachIt(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	var out bytes.Buffer
+	err := run(context.Background(), client, []string{"job", "create",
+		"--title", "sort the listing",
+		"--brief", "make the listing sort by the clock it shows",
+		"--repository", "atlantic-blue/quay-crew",
+		"--mode", "edits"}, &out, "")
+	if err == nil {
+		t.Fatalf("the tool declared the job and said %q", out.String())
+	}
+	for _, phrase := range []string{"atlantic-blue/quay-crew", "mode edits", "--mode dangerous"} {
+		if !strings.Contains(err.Error(), phrase) {
+			t.Errorf("the refusal says %q, want it to say %q", err, phrase)
+		}
+	}
+	// And no row was written, so there is no job for the operator to go and stop.
+	listed, err := client.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	if len(listed.GetJobs()) != 0 {
+		t.Fatalf("the system holds %d jobs, and a refusal writes no row", len(listed.GetJobs()))
 	}
 }
