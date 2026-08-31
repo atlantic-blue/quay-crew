@@ -133,7 +133,7 @@ func (v *view) briefing(w http.ResponseWriter, r *http.Request) {
 //
 // runs is the flow run carried by each job that is asking, which decides the command its row offers.
 func blocks(jobs []*quaycrewv1.Job, names map[string]string, runs map[string]string) []block {
-	produced := tree(jobs, names, landed, endedAt, asLanded, landedAtMost)
+	produced := tree(jobs, names, landed, ended, asLanded, landedAtMost)
 	return []block{
 		{
 			ID:      "waiting",
@@ -145,7 +145,7 @@ func blocks(jobs []*quaycrewv1.Job, names map[string]string, runs map[string]str
 			ID:      "blocked",
 			Heading: "blocked",
 			Says:    "Nothing is blocked.",
-			Rows:    tree(jobs, names, blocked, endedAt, asBlocked, 0),
+			Rows:    tree(jobs, names, blocked, ended, asBlocked, 0),
 		},
 		{
 			ID:      "produced",
@@ -256,12 +256,12 @@ func asRunning(row *jobRow, one *quaycrewv1.Job) {
 	row.Cost = display.Tokens(one.GetSpentTokens())
 }
 
-// since, endedAt and declared are the moment a block orders by: when the job started asking, when it
+// since, ended and declared are the moment a block orders by: when the job started asking, when it
 // ended, and when it was declared.
 
 func since(one *quaycrewv1.Job) time.Time { return at(one.GetUpdatedAt()) }
 
-func endedAt(one *quaycrewv1.Job) time.Time {
+func ended(one *quaycrewv1.Job) time.Time {
 	if one.GetFinishedAt() != nil {
 		return at(one.GetFinishedAt())
 	}
