@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/role"
 	"gopkg.in/yaml.v3"
@@ -83,10 +84,18 @@ type Graph struct {
 	// schedule does: what an automation is allowed to do is versioned and reviewable beside what it
 	// does. There is nowhere else to put it either, because the run's session does not exist until
 	// the run starts, so `krewe mode` has nothing to point at.
-	Mode   string
-	Limits Limits
-	Nodes  map[string]Node
-	Edges  []Edge
+	Mode string
+	// Product is the one sentence a run of this graph serves, in a person's words: what somebody
+	// does with what the run builds, and what they get back. It reaches the job carrying the run,
+	// and every step under it carries the same one.
+	//
+	// A graph that stops at its first usable path declares one, because the question put to the
+	// operator there names the sentence, and a question with no sentence in it is a question about
+	// the code.
+	Product string
+	Limits  Limits
+	Nodes   map[string]Node
+	Edges   []Edge
 	// Start is the one node no edge points into, derived rather than declared so the file cannot
 	// say one thing and the shape another.
 	Start string
@@ -145,6 +154,14 @@ type Node struct {
 	// For is how long a wait node waits. It becomes a due time on the run, read by a poller, so a
 	// waiting run costs nothing and survives the system being restarted underneath it.
 	For time.Duration
+	// Usable says this dispatch is the first thing a person can open. A run stops there once, shows
+	// the address the step replied with beside the sentence the run serves, and asks whether it is
+	// what they wanted.
+	//
+	// It is the moment where an answer of no is cheap. A run built a design document faithfully,
+	// every check was green, and the operator opened it two days later and could not use it: the
+	// same answer at the end cost the whole run, and here it costs one step.
+	Usable bool
 }
 
 // Edge joins two nodes. When is the label a choice's answer must match, empty on the single edge
@@ -158,6 +175,7 @@ type graphFile struct {
 	Name    string `yaml:"name"`
 	Version int    `yaml:"version"`
 	Mode    string `yaml:"mode"`
+	Product string `yaml:"product"`
 	Limits  struct {
 		Transitions *int  `yaml:"transitions"`
 		Tokens      int64 `yaml:"tokens"`
@@ -172,6 +190,7 @@ type graphFile struct {
 		On     map[string]string `yaml:"on"`
 		For    string            `yaml:"for"`
 		Text   string            `yaml:"text"`
+		Usable bool              `yaml:"usable"`
 		Expect *struct {
 			File     string `yaml:"file"`
 			Contains string `yaml:"contains"`
@@ -240,7 +259,13 @@ func Parse(source []byte) (Graph, error) {
 			file.Name, declared, strings.Join(offered, ", "))
 	}
 
-	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Mode: mode, Limits: limits, Nodes: map[string]Node{}}
+	sentence := job.TidySentence(file.Product)
+	if len(sentence) > job.ProductLimit {
+		return Graph{}, fmt.Errorf("flow: graph %s says a person gets a sentence of %d bytes and the ceiling is %d: write what somebody does and what they get back, and put the rest in the prompts",
+			file.Name, len(sentence), job.ProductLimit)
+	}
+
+	graph := Graph{Name: file.Name, Version: file.Version, Every: every, Mode: mode, Product: sentence, Limits: limits, Nodes: map[string]Node{}}
 	for name, node := range file.Nodes {
 		var waitFor time.Duration
 		if name == DoneNode {
@@ -306,8 +331,15 @@ func Parse(source []byte) (Graph, error) {
 			}
 			expect = &Expect{File: path, Contains: carries}
 		}
+		// The first thing a person can open is something a step builds, and only a dispatch builds
+		// anything. Refused rather than ignored, for the reason a dropped role is refused: a graph
+		// that reads as stopping for a person and does not is worse than one that never claimed to.
+		if node.Usable && node.Type != NodeDispatch {
+			return Graph{}, fmt.Errorf("flow: %s node %s says it is the first thing a person can open, and only a %s builds anything, so the run would never stop there",
+				node.Type, name, NodeDispatch)
+		}
 		graph.Nodes[name] = Node{Type: node.Type, Prompt: node.Prompt, Role: roleName, On: node.On,
-			For: waitFor, Text: node.Text, Expect: expect}
+			For: waitFor, Text: node.Text, Usable: node.Usable, Expect: expect}
 	}
 
 	pointedAt := map[string]bool{}
@@ -348,6 +380,9 @@ func Parse(source []byte) (Graph, error) {
 	if err := usableTrigger(graph); err != nil {
 		return Graph{}, err
 	}
+	if err := theFirstUsablePath(graph); err != nil {
+		return Graph{}, err
+	}
 	for name, node := range graph.Nodes {
 		if err := usableEdges(graph, name, node); err != nil {
 			return Graph{}, err
@@ -383,6 +418,35 @@ func usableTrigger(graph Graph) error {
 	if len(triggers) == 1 && triggers[0] != graph.Start {
 		return fmt.Errorf("flow: graph %s begins at %s, and its trigger node %s has an edge into it; a trigger node is where a run begins, because the trigger arrived before the run existed",
 			graph.Name, graph.Start, triggers[0])
+	}
+	return nil
+}
+
+// theFirstUsablePath refuses a graph whose stop for a person could not be put.
+//
+// Two nodes marked usable is the same mistake as two starts: a run stops once, at the first thing a
+// person can open, and a second stop puts a question the operator has already answered. Which of
+// the two comes first depends on the path a run takes, so the file says which one it is rather than
+// leaving it to the run.
+//
+// A graph with no sentence is refused because the question is the sentence. Without it the operator
+// is shown an address and asked whether it is right, which is the question that was never worth
+// asking: right against what.
+func theFirstUsablePath(graph Graph) error {
+	var usable []string
+	for name, node := range graph.Nodes {
+		if node.Usable {
+			usable = append(usable, name)
+		}
+	}
+	sort.Strings(usable)
+	if len(usable) > 1 {
+		return fmt.Errorf("flow: graph %s marks %d nodes as the first thing a person can open (%s), and a run stops once; keep the earliest one",
+			graph.Name, len(usable), strings.Join(usable, ", "))
+	}
+	if len(usable) == 1 && graph.Product == "" {
+		return fmt.Errorf("flow: graph %s stops at %s for a person to use what it built, and says nothing about what that person gets, so the question would name an address and nothing to measure it against; add a line `product: <what somebody does and what they get back>` beside the name",
+			graph.Name, usable[0])
 	}
 	return nil
 }

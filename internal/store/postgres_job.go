@@ -526,6 +526,18 @@ func (p *Postgres) RecordJobSession(ctx context.Context, id, session string) err
 	return nil
 }
 
+// ReplaceJobProduct writes the one sentence a job serves over what it carried, with its record, in
+// one transaction.
+//
+// Held to no phase. The job this is called on is the one carrying a flow run, which is held back
+// while its steps work, so a condition on the running phase would refuse the only case there is.
+func (p *Postgres) ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "replace the sentence a job serves", ErrNotFound, []*job.Event{event}, `
+		update jobs set product = $2, version = version + 1, updated_at = now()
+		where id = $1`,
+		job.TidySentence(product))
+}
+
 // LandJob writes what came of the job, with its record, in one transaction. Conditional on the
 // job still running, so what it ended as is written once.
 func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error) {

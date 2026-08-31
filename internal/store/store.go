@@ -440,6 +440,14 @@ type Store interface {
 	RenewLease(ctx context.Context, id string, lease job.Lease) error
 	RecordJobSession(ctx context.Context, id, session string) error
 	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
+	// ReplaceJobProduct writes the one sentence a job serves over what it carried, and records the
+	// move. It is what a flow run does when the operator, shown the first thing a person can open,
+	// answers with the sentence they wanted instead: every job declared under this one afterwards
+	// carries the new sentence, because a job takes it from the job above it as it is declared.
+	//
+	// Any phase. A job that carries a run is held back while its steps work, so a rule that only let
+	// a running job be corrected would refuse the one case this exists for.
+	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// RecordSteer writes one steer and adds it to the count on each job in counted, in one

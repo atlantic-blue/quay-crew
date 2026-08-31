@@ -49,6 +49,7 @@ func (c *system) PrepareJob(ctx context.Context, under string, declaration job.D
 		ID: store.NewID(), Workspace: tidy.Workspace, Project: tidy.Project,
 		Title: tidy.Title, Brief: tidy.Brief, Role: tidy.Role, Mode: tidy.Mode,
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains, Labels: tidy.Labels,
+		Product: tidy.Product,
 		Version: 1, Phase: job.PhasePending, TraceID: "trace-of-the-tree",
 	}
 	if under != "" {
@@ -57,6 +58,15 @@ func (c *system) PrepareJob(ctx context.Context, under string, declaration job.D
 			return nil, nil, err
 		}
 		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
+		// The same rule the control plane keeps: a job under another carries the sentence that one
+		// serves, and one stating a different sentence is refused. It is here because what a step of a
+		// run is given depends on it, and a double that let a step keep its own would prove nothing
+		// about the run.
+		carried, err := job.Inherited(parent.Product, declared.Product)
+		if err != nil {
+			return nil, nil, err
+		}
+		declared.Product = carried
 	}
 	if declared.Depth > c.maxDepth {
 		return nil, nil, fmt.Errorf("this workspace allows job no deeper than %d, and this would be at depth %d",

@@ -148,6 +148,12 @@ job. They are the four kinds
 - `flow.run.stopped`, when the run was halted instead: a limit, a refusal, or a person. The detail is
   the reason.
 
+One more, added by [issue 520](https://github.com/atlantic-blue/quay-crew/issues/520):
+
+- `flow.product.replaced`, when the operator, shown the first thing a person can open, answered with
+  the sentence they wanted instead. The detail is the new sentence, so the tree says what the rest of
+  the work was done against rather than only what it started against.
+
 One history rather than two, which is why they are here and not on a stream of their own. Every step
 the run took is a job under the same one, so its `job.*` records are beside these.
 
