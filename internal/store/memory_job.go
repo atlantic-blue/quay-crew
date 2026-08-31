@@ -98,12 +98,28 @@ func (m *Memory) ListJobs(_ context.Context, filter job.Filter) ([]*job.Job, err
 		kept.Answer = ""
 		listed = append(listed, &kept)
 	}
+	// A window about what finished orders by the moment a job finished, and everything else orders by
+	// the moment it was declared. A row with no moment at all sorts last rather than crashing the
+	// listing: the filter above should already have dropped it.
+	ordering := func(one *job.Job) time.Time {
+		if filter.FinishedSince == nil {
+			return one.CreatedAt
+		}
+		if one.FinishedAt == nil {
+			return time.Time{}
+		}
+		return *one.FinishedAt
+	}
 	sort.SliceStable(listed, func(i, j int) bool {
-		if listed[i].CreatedAt.Equal(listed[j].CreatedAt) {
+		left, right := ordering(listed[i]), ordering(listed[j])
+		if left.Equal(right) {
 			return listed[i].ID > listed[j].ID
 		}
-		return listed[i].CreatedAt.After(listed[j].CreatedAt)
+		return left.After(right)
 	})
+	if filter.Limit > 0 && len(listed) > filter.Limit {
+		listed = listed[:filter.Limit]
+	}
 	return listed, nil
 }
 
@@ -243,6 +259,12 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 	case filter.Parent == "" && filter.Root && held.Parent != "":
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
+		return false
+	// A job that has not finished is not late in the window, it is outside the question: the
+	// window is about jobs that ended.
+	case filter.FinishedSince != nil && held.FinishedAt == nil:
+		return false
+	case filter.FinishedSince != nil && held.FinishedAt.Before(*filter.FinishedSince):
 		return false
 	}
 	if filter.LabelKey == "" {

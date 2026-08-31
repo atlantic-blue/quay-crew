@@ -310,11 +310,22 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a phase; use one of %s", phase, strings.Join(job.Phases(), ", "))
 	}
-	listed, err := s.store.ListJobs(ctx, job.Filter{
+	if req.GetLimit() < 0 {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"a listing cannot return %d jobs; leave the limit out for every row, or give a count above zero",
+			req.GetLimit())
+	}
+	filter := job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
 		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
-	})
+		Limit: int(req.GetLimit()),
+	}
+	if since := req.GetFinishedSince(); since != nil {
+		at := since.AsTime()
+		filter.FinishedSince = &at
+	}
+	listed, err := s.store.ListJobs(ctx, filter)
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
