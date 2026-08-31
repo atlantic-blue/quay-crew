@@ -86,6 +86,7 @@ const (
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
+	ControlPlaneService_GetHistory_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetHistory"
 	ControlPlaneService_GetHeadroom_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetHeadroom"
 	ControlPlaneService_GetHealth_FullMethodName                = "/quaycrew.v1.ControlPlaneService/GetHealth"
 )
@@ -181,6 +182,8 @@ type ControlPlaneServiceClient interface {
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
+	// What the crew did over a window: the read a session makes instead of being told.
+	GetHistory(ctx context.Context, in *GetHistoryRequest, opts ...grpc.CallOption) (*GetHistoryResponse, error)
 	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error)
@@ -868,6 +871,16 @@ func (c *controlPlaneServiceClient) GetUsage(ctx context.Context, in *GetUsageRe
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetHistory(ctx context.Context, in *GetHistoryRequest, opts ...grpc.CallOption) (*GetHistoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHistoryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetHistory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetHeadroomResponse)
@@ -979,6 +992,8 @@ type ControlPlaneServiceServer interface {
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
+	// What the crew did over a window: the read a session makes instead of being told.
+	GetHistory(context.Context, *GetHistoryRequest) (*GetHistoryResponse, error)
 	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
 	// and never from the daemon, so the header may ask it every second.
 	GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error)
@@ -1196,6 +1211,9 @@ func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoR
 }
 func (UnimplementedControlPlaneServiceServer) GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUsage not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetHistory(context.Context, *GetHistoryRequest) (*GetHistoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHistory not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetHeadroom not implemented")
@@ -2430,6 +2448,24 @@ func _ControlPlaneService_GetUsage_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHistoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetHistory(ctx, req.(*GetHistoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetHeadroom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetHeadroomRequest)
 	if err := dec(in); err != nil {
@@ -2740,6 +2776,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUsage",
 			Handler:    _ControlPlaneService_GetUsage_Handler,
+		},
+		{
+			MethodName: "GetHistory",
+			Handler:    _ControlPlaneService_GetHistory_Handler,
 		},
 		{
 			MethodName: "GetHeadroom",

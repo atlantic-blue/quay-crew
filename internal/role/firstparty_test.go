@@ -112,6 +112,10 @@ func TestEachShippedRoleMayOnlyWhatItsBriefAsksFor(t *testing.T) {
 		// It reads the job it was given and releases it. A session that can push and can also fan
 		// out could spend a whole budget on pushes nobody reviewed.
 		"releaser": {VerbJobRead},
+		// It writes about work this system did, so it reads that work rather than being handed it. A
+		// role that writes about the system and cannot read the system is the failure issue 543
+		// describes: the facts get typed into its brief by hand, and the brief outgrows the piece.
+		"marketing": {VerbJobRead},
 	}
 	roles, err := All(shipped)
 	if err != nil {

@@ -502,3 +502,35 @@ func leaseEnd(lease job.Lease) *time.Time {
 	until := lease.Until.UTC()
 	return &until
 }
+
+// JobHistory returns every job declared inside a window, as digests, newest first.
+func (m *Memory) JobHistory(_ context.Context, query job.HistoryQuery) ([]*job.Digest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	history := make([]*job.Digest, 0, len(m.jobs))
+	for _, held := range m.jobs {
+		if !inHistory(held, query) {
+			continue
+		}
+		history = append(history, job.DigestOf(held))
+	}
+	job.SortDigests(history)
+	return history, nil
+}
+
+// inHistory says whether one job belongs in a history: it sits where the query is reading, and it was
+// declared inside the window.
+func inHistory(held *job.Job, query job.HistoryQuery) bool {
+	switch {
+	case query.Project != "":
+		if held.Project != query.Project {
+			return false
+		}
+	case query.Workspace != "":
+		if held.Workspace != query.Workspace {
+			return false
+		}
+	}
+	return query.Window.Holds(held.CreatedAt)
+}

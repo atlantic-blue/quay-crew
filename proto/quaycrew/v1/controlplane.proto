@@ -1126,6 +1126,87 @@ message GetUsageResponse {
   int64 sessions = 2;
 }
 
+// GetHistoryRequest asks what the crew did over a window of time.
+//
+// It is the read a session makes to answer "what happened, what did it cost, and what failed", which
+// nothing could answer before: a listing carries no dates, no cost and no reason, and reading each job
+// whole costs a reader its whole context.
+message GetHistoryRequest {
+  // project wins over workspace when both are set, being the narrower. Neither set reads every
+  // project, the way a system wide listing does.
+  string workspace = 1;
+  string project = 2;
+  // since and until bound the window, read against when each job was declared rather than when it
+  // finished, so a job stays in the window somebody asked for it in and never moves later.
+  //
+  // An unset since is the default window back from until, and an unset until is now. The window is
+  // always bounded: an unbounded history is the dump this read exists to avoid.
+  google.protobuf.Timestamp since = 3;
+  google.protobuf.Timestamp until = 4;
+  // limit caps how many jobs come back, applied after the total is taken. Zero takes the default and
+  // anything above the ceiling is brought down to it.
+  int32 limit = 5;
+}
+message GetHistoryResponse {
+  // total covers every job in the window, and never only the ones below it. A summary that added up
+  // its own page would be a wrong number a reader has no way to check.
+  HistoryTotals total = 1;
+  // jobs are the window newest first, each reduced to a digest.
+  repeated JobDigest jobs = 2;
+  // left_out is how many jobs the window held that the limit did not return. A cap nobody is told
+  // about reads as complete coverage, which is the one way a bounded read can lie.
+  int32 left_out = 3;
+  // since and until are the window that was read, resolved from the request, so a caller that named
+  // neither is still told what it got.
+  google.protobuf.Timestamp since = 4;
+  google.protobuf.Timestamp until = 5;
+}
+
+// HistoryTotals is a window of jobs added up.
+message HistoryTotals {
+  // jobs is how many were declared in the window, and the three below are how they ended.
+  int32 jobs = 1;
+  int32 done = 2;
+  int32 failed = 3;
+  int32 stopped = 4;
+  // unfinished is every job in the window that has not reached a terminal phase, so the four numbers
+  // above and this one add up to jobs. A total whose parts do not sum is a number that gets trusted
+  // and is wrong.
+  int32 unfinished = 5;
+  int64 spent_tokens = 6;
+  // pull_requests is how many jobs named one, which is how much of the window reached a reviewer.
+  int32 pull_requests = 7;
+  // steers is how many times somebody had to say something the crew should have known, over the
+  // window. It is the score the acceptance work exists to move.
+  int32 steers = 8;
+  // working_seconds is the time jobs spent running, summed over those that both started and
+  // finished. A job still running adds nothing, because its duration is not known yet.
+  int64 working_seconds = 9;
+}
+
+// JobDigest is one job reduced to the facts a reader needs to say what happened.
+//
+// It carries no brief, no answer and no steps. Those are what make a job too large to read a hundred
+// of, and they are why this is a message of its own rather than the Job above with fields blanked: a
+// digest that was a Job would grow an answer again the moment somebody added one.
+message JobDigest {
+  string id = 1;
+  string project = 2;
+  string title = 3;
+  string role = 4;
+  string phase = 5;
+  int64 spent_tokens = 6;
+  // pull_request is the address the answer named, and empty for a job that opened none.
+  string pull_request = 7;
+  // reason is why a failed or stopped job ended. It is on the digest because "what failed and why" is
+  // one question, and a reader who had to ask again for every failure is back where they started.
+  string reason = 8;
+  int32 steers = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp started_at = 11;
+  google.protobuf.Timestamp finished_at = 12;
+}
+
 // Task is one exchange with the model, read back from the projection of the event log.
 message Task {
   string id = 1;
@@ -1645,6 +1726,9 @@ service ControlPlaneService {
   // GetUsage adds up what every conversation in the system has cost. It is a running total rather than
   // configuration, which is why it is not part of GetInfo.
   rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+
+  // What the crew did over a window: the read a session makes instead of being told.
+  rpc GetHistory(GetHistoryRequest) returns (GetHistoryResponse);
   // GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
   // and never from the daemon, so the header may ask it every second.
   rpc GetHeadroom(GetHeadroomRequest) returns (GetHeadroomResponse);
