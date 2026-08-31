@@ -417,6 +417,67 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// What a flow run does when the operator, shown the first thing a person can open, answers with
+	// the sentence they wanted instead. Held to no phase, because the job it lands on carries a run
+	// and is held back while its steps work.
+	t.Run("the one sentence a job serves is replaced, and the move is on the record", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "build the transcript page", Brief: "build it",
+			Product: "search the archive by video id",
+			Version: 1, Phase: job.PhaseWaiting,
+		}
+		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+
+		replaced, err := s.ReplaceJobProduct(ctx, declared.ID, "  paste a link and get\n the text back  ",
+			&job.Event{
+				ID: store.NewID(), Kind: "flow.product.replaced", Job: declared.ID,
+				Workspace: workspace, Project: project, OccurredAt: time.Now().UTC(),
+			})
+		if err != nil {
+			t.Fatalf("ReplaceJobProduct: %v", err)
+		}
+		// One line, whatever it arrived as. It is read in a listing, on a job, and in front of a
+		// session, and a line break in the middle of it breaks all three.
+		if replaced.Product != "paste a link and get the text back" {
+			t.Fatalf("the job serves %q, want the sentence tidied onto one line", replaced.Product)
+		}
+		if replaced.Version != declared.Version+1 {
+			t.Errorf("the version reads %d and it was %d: the sentence is a declared field, so a status has to be able to tell a stale reading from a current one",
+				replaced.Version, declared.Version)
+		}
+		found, err := s.GetJob(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if found.Product != replaced.Product {
+			t.Fatalf("the job reads back serving %q, want %q", found.Product, replaced.Product)
+		}
+		events, err := s.ListJobEvents(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("ListJobEvents: %v", err)
+		}
+		if kinds := eventKindsOf(events); len(kinds) != 2 || kinds[1] != "flow.product.replaced" {
+			t.Errorf("the job records %v, want the replacement after the declaration", kinds)
+		}
+	})
+
+	t.Run("replacing the sentence of a job that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.ReplaceJobProduct(ctx, "0123456789abcdef01234567", "paste a link and get the text back",
+			nil); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ReplaceJobProduct on a job that is not there returned %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("job that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
