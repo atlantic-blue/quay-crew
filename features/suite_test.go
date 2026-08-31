@@ -716,6 +716,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
 	initializeContextSizeSteps(sc)
+	initializeContextSpendSteps(sc)
 	initializeSandboxEnvSteps(sc)
 	initializeAuthSteps(sc)
 	initializeWorkspaceSteps(sc)

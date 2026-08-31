@@ -2033,6 +2033,7 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	for _, session := range sessions {
 		s.withUsage(session)
 		s.withContextWindow(session)
+		s.withContextSpend(session)
 	}
 	s.withStaleness(ctx, sessions)
 	if req.GetPresence() {
@@ -2049,6 +2050,7 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 	}
 	s.withUsage(session)
 	s.withContextWindow(session)
+	s.withContextSpend(session)
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -2108,6 +2110,27 @@ func (s *Server) withContextWindow(session *quaycrewv1.Session) {
 	}
 	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
 	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
+}
+
+// withContextSpend puts where a session's context went onto it, by category.
+//
+// The window's share says a session is nearly full and nothing about what filled it, so a person
+// reading it cannot say whether the answer is to read differently, to run fewer commands, or to stop
+// the session going round in circles. This is that answer.
+//
+// It costs nothing beyond the two readings above: all three come out of one pass over the transcript,
+// kept until the file changes.
+//
+// A conversation nobody has spoken in is left without a breakdown rather than given four zeroes,
+// which is the same rule the cost and the window follow.
+func (s *Server) withContextSpend(session *quaycrewv1.Session) {
+	spent := s.storage.ConversationSpend(boxOf(session), session.GetModelSessionId())
+	if spent.Empty() {
+		return
+	}
+	session.ContextSpend = &quaycrewv1.ContextSpend{
+		Reads: spent.Reads, Tools: spent.Tools, Turns: spent.Turns, Told: spent.Told,
+	}
 }
 
 // AttachSession describes how to open a session's conversation.
