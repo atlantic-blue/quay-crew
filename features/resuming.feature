@@ -12,7 +12,9 @@ Feature: A job that failed is continued rather than repeated
   they outlive the container and the controller. A job that failed is continued: it keeps its
   session, its working directory, its branch and its pull request, and the next task carries what is
   already finished rather than the brief. The session is asked to fetch the branch its work is based
-  on and say what moved while it was stopped, because it may have moved.
+  on and say what moved while it was stopped, because it may have moved. That answer is read rather
+  than believed: an attempt that says nothing about its base is asked once, and then the job stops
+  rather than reading as one that went well.
 
   The other answer is refusing it. A failure that was the work being wrong must not be offered a
   second attempt, so refusing ends the job, and a job that was ended on purpose is never continued.
@@ -81,3 +83,44 @@ Feature: A job that failed is continued rather than repeated
     And the task the controller sent fails
     When that session tries to continue its own job
     Then the system refuses it, and the job is still failed
+
+  # The base is the part the system cannot see. A resume puts a session back into the working
+  # directory it left, and what that work stands on moved while it was stopped, so the attempt that
+  # carries on is asked what moved and the answer is read rather than believed.
+  Scenario: A continued job that says nothing about its base is asked what moved
+    Given the session running that job records "read the issue"
+    And the task the controller sent fails
+    And the model will answer "I carried on and the tests pass. Opened https://github.com/atlantic-blue/quay-crew/pull/531"
+    When the operator continues the job
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the session was asked what moved under its base
+    And the job is running
+
+  # Asked once and no more. Every ask is a task somebody pays for, and an attempt that may have built
+  # on a base nobody looked at must not read as one that went well.
+  Scenario: A continued job that still says nothing is stopped rather than called done
+    Given the session running that job records "opened https://github.com/atlantic-blue/quay-crew/pull/531"
+    And the task the controller sent fails
+    And the model will answer "I carried on and the tests pass"
+    When the operator continues the job
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is stopped, and the reason says no answer said what moved under its base
+    And the system was asked to run 3 tasks
+    And the job still names the pull request "https://github.com/atlantic-blue/quay-crew/pull/531"
+
+  Scenario: A continued job that says what moved under its base is done
+    Given the session running that job records "read the issue"
+    And the task the controller sent fails
+    And the model will answer "Base: nothing moved. Opened https://github.com/atlantic-blue/quay-crew/pull/531"
+    When the operator continues the job
+    And the controller ticks again
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is done, and it names the pull request "https://github.com/atlantic-blue/quay-crew/pull/531"
+    And the system was asked to run 2 tasks
