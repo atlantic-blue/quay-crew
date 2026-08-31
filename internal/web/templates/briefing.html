@@ -1,4 +1,10 @@
 {{define "body"}}
+<p class="system">
+  <span class="figure">{{.Header.Running}} running</span>
+  {{if .Header.Tokens}}<span class="figure">{{.Header.Tokens}} tokens</span>{{end}}
+  {{if .Header.Room}}<span class="figure {{.Header.RoomState}}">{{.Header.Room}}</span>{{end}}
+  <span class="figure{{if .Header.Degraded}} down{{end}}">{{.Header.Health}}</span>
+</p>
 {{range .Blocks}}
 <section class="block" id="{{.ID}}">
   <h2>{{.Heading}}</h2>
@@ -39,5 +45,5 @@
   {{end}}
 </section>
 {{end}}
-<p class="drawn">Drawn at {{.DrawnAt}}. <a href="/sessions">Every live conversation</a> is on its own page.</p>
+<p class="drawn">Drawn at {{.DrawnAt}}, and again every {{.Refresh}} seconds. <a href="/sessions">Every live conversation</a> is on its own page.</p>
 {{end}}

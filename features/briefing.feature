@@ -56,3 +56,41 @@ Feature: The briefing answers the operator's questions before it says what is ru
     And the operator opens the briefing
     Then the briefing lists no sessions
     And the session listing still carries that conversation
+
+  # A briefing that says a job is waiting and leaves the operator to work out what to type has moved
+  # the problem rather than answered it, and there are two answer commands. A run refuses the job one.
+  Scenario: A job carrying a flow run is answered with the run's own command
+    Given the system holds this flow graph:
+      """
+      name: careful
+      version: 1
+      mode: edits
+      nodes:
+        fix:    { type: dispatch, prompt: "fix the build" }
+        permit: { type: ask, text: "fixed it locally. push?" }
+      edges:
+        - [fix, permit]
+        - [permit, done]
+      """
+    When the operator starts the flow "careful" in the project
+    Then the flow run is asking "fixed it locally. push?"
+    When the operator opens the briefing
+    Then the briefing offers the run's own answer command, and not the job's
+
+  # A figure nobody measured, dressed as a figure, is the failure the memory line exists to prevent,
+  # and a part nobody probed must never read the same as a part that answered.
+  Scenario: The header says unknown where nothing was measured
+    When the operator opens the briefing
+    Then the briefing says the machine was not measured and the system was never probed
+
+  Scenario: The header counts what is running rather than making the operator read the block
+    Given a job titled "choose where the transcripts are stored" whose session is still working
+    When the operator opens the briefing
+    Then the briefing counts 1 running
+
+  # A page that sits in a tab and looks current is the failure the briefing exists to end, and saying
+  # when it was drawn is only half of it.
+  Scenario: The page draws itself again, and says when it was drawn
+    When the operator opens the briefing
+    Then the briefing draws itself again with nobody reloading
+    And the briefing says when it was drawn

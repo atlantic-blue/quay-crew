@@ -716,6 +716,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
 	initializeBriefingSteps(sc)
+	initializeBriefingHeaderSteps(sc)
 	initializeFlowSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)

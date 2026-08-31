@@ -206,7 +206,12 @@ commands:
   context clear [<address>]               empty what a level says
   attach <session>                         open a session's conversation, with its history
   web [<address>]                         read the system in a browser on this machine. Read only,
-                                           and it serves 127.0.0.1:8080 unless told another port
+                                           and it serves 127.0.0.1:8080 unless told another port.
+                                           The front door is the briefing: what needs you, what is
+                                           blocked, what the system produced, and what is running
+                                           last. It says how many jobs run, what the system spent,
+                                           what the machine has left and how the system is, and it
+                                           draws itself again. The session listing is at /sessions
   room                                     how much memory this sandbox actually has, and what to
                                            do about a gate that does not fit in it. A sandbox with
                                            no limit advertises the whole machine, and the kernel
