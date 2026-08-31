@@ -369,12 +369,15 @@ func jobTitled(ctx context.Context, title string) (*quaycrewv1.Job, error) {
 // processes over one database.
 func anotherController(ctx context.Context, name string, lease time.Duration) *controlplane.Server {
 	w := worldFrom(ctx)
-	return controlplane.NewServer(controlplane.Config{
+	// Recorded, so waiting for tasks to land covers the ones this one dispatches. A task belongs to
+	// the process that started it: without this, a step that waits for the task to land waits on a
+	// control plane that never sent it, returns at once, and whatever comes next races the model.
+	return w.serving(controlplane.NewServer(controlplane.Config{
 		Store: w.systemStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 		ControllerName: name, JobLease: lease,
-	})
+	}))
 }
 
 func initializeJobLeaseSteps(sc *godog.ScenarioContext) {
