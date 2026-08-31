@@ -406,6 +406,16 @@ That is the whole of the exception: no controller, no timer and no poller moves 
 somebody ending a job on purpose, which is what `RefuseJob` does to a failure the operator judges was
 the work being wrong rather than the run. `features/resuming.feature` is the shape of it.
 
+**A continued attempt says what moved under its base, and the answer is read.** A resume puts a
+session back into the working directory it left, and what that work stands on moved while it was
+stopped. The system runs no git, so it states the shape it will read and reads the answer against it,
+exactly as it does with the address of a pull request: the continued task asks for one line opening
+with `Base:`, and where the job names a repository and the answer carries no such line, the session is
+asked once more and the job stops if the second answer carries none either. The reason names the
+repository and says it asked twice, and what the attempt produced stays on the row, because the end of
+an attempt is not the end of its work. A job that names no repository is not held to it, since the
+system knows of no base it was away from.
+
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
 reader gets from the job to the conversation, and it is what `quay attach` takes.
 

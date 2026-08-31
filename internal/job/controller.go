@@ -809,6 +809,18 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	// rather than reported by the model, the way an expectation is, and read on every path so a job
 	// that stopped for some other reason still records the pull request it did open.
 	landing.PullRequest = PullRequestIn(one.Repository, landing.Answer)
+	// A continued attempt has one thing to say that an attempt from nothing does not: what moved under
+	// the base its work stands on. Read first, because it decides whether the work is worth publishing
+	// at all: a branch opened against a base nobody looked at is the second failure a resume can cause,
+	// and it costs more than a branch nobody pushed.
+	if kind == EventAnswered && one.Resuming != "" && one.Repository != "" &&
+		MovedUnderIt(landing.Answer) == "" {
+		if c.askWhatMovedUnderIt(ctx, one, tasks) {
+			return
+		}
+		landing.Phase, landing.Reason, kind =
+			PhaseStopped, NothingSaidAboutTheBase(one.Repository), EventStopped
+	}
 	if kind == EventAnswered && one.Repository != "" && landing.PullRequest == "" {
 		// Nothing is landed here. The job stays running while the session is asked, so a controller
 		// that dies between the ask and the answer finds a running job with two tasks and reads them
@@ -881,6 +893,36 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 		// A system that cannot ask again lands the job below with the reason, rather than holding a row
 		// open waiting for a task nobody sent.
 		c.logger.WarnContext(ctx, "could not ask a session again for the pull request",
+			"job", one.ID, "session", one.Session, "error", err)
+		return false
+	}
+	// The hold moves on, because the job is still this controller's and a task is in flight again.
+	c.renew(ctx, one)
+	return true
+}
+
+// askWhatMovedUnderIt sends a continued session back for the one thing its answer did not carry, and
+// says whether it went.
+//
+// Asked once. The bound is the task being read, off the record: the answer in hand is the answer to
+// the task above it, so a session answering the ask is holding the ask in its own history. A
+// controller that took this row over after another died reads the same history and does not ask a
+// third time. Counting tasks the way the pull request ask does would not work here, because a
+// continued job's session already holds the tasks of the attempt that failed.
+//
+// No record of its own is written, for the same reason the pull request ask writes none: the task is
+// the record, in the session krewe job show already names.
+func (c *Controller) askWhatMovedUnderIt(ctx context.Context, one *Job, tasks []*quaycrewv1.Task) bool {
+	if AskingWhatMoved(tasks[len(tasks)-1].GetPrompt()) {
+		return false
+	}
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: SessionFor(one.ID), Text: AskedWhatMoved(one.Repository),
+		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+	}); err != nil {
+		// A system that cannot ask again lands the job below with the reason, rather than holding a row
+		// open waiting for a task nobody sent.
+		c.logger.WarnContext(ctx, "could not ask a continued session what moved under its base",
 			"job", one.ID, "session", one.Session, "error", err)
 		return false
 	}
