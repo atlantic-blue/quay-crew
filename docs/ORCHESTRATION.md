@@ -2639,6 +2639,12 @@ The right half does not change shape. It stays one conversation, and it stays th
 changes is that the driver now declares jobs rather than dispatching tasks, so the left half shows
 what the right half asked for.
 
+**The browser takes the same shape, and it took it first.** `quay-crew#547` built the briefing at the
+front door of `krewe web`, and its job rows are this tree: roots at the top, children under them, the
+session as a cell rather than a level. A page cannot drill, so it draws the depth instead, and a block
+keeps only the branches holding a row that answers it. The console's own version of this is
+`quay-crew#474`, and the two must not grow into different shapes.
+
 ## 13. Surviving an upgrade
 
 `quay-crew#397` records the cost. Taking a fix costs every running session, and nothing tells an
